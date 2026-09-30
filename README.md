@@ -55,4 +55,5 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 
 - [观测与工具协议](docs/rgb_protocol.md)
 - [四相机异步设计与验证](docs/async_observation.md)
+- [2026-09-30 实测结果](docs/four_camera_validation_20260930.md)：60项CPU测试、真实MCP四相机探针、radio实例301闭环通过；[网页与回放](http://10.76.5.241:8765/surround_observation.html)（实验室网络/VPN）。
 - [此前三相机实验记录](docs/history_before_four_camera.md)：历史成功结果不自动代表新相机配置通过。

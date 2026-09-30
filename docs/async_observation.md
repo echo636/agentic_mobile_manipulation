@@ -11,3 +11,5 @@ Jinkai reference: dadwadw233/habitat-gs, branch jinkai/harness, commit 0815cf234
 Validation is recorded in the project batch operations/async_surround_20260930. CPU tests cover nonblocking submission, interleaving, cancellation, stale refs, side-camera targets, failures, owner-thread enforcement and camera axes. Real simulator and model results must be recorded separately; passing these tests is not a task success claim.
 
 Initial 8cm-radius rig passed interface/pose checks but the forward view had substantial robot-shell occlusion. Visual inspection prompted the 35cm mounting-radius revision; first-run evidence is retained. No robot rendering is hidden and no observation frames are edited.
+
+Revised rig validation and one real-model task regression are complete; see [recorded results](four_camera_validation_20260930.md) for source versions, independent evaluation and limits.

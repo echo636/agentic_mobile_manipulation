@@ -146,6 +146,8 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         page = page.replace(' href="replay_audit.json"', '')
     if not data['video']:
         page = page.replace(' href="video.json"', '')
+    if not data['has_public_trace']:
+        page = page.replace(' href="model_public_events.jsonl"', '')
     if not (run_dir / 'index.html').is_file():
         page = page.replace('<a href="index.html">原始日志页</a>', '')
     (run_dir / 'replay.html').write_text(page)
