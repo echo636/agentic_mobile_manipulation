@@ -71,7 +71,7 @@ class CheckedPlacement:
         attempts = [point, None] if point is not None and max_steps >= 100 else [point]
         for attempt, candidate in enumerate(attempts):
             try:
-                self._try_place_on_top(held, target, max_steps, candidate)
+                check = self._try_place_on_top(held, target, max_steps, candidate)
                 break
             except SkillError:
                 if attempt == len(attempts)-1:
@@ -79,7 +79,7 @@ class CheckedPlacement:
         self.frames_revision = -1
         self._cleanup_grasp_contacts()
         return {'primitive':'place_on_top','implementation':'checked_selected_surface_then_official_sampler',
-                'postcondition':'OnTop.get_value_after_settling','failure_policy':'restore_pre_action_state'}
+                'postcondition':check,'failure_policy':'restore_pre_action_state'}
 
     def _try_place_on_top(self, held, target, max_steps, point):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
@@ -98,14 +98,45 @@ class CheckedPlacement:
             for _ in range(min(50,max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             adjacency = held.states[VerticalAdjacency].get_value()
+            touching = bool(held.states[Touching].get_value(target))
+            official_on_top = bool(held.states[OnTop].get_value(target))
+            supported, support = self._selected_surface_support(held, target, point, touching)
             self._placement_record({'status':'postcondition_check','target':target.name,'held':held.name,
                 'position':held.get_position_orientation()[0].tolist(),
-                'touching':bool(held.states[Touching].get_value(target)),
+                'touching':touching,'official_on_top':official_on_top,'selected_surface_support':support,
                 'target_below':target in adjacency.negative_neighbors,
                 'target_above':target in adjacency.positive_neighbors,
                 'grasp_released':self.primitives._get_obj_in_hand() is None})
-            if not held.states[OnTop].get_value(target):
-                raise SkillError('postcondition_error','Placement did not satisfy OnTop after settling',changed=True)
+            if not (official_on_top or supported):
+                raise SkillError('postcondition_error','Object is not stably supported by the selected surface',changed=True)
+        return 'official_OnTop' if official_on_top else 'selected_surface_contact_and_support_after_settling'
+
+    def _selected_surface_support(self, held, target, point, touching):
+        """An actual lower shelf can support an object while official OnTop is false.
+
+        This motor check is independent of task goals. It never writes predicates
+        or changes evaluator semantics, and does not accept mere side contact.
+        """
+        from omnigibson.utils.sampling_utils import raytest
+        if point is None:
+            return False, {'available':False,'reason':'No selected surface point'}
+        lo,hi=held.aabb;center=(lo+hi)/2
+        end=center.clone();end[2]=lo[2]-.08
+        hit=raytest(center,end,ignore_bodies=[link.prim_path for obj in (held,self.robot) for link in obj.links.values()])
+        target_paths={link.prim_path for link in target.links.values()}
+        speed=float(self.torch.linalg.norm(held.get_linear_velocity()))
+        gap=float(lo[2]-hit['position'][2]) if hit['hit'] else None
+        normal_z=float(hit['normal'][2]) if hit['hit'] else None
+        height_error=abs(float(hit['position'][2]-point[2])) if hit['hit'] else None
+        selected_xy_distance=float(self.torch.linalg.norm(center[:2]-point[:2]))
+        checks={'touching_selected_object':touching,'released':self.primitives._get_obj_in_hand() is None,
+                'support_ray_hits_selected_object':hit.get('rigidBody') in target_paths,
+                'upward_support':normal_z is not None and normal_z>=.9,
+                'bottom_near_support':gap is not None and -.03<=gap<=.06,
+                'selected_shelf_height':height_error is not None and height_error<=.05,
+                'selected_surface_neighborhood':selected_xy_distance<=.20,'settled':speed<=.10}
+        return all(checks.values()), {'checks':checks,'speed_m_s':speed,'bottom_gap_m':gap,
+            'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance}
 
     def _checked_place_inside(self, target, max_steps):
         from omnigibson.object_states import Inside
