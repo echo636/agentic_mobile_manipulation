@@ -86,3 +86,12 @@ camera axes in the robot frame (world-horizontal axes change when the base tilts
 These changes do not fix depth/collision disagreement, placement sampling failures,
 or all simulator initialization faults. Raw errors and independent task scores remain
 separate. This is an RGB + ideal executor research protocol, not an official submission.
+
+The isolated `bringing_in_wood` startup probe on the frozen `f90e51e` runtime
+failed after class-name adaptation: legacy serialized robot state lacks
+`controller_groups`. The class migration is therefore only a partial compatibility
+fix; the task remains affected by an asset/source state-schema mismatch. No default
+controller state was substituted and no original instance was rewritten. The 32-task
+retest retains this task and its failure in the denominator. Historical trash/toolbox
+camera audits both passed when rechecked on copies in the robot frame; original
+validation files were preserved.
