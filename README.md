@@ -51,6 +51,16 @@ python -m manipulation_agent.cli --backend omnigibson --policy scripted \
 
 The deterministic probes support radio, three soda cans into trash, and dirty dishes into a sink. A recipe being available does not mean its simulator run passed. Runtime records determine the verified scope.
 
+The bundled catalog lists 100 tasks, with 50 detailed instructions available in the captured official page manifest. A missing instruction requires an explicit `--instruction`; the CLI never silently reuses the radio instruction for another task.
+
+`--inside-placement symbolic_raycast` preserves the official symbolic primitive and is the default. Its ray sampler failed on the first soda-can placement in the tested trash instance. The explicit alternative `--inside-placement official_volume` uses the same pinned simulator's `Inside.set_value`: it releases the held object, samples actual poses inside the fillable volume, runs collision/settling checks, then verifies `Inside.get_value` again. It does not read the task goal or write success flags. Failed placement may leave an object released. Volume sampling is limited to 120 seconds and at most `min(6000, remaining_action_steps * 4)` internal physics ticks; those ticks are recorded separately from `env.step`, so official time metrics do not represent total physics effort.
+
+```bash
+python -m manipulation_agent.cli --backend omnigibson --policy scripted \
+  --task picking_up_trash --instance 301 --inside-placement official_volume \
+  --output runs/trash-volume-301
+```
+
 For the lab's configured S134, `scripts/run_s134.sh` uses the project-specific environment and storage. Recheck GPU ownership, memory limits, disk and quota before starting a new job. Run it under a unique user systemd unit; do not stop other projects' processes.
 
 ## Model control
