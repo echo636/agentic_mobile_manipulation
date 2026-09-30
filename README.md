@@ -18,7 +18,7 @@
 
 ## 连续执行视频
 
-使用`--record-video`，在每个env.step后录制RGB，生成`episode.mp4`、`video.json`和`video_frames.jsonl`。四格画面包含头部、左右腕部相机，以及仅供研究者查看的第三人称；第三人称没有进入MCP图像注册表。
+真实OmniGibson运行默认启用录像（`--no-record-video`可关闭；mock默认不录制），在每个env.step后录制RGB，生成`episode.mp4`、`video.json`和`video_frames.jsonl`。四格画面包含头部、左右腕部相机，以及仅供研究者查看的第三人称；第三人称没有进入MCP图像注册表。
 
 视频按控制步仿真时间播放，省略模型等待期间的暂停；额外观测边界记录一帧。理想执行器本身的位姿/状态瞬时跳变如实保留，无运动插帧。覆盖范围为全部env.step，不含内部物理子步或放置采样器的候选搜索过程。Replay页面支持MP4播放/慢放/下载及动作步骤同步。`video.json`检查连续控制步覆盖率，视频成功与任务成功独立记录。
 
@@ -54,3 +54,16 @@ PYTHONPATH=src python -m manipulation_agent.replay \
 实验保存源码/依赖/资产/任务实例版本、主机/解释器/GPU/PID/unit、公开与私有记录。最终BDDL和TaskMetric独立评分，不返回活动模型。任务成绩以真实run records为准；不把CPU mock、编码成功或旧oracle成绩当成当前任务成功。当前是理想执行器研究协议，不是官方物理控制排行榜提交。
 
 [系统与实验网页](http://10.76.5.241:8765/rgb_system.html)
+
+## 当前验证结果（2026-09-30）
+
+真实gpt-6-astra + OmniGibson + minimal四工具：
+
+|任务/实例|独立结果|动作/调用|连续视频|
+|---|---|---|---|
+|turning_on_radio / 301 / seed0|BDDL和TaskMetric通过|3 / 5|185帧，180 env.step，6.17秒|
+|picking_up_trash / 301 / seed0|3个罐子全部入桶，BDDL和TaskMetric通过|25 / 27|1187帧，1160 env.step，39.57秒|
+
+Radio实际源码c77e2f5、trash实际源码3931d44；后续默认配置/文档更新不改写原实验版本。两轮均审计了模型实际图像字节和精确工具调用，无plan/memory/skill调用。视频录制不包含模型等待与内部采样候选搜索；任务覆盖仅这两个实例。
+
+[完整视频页面](http://10.76.5.241:8765/minimal_loop.html) · [抓放任务Replay](http://10.76.5.241:8765/manipulation_runs/mas_minimal_video_trash_r1/replay.html)
