@@ -10,7 +10,8 @@ from ..contracts import SkillError
 from ..omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, look_at_orientation
 from ..records import now
-from .placement import CheckedPlacement
+from .placement import CheckedPlacement, placement_transaction
+from .grasp_contacts import filter_robot_contacts, restore_robot_contacts
 
 class RGBBackend(CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
@@ -23,6 +24,7 @@ class RGBBackend(CheckedPlacement, OmniGibsonBackend):
         self._spectator_anchor = None
         self._spectator_choice = None
         self._base_target = None
+        self._grasp_contact_filters = []
         self.image_size=512
         self.capture_index=0
         self.image_files={}
@@ -430,6 +432,28 @@ class RGBBackend(CheckedPlacement, OmniGibsonBackend):
             result=self.execute(primitive,obj.name,max_steps)
         return {**result,'private_grounding':grounding}
 
+    def execute(self, skill, target, max_steps):
+        if skill != 'grasp' or self.primitives._get_obj_in_hand() is not None:
+            result=super().execute(skill,target,max_steps)
+            self._cleanup_grasp_contacts()
+            return result
+        obj=self._objects().get(target)
+        additions=filter_robot_contacts(self.robot,obj,self.og.sim)
+        try:
+            with placement_transaction(self.og.sim,self._placement_record):
+                result=super().execute(skill,target,max_steps)
+        except Exception:
+            restore_robot_contacts(additions,self.og.sim)
+            raise
+        self._grasp_contact_filters=additions
+        return {**result,'robot_held_contact':'filtered_during_ideal_grasp',
+                'world_object_collisions':'preserved'}
+
+    def _cleanup_grasp_contacts(self):
+        if self._grasp_contact_filters and self.primitives._get_obj_in_hand() is None:
+            restore_robot_contacts(self._grasp_contact_filters,self.og.sim)
+            self._grasp_contact_filters=[]
+
     def evaluate(self):
         result=super().evaluate()
         result['protocol']='rgb_agent_ideal_executor_v5_checked_placement'
@@ -447,6 +471,7 @@ class RGBBackend(CheckedPlacement, OmniGibsonBackend):
         result['placement'] = {'on_top':'selected_surface_cuboid_then_official_sampler',
             'inside':'official_volume','verification':'official_predicate_after_settling',
             'failure_policy':'restore_pre_action_state','goal_access':False}
+        result['grasp_contact_policy']='filter_robot_held_pairs_only_restore_after_release'
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; symbolic grasp/place remain instantaneous'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,

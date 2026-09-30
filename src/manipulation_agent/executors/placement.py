@@ -65,6 +65,25 @@ class CheckedPlacement:
         held = self.primitives._get_obj_in_hand()
         if held is None:
             raise SkillError('empty_hand','No object is held')
+        # A lower shelf can be geometrically valid but fail official OnTop:
+        # the same rack is also above the shoe. Retry its official surface
+        # sampler, retaining the exact selected object and official predicate.
+        attempts = [point, None] if point is not None and max_steps >= 100 else [point]
+        for attempt, candidate in enumerate(attempts):
+            try:
+                self._try_place_on_top(held, target, max_steps, candidate)
+                break
+            except SkillError:
+                if attempt == len(attempts)-1:
+                    raise
+        self.frames_revision = -1
+        self._cleanup_grasp_contacts()
+        return {'primitive':'place_on_top','implementation':'checked_selected_surface_then_official_sampler',
+                'postcondition':'OnTop.get_value_after_settling','failure_policy':'restore_pre_action_state'}
+
+    def _try_place_on_top(self, held, target, max_steps, point):
+        from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
+        from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
         with placement_transaction(self.og.sim, self._placement_record):
             try:
                 pose = self._surface_pose(held, target, point)
@@ -78,11 +97,15 @@ class CheckedPlacement:
             held.keep_still()
             for _ in range(min(50,max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            adjacency = held.states[VerticalAdjacency].get_value()
+            self._placement_record({'status':'postcondition_check','target':target.name,'held':held.name,
+                'position':held.get_position_orientation()[0].tolist(),
+                'touching':bool(held.states[Touching].get_value(target)),
+                'target_below':target in adjacency.negative_neighbors,
+                'target_above':target in adjacency.positive_neighbors,
+                'grasp_released':self.primitives._get_obj_in_hand() is None})
             if not held.states[OnTop].get_value(target):
                 raise SkillError('postcondition_error','Placement did not satisfy OnTop after settling',changed=True)
-        self.frames_revision = -1
-        return {'primitive':'place_on_top','implementation':'checked_selected_surface_then_official_sampler',
-                'postcondition':'OnTop.get_value_after_settling','failure_policy':'restore_pre_action_state'}
 
     def _checked_place_inside(self, target, max_steps):
         from omnigibson.object_states import Inside
@@ -115,6 +138,7 @@ class CheckedPlacement:
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if not held.states[Inside].get_value(target):
                 raise SkillError('postcondition_error','Object left container after settling',changed=True)
+        self._cleanup_grasp_contacts()
         return {'primitive':'place_inside','implementation':'transactional_official_Inside_set_value',
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
