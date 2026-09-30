@@ -270,6 +270,85 @@ class RGBBackend(OmniGibsonBackend):
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
 
+    def _navigate(self, target, max_steps):
+        """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
+        from dataclasses import asdict
+        from .gt_navigation import GridMap, NavigationError, plan_navigation, STRATEGY
+        trav=self.env.scene.trav_map
+        position,_=self.robot.get_position_orientation()
+        point=target.get_position_orientation()[0]
+        floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
+        occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
+        height,width=occupancy.shape
+        grid=GridMap(width,height,float(trav.map_resolution),
+                     (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
+                     (occupancy!=0).astype('uint8').tobytes())
+        try:
+            plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist())
+        except NavigationError as exc:
+            raise SkillError('navigation_unreachable',str(exc)) from exc
+        details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
+                 'plan':asdict(plan),'map_resolution_m':grid.resolution,
+                 'map_sha256':hashlib.sha256(grid.free).hexdigest(),
+                 'dynamic_collision_check':False,'collision_substrate':'static_eroded_grid'}
+        with (self.output/'navigation_plans.jsonl').open('a') as stream:
+            stream.write(json.dumps(details)+'\n')
+        result=self._execute_gt_plan(grid,plan,max_steps)
+        self.navigation_distance+=result['actual_path_distance_m']
+        return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
+                'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
+                'start_grid_offset_m':plan.start_grid_offset_m,'dynamic_collision_check':False}
+
+    def _execute_gt_plan(self, grid, plan, max_steps):
+        """Follow the GT path using actual pose feedback and bounded commands."""
+        import omnigibson.utils.transform_utils as T
+        from .gt_navigation import GreedyGridFollower, NavigationError
+        settling=10
+        if max_steps<=settling:raise SkillError('action_timeout','Insufficient GT follower step budget')
+        pos,quat=self.robot.get_position_orientation()
+        follower=GreedyGridFollower(grid,plan,self.og.sim.get_sim_step_dt())
+        held=self.primitives._get_obj_in_hand()
+        relative=T.relative_pose_transform(*held.get_position_orientation(),pos,quat) if held else None
+        joints=self.robot.get_joint_positions()
+        indices=self.torch.tensor([i for i in range(len(joints)) if i not in self.robot.base_idx.tolist()],device=joints.device)
+        posture=joints[indices].clone();before=self.steps;travelled=0.;previous=pos[:2].cpu().tolist()
+        try:
+            with (self.output/'base_motion.jsonl').open('a') as stream:
+                while True:
+                    actual_pos,actual_quat=self.robot.get_position_orientation()
+                    rotation=T.quat2mat(actual_quat)
+                    actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+                    command=follower.next_pose((*actual_pos[:2].cpu().tolist(),actual_yaw))
+                    if command is None:break
+                    if self.steps-before>=max_steps-settling:
+                        raise SkillError('action_timeout','GT follower exhausted its control-step budget',changed=self.steps>before)
+                    x,y,yaw=command
+                    new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
+                    orientation=T.euler2quat(self.torch.tensor([0.,0.,yaw],device=quat.device))
+                    self._base_target={'position':new_pos,'orientation':orientation,'indices':indices,
+                                       'posture':posture,'held':held,'relative':relative}
+                    self._restore_base_target()
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                    measured,measured_quat=self.robot.get_position_orientation()
+                    actual_xy=measured[:2].cpu().tolist();travelled+=math.dist(previous,actual_xy);previous=actual_xy
+                    stream.write(json.dumps({'at':now(),'env_step':self.steps,'commanded_position':new_pos.tolist(),
+                        'actual_position':measured.tolist(),'actual_orientation':measured_quat.tolist(),
+                        'commanded_yaw':yaw,'follower':'greedy_grid_pose_feedback','audience':'executor_private'})+'\n')
+            motion_steps=self.steps-before
+            if self._base_target is not None:
+                for _ in range(settling):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            actual_pos,actual_quat=self.robot.get_position_orientation()
+            final_error=math.dist(actual_pos[:2].cpu().tolist(),plan.goal)
+            if final_error>follower.position_tolerance or not grid.navigable(grid.cell(actual_pos[:2].cpu().tolist())):
+                raise SkillError('navigation_unreachable','GT follower final pose verification failed',changed=self.steps>before)
+        except NavigationError as exc:
+            raise SkillError('navigation_unreachable',str(exc),changed=self.steps>before) from exc
+        finally:
+            self._base_target=None
+        return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
+                'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
+                'max_speed_m_s':.5,'max_yaw_speed_deg_s':60,'physical_controller':False}
+
     def _execute_base_path(self, points, end_yaw, max_steps):
         """Execute each bounded ideal pose in simulation and capture its real RGB.
 
@@ -342,18 +421,26 @@ class RGBBackend(OmniGibsonBackend):
 
     def evaluate(self):
         result=super().evaluate()
-        result['protocol']='rgb_agent_ideal_executor_v3_depth_checked_ray'
+        result['protocol']='rgb_agent_ideal_executor_v4_jinkai_gt_navigation'
         result['observation_mode']=self.mode
         return result
 
     def provenance(self):
+        from .gt_navigation import SOURCE_COMMIT, STRATEGY
         result=super().provenance()
-        result.update(executor='symbolic_manipulation_plus_private_rendered_pixel_navigation',
+        result.update(executor='symbolic_manipulation_plus_jinkai_gt_grid_navigation',
                       observation_mode=self.mode,image_size=self.image_size,
                       grounding='same_pixel_depth_checked_nonrobot_collision_ray_private_executor_only',
                       model_visible_truth=False)
         result['record_video'] = self.record_video
-        result['base_execution'] = 'live_kinematic_path_0.5m_s_60deg_s; symbolic grasp/place remain instantaneous'
+        result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; symbolic grasp/place remain instantaneous'
+        result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
+            'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
+            'geometry':'OmniGibson static eroded traversability grid',
+            'habitat_native_navmesh':False,'dynamic_collision_check':False,
+            'goal_selection':'jinkai visual-point candidate sampling and ranking',
+            'pixel_grounding':'same selected pixel; no neighboring-pixel target substitution',
+            'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,

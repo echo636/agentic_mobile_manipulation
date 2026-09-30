@@ -51,6 +51,8 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 
 目标由模型在最新 RGB 中选点；执行器使用私有几何完成导航及官方 symbolic/volume 操作。底盘逐控制步理想运动，抓放可能瞬变；不是物理控制排行榜提交。最终 BDDL/TaskMetric 在结束后独立评分，不返回活动模型。
 
+导航已接入 jinkai/harness 的 visual-point GT planner 策略：候选落脚点采样、可达性检查、目标距离评分，以及逐步位姿反馈。Habitat 原生 navmesh/follower 由 OmniGibson 的静态可通行网格和理想底盘适配替代；修复了微小位置偏差导致起点落入相邻障碍格的问题。当前仍不包含完整动态碰撞检查。[移植范围与验证](docs/gt_navigation.md)。原 100 条批量评测按用户要求暂停，开发更新不会自动恢复它。
+
 原始视频、图像、完整公开模型消息、工具轨迹、Skill 快照、版本、主机/解释器/GPU/PID 和失败记录保存在各 run 中。Replay 不补写隐藏思考或不存在的机械臂运动。原始数据和资产不提交到 Git。
 
 - [观测与工具协议](docs/rgb_protocol.md)
