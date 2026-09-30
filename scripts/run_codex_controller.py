@@ -15,6 +15,7 @@ import signal
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.vision_policy import system_prompt
 from manipulation_agent.records import now, write_json, source_version
+from manipulation_agent.model_trace import export_summaries
 
 
 def main():
@@ -32,10 +33,11 @@ def main():
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     workspace = args.output / "empty_workspace"
     workspace.mkdir()
-    command = ["codex", "exec", "--ignore-user-config", "--ephemeral", "--skip-git-repo-check", "--json",
+    command = ["codex", "exec", "--ignore-user-config", "--skip-git-repo-check", "--json",
                "--sandbox", "read-only", "--model", args.model, "--cd", str(workspace.resolve()),
                "-c", 'approval_policy="never"', "-c", 'web_search="disabled"',
-               "-c", "project_doc_max_bytes=0", "-c", "developer_instructions=" + json.dumps(system_prompt(args.agent_profile))]
+               "-c", "project_doc_max_bytes=0", "-c", 'model_reasoning_summary="auto"',
+               "-c", "developer_instructions=" + json.dumps(system_prompt(args.agent_profile))]
     for feature in ("shell_tool", "unified_exec", "plugins", "apps", "hooks", "view_image", "multi_agent", "browser_use",
                     "computer_use", "image_generation"):
         command += ["--disable", feature]
@@ -88,6 +90,11 @@ def main():
                     duration_seconds=time.monotonic() - started, finished_at=now(),
                     task_success=None, formal_finish_observed=closed, tools_called=calls,
                     validation_note="Client exit alone does not prove task success; join with simulator run.json")
+    try:
+        metadata['reasoning_trace']=export_summaries(args.output,events,metadata['started_at'],metadata['finished_at'])
+    except Exception as exc:
+        metadata['reasoning_trace']={'status':'failed','error_type':type(exc).__name__,
+                                     'reason':'Run-local summary export failed; raw controller events preserved'}
     write_json(args.output / "controller.json", metadata)
     print(json.dumps({k: metadata[k] for k in ("status", "exit_code", "model", "duration_seconds")}))
     return process.returncode or (0 if closed else 2)

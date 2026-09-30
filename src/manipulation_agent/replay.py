@@ -28,9 +28,14 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     explained = json.loads(explained_path.read_text()) if explained_path.exists() else None
     walltime_path = run_dir / 'walltime_video.json'
     walltime = json.loads(walltime_path.read_text()) if walltime_path.exists() else None
+    review_path = run_dir / 'review_video.json'
+    review = json.loads(review_path.read_text()) if review_path.exists() else None
     video_markers = {m['request_id']:m for m in (video or {}).get('markers', [])}
     audit = audit_episode(run_dir, controller_dir) if controller_dir else None
     model_messages = {}; model_payloads = {}; pending = []; public_events = []; model_index = 0
+    summaries=lines(controller_dir/'model_reasoning_summaries.jsonl') if controller_dir else []
+    summaries=[r for r in summaries if r.get('source')=='provider_returned_reasoning_summary' and r.get('verbatim') is True]
+    summary_index=0
     if controller_dir:
         for event_index, event in enumerate(lines(controller_dir/'model_events.jsonl')):
             item = event.get('item',{})
@@ -80,6 +85,9 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     calls = [e for e in events if e['kind'] == 'tool_call']
     start = datetime.fromisoformat(calls[0]['at']) if calls else None
     for call in calls:
+        step_summaries=[]
+        while summary_index<len(summaries) and summaries[summary_index].get('at') and datetime.fromisoformat(summaries[summary_index]['at'])<=datetime.fromisoformat(call['at']):
+            step_summaries.append(summaries[summary_index]);summary_index+=1
         event = results.get(call['request_id']); result = event.get('result') if event else None
         args = call['arguments']; name = call['name']
         before = copy.deepcopy(last_observation)
@@ -100,6 +108,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                       'observation_job': copy.deepcopy((result or {}).get('job')),
                       'request_id':call['request_id'], 'decision':copy.deepcopy(args.get('decision')),
                       'model_messages':copy.deepcopy(model_messages.get(len(steps)+1,[])),
+                      'model_reasoning_summaries':step_summaries,
                       **model_payloads.get(len(steps)+1,{}),
                       'at': call['at'], 'elapsed_seconds': (datetime.fromisoformat(call['at']) - start).total_seconds(),
                       'video_start_seconds': video_markers.get(call['request_id'],{}).get('seconds'),
@@ -107,7 +116,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                       'status': 'missing_result' if result is None else ('passed' if result.get('ok') else 'failed'),
                       'before': before, 'after': copy.deepcopy(last_observation), 'new_observation': new_obs is not None,
                       'decisions': copy.deepcopy(decisions[-4:]), 'plan': copy.deepcopy(plan), 'memory': copy.deepcopy(notes)})
-    # No private executor events or hidden model reasoning are exported into the replay.
+    # Only provider-returned summaries, never opaque/encrypted internal reasoning.
     return {'schema_version': 1, 'generated_at': now(), 'kind': 'discrete_observation_action_replay',
             'run_id': run['run_id'], 'status': run['status'], 'rgb_only': rgb,
             'instruction': run.get('config', {}).get('instruction'), 'config': run.get('config', {}),
@@ -115,11 +124,14 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
             'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
-            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime,
+            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review,
             'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(controller_dir),
+            'model_reasoning_summaries':summaries,
+            'model_final_reasoning_summaries':summaries[summary_index:],
+            'reasoning_availability':'provider_returned_summary' if summaries else 'not_recorded_or_not_returned',
             'model_messages_after_last_sim_call':[m for i,ms in model_messages.items() if i>len(steps) for m in ms],
             'model_calls_without_sim_record':[c for i,c in model_payloads.items() if i>len(steps)],
-            'model_text_contract':'Original public assistant messages only; no translation, rewriting or private reasoning. Alignment uses event order, not invented wall-clock timestamps.',
+            'model_text_contract':'Verbatim assistant messages and provider-returned reasoning summaries are separate. No translation, rewritten decision summary or opaque internal reasoning. Assistant text uses event order; provider summaries use recorded timestamps.',
             'evaluation_offline_only': {'task_success': run.get('task_success'), 'evaluation': run.get('evaluation'),
                                         'agent_outcome': run.get('agent_outcome'), 'finish_reason': run.get('finish_reason')},
             'failure': run.get('failure') or run.get('error'),

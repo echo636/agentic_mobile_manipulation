@@ -18,8 +18,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from .records import now,write_json
 from .replay import render_replay
 
-PHASES={'initial':'初始场景','decision':'LLM 原文 / 工具调用','execution':'执行工具','result':'工具返回 · 检查新观测','evaluation':'结束后的独立评分','final':'LLM 结束后的公开原文'}
-LABELS={'observe':'读取 RGB','look':'转向观察','navigate_to':'接近目标','grasp':'抓取','place_inside':'放入容器','place_on_top':'放到表面','toggle_on':'打开设备','finish':'结束任务','read_skill':'读取 Skill','list_skills':'查看 Skill 目录'}
+PHASES={'initial':'Initial observation','decision':'Model output / tool call','execution':'Tool execution','result':'Tool result','evaluation':'Independent evaluation','final':'Final model output'}
+LABELS={}
 FONT=Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')
 
 
@@ -35,13 +35,9 @@ def char_width(char,size):
 
 def outcome(step):
     result=step.get('result')
-    if not result:return '没有记录工具返回。'
-    if not result.get('ok'):return '失败：'+result.get('error',{}).get('code','unknown')+' / '+result.get('error',{}).get('message','')
-    if step['tool']=='read_skill':return '已读取 '+step['arguments']['name']+'。这是工作流指导文档，由大脑继续调用动作工具。'
-    if step['tool']=='list_skills':return '可用：'+', '.join(s['name'] for s in result.get('skills',[]))
-    if result.get('closed'):return '已接受结束请求。模型声明：'+step['arguments'].get('reason','')
-    if result.get('effect'):return '执行器报告操作完成。请结合最新 RGB 核查，工具完成不等于任务成功。'
-    return '已返回当前机器人 RGB 观测。'
+    if not result:return 'No tool result recorded.'
+    keys=('ok','error','effect','closed','job')
+    return json.dumps({k:result[k] for k in keys if k in result},ensure_ascii=False,separators=(',',':'))
 
 
 def make_panel(step,phase,run,total):
@@ -62,42 +58,47 @@ def make_panel(step,phase,run,total):
     draw.rectangle((1024,0,1919,1079),fill='#14283a')
     wrap('BEHAVIOR · RGB AGENT',1052,28,size=22,color='#64d9cb')
     number=step['index'] if step else 0
-    heading=f'步骤 {number:02d} / {total:02d} · {PHASES[phase]}' if step else PHASES[phase]
+    heading=f'Step {number:02d} / {total:02d} | {PHASES[phase]}' if step else PHASES[phase]
     wrap(heading,1052,72,size=34,max_lines=2)
     tool=step['tool'] if step else 'observe'
     args=step['arguments'] if step else {}
     action=args.get('primitive',tool)
-    wrap(LABELS.get(action,action) if step else '回放记录',1052,135,size=30,color='#ffffff')
+    wrap(LABELS.get(action,action) if step else 'Recorded replay',1052,135,size=30,color='#ffffff')
     # Exact executable parameters, separate from the public decision text.
     call={k:v for k,v in args.items() if k!='decision'}
     if tool=='finish':call={'outcome':args.get('outcome')}
     if step:
         wrap(tool+'('+json.dumps(call,ensure_ascii=False,separators=(',',':'))+')',1052,186,size=21,color='#80c9ee',max_lines=4)
     y=315
+    summaries=step.get('model_reasoning_summaries',[]) if step else []
     messages=step.get('model_messages',[]) if step else (run.get('_final_model_messages',[]) if phase=='final' else [])
-    y=wrap('LLM 公开原文 · 未翻译 / 未改写',1052,y,size=22,color='#74c9bf')+12
+    if summaries:
+        y=wrap('Provider reasoning summary (verbatim)',1052,y,size=22,color='#e4be79')+8
+        for message in summaries:
+            y=wrap(message['text'],1052,y,size=25,max_lines=5)+8
+    y=wrap('Assistant output (verbatim)',1052,y,size=22,color='#74c9bf')+12
     if messages:
         for message in messages:
             y=wrap(message['text'],1052,y,size=28,max_lines=7)+10
     else:
-        y=wrap('此调用前没有新增公开文本。',1052,y,size=27,max_lines=2)+10
-        y=wrap('工具调用本身即上方原始参数；不补写模型思考。',1052,y,size=24,max_lines=3)+14
+        y=wrap('No new assistant text before this call.',1052,y,size=27,max_lines=2)+10
+        y=wrap('Exact tool arguments shown above.',1052,y,size=24,max_lines=3)+14
     if tool=='read_skill':
-        y=wrap('读取的 Skill：'+args.get('name',''),1052,min(y,660),size=26,color='#87dccc',max_lines=2)
+        y=wrap('Skill: '+args.get('name',''),1052,min(y,660),size=26,color='#87dccc',max_lines=2)
     if tool=='finish':
-        wrap('finish.reason 原文：'+args.get('reason',''),1052,min(y,590),size=23,max_lines=5)
+        wrap('finish.reason: '+args.get('reason',''),1052,min(y,590),size=23,max_lines=5)
     if phase=='result' and step:
         draw.rectangle((1040,810,1903,979),fill='#1b3e49')
-        wrap('返回结果',1052,824,size=20,color='#83e3c9')
+        wrap('Tool response',1052,824,size=20,color='#83e3c9')
         wrap(outcome(step),1052,859,size=23,max_lines=3)
     elif phase=='evaluation':
         success=run.get('task_success')
         draw.rectangle((1040,315,1903,850),fill='#17463f')
-        wrap('独立任务评估',1070,360,size=34,color='#99f4d2')
-        wrap('任务成功。Q = '+str(run.get('evaluation',{}).get('goal_satisfaction_fraction','—')) if success else '任务未通过；请查看原始评估。',1070,440,width=780,size=36,max_lines=4)
-        wrap('评分在结束后单独计算，没有提供给大脑。',1070,655,width=780,size=27,max_lines=3)
-    wrap('同步版：等待被压缩；停顿重复真实帧。',1052,996,size=21,color='#99aec0',max_lines=1)
-    wrap('大脑仅看机器人 RGB；理想抓放仍可能瞬变。',1052,1031,size=21,color='#99aec0',max_lines=1)
+        wrap('Independent evaluation',1070,360,size=34,color='#99f4d2')
+        wrap('Task passed. Q = '+str(run.get('evaluation',{}).get('goal_satisfaction_fraction','—')) if success else 'Task not passed. See recorded evaluation.',1070,440,width=780,size=36,max_lines=4)
+        wrap('Offline score; not visible to the agent.',1070,655,width=780,size=27,max_lines=3)
+    wrap(run.get('_video_note','Recorded frames | original text | timeline in replay'),1052,996,size=21,color='#99aec0',max_lines=1)
+    wrap('Full transcript and original timing in the replay.',1052,1031,size=21,color='#99aec0',max_lines=1)
     return canvas
 
 
