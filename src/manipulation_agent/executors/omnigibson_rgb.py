@@ -15,6 +15,7 @@ class RGBBackend(OmniGibsonBackend):
     def __init__(self,*args,record_video=False,**kwargs):
         self.record_video = record_video
         self.video = None
+        self.spectator = None
         self.image_size=512
         self.capture_index=0
         self.image_files={}
@@ -22,8 +23,15 @@ class RGBBackend(OmniGibsonBackend):
         super().__init__(*args,**kwargs)
         if self.record_video:
             from ..video import EpisodeVideo
-            self.og.sim.viewer_camera.image_width = self.image_size
-            self.og.sim.viewer_camera.image_height = self.image_size
+            from omnigibson.sensors import VisionSensor
+            # Use an independent offscreen render product at its final size. Do
+            # not resize/destroy the shared GUI viewer product: it invalidates
+            # robot RGB annotators in the pinned headless runtime.
+            self.spectator = VisionSensor(relative_prim_path='/mas_spectator',name='mas_spectator',
+                                          modalities=['rgb'],image_width=self.image_size,
+                                          image_height=self.image_size,viewport_name=None)
+            self.spectator.load(None)
+            self.spectator.initialize()
             self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size)
 
     def _position_spectator(self):
@@ -39,7 +47,7 @@ class RGBBackend(OmniGibsonBackend):
         right = torch.linalg.cross(direction,torch.tensor([0.,0.,1.]));right /= torch.linalg.norm(right)
         up = torch.linalg.cross(right,direction)
         orientation = T.mat2quat(torch.stack((right,up,-direction),dim=1))
-        self.og.sim.viewer_camera.set_position_orientation(camera,orientation)
+        self.spectator.set_position_orientation(camera,orientation)
 
     def _video_frame(self, kind):
         if self.video is None or self.video.closed: return
@@ -58,7 +66,7 @@ class RGBBackend(OmniGibsonBackend):
             if 'Camera' not in name: continue
             view = 'head' if 'zed' in name else 'left_wrist' if 'left' in name else 'right_wrist'
             sensors[view] = sensor
-        if include_spectator: sensors['spectator'] = self.og.sim.viewer_camera
+        if include_spectator: sensors['spectator'] = self.spectator
         shapes = {}
         for attempt in range(30):
             self.og.sim.render()
