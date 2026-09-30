@@ -62,6 +62,9 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 
 ## 结果可视化
 
-[实验结果与故障分析页面](http://10.76.5.241:8765/retest32_gt_20260930/results.html)展示 32 项重测的实时状态、旧新 Q 分数、失败证据、工具耗时、真实耗时视频，以及逐次工具调用前后的四路 RGB 和模型公开原文。
+[实验结果与故障分析页面](http://10.76.5.241:8765/retest32_gt_20260930/results.html)展示 32 项重测的实时状态、旧新 Q 分数、失败证据、工具耗时、精简视频，以及逐次工具调用前后的四路 RGB 和模型原文。默认精简版动作按仿真时间 2× 播放、压缩静止和等待；真实耗时与原始录像仍可切换。接口实际返回的 reasoning summary 与 assistant 输出分别显示，历史缺失不补写。
 
 页面源码为 [web/results.html](web/results.html)，无需构建或外部 CDN。部署在批次报告目录中，读取同目录的 `behavior100/progress.json`、`behavior100/walltime_index.json`、`failure_review/review.json` 和各任务 `replay.json`。进度每 30 秒更新；人工复核的失败分析使用明确标注的冻结快照，新增任务不会自动套用旧结论。分析脚本、输入哈希、发布记录和浏览器验证保存在对应 operations 批次，不修改原始评测数据。
+
+- [回放、接口推理摘要与原始记录](docs/replay_trace.md) · [含推理摘要的新真实测试](http://10.76.5.241:8765/replay_trace_20261001/manipulation_runs/mas_trace_000_turning_on_radio_i301_s0_r1/replay.html#step=9)
+- [启动和放置修复的验证范围](docs/executor_repairs_20261001.md) · [每次修复尝试与结果](http://10.76.5.241:8765/executor_fixes_20261001/index.html)
