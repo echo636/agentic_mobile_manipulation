@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import traceback
 from pathlib import Path
@@ -23,12 +24,19 @@ def main() -> int:
     parser.add_argument("--instance", type=int, default=301)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--instruction", default="Turn on the radio on the living-room table.")
+    parser.add_argument("--instruction", help="Override the bundled public challenge instruction")
+    parser.add_argument("--inside-placement", choices=["symbolic_raycast", "official_volume"], default="symbolic_raycast",
+                        help="Explicit research executor choice; never selected by the model")
     parser.add_argument("--max-actions", type=int, default=80)
     parser.add_argument("--max-sim-steps", type=int, default=20000)
     parser.add_argument("--port", type=int, default=29430)
     parser.add_argument("--controller", default="unspecified", help="Recorded external model/client for serve mode")
     args = parser.parse_args()
+    catalog = json.loads((Path(__file__).parent / "tasks.json").read_text())
+    if args.instruction is None:
+        if not catalog["tasks"].get(args.task, {}).get("instruction"):
+            parser.error("Task has no bundled instruction: provide --instruction explicitly")
+        args.instruction = catalog["tasks"][args.task]["instruction"]
     policy = None
     # Check credentials BEFORE spending time and GPU memory on simulator startup.
     if args.policy == "responses":
@@ -46,7 +54,8 @@ def main() -> int:
             backend = FakeBackend()
         else:
             from .omnigibson_backend import OmniGibsonBackend
-            backend = OmniGibsonBackend(args.task, args.instance, args.output, seed=args.seed, max_steps=args.max_sim_steps)
+            backend = OmniGibsonBackend(args.task, args.instance, args.output, seed=args.seed,
+                                       max_steps=args.max_sim_steps, inside_placement=args.inside_placement)
         harness = Harness(backend, recorder, Budget(max_actions=args.max_actions, max_sim_steps=args.max_sim_steps))
         if args.policy == "scripted":
             from .policies import scripted_episode

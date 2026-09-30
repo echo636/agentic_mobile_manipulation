@@ -12,6 +12,7 @@ import math
 import os
 import random
 import subprocess
+import time
 from pathlib import Path
 
 from .contracts import SkillError
@@ -21,7 +22,8 @@ from .records import write_json
 class OmniGibsonBackend:
     mode = "oracle_task_state"
 
-    def __init__(self, task: str, instance: int, output: Path, *, seed: int = 0, max_steps: int = 20000):
+    def __init__(self, task: str, instance: int, output: Path, *, seed: int = 0, max_steps: int = 20000,
+                 inside_placement: str = "symbolic_raycast"):
         # Fail explicitly on the vector-env API change until its adapter is validated.
         version = metadata.version("omnigibson")
         if version != "3.9.2":
@@ -52,6 +54,8 @@ class OmniGibsonBackend:
         self.og, self.torch = og, torch
         self.task_name, self.instance, self.seed, self.output = task, instance, seed, output
         self.steps = 0
+        self.inside_placement = inside_placement
+        self.sampling_physics_steps = 0
         self.navigation_distance = 0.0
         self.frames_revision = -1
         self.frames = []
@@ -206,6 +210,7 @@ class OmniGibsonBackend:
                     relations[label] = [other_key for other_key, other in objects.items()
                                         if other is not obj and obj.states[cls].get_value(other)]
             result.append({"id": key, "category": obj.category, "name": obj.name,
+                           "graspable": not obj.fixed_base,
                            "distance_m": round(float(self.torch.linalg.norm(base[:2] - nearest)), 3),
                            "states": values, "relations": relations})
         return {"objects": result, "held_object": next((k for k, v in objects.items() if v is held), None),
@@ -272,6 +277,51 @@ class OmniGibsonBackend:
         return {"navigation": "ideal_reachable_endpoint_teleport", "path_distance_m": float(length),
                 "dynamic_collision_check": False, "settling_steps": 50}
 
+    def _place_inside_volume(self, target, max_steps: int) -> dict:
+        """Ideal placement through official collision-checked volume sampling.
+
+        No goal/evaluator access: release the currently held object, sample a real
+        pose using Inside.set_value, settle and independently recheck the relation.
+        Its internal physics ticks are bounded and counted separately from env.step.
+        Failed placement can leave the item released and must be replanned.
+        """
+        from omnigibson.object_states import Inside
+        held = self.primitives._get_obj_in_hand()
+        if held is None:
+            raise SkillError("empty_hand", "No object is held")
+        fillable = [link for link in target.links.values() if link.is_meta_link and
+                    link.meta_link_type in {"fillable", "openfillable"}]
+        if not fillable or Inside not in held.states:
+            raise SkillError("unsupported_relation", "Target has no supported fillable volume")
+        # Release before sampling; the grasp constraint would drag a sampled pose back.
+        for arm in self.robot.arm_names:
+            self.robot.release_grasp_immediately(arm=arm)
+        original_step = self.og.sim.step_physics
+        started = time.monotonic()
+        before = self.sampling_physics_steps
+        physics_limit = min(6000, max_steps * 4)
+
+        def bounded_step(*args, **kwargs):
+            if self.sampling_physics_steps - before >= physics_limit or time.monotonic() - started > 120:
+                raise SkillError("sampling_budget_exhausted", "Volume sampler exceeded physics/time limit", changed=True)
+            self.sampling_physics_steps += 1
+            return original_step(*args, **kwargs)
+
+        self.og.sim.step_physics = bounded_step
+        try:
+            sampled = held.states[Inside].set_value(target, True)
+        finally:
+            self.og.sim.step_physics = original_step
+            self.frames_revision = -1
+        if not sampled:
+            raise SkillError("sampling_error", "Official volume sampler could not place the released object", changed=True)
+        for _ in range(min(50, max_steps)):
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        if not held.states[Inside].get_value(target):
+            raise SkillError("postcondition_error", "Object left the container after settling", changed=True)
+        return {"primitive": "place_inside", "implementation": "official_Inside_set_value_volume_sampler",
+                "postcondition": "Inside.get_value_after_settling", "sampling_physics_steps": self.sampling_physics_steps - before}
+
     def execute(self, skill: str, target: str | None, max_steps: int) -> dict:
         from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitiveSet as Primitive
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveErrorGroup
@@ -279,6 +329,8 @@ class OmniGibsonBackend:
         before = self.steps
         if skill == "navigate_to":
             return self._navigate(obj, max_steps)
+        if skill == "place_inside" and self.inside_placement == "official_volume":
+            return self._place_inside_volume(obj, max_steps)
         if skill == "wait":
             for _ in range(min(30, max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
@@ -307,6 +359,9 @@ class OmniGibsonBackend:
                 "goal_options": goals, "initial_goal_options": self.initial_goals,
                 "goal_satisfaction_fraction": max((sum(o) / len(o) for o in goals if o), default=0),
                 "official_metrics": official, "ideal_navigation_distance_m": self.navigation_distance,
+                "inside_placement": self.inside_placement,
+                "volume_sampling_physics_steps": self.sampling_physics_steps,
+                "time_metric_scope": "env.step only; excludes separate volume sampling physics ticks",
                 "protocol": "symbolic_oracle_research", "official_submission_eligible": False,
                 "task_instance": self.task_metadata}
 
@@ -322,6 +377,7 @@ class OmniGibsonBackend:
             versions[name] = version.read_text().strip() if version.exists() else "unresolved"
         return {"name": "OmniGibson", "executor": "official_symbolic_plus_ideal_navigation",
                 "observation_mode": self.mode, "packages": packages, "gpu_index": gpu,
+                "inside_placement": self.inside_placement,
                 "omnigibson_source_commit": source.stdout.strip(),
                 "gpu_uuid": query.stdout.strip(), "assets": versions, "input_hashes": self.input_hashes,
                 "task_instance": self.task_metadata, "official_submission_eligible": False}

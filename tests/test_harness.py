@@ -70,6 +70,16 @@ class HarnessContracts(unittest.TestCase):
     def test_cannot_grasp_distant_object(self):
         self.assertEqual(self.act("grasp", "radio.n.01_1")["error"]["code"], "out_of_reach")
 
+    def test_fixed_object_cannot_be_grasped(self):
+        next(o for o in self.h.snapshot["objects"] if o["id"] == "apple.n.01_1")["graspable"] = False
+        self.assertEqual(self.act("grasp", "apple.n.01_1")["error"]["code"], "fixed_object")
+        self.assertEqual(self.backend.steps, 0)
+
+    def test_cannot_reach_through_closed_container(self):
+        next(o for o in self.h.snapshot["objects"] if o["id"] == "apple.n.01_1")["relations"] = {"inside": ["cabinet.n.01_1"]}
+        self.assertEqual(self.act("grasp", "apple.n.01_1")["error"]["code"], "container_closed")
+        self.assertEqual(self.backend.steps, 0)
+
     def test_closed_container_requires_open_before_grasp(self):
         self.act("grasp", "apple.n.01_1")
         self.assertEqual(self.act("place_inside", "cabinet.n.01_1")["error"]["code"], "container_closed")

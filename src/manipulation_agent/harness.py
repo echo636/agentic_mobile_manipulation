@@ -82,6 +82,8 @@ class Harness:
         if skill == "grasp" and held is not None and held != target:
             raise SkillError("hand_occupied", "Place or release the held object first")
         if skill == "grasp":
+            if objects[target].get("graspable") is False:
+                raise SkillError("fixed_object", "This object is fixed in the scene and cannot be grasped")
             for parent in objects[target].get("relations", {}).get("inside", []):
                 if objects.get(parent, {}).get("states", {}).get("open") is False:
                     raise SkillError("container_closed", "Open the containing object before grasping its contents")

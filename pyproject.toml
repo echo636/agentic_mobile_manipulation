@@ -18,3 +18,6 @@ manip-mcp = "manipulation_agent.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+manipulation_agent = ["tasks.json"]
