@@ -33,7 +33,10 @@ def summarize(rows):
     counts = dict(Counter(r['status'] for r in rows))
     completed = sum(r['status'] in FINAL for r in rows)
     successes = sum(r.get('task_success') is True for r in rows)
+    first=[r.get('previous_attempts',[r])[0] for r in rows]
     return {'total':len(rows), 'completed':completed, 'counts':counts, 'task_successes':successes,
+            'first_attempt_task_successes':sum(r.get('task_success') is True for r in first),
+            'extra_infrastructure_attempts':sum(len(r.get('previous_attempts',[])) for r in rows),
             'success_fraction_all_tasks': successes/len(rows) if rows else 0,
             'final_evaluations':sum(r.get('task_success') is not None for r in rows),
             'complete_videos':sum(r.get('video_validation')=='passed' for r in rows),
@@ -47,13 +50,16 @@ def render_dashboard(progress):
         links=[]
         for key,label in [('replay_url','Replay'),('video_url','视频'),('record_url','记录')]:
             if r.get(key): links.append(f'<a href="{esc(r[key])}">{label}</a>')
+        for previous in r.get('previous_attempts',[]):
+            if previous.get('replay_url'):
+                links.append(f'<a href="{esc(previous["replay_url"])}">此前失败尝试</a>')
         outcome='成功' if r.get('task_success') is True else ('未成功' if r.get('task_success') is False else '未取得最终评分')
         rows.append(f'<tr data-status="{esc(r["status"])}"><td>{r["index"]+1}</td><td>{esc(r["name"])}<small>{esc(r["task"])}</small><details><summary>任务输入与来源</summary><p>{esc(r["instruction"])}</p><p>{esc(r["instruction_source"])}</p></details></td><td class="{r["status"]}">{esc(r["status"])}<small>{esc(r.get("stage","queued"))}</small></td><td>{outcome}<small>Q={esc(r.get("q_score","—"))}</small></td><td>{esc(r.get("actions","—"))}<small>{esc(r.get("tool_calls","—"))} tool calls</small></td><td>{esc(r.get("evidence_alignment","—"))}<small>video: {esc(r.get("video_validation","—"))}</small></td><td>{" · ".join(links)}<small>{esc(r.get("failure",""))}</small></td></tr>')
     return '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BEHAVIOR 100 · 批量测试</title>
 <style>body{font:16px system-ui;background:#eef3f8;color:#142c43;margin:25px auto;max-width:1500px;padding:0 18px}a{color:#07599b}article,.cards>div{background:white;border:1px solid #d3dfe9;border-radius:10px;padding:18px;margin:14px 0}.cards{display:flex;gap:14px;flex-wrap:wrap}.cards>div{flex:1;min-width:150px}.cards strong{font-size:30px;display:block}table{border-collapse:collapse;width:100%;min-width:1050px}td,th{text-align:left;border-bottom:1px solid #ddd;padding:12px;vertical-align:top}small{display:block;color:#586d81;margin-top:7px;overflow-wrap:anywhere}td:nth-child(2){max-width:360px}td:last-child{max-width:270px}summary{cursor:pointer}input,select{font:inherit;padding:8px;margin:8px}.table{overflow-x:auto}.passed{color:#087044}.failed{color:#ad3030}.blocked{color:#9c6700}.running{color:#065fa7}p{line-height:1.65}code{overflow-wrap:anywhere}</style>
 <h1>BEHAVIOR 2026 · 100 项任务测试</h1><p>RGB agent + ideal motor executor · gpt-6-astra · public instance 301 · seed 0</p>''' + f'''
 <div class="cards"><div><strong>{s['completed']} / {s['total']}</strong>已结束（包括失败和受阻）</div><div><strong>{s['task_successes']} / {s['total']}</strong>独立评估成功 / 固定总数</div><div><strong>{s['final_evaluations']}</strong>取得最终评分</div><div><strong>{s['complete_videos']}</strong>录像完整性验证通过</div></div>
-<article><p><b>协议：</b>每种任务运行一个公开测试实例，共 100 个 episode，不等于所有公开实例或官方排行榜提交。机器人输入是同时采集的前、后、左、右 RGB，无腕部相机；模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。切割、擦洗等能力未扩展，相关失败保留在总数中。</p><p><b>输入来源：</b>50 项使用官方原文，50 项按静态 BDDL 目标补写，逐项标注。独立评估、几何和 spectator 录像只供执行器或离线审阅，不作为模型观测。</p><p><b>回放：</b>连续录像记录实际控制步；模型等待时间不铺成静止画面。Replay 同步四路 RGB、模型公开 assistant 原文、工具参数和返回结果。不补写思考，不展示隐藏推理；原始私有运行记录保存在实验目录。</p><p><b>状态：</b>passed 要求任务成功、控制器正常结束、证据对齐和录像验证通过；failed/blocked 分别保留具体阶段。失败任务有最终评分时显示 Q，仿真在初始化前失败时无法生成观测或视频。部分录像不标成完整。</p><p>批次状态：{esc(s['execution_status'])} · 更新：{esc(progress['updated_at'])} · <a href="behavior100/progress.json">实时 JSON</a> · <a href="behavior100/manifest.json">冻结清单</a> · <a href="behavior100/validation.json">验证记录</a> · <a href="behavior100/journal.md">迭代日志</a></p></article>
+<article><p><b>失败与重试：</b>首次尝试成功 {s['first_attempt_task_successes']} / {s['total']}；另有 {s['extra_infrastructure_attempts']} 次模型启动前的基础设施重试。上方成功数含修复后的最新尝试，原始失败记录保留在该任务行，任务总数始终为 100。</p><p><b>协议：</b>每种任务运行一个公开测试实例，共 100 个 episode，不等于所有公开实例或官方排行榜提交。机器人输入是同时采集的前、后、左、右 RGB，无腕部相机；模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。切割、擦洗等能力未扩展，相关失败保留在总数中。</p><p><b>输入来源：</b>50 项使用官方原文，50 项按静态 BDDL 目标补写，逐项标注。独立评估、几何和 spectator 录像只供执行器或离线审阅，不作为模型观测。</p><p><b>回放：</b>连续录像记录实际控制步；模型等待时间不铺成静止画面。Replay 同步四路 RGB、模型公开 assistant 原文、工具参数和返回结果。不补写思考，不展示隐藏推理；原始私有运行记录保存在实验目录。</p><p><b>状态：</b>passed 要求任务成功、控制器正常结束、证据对齐和录像验证通过；failed/blocked 分别保留具体阶段。失败任务有最终评分时显示 Q，仿真在初始化前失败时无法生成观测或视频。部分录像不标成完整。</p><p>批次状态：{esc(s['execution_status'])} · 更新：{esc(progress['updated_at'])} · <a href="behavior100/progress.json">实时 JSON</a> · <a href="behavior100/manifest.json">冻结清单</a> · <a href="behavior100/validation.json">验证记录</a> · <a href="behavior100/journal.md">迭代日志</a></p></article>
 <input id="search" placeholder="搜索任务 / 阶段"><select id="status"><option value="">所有状态</option><option>planned</option><option>running</option><option>passed</option><option>failed</option><option>blocked</option></select><label><input id="refresh" type="checkbox" checked>每 60 秒刷新</label><div class="table"><table><thead><tr><th>#</th><th>任务</th><th>运行状态</th><th>独立评估</th><th>动作数</th><th>证据与录像</th><th>回放 / 原始记录</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>''' + '''<script>const search=document.querySelector('#search'), status=document.querySelector('#status');function filter(){document.querySelectorAll('tbody tr').forEach(r=>r.hidden=!(r.textContent.toLowerCase().includes(search.value.toLowerCase())&&(!status.value||r.dataset.status===status.value)))}search.oninput=status.onchange=filter;setInterval(()=>{if(document.querySelector('#refresh').checked&&!search.value&&!status.value)location.reload()},60000)</script></html>'''
 
 
@@ -64,13 +70,27 @@ class Batch:
         self.lock=threading.RLock(); self.queue=queue.Queue(); self.rows=self.manifest['tasks']
         for directory in ('records','preflight','controllers','runs','launchers','logs'):
             (self.root/directory).mkdir(exist_ok=True)
+        selection_path=self.root/'infrastructure_retries.json'
+        selections=json.loads(selection_path.read_text()) if selection_path.exists() else {}
         for r in self.rows:
             saved=self.root/'records'/f"{r['run_id']}.json"
+            selection=selections.get(str(r['index']))
+            if selection:
+                previous=json.loads(saved.read_text())
+                if previous.get('controller_pid') is not None or previous.get('actions') != 0:
+                    raise RuntimeError('Only pre-policy infrastructure failures can use this retry mechanism')
+                if previous['status']!='failed': raise RuntimeError('Retry requires a preserved failed attempt')
+                r.update(run_id=selection['run_id'],attempt=2,previous_attempts=[previous],retry_reason=selection['reason'])
+                saved=self.root/'records'/f"{r['run_id']}.json"
             if saved.exists(): r.update(json.loads(saved.read_text()))
             if r['status'] == 'running':
                 raise RuntimeError('Unfinished attempt exists; reconcile its owned unit and archive before resume: '+r['run_id'])
         if source_version()['dirty']: raise RuntimeError('Batch source must be a clean frozen checkout')
         self.environment={**os.environ,'PYTHONPATH':str(self.source/'src')}
+        if config.get('controller_path'): self.environment['PATH']=config['controller_path']
+        client=shutil.which('codex',path=self.environment.get('PATH'))
+        if not client: raise RuntimeError('Model executable unavailable before any simulator launch')
+        subprocess.run([client,'--version'],check=True,capture_output=True,text=True,timeout=20)
 
     def ssh(self, args, timeout=40):
         cmd=shlex.join(args) if isinstance(args,list) else args
@@ -113,7 +133,7 @@ class Batch:
 
     def run_one(self, row, gpu):
         runid=row['run_id']; port=self.c['base_port']+gpu
-        unit=f"mas-b100-{row['index']:03d}-r1-{self.c['batch_tag']}.service"
+        unit=f"mas-b100-{row['index']:03d}-r{row.get('attempt',1)}-{self.c['batch_tag']}.service"
         remote_run=Path(self.c['data_root'])/'runs'/runid
         controller=self.root/'controllers'/runid
         own_unit=False
@@ -139,7 +159,7 @@ class Batch:
             launcher=self.root/'launchers'/f'{runid}.sh'
             q=shlex.quote
             command=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'simulate','--manifest',str(self.root/'manifest.json'),
-                     '--index',str(row['index']),'--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root']]
+                     '--index',str(row['index']),'--run-id',runid,'--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root']]
             launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+'\nsource '+q(self.c['sim_env'])+
                                 '\nexport PYTHONPATH='+q(str(self.source/'src'))+'\nexport OMNIGIBSON_APPDATA_PATH='+q(self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))+
                                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
@@ -176,6 +196,8 @@ class Batch:
                 self.update(row,controller_wrapper_exit_code=process.returncode,stage='finalizing')
             metadata=json.loads((controller/'controller.json').read_text()) if (controller/'controller.json').exists() else {}
             self.update(row,controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),model_duration_seconds=metadata.get('duration_seconds'))
+            if not metadata:
+                self.update(row,failure='Controller did not create metadata; inspect original launcher traceback',failure_stage='controller_launch')
             if not metadata.get('formal_finish_observed'):
                 self.journal(f"CONTROLLER FAILURE {runid}; supervisor requests finish aborted, recorded as supervisor intervention (not a model call).")
                 self.update(row,supervisor_intervention=True)

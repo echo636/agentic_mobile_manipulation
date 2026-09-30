@@ -70,7 +70,7 @@ def assets(manifest, data_root):
 def main():
     p=argparse.ArgumentParser(); p.add_argument('mode', choices=['preflight', 'assets', 'simulate'])
     p.add_argument('--manifest',type=Path,required=True); p.add_argument('--index',type=int)
-    p.add_argument('--gpu',type=int); p.add_argument('--port',type=int); p.add_argument('--unit')
+    p.add_argument('--gpu',type=int); p.add_argument('--port',type=int); p.add_argument('--unit'); p.add_argument('--run-id')
     p.add_argument('--data-root',type=Path,required=True)
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
     if a.mode == 'assets':
@@ -78,6 +78,11 @@ def main():
     if a.mode == 'preflight':
         print(json.dumps(preflight(a.gpu,a.port,a.data_root))); return
     row=manifest['tasks'][a.index]
+    if a.run_id:
+        import re
+        if not re.fullmatch(re.escape(row['run_id'].rsplit('_r',1)[0])+r'_r[1-9][0-9]*',a.run_id):
+            raise ValueError('Attempt ID must preserve the frozen task identity')
+        row['run_id']=a.run_id
     os.environ['MAS_UNIT']=a.unit
     result=preflight(a.gpu,a.port,a.data_root)
     # Persist a second check inside the allocated unit, immediately before startup.
