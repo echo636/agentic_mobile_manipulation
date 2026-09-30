@@ -357,7 +357,7 @@ class RGBBackend(OmniGibsonBackend):
         result['robot_camera_views'] = list(DIRECTIONS)
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,
-            'mount_radius_m':0.08,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
+            'mount_radius_m':0.35,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
             'stock_wrist_cameras_enabled':False}
         return result
 

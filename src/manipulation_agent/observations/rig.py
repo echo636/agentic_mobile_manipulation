@@ -5,7 +5,7 @@ DIRECTIONS = ('front', 'back', 'left', 'right')
 YAW_DEGREES = {'front': 0, 'back': 180, 'left': 90, 'right': -90}
 
 
-def camera_mount(direction, height, radius=0.08, pitch_degrees=20):
+def camera_mount(direction, height, radius=0.35, pitch_degrees=20):
     yaw, pitch = math.radians(YAW_DEGREES[direction]), math.radians(pitch_degrees)
     c, s, cp, sp = math.cos(yaw), math.sin(yaw), math.cos(pitch), math.sin(pitch)
     right = (s, -c, 0)

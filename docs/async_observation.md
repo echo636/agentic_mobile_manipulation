@@ -9,3 +9,5 @@ An ordinary motion can execute before or after a pending capture. A cached resul
 Jinkai reference: dadwadw233/habitat-gs, branch jinkai/harness, commit 0815cf234ee591bacd8017e9b1def4fac13e649b. Its four-direction image_ref organization informed this interface. The inspected _get_panorama implementation turns and restores the agent; that mechanism is not used here. This repository implements the user's explicit four-fixed-camera requirement and does not change the navigation repository.
 
 Validation is recorded in the project batch operations/async_surround_20260930. CPU tests cover nonblocking submission, interleaving, cancellation, stale refs, side-camera targets, failures, owner-thread enforcement and camera axes. Real simulator and model results must be recorded separately; passing these tests is not a task success claim.
+
+Initial 8cm-radius rig passed interface/pose checks but the forward view had substantial robot-shell occlusion. Visual inspection prompted the 35cm mounting-radius revision; first-run evidence is retained. No robot rendering is hidden and no observation frames are edited.

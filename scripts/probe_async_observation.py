@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 import sys
 import time
+import os
+import socket
 from datetime import datetime, timezone
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -23,7 +25,8 @@ async def probe(args):
     output.mkdir(parents=True, exist_ok=False)
     trace = []
     async with stdio_client(StdioServerParameters(command=sys.executable,
-            args=['-m','manipulation_agent.mcp_server','--bridge',args.bridge])) as (reader, writer):
+            args=['-m','manipulation_agent.mcp_server','--bridge',args.bridge],
+            env={'PYTHONPATH':os.environ.get('PYTHONPATH',str(Path(__file__).resolve().parents[1]/'src'))})) as (reader, writer):
         async with ClientSession(reader, writer) as client:
             await client.initialize()
             tools = {t.name for t in (await client.list_tools()).tools}
@@ -79,6 +82,9 @@ async def probe(args):
                 'start_status':'planned','start_latency_seconds':trace[0]['duration_seconds'],
                 'no_physics_steps':True,'stale_image_rejected':True,'cancel_race_terminal':terminal['job']['status'],
                 'tool_calls':len(trace),'interpreter':sys.executable}
+            result.update(host=socket.gethostname(),pid=os.getpid(),gpu_uuid=None,
+                          bridge=args.bridge,output_path=str(output.resolve()),
+                          source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
             (output/'validation.json').write_text(json.dumps(result,indent=2)+'\n')
             print(json.dumps(result))
 
