@@ -106,3 +106,18 @@ Oracle task-object identity, states and relations simplify perception. That is a
 Official challenge rules currently require onboard RGB/depth/proprioception and forbid simulator-only policy inputs. Our symbolic research runs remain separate from leaderboard results. See [official evaluation rules](https://behavior.stanford.edu/challenge/evaluation.html).
 
 See [architecture](docs/architecture.md) and [source provenance](docs/provenance.md).
+
+## Verified pilot and evidence audit
+
+Real model + MCP + OmniGibson episodes passed for radio and three soda cans into a bin. A restaurant dirty-dishes episode failed during bowl grasp with invalid physics state; it has no final task score. See [validation results and limitations](docs/validation.md), including all failed iterations and the distinction between scripted and model runs.
+
+Cross-check a model trace against its simulator trace without modifying either:
+
+```bash
+PYTHONPATH=src python -m manipulation_agent.audit \
+  --run-dir /path/to/simulator/run \
+  --controller-dir /path/to/controller/run \
+  --output /path/to/paired_audit.json
+```
+
+The audit checks exact tool order and arguments, permitted tools, formal closure, source commit and independent task success. Same-commit checks do not by themselves establish byte-identical dirty working trees; preserve and inspect source digests and snapshots as well.
