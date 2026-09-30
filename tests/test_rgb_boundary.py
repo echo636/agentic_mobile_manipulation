@@ -25,7 +25,7 @@ class RGBBoundary(unittest.TestCase):
         return self.call('act',primitive=primitive,target=target or self.target(),revision=self.h.revision)
     def test_no_object_truth_in_observation(self):
         obs=self.call('observe')['observation']
-        self.assertEqual(set(obs),{'images','observation_mode','revision'})
+        self.assertEqual(set(obs),{'images','observation_mode','revision','capture'})
         self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(obs))
     def test_observer_with_truth_fails_closed(self):
         obs=self.backend.observe();obs['objects']=[{'id':'hidden'}]
@@ -65,7 +65,7 @@ class RGBBoundary(unittest.TestCase):
         self.assertTrue(result['closed']);self.assertNotIn('evaluation',result)
         self.assertFalse(self.recorder.run['task_success'])
     def test_tool_surface_has_workflows_and_look(self):
-        self.assertEqual({x['name'] for x in tool_specs('workflow')},{'observe','look','act','update_plan','remember','recall','list_skills','read_skill','finish'})
+        self.assertEqual({x['name'] for x in tool_specs('workflow')},{'observe','look','act','update_plan','remember','recall','list_skills','read_skill','finish','start_observation','get_observation','cancel_observation'})
     def test_duplicate_request_does_not_repeat_motion(self):
         args={'primitive':'toggle_on','target':self.target(),'revision':0}
         one=self.h.call('act',args,'repeat');two=self.h.call('act',args,'repeat')

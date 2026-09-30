@@ -30,18 +30,18 @@ async def probe(output):
         params=StdioServerParameters(command=sys.executable,args=['-m','manipulation_agent.mcp_server','--bridge',url],env=dict(os.environ))
         async with stdio_client(params) as (read,write):
             async with ClientSession(read,write) as client:
-                await client.initialize();tools=await client.list_tools();assert {t.name for t in tools.tools}=={'observe','look','act','finish','list_skills','read_skill'}
+                await client.initialize();tools=await client.list_tools();assert {t.name for t in tools.tools}=={'observe','look','act','finish','list_skills','read_skill','start_observation','get_observation','cancel_observation'}
                 catalog=await client.call_tool('list_skills',{}); assert json.loads(catalog.content[0].text)['skills']
                 skill=await client.call_tool('read_skill',{'name':'pick-and-place','resource':'SKILL.md'}); assert json.loads(skill.content[0].text)['text']
                 result=await client.call_tool('observe',{})
                 payload=json.loads(result.content[0].text);frame=payload['observation']['images'][0]
-                images=[c for c in result.content if c.type=='image'];assert len(images)==1
+                images=[c for c in result.content if c.type=='image'];assert len(images)==4
                 binary=base64.b64decode(images[0].data)
                 assert hashlib.sha256(binary).hexdigest()==frame['sha256']
                 assert binary.startswith(b'\x89PNG')
                 args={'primitive':'toggle_on','target':{'image_ref':frame['image_ref'],'point':[0.5,0.5]},'revision':payload['observation']['revision']}
                 action=await client.call_tool('act',args);a=json.loads(action.content[0].text);assert a['ok']
-                assert len([c for c in action.content if c.type=='image'])==1
+                assert len([c for c in action.content if c.type=='image'])==4
                 stale=await client.call_tool('act',args);assert not json.loads(stale.content[0].text)['ok']
                 finish=await client.call_tool('finish',{'outcome':'achieved','reason':'CPU image transport fixture complete'})
                 assert json.loads(finish.content[0].text)['closed']

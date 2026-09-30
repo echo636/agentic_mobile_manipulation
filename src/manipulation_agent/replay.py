@@ -67,7 +67,9 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 if not path.is_relative_to(run_dir.resolve()) or not path.is_file():
                     item['file'] = None
             views.append(item)
-        return {'revision': value.get('revision'), 'images': views}
+        result = {'revision': value.get('revision'), 'images': views}
+        if 'capture' in value: result['capture'] = copy.deepcopy(value['capture'])
+        return result
 
     # The constructor's episode_started image has NOT been returned to the agent.
     last_observation = None
@@ -93,6 +95,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         seconds = (datetime.fromisoformat(event['at']) - datetime.fromisoformat(call['at'])).total_seconds() if event else None
         steps.append({'index': len(steps) + 1, 'event_id': call['id'], 'result_event_id': event['id'] if event else None,
                       'tool': name, 'arguments': args, 'result': result,
+                      'observation_job': copy.deepcopy((result or {}).get('job')),
                       'request_id':call['request_id'], 'decision':copy.deepcopy(args.get('decision')),
                       'model_messages':copy.deepcopy(model_messages.get(len(steps)+1,[])),
                       **model_payloads.get(len(steps)+1,{}),

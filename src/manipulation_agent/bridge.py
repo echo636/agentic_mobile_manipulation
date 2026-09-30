@@ -100,8 +100,11 @@ def serve(harness, port: int) -> None:
                     break
             elif time.monotonic() - harness.started > harness.budget.wall_seconds:
                 harness.call("finish", {"outcome": "aborted", "reason": "Service wall-clock budget exhausted"}, "service-timeout")
+            if hasattr(harness, 'tick_background') and not harness.closed:
+                harness.tick_background()
             try:
-                body, future = jobs.get(timeout=0.2)
+                active = getattr(getattr(harness, 'surround', None), 'active', False)
+                body, future = jobs.get(timeout=0 if active else 0.2)
             except queue.Empty:
                 continue
             try:

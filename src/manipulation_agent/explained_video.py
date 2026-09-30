@@ -14,7 +14,7 @@ import sys
 import platform
 from pathlib import Path
 import subprocess
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 from .records import now,write_json
 from .replay import render_replay
 
@@ -129,7 +129,8 @@ def build(run_dir,controller_dir=None):
             buf.extend(block)
         if len(buf)!=size:raise RuntimeError('Source ended before manifest frame count')
         source_count+=1
-        return Image.frombytes('RGB',(raw['width'],raw['height']),bytes(buf)).resize((1000,1078),Image.Resampling.BILINEAR)
+        return ImageOps.pad(Image.frombytes('RGB',(raw['width'],raw['height']),bytes(buf)),
+                            (1000,1078),method=Image.Resampling.BILINEAR,color='#101d2b')
     def write_frame(panel,frame,repeat=1):
         nonlocal out_count
         canvas=panel.copy();canvas.paste(frame,(12,1));payload=canvas.tobytes()

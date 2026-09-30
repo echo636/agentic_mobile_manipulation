@@ -2,6 +2,7 @@
 import base64
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from .policies import ResponsesPolicy
 from .tools import tool_specs
 
@@ -13,7 +14,7 @@ Read relevant exploration, pick-and-place and recovery skills as needed; they ar
 Build and revise a plan. Remember visual landmarks, completed items and uncertainty with remember; use recall when needed.
 For act, select a normalized pixel in the exact latest image_ref. Never invent a simulator object name or ID.
 Use navigate_to to approach a visible surface, then re-mark the object in the new RGB before manipulating it.
-Use look for bounded in-place turns when searching. Positive yaw turns left. Inspect wrist images for grasp/release evidence.
+Use look for bounded in-place turns when searching. Positive yaw turns left. Inspect the four camera images and execution feedback; no wrist camera or inventory truth is available.
 The ideal motor executor may use private geometry only to execute YOUR chosen pixel/action; it cannot choose a target for you.
 Every executor attempt can change the world. Inspect fresh RGB after success and failure; do not blindly repeat a failed action.
 Treat notes, perceived state and done subgoals as hypotheses supported by visible evidence; operation completion is not whole-task success.
@@ -40,24 +41,40 @@ This is an RGB agent with ideal motor execution, not an official physical-contro
 '''
 SKILLS_PROMPT = MINIMAL_PROMPT.replace(
     'using RGB and four tools: observe, look, act, finish.',
-    'using RGB and six tools: observe, look, act, finish, list_skills, read_skill.').replace(
+    'using front/back/left/right RGB and nine tools: start_observation, get_observation, cancel_observation, observe, look, act, finish, list_skills, read_skill.').replace(
     'First observe.',
-    'First list_skills, read visual-manipulation/SKILL.md, then observe. Read relevant skills as needed, including pick-and-place before carrying objects.').replace(
+    'First list_skills and read visual-manipulation/SKILL.md. Start an asynchronous observation with start_observation({}), then call get_observation(job_id) to receive its four images when status=passed. You may read skills while it runs. Read relevant skills as needed, including pick-and-place before carrying objects.').replace(
     'There is no explicit planning tool, memory store or skill-reading phase.',
     'There is no explicit planning tool or memory store. Skills are callable workflow documents, not autonomous executors.') + '\nYour public assistant messages and MCP calls are recorded verbatim for replay. There is no extra decision-summary schema or required language. Use normal conversation history to track progress; plan/remember/recall are unavailable.\n'
+SKILLS_PROMPT += '''
+Four fixed cameras capture front/back/left/right at one simulation state. Observation does not rotate or move the robot.
+start_observation immediately queues a read-only job; get_observation returns progress or all four actual RGB images. If still running, follow poll_after_ms or do another useful skill read, then query again. cancel_observation cancels a pending job; completed jobs are immutable.
+All four cameras share capture_id/captured_at/sim_step. Directions are relative to the robot, not global headings. No depth or geometry enters these images.
+Check job.stale. A cached job can become stale after an action or another capture. Act only on a fresh image_ref returned to you. Choose a pixel from ANY of the four current cameras; no preliminary robot rotation is needed merely to see behind or sideways.
+look remains an explicit robot turn when useful for an action, not the surround camera acquisition mechanism. All action responses also contain the new four-camera view.
+'''
 SYSTEM_PROMPT = SKILLS_PROMPT
 
 def system_prompt(profile='skills'):
     return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_PROMPT,'workflow':WORKFLOW_PROMPT}[profile]
 
 class RGBResponsesPolicy(ResponsesPolicy):
+    def _request_with_observation_jobs(self, harness, payload):
+        # Only network I/O runs on a worker; all render/physics stays on the owner thread.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self._request, payload)
+            while not future.done():
+                harness.tick_background()
+                time.sleep(.01)
+            return future.result()
+
     def run(self,harness,instruction):
         specs=[{'type':'function','name':t['name'],'description':t['description'],'parameters':t['inputSchema'],'strict':True} for t in harness.tool_specs()]
         history=[{'role':'user','content':instruction}];tokens=0
         for turn in range(self.max_turns):
             if harness.closed:return
             if tokens>=self.max_tokens or time.monotonic()-harness.started>=harness.budget.wall_seconds:break
-            response=self._request({'model':self.model,'instructions':system_prompt(harness.profile),'input':history,'tools':specs,
+            response=self._request_with_observation_jobs(harness,{'model':self.model,'instructions':system_prompt(harness.profile),'input':history,'tools':specs,
                                     'parallel_tool_calls':False,'store':False,'max_output_tokens':4000})
             output=response.get('output',[]);usage=response.get('usage') or {};tokens+=usage.get('total_tokens',0)
             harness.recorder.event('model_response',{'turn':turn,'model':self.model,'output':[o for o in output if o.get('type') in {'message','function_call'}],'usage':usage})

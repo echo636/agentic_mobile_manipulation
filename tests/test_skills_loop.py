@@ -12,7 +12,7 @@ class SkillsLoopTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/'run';r=Recorder(root,{'backend':'mock','observation_mode':'rgb_only'})
             h=VisionHarness(MockRGBBackend(root),r)
-            self.assertEqual({t['name'] for t in h.tool_specs()},{'observe','look','act','finish','list_skills','read_skill'})
+            self.assertEqual({t['name'] for t in h.tool_specs()},{'observe','look','act','finish','list_skills','read_skill','start_observation','get_observation','cancel_observation'})
             self.assertFalse(hasattr(h,'plan'));self.assertFalse(hasattr(h,'memory'))
             self.assertTrue(h.call('list_skills',{},'ls')['skills'])
             self.assertTrue(h.call('read_skill',{'name':'pick-and-place','resource':'SKILL.md'},'read')['text'])

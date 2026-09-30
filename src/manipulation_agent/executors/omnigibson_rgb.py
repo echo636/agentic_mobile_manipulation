@@ -8,11 +8,14 @@ from types import SimpleNamespace
 
 from ..contracts import SkillError
 from ..omnigibson_backend import OmniGibsonBackend
+from ..observations.rig import DIRECTIONS, camera_mount
+from ..records import now
 
 class RGBBackend(OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
+        self.fixed_surround_rgb = True
         self.record_video = record_video
         self.video = None
         self.spectator = None
@@ -24,7 +27,23 @@ class RGBBackend(OmniGibsonBackend):
         self.image_files={}
         self.current_frames={}
         self._sensor_packets={}
+        self.rig = {}
         super().__init__(*args,**kwargs)
+        cameras = [n for n in self.robot.sensors if 'Camera' in n]
+        if cameras:
+            raise RuntimeError('Stock head/wrist camera exclusion was not applied')
+        from omnigibson.sensors import VisionSensor
+        base_pos = self.robot.get_position_orientation()[0]
+        self.rig_height = float(self.robot.aabb[1][2] - base_pos[2]) + 0.05
+        for direction in DIRECTIONS:
+            sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
+                modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
+                focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
+            sensor.load(None)
+            sensor.initialize()
+            self.rig[direction] = sensor
+        self._position_rig()
+        for _ in range(20): self.og.sim.render()
         if self.record_video:
             from ..video import EpisodeVideo
             from omnigibson.sensors import VisionSensor
@@ -36,9 +55,21 @@ class RGBBackend(OmniGibsonBackend):
                                           image_height=self.image_size,viewport_name=None)
             self.spectator.load(None)
             self.spectator.initialize()
-            self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size)
+            self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size,
+                                      views=(*DIRECTIONS,'spectator'))
             self._position_spectator()
             for _ in range(20): self.og.sim.render()
+
+    def _position_rig(self):
+        """Kinematic sensor mount only: never writes robot pose or advances physics."""
+        import omnigibson.utils.transform_utils as T
+        base_pos, base_quat = self.robot.get_position_orientation()
+        rotation = T.quat2mat(base_quat)
+        for direction, sensor in self.rig.items():
+            offset, basis = camera_mount(direction, self.rig_height)
+            offset = self.torch.tensor(offset, device=base_pos.device)
+            basis = self.torch.tensor(basis, device=base_pos.device)
+            sensor.set_position_orientation(base_pos + rotation @ offset, T.mat2quat(rotation @ basis))
 
     def _position_spectator(self):
         """Collision-aware filming camera; its geometry/poses stay offline."""
@@ -90,12 +121,11 @@ class RGBBackend(OmniGibsonBackend):
         Wait with render-only ticks; never advance physics to warm up recording.
         """
         import numpy as np
-        sensors = {}
-        for name,sensor in self.robot.sensors.items():
-            if 'Camera' not in name: continue
-            view = 'head' if 'zed' in name else 'left_wrist' if 'left' in name else 'right_wrist'
-            sensors[view] = sensor
+        self._position_rig()
+        sensors = dict(self.rig)
         if include_spectator: sensors['spectator'] = self.spectator
+        # Flush render-product latency after camera poses change, with physics frozen.
+        for _ in range(3): self.og.sim.render()
         shapes = {}
         for attempt in range(30):
             self.og.sim.render()
@@ -145,15 +175,18 @@ class RGBBackend(OmniGibsonBackend):
     def observe(self):
         from PIL import Image
         import numpy as np
+        start_step = self.steps
+        before_pos,before_quat = self.robot.get_position_orientation()
+        before_joints = self.robot.get_joint_positions().clone()
         rendered = self._render_rgb_views()
         self.capture_index+=1
         self.current_frames={}
         folder=self.output/'frames';folder.mkdir(exist_ok=True)
         private_folder=self.output/'executor_frames';private_folder.mkdir(exist_ok=True)
         images=[];audit=[]
-        for sensor_name,sensor in self.robot.sensors.items():
-            if 'Camera' not in sensor_name: continue
-            view='head' if 'zed' in sensor_name else 'left_wrist' if 'left' in sensor_name else 'right_wrist'
+        capture = {'capture_id':f'capture-{self.capture_index:05d}', 'captured_at':now(),
+                   'sim_step':start_step,'sim_time_seconds':start_step*self.og.sim.get_sim_step_dt()}
+        for view,sensor in self.rig.items():
             ref=f'rgb-{self.capture_index:05d}-{view}'
             pixels=rendered[view]
             path=folder/f'{ref}.jpg'
@@ -174,9 +207,20 @@ class RGBBackend(OmniGibsonBackend):
                            'mime_type':'image/jpeg','sha256':digest})
             audit.append({'image_ref':ref,'file':str(path.relative_to(self.output)),'sha256':digest})
         with (self.output/'captures.jsonl').open('a') as stream:
-            stream.write(json.dumps({'capture':self.capture_index,'env_steps':self.steps,'images':audit})+'\n')
+            stream.write(json.dumps({'capture':self.capture_index,'env_steps':self.steps,
+                                     'synchronized_capture':capture,'images':audit})+'\n')
+        after_pos,after_quat = self.robot.get_position_orientation()
+        after_joints = self.robot.get_joint_positions()
+        unchanged = self.steps == start_step and self.torch.equal(before_pos,after_pos) and self.torch.equal(before_quat,after_quat) and self.torch.equal(before_joints,after_joints)
+        with (self.output/'observation_capture_audit.jsonl').open('a') as stream:
+            stream.write(json.dumps({'capture':capture,'audience':'executor_private','no_robot_motion':bool(unchanged),
+                'start_step':start_step,'end_step':self.steps,'before_position':before_pos.tolist(),
+                'after_position':after_pos.tolist(),'before_orientation':before_quat.tolist(),
+                'after_orientation':after_quat.tolist(),'rig_sensor_names':[s.name for s in self.rig.values()],
+                'stock_sensor_names':list(self.robot.sensors)})+'\n')
+        if not unchanged: raise RuntimeError('Read-only camera capture changed robot state')
         self._video_frame('observation_boundary')
-        return {'images':images,'observation_mode':self.mode}
+        return {'images':images,'observation_mode':self.mode,'capture':capture}
 
     def image_bytes(self,ref):
         if ref not in self.image_files: raise KeyError(ref)
@@ -310,6 +354,11 @@ class RGBBackend(OmniGibsonBackend):
                       model_visible_truth=False)
         result['record_video'] = self.record_video
         result['base_execution'] = 'live_kinematic_path_0.5m_s_60deg_s; symbolic grasp/place remain instantaneous'
+        result['robot_camera_views'] = list(DIRECTIONS)
+        result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
+        result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,
+            'mount_radius_m':0.08,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
+            'stock_wrist_cameras_enabled':False}
         return result
 
     def close(self):

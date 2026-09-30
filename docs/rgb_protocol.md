@@ -1,18 +1,18 @@
 # RGB agent protocol · skills profile / rendered-pixel executor
 
-The current default exposes observe, look, act, finish, list_skills and read_skill. Explicit plan and memory stores are deferred. The agent performs RGB search, recognition, action choice, recovery and verification; only motor execution is idealized. Public model messages and MCP results are replayed verbatim without forced Chinese decision summaries. v0.1 oracle runs remain historical harness probes, not validation of this RGB protocol.
+The current default exposes start_observation, get_observation, cancel_observation, observe, look, act, finish, list_skills and read_skill. Explicit plan and memory stores are deferred. The agent performs RGB search, recognition, action choice, recovery and verification; only motor execution is idealized. Public model messages and MCP results are replayed verbatim without forced Chinese decision summaries. v0.1 oracle runs remain historical harness probes, not validation of this RGB protocol.
 
 ## Three distinct layers
 
 - `skills/*/SKILL.md`: agent workflow instructions, with references; no simulator code. Four packages: visual-manipulation, visual-exploration, pick-and-place, failure-recovery.
-- `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry: six current tools. The optional historical workflow profile additionally exposes update_plan, remember and recall; minimal reproduces the older four-tool interface.
+- `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry: nine current tools. The optional historical workflow profile additionally exposes update_plan, remember and recall; minimal reproduces the older four-tool interface.
 - `src/manipulation_agent/executors/`: ten motor primitives and the OmniGibson adapter. Primitives are not the workflow skill packages.
 
 `skill_runtime.py` freezes skill text and references into each run, hashes the bundle and permits only enumerated resources through read_skill. This lets a model consume skill documents without an arbitrary file-reading tool. This is a human-authored skill library, not automatic skill learning or evolution.
 
 ## Observation and action contract
 
-The public observation contains only observation_mode=rgb_only, revision, and image metadata: image_ref, view, dimensions, MIME type and content hash. Three onboard camera views are returned at 512x512: head and left/right wrists. MCP attaches actual image content for every observation-bearing response; a file path is not used as a substitute for image input.
+The public observation contains observation_mode=rgb_only, revision, image metadata (image_ref, view, dimensions, MIME type and content hash), and a common capture_id/captured_at/sim_step/sim_time_seconds record. Four fixed camera views are returned at 512x512: front/back/left/right. No wrist cameras are active. Acquisition does not rotate the robot or advance physics. MCP attaches actual image content for every observation-bearing response; a file path is not used as a substitute for image input.
 
 No task-object list, object names/IDs/categories, world poses, distances, depth, segmentation, scene graph, Inside/OnTop/Open/ToggledOn flags, inventory truth, global map or task score is returned. Normal conversation history contains the model's own hypotheses; optional historical workflow notes/plans are also hypotheses. Execution status/error categories are feedback about the requested motor operation, not a semantic state observation.
 
@@ -20,15 +20,14 @@ The model selects `target={image_ref, point:[x,y]}` in the latest RGB. x increas
 
 Inside the current V3 motor executor, the exact selected pixel indexes private linear depth captured with the RGB. A ray through that pixel ignores robot collision proxies and accepts the first external hit only when it agrees with the rendered depth (within max(3cm, 2% of camera-to-surface distance)). There is no object-name search, task-scope filtering, candidate generation, nearby-pixel snapping or hidden-target selection. Depth/calibration are archived privately in executor_frames, never exposed in MCP. V1 could hit invisible self collision proxies; V2 added rendered instance maps but its trial ended in a native render crash. V3 removes segmentation as a mitigation; this does not establish the crash's root cause.
 
-These three cameras are not a surround observation. look turns the base by at most 90 degrees and returns another three-camera observation. The system does not automatically sweep a circle, assemble a panorama or retain a separate directional-view bundle. Tool execution and observation run serially on the simulator owner thread; asynchronous MCP transport does not make observation asynchronous.
+start_observation queues a read-only job and returns its ID immediately. get_observation returns planned/running, or passed with actual four-image content. cancel_observation requests cancellation; already completed jobs are immutable. A job records common capture time and simulation step. The bridge services capture on the simulator owner thread while external LLM/network work proceeds independently. No worker thread calls renderer/physics APIs. A render/capture batch is atomic, so a cancel arriving after completion cannot undo it.
+
+The job's stale flag compares its frozen result with the current observation. Cached old frames remain available as evidence but act rejects expired refs. All four current camera images are valid point-selection surfaces; no robot turn is needed simply to observe another direction. Pending capture does not reserve robot motion; serialized scheduling ensures capture occurs wholly before or after a motor operation, never across one.
 
 ## Comparison to the proposed harness diagram
 
-The current skills profile implements task instruction → RGB → model action/target selection → tool execution → fresh RGB → continue/finish. There is no mandatory initial task decomposition or explicit task-step Stack, following the requested deferral of plan/memory. The same model decides whether to continue or finish from RGB and operation feedback; a distinct completion-check model stage is not enforced. The final private BDDL evaluation is for researchers, not this visual decision loop. Conversation context remains available, but is not an explicit stack or independent memory module. Skill documents are callable through list_skills/read_skill.
+The core loop and asynchronous four-direction observation are implemented. Explicit initial decomposition/task-step Stack and independent plan/memory remain deferred. The same LLM judges continuation or finish; there is no forced separate completion-model stage. The private final evaluator is not model input.
 
-The executor uses private geometric state to follow a connected traversability path at <=0.5m/s, turning at <=60deg/s with explicit ideal posture holding and official symbolic primitives/volume sampling for manipulation. These do not represent physically controlled locomotion or learned grasping. The agent still has to decide what to look at, where to go and which visible object to operate on. No object state is sent back with the result. Error messages are allowlisted; full upstream errors and private grounding stay in offline audit records.
-
-Evaluation is private. finish closes the episode and runs BDDL/TaskMetric, returning only closure and the agent's claimed outcome. It cannot be used to query a score and continue acting. The raw task/scene/evaluator records remain in the experiment archive and are not exposed by MCP.
 
 ## Running
 

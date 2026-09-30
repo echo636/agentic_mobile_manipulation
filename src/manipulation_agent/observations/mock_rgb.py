@@ -4,6 +4,8 @@ import hashlib
 import struct
 import zlib
 from pathlib import Path
+from ..records import now
+from .rig import DIRECTIONS
 
 
 def png_fixture(on=False):
@@ -19,10 +21,16 @@ class MockRGBBackend:
     def __init__(self,output):
         self.output=output;self.steps=0;self.on=False;self.capture=0;self.images={};self.fail_next=False
     def observe(self):
-        self.capture+=1;ref=f'mock-rgb-{self.capture}'
-        data=png_fixture(self.on);self.images[ref]=data
-        return {'observation_mode':self.mode,'images':[{'image_ref':ref,'view':'head','width':96,'height':64,
-                'mime_type':'image/png','sha256':hashlib.sha256(data).hexdigest()}]}
+        self.capture+=1
+        images=[]
+        for view in DIRECTIONS:
+            ref=f'mock-rgb-{self.capture}-{view}'
+            data=png_fixture(self.on);self.images[ref]=data
+            images.append({'image_ref':ref,'view':view,'width':96,'height':64,
+                'mime_type':'image/png','sha256':hashlib.sha256(data).hexdigest()})
+        return {'observation_mode':self.mode,'images':images,
+                'capture':{'capture_id':f'mock-capture-{self.capture}', 'captured_at':now(),
+                           'sim_step':self.steps,'sim_time_seconds':self.steps/30}}
     def image_bytes(self,ref):return self.images[ref],'image/png'
     def execute_visual(self,primitive,target,max_steps,**kwargs):
         from ..contracts import SkillError

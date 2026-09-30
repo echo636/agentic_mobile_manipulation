@@ -4,15 +4,20 @@ from ..contracts import SkillError
 
 OBS_KEYS = {"images", "observation_mode"}
 IMAGE_KEYS = {"image_ref", "view", "width", "height", "mime_type", "sha256"}
+CAPTURE_KEYS = {'capture_id','captured_at','sim_step','sim_time_seconds'}
 
 def public_observation(value: dict, revision: int) -> dict:
-    if set(value) != OBS_KEYS or value["observation_mode"] != "rgb_only":
+    if set(value) not in (OBS_KEYS, OBS_KEYS | {'capture'}) or value["observation_mode"] != "rgb_only":
         raise RuntimeError("RGB observation boundary violation")
     if not value["images"]:
         raise RuntimeError("RGB observer returned no image")
     for image in value["images"]:
         if set(image) != IMAGE_KEYS:
             raise RuntimeError("RGB image metadata boundary violation")
+    if 'capture' in value:
+        capture = value['capture']
+        if set(capture) != CAPTURE_KEYS or {i['view'] for i in value['images']} != {'front','back','left','right'} or len(value['images']) != 4:
+            raise RuntimeError('Four-camera capture boundary violation')
     return {**copy.deepcopy(value), "revision":revision}
 
 ERROR_MESSAGES = {

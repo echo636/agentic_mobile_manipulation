@@ -10,6 +10,7 @@ from .observations.boundary import public_observation, public_execution_error
 from .records import write_json
 from .skill_runtime import SkillLibrary
 from .tools import REGISTRY, tool_specs
+from .surround import SurroundJobs
 
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills'):
@@ -17,6 +18,7 @@ class VisionHarness:
         self.owner=threading.get_ident(); self.started=time.monotonic()
         self.revision=self.actions=self.calls=0; self.closed=False
         self.profile = profile
+        self.surround = SurroundJobs(self)
         self.catalog = {t['name']: t for t in tool_specs(profile)}
         self.cache,self.evidence={},{}
         self.skills = None
@@ -27,7 +29,7 @@ class VisionHarness:
         recorder.run['config']['agent_profile'] = profile
         self.snapshot=self.refresh()
         recorder.run.update(backend=backend.provenance(),budget=asdict(budget),skill_bundle_sha256=self.skills.digest if self.skills else None,
-                            observation_contract="rgb_only_v1")
+                            observation_contract="rgb_four_camera_same_state_v1" if 'capture' in self.snapshot else "rgb_only_v1")
         write_json(recorder.output/'run.json',recorder.run)
         recorder.event('episode_started',{'observation':self.snapshot})
 
@@ -38,6 +40,10 @@ class VisionHarness:
         return copy.deepcopy(self.snapshot)
 
     def image_bytes(self, image_ref): return self.backend.image_bytes(image_ref)
+
+    def tick_background(self):
+        if threading.get_ident()!=self.owner: raise RuntimeError('Simulator owner thread required')
+        self.surround.tick()
 
     def call(self,name,arguments,request_id):
         if threading.get_ident()!=self.owner: raise RuntimeError('Simulator owner thread required')
@@ -62,7 +68,8 @@ class VisionHarness:
             execution_args = {k:v for k,v in arguments.items() if k != 'decision'}
             result={'ok':True,**REGISTRY[name].handler(self,**execution_args)}
         except SkillError as exc:
-            result={'ok':False,'error':{'code':exc.code,'message':str(exc)},'observation':self.snapshot}
+            result={'ok':False,'error':{'code':exc.code,'message':str(exc)}}
+            result['observation']=self.snapshot
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result})
         result['evidence_id']=event_id
         self.evidence[event_id]={'name':'act' if name in {'act','look'} else name,'ok':result['ok'],'revision':self.revision}
@@ -97,6 +104,7 @@ class VisionHarness:
     def remember(self,key,text,revision): return LegacyPlanHelpers._tool_remember(self,key,text,revision)
     def recall(self): return LegacyPlanHelpers._tool_recall(self)
     def finish(self,outcome,reason):
+        self.surround.stop_for_finish()
         if hasattr(self.backend, 'finalize_video'):
             self.recorder.run['video'] = self.backend.finalize_video()
         return LegacyPlanHelpers._tool_finish(self,outcome,reason)

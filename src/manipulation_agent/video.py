@@ -15,10 +15,14 @@ from .records import now, write_json
 class EpisodeVideo:
     VIEWS = ('head', 'spectator', 'left_wrist', 'right_wrist')
 
-    def __init__(self, output: Path, fps: float, size=512):
+    def __init__(self, output: Path, fps: float, size=512, views=None):
         self.output = output
+        self.views = tuple(views or self.VIEWS)
+        if self.views not in {self.VIEWS, ('front','back','left','right','spectator')}:
+            raise ValueError('Unsupported recording layout')
         self.size = size; self.fps = float(fps)
-        self.width = 2 * size; self.height = 2 * size + 80
+        self.rows = (len(self.views)+1)//2
+        self.width = 2 * size; self.height = self.rows * size + 80
         self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
         self.closed = False; self.process = None; self.log = None
         self.manifest = {'status':'running','file':'episode.mp4','poster':'video_poster.jpg',
@@ -27,7 +31,7 @@ class EpisodeVideo:
                          'spectator_model_visible':False, 'synthesized_motion':False,
                          'time_basis':'simulation control steps; model wait time omitted; boundary captures add one frame',
                          'excluded':'physics substeps and private volume-sampler candidate-search ticks',
-                         'views':list(self.VIEWS),'markers':self.markers}
+                         'views':list(self.views),'markers':self.markers}
         write_json(output/'video.json', self.manifest)
 
     def mark(self, name, arguments, request_id):
@@ -39,24 +43,25 @@ class EpisodeVideo:
         import numpy as np
         from PIL import Image, ImageDraw, ImageFont
         if self.closed: return
-        if set(pixels) != set(self.VIEWS):
-            raise ValueError('Continuous recorder requires all four RGB views')
-        tiles = {name: np.asarray(pixels[name], dtype=np.uint8) for name in self.VIEWS}
+        if set(pixels) != set(self.views):
+            raise ValueError('Continuous recorder requires its configured RGB views')
+        tiles = {name: np.asarray(pixels[name], dtype=np.uint8) for name in self.views}
         if any(a.shape != (self.size, self.size, 3) for a in tiles.values()):
             raise ValueError('Invalid video camera shape')
         canvas = Image.new('RGB', (self.width, self.height), '#102637')
         draw = ImageDraw.Draw(canvas)
         font_path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
         font = ImageFont.truetype(str(font_path), 16) if font_path.exists() else ImageFont.load_default()
-        for name, x, y in zip(self.VIEWS, (0,self.size,0,self.size), (0,0,self.size,self.size)):
+        for i, name in enumerate(self.views):
+            x,y=(i%2)*self.size,(i//2)*self.size
             canvas.paste(Image.fromarray(tiles[name]), (x,y))
             draw.rectangle((x,y,x+self.size,y+25), fill='#102637')
             label = 'SPECTATOR - replay only' if name == 'spectator' else 'ROBOT RGB - '+name
             draw.text((x+8,y+3),label,fill='white',font=font)
         title = f"env.step {env_step} | {self.context.get('primitive','initial RGB')} | {kind}"
-        draw.text((12,2*self.size+7),title,fill='white',font=font)
-        draw.text((12,2*self.size+32),'Ideal executor: instantaneous pose/state changes are recorded as executed.',fill='#b6d6df',font=font)
-        draw.text((12,2*self.size+55),'Every control step recorded. Model wait time omitted. No motion interpolation.',fill='#b6d6df',font=font)
+        draw.text((12,self.rows*self.size+7),title,fill='white',font=font)
+        draw.text((12,self.rows*self.size+32),'Ideal executor: instantaneous pose/state changes are recorded as executed.',fill='#b6d6df',font=font)
+        draw.text((12,self.rows*self.size+55),'Every control step recorded. Model wait time omitted. No motion interpolation.',fill='#b6d6df',font=font)
         if self.process is None:
             ffmpeg = shutil.which('ffmpeg')
             if not ffmpeg: raise RuntimeError('ffmpeg is required for --record-video')
