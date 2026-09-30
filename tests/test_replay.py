@@ -102,6 +102,22 @@ class ReplayEvidenceTests(unittest.TestCase):
         self.models[0]['item']['result']['content'][1]['data']=base64.b64encode(b'tampered').decode()
         self.assertFalse(audit_rgb_transport(self.root,self.events,self.models)['checks']['image_bytes_hashes_and_archive_match'])
 
+    def test_provider_summary_aligns_by_timestamp_and_stays_separate(self):
+        controller=self.root/'controller';controller.mkdir()
+        (controller/'controller.json').write_text(json.dumps({'model':'fixture'}))
+        (controller/'model_events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in self.models))
+        self.events[4]['at']='2026-09-30T00:00:02Z';self.events[5]['at']='2026-09-30T00:00:03Z';self.save()
+        summary={'source':'provider_returned_reasoning_summary','verbatim':True,'translated':False,
+                 'text':'Provider text, exactly.\n**Original formatting**','at':'2026-09-30T00:00:01Z'}
+        final={**summary,'text':'Later summary','at':'2026-09-30T00:00:04Z'}
+        (controller/'model_reasoning_summaries.jsonl').write_text(json.dumps(summary)+'\n'+json.dumps(final)+'\n')
+        with patch('manipulation_agent.replay.audit_episode',return_value=None):
+            data=build_replay(self.root,controller)
+        self.assertEqual(data['steps'][0]['model_reasoning_summaries'],[])
+        self.assertEqual(data['steps'][1]['model_reasoning_summaries'],[summary])
+        self.assertEqual(data['steps'][1]['model_messages'],[])
+        self.assertEqual(data['model_final_reasoning_summaries'],[final])
+
     def test_oracle_extra_field_and_wrong_target_fail(self):
         result=json.loads(self.models[0]['item']['result']['content'][0]['text'])
         result['observation']['objects']=[{'id':'GT'}]
