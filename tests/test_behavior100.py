@@ -1,11 +1,23 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import json
+import tempfile
 
 spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_model_decision_prevents_infrastructure_retry(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder);record={'status':'failed','actions':0,'controller_pid':123}
+            stream=path/'model_events.jsonl'
+            stream.write_text(json.dumps({'type':'item.completed','item':{'type':'error'}})+'\n')
+            self.assertTrue(batch.prepolicy_failure(record,path))
+            for kind in ('agent_message','reasoning','mcp_tool_call'):
+                stream.write_text(json.dumps({'type':'item.started','item':{'type':kind}})+'\n')
+                self.assertFalse(batch.prepolicy_failure(record,path))
+
     def test_infrastructure_retry_retains_first_attempt_failure(self):
         row={'status':'passed','task_success':True,'previous_attempts':[{'status':'failed','task_success':False}]}
         result=batch.summarize([row])

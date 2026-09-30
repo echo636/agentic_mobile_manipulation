@@ -29,6 +29,16 @@ from manipulation_agent.tools import tool_specs
 FINAL = {'passed','failed','blocked'}
 
 
+def prepolicy_failure(record, controller):
+    if record.get('status')!='failed' or record.get('actions')!=0: return False
+    stream=controller/'model_events.jsonl'
+    if not stream.exists(): return record.get('controller_pid') is None
+    events=[json.loads(s) for s in stream.read_text().splitlines()]
+    # Client error items are not model decisions. Any generated policy item,
+    # including reasoning or a started tool call, prevents this retry route.
+    return all(e.get('item',{}).get('type') in (None,'error') for e in events)
+
+
 def summarize(rows):
     counts = dict(Counter(r['status'] for r in rows))
     completed = sum(r['status'] in FINAL for r in rows)
@@ -76,17 +86,21 @@ class Batch:
             saved=self.root/'records'/f"{r['run_id']}.json"
             selection=selections.get(str(r['index']))
             if selection:
-                previous=json.loads(saved.read_text())
-                if previous.get('controller_pid') is not None or previous.get('actions') != 0:
-                    raise RuntimeError('Only pre-policy infrastructure failures can use this retry mechanism')
-                if previous['status']!='failed': raise RuntimeError('Retry requires a preserved failed attempt')
-                r.update(run_id=selection['run_id'],attempt=2,previous_attempts=[previous],retry_reason=selection['reason'])
+                previous=[]
+                for runid in selection.get('previous_run_ids',[r['run_id']]):
+                    record=json.loads((self.root/'records'/f'{runid}.json').read_text())
+                    if not prepolicy_failure(record,self.root/'controllers'/runid):
+                        raise RuntimeError('Only failed attempts before any policy output may be retried here')
+                    previous.append({k:v for k,v in record.items() if k!='previous_attempts'})
+                r.update(run_id=selection['run_id'],attempt=len(previous)+1,previous_attempts=previous,retry_reason=selection['reason'])
                 saved=self.root/'records'/f"{r['run_id']}.json"
             if saved.exists(): r.update(json.loads(saved.read_text()))
             if r['status'] == 'running':
                 raise RuntimeError('Unfinished attempt exists; reconcile its owned unit and archive before resume: '+r['run_id'])
         if source_version()['dirty']: raise RuntimeError('Batch source must be a clean frozen checkout')
         self.environment={**os.environ,'PYTHONPATH':str(self.source/'src')}
+        missing=[k for k in config.get('required_controller_env',[]) if not self.environment.get(k)]
+        if missing: raise RuntimeError('Required controller environment variables absent: '+','.join(missing))
         if config.get('controller_path'): self.environment['PATH']=config['controller_path']
         client=shutil.which('codex',path=self.environment.get('PATH'))
         if not client: raise RuntimeError('Model executable unavailable before any simulator launch')
@@ -308,12 +322,19 @@ class Batch:
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True);p.add_argument('--limit',type=int);p.add_argument('--publish-only',action='store_true')
+    p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True);p.add_argument('--limit',type=int);p.add_argument('--publish-only',action='store_true');p.add_argument('--bootstrap-first',action='store_true')
     a=p.parse_args();config=json.loads(a.config.read_text());root=Path(config['batch'])
     with (root/'supervisor.lock').open('w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         batch=Batch(config)
         if a.publish_only:batch.publish()
+        elif a.bootstrap_first:
+            first=next(r for r in batch.rows if r['status']=='planned')
+            batch.run(1)
+            if first.get('evidence_alignment')!='passed' or first.get('video_validation')!='passed':
+                raise RuntimeError('First episode did not validate the real model/replay pipeline; remaining tasks stay planned')
+            batch.journal('Real model/replay pipeline passed; continuing all remaining planned tasks on the configured GPU slots.')
+            batch.run(a.limit)
         else:batch.run(a.limit)
 
 
