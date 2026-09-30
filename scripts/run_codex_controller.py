@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import time
 import shutil
+import signal
 
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.vision_policy import system_prompt
@@ -53,15 +54,20 @@ def main():
     write_json(args.output / "controller.json", metadata)
     started = time.monotonic()
     with (args.output / "model_events.jsonl").open("w") as stdout, (args.output / "client.stderr.log").open("w") as stderr:
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, text=True)
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, text=True,
+                                   start_new_session=True)
         metadata["pid"] = process.pid
         write_json(args.output / "controller.json", metadata)
         try:
             process.communicate("Use only the manipulation MCP tools to complete this simulation task.\n" + args.instruction,
                                 timeout=args.timeout)
         except subprocess.TimeoutExpired:
-            process.terminate()
-            process.wait(timeout=20)
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=20)
             metadata["timeout"] = True
     events = [json.loads(line) for line in (args.output / "model_events.jsonl").read_text().splitlines() if line.startswith("{")]
     closed = False

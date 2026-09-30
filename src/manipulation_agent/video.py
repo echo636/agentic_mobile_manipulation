@@ -69,7 +69,8 @@ class EpisodeVideo:
             command = [ffmpeg,'-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24',
                        '-video_size',f'{self.width}x{self.height}','-framerate',str(self.fps),'-i','pipe:0',
                        '-an','-c:v','libx264','-threads','2','-preset','fast','-crf','20',
-                       '-pix_fmt','yuv420p','-movflags','+faststart',str(self.output/'episode.mp4')]
+                       '-pix_fmt','yuv420p','-g',str(max(1,round(self.fps))),
+                       '-movflags','+frag_keyframe+empty_moov+default_base_moof',str(self.output/'episode.mp4')]
             self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.log)
             self.manifest['encoder_pid'] = self.process.pid
             self.manifest['encoder_command'] = command
@@ -83,6 +84,12 @@ class EpisodeVideo:
             stream.write(json.dumps(row)+'\n')
         if kind == 'env_step': self.env_steps.append(env_step)
         self.count += 1
+        # Preserve completed fragments and a progress checkpoint after a native
+        # simulator crash. Only finish() can mark a recording complete.
+        if self.count == 1 or self.count % 60 == 0:
+            self.manifest.update(frame_count=self.count, recorded_env_steps=len(self.env_steps),
+                                 checkpoint_at=now(), markers=self.markers)
+            write_json(self.output/'video.json', self.manifest)
 
     def finish(self, final_env_step):
         if self.closed: return self.manifest

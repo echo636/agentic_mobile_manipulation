@@ -1,0 +1,298 @@
+"""Durable 100-task runner. One immutable attempt per row; never filter failures.
+
+Run from a clean, frozen checkout on the controller host. JSON config supplies
+site paths; authentication stays in the existing local SSH/model clients.
+"""
+import argparse
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+import fcntl
+import hashlib
+import html
+import json
+import os
+from pathlib import Path
+import queue
+import shlex
+import shutil
+import subprocess
+import sys
+import threading
+import time
+import traceback
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
+from manipulation_agent.records import now, write_json, read_run, source_version
+from manipulation_agent.replay import render_replay
+from manipulation_agent.tools import tool_specs
+
+FINAL = {'passed','failed','blocked'}
+
+
+def summarize(rows):
+    counts = dict(Counter(r['status'] for r in rows))
+    completed = sum(r['status'] in FINAL for r in rows)
+    successes = sum(r.get('task_success') is True for r in rows)
+    return {'total':len(rows), 'completed':completed, 'counts':counts, 'task_successes':successes,
+            'success_fraction_all_tasks': successes/len(rows) if rows else 0,
+            'final_evaluations':sum(r.get('task_success') is not None for r in rows),
+            'complete_videos':sum(r.get('video_validation')=='passed' for r in rows),
+            'execution_status':'completed' if completed == len(rows) else 'running'}
+
+
+def render_dashboard(progress):
+    esc=lambda x: html.escape(str(x))
+    s=progress['summary']; rows=[]
+    for r in progress['tasks']:
+        links=[]
+        for key,label in [('replay_url','Replay'),('video_url','视频'),('record_url','记录')]:
+            if r.get(key): links.append(f'<a href="{esc(r[key])}">{label}</a>')
+        outcome='成功' if r.get('task_success') is True else ('未成功' if r.get('task_success') is False else '未取得最终评分')
+        rows.append(f'<tr data-status="{esc(r["status"])}"><td>{r["index"]+1}</td><td>{esc(r["name"])}<small>{esc(r["task"])}</small><details><summary>任务输入与来源</summary><p>{esc(r["instruction"])}</p><p>{esc(r["instruction_source"])}</p></details></td><td class="{r["status"]}">{esc(r["status"])}<small>{esc(r.get("stage","queued"))}</small></td><td>{outcome}<small>Q={esc(r.get("q_score","—"))}</small></td><td>{esc(r.get("actions","—"))}<small>{esc(r.get("tool_calls","—"))} tool calls</small></td><td>{esc(r.get("evidence_alignment","—"))}<small>video: {esc(r.get("video_validation","—"))}</small></td><td>{" · ".join(links)}<small>{esc(r.get("failure",""))}</small></td></tr>')
+    return '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BEHAVIOR 100 · 批量测试</title>
+<style>body{font:16px system-ui;background:#eef3f8;color:#142c43;margin:25px auto;max-width:1500px;padding:0 18px}a{color:#07599b}article,.cards>div{background:white;border:1px solid #d3dfe9;border-radius:10px;padding:18px;margin:14px 0}.cards{display:flex;gap:14px;flex-wrap:wrap}.cards>div{flex:1;min-width:150px}.cards strong{font-size:30px;display:block}table{border-collapse:collapse;width:100%;min-width:1050px}td,th{text-align:left;border-bottom:1px solid #ddd;padding:12px;vertical-align:top}small{display:block;color:#586d81;margin-top:7px;overflow-wrap:anywhere}td:nth-child(2){max-width:360px}td:last-child{max-width:270px}summary{cursor:pointer}input,select{font:inherit;padding:8px;margin:8px}.table{overflow-x:auto}.passed{color:#087044}.failed{color:#ad3030}.blocked{color:#9c6700}.running{color:#065fa7}p{line-height:1.65}code{overflow-wrap:anywhere}</style>
+<h1>BEHAVIOR 2026 · 100 项任务测试</h1><p>RGB agent + ideal motor executor · gpt-6-astra · public instance 301 · seed 0</p>''' + f'''
+<div class="cards"><div><strong>{s['completed']} / {s['total']}</strong>已结束（包括失败和受阻）</div><div><strong>{s['task_successes']} / {s['total']}</strong>独立评估成功 / 固定总数</div><div><strong>{s['final_evaluations']}</strong>取得最终评分</div><div><strong>{s['complete_videos']}</strong>录像完整性验证通过</div></div>
+<article><p><b>协议：</b>每种任务运行一个公开测试实例，共 100 个 episode，不等于所有公开实例或官方排行榜提交。机器人输入是同时采集的前、后、左、右 RGB，无腕部相机；模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。切割、擦洗等能力未扩展，相关失败保留在总数中。</p><p><b>输入来源：</b>50 项使用官方原文，50 项按静态 BDDL 目标补写，逐项标注。独立评估、几何和 spectator 录像只供执行器或离线审阅，不作为模型观测。</p><p><b>回放：</b>连续录像记录实际控制步；模型等待时间不铺成静止画面。Replay 同步四路 RGB、模型公开 assistant 原文、工具参数和返回结果。不补写思考，不展示隐藏推理；原始私有运行记录保存在实验目录。</p><p><b>状态：</b>passed 要求任务成功、控制器正常结束、证据对齐和录像验证通过；failed/blocked 分别保留具体阶段。失败任务有最终评分时显示 Q，仿真在初始化前失败时无法生成观测或视频。部分录像不标成完整。</p><p>批次状态：{esc(s['execution_status'])} · 更新：{esc(progress['updated_at'])} · <a href="behavior100/progress.json">实时 JSON</a> · <a href="behavior100/manifest.json">冻结清单</a> · <a href="behavior100/validation.json">验证记录</a> · <a href="behavior100/journal.md">迭代日志</a></p></article>
+<input id="search" placeholder="搜索任务 / 阶段"><select id="status"><option value="">所有状态</option><option>planned</option><option>running</option><option>passed</option><option>failed</option><option>blocked</option></select><label><input id="refresh" type="checkbox" checked>每 60 秒刷新</label><div class="table"><table><thead><tr><th>#</th><th>任务</th><th>运行状态</th><th>独立评估</th><th>动作数</th><th>证据与录像</th><th>回放 / 原始记录</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>''' + '''<script>const search=document.querySelector('#search'), status=document.querySelector('#status');function filter(){document.querySelectorAll('tbody tr').forEach(r=>r.hidden=!(r.textContent.toLowerCase().includes(search.value.toLowerCase())&&(!status.value||r.dataset.status===status.value)))}search.oninput=status.onchange=filter;setInterval(()=>{if(document.querySelector('#refresh').checked&&!search.value&&!status.value)location.reload()},60000)</script></html>'''
+
+
+class Batch:
+    def __init__(self, config):
+        self.c=config; self.root=Path(config['batch']); self.source=Path(__file__).resolve().parents[1]
+        self.manifest=json.loads((self.root/'manifest.json').read_text()); self.reports=Path(config['reports'])
+        self.lock=threading.RLock(); self.queue=queue.Queue(); self.rows=self.manifest['tasks']
+        for directory in ('records','preflight','controllers','runs','launchers','logs'):
+            (self.root/directory).mkdir(exist_ok=True)
+        for r in self.rows:
+            saved=self.root/'records'/f"{r['run_id']}.json"
+            if saved.exists(): r.update(json.loads(saved.read_text()))
+            if r['status'] == 'running':
+                raise RuntimeError('Unfinished attempt exists; reconcile its owned unit and archive before resume: '+r['run_id'])
+        if source_version()['dirty']: raise RuntimeError('Batch source must be a clean frozen checkout')
+        self.environment={**os.environ,'PYTHONPATH':str(self.source/'src')}
+
+    def ssh(self, args, timeout=40):
+        cmd=shlex.join(args) if isinstance(args,list) else args
+        return subprocess.run(self.c['ssh']+[cmd],capture_output=True,text=True,timeout=timeout)
+
+    def journal(self, message):
+        with self.lock:
+            with (self.root/'journal.md').open('a') as f: f.write(f'\n- {now()} · {message}\n')
+
+    def publish(self):
+        with self.lock:
+            progress={'updated_at':now(),'source':source_version(),'supervisor':{'host':os.uname().nodename,'pid':os.getpid(),'unit':os.environ.get('MAS_UNIT'),'interpreter':sys.executable},
+                      'summary':summarize(self.rows),'tasks':self.rows}
+            write_json(self.root/'progress.json',progress)
+            write_json(self.root/'run_records.json',{'updated_at':now(),'runs':self.rows})
+            validation={'status':'running' if progress['summary']['execution_status']=='running' else ('passed' if all(r['status']=='passed' for r in self.rows) else 'failed'),
+                        'level':'100_task_real_rgb_simulator_batch','summary':progress['summary'],
+                        'source':progress['source'],'official_submission_eligible':False,
+                        'note':'Task success, controller termination, transport alignment and video completeness are separate fields.'}
+            write_json(self.root/'validation.json',validation)
+            public=self.reports/'behavior100';public.mkdir(parents=True,exist_ok=True)
+            for name in ('progress.json','manifest.json','validation.json','journal.md'):
+                temp=public/(name+'.tmp');shutil.copyfile(self.root/name,temp);temp.replace(public/name)
+            target=self.reports/'behavior100.html'; tmp=target.with_suffix('.html.tmp')
+            tmp.write_text(render_dashboard(progress));tmp.replace(target)
+
+    def update(self, row, **values):
+        with self.lock:
+            row.update(values,updated_at=now())
+            write_json(self.root/'records'/f"{row['run_id']}.json",row)
+            self.publish()
+
+    def unit_state(self, unit):
+        p=self.ssh(['systemctl','--user','show',unit,'-p','ActiveState','-p','MainPID','-p','ExecMainStatus','-p','Result','-p','Description','-p','MemoryPeak'])
+        return dict(line.split('=',1) for line in p.stdout.splitlines() if '=' in line)
+
+    def health(self, port):
+        p=self.ssh(['curl','--noproxy','*','-fsS','--max-time','3',f'http://127.0.0.1:{port}/healthz'])
+        return json.loads(p.stdout) if p.returncode==0 else None
+
+    def run_one(self, row, gpu):
+        runid=row['run_id']; port=self.c['base_port']+gpu
+        unit=f"mas-b100-{row['index']:03d}-r1-{self.c['batch_tag']}.service"
+        remote_run=Path(self.c['data_root'])/'runs'/runid
+        controller=self.root/'controllers'/runid
+        own_unit=False
+        self.update(row,status='running',stage='preflight',started_at=now(),gpu_index=gpu,
+                    simulator_unit=unit,simulator_output=str(remote_run),controller_output=str(controller))
+        self.journal(f"START {runid}; GPU index {gpu}; unit {unit}; output {remote_run}.")
+        try:
+            check_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'preflight','--manifest',str(self.root/'manifest.json'),
+                       '--gpu',str(gpu),'--port',str(port),'--data-root',self.c['data_root']]
+            for attempt in range(61):
+                p=self.ssh(check_cmd)
+                if p.returncode: raise RuntimeError('Remote resource preflight command failed: '+p.stderr[-1200:])
+                check=json.loads(p.stdout)
+                write_json(self.root/'preflight'/f'{runid}_{attempt:02d}.json',check)
+                if check['status']=='passed': break
+                self.update(row,stage='waiting_for_resources',resource_checks=check['checks'])
+                time.sleep(30)
+            else: raise RuntimeError('Resource preflight remained blocked for 30 minutes')
+            state=self.unit_state(unit)
+            if state.get('ActiveState') in {'active','activating','deactivating'}: raise RuntimeError('Unit collision; refusing to reuse')
+            if self.ssh(['test','-e',str(remote_run)]).returncode == 0: raise RuntimeError('Output exists; immutable attempt cannot be overwritten')
+            # The launcher is data only, outside the frozen source tree.
+            launcher=self.root/'launchers'/f'{runid}.sh'
+            q=shlex.quote
+            command=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'simulate','--manifest',str(self.root/'manifest.json'),
+                     '--index',str(row['index']),'--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root']]
+            launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+'\nsource '+q(self.c['sim_env'])+
+                                '\nexport PYTHONPATH='+q(str(self.source/'src'))+'\nexport OMNIGIBSON_APPDATA_PATH='+q(self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))+
+                                '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
+            launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
+                    '-p','MemoryMax=48G','-p','CPUQuota=800%','-p',f"RuntimeMaxSec={self.manifest['simulator_runtime_max_seconds']}",
+                    '-p','TimeoutStopSec=30','-p','KillMode=control-group','-p','SuccessExitStatus=2',
+                    '-p','WorkingDirectory='+str(self.source),'/bin/bash',str(launcher)]
+            p=self.ssh(launch);(self.root/'logs'/f'{runid}_launch.log').write_text(p.stdout+p.stderr)
+            if p.returncode: raise RuntimeError('Simulator unit launch failed')
+            own_unit=True
+            self.update(row,stage='simulator_starting',gpu_uuid=check['gpu_uuid'],simulator_host=check['host'],
+                        simulator_interpreter=self.c['sim_python'],source=source_version(),port=port)
+            deadline=time.monotonic()+self.manifest['startup_timeout_seconds']
+            while time.monotonic()<deadline:
+                state=self.unit_state(unit)
+                if state.get('ActiveState') not in {'active','activating'}: raise RuntimeError('Simulator exited before bridge ready: '+str(state))
+                h=self.health(port)
+                if h and h.get('ready') and not h.get('closed'):
+                    if {t['name'] for t in h['tools']}!={t['name'] for t in tool_specs(self.manifest['agent_profile'])}: raise RuntimeError('Bridge tool profile mismatch')
+                    write_json(self.root/'logs'/f'{runid}_health.json',h);break
+                time.sleep(4)
+            else: raise TimeoutError('Simulator startup exceeded fixed budget')
+            self.update(row,stage='policy_running',simulator_pid=int(state['MainPID']),bridge_ready_at=now())
+            self.journal(f"READY {runid}; host {check['host']}; PID {state['MainPID']}; GPU UUID {check['gpu_uuid']}; real RGB model policy starting.")
+            remote=shlex.join(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],'-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
+            cmd=[sys.executable,str(self.source/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
+                 '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],'--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),
+                 '--output',str(controller),'--timeout',str(self.manifest['model_timeout_seconds']),'--agent-profile',self.manifest['agent_profile']]
+            with (self.root/'logs'/f'{runid}_controller.log').open('w') as log:
+                process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,env=self.environment)
+                self.update(row,controller_wrapper_pid=process.pid,controller_host=os.uname().nodename,controller_interpreter=sys.executable)
+                while process.poll() is None:
+                    time.sleep(5)
+                self.update(row,controller_wrapper_exit_code=process.returncode,stage='finalizing')
+            metadata=json.loads((controller/'controller.json').read_text()) if (controller/'controller.json').exists() else {}
+            self.update(row,controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),model_duration_seconds=metadata.get('duration_seconds'))
+            if not metadata.get('formal_finish_observed'):
+                self.journal(f"CONTROLLER FAILURE {runid}; supervisor requests finish aborted, recorded as supervisor intervention (not a model call).")
+                self.update(row,supervisor_intervention=True)
+                code="from manipulation_agent.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{port}')+",'finish',{'outcome':'aborted','reason':'Batch supervisor: controller ended without formal finish'},'batch-supervisor-finish',timeout=30))"
+                finish=self.ssh(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],'-c',code],timeout=45)
+                (self.root/'logs'/f'{runid}_forced_finish.log').write_text(finish.stdout+finish.stderr)
+            for _ in range(24):
+                state=self.unit_state(unit)
+                if state.get('ActiveState') not in {'active','activating','deactivating'}: break
+                time.sleep(5)
+        except Exception as exc:
+            self.update(row,failure=f'{type(exc).__name__}: {exc}',failure_stage=row.get('stage'))
+            (self.root/'logs'/f'{runid}_supervisor_error.log').write_text(traceback.format_exc())
+            self.journal(f"FAILURE {runid}; stage {row.get('stage')}; {type(exc).__name__}: {exc}")
+        finally:
+            if own_unit:
+                try:
+                    state=self.unit_state(unit)
+                    if state.get('ActiveState') in {'active','activating','deactivating'}:
+                        if state.get('Description') != f'BEHAVIOR100 owned {runid}': raise RuntimeError('Ownership check failed; refusing stop')
+                        self.ssh(['systemctl','--user','stop',unit],timeout=60)
+                    state=self.unit_state(unit)
+                    self.update(row,unit_final_state=state)
+                    p=self.ssh(['journalctl','--user','-u',unit,'--no-pager','-o','short-iso'],timeout=60)
+                    (self.root/'logs'/f'{runid}_simulator.log').write_text(p.stdout+p.stderr)
+                    self.archive(row,controller,remote_run)
+                except Exception as exc:
+                    self.update(row,archive_failure=str(exc))
+                    self.journal(f"ARCHIVE FAILURE {runid}: {exc}")
+            passed=row.get('task_success') is True and row.get('controller_status')=='passed' and row.get('evidence_alignment')=='passed' and row.get('video_validation')=='passed'
+            self.update(row,status='passed' if passed else ('blocked' if not own_unit else 'failed'),stage='complete',finished_at=now())
+            self.journal(f"END {runid}: status={row['status']}; task_success={row.get('task_success')}; evidence={row.get('evidence_alignment')}; video={row.get('video_validation')}; actions={row.get('actions')}. All failures remain in the denominator.")
+            self.publish()
+
+    def archive(self,row,controller,remote_run):
+        dest=self.root/'runs'/row['run_id'];dest.mkdir(exist_ok=True)
+        # rsync needs the SSH command without the final host argument.
+        cmd=['rsync','-a','-e',shlex.join(self.c['ssh'][:-1]),self.c['ssh'][-1]+':'+str(remote_run)+'/',str(dest)+'/']
+        p=subprocess.run(cmd,capture_output=True,text=True,timeout=180)
+        (self.root/'logs'/f"{row['run_id']}_archive.log").write_text(p.stdout+p.stderr)
+        simlog=self.root/'logs'/f"{row['run_id']}_simulator.log"
+        if simlog.exists():shutil.copyfile(simlog,dest/'simulator.log')
+        if not (dest/'run.json').exists():
+            self.update(row,failure=row.get('failure') or 'No simulator recorder created',task_success=None,video_validation='unavailable_before_initialization')
+            return
+        raw=json.loads((dest/'run.json').read_text())
+        if raw['status']=='running':
+            write_json(dest/'termination.json',{'status':'failed','at':now(),'reason':row.get('failure') or 'Simulator ended without final recorder',
+                       'unit':row['simulator_unit'],'unit_state':row.get('unit_final_state'),'final_evaluation_available':False})
+        run=read_run(dest)
+        self.update(row,task_success=run.get('task_success'),actions=run.get('actions'),tool_calls=run.get('tool_calls'),
+                    sim_steps=run.get('sim_steps'),evaluation=run.get('evaluation'),q_score=(run.get('evaluation') or {}).get('official_metrics',{}).get('q_score',{}).get('final'),
+                    run_source=run.get('source'),backend=run.get('backend'),agent_outcome=run.get('agent_outcome'),finish_reason=run.get('finish_reason'))
+        errors=[]
+        for script,filename in [('validate_async_observation.py','observation_validation.json'),('validate_episode_video.py','video_validation.json')]:
+            cmd=[sys.executable,str(self.source/'scripts'/script)]
+            if script=='validate_async_observation.py': cmd.append('--run-dir')
+            cmd.append(str(dest))
+            p=subprocess.run(cmd,capture_output=True,text=True,timeout=300,env=self.environment)
+            (dest/(script+'.log')).write_text(p.stdout+p.stderr)
+            # Failed validation never gets converted to success merely because the file exists.
+            if not (dest/filename).exists(): write_json(dest/filename,{'status':'failed','reason':'Validator could not complete','exit_code':p.returncode})
+        controller_ready=(controller/'controller.json').is_file() and (controller/'model_events.jsonl').is_file()
+        try:
+            replay=render_replay(dest,controller if controller_ready else None)
+        except Exception as exc:
+            errors.append('Controller/replay join failed: '+str(exc))
+            replay=render_replay(dest)
+        video=json.loads((dest/'video_validation.json').read_text())
+        audit=replay.get('audit') or {}
+        public=self.reports/'manipulation_runs'/row['run_id']
+        # This directory contains simulator artifacts and public-only model export.
+        # Raw controller stream and authentication remain outside the web root.
+        shutil.copytree(dest,public,dirs_exist_ok=True)
+        prefix='manipulation_runs/'+row['run_id']+'/'
+        observation=json.loads((dest/'observation_validation.json').read_text())
+        self.update(row,video_validation=video['status'],observation_validation=observation['status'],evidence_alignment=audit.get('evidence_alignment','unavailable'),
+                    model_usage=audit.get('usage'),replay_url=prefix+'replay.html',record_url=prefix+'run.json',
+                    video_url=prefix+'episode.mp4' if (dest/'episode.mp4').exists() else None,
+                    replay_errors=errors,video_frames=video.get('frame_count'),video_seconds=video.get('duration_seconds'))
+        # Checksums cover original evidence as well as exports; streamed for large videos.
+        hashes={}
+        for folder in (dest,controller):
+            if not folder.exists():continue
+            for path in sorted(folder.iterdir()):
+                if path.is_file():
+                    with path.open('rb') as f: hashes[str(path.relative_to(self.root))]=hashlib.file_digest(f,'sha256').hexdigest()
+        write_json(dest/'artifact_hashes.json',hashes)
+        shutil.copyfile(dest/'artifact_hashes.json',public/'artifact_hashes.json')
+
+    def run(self,limit=None):
+        self.publish()
+        for row in self.rows:
+            if row['status']=='planned': self.queue.put(row)
+        if limit is not None:
+            limited=queue.Queue()
+            for _ in range(min(limit,self.queue.qsize())):limited.put(self.queue.get_nowait())
+            self.queue=limited
+        def worker(gpu):
+            while True:
+                try:row=self.queue.get_nowait()
+                except queue.Empty:return
+                self.run_one(row,gpu)
+        with ThreadPoolExecutor(max_workers=len(self.c['gpus'])) as pool:
+            futures=[pool.submit(worker,gpu) for gpu in self.c['gpus']]
+            for future in futures:future.result()
+        self.publish()
+
+
+def main():
+    p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True);p.add_argument('--limit',type=int);p.add_argument('--publish-only',action='store_true')
+    a=p.parse_args();config=json.loads(a.config.read_text());root=Path(config['batch'])
+    with (root/'supervisor.lock').open('w') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        batch=Batch(config)
+        if a.publish_only:batch.publish()
+        else:batch.run(a.limit)
+
+
+if __name__=='__main__':main()
