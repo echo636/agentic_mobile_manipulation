@@ -23,6 +23,7 @@ class RGBBackend(OmniGibsonBackend):
         self.capture_index=0
         self.image_files={}
         self.current_frames={}
+        self._sensor_packets={}
         super().__init__(*args,**kwargs)
         if self.record_video:
             from ..video import EpisodeVideo
@@ -98,16 +99,19 @@ class RGBBackend(OmniGibsonBackend):
         shapes = {}
         for attempt in range(30):
             self.og.sim.render()
-            pixels = {}
+            pixels = {}; packets = {}
             for view,sensor in sensors.items():
-                data,_ = sensor.get_obs()
+                data,info = sensor.get_obs()
                 raw = data.get('rgb')
                 if raw is None: continue
                 rgb = raw.detach().cpu().numpy()
                 shapes[view] = list(rgb.shape)
                 if rgb.ndim == 3 and rgb.shape[:2] == (self.image_size,self.image_size) and rgb.shape[2] >= 3:
                     pixels[view] = rgb[...,:3].astype(np.uint8)
-            if len(pixels) == len(sensors): return pixels
+                    packets[view] = (data,info)
+            if len(pixels) == len(sensors):
+                self._sensor_packets = packets
+                return pixels
         raise RuntimeError('RGB render products did not become ready: '+json.dumps(shapes))
 
     def _step(self, action):
@@ -145,6 +149,7 @@ class RGBBackend(OmniGibsonBackend):
         self.capture_index+=1
         self.current_frames={}
         folder=self.output/'frames';folder.mkdir(exist_ok=True)
+        private_folder=self.output/'executor_frames';private_folder.mkdir(exist_ok=True)
         images=[];audit=[]
         for sensor_name,sensor in self.robot.sensors.items():
             if 'Camera' not in sensor_name: continue
@@ -157,6 +162,15 @@ class RGBBackend(OmniGibsonBackend):
             position,orientation=sensor.get_position_orientation()
             frame={'sensor':sensor,'position':position.clone(),'orientation':orientation.clone(),
                    'intrinsic':sensor.intrinsic_matrix.clone(),'width':pixels.shape[1],'height':pixels.shape[0]}
+            data,info=self._sensor_packets[view]
+            frame['depth_linear']=data['depth_linear'].detach().cpu().clone()
+            frame['seg_instance']=data['seg_instance'].detach().cpu().clone()
+            frame['instance_labels']=dict(info['seg_instance'])
+            np.savez_compressed(private_folder/f'{ref}.npz',depth_linear=frame['depth_linear'].numpy(),
+                                seg_instance=frame['seg_instance'].numpy())
+            (private_folder/f'{ref}.json').write_text(json.dumps({'audience':'executor_private_only',
+                'image_ref':ref,'rgb_sha256':digest,'instance_labels':frame['instance_labels'],
+                'position':position.tolist(),'orientation':orientation.tolist(),'intrinsic':frame['intrinsic'].tolist()}))
             self.current_frames[ref]=frame
             self.image_files[ref]=path
             images.append({'image_ref':ref,'view':view,'width':pixels.shape[1],'height':pixels.shape[0],
@@ -172,30 +186,37 @@ class RGBBackend(OmniGibsonBackend):
         return self.image_files[ref].read_bytes(),'image/jpeg'
 
     def _ground(self,target):
-        """Turn an agent-chosen pixel into the FIRST physical surface on its camera ray.
+        """Route exactly the chosen rendered pixel to the ideal actuator target.
 
-        Uses calibration and collision geometry inside the ideal motor executor.
-        No object-name search, task-object filtering, candidate snapping or labels.
+        Private renderer instance/depth data resolves the surface actually visible
+        in RGB. No class search, task-object filtering, candidate snapping or
+        alternate-pixel search. This information is never sent to the model.
         """
         from omnigibson.utils.sampling_utils import raytest
         import omnigibson.utils.transform_utils as T
         frame=self.current_frames.get(target['image_ref'])
         if frame is None: raise SkillError('stale_image_ref','Expired RGB capture')
         x,y=target['point'];K=frame['intrinsic'].cpu()
-        px=x*(frame['width']-1);py=y*(frame['height']-1)
+        px=round(x*(frame['width']-1));py=round(y*(frame['height']-1))
         # USD cameras look along -Z; image down corresponds to camera -Y.
         local=self.torch.tensor([(px-float(K[0,2]))/float(K[0,0]),
                                  -(py-float(K[1,2]))/float(K[1,1]),-1.0])
         start=frame['position'].cpu()
-        direction=T.quat2mat(frame['orientation'].cpu()) @ local
-        direction/=self.torch.linalg.norm(direction)
-        hit=raytest(start,start+direction*30.0)
-        if not hit['hit']: raise SkillError('no_surface_at_point','No collision surface at selected pixel')
-        body=hit.get('rigidBody','')
-        obj=next((o for o in self.env.scene.objects if body==o.prim_path or body.startswith(o.prim_path+'/')),None)
+        instance=int(frame['seg_instance'][py,px])
+        labels=frame['instance_labels'];label=labels.get(instance,labels.get(str(instance)))
+        depth=float(frame['depth_linear'][py,px])
+        if label in {None,'background','unlabelled'} or not math.isfinite(depth) or not 0<depth<30:
+            raise SkillError('no_surface_at_point','No supported visible surface at selected pixel')
+        obj=self.env.scene.object_registry('name',label)
         if obj is self.robot: raise SkillError('invalid_visual_target','Pixel hits robot')
-        return obj,hit['position'],{'rigid_body':body,'hit_position':hit['position'].tolist(),
-                                  'selected_pixel':target['point'],'image_ref':target['image_ref']}
+        direction=T.quat2mat(frame['orientation'].cpu()) @ local
+        point=start+direction*depth
+        unit=direction/self.torch.linalg.norm(direction)
+        hit=raytest(start,start+unit*30.0)
+        return obj,point,{'routing':'exact_rendered_instance_and_depth_at_agent_pixel',
+            'instance_id':instance,'rendered_object':label,'rigid_body':obj.prim_path if obj else None,
+            'depth_linear':depth,'hit_position':point.tolist(),'collision_ray_body_diagnostic':hit.get('rigidBody') if hit['hit'] else None,
+            'selected_pixel':target['point'],'raster_pixel':[px,py],'image_ref':target['image_ref']}
 
     def _turn(self,degrees,max_steps):
         import omnigibson.utils.transform_utils as T
@@ -276,15 +297,15 @@ class RGBBackend(OmniGibsonBackend):
 
     def evaluate(self):
         result=super().evaluate()
-        result['protocol']='rgb_agent_ideal_executor_v1'
+        result['protocol']='rgb_agent_ideal_executor_v2_rendered_pixel'
         result['observation_mode']=self.mode
         return result
 
     def provenance(self):
         result=super().provenance()
-        result.update(executor='symbolic_manipulation_plus_private_pixel_ray_navigation',
+        result.update(executor='symbolic_manipulation_plus_private_rendered_pixel_navigation',
                       observation_mode=self.mode,image_size=self.image_size,
-                      grounding='first_collision_on_agent_selected_RGB_pixel_ray',
+                      grounding='exact_instance_and_depth_at_agent_selected_RGB_pixel_private_executor_only',
                       model_visible_truth=False)
         result['record_video'] = self.record_video
         result['base_execution'] = 'live_kinematic_path_0.5m_s_60deg_s; symbolic grasp/place remain instantaneous'
