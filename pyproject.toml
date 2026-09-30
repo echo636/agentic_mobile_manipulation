@@ -20,7 +20,7 @@ manip-mcp = "manipulation_agent.mcp_server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-manipulation_agent = ["tasks.json"]
+manipulation_agent = ["tasks.json", "replay_assets/*.html", "replay_assets/*.css", "replay_assets/*.js"]
 
 [tool.setuptools.data-files]
 "share/manipulation-agentic-system/skills/visual-manipulation" = ["skills/visual-manipulation/SKILL.md"]

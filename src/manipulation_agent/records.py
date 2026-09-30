@@ -76,3 +76,8 @@ class Recorder:
         page += f'<h1>{html.escape(self.output.name)}</h1><p class="note">研究评测：symbolic 执行器与 oracle 状态须按记录区分。工具通过、模型声称完成与 BDDL 任务成功是三件事。</p>'
         page += f'<p><a href="run.json">结构化运行记录</a> · <a href="events.jsonl">完整事件轨迹</a></p><article><pre>{esc(self.run)}</pre></article><h2>逐步事件</h2>{cards}<h2>机器人观测</h2><div id="frames">{images}</div></html>'
         (self.output / "index.html").write_text(page, encoding="utf-8")
+        if self.run.get('config', {}).get('observation_mode') == 'rgb_only' or self.run.get('config', {}).get('backend') == 'omnigibson':
+            from .replay import render_replay
+            render_replay(self.output)
+            page = page.replace('<h1>', '<p><a href="replay.html">▶ 打开逐步 Replay</a></p><h1>', 1)
+            (self.output / 'index.html').write_text(page, encoding='utf-8')

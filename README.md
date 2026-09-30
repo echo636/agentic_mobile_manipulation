@@ -33,6 +33,7 @@ src/manipulation_agent/
   bridge.py                          # HTTP排队与单线程仿真所有者
   records.py                         # run/events/源码快照/HTML
   audit.py                           # 控制器与仿真记录交叉检查
+  replay.py / replay_assets/          # 逐步观测、动作与公开决策记录的回放
 ```
 
 **Skill文档、tool接口和动作primitive是三层不同概念。** Skill告诉模型如何组织工具完成任务；tool是可调用能力；primitive负责一次底层动作。技能库是人工编写并冻结到每轮运行的工作流，尚未实现自动技能学习或演化。
@@ -82,3 +83,16 @@ finish只返回关闭状态与模型自己的声明；独立BDDL/TaskMetric结�
 每轮保存skill_snapshot/manifest、source_snapshot、图像SHA、模型调用、run.json、events.jsonl、captures.jsonl和HTML。已知低层限制包含小容器采样和大碗辅助抓取时的物理稳定性；不能把理想小脑假设写成永远成功。当前也不是官方物理控制排行榜提交。
 
 [RGB当前页面](http://10.76.5.241:8765/rgb_system.html) · [历史基线与来源仓库分析](http://10.76.5.241:8765/manipulation_system.html)
+
+## 真实任务 Replay
+
+每轮RGB实验结束自动生成 `replay.html` 与 `replay.json`。关联模型日志后重建，可验证模型实际收到的ImageContent与落盘图像哈希、工具参数/结果、源码及正式结束：
+
+```bash
+PYTHONPATH=src python -m manipulation_agent.replay \
+  --run-dir runs/rgb-radio --controller-dir runs/rgb-radio-controller
+```
+
+回放包含完整工具时间线、步进/自动播放、三相机前后RGB、模型传入像素叠加、执行错误、当时已记录的计划/记忆及技能读取。决策摘要只来自显式工具参数，不提供隐藏推理或事后编造动机。没有新观测的步骤明确沿用前图；构造器内部未返回模型的初始画面不混入模型视图；未录制的运动中间帧不插值。最终BDDL评分单列为实验后审阅信息。
+
+2026-09-30：`turning_on_radio / 301 / seed 0`，真实模型gpt-6-astra、真实OmniGibson相机RGB、理想执行器，BDDL与TaskMetric成功。3机器人动作、16工具调用、180 env.step；18个实际图像内容块/15张不同图像，控制器与仿真轨迹及哈希对齐。实验源码 `e48a7ac`，后续离线审计与replay改动不改变原运行版本。这是1个实例的通过记录，不代表100任务成绩或官方物理控制排行榜结果。

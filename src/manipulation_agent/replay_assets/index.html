@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@@TITLE@@ · Experiment Replay</title><style>@@CSS@@</style></head>
+<body><header><a class="back" href="../../rgb_system.html#results">← 实验报告</a><span class="eyebrow">BEHAVIOR · OBSERVATION / ACTION REPLAY</span><h1 id="title"></h1><p id="instruction"></p><div id="stats" class="stats"></div></header>
+<main><aside id="protocol" class="notice"></aside>
+<div class="transport"><button id="prev" aria-label="上一步">← 上一步</button><button id="play">▶ 播放</button><button id="next" aria-label="下一步">下一步 →</button><label>步间隔 <select id="speed"><option value="2500">2.5 秒</option><option value="1000">1 秒</option><option value="5000">5 秒</option></select></label><span id="position"></span><input id="seek" type="range" min="1" max="1" value="1" aria-label="轨迹进度"><span class="muted">← / → 切步 · 空格播放 · 离散步骤，非实时视频</span></div>
+<div class="layout"><aside class="timeline card"><div class="timeline-head"><strong>完整工具轨迹</strong><select id="filter" aria-label="筛选轨迹"><option value="all">全部步骤</option><option value="motor">机器人动作</option><option value="observation">含观测返回</option><option value="failed">失败 / 缺失</option></select></div><div id="timeline"></div></aside>
+<section class="workspace"><div class="step-heading"><div><span class="eyebrow" id="event"></span><h2 id="step-title"></h2></div><span id="step-status" class="badge"></span></div>
+<div class="camera-bar"><span>相机</span><button data-view="head" aria-pressed="true">头部 RGB</button><button data-view="left_wrist" aria-pressed="false">左腕 RGB</button><button data-view="right_wrist" aria-pressed="false">右腕 RGB</button></div>
+<div class="frames"><figure class="card"><figcaption><strong>调用前 · Agent 已有观测</strong><small id="before-meta"></small></figcaption><div id="before-frame" class="frame"></div></figure><figure class="card"><figcaption><strong>返回后 · 最新可用观测</strong><small id="after-meta"></small></figcaption><div id="after-frame" class="frame"></div></figure></div>
+<p id="frame-note" class="caption"></p>
+<div class="info-grid"><article class="card"><h3>执行与结果</h3><p id="action"></p><p id="outcome"></p><p id="timing" class="muted"></p><details><summary>精确调用参数</summary><pre id="arguments"></pre></details><details><summary>原始公开工具返回</summary><pre id="result"></pre></details></article>
+<article class="card"><h3>决策摘要与视觉依据</h3><p class="muted">仅展示此时已显式记录的计划 / 笔记，均为 agent 的判断。</p><div id="decisions"></div></article></div>
+<div class="info-grid"><article class="card"><h3>当前已接受的任务计划</h3><div id="plan"></div></article><article class="card"><h3>记忆与技能</h3><div id="memory"></div><details id="skill-detail" hidden><summary>本步读取的技能原文</summary><pre id="skill-text"></pre></details></article></div>
+</section></div>
+<section class="card evaluation"><h2>独立评估 · 实验结束后可见</h2><p>此区域用于研究者审阅，未作为观测反馈给 agent。任务成功、工具执行完成和模型声称完成分别记录。</p><div id="evaluation-stats" class="stats"></div><details><summary>评分、来源与执行环境</summary><pre id="evaluation"></pre></details><p id="audit-summary"></p><p class="downloads"><a href="replay.json">Replay 数据</a><a href="run.json">原始 Run</a><a href="events.jsonl">离线诊断事件（含执行器私有信息）</a><a id="audit-link" href="replay_audit.json">图像与调用审计</a><a href="index.html">原始日志页</a></p></section>
+<footer id="limitations"></footer></main>
+<dialog id="zoom"><button id="close-zoom">关闭 ×</button><img alt="原始相机RGB放大"><p></p></dialog>
+<script type="application/json" id="replay-data">@@DATA@@</script><script>@@JS@@</script></body></html>
