@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from ..contracts import SkillError
 from ..omnigibson_backend import OmniGibsonBackend
-from ..observations.rig import DIRECTIONS, camera_mount
+from ..observations.rig import DIRECTIONS, camera_mount, look_at_orientation
 from ..records import now
 
 class RGBBackend(OmniGibsonBackend):
@@ -98,10 +98,7 @@ class RGBBackend(OmniGibsonBackend):
                 score = usable-.015*i-.005*j + (.65 if (i,j)==self._spectator_choice else 0)
                 if best is None or score>best[0]: best=(score,target+direction*usable,usable,(i,j))
         _,camera,clearance,self._spectator_choice = best
-        direction = target-camera; direction /= torch.linalg.norm(direction)
-        right = torch.linalg.cross(direction,torch.tensor([0.,0.,1.]));right /= torch.linalg.norm(right)
-        up = torch.linalg.cross(right,direction)
-        orientation = T.mat2quat(torch.stack((right,up,-direction),dim=1))
+        orientation = torch.tensor(look_at_orientation(camera.tolist(),target.tolist()),dtype=camera.dtype)
         self.spectator.set_position_orientation(camera,orientation)
         self._spectator_anchor = (pos.clone(),yaw)
         self.og.sim.render()
@@ -111,7 +108,14 @@ class RGBBackend(OmniGibsonBackend):
 
     def _video_frame(self, kind):
         if self.video is None or self.video.closed: return
-        self._position_spectator()
+        try:
+            self._position_spectator()
+        except Exception as exc:
+            # The offline filming camera must not interrupt a robot action or
+            # its error recovery. Preserve its last pose and record degradation.
+            with (self.output/'recording_warnings.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at':now(),'env_step':self.steps,'component':'spectator_pose',
+                    'type':type(exc).__name__,'error':str(exc),'fallback':'last_camera_pose'})+'\n')
         pixels = self._render_rgb_views(include_spectator=True)
         self.video.append(pixels,self.steps,kind)
 

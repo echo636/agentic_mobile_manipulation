@@ -60,3 +60,29 @@ yaw after each simulation step and verifies the final position.
 The original 100-task runtime remains frozen and paused at the user's request.
 No automatic batch resume is part of this change. A future evaluation must use
 a new recorded executor version and retain original failed/interrupted attempts.
+
+## Validation on 2026-09-30 and scoped retest
+
+- CPU suite: 85 tests passed, including navigation geometry/follower, RGB boundary,
+  tilted robot camera audit, spectator failure isolation, legacy R1Pro scene metadata,
+  and immutable batch accounting.
+- Direct reference parity: 5,000 candidate coordinates (maximum discrepancy
+  5.41e-7 m) and five scoring cases matched the jinkai source snapshot.
+- Archived failure reproduction: all 25 invalid-start navigation queries planned and
+  followed on the original static maps within the 700-step action budget.
+- Real OmniGibson scripted navigation probe (source `34cd684`): both moves reached;
+  172 and 207 control steps including settling, final errors below 4e-6 m.
+  This checks the actual navigation adapter, not model performance or task success.
+- A separate 32-task RGB/model retest is authorized: the previous 29 completed tasks
+  plus three user-interrupted tasks. Instance 301, seed 0, original instructions,
+  model and budgets are retained. The remaining 68 tasks are excluded. New run IDs
+  and a separate report directory preserve the paused original batch.
+
+Additional infrastructure fixes before that retest: avoid the spectator camera's
+Torch-compiled matrix-to-quaternion path and isolate recording pose failures; adapt
+only the known serialized legacy R1Pro class to the current Robot(model=r1pro) in a
+hashed derived scene copy, retaining identity and asset hash verification. Audit
+camera axes in the robot frame (world-horizontal axes change when the base tilts).
+These changes do not fix depth/collision disagreement, placement sampling failures,
+or all simulator initialization faults. Raw errors and independent task scores remain
+separate. This is an RGB + ideal executor research protocol, not an official submission.

@@ -19,6 +19,20 @@ from .contracts import SkillError
 from .records import write_json
 
 
+def normalize_embedded_robot(data):
+    """Migrate the known legacy R1Pro serialization in a derived scene copy only."""
+    changes = []
+    for key, entry in data['objects_info']['init_info'].items():
+        if (entry.get('class_module'),entry.get('class_name')) == ('omnigibson.robots.r1pro','R1Pro'):
+            if entry['args'].get('model','r1pro') != 'r1pro':
+                raise ValueError('Conflicting legacy robot model')
+            entry.update(class_module='omnigibson.robots.robot',class_name='Robot')
+            entry['args']['model']='r1pro'
+            changes.append({'object':key,'from':'omnigibson.robots.r1pro.R1Pro',
+                            'to':'omnigibson.robots.robot.Robot','model':'r1pro'})
+    return changes
+
+
 class OmniGibsonBackend:
     mode = "oracle_task_state"
 
@@ -135,6 +149,10 @@ class OmniGibsonBackend:
         scene = task_cfg["scene_model"]
         template = instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json"
         data = json.loads(template.read_text())
+        migrations = normalize_embedded_robot(data)
+        if migrations:
+            write_json(self.output/'scene_compatibility.json',{'changes':migrations,
+                       'original_template_unmodified':True,'asset_hash_check_preserved':True})
         embedded = [o for o in data["objects_info"]["init_info"].values() if o["class_name"] == "Robot"]
         if len(embedded) > 1:
             raise ValueError("Multiple embedded robots are unsupported")

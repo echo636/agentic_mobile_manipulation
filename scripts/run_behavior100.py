@@ -65,12 +65,21 @@ def render_dashboard(progress):
                 links.append(f'<a href="{esc(previous["replay_url"])}">此前失败尝试</a>')
         outcome='成功' if r.get('task_success') is True else ('未成功' if r.get('task_success') is False else '未取得最终评分')
         rows.append(f'<tr data-status="{esc(r["status"])}"><td>{r["index"]+1}</td><td>{esc(r["name"])}<small>{esc(r["task"])}</small><details><summary>任务输入与来源</summary><p>{esc(r["instruction"])}</p><p>{esc(r["instruction_source"])}</p></details></td><td class="{r["status"]}">{esc(r["status"])}<small>{esc(r.get("stage","queued"))}</small></td><td>{outcome}<small>Q={esc(r.get("q_score","—"))}</small></td><td>{esc(r.get("actions","—"))}<small>{esc(r.get("tool_calls","—"))} tool calls</small></td><td>{esc(r.get("evidence_alignment","—"))}<small>video: {esc(r.get("video_validation","—"))}</small></td><td>{" · ".join(links)}<small>{esc(r.get("failure",""))}</small></td></tr>')
-    return '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BEHAVIOR 100 · 批量测试</title>
+    page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BEHAVIOR 100 · 批量测试</title>
 <style>body{font:16px system-ui;background:#eef3f8;color:#142c43;margin:25px auto;max-width:1500px;padding:0 18px}a{color:#07599b}article,.cards>div{background:white;border:1px solid #d3dfe9;border-radius:10px;padding:18px;margin:14px 0}.cards{display:flex;gap:14px;flex-wrap:wrap}.cards>div{flex:1;min-width:150px}.cards strong{font-size:30px;display:block}table{border-collapse:collapse;width:100%;min-width:1050px}td,th{text-align:left;border-bottom:1px solid #ddd;padding:12px;vertical-align:top}small{display:block;color:#586d81;margin-top:7px;overflow-wrap:anywhere}td:nth-child(2){max-width:360px}td:last-child{max-width:270px}summary{cursor:pointer}input,select{font:inherit;padding:8px;margin:8px}.table{overflow-x:auto}.passed{color:#087044}.failed{color:#ad3030}.blocked{color:#9c6700}.running{color:#065fa7}p{line-height:1.65}code{overflow-wrap:anywhere}</style>
 <h1>BEHAVIOR 2026 · 100 项任务测试</h1><p>RGB agent + ideal motor executor · gpt-6-astra · public instance 301 · seed 0</p>''' + f'''
 <div class="cards"><div><strong>{s['completed']} / {s['total']}</strong>已结束（包括失败和受阻）</div><div><strong>{s['task_successes']} / {s['total']}</strong>独立评估成功 / 固定总数</div><div><strong>{s['final_evaluations']}</strong>取得最终评分</div><div><strong>{s['complete_videos']}</strong>录像完整性验证通过</div></div>
-<article><p><b>失败与重试：</b>首次尝试成功 {s['first_attempt_task_successes']} / {s['total']}；另有 {s['extra_infrastructure_attempts']} 次模型启动前的基础设施重试。上方成功数含修复后的最新尝试，原始失败记录保留在该任务行，任务总数始终为 100。</p><p><b>协议：</b>每种任务运行一个公开测试实例，共 100 个 episode，不等于所有公开实例或官方排行榜提交。机器人输入是同时采集的前、后、左、右 RGB，无腕部相机；模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。切割、擦洗等能力未扩展，相关失败保留在总数中。</p><p><b>输入来源：</b>50 项使用官方原文，50 项按静态 BDDL 目标补写，逐项标注。独立评估、几何和 spectator 录像只供执行器或离线审阅，不作为模型观测。</p><p><b>回放：</b>连续录像记录实际控制步；模型等待时间不铺成静止画面。Replay 同步四路 RGB、模型公开 assistant 原文、工具参数和返回结果。不补写思考，不展示隐藏推理；原始私有运行记录保存在实验目录。</p><p><b>状态：</b>passed 要求任务成功、控制器正常结束、证据对齐和录像验证通过；failed/blocked 分别保留具体阶段。失败任务有最终评分时显示 Q，仿真在初始化前失败时无法生成观测或视频。部分录像不标成完整。</p><p>批次状态：{esc(s['execution_status'])} · 更新：{esc(progress['updated_at'])} · <a href="behavior100/progress.json">实时 JSON</a> · <a href="behavior100/manifest.json">冻结清单</a> · <a href="behavior100/validation.json">验证记录</a> · <a href="behavior100/journal.md">迭代日志</a></p></article>
+<article><p><b>失败与重试：</b>首次尝试成功 {s['first_attempt_task_successes']} / {s['total']}；另有 {s['extra_infrastructure_attempts']} 次模型启动前的基础设施重试。上方成功数含修复后的最新尝试，原始失败记录保留在该任务行，任务总数始终为 100。</p><p><b>协议：</b>每种任务运行一个公开测试实例，共 100 个 episode，不等于所有公开实例或官方排行榜提交。机器人输入是同时采集的前、后、左、右 RGB，无腕部相机；模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。切割、擦洗等能力未扩展，相关失败保留在总数中。</p><p><b>输入来源：</b>50 项使用官方原文，50 项按静态 BDDL 目标补写，逐项标注。独立评估、几何和 spectator 录像只供执行器或离线审阅，不作为模型观测。</p><p><b>回放：</b>连续录像记录实际控制步；模型等待时间不铺成静止画面。Replay 同步四路 RGB、模型公开 assistant 原文、工具参数和返回结果。不补写思考，不展示隐藏推理；原始私有运行记录保存在实验目录。</p><p><b>状态：</b>passed 要求任务成功、控制器正常结束、证据对齐、四相机观测和录像验证通过；failed/blocked 分别保留具体阶段。失败任务有最终评分时显示 Q，仿真在初始化前失败时无法生成观测或视频。部分录像不标成完整。</p><p>批次状态：{esc(s['execution_status'])} · 更新：{esc(progress['updated_at'])} · <a href="behavior100/progress.json">实时 JSON</a> · <a href="behavior100/manifest.json">冻结清单</a> · <a href="behavior100/validation.json">验证记录</a> · <a href="behavior100/journal.md">迭代日志</a></p></article>
 <input id="search" placeholder="搜索任务 / 阶段"><select id="status"><option value="">所有状态</option><option>planned</option><option>running</option><option>passed</option><option>failed</option><option>blocked</option></select><label><input id="refresh" type="checkbox" checked>每 60 秒刷新</label><div class="table"><table><thead><tr><th>#</th><th>任务</th><th>运行状态</th><th>独立评估</th><th>动作数</th><th>证据与录像</th><th>回放 / 原始记录</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>''' + '''<script>const search=document.querySelector('#search'), status=document.querySelector('#status');function filter(){document.querySelectorAll('tbody tr').forEach(r=>r.hidden=!(r.textContent.toLowerCase().includes(search.value.toLowerCase())&&(!status.value||r.dataset.status===status.value)))}search.oninput=status.onchange=filter;setInterval(()=>{if(document.querySelector('#refresh').checked&&!search.value&&!status.value)location.reload()},60000)</script></html>'''
+    total = s['total']
+    official=sum(r['instruction_source']=='official_gallery' for r in progress['tasks'])
+    page=page.replace('50 项使用官方原文，50 项按静态 BDDL 目标补写',f'{official} 项使用官方原文，{total-official} 项按静态 BDDL 目标补写')
+    page = page.replace('100 项任务测试',f'{total} 项任务测试').replace('任务总数始终为 100',f'任务总数始终为 {total}').replace('共 100 个 episode',f'共 {total} 个 episode')
+    if progress.get('comparison'):
+        c = progress['comparison']
+        banner = '<article><b>GT 导航修复后重测</b><p>'+esc(c['scope'])+'</p><p><a href="'+esc(c['baseline_url'])+'">上次测试账本</a> · <a href="'+esc(c['report_url'])+'">修复与验证报告</a> · <a href="behavior100_realtime.html">真实耗时视频</a></p><p>本页仅统计新批次，不覆盖或合并旧成绩。其他任务未排队。</p></article>'
+        page = page.replace('<div class="cards">',banner+'<div class="cards">',1)
+    return page
 
 
 class Batch:
@@ -117,11 +126,11 @@ class Batch:
     def publish(self):
         with self.lock:
             progress={'updated_at':now(),'source':source_version(),'supervisor':{'host':os.uname().nodename,'pid':os.getpid(),'unit':os.environ.get('MAS_UNIT'),'interpreter':sys.executable},
-                      'summary':summarize(self.rows),'tasks':self.rows}
+                      'summary':summarize(self.rows),'tasks':self.rows,'comparison':self.manifest.get('comparison')}
             write_json(self.root/'progress.json',progress)
             write_json(self.root/'run_records.json',{'updated_at':now(),'runs':self.rows})
             validation={'status':'running' if progress['summary']['execution_status']=='running' else ('passed' if all(r['status']=='passed' for r in self.rows) else 'failed'),
-                        'level':'100_task_real_rgb_simulator_batch','summary':progress['summary'],
+                        'level':'real_rgb_simulator_batch','task_count':len(self.rows),'summary':progress['summary'],
                         'source':progress['source'],'official_submission_eligible':False,
                         'note':'Task success, controller termination, transport alignment and video completeness are separate fields.'}
             write_json(self.root/'validation.json',validation)
@@ -241,7 +250,7 @@ class Batch:
                 except Exception as exc:
                     self.update(row,archive_failure=str(exc))
                     self.journal(f"ARCHIVE FAILURE {runid}: {exc}")
-            passed=row.get('task_success') is True and row.get('controller_status')=='passed' and row.get('evidence_alignment')=='passed' and row.get('video_validation')=='passed'
+            passed=row.get('task_success') is True and row.get('controller_status')=='passed' and row.get('evidence_alignment')=='passed' and row.get('video_validation')=='passed' and row.get('observation_validation')=='passed'
             self.update(row,status='passed' if passed else ('blocked' if not own_unit else 'failed'),stage='complete',finished_at=now())
             self.journal(f"END {runid}: status={row['status']}; task_success={row.get('task_success')}; evidence={row.get('evidence_alignment')}; video={row.get('video_validation')}; actions={row.get('actions')}. All failures remain in the denominator.")
             self.publish()
@@ -291,7 +300,7 @@ class Batch:
         self.update(row,video_validation=video['status'],observation_validation=observation['status'],evidence_alignment=audit.get('evidence_alignment','unavailable'),
                     model_usage=audit.get('usage'),replay_url=prefix+'replay.html',record_url=prefix+'run.json',
                     video_url=prefix+'episode.mp4' if (dest/'episode.mp4').exists() else None,
-                    replay_errors=errors,video_frames=video.get('frame_count'),video_seconds=video.get('duration_seconds'))
+                    replay_errors=errors,recording_warnings=sum(1 for _ in (dest/'recording_warnings.jsonl').open()) if (dest/'recording_warnings.jsonl').exists() else 0,video_frames=video.get('frame_count'),video_seconds=video.get('duration_seconds'))
         # Checksums cover original evidence as well as exports; streamed for large videos.
         hashes={}
         for folder in (dest,controller):

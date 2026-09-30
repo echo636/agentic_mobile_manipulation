@@ -14,6 +14,16 @@ def forward(q):
     return [-2*(x*z+y*w), -2*(y*z-x*w), -(1-2*(x*x+y*y))]
 
 
+def base_relative_forward(camera_quat, base_quat):
+    """Mount directions are defined in the robot base, including when it tilts."""
+    v=forward(camera_quat)
+    x,y,z,w=base_quat
+    rotation=[[1-2*(y*y+z*z),2*(x*y-z*w),2*(x*z+y*w)],
+              [2*(x*y+z*w),1-2*(x*x+z*z),2*(y*z-x*w)],
+              [2*(x*z-y*w),2*(y*z+x*w),1-2*(x*x+y*y)]]
+    return [sum(rotation[j][i]*v[j] for j in range(3)) for i in range(3)]
+
+
 def validate(root, probe=None):
     run=json.loads((root/'run.json').read_text())
     captures=read_lines(root/'captures.jsonl')
@@ -28,6 +38,7 @@ def validate(root, probe=None):
         'no_wrist_images':not list((root/'frames').glob('*wrist*')),
         'common_capture_identity':all('synchronized_capture' in c and c['synchronized_capture']['sim_step']==c['env_steps'] for c in captures),
         'rgb_hashes_match':True,'four_distinct_direction_images':True,'cardinal_optical_axes':True,'ninety_degree_hfov':True}
+    by_capture={a['capture']['capture_id']:a for a in audits}
     for c in captures:
         names={row['image_ref'].split('-')[-1] for row in c['images']}
         checks['exactly_four_fixed_cameras'] &= names=={'front','back','left','right'} and len(c['images'])==4
@@ -36,7 +47,8 @@ def validate(root, probe=None):
             ref=row['image_ref'];meta=json.loads((root/'executor_frames'/f'{ref}.json').read_text())
             payload=(root/row['file']).read_bytes();sha=hashlib.sha256(payload).hexdigest();hashes.append(sha)
             checks['rgb_hashes_match'] &= sha==row['sha256']==meta['rgb_sha256']
-            axis=forward(meta['orientation']);n=math.hypot(*axis[:2]);axes[ref.split('-')[-1]]=[axis[0]/n,axis[1]/n]
+            base=by_capture[c['synchronized_capture']['capture_id']]['before_orientation']
+            axis=base_relative_forward(meta['orientation'],base);n=math.hypot(*axis[:2]);axes[ref.split('-')[-1]]=[axis[0]/n,axis[1]/n]
             k=meta['intrinsic'];fov=math.degrees(2*math.atan(256/k[0][0]))
             checks['ninety_degree_hfov'] &= abs(fov-90)<.1
         checks['four_distinct_direction_images'] &= len(set(hashes))==4
@@ -56,7 +68,8 @@ def validate(root, probe=None):
         checks['read_only_probe_no_actions']=run.get('actions')==0 and run.get('sim_steps')==0
     result={'status':'passed' if all(checks.values()) else 'failed','run_id':run['run_id'],
             'validation_level':'fixed_four_camera_async_interface','task_success_separate':run.get('task_success'),
-            'checks':checks,'captures':len(captures),'jobs':len(jobs),'source':run['source']}
+            'checks':checks,'captures':len(captures),'jobs':len(jobs),'source':run['source'],
+            'axis_reference_frame':'robot_base'}
     (root/'observation_validation.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result));return 0 if result['status']=='passed' else 2
 

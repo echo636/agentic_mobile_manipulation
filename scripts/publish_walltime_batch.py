@@ -13,7 +13,9 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--batch',type=Path,required=True);p.add_argument('--reports',type=Path,required=True);p.add_argument('--watch',action='store_true');a=p.parse_args()
     source=Path(__file__).resolve().parents[1];records=a.batch/'walltime_records';records.mkdir(exist_ok=True)
     public=a.reports/'behavior100';public.mkdir(exist_ok=True)
-    (a.reports/'behavior100_realtime.html').write_text(PAGE)
+    total=len(json.loads((a.batch/'manifest.json').read_text())['tasks'])
+    page=PAGE.replace('100 项测试',f'{total} 项测试').replace('BEHAVIOR 100',f'BEHAVIOR {total}').replace('100 个任务类型',f'{total} 个任务类型')
+    (a.reports/'behavior100_realtime.html').write_text(page)
     with (a.batch/'walltime.lock').open('w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         index=json.loads((public/'walltime_index.json').read_text())['runs'] if (public/'walltime_index.json').exists() else {}
@@ -57,8 +59,9 @@ def main():
                 write_json(records/(runid+'.json'),{**record,'result':result})
                 with (a.batch/'walltime_journal.md').open('a') as f:f.write(f"\n- {now()} · {runid}: {result['status']}; duration={result.get('duration_seconds')}; renderer={source_version()['commit']}; original policy/evaluator evidence unchanged.\n")
                 publish('running')
-            done=progress['summary']['execution_status']=='completed'
-            publish('completed' if done else 'running')
+            state=progress['summary']['execution_status']
+            done=state in {'completed','paused'}
+            publish(state if done else 'running')
             if done or not a.watch:return
             time.sleep(20)
 

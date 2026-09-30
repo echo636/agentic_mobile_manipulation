@@ -48,4 +48,14 @@ class BatchEvidenceTests(unittest.TestCase):
         self.assertNotIn('href="episode.mp4"',text)
         self.assertEqual(batch.summarize([row])['execution_status'],'completed')
 
+    def test_subset_reports_actual_denominator_and_separate_baseline(self):
+        row={'index':0,'status':'planned','name':'Radio','task':'radio',
+             'instruction':'Turn on radio','instruction_source':'official_gallery'}
+        text=batch.render_dashboard({'summary':batch.summarize([row]),'tasks':[row],'updated_at':'test',
+             'comparison':{'scope':'29 completed + 3 interrupted','baseline_url':'../old.html','report_url':'../fix.html'}})
+        self.assertIn('1 项任务测试',text)
+        self.assertIn('1 项使用官方原文，0 项按静态',text)
+        self.assertIn('href="../old.html"',text)
+        self.assertNotIn('共 100 个 episode',text)
+
 if __name__=='__main__': unittest.main()
