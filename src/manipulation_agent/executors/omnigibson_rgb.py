@@ -16,6 +16,7 @@ class RGBBackend(OmniGibsonBackend):
         self.record_video = record_video
         self.video = None
         self.spectator = None
+        self._spectator_anchor = None
         self.image_size=512
         self.capture_index=0
         self.image_files={}
@@ -35,19 +36,42 @@ class RGBBackend(OmniGibsonBackend):
             self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size)
 
     def _position_spectator(self):
-        """Private chase view for the researcher; never enters robot.sensors/MCP."""
+        """Collision-aware filming camera; its geometry/poses stay offline."""
         import omnigibson.utils.transform_utils as T
+        from omnigibson.utils.sampling_utils import raytest
         torch = self.torch
         pos, quat = self.robot.get_position_orientation()
         pos = pos.cpu(); rotation = T.quat2mat(quat.cpu())
-        forward = rotation[:,0]; side = rotation[:,1]
-        camera = pos - 2.0*forward - 1.6*side + torch.tensor([0.,0.,2.25])
-        target = pos + .5*forward + torch.tensor([0.,0.,.9])
+        yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        if self._spectator_anchor is not None:
+            old_pos,old_yaw = self._spectator_anchor
+            delta = math.atan2(math.sin(yaw-old_yaw),math.cos(yaw-old_yaw))
+            if float(torch.linalg.norm(pos-old_pos)) < .12 and abs(delta) < .1: return
+        lo,hi = self.robot.aabb
+        target = (lo.cpu()+hi.cpu())/2
+        ignore = [link.prim_path for link in self.robot.links.values()]
+        best = None
+        for i,angle in enumerate((135,-135,90,-90,180,0,45,-45)):
+            theta = yaw+math.radians(angle)
+            for j,height in enumerate((.8,1.2)):
+                offset = torch.tensor([2.4*math.cos(theta),2.4*math.sin(theta),height])
+                distance = float(torch.linalg.norm(offset)); direction = offset/distance
+                hit = raytest(target,target+offset,ignore_bodies=ignore)
+                clearance = float(torch.linalg.norm(hit['position'].cpu()-target))-.25 if hit['hit'] else distance
+                usable = max(.12,min(distance,clearance))
+                score = usable-.015*i-.005*j
+                if best is None or score>best[0]: best=(score,target+direction*usable,usable)
+        _,camera,clearance = best
         direction = target-camera; direction /= torch.linalg.norm(direction)
         right = torch.linalg.cross(direction,torch.tensor([0.,0.,1.]));right /= torch.linalg.norm(right)
         up = torch.linalg.cross(right,direction)
         orientation = T.mat2quat(torch.stack((right,up,-direction),dim=1))
         self.spectator.set_position_orientation(camera,orientation)
+        self._spectator_anchor = (pos.clone(),yaw)
+        for _ in range(3): self.og.sim.render()
+        with (self.output/'spectator_poses.jsonl').open('a') as stream:
+            stream.write(json.dumps({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
+                                     'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})+'\n')
 
     def _video_frame(self, kind):
         if self.video is None or self.video.closed: return
