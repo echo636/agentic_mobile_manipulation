@@ -28,7 +28,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     explained = json.loads(explained_path.read_text()) if explained_path.exists() else None
     video_markers = {m['request_id']:m for m in (video or {}).get('markers', [])}
     audit = audit_episode(run_dir, controller_dir) if controller_dir else None
-    model_messages = {}; pending = []; public_events = []; model_index = 0
+    model_messages = {}; model_payloads = {}; pending = []; public_events = []; model_index = 0
     if controller_dir:
         for event_index, event in enumerate(lines(controller_dir/'model_events.jsonl')):
             item = event.get('item',{})
@@ -40,6 +40,10 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             elif item.get('type') == 'mcp_tool_call':
                 model_index += 1
                 model_messages[model_index] = pending
+                model_payloads[model_index] = {
+                    'model_call_event_id':item.get('id'),
+                    'model_result_text':next((c.get('text','') for c in (item.get('result') or {}).get('content',[])
+                                              if c.get('type')=='text'),None)}
                 pending = []
                 public_events.append(event)
 
@@ -89,6 +93,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                       'tool': name, 'arguments': args, 'result': result,
                       'request_id':call['request_id'], 'decision':copy.deepcopy(args.get('decision')),
                       'model_messages':copy.deepcopy(model_messages.get(len(steps)+1,[])),
+                      **model_payloads.get(len(steps)+1,{}),
                       'at': call['at'], 'elapsed_seconds': (datetime.fromisoformat(call['at']) - start).total_seconds(),
                       'video_start_seconds': video_markers.get(call['request_id'],{}).get('seconds'),
                       'tool_seconds': seconds, 'is_motor_action': name in {'act', 'look'},
