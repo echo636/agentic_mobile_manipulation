@@ -6,17 +6,31 @@ The sidecar maps every viewing interval to its source frame/call/phase.
 """
 from __future__ import annotations
 import argparse
+from functools import lru_cache
 import hashlib
 import json
+import os
+import sys
+import platform
 from pathlib import Path
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 from .records import now,write_json
 from .replay import render_replay
 
-PHASES={'initial':'初始场景','decision':'LLM 原文 / 工具调用','execution':'执行工具','result':'工具返回 · 检查新观测','evaluation':'结束后的独立评分'}
+PHASES={'initial':'初始场景','decision':'LLM 原文 / 工具调用','execution':'执行工具','result':'工具返回 · 检查新观测','evaluation':'结束后的独立评分','final':'LLM 结束后的公开原文'}
 LABELS={'observe':'读取 RGB','look':'转向观察','navigate_to':'接近目标','grasp':'抓取','place_inside':'放入容器','place_on_top':'放到表面','toggle_on':'打开设备','finish':'结束任务','read_skill':'读取 Skill','list_skills':'查看 Skill 目录'}
 FONT=Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')
+
+
+@lru_cache(maxsize=16)
+def get_font(size):
+    return ImageFont.truetype(str(FONT),size)
+
+
+@lru_cache(maxsize=4096)
+def char_width(char,size):
+    return get_font(size).getlength(char)
 
 
 def outcome(step):
@@ -32,13 +46,14 @@ def outcome(step):
 
 def make_panel(step,phase,run,total):
     canvas=Image.new('RGB',(1920,1080),'#101d2b');draw=ImageDraw.Draw(canvas)
-    font=lambda n:ImageFont.truetype(str(FONT),n)
+    font=get_font
     def wrap(text,x,y,width=845,size=26,color='#dfeaf4',max_lines=7):
-        lines=[];line=''
+        lines=[];line='';line_width=0.
         for c in str(text):
-            if c=='\n' or draw.textlength(line+c,font=font(size))>width:
-                lines.append(line);line='' if c=='\n' else c
-            else:line+=c
+            cw=char_width(c,size) if c!='\n' else 0
+            if c=='\n' or line_width+cw>width-8:
+                lines.append(line);line='' if c=='\n' else c;line_width=0 if c=='\n' else cw
+            else:line+=c;line_width+=cw
         if line:lines.append(line)
         if len(lines)>max_lines:lines=lines[:max_lines];lines[-1]+='…'
         for line in lines:
@@ -57,7 +72,7 @@ def make_panel(step,phase,run,total):
     if tool=='finish':call={'outcome':args.get('outcome')}
     wrap(tool+'('+json.dumps(call,ensure_ascii=False,separators=(',',':'))+')',1052,186,size=21,color='#80c9ee',max_lines=4)
     y=315
-    messages=step.get('model_messages',[]) if step else []
+    messages=step.get('model_messages',[]) if step else (run.get('_final_model_messages',[]) if phase=='final' else [])
     y=wrap('LLM 公开原文 · 未翻译 / 未改写',1052,y,size=22,color='#74c9bf')+12
     if messages:
         for message in messages:
@@ -87,10 +102,13 @@ def make_panel(step,phase,run,total):
 def build(run_dir,controller_dir=None):
     data=render_replay(run_dir,controller_dir)
     raw=data['video'];assert raw and raw['status']=='passed'
-    run=json.loads((run_dir/'run.json').read_text());fps=raw['fps'];steps=data['steps']
+    run=json.loads((run_dir/'run.json').read_text());run['_final_model_messages']=data.get('model_final_messages',[]);fps=raw['fps'];steps=data['steps']
     size=raw['width']*raw['height']*3
     output=run_dir/'explained.mp4';ledger=[];out_count=0;source_count=0;last=None
-    manifest={'status':'running','started_at':now(),'file':output.name,'poster':'explained_poster.jpg','fps':fps,
+    manifest={'host':platform.node(),'pid':os.getpid(),'interpreter':sys.executable,
+        'renderer_source_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        'ffmpeg_version':subprocess.check_output(['ffmpeg','-version'],text=True).splitlines()[0],
+        'status':'running','started_at':now(),'file':output.name,'poster':'explained_poster.jpg','fps':fps,
         'source_sha256':raw['sha256'],'source_file':raw['file'],'source_frames':raw['frame_count'],
         'scope':'all raw video frames once in order, plus labeled public-decision/result holds',
         'model_wait':'compressed; holds are viewing time, not model latency','synthesized_motion':False,
@@ -99,6 +117,7 @@ def build(run_dir,controller_dir=None):
     decoder=subprocess.Popen(['ffmpeg','-v','error','-threads','2','-i',str(run_dir/raw['file']),'-f','rawvideo','-pix_fmt','rgb24','pipe:1'],stdout=subprocess.PIPE,stderr=(run_dir/'explained_decode.log').open('wb'))
     encoder=subprocess.Popen(['ffmpeg','-v','error','-y','-f','rawvideo','-pix_fmt','rgb24','-s','1920x1080','-r',str(fps),'-i','pipe:0','-an','-c:v','libx264','-threads','3','-preset','veryfast','-crf','22','-pix_fmt','yuv420p','-movflags','+faststart',str(output)],stdin=subprocess.PIPE,stderr=(run_dir/'explained_encoder.log').open('wb'))
     manifest.update(encoder_pid=encoder.pid,decoder_pid=decoder.pid)
+    write_json(run_dir/'explained_video.json',manifest)
     def read_frame():
         nonlocal source_count
         buf=bytearray()
@@ -141,6 +160,8 @@ def build(run_dir,controller_dir=None):
             interval(step,'decision',round(duration*fps),True)
             interval(step,'execution',end-start)
             interval(step,'result',round((4 if step['tool'] in {'read_skill','finish'} else 2)*fps),True)
+        if data.get('model_final_messages'):
+            interval(None,'final',round(min(12,max(4,sum(len(m['text']) for m in data['model_final_messages'])/25))*fps),True)
         interval(None,'evaluation',round(5*fps),True)
         if decoder.stdout.read(1):raise RuntimeError('More source frames than recorded')
         encoder.stdin.close();code=encoder.wait(timeout=120);dec=decoder.wait(timeout=30)

@@ -22,7 +22,7 @@ if(['minimal','skills'].includes(D.config.agent_profile)){$('workflow-panels').h
 
 if(D.video?.status==='passed'){
  const v=$('episode-video');$('video-panel').hidden=false;
- const phaseNames={initial:'初始场景',decision:'LLM 公开原文 / 工具调用',execution:'执行工具',result:'工具返回与核查',evaluation:'独立评估（未提供给模型）'};
+ const phaseNames={initial:'初始场景',decision:'LLM 公开原文 / 工具调用',execution:'执行工具',result:'工具返回与核查',evaluation:'独立评估（未提供给模型）',final:'LLM 结束后的公开原文'};
  function setEdition(){
   const record=edition==='explained'?D.explained_video:D.video;
   v.src=record.file;v.poster=record.poster;v.defaultPlaybackRate=1;v.playbackRate=Number($('video-speed').value);
