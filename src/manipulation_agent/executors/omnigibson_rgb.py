@@ -433,15 +433,20 @@ class RGBBackend(CheckedPlacement, OmniGibsonBackend):
     def execute(self, skill, target, max_steps):
         if skill != 'grasp':
             return super().execute(skill,target,max_steps)
+        restored=False
+        def record(data):
+            nonlocal restored
+            self._placement_record(data)
+            restored=data.get('status')=='rolled_back'
         try:
-            with placement_transaction(self.og.sim,self._placement_record):
+            with placement_transaction(self.og.sim,record):
                 return super().execute(skill,target,max_steps)
         except Exception as exc:
             # A Python-level physics assertion can be rolled back without
             # changing grasp semantics or introducing runtime USD schemas.
             self.frames_revision=-1
             message=str(exc).lower()
-            if 'nan' not in message or 'quaternion' not in message:
+            if not restored or 'nan' not in message or 'quaternion' not in message:
                 raise
             position,orientation=self.robot.get_position_orientation()
             if not bool(self.torch.isfinite(position).all() and self.torch.isfinite(orientation).all()):
