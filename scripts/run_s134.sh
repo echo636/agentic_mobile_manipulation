@@ -6,6 +6,7 @@ MAS_LOCAL=/mnt/data2/home/xujingyi/agentic_mobile_manip
 MAS_REPO="$MAS_SHARED/repos/manipulation-agentic-system"
 export OMNI_KIT_ACCEPT_EULA=YES OMNIGIBSON_HEADLESS=1
 export OMNIGIBSON_GPU_ID="${MAS_GPU:-3}"
+export MAS_GPU_UUID="$(nvidia-smi -i "$OMNIGIBSON_GPU_ID" --query-gpu=uuid --format=csv,noheader)"
 export OMNIGIBSON_DATA_PATH="$MAS_LOCAL/data/omnigibson"
 export OMNIGIBSON_APPDATA_PATH="$MAS_LOCAL/cache/mas-omnigibson"
 export PYTHONPATH="$MAS_REPO/src"

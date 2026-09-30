@@ -5,6 +5,7 @@ import html
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -43,9 +44,12 @@ class Recorder:
         self.run = {"schema_version": 1, "run_id": output.name, "status": "running",
                     "started_at": now(), "host": platform.node(), "pid": os.getpid(),
                     "interpreter": sys.executable, "unit": os.environ.get("MAS_UNIT"),
+                    "gpu_uuid": os.environ.get("MAS_GPU_UUID"),
                     "output_path": str(output.resolve()), "source": source_version(),
                     "config": config, "task_success": None}
         write_json(output / "run.json", self.run)
+        shutil.copytree(Path(__file__).resolve().parents[2] / "src", output / "source_snapshot",
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 
     def event(self, kind: str, payload: dict) -> str:
         self.sequence += 1

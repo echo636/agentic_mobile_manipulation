@@ -8,9 +8,14 @@ from pathlib import Path
 from .contracts import Budget
 from .harness import Harness
 from .records import Recorder
+from . import bridge, fake_backend, omnigibson_backend, policies
 
 
 def main() -> int:
+    import faulthandler
+    import signal
+    faulthandler.enable()
+    faulthandler.register(signal.SIGUSR1, all_threads=False)
     parser = argparse.ArgumentParser(description="Independent manipulation agent research harness")
     parser.add_argument("--backend", choices=["mock", "omnigibson"], default="mock")
     parser.add_argument("--policy", choices=["scripted", "responses", "serve"], default="scripted")
@@ -22,6 +27,7 @@ def main() -> int:
     parser.add_argument("--max-actions", type=int, default=80)
     parser.add_argument("--max-sim-steps", type=int, default=20000)
     parser.add_argument("--port", type=int, default=29430)
+    parser.add_argument("--controller", default="unspecified", help="Recorded external model/client for serve mode")
     args = parser.parse_args()
     policy = None
     # Check credentials BEFORE spending time and GPU memory on simulator startup.
@@ -31,7 +37,7 @@ def main() -> int:
     config = vars(args).copy()
     config["output"] = str(args.output.resolve())
     config["validation_level"] = "cpu_contract_only" if args.backend == "mock" else (
-        "real_model_real_simulator_oracle_symbolic" if policy else "scripted_real_simulator" if args.policy == "scripted" else "tool_service")
+        "real_model_real_simulator_oracle_symbolic" if policy else "scripted_real_simulator" if args.policy == "scripted" else "tool_service_requires_controller_evidence")
     recorder = Recorder(args.output, config)
     backend = None
     try:

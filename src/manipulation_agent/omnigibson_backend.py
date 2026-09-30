@@ -82,6 +82,16 @@ class OmniGibsonBackend:
         self.evaluator.load_task_instance(instance)
         self.evaluator.reset()
         self.env, self.robot = self.evaluator.env, self.evaluator.robot
+        from omnigibson.utils.asset_utils import get_task_instance_path
+        import bddl
+        scene = self.env.task.scene_name
+        filename = self.env.task.get_cached_activity_scene_filename(
+            scene_model=scene, activity_name=task, activity_definition_id=0, activity_instance_id=instance)
+        instance_path = Path(get_task_instance_path(scene, f"{scene}_task_{task}_instances/{filename}-tro_state", mode="public_test"))
+        self.input_hashes["task_instance_state"] = hashlib.sha256(instance_path.read_bytes()).hexdigest()
+        definition_path = Path(bddl.__file__).parent / "activity_definitions" / task / "problem0.bddl"
+        self.input_hashes["bddl_definition"] = hashlib.sha256(definition_path.read_bytes()).hexdigest()
+        write_json(output / "dependency_versions.json", {d.metadata["Name"]: d.version for d in metadata.distributions() if d.metadata["Name"]})
         self.task_metric = next(m for m in self.evaluator.metrics if isinstance(m, TaskMetric))
         from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitives
         self.primitives = SymbolicSemanticActionPrimitives(self.env, self.robot)
@@ -111,16 +121,23 @@ class OmniGibsonBackend:
                 "motor_type": "position", "command_input_limits": None, "command_output_limits": None,
                 "use_impedances": False, "use_delta_commands": False,
             }
+        # HolonomicBaseJointController fixes this internally and has no such constructor argument.
+        robot_cfg["controller_config"]["base"].pop("use_delta_commands")
         scene = task_cfg["scene_model"]
         template = instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json"
         data = json.loads(template.read_text())
         embedded = [o for o in data["objects_info"]["init_info"].values() if o["class_name"] == "Robot"]
-        if len(embedded) != 1:
-            raise ValueError("Expected one embedded R1Pro in the challenge template")
-        args = embedded[0]["args"]
-        for key, value in robot_cfg.items():
-            if key not in {"type", "name", "position", "orientation"}:
-                args[key] = value
+        if len(embedded) > 1:
+            raise ValueError("Multiple embedded robots are unsupported")
+        if embedded:
+            args = embedded[0]["args"]
+            for key, value in robot_cfg.items():
+                if key not in {"type", "name", "position", "orientation"}:
+                    args[key] = value
+            config["robots"] = []
+        else:
+            robot_cfg.update(position=task_cfg["robot_start_position"], orientation=task_cfg["robot_start_orientation"])
+            config["robots"] = [robot_cfg]
         cache = Path(os.environ["OMNIGIBSON_APPDATA_PATH"]) / "mas-scenes"
         cache.mkdir(parents=True, exist_ok=True)
         encoded = json.dumps(data, sort_keys=True)
@@ -131,7 +148,6 @@ class OmniGibsonBackend:
                              "configured_scene": hashlib.sha256(encoded.encode()).hexdigest()}
         config["scene"].update(scene_file=str(patched), trav_map_resolution=0.05,
                               default_erosion_radius=0.57, waypoint_resolution=0.1)
-        config["robots"] = []
         config["env"].update(device=f"cuda:{gpu}", automatic_reset=False)
         config["task"]["termination_config"]["max_steps"] = max_steps
         return config
@@ -298,6 +314,7 @@ class OmniGibsonBackend:
         gpu = os.environ.get("OMNIGIBSON_GPU_ID", "0")
         query = subprocess.run(["nvidia-smi", "-i", gpu, "--query-gpu=uuid", "--format=csv,noheader"], capture_output=True, text=True)
         packages = {p: metadata.version(p) for p in ("omnigibson", "torch", "isaacsim", "bddl", "mcp")}
+        source = subprocess.run(["git", "-C", str(Path(self.og.__file__).parent), "rev-parse", "HEAD"], capture_output=True, text=True)
         versions = {}
         root = Path(os.environ["OMNIGIBSON_DATA_PATH"])
         for name in ("behavior-1k-assets", "omnigibson-robot-assets"):
@@ -305,6 +322,7 @@ class OmniGibsonBackend:
             versions[name] = version.read_text().strip() if version.exists() else "unresolved"
         return {"name": "OmniGibson", "executor": "official_symbolic_plus_ideal_navigation",
                 "observation_mode": self.mode, "packages": packages, "gpu_index": gpu,
+                "omnigibson_source_commit": source.stdout.strip(),
                 "gpu_uuid": query.stdout.strip(), "assets": versions, "input_hashes": self.input_hashes,
                 "task_instance": self.task_metadata, "official_submission_eligible": False}
 

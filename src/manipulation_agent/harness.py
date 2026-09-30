@@ -81,6 +81,10 @@ class Harness:
         held = self.snapshot.get("held_object")
         if skill == "grasp" and held is not None and held != target:
             raise SkillError("hand_occupied", "Place or release the held object first")
+        if skill == "grasp":
+            for parent in objects[target].get("relations", {}).get("inside", []):
+                if objects.get(parent, {}).get("states", {}).get("open") is False:
+                    raise SkillError("container_closed", "Open the containing object before grasping its contents")
         if skill in {"place_inside", "place_on_top", "release"} and held is None:
             raise SkillError("empty_hand", "No object is being held")
         if skill in {"open", "close", "toggle_on", "toggle_off"} and held is not None:
@@ -105,13 +109,17 @@ class Harness:
         by_id = {g["id"]: g for g in subgoals}
         if len(by_id) != len(subgoals) or any(not k for k in by_id):
             raise SkillError("invalid_plan", "Subgoal IDs must be unique and nonempty")
+        visited = set()
         def visit(key, trail):
             if key in trail:
                 raise SkillError("invalid_plan", "Plan dependencies contain a cycle")
             if key not in by_id:
                 raise SkillError("invalid_plan", "Plan references an unknown dependency")
+            if key in visited:
+                return
             for parent in by_id[key]["dependencies"]:
                 visit(parent, trail | {key})
+            visited.add(key)
         for key, goal in by_id.items():
             visit(key, set())
             if goal["status"] == "done":

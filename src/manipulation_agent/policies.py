@@ -20,6 +20,8 @@ Memory and plans are your beliefs, not ground truth. Read state feedback to veri
 effects. Do not repeatedly retry an unchanged failed action. You have no shell,
 Python execution, arbitrary file reader, reset, or evaluator access. Finish only
 when observations support the whole instruction, or honestly report blocked.
+You MUST call the manipulation tool named finish(outcome, reason), receive
+closed=true, and only then write a final response. A text answer is not a finish.
 This experiment explicitly uses oracle task-object state and ideal symbolic
 execution. It does not measure visual perception or physical control capability.
 """
@@ -40,7 +42,7 @@ def scripted_episode(harness, task: str) -> None:
             raise ValueError("No radio in task scope")
         actions = [("navigate_to", targets[0]), ("toggle_on", targets[0])]
     elif task in {"picking_up_trash", "putting_dirty_dishes_in_sink"}:
-        destination_words = ("trash", "wastebasket") if task == "picking_up_trash" else ("sink",)
+        destination_words = ("trash", "wastebasket", "ashcan") if task == "picking_up_trash" else ("sink",)
         item_words = ("can", "pop.n", "soda") if task == "picking_up_trash" else ("bowl", "plate", "dish")
         destinations = [o["id"] for o in obs["objects"] if any(w in o["id"] or w in o["category"] for w in destination_words)]
         items = [o["id"] for o in obs["objects"] if o["id"] not in destinations and any(w in o["id"] or w in o["category"] for w in item_words)]
