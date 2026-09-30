@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import Protocol
+import math
 
 
 SKILLS = (
@@ -84,7 +85,8 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
             return
         kind = next(k for k in kind if k != "null")
     valid = {"object": isinstance(value, dict), "array": isinstance(value, list),
-             "string": isinstance(value, str), "integer": type(value) is int}.get(kind, False)
+             "string": isinstance(value, str), "integer": type(value) is int,
+             "number": type(value) in (int, float) and math.isfinite(value)}.get(kind, False)
     if not valid:
         raise SkillError("invalid_arguments", f"{path} must be {kind}")
     if "enum" in schema and value not in schema["enum"]:
@@ -96,11 +98,14 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
         for k, v in value.items():
             validate(v, props[k], f"{path}.{k}")
     elif kind == "array":
+        if len(value) < schema.get("minItems", 0):
+            raise SkillError("invalid_arguments", f"{path} is too short")
         if len(value) > schema.get("maxItems", 200):
             raise SkillError("invalid_arguments", f"{path} is too long")
         for i, v in enumerate(value):
             validate(v, schema["items"], f"{path}[{i}]")
     elif kind == "string" and len(value) > 8000:
         raise SkillError("invalid_arguments", f"{path} is too long")
-    elif kind == "integer" and value < schema.get("minimum", value):
-        raise SkillError("invalid_arguments", f"{path} is below minimum")
+    elif kind in {"integer", "number"}:
+        if value < schema.get("minimum", value) or value > schema.get("maximum", value):
+            raise SkillError("invalid_arguments", f"{path} is outside the allowed range")

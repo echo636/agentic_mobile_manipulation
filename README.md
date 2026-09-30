@@ -1,123 +1,84 @@
-# Manipulation Agentic System
+# Manipulation Agentic System · RGB v0.2
 
-An independently maintained, auditable agent harness for mobile manipulation in OmniGibson. This repository has its own Git history and does not import the lvzhang, wenbo, or Habitat-GS source trees.
+独立维护的 OmniGibson manipulation agent。**模型通过 RGB 完成观察、搜索、识别、计划、记忆、动作选择、恢复和核查；仅底层动作执行由仿真器理想化接口代替。**
 
-The first research protocol combines **oracle task-object observations**, **official symbolic manipulation primitives**, and **ideal navigation to a reachable map endpoint**. This isolates planning, object selection, ordering and recovery from low-level control. It is **not an official BEHAVIOR challenge submission** and does not establish visual perception or physical manipulation performance.
+旧版 v0.1 的 oracle-state 成功记录属于历史 harness 集成基线，不能作为当前 RGB 版本的任务成绩。当前规则见 [RGB协议](docs/rgb_protocol.md)，历史记录见 [v0.1验证](docs/validation.md)。
 
-## What is implemented
+## 文件在哪里
 
-- A shared tool catalog: `observe`, `act`, `update_plan`, `remember`, `recall`, `finish`.
-- Semantic actions: navigate, grasp, place inside/on top, open/close, toggle on/off, release and bounded wait.
-- An episode owner that enforces schemas, observation revisions, object identity, hand/container/reachability preconditions and action/step/time budgets.
-- Replay-safe request IDs, structured failures, fresh observations after partial execution, plan dependencies and memory provenance.
-- A Responses-compatible model loop, an optional installed Codex client controller, and a separate deterministic integration policy.
-- An actual MCP stdio server, a loopback HTTP bridge, and serialized main-thread simulator execution.
-- Official public task-instance restoration, BDDL goal evaluation, pinned official TaskMetric, JSONL action traces, RGB/depth snapshots and per-episode HTML.
+```text
+skills/                              # Agent 的工作流技能文档
+  visual-manipulation/SKILL.md        # 观察—计划—行动—视觉核查—结束
+  visual-manipulation/references/     # 证据规则
+  visual-exploration/SKILL.md         # 搜索、转向、视觉路标、返回
+  pick-and-place/SKILL.md             # 容器准备、抓取、搬运、放置
+  failure-recovery/SKILL.md           # 新观测、记忆、修订与有界恢复
+src/manipulation_agent/
+  tools/                             # 9 个实际工具的schema与实现
+    base.py                          # Tool定义与注册中心
+    observation.py                   # observe、look
+    action.py                        # act
+    planning.py                      # update_plan
+    memory.py                        # remember、recall
+    skills.py                        # list_skills、read_skill
+    session.py                       # finish
+  observations/boundary.py           # RGB公开观测白名单
+  executors/primitives.py            # 10个机器人动作原语
+  executors/omnigibson_rgb.py         # RGB采集、像素射线、私有小脑执行
+  skill_runtime.py                   # skill快照、SHA、资源白名单
+  vision_harness.py                  # 校验、版本、预算、闭环记录
+  vision_policy.py                   # RGB模型提示与Responses图像循环
+  vision_cli.py                      # 当前默认入口
+  mcp_server.py                      # MCP文本＋真实图像内容
+  bridge.py                          # HTTP排队与单线程仿真所有者
+  records.py                         # run/events/源码快照/HTML
+  audit.py                           # 控制器与仿真记录交叉检查
+```
 
-`finish(achieved)` records a claim. The independent evaluator decides task success. Goal truth and scores are not returned to the active controller. Plan completion remains an agent claim linked to action evidence, not an independently verified BDDL subgoal.
+**Skill文档、tool接口和动作primitive是三层不同概念。** Skill告诉模型如何组织工具完成任务；tool是可调用能力；primitive负责一次底层动作。技能库是人工编写并冻结到每轮运行的工作流，尚未实现自动技能学习或演化。
 
-## CPU quick start
+## 当前公开输入与动作
 
-Python 3.11 or newer; the core has no third-party dependencies.
+`observe` 返回 head、left_wrist、right_wrist 三路 512×512 RGB，附带 image_ref、view、尺寸、图像SHA和revision。MCP返回真实ImageContent，模型不用读取文件路径。没有对象列表、真实ID/名称、深度、距离、分割图、地图、状态谓词、持物真值或评分。
+
+`act(primitive, target, revision)` 的 target 为 `{"image_ref":"最新图像引用","point":[0.5,0.5]}`。模型必须自己从RGB选点；x左0右1，y上0下1。release/wait使用null。`look(yaw_degrees, revision)` 原地转向，范围±90度，正值左转。所有执行尝试返回新RGB；旧图像引用失效。
+
+10个primitives：navigate_to、grasp、place_inside、place_on_top、open、close、toggle_on、toggle_off、release、wait。
+
+理想执行器内部使用相机标定及射线首个碰撞，把模型选择的像素转成低层目标；不会按对象名字寻找目标、生成GT候选或返回对象标签。导航仍为可通行地图上的终点移动，操作仍采用官方symbolic primitive/容器体积采样。其执行耗时不能解释为真实物理控制性能。
+
+## 启动与测试
+
+Python 3.11+。无仿真依赖的契约测试：
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
-PYTHONPATH=src python -m manipulation_agent.cli --backend mock --output runs/mock-radio
 ```
 
-The mock proves software behavior only. Every output directory must be new. Open `runs/mock-radio/index.html` and inspect `run.json` / `events.jsonl`.
-
-## Real simulator setup
-
-The current adapter pins **OmniGibson 3.9.2 / Isaac Sim 5.1 / Python 3.11 / PyTorch 2.7.0+cu128**, BEHAVIOR assets 3.9.0 and robot assets 3.8.2. Install the official BEHAVIOR environment and licensed assets first; do not pip-install a second incompatible Torch/Isaac stack into it. OmniGibson 3.9.3 changes the environment API; this adapter rejects that version until its integration is validated.
-
-Required environment variables:
+实际RGB MCP图像传输测试需要 `mcp==1.28.1`，只使用CPU fixture：
 
 ```bash
-export OMNI_KIT_ACCEPT_EULA=YES
-export OMNIGIBSON_HEADLESS=1
-export OMNIGIBSON_GPU_ID=0
-export OMNIGIBSON_DATA_PATH=/your/project/data/omnigibson
-export OMNIGIBSON_APPDATA_PATH=/your/project/cache/omnigibson
-export PYTHONPATH=/your/checkout/src
+PYTHONPATH=src python scripts/probe_rgb_mcp.py runs/rgb-mcp-probe
 ```
 
-The data root must contain `behavior-1k-assets`, `omnigibson-robot-assets` and `2026-challenge-task-instances`. Never place asset decryption keys in source control or reports.
+当前仿真适配固定 OG3.9.2 / Isaac5.1 / Torch2.7.0+cu128 / BDDL3.7.0，BEHAVIOR资产3.9.0、robot资产3.8.2。使用项目独立环境，不改旧导航环境。设置官方数据与缓存路径后：
 
 ```bash
-python -m manipulation_agent.cli --backend omnigibson --policy scripted \
-  --task turning_on_radio --instance 301 --output runs/radio-301
+PYTHONPATH=src python -m manipulation_agent.vision_cli \
+  --backend omnigibson --policy serve --task turning_on_radio \
+  --instance 301 --output runs/rgb-radio --port 29440
 ```
 
-The deterministic probes support radio, three soda cans into trash, and dirty dishes into a sink. A recipe being available does not mean its simulator run passed. Runtime records determine the verified scope.
+S134使用 `scripts/run_s134.sh`，其默认入口已经切换为vision_cli。启动GPU任务前检查资源，并使用唯一unit/run目录；记录机器、解释器、GPU UUID、PID/unit和版本。
 
-The bundled catalog lists 100 tasks, with 50 detailed instructions available in the captured official page manifest. A missing instruction requires an explicit `--instruction`; the CLI never silently reuses the radio instruction for another task.
+模型通过 `python -m manipulation_agent.mcp_server --bridge http://127.0.0.1:29440` 接入。`scripts/run_codex_controller.py` 使用既有登录客户端，禁用shell、任意文件查看、web和其他agent，只开放本项目九个工具。首次读取工作流skills后，观察RGB并自主执行。
 
-`--inside-placement symbolic_raycast` preserves the official symbolic primitive and is the default. Its ray sampler failed on the first soda-can placement in the tested trash instance. The explicit alternative `--inside-placement official_volume` uses the same pinned simulator's `Inside.set_value`: it releases the held object, samples actual poses inside the fillable volume, runs collision/settling checks, then verifies `Inside.get_value` again. It does not read the task goal or write success flags. Failed placement may leave an object released. Volume sampling is limited to 120 seconds and at most `min(6000, remaining_action_steps * 4)` internal physics ticks; those ticks are recorded separately from `env.step`, so official time metrics do not represent total physics effort.
+也实现了 `--policy responses` 的RGB循环，配置仅从私有环境变量读取：LLM_MODEL、LLM_BASE_URL、LLM_API_KEY。不要把凭据写入仓库或日志。提供商路径是否完成真实模型验证，以本轮记录为准。
 
-```bash
-python -m manipulation_agent.cli --backend omnigibson --policy scripted \
-  --task picking_up_trash --instance 301 --inside-placement official_volume \
-  --output runs/trash-volume-301
-```
+## 评测和记录
 
-For the lab's configured S134, `scripts/run_s134.sh` uses the project-specific environment and storage. Recheck GPU ownership, memory limits, disk and quota before starting a new job. Run it under a unique user systemd unit; do not stop other projects' processes.
+finish只返回关闭状态与模型自己的声明；独立BDDL/TaskMetric结果不回流给活动模型。工具完成、模型声称成功与实际任务成功分开记录。模型的笔记与计划都是判断，不是真值。原始图像、公开工具回复和私有执行器诊断分别记录；私有诊断不会经过MCP发送给模型。
 
-## Model control
+每轮保存skill_snapshot/manifest、source_snapshot、图像SHA、模型调用、run.json、events.jsonl、captures.jsonl和HTML。已知低层限制包含小容器采样和大碗辅助抓取时的物理稳定性；不能把理想小脑假设写成永远成功。当前也不是官方物理控制排行榜提交。
 
-Responses-compatible endpoints:
-
-```bash
-# Set privately; never commit a key or include it in a command log.
-export LLM_API_KEY=YOUR_KEY
-export LLM_BASE_URL=https://YOUR_ENDPOINT/v1
-export LLM_MODEL=YOUR_MODEL
-python -m manipulation_agent.cli --backend omnigibson --policy responses \
-  --task turning_on_radio --instance 301 \
-  --instruction 'Turn on the radio on the living-room table.' --output runs/model-radio
-```
-
-This initial model interface consumes structured oracle state. RGB/depth snapshots are archived for diagnosis; the Responses policy currently does not inject image pixels. Do not call it a visual policy.
-
-Alternatively start `--policy serve --controller codex/YOUR_MODEL --port 29430`. The simulator remains on its main thread. The optional `scripts/run_codex_controller.py` launches the installed client with existing authentication and the MCP command you specify; it disables shell, other agents, plugins, browser and web tools. It does not read or copy authentication files. The simulator record must be joined with the controller trace before calling it a real-model episode.
-
-## MCP
-
-Install the optional `mcp==1.28.1` dependency in a CPU Python environment. Start the episode bridge, then configure an MCP client to run:
-
-```bash
-PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1:29430
-```
-
-The MCP protocol uses stdout; diagnostics use stderr. The HTTP bridge binds only to loopback. For another machine, launch the stdio proxy through SSH or use an SSH tunnel. No evaluator, arbitrary Python, shell, reset, or arbitrary file-read tool is exposed.
-
-Real transport test, independent of the simulator:
-
-```bash
-PYTHONPATH=src python scripts/probe_mcp.py runs/mcp-probe
-```
-
-## Research boundaries
-
-The official symbolic executor changes poses/states and establishes grasps directly. It still needs compatible controllers, valid task objects and reachable predicate samples. Our navigation adapter uses the static eroded traversability map and teleports to a reachable endpoint; it does not simulate traversing the path or prove dynamic collision avoidance. Its reported path length and settling time must not be compared as physical navigation efficiency.
-
-Oracle task-object identity, states and relations simplify perception. That is a separate assumption from ideal motor execution. A later vision-only arm must replace this observation adapter while preserving the same skills and evaluation contract. Cleaning, cutting, heating, liquids, attachment, dual-arm planning, learned physical execution and all-100-task coverage are not claimed by v0.1.
-
-Official challenge rules currently require onboard RGB/depth/proprioception and forbid simulator-only policy inputs. Our symbolic research runs remain separate from leaderboard results. See [official evaluation rules](https://behavior.stanford.edu/challenge/evaluation.html).
-
-See [architecture](docs/architecture.md) and [source provenance](docs/provenance.md).
-
-## Verified pilot and evidence audit
-
-Real model + MCP + OmniGibson episodes passed for radio and three soda cans into a bin. A restaurant dirty-dishes episode failed during bowl grasp with invalid physics state; it has no final task score. See [validation results and limitations](docs/validation.md), including all failed iterations and the distinction between scripted and model runs.
-
-Cross-check a model trace against its simulator trace without modifying either:
-
-```bash
-PYTHONPATH=src python -m manipulation_agent.audit \
-  --run-dir /path/to/simulator/run \
-  --controller-dir /path/to/controller/run \
-  --output /path/to/paired_audit.json
-```
-
-The audit checks exact tool order and arguments, permitted tools, formal closure, source commit and independent task success. Same-commit checks do not by themselves establish byte-identical dirty working trees; preserve and inspect source digests and snapshots as well.
+[RGB当前页面](http://10.76.5.241:8765/rgb_system.html) · [历史基线与来源仓库分析](http://10.76.5.241:8765/manipulation_system.html)

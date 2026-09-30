@@ -42,7 +42,22 @@ def serve(harness, port: int) -> None:
 
         def do_GET(self):
             if self.path == "/healthz":
-                self.send(200, {"ready": True, "closed": harness.closed, "tools": tool_specs()})
+                catalog = harness.tool_specs() if hasattr(harness, "tool_specs") else tool_specs()
+                self.send(200, {"ready": True, "closed": harness.closed, "tools": catalog})
+            elif self.path.startswith("/image/") and hasattr(harness, "image_bytes"):
+                ref = self.path.removeprefix("/image/")
+                try:
+                    data, mime = harness.image_bytes(ref)
+                except KeyError:
+                    return self.send(404, {"error": "unknown_image_ref"})
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                try:
+                    self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
             else:
                 self.send(404, {"error": "not_found"})
 

@@ -19,4 +19,4 @@ export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
 export OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MAX_JOBS=4 PYTHONHASHSEED=0
 export NO_PROXY=127.0.0.1,localhost
 export no_proxy="$NO_PROXY"
-exec "$MAS_LOCAL/envs/behavior/bin/python" -u -m manipulation_agent.cli "$@"
+exec "$MAS_LOCAL/envs/behavior/bin/python" -u -m manipulation_agent.vision_cli "$@"

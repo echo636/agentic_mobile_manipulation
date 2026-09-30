@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "manipulation-agentic-system"
-version = "0.1.0"
+version = "0.2.0"
 description = "An auditable agent harness for OmniGibson manipulation research"
 requires-python = ">=3.11"
 dependencies = []
@@ -13,7 +13,7 @@ dependencies = []
 mcp = ["mcp==1.28.1"]
 
 [project.scripts]
-manip-agent = "manipulation_agent.cli:main"
+manip-agent = "manipulation_agent.vision_cli:main"
 manip-mcp = "manipulation_agent.mcp_server:main"
 
 [tool.setuptools.packages.find]
@@ -21,3 +21,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 manipulation_agent = ["tasks.json"]
+
+[tool.setuptools.data-files]
+"share/manipulation-agentic-system/skills/visual-manipulation" = ["skills/visual-manipulation/SKILL.md"]
+"share/manipulation-agentic-system/skills/visual-manipulation/references" = ["skills/visual-manipulation/references/evidence.md"]
+"share/manipulation-agentic-system/skills/visual-exploration" = ["skills/visual-exploration/SKILL.md"]
+"share/manipulation-agentic-system/skills/pick-and-place" = ["skills/pick-and-place/SKILL.md"]
+"share/manipulation-agentic-system/skills/failure-recovery" = ["skills/failure-recovery/SKILL.md"]

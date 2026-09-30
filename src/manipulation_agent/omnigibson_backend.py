@@ -117,7 +117,8 @@ class OmniGibsonBackend:
         robot_cfg.pop("eval", None)
         robot_cfg.update(grasping_mode="sticky", disable_grasp_handling=True,
                          obs_modalities=["rgb", "depth_linear", "proprio"])
-        robot_cfg["sensor_config"]["VisionSensor"]["sensor_kwargs"].update(image_height=256, image_width=256)
+        image_size = getattr(self, "image_size", 256)
+        robot_cfg["sensor_config"]["VisionSensor"]["sensor_kwargs"].update(image_height=image_size, image_width=image_size)
         # Symbolic settling converts joint positions to actions; every actuated group must be absolute position.
         for name in ("base", "trunk", "arm_left", "arm_right", "gripper_left", "gripper_right"):
             robot_cfg["controller_config"][name] = {

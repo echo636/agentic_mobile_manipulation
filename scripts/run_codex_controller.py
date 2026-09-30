@@ -9,9 +9,10 @@ import os
 from pathlib import Path
 import subprocess
 import time
+import shutil
 
-from manipulation_agent.contracts import tool_specs
-from manipulation_agent.policies import SYSTEM_PROMPT
+from manipulation_agent.tools import tool_specs
+from manipulation_agent.vision_policy import SYSTEM_PROMPT
 from manipulation_agent.records import now, write_json, source_version
 
 
@@ -25,6 +26,8 @@ def main():
     p.add_argument("--timeout", type=int, default=900)
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
+    shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     workspace = args.output / "empty_workspace"
     workspace.mkdir()
     command = ["codex", "exec", "--ignore-user-config", "--ephemeral", "--skip-git-repo-check", "--json",
@@ -41,7 +44,7 @@ def main():
     for key, value in server.items():
         command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
     command += ["-"]
-    metadata = {"started_at": now(), "status": "running", "model": args.model,
+    metadata = {"started_at": now(), "status": "running", "model": args.model, "observation_mode": "rgb_only",
                 "host": os.uname().nodename, "controller": "codex_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": subprocess.check_output(["codex", "--version"], text=True).strip()}
