@@ -48,6 +48,14 @@ class ReplayEvidenceTests(unittest.TestCase):
         self.assertEqual(data['steps'][1]['status'],'failed')
         self.assertNotIn('HIDDEN_WORLD_POSE',json.dumps(data))
 
+    def test_native_crash_uses_termination_overlay_without_rewriting_raw_run(self):
+        original=(self.root/'run.json').read_bytes()
+        (self.root/'termination.json').write_text(json.dumps({'status':'failed','reason':'SIGSEGV','final_evaluation_available':False}))
+        data=build_replay(self.root)
+        self.assertEqual(data['status'],'failed')
+        self.assertIsNone(data['evaluation_offline_only']['task_success'])
+        self.assertEqual((self.root/'run.json').read_bytes(),original)
+
     def test_failed_plan_is_visible_but_does_not_overwrite_accepted_plan(self):
         self.events[4]['name']='update_plan'
         self.events[4]['arguments']={'reason':'proposed claim','subgoals':[{'id':'bad','status':'done'}]}

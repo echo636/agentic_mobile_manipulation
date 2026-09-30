@@ -43,6 +43,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 model_messages[model_index] = pending
                 model_payloads[model_index] = {
                     'model_call_event_id':item.get('id'),
+                    'model_tool':item.get('tool'),'model_arguments':item.get('arguments'),
+                    'model_transport_error':item.get('error'),
                     'model_result_text':next((c.get('text','') for c in (item.get('result') or {}).get('content',[])
                                               if c.get('type')=='text'),None)}
                 pending = []
@@ -110,6 +112,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
             'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained,
             'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(controller_dir),
+            'model_messages_after_last_sim_call':[m for i,ms in model_messages.items() if i>len(steps) for m in ms],
+            'model_calls_without_sim_record':[c for i,c in model_payloads.items() if i>len(steps)],
             'model_text_contract':'Original public assistant messages only; no translation, rewriting or private reasoning. Alignment uses event order, not invented wall-clock timestamps.',
             'evaluation_offline_only': {'task_success': run.get('task_success'), 'evaluation': run.get('evaluation'),
                                         'agent_outcome': run.get('agent_outcome'), 'finish_reason': run.get('finish_reason')},

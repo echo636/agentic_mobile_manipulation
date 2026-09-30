@@ -47,6 +47,6 @@ if(D.video?.status==='passed'){
  });
  setEdition();
 }
-$('public-trace-link').hidden=!D.has_public_trace;text('final-model-message',(D.model_final_messages||[]).map(m=>m.text).join('\n\n')||'没有单独的结束后公开文本。');
+$('transport-failures').hidden=!D.model_calls_without_sim_record?.length;text('unmatched-calls',JSON.stringify(D.model_calls_without_sim_record||[],null,2));$('public-trace-link').hidden=!D.has_public_trace;text('final-model-message',[...(D.model_messages_after_last_sim_call||[]),...(D.model_final_messages||[])].map(m=>m.text).join('\n\n')||'没有单独的结束后公开文本。');
 const hash=location.hash.match(/^#step=(\d+)$/);index=hash?Math.max(0,Math.min(D.steps.length-1,Number(hash[1])-1)):0;select(index);
 })();
