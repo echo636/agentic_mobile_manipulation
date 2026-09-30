@@ -59,3 +59,9 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 - [四相机异步设计与验证](docs/async_observation.md)
 - [2026-09-30 实测结果](docs/four_camera_validation_20260930.md)：60项CPU测试、真实MCP四相机探针、radio实例301闭环通过；[网页与回放](http://10.76.5.241:8765/surround_observation.html)（实验室网络/VPN）。
 - [此前三相机实验记录](docs/history_before_four_camera.md)：历史成功结果不自动代表新相机配置通过。
+
+## 结果可视化
+
+[实验结果与故障分析页面](http://10.76.5.241:8765/retest32_gt_20260930/results.html)展示 32 项重测的实时状态、旧新 Q 分数、失败证据、工具耗时、真实耗时视频，以及逐次工具调用前后的四路 RGB 和模型公开原文。
+
+页面源码为 [web/results.html](web/results.html)，无需构建或外部 CDN。部署在批次报告目录中，读取同目录的 `behavior100/progress.json`、`behavior100/walltime_index.json`、`failure_review/review.json` 和各任务 `replay.json`。进度每 30 秒更新；人工复核的失败分析使用明确标注的冻结快照，新增任务不会自动套用旧结论。分析脚本、输入哈希、发布记录和浏览器验证保存在对应 operations 批次，不修改原始评测数据。
