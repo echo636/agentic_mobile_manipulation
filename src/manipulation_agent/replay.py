@@ -26,6 +26,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     video = json.loads(video_path.read_text()) if video_path.exists() else None
     explained_path = run_dir / 'explained_video.json'
     explained = json.loads(explained_path.read_text()) if explained_path.exists() else None
+    walltime_path = run_dir / 'walltime_video.json'
+    walltime = json.loads(walltime_path.read_text()) if walltime_path.exists() else None
     video_markers = {m['request_id']:m for m in (video or {}).get('markers', [])}
     audit = audit_episode(run_dir, controller_dir) if controller_dir else None
     model_messages = {}; model_payloads = {}; pending = []; public_events = []; model_index = 0
@@ -113,7 +115,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
             'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
-            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained,
+            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime,
             'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(controller_dir),
             'model_messages_after_last_sim_call':[m for i,ms in model_messages.items() if i>len(steps) for m in ms],
             'model_calls_without_sim_record':[c for i,c in model_payloads.items() if i>len(steps)],
