@@ -10,8 +10,9 @@ from ..contracts import SkillError
 from ..omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, look_at_orientation
 from ..records import now
+from .placement import CheckedPlacement
 
-class RGBBackend(OmniGibsonBackend):
+class RGBBackend(CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
@@ -421,11 +422,17 @@ class RGBBackend(OmniGibsonBackend):
             for parent in self.env.scene.objects:
                 if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
                     raise SkillError('container_closed','Grasp through closed container rejected')
-        return {**self.execute(primitive,obj.name,max_steps),'private_grounding':grounding}
+        if primitive=='place_on_top':
+            result=self._checked_place_on_top(obj,max_steps,point)
+        elif primitive=='place_inside' and self.inside_placement=='official_volume':
+            result=self._checked_place_inside(obj,max_steps)
+        else:
+            result=self.execute(primitive,obj.name,max_steps)
+        return {**result,'private_grounding':grounding}
 
     def evaluate(self):
         result=super().evaluate()
-        result['protocol']='rgb_agent_ideal_executor_v4_jinkai_gt_navigation'
+        result['protocol']='rgb_agent_ideal_executor_v5_checked_placement'
         result['observation_mode']=self.mode
         return result
 
@@ -437,6 +444,9 @@ class RGBBackend(OmniGibsonBackend):
                       grounding='same_pixel_depth_checked_nonrobot_collision_ray_private_executor_only',
                       model_visible_truth=False)
         result['record_video'] = self.record_video
+        result['placement'] = {'on_top':'selected_surface_cuboid_then_official_sampler',
+            'inside':'official_volume','verification':'official_predicate_after_settling',
+            'failure_policy':'restore_pre_action_state','goal_access':False}
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; symbolic grasp/place remain instantaneous'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
