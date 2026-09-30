@@ -117,9 +117,6 @@ class OmniGibsonBackend:
         robot_cfg.pop("eval", None)
         robot_cfg.update(grasping_mode="sticky", disable_grasp_handling=True,
                          obs_modalities=["rgb", "depth_linear", "proprio"])
-        if self.mode == 'rgb_only':
-            # Private pixel-to-actuator routing; never included in model observations.
-            robot_cfg['obs_modalities'].append('seg_instance')
         image_size = getattr(self, "image_size", 256)
         robot_cfg["sensor_config"]["VisionSensor"]["sensor_kwargs"].update(image_height=image_size, image_width=image_size)
         # Symbolic settling converts joint positions to actions; every actuated group must be absolute position.

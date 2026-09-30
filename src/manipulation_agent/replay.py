@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from .audit import audit_episode
-from .records import now, write_json
+from .records import now, write_json, read_run
 
 
 def lines(path: Path) -> list[dict]:
@@ -17,7 +17,7 @@ def lines(path: Path) -> list[dict]:
 
 
 def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
-    run = json.loads((run_dir / 'run.json').read_text())
+    run = read_run(run_dir)
     events = lines(run_dir / 'events.jsonl')
     captures = lines(run_dir / 'captures.jsonl')
     images = {i['image_ref']: {**i, 'env_steps': c['env_steps']} for c in captures for i in c['images']}

@@ -22,6 +22,21 @@ def write_json(path: Path, value: dict) -> None:
     tmp.replace(path)
 
 
+def read_run(output: Path) -> dict:
+    """Read an immutable run plus an externally observed process termination.
+
+    A native crash cannot finalize its Python recorder. Never rewrite that raw
+    file or invent a final evaluator result; attach the supervisor evidence.
+    """
+    run=json.loads((output/'run.json').read_text())
+    termination=output/'termination.json'
+    if termination.exists():
+        record=json.loads(termination.read_text())
+        run={**run,'raw_recorder_status':run['status'],'status':record['status'],
+             'task_success':None,'failure':record.get('reason'),'external_termination':record}
+    return run
+
+
 def source_version() -> dict:
     root = Path(__file__).resolve().parents[2]
     def git(*args):
