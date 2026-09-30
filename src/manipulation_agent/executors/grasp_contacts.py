@@ -3,11 +3,14 @@
 
 def filter_robot_contacts(robot, obj, sim):
     additions=[]
+    # API creation opens its own editing_usd context in OG 3.9.2. Resolve
+    # all APIs before the single relationship-editing block (no nesting).
+    robot_links=[(a,a._collision_filter_api.GetFilteredPairsRel()) for a in robot.links.values()]
+    object_links=[(b,b._collision_filter_api.GetFilteredPairsRel()) for b in obj.links.values()]
     with sim.editing_usd():
-        for a in robot.links.values():
-            for b in obj.links.values():
-                for source,target in ((a,b),(b,a)):
-                    relation=source._collision_filter_api.GetFilteredPairsRel()
+        for a,ar in robot_links:
+            for b,br in object_links:
+                for relation,target in ((ar,b),(br,a)):
                     if target.prim_path not in {str(p) for p in relation.GetTargets()}:
                         relation.AddTarget(target.prim_path)
                         additions.append((relation,target.prim_path))
