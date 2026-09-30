@@ -40,7 +40,7 @@ def outcome(step):
     if step['tool']=='read_skill':return '已读取 '+step['arguments']['name']+'。这是工作流指导文档，由大脑继续调用动作工具。'
     if step['tool']=='list_skills':return '可用：'+', '.join(s['name'] for s in result.get('skills',[]))
     if result.get('closed'):return '已接受结束请求。模型声明：'+step['arguments'].get('reason','')
-    if result.get('effect'):return '执行器报告操作完成。右侧为本步预期；请结合最新 RGB 核查，工具完成不等于任务成功。'
+    if result.get('effect'):return '执行器报告操作完成。请结合最新 RGB 核查，工具完成不等于任务成功。'
     return '已返回当前机器人 RGB 观测。'
 
 
