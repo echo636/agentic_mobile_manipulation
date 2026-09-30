@@ -76,4 +76,8 @@ Radio实际源码c77e2f5、trash实际源码3931d44；后续默认配置/文档�
 
 [完整视频页面](http://10.76.5.241:8765/minimal_loop.html) · [抓放任务Replay](http://10.76.5.241:8765/manipulation_runs/mas_minimal_video_trash_r1/replay.html)
 
-当前逐步底盘运动与Skill轮次的成绩独立记录在`operations/skills_replay_20260930`。r1因姿态漂移失败、模型正式报告blocked；r2加入理想姿态保持后重新验证。请以该批次run/validation记录为准，不将历史瞬移模式的成功当作新执行器成绩。
+当前逐步底盘运动与Skill轮次的成绩独立记录在`operations/skills_replay_20260930`。r1姿态漂移失败；r2碰撞代理错误拒绝可见目标，最终Q=1/3；r3原生渲染崩溃，没有最终评分。失败记录均保留。
+
+r4（实际源码`1005384`）使用V3私有深度核对和逐步理想底盘运动，真实gpt-6-astra完成`picking_up_trash/public_test/301/seed0`：三个目标均通过独立BDDL/TaskMetric评估，Q=1，25动作/32调用/1878控制步，零执行器报错。模型实际读取3种Skill及一份参考文档，接收78张RGB图像；源码、调用和图像字节审计通过。原始视频1905帧、30FPS、63.5秒。仅此实例通过，不代表整个challenge验证。
+
+[当前Skill闭环成功回放](http://10.76.5.241:8765/manipulation_runs/mas_skills_video_trash_r4/replay.html)
