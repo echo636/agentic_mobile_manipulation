@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .contracts import SkillError
 from .records import write_json
+from .goal_grounding import efficient_grounding, evaluate_once_per_literal
 
 
 def normalize_embedded_robot(data):
@@ -123,7 +124,25 @@ class OmniGibsonBackend:
             def _preprocess_obs(inner, obs):
                 return obs
 
-        with self._startup_stage('construct_evaluator_and_environment'):
+            def load_metrics(inner):
+                metrics = super().load_metrics()
+                # Preserve the pinned official metric implementation and formula.
+                # Only memoize identical predicate reads within a scoring pass.
+                for metric in metrics:
+                    if isinstance(metric, TaskMetric):
+                        reset = metric.reset
+                        compute = metric._compute_episode_metrics
+                        def cached_reset(env, original=reset):
+                            with evaluate_once_per_literal(env.task.ground_goal_state_options):
+                                return original(env)
+                        def cached_compute(env, info, original=compute):
+                            with evaluate_once_per_literal(env.task.ground_goal_state_options):
+                                return original(env, info)
+                        metric.reset = cached_reset
+                        metric._compute_episode_metrics = cached_compute
+                return metrics
+
+        with self._startup_stage('construct_evaluator_and_environment'), efficient_grounding():
             self.evaluator = ResearchEvaluator(OmegaConf.create({
                 "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
             }))
@@ -220,8 +239,10 @@ class OmniGibsonBackend:
                 and hasattr(obj, "states") and hasattr(obj, "aabb")}
 
     def _goal_options(self) -> list[list[bool]]:
-        return [[bool(pred.evaluate(self.env.task._evaluate_predicate)) for pred in option]
-                for option in self.env.task.ground_goal_state_options]
+        options = self.env.task.ground_goal_state_options
+        with evaluate_once_per_literal(options):
+            return [[bool(pred.evaluate(self.env.task._evaluate_predicate)) for pred in option]
+                    for option in options]
 
     def _capture(self) -> list[dict]:
         if self.frames_revision == self.steps:
