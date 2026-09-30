@@ -33,6 +33,9 @@ try:
    result={'primitive':primitive,'status':'passed','details':details}
   except SkillError as exc:
    result={'primitive':primitive,'status':'failed','code':exc.code,'error':str(exc)}
+   if exc.code=='physics_instability':
+    recovered=b.observe()
+    result['rgb_after_rollback']=[image['view'] for image in recovered['images']]
   result['robot_pose_finite']=bool(b.torch.isfinite(b.robot.get_position_orientation()[0]).all() and b.torch.isfinite(b.robot.get_position_orientation()[1]).all())
   r.event('diagnostic_result',result);results.append(result);print(json.dumps(result),flush=True)
  validation={'status':'passed' if all(x['robot_pose_finite'] for x in results) else 'failed','level':'scripted_action_sequence_completed',
