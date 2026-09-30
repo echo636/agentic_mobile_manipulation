@@ -11,4 +11,3 @@ description: Recover from incorrect visual targets, rejected actions and partial
 5. Never repeat an unchanged failed action more than once. After two alternatives fail, reassess the target and scene from RGB. Finish blocked with the actual limitation if no supported path remains.
 6. Stale image/revision errors mean you must use the newest observation. Never replay an old pixel after movement.
 7. Do not use evaluator output, hidden object names, arbitrary shell/Python or task reset to solve a failure.
-8. `physics_instability` means the grasp failed and its pre-action state was restored. Inspect fresh RGB and choose a bounded alternative; never count the failed grasp as completed.

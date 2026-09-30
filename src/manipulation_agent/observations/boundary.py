@@ -34,7 +34,6 @@ ERROR_MESSAGES = {
     "sampling_error":"The executor could not find a valid placement; inspect the new RGB before recovery.",
     "postcondition_error":"The executor could not complete the requested action; inspect the new RGB.",
     "execution_error":"Execution failed or partially completed; inspect the new RGB.",
-    "physics_instability":"Grasp physics became unstable. The executor restored the pre-action state; inspect RGB before choosing an alternative.",
     "action_timeout":"The executor exhausted this action's step budget.",
     "sampling_budget_exhausted":"The executor exhausted its placement sampling budget.",
     "unsupported_relation":"The selected surface does not support this placement operation.",

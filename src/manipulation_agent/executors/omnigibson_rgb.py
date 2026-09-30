@@ -10,7 +10,7 @@ from ..contracts import SkillError
 from ..omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, look_at_orientation
 from ..records import now
-from .placement import CheckedPlacement, placement_transaction
+from .placement import CheckedPlacement
 
 class RGBBackend(CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
@@ -430,29 +430,6 @@ class RGBBackend(CheckedPlacement, OmniGibsonBackend):
             result=self.execute(primitive,obj.name,max_steps)
         return {**result,'private_grounding':grounding}
 
-    def execute(self, skill, target, max_steps):
-        if skill != 'grasp':
-            return super().execute(skill,target,max_steps)
-        restored=False
-        def record(data):
-            nonlocal restored
-            self._placement_record(data)
-            restored=data.get('status')=='rolled_back'
-        try:
-            with placement_transaction(self.og.sim,record):
-                return super().execute(skill,target,max_steps)
-        except Exception as exc:
-            # A Python-level physics assertion can be rolled back without
-            # changing grasp semantics or introducing runtime USD schemas.
-            self.frames_revision=-1
-            message=str(exc).lower()
-            if not restored or 'nan' not in message or 'quaternion' not in message:
-                raise
-            position,orientation=self.robot.get_position_orientation()
-            if not bool(self.torch.isfinite(position).all() and self.torch.isfinite(orientation).all()):
-                raise RuntimeError('Robot pose is still non-finite after grasp rollback') from exc
-            raise SkillError('physics_instability','Grasp physics became unstable; pre-action state restored') from exc
-
     def evaluate(self):
         result=super().evaluate()
         result['protocol']='rgb_agent_ideal_executor_v6_selected_surface_support'
@@ -471,7 +448,6 @@ class RGBBackend(CheckedPlacement, OmniGibsonBackend):
             'inside':'official_volume','verification':'physical_selected_surface_support_or_official_OnTop; official_Inside',
             'failure_policy':'restore_pre_action_state','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
-        result['grasp_failure_policy'] = 'transactional_state_restore; NaN quaternion assertion becomes explicit physics_instability if restoration succeeds'
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; symbolic grasp/place remain instantaneous'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
