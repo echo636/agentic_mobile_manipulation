@@ -43,19 +43,36 @@ class RGBBackend(OmniGibsonBackend):
 
     def _video_frame(self, kind):
         if self.video is None or self.video.closed: return
-        import numpy as np
         self._position_spectator()
-        self.og.sim.render()
-        pixels = {}
+        pixels = self._render_rgb_views(include_spectator=True)
+        self.video.append(pixels,self.steps,kind)
+
+    def _render_rgb_views(self, include_spectator=False):
+        """Render-product resizing can invalidate all cameras for several frames.
+
+        Wait with render-only ticks; never advance physics to warm up recording.
+        """
+        import numpy as np
+        sensors = {}
         for name,sensor in self.robot.sensors.items():
             if 'Camera' not in name: continue
-            data,_ = sensor.get_obs()
-            if 'rgb' not in data: continue
             view = 'head' if 'zed' in name else 'left_wrist' if 'left' in name else 'right_wrist'
-            pixels[view] = data['rgb'].detach().cpu().numpy()[...,:3].astype(np.uint8)
-        data,_ = self.og.sim.viewer_camera.get_obs()
-        pixels['spectator'] = data['rgb'].detach().cpu().numpy()[...,:3].astype(np.uint8)
-        self.video.append(pixels,self.steps,kind)
+            sensors[view] = sensor
+        if include_spectator: sensors['spectator'] = self.og.sim.viewer_camera
+        shapes = {}
+        for attempt in range(30):
+            self.og.sim.render()
+            pixels = {}
+            for view,sensor in sensors.items():
+                data,_ = sensor.get_obs()
+                raw = data.get('rgb')
+                if raw is None: continue
+                rgb = raw.detach().cpu().numpy()
+                shapes[view] = list(rgb.shape)
+                if rgb.ndim == 3 and rgb.shape[:2] == (self.image_size,self.image_size) and rgb.shape[2] >= 3:
+                    pixels[view] = rgb[...,:3].astype(np.uint8)
+            if len(pixels) == len(sensors): return pixels
+        raise RuntimeError('RGB render products did not become ready: '+json.dumps(shapes))
 
     def _step(self, action):
         super()._step(action)
@@ -74,18 +91,16 @@ class RGBBackend(OmniGibsonBackend):
     def observe(self):
         from PIL import Image
         import numpy as np
-        self.og.sim.render()
+        rendered = self._render_rgb_views()
         self.capture_index+=1
         self.current_frames={}
         folder=self.output/'frames';folder.mkdir(exist_ok=True)
         images=[];audit=[]
         for sensor_name,sensor in self.robot.sensors.items():
             if 'Camera' not in sensor_name: continue
-            data,_=sensor.get_obs()
-            if 'rgb' not in data: continue
             view='head' if 'zed' in sensor_name else 'left_wrist' if 'left' in sensor_name else 'right_wrist'
             ref=f'rgb-{self.capture_index:05d}-{view}'
-            pixels=data['rgb'].detach().cpu().numpy()[...,:3].astype(np.uint8)
+            pixels=rendered[view]
             path=folder/f'{ref}.jpg'
             Image.fromarray(pixels).save(path,quality=92)
             digest=hashlib.sha256(path.read_bytes()).hexdigest()
