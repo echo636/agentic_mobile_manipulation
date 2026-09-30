@@ -60,5 +60,25 @@ class SimulatorRegressions(unittest.TestCase):
                                        'default_reset_mode':'untuck','model':'r1pro'})
         self.assertEqual(normalize_embedded_robot(data),[])
 
+    def test_legacy_controller_goals_are_not_loaded_into_different_controllers(self):
+        physical={'joint_pos':[1,2,3],'joint_vel':[0,0,0],'root_link':{'pos':[4,5,6]},
+                  'controllers':{'arm_left':{'goal':{'target_pos':[7,8,9]}}}}
+        data={'objects_info':{'init_info':{'r':{'class_module':'omnigibson.robots.r1pro',
+              'class_name':'R1Pro','args':{'model':'r1pro'}}}},
+              'state':{'registry':{'object_registry':{'r':physical}}}}
+        changes=normalize_embedded_robot(data)
+        self.assertEqual(physical['controller_groups'],{})
+        self.assertEqual(physical['joint_pos'],[1,2,3])
+        self.assertEqual(physical['root_link'],{'pos':[4,5,6]})
+        self.assertEqual(changes[-1]['migration'],'legacy_controller_state')
+        self.assertEqual(normalize_embedded_robot(data),[])
+
+    def test_current_controller_state_is_preserved(self):
+        state={'controller_groups':{'arm_left':{'goal':{'target':[1,2]}}}}
+        data={'objects_info':{'init_info':{'r':{'class_name':'Robot','args':{'model':'r1pro'}}}},
+              'state':{'registry':{'object_registry':{'r':state}}}}
+        self.assertEqual(normalize_embedded_robot(data),[])
+        self.assertEqual(state['controller_groups']['arm_left']['goal']['target'],[1,2])
+
 
 if __name__=='__main__':unittest.main()

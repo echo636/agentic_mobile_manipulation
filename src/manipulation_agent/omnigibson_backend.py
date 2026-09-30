@@ -13,6 +13,7 @@ import os
 import random
 import subprocess
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from .contracts import SkillError
@@ -30,11 +31,40 @@ def normalize_embedded_robot(data):
             entry['args']['model']='r1pro'
             changes.append({'object':key,'from':'omnigibson.robots.r1pro.R1Pro',
                             'to':'omnigibson.robots.robot.Robot','model':'r1pro'})
+        if entry.get('class_name') == 'Robot' and entry.get('args', {}).get('model') == 'r1pro':
+            state = data.get('state', {}).get('registry', {}).get('object_registry', {}).get(key)
+            if state is not None and 'controller_groups' not in state:
+                if 'controllers' not in state:
+                    raise ValueError(f'Unrecognized serialized controller schema for {key}')
+                # Old IK/velocity goals are incompatible with the newly configured
+                # absolute-position controllers. Retain physical state and use the
+                # current controllers' defaults, followed by the evaluator reset.
+                state['controller_groups'] = {}
+                changes.append({'object': key, 'migration': 'legacy_controller_state',
+                    'old_controller_names': sorted(state['controllers']),
+                    'policy': 'current_controller_defaults_then_evaluator_reset',
+                    'physical_state_preserved': True})
     return changes
 
 
 class OmniGibsonBackend:
     mode = "oracle_task_state"
+
+    @contextmanager
+    def _startup_stage(self, name):
+        start = time.monotonic()
+        def record(status, **extra):
+            with (self.output / 'startup_stages.jsonl').open('a') as stream:
+                stream.write(json.dumps({'stage': name, 'status': status,
+                    'elapsed_seconds': time.monotonic() - start, **extra}) + '\n')
+        record('running')
+        try:
+            yield
+        except BaseException as exc:
+            record('failed', error_type=type(exc).__name__, error=str(exc))
+            raise
+        else:
+            record('passed')
 
     def __init__(self, task: str, instance: int, output: Path, *, seed: int = 0, max_steps: int = 20000,
                  inside_placement: str = "symbolic_raycast"):
@@ -93,12 +123,16 @@ class OmniGibsonBackend:
             def _preprocess_obs(inner, obs):
                 return obs
 
-        self.evaluator = ResearchEvaluator(OmegaConf.create({
-            "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
-        }))
-        self.evaluator.reset()
-        self.evaluator.load_task_instance(instance)
-        self.evaluator.reset()
+        with self._startup_stage('construct_evaluator_and_environment'):
+            self.evaluator = ResearchEvaluator(OmegaConf.create({
+                "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
+            }))
+        with self._startup_stage('initial_reset'):
+            self.evaluator.reset()
+        with self._startup_stage('load_task_instance'):
+            self.evaluator.load_task_instance(instance)
+        with self._startup_stage('instance_reset'):
+            self.evaluator.reset()
         self.env, self.robot = self.evaluator.env, self.evaluator.robot
         from omnigibson.utils.asset_utils import get_task_instance_path
         import bddl
@@ -114,7 +148,8 @@ class OmniGibsonBackend:
         from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitives
         self.primitives = SymbolicSemanticActionPrimitives(self.env, self.robot)
         self.primitives._enable_head_tracking = False
-        self.initial_goals = self._goal_options()
+        with self._startup_stage('initial_goal_evaluation'):
+            self.initial_goals = self._goal_options()
         # Keep original task-instance files intact. Evaluator performs its official restoration.
         self.task_metadata = {"task": task, "instance": instance, "split": "public_test",
                               "scene": self.env.task.scene_name, "seed": seed}
