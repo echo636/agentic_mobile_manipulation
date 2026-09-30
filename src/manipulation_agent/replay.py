@@ -24,8 +24,24 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
     video_path = run_dir / 'video.json'
     video = json.loads(video_path.read_text()) if video_path.exists() else None
+    explained_path = run_dir / 'explained_video.json'
+    explained = json.loads(explained_path.read_text()) if explained_path.exists() else None
     video_markers = {m['request_id']:m for m in (video or {}).get('markers', [])}
     audit = audit_episode(run_dir, controller_dir) if controller_dir else None
+    model_messages = {}; pending = []; public_events = []; model_index = 0
+    if controller_dir:
+        for event_index, event in enumerate(lines(controller_dir/'model_events.jsonl')):
+            item = event.get('item',{})
+            if event.get('type') != 'item.completed': continue
+            if item.get('type') == 'agent_message':
+                pending.append({'id':item.get('id'),'text':item.get('text',''),
+                                'source_event_index':event_index,'source':'LLM public assistant message, verbatim'})
+                public_events.append(event)
+            elif item.get('type') == 'mcp_tool_call':
+                model_index += 1
+                model_messages[model_index] = pending
+                pending = []
+                public_events.append(event)
 
     def observation(value):
         if not value:
@@ -72,6 +88,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         steps.append({'index': len(steps) + 1, 'event_id': call['id'], 'result_event_id': event['id'] if event else None,
                       'tool': name, 'arguments': args, 'result': result,
                       'request_id':call['request_id'], 'decision':copy.deepcopy(args.get('decision')),
+                      'model_messages':copy.deepcopy(model_messages.get(len(steps)+1,[])),
                       'at': call['at'], 'elapsed_seconds': (datetime.fromisoformat(call['at']) - start).total_seconds(),
                       'video_start_seconds': video_markers.get(call['request_id'],{}).get('seconds'),
                       'tool_seconds': seconds, 'is_motor_action': name in {'act', 'look'},
@@ -86,17 +103,23 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
             'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
-            'audit': audit, 'steps': steps, 'video':video,
+            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained,
+            'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(controller_dir),
+            'model_text_contract':'Original public assistant messages only; no translation, rewriting or private reasoning. Alignment uses event order, not invented wall-clock timestamps.',
             'evaluation_offline_only': {'task_success': run.get('task_success'), 'evaluation': run.get('evaluation'),
                                         'agent_outcome': run.get('agent_outcome'), 'finish_reason': run.get('finish_reason')},
             'failure': run.get('failure') or run.get('error'),
-            'limitations': ['仅回放已记录的工具边界RGB；未录制的运动中间帧不生成、不插值。',
-                '决策摘要仅来自模型显式提交的计划、记忆和结束说明；不展示隐藏推理，也不事后补写动机。',
+            'limitations': ['连续录像保留实际控制步；讲解版额外停顿仅重复真实帧，省略模型等待，不插造运动。',
+                'LLM 文本为公开 assistant 原文，按原始事件顺序对齐，不翻译或补写，不展示隐藏思维链。',
                 '独立评分仅供实验结束后审阅，没有通过工具提供给模型。']}
 
 
 def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     data = build_replay(run_dir, controller_dir)
+    # Keep the downloadable original public stream separate: images may be large.
+    public_events = data.pop('model_public_events')
+    if controller_dir:
+        (run_dir/'model_public_events.jsonl').write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in public_events))
     write_json(run_dir / 'replay.json', data)
     if data['audit']:
         write_json(run_dir / 'replay_audit.json', data['audit'])

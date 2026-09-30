@@ -71,9 +71,9 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
             if profile == 'skills':
                 checks['skills_profile_on_both_sides'] = controller.get('agent_profile') == 'skills'
                 checks['no_plan_memory_tools_called'] = all(c['name'] in catalog for c in calls)
-                checks['public_decisions_on_motor_calls'] = all(
-                    set(c['arguments'].get('decision',{})) == {'observation','reason','expected'}
-                    for c in calls if c['name'] in {'act','look'})
+                checks['recorded_summary_fields_valid_if_present'] = all(
+                    set(c['arguments']['decision']) == {'observation','reason','expected'}
+                    for c in calls if 'decision' in c['arguments'])
         else:
             checks['minimal_profile_on_both_sides'] = controller.get('agent_profile') == 'minimal'
             checks['no_workflow_tools_called'] = all(c['name'] in {'observe','look','act','finish'} for c in calls)

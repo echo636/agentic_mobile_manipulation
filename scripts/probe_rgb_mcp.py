@@ -39,7 +39,7 @@ async def probe(output):
                 binary=base64.b64decode(images[0].data)
                 assert hashlib.sha256(binary).hexdigest()==frame['sha256']
                 assert binary.startswith(b'\x89PNG')
-                args={'primitive':'toggle_on','target':{'image_ref':frame['image_ref'],'point':[0.5,0.5]},'revision':payload['observation']['revision'], 'decision':{'observation':'Fixture pixel visible','reason':'Test bounded action','expected':'Fresh RGB'}}
+                args={'primitive':'toggle_on','target':{'image_ref':frame['image_ref'],'point':[0.5,0.5]},'revision':payload['observation']['revision']}
                 action=await client.call_tool('act',args);a=json.loads(action.content[0].text);assert a['ok']
                 assert len([c for c in action.content if c.type=='image'])==1
                 stale=await client.call_tool('act',args);assert not json.loads(stale.content[0].text)['ok']

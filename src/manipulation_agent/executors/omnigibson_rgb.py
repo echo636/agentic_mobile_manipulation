@@ -18,6 +18,7 @@ class RGBBackend(OmniGibsonBackend):
         self.spectator = None
         self._spectator_anchor = None
         self._spectator_choice = None
+        self._base_target = None
         self.image_size=512
         self.capture_index=0
         self.image_files={}
@@ -111,7 +112,21 @@ class RGBBackend(OmniGibsonBackend):
 
     def _step(self, action):
         super()._step(action)
+        if self._base_target is not None:
+            self._restore_base_target()
         self._video_frame('env_step')
+
+    def _restore_base_target(self):
+        """Ideal base actuator holds posture while moving; no passive joint drift."""
+        import omnigibson.utils.transform_utils as T
+        target=self._base_target
+        self.robot.set_joint_positions(target['posture'],indices=target['indices'])
+        self.robot.set_position_orientation(target['position'],target['orientation'])
+        self.robot.keep_still()
+        if target['held'] is not None:
+            target['held'].set_position_orientation(*T.pose_transform(
+                target['position'],target['orientation'],*target['relative']))
+            target['held'].keep_still()
 
     def mark_video_tool(self, name, arguments, request_id):
         if self.video: self.video.mark(name,arguments,request_id)
@@ -207,23 +222,29 @@ class RGBBackend(OmniGibsonBackend):
         held=self.primitives._get_obj_in_hand()
         relative=T.relative_pose_transform(*held.get_position_orientation(),pos,quat) if held else None
         before = self.steps
-        with (self.output/'base_motion.jsonl').open('a') as stream:
-            for x,y,angle in poses:
-                new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
-                new_quat=T.euler2quat(self.torch.tensor([0.,0.,angle],device=quat.device))
-                self.robot.set_position_orientation(new_pos,new_quat)
-                if held is not None:
-                    held.set_position_orientation(*T.pose_transform(new_pos,new_quat,*relative));held.keep_still()
-                self.robot.keep_still()
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                actual_pos,actual_quat=self.robot.get_position_orientation()
-                stream.write(json.dumps({'env_step':self.steps,'commanded_position':new_pos.tolist(),
-                    'actual_position':actual_pos.tolist(),'actual_orientation':actual_quat.tolist(),
-                    'commanded_yaw':angle,'audience':'executor_private'})+'\n')
-        for _ in range(settling):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        joints=self.robot.get_joint_positions()
+        indices=self.torch.tensor([i for i in range(len(joints)) if i not in self.robot.base_idx.tolist()],device=joints.device)
+        posture=joints[indices].clone()
+        try:
+            with (self.output/'base_motion.jsonl').open('a') as stream:
+                for x,y,angle in poses:
+                    new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
+                    new_quat=T.euler2quat(self.torch.tensor([0.,0.,angle],device=quat.device))
+                    self._base_target={'position':new_pos,'orientation':new_quat,'indices':indices,
+                                       'posture':posture,'held':held,'relative':relative}
+                    self._restore_base_target()
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                    actual_pos,actual_quat=self.robot.get_position_orientation()
+                    stream.write(json.dumps({'env_step':self.steps,'commanded_position':new_pos.tolist(),
+                        'actual_position':actual_pos.tolist(),'actual_orientation':actual_quat.tolist(),
+                        'commanded_yaw':angle,'posture_max_error':float(self.torch.max(self.torch.abs(self.robot.get_joint_positions()[indices]-posture))),
+                        'audience':'executor_private'})+'\n')
+            for _ in range(settling):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        finally:
+            self._base_target=None
         return {'motor':'ideal_kinematic_path','motion_steps':len(poses),'settling_steps':settling,
                 'steps':self.steps-before,'max_speed_m_s':.5,'max_yaw_speed_deg_s':60,
-                'physical_controller':False}
+                'physical_controller':False,'posture_hold':'ideal_joint_position_projection_each_control_step'}
 
     def execute_visual(self,primitive,target,max_steps,**kwargs):
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)

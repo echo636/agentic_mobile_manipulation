@@ -44,14 +44,7 @@ SKILLS_PROMPT = MINIMAL_PROMPT.replace(
     'First observe.',
     'First list_skills, read visual-manipulation/SKILL.md, then observe. Read relevant skills as needed, including pick-and-place before carrying objects.').replace(
     'There is no explicit planning tool, memory store or skill-reading phase.',
-    'There is no explicit planning tool or memory store. Skills are callable workflow documents, not autonomous executors.').replace(
-    'act takes primitive, revision and target=',
-    'act takes primitive, revision, decision and target=') + '''
-For EVERY act and look, include decision={observation, reason, expected}: three SHORT public sentences for the human replay.
-Write these summaries in Chinese. State the visible evidence/uncertainty, immediate purpose, and expected visible outcome.
-This is a concise decision explanation, not a private chain of thought. It is recorded before execution; never claim unseen success.
-Use normal conversation history to track progress; do not call plan/remember/recall (unavailable).
-'''
+    'There is no explicit planning tool or memory store. Skills are callable workflow documents, not autonomous executors.') + '\nYour public assistant messages and MCP calls are recorded verbatim for replay. There is no extra decision-summary schema or required language. Use normal conversation history to track progress; plan/remember/recall are unavailable.\n'
 SYSTEM_PROMPT = SKILLS_PROMPT
 
 def system_prompt(profile='skills'):
