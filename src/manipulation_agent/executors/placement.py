@@ -66,8 +66,8 @@ class CheckedPlacement:
         if held is None:
             raise SkillError('empty_hand','No object is held')
         # A lower shelf can be geometrically valid but fail official OnTop:
-        # the same rack is also above the shoe. Retry its official surface
-        # sampler, retaining the exact selected object and official predicate.
+        # the same rack is also above the shoe. Check physical support on the
+        # selected surface, then retry its official sampler if necessary.
         attempts = [point, None] if point is not None and max_steps >= 100 else [point]
         for attempt, candidate in enumerate(attempts):
             try:
@@ -77,7 +77,6 @@ class CheckedPlacement:
                 if attempt == len(attempts)-1:
                     raise
         self.frames_revision = -1
-        self._cleanup_grasp_contacts()
         return {'primitive':'place_on_top','implementation':'checked_selected_surface_then_official_sampler',
                 'postcondition':check,'failure_policy':'restore_pre_action_state'}
 
@@ -169,7 +168,6 @@ class CheckedPlacement:
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if not held.states[Inside].get_value(target):
                 raise SkillError('postcondition_error','Object left container after settling',changed=True)
-        self._cleanup_grasp_contacts()
         return {'primitive':'place_inside','implementation':'transactional_official_Inside_set_value',
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
