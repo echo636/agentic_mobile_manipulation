@@ -1,4 +1,5 @@
 import math
+import json
 import importlib.util
 from pathlib import Path
 import random
@@ -7,7 +8,7 @@ import tempfile
 import unittest
 
 from manipulation_agent.observations.rig import look_at_orientation
-from manipulation_agent.omnigibson_backend import normalize_embedded_robot
+from manipulation_agent.omnigibson_backend import normalize_embedded_robot, select_compatible_scene
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 
 spec=importlib.util.spec_from_file_location('observation_validator',Path(__file__).resolve().parents[1]/'scripts/validate_async_observation.py')
@@ -15,6 +16,23 @@ validator=importlib.util.module_from_spec(spec);spec.loader.exec_module(validato
 
 
 class SimulatorRegressions(unittest.TestCase):
+    def test_stale_partial_scene_uses_matching_supplied_full_template(self):
+        with tempfile.TemporaryDirectory() as folder:
+            partial=Path(folder)/'template-partial_rooms.json';full=Path(folder)/'template.json'
+            instance=Path(folder)/'instance.json'
+            def scene(key,name):return {'metadata':{'task':{'inst_to_name':{key:name}}},
+                                       'objects_info':{'init_info':{name:{}}}}
+            partial.write_text(json.dumps(scene('firewood.n.01_1','firewood_1')))
+            full.write_text(json.dumps(scene('plywood.n.01_1','plywood_1')))
+            instance.write_text(json.dumps({'plywood.n.01_1':{},'robot_poses':{}}))
+            original=partial.read_bytes()
+            selected,data,rejected=select_compatible_scene(partial,instance)
+            self.assertEqual(selected,full)
+            self.assertEqual(rejected[0]['missing_instance_bindings'],['plywood.n.01_1'])
+            self.assertEqual(partial.read_bytes(),original)
+            full.unlink()
+            with self.assertRaisesRegex(ValueError,'incompatible'):select_compatible_scene(partial,instance)
+
     def test_tilted_robot_axis_audit_uses_robot_frame(self):
         angle=.3; sx,cx=math.sin(angle/2),math.cos(angle/2)
         base=[sx,0,0,cx]

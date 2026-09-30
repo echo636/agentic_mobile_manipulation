@@ -48,6 +48,30 @@ def normalize_embedded_robot(data):
     return changes
 
 
+def select_compatible_scene(template: Path, instance_path: Path):
+    """Choose a supplied template whose object bindings cover the actual instance.
+
+    Some challenge archives ship an obsolete partial-room template alongside a
+    current full template. Never rename task objects or substitute another task.
+    """
+    required = set(json.loads(instance_path.read_text())) - {'robot_poses'}
+    candidates = [template, template.with_name(template.name.replace('-partial_rooms', ''))]
+    rejected = []
+    for candidate in dict.fromkeys(candidates):
+        if not candidate.is_file():
+            continue
+        data = json.loads(candidate.read_text())
+        bindings = data.get('metadata', {}).get('task', {}).get('inst_to_name', {})
+        objects = data['objects_info']['init_info']
+        missing = sorted(k for k in required if k not in bindings or
+                         (not k.startswith('agent.') and bindings[k] not in objects))
+        if not missing:
+            return candidate, data, rejected
+        rejected.append({'path': str(candidate), 'missing_instance_bindings': missing,
+                         'sha256': hashlib.sha256(candidate.read_bytes()).hexdigest()})
+    raise ValueError('Task instance and scene templates are incompatible: ' + json.dumps(rejected))
+
+
 class OmniGibsonBackend:
     mode = "oracle_task_state"
 
@@ -202,7 +226,13 @@ class OmniGibsonBackend:
         robot_cfg["controller_config"]["base"].pop("use_delta_commands")
         scene = task_cfg["scene_model"]
         template = instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json"
-        data = json.loads(template.read_text())
+        instance_path = template.parent / f'{scene}_task_{task}_instances' / f'{scene}_task_{task}_0_{self.instance}_template-tro_state.json'
+        template, data, rejected = select_compatible_scene(template, instance_path)
+        if rejected:
+            write_json(self.output / 'scene_template_selection.json', {
+                'selected': str(template), 'rejected': rejected,
+                'policy': 'use_supplied_full_template_with_matching_instance_bindings',
+                'original_assets_unmodified': True, 'task_instance_unchanged': True})
         migrations = normalize_embedded_robot(data)
         if migrations:
             write_json(self.output/'scene_compatibility.json',{'changes':migrations,
