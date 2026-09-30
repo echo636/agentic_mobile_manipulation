@@ -32,8 +32,9 @@ def read_run(output: Path) -> dict:
     termination=output/'termination.json'
     if termination.exists():
         record=json.loads(termination.read_text())
-        run={**run,'raw_recorder_status':run['status'],'status':record['status'],
-             'task_success':None,'failure':record.get('reason'),'external_termination':record}
+        run={**run,'raw_recorder_status':run['status'],'external_termination':record}
+        if run['status']=='running':
+            run.update(status=record['status'],task_success=None,failure=record.get('reason'))
     return run
 
 

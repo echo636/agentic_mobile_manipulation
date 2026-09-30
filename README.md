@@ -18,7 +18,9 @@ Replay逐字展示模型实际的公开assistant输出与原始MCP消息，不�
 {"primitive":"grasp","target":{"image_ref":"最新图像引用","point":[0.5,0.6]},"revision":1}
 ```
 
-V2执行器内部读取模型所选像素对应的渲染实例与线性深度，将该可见表面路由到底层目标（不搜索其他像素或任务对象），使用官方symbolic动作接口及逐控制步理想运动学导航。10个动作：navigate_to、grasp、place_inside、place_on_top、open、close、toggle_on、toggle_off、release、wait。搜索使用look（±90°，正值左转）。目标识别与选点由模型自己完成。
+V3执行器内部读取模型所选像素的私有线性深度，核对同一条射线上排除机器人碰撞代理后的命中点；不搜索其他像素或任务对象，不启用实例分割。使用官方symbolic动作接口及逐控制步理想运动学导航。10个动作：navigate_to、grasp、place_inside、place_on_top、open、close、toggle_on、toggle_off、release、wait。搜索使用look（±90°，正值左转）。目标识别与选点由模型自己完成。
+
+当前是三路相机RGB，不是环视RGB。look转动底盘后同步返回新图，没有自动360°扫描、全景拼接或异步观测任务。已实现观察—动作—反馈—继续/结束闭环；尚无规划图中的显式任务步骤Stack、独立完成判断节点。对话上下文保留历史，但不等同于独立plan/memory。
 
 ## 连续执行视频
 
