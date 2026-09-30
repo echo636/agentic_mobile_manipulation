@@ -21,7 +21,7 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
     if rgb:
         from .tools import tool_specs as rgb_tool_specs
-        catalog = {t['name'] for t in rgb_tool_specs()}
+        catalog = {t['name'] for t in rgb_tool_specs(run.get('config', {}).get('agent_profile', 'workflow'))}
     else:
         catalog = {t['name'] for t in tool_specs()}
     for event in model_events:
@@ -63,9 +63,13 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
             run.get('source', {}).get('dirty') is False and controller.get('source', {}).get('dirty') is False
             and bool(run['source'].get('source_sha256'))
             and run['source']['source_sha256'] == controller.get('source', {}).get('source_sha256'))
-        manifest = run_dir / 'skill_manifest.json'
-        checks['frozen_skill_manifest'] = manifest.exists() and bool(run.get('skill_bundle_sha256')) and (
-            json.loads(manifest.read_text()).get('bundle_sha256') == run.get('skill_bundle_sha256'))
+        if run.get('config', {}).get('agent_profile', 'workflow') == 'workflow':
+            manifest = run_dir / 'skill_manifest.json'
+            checks['frozen_skill_manifest'] = manifest.exists() and bool(run.get('skill_bundle_sha256')) and (
+                json.loads(manifest.read_text()).get('bundle_sha256') == run.get('skill_bundle_sha256'))
+        else:
+            checks['minimal_profile_on_both_sides'] = controller.get('agent_profile') == 'minimal'
+            checks['no_workflow_tools_called'] = all(c['name'] in {'observe','look','act','finish'} for c in calls)
     evidence_ok = all(v for k, v in checks.items() if k not in {'independent_task_success', 'official_task_success'})
     return {'schema_version': 1, 'audited_at': now(), 'run_id': run['run_id'], 'model': controller['model'],
             'status': 'passed' if all(checks.values()) else 'failed',

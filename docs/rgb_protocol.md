@@ -1,3 +1,5 @@
+> 当前默认为minimal四工具闭环；plan/memory及workflow技能加载默认停用。使用`--record-video`录制全部env.step与离线第三人称，图像输入边界保持RGB-only。旧workflow模式仅显式启用。
+
 # RGB agent protocol v0.2
 
 The user requires an agent that perceives RGB and performs its own search, recognition, planning, memory, recovery and verification. Only motor execution is idealized. v0.1 oracle runs remain historical harness probes, not validation of this RGB protocol.

@@ -5,7 +5,7 @@ import time
 from .policies import ResponsesPolicy
 from .tools import tool_specs
 
-SYSTEM_PROMPT = '''You control a mobile manipulation robot through RGB images and structured MCP tools.
+WORKFLOW_PROMPT = '''You control a mobile manipulation robot through RGB images and structured MCP tools.
 Only the task instruction, RGB pixels, image/camera metadata, your notes and action execution feedback are available.
 There is no oracle object list, state flag, distance, map or evaluator feedback. Perceive and choose objects yourself.
 First call list_skills and read_skill(name="visual-manipulation", resource="SKILL.md"), then observe.
@@ -22,14 +22,35 @@ Call finish with achieved/blocked/aborted and a reason based on observed evidenc
 This experiment evaluates an RGB agent with ideal motor execution; it is not an official physical-control leaderboard submission.
 '''
 
+MINIMAL_PROMPT = '''You control a mobile manipulation robot using RGB and four tools: observe, look, act, finish.
+First observe. Use the current RGB to find the instructed objects, select a pixel, execute one action, then inspect the returned RGB.
+Repeat this direct observation-action-feedback loop until the task appears complete or you are blocked.
+There is no explicit planning tool, memory store or skill-reading phase. Your conversation retains previous RGB and tool feedback.
+Only the task instruction, robot RGB images, image metadata and bounded execution feedback are available.
+There is no oracle object list, object ID, distance, map, state flag or evaluator feedback. Perceive and choose targets yourself.
+act takes primitive, revision and target={image_ref: latest image reference, point: [x,y]} with normalized x left-to-right and y top-to-bottom.
+Navigate toward a visible target, then select it again in the fresh image before manipulation. release/wait use a null target.
+look turns in place; positive yaw turns left, within +/-90 degrees. Use it to search outside the current view.
+The ideal motor executor can use private geometry to execute your selected action; it cannot find or choose the target for you.
+After success or failure inspect fresh RGB; operation completion alone is not task success. Try a bounded alternative when needed.
+Open a visibly closed destination before picking an item; this executor needs an empty hand to open/close/toggle.
+Use only these MCP tools. No shell, arbitrary files, code execution, external web, reset or evaluation access.
+Finish with achieved/blocked/aborted and a short reason based on your visual evidence. Receive closed=true before final text.
+This is an RGB agent with ideal motor execution, not an official physical-control leaderboard submission.
+'''
+SYSTEM_PROMPT = MINIMAL_PROMPT
+
+def system_prompt(profile='minimal'):
+    return MINIMAL_PROMPT if profile == 'minimal' else WORKFLOW_PROMPT
+
 class RGBResponsesPolicy(ResponsesPolicy):
     def run(self,harness,instruction):
-        specs=[{'type':'function','name':t['name'],'description':t['description'],'parameters':t['inputSchema'],'strict':True} for t in tool_specs()]
+        specs=[{'type':'function','name':t['name'],'description':t['description'],'parameters':t['inputSchema'],'strict':True} for t in harness.tool_specs()]
         history=[{'role':'user','content':instruction}];tokens=0
         for turn in range(self.max_turns):
             if harness.closed:return
             if tokens>=self.max_tokens or time.monotonic()-harness.started>=harness.budget.wall_seconds:break
-            response=self._request({'model':self.model,'instructions':SYSTEM_PROMPT,'input':history,'tools':specs,
+            response=self._request({'model':self.model,'instructions':system_prompt(harness.profile),'input':history,'tools':specs,
                                     'parallel_tool_calls':False,'store':False,'max_output_tokens':4000})
             output=response.get('output',[]);usage=response.get('usage') or {};tokens+=usage.get('total_tokens',0)
             harness.recorder.event('model_response',{'turn':turn,'model':self.model,'output':[o for o in output if o.get('type') in {'message','function_call'}],'usage':usage})

@@ -12,7 +12,7 @@ import time
 import shutil
 
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.vision_policy import SYSTEM_PROMPT
+from manipulation_agent.vision_policy import system_prompt
 from manipulation_agent.records import now, write_json, source_version
 
 
@@ -24,6 +24,7 @@ def main():
     p.add_argument("--mcp-args-json", required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--timeout", type=int, default=900)
+    p.add_argument('--agent-profile', choices=['minimal','workflow'], default='minimal')
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
@@ -33,18 +34,19 @@ def main():
     command = ["codex", "exec", "--ignore-user-config", "--ephemeral", "--skip-git-repo-check", "--json",
                "--sandbox", "read-only", "--model", args.model, "--cd", str(workspace.resolve()),
                "-c", 'approval_policy="never"', "-c", 'web_search="disabled"',
-               "-c", "project_doc_max_bytes=0", "-c", "developer_instructions=" + json.dumps(SYSTEM_PROMPT)]
+               "-c", "project_doc_max_bytes=0", "-c", "developer_instructions=" + json.dumps(system_prompt(args.agent_profile))]
     for feature in ("shell_tool", "unified_exec", "plugins", "apps", "hooks", "view_image", "multi_agent", "browser_use",
                     "computer_use", "image_generation"):
         command += ["--disable", feature]
     server = {"command": args.mcp_command, "args": json.loads(args.mcp_args_json),
-              "enabled_tools": [t["name"] for t in tool_specs()], "startup_timeout_sec": 60,
+              "enabled_tools": [t["name"] for t in tool_specs(args.agent_profile)], "startup_timeout_sec": 60,
               "tool_timeout_sec": 300, "default_tools_approval_mode": "approve"}
     # JSON strings/arrays are also valid TOML values; these are subprocess arguments, not shell text.
     for key, value in server.items():
         command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
     command += ["-"]
     metadata = {"started_at": now(), "status": "running", "model": args.model, "observation_mode": "rgb_only",
+                "agent_profile": args.agent_profile,
                 "host": os.uname().nodename, "controller": "codex_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": subprocess.check_output(["codex", "--version"], text=True).strip()}

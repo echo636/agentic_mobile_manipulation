@@ -22,6 +22,9 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     captures = lines(run_dir / 'captures.jsonl')
     images = {i['image_ref']: {**i, 'env_steps': c['env_steps']} for c in captures for i in c['images']}
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
+    video_path = run_dir / 'video.json'
+    video = json.loads(video_path.read_text()) if video_path.exists() else None
+    video_markers = {m['request_id']:m for m in (video or {}).get('markers', [])}
     audit = audit_episode(run_dir, controller_dir) if controller_dir else None
 
     def observation(value):
@@ -69,6 +72,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         steps.append({'index': len(steps) + 1, 'event_id': call['id'], 'result_event_id': event['id'] if event else None,
                       'tool': name, 'arguments': args, 'result': result,
                       'at': call['at'], 'elapsed_seconds': (datetime.fromisoformat(call['at']) - start).total_seconds(),
+                      'video_start_seconds': video_markers.get(call['request_id'],{}).get('seconds'),
                       'tool_seconds': seconds, 'is_motor_action': name in {'act', 'look'},
                       'status': 'missing_result' if result is None else ('passed' if result.get('ok') else 'failed'),
                       'before': before, 'after': copy.deepcopy(last_observation), 'new_observation': new_obs is not None,
@@ -81,7 +85,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
             'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
-            'audit': audit, 'steps': steps,
+            'audit': audit, 'steps': steps, 'video':video,
             'evaluation_offline_only': {'task_success': run.get('task_success'), 'evaluation': run.get('evaluation'),
                                         'agent_outcome': run.get('agent_outcome'), 'finish_reason': run.get('finish_reason')},
             'failure': run.get('failure') or run.get('error'),
@@ -104,6 +108,8 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     page = page.replace('@@DATA@@', embedded).replace('@@JS@@', (assets / 'player.js').read_text())
     if not data['audit']:
         page = page.replace(' href="replay_audit.json"', '')
+    if not data['video']:
+        page = page.replace(' href="video.json"', '')
     (run_dir / 'replay.html').write_text(page)
     return data
 

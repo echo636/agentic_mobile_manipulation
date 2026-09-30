@@ -47,7 +47,7 @@ class OmniGibsonBackend:
         if instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
             raise ValueError("Instance must belong to this pinned source's public test split")
         gm.HEADLESS = True
-        gm.RENDER_VIEWER_CAMERA = False
+        gm.RENDER_VIEWER_CAMERA = getattr(self, 'record_video', False)
         gm.ENABLE_HQ_RENDERING = False
         gm.USE_GPU_DYNAMICS = False
         gm.ENABLE_TRANSITION_RULES = True

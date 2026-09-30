@@ -30,9 +30,7 @@ async def probe(output):
         params=StdioServerParameters(command=sys.executable,args=['-m','manipulation_agent.mcp_server','--bridge',url],env=dict(os.environ))
         async with stdio_client(params) as (read,write):
             async with ClientSession(read,write) as client:
-                await client.initialize();tools=await client.list_tools();assert len(tools.tools)==9
-                skill=await client.call_tool('read_skill',{'name':'visual-manipulation','resource':'SKILL.md'})
-                assert 'Visual manipulation workflow' in skill.content[0].text
+                await client.initialize();tools=await client.list_tools();assert {t.name for t in tools.tools}=={'observe','look','act','finish'}
                 result=await client.call_tool('observe',{})
                 payload=json.loads(result.content[0].text);frame=payload['observation']['images'][0]
                 images=[c for c in result.content if c.type=='image'];assert len(images)==1

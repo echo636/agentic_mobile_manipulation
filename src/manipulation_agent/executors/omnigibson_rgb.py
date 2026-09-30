@@ -12,12 +12,60 @@ from ..omnigibson_backend import OmniGibsonBackend
 class RGBBackend(OmniGibsonBackend):
     mode="rgb_only"
 
-    def __init__(self,*args,**kwargs):
+    def __init__(self,*args,record_video=False,**kwargs):
+        self.record_video = record_video
+        self.video = None
         self.image_size=512
         self.capture_index=0
         self.image_files={}
         self.current_frames={}
         super().__init__(*args,**kwargs)
+        if self.record_video:
+            from ..video import EpisodeVideo
+            self.og.sim.viewer_camera.image_width = self.image_size
+            self.og.sim.viewer_camera.image_height = self.image_size
+            self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size)
+
+    def _position_spectator(self):
+        """Private chase view for the researcher; never enters robot.sensors/MCP."""
+        import omnigibson.utils.transform_utils as T
+        torch = self.torch
+        pos, quat = self.robot.get_position_orientation()
+        pos = pos.cpu(); rotation = T.quat2mat(quat.cpu())
+        forward = rotation[:,0]; side = rotation[:,1]
+        camera = pos - 2.0*forward - 1.6*side + torch.tensor([0.,0.,2.25])
+        target = pos + .5*forward + torch.tensor([0.,0.,.9])
+        direction = target-camera; direction /= torch.linalg.norm(direction)
+        right = torch.linalg.cross(direction,torch.tensor([0.,0.,1.]));right /= torch.linalg.norm(right)
+        up = torch.linalg.cross(right,direction)
+        orientation = T.mat2quat(torch.stack((right,up,-direction),dim=1))
+        self.og.sim.viewer_camera.set_position_orientation(camera,orientation)
+
+    def _video_frame(self, kind):
+        if self.video is None or self.video.closed: return
+        import numpy as np
+        self._position_spectator()
+        self.og.sim.render()
+        pixels = {}
+        for name,sensor in self.robot.sensors.items():
+            if 'Camera' not in name: continue
+            data,_ = sensor.get_obs()
+            if 'rgb' not in data: continue
+            view = 'head' if 'zed' in name else 'left_wrist' if 'left' in name else 'right_wrist'
+            pixels[view] = data['rgb'].detach().cpu().numpy()[...,:3].astype(np.uint8)
+        data,_ = self.og.sim.viewer_camera.get_obs()
+        pixels['spectator'] = data['rgb'].detach().cpu().numpy()[...,:3].astype(np.uint8)
+        self.video.append(pixels,self.steps,kind)
+
+    def _step(self, action):
+        super()._step(action)
+        self._video_frame('env_step')
+
+    def mark_video_tool(self, name, arguments, request_id):
+        if self.video: self.video.mark(name,arguments,request_id)
+
+    def finalize_video(self):
+        return self.video.finish(self.steps) if self.video else None
 
     def _objects(self):
         # PRIVATE routing after an agent selects a pixel; no task-scope candidate discovery.
@@ -51,6 +99,7 @@ class RGBBackend(OmniGibsonBackend):
             audit.append({'image_ref':ref,'file':str(path.relative_to(self.output)),'sha256':digest})
         with (self.output/'captures.jsonl').open('a') as stream:
             stream.write(json.dumps({'capture':self.capture_index,'env_steps':self.steps,'images':audit})+'\n')
+        self._video_frame('observation_boundary')
         return {'images':images,'observation_mode':self.mode}
 
     def image_bytes(self,ref):
@@ -138,4 +187,11 @@ class RGBBackend(OmniGibsonBackend):
                       observation_mode=self.mode,image_size=self.image_size,
                       grounding='first_collision_on_agent_selected_RGB_pixel_ray',
                       model_visible_truth=False)
+        result['record_video'] = self.record_video
         return result
+
+    def close(self):
+        try:
+            self.finalize_video()
+        finally:
+            super().close()

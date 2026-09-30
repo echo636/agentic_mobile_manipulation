@@ -1,0 +1,105 @@
+"""Offline RGB recording at every env.step, with an auditable frame timeline.
+
+No simulator dependency here. Encoding runs in a project-owned ffmpeg subprocess;
+frames are streamed rather than accumulated in memory. No synthesized motion.
+"""
+import hashlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+
+from .records import now, write_json
+
+
+class EpisodeVideo:
+    VIEWS = ('head', 'spectator', 'left_wrist', 'right_wrist')
+
+    def __init__(self, output: Path, fps: float, size=512):
+        self.output = output
+        self.size = size; self.fps = float(fps)
+        self.width = 2 * size; self.height = 2 * size + 80
+        self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
+        self.closed = False; self.process = None; self.log = None
+        self.manifest = {'status':'running','file':'episode.mp4','poster':'video_poster.jpg',
+                         'fps':self.fps,'width':self.width,'height':self.height,
+                         'started_at':now(),'frame_count':0,'scope':'every_env_step_plus_observation_boundaries',
+                         'spectator_model_visible':False, 'synthesized_motion':False,
+                         'time_basis':'simulation control steps; model wait time omitted; boundary captures add one frame',
+                         'excluded':'physics substeps and private volume-sampler candidate-search ticks',
+                         'views':list(self.VIEWS),'markers':self.markers}
+        write_json(output/'video.json', self.manifest)
+
+    def mark(self, name, arguments, request_id):
+        if self.closed: return
+        self.context = {'tool':name,'primitive':arguments.get('primitive', name),'request_id':request_id}
+        self.markers.append({**self.context,'frame_index':self.count,'seconds':self.count/self.fps})
+
+    def append(self, pixels, env_step: int, kind: str):
+        import numpy as np
+        from PIL import Image, ImageDraw, ImageFont
+        if self.closed: return
+        if set(pixels) != set(self.VIEWS):
+            raise ValueError('Continuous recorder requires all four RGB views')
+        tiles = {name: np.asarray(pixels[name], dtype=np.uint8) for name in self.VIEWS}
+        if any(a.shape != (self.size, self.size, 3) for a in tiles.values()):
+            raise ValueError('Invalid video camera shape')
+        canvas = Image.new('RGB', (self.width, self.height), '#102637')
+        draw = ImageDraw.Draw(canvas)
+        font_path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+        font = ImageFont.truetype(str(font_path), 16) if font_path.exists() else ImageFont.load_default()
+        for name, x, y in zip(self.VIEWS, (0,self.size,0,self.size), (0,0,self.size,self.size)):
+            canvas.paste(Image.fromarray(tiles[name]), (x,y))
+            draw.rectangle((x,y,x+self.size,y+25), fill='#102637')
+            label = 'SPECTATOR - replay only' if name == 'spectator' else 'ROBOT RGB - '+name
+            draw.text((x+8,y+3),label,fill='white',font=font)
+        title = f"env.step {env_step} | {self.context.get('primitive','initial RGB')} | {kind}"
+        draw.text((12,2*self.size+7),title,fill='white',font=font)
+        draw.text((12,2*self.size+32),'Ideal executor: instantaneous pose/state changes are recorded as executed.',fill='#b6d6df',font=font)
+        draw.text((12,2*self.size+55),'Every control step recorded. Model wait time omitted. No motion interpolation.',fill='#b6d6df',font=font)
+        if self.process is None:
+            ffmpeg = shutil.which('ffmpeg')
+            if not ffmpeg: raise RuntimeError('ffmpeg is required for --record-video')
+            self.log = (self.output/'video_encoder.log').open('wb')
+            command = [ffmpeg,'-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24',
+                       '-video_size',f'{self.width}x{self.height}','-framerate',str(self.fps),'-i','pipe:0',
+                       '-an','-c:v','libx264','-threads','2','-preset','fast','-crf','20',
+                       '-pix_fmt','yuv420p','-movflags','+faststart',str(self.output/'episode.mp4')]
+            self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.log)
+            self.manifest['encoder_pid'] = self.process.pid
+            self.manifest['encoder_command'] = command
+            canvas.save(self.output/'video_poster.jpg',quality=90)
+        raw = np.asarray(canvas).tobytes()
+        self.process.stdin.write(raw)
+        row = {'frame_index':self.count,'video_seconds':self.count/self.fps,'env_step':env_step,
+               'kind':kind, **self.context,
+               'rgb_sha256':{k:hashlib.sha256(v.tobytes()).hexdigest() for k,v in tiles.items()}}
+        with (self.output/'video_frames.jsonl').open('a') as stream:
+            stream.write(json.dumps(row)+'\n')
+        if kind == 'env_step': self.env_steps.append(env_step)
+        self.count += 1
+
+    def finish(self, final_env_step):
+        if self.closed: return self.manifest
+        self.closed = True
+        if self.process:
+            try:
+                self.process.stdin.close()
+                code = self.process.wait(timeout=90)
+            except BaseException:
+                self.process.kill();self.process.wait();raise
+            finally:
+                self.log.close()
+        else: code = None
+        complete = self.env_steps == list(range(1,final_env_step+1))
+        valid = code == 0 and self.count > 0 and complete
+        self.manifest.update(status='passed' if valid else 'failed',finished_at=now(),frame_count=self.count,
+                             duration_seconds=self.count/self.fps,final_env_step=final_env_step,
+                             recorded_env_steps=len(self.env_steps),every_env_step_recorded=complete,
+                             encoder_exit_code=code,markers=self.markers)
+        path = self.output/'episode.mp4'
+        if path.exists():
+            self.manifest.update(bytes=path.stat().st_size,sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+        write_json(self.output/'video.json',self.manifest)
+        if not valid: raise RuntimeError('Continuous video recording is incomplete; inspect video.json')
+        return self.manifest

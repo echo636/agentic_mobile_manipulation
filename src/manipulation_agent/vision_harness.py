@@ -12,19 +12,25 @@ from .skill_runtime import SkillLibrary
 from .tools import REGISTRY, tool_specs
 
 class VisionHarness:
-    def __init__(self, backend, recorder, budget=Budget()):
+    def __init__(self, backend, recorder, budget=Budget(), *, profile='minimal'):
         self.backend,self.recorder,self.budget=backend,recorder,budget
         self.owner=threading.get_ident(); self.started=time.monotonic()
         self.revision=self.actions=self.calls=0; self.closed=False
-        self.plan,self.memory,self.cache,self.evidence=[],{},{},{}
-        self.skills=SkillLibrary(recorder.output)
+        self.profile = profile
+        self.catalog = {t['name']: t for t in tool_specs(profile)}
+        self.cache,self.evidence={},{}
+        self.skills = None
+        if profile == 'workflow':
+            self.plan,self.memory=[],{}
+            self.skills=SkillLibrary(recorder.output)
+        recorder.run['config']['agent_profile'] = profile
         self.snapshot=self.refresh()
-        recorder.run.update(backend=backend.provenance(),budget=asdict(budget),skill_bundle_sha256=self.skills.digest,
+        recorder.run.update(backend=backend.provenance(),budget=asdict(budget),skill_bundle_sha256=self.skills.digest if self.skills else None,
                             observation_contract="rgb_only_v1")
         write_json(recorder.output/'run.json',recorder.run)
         recorder.event('episode_started',{'observation':self.snapshot})
 
-    def tool_specs(self): return tool_specs()
+    def tool_specs(self): return list(self.catalog.values())
 
     def refresh(self):
         self.snapshot=public_observation(self.backend.observe(),self.revision)
@@ -44,9 +50,11 @@ class VisionHarness:
             return copy.deepcopy(result)
         self.calls+=1
         self.recorder.event('tool_call',{'name':name,'arguments':arguments,'request_id':request_id})
+        if hasattr(self.backend, 'mark_video_tool'):
+            self.backend.mark_video_tool(name, arguments, request_id)
         try:
             if self.closed: raise SkillError('episode_closed','The episode is closed')
-            if name not in REGISTRY: raise SkillError('unknown_tool','Unknown public tool')
+            if name not in self.catalog: raise SkillError('unknown_tool','Tool is not enabled in this agent profile')
             validate(arguments,REGISTRY[name].schema)
             if name!='finish' and (self.calls>self.budget.max_calls or time.monotonic()-self.started>self.budget.wall_seconds):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')
@@ -86,4 +94,7 @@ class VisionHarness:
     def update_plan(self,reason,subgoals): return LegacyPlanHelpers._tool_update_plan(self,reason,subgoals)
     def remember(self,key,text,revision): return LegacyPlanHelpers._tool_remember(self,key,text,revision)
     def recall(self): return LegacyPlanHelpers._tool_recall(self)
-    def finish(self,outcome,reason): return LegacyPlanHelpers._tool_finish(self,outcome,reason)
+    def finish(self,outcome,reason):
+        if hasattr(self.backend, 'finalize_video'):
+            self.recorder.run['video'] = self.backend.finalize_video()
+        return LegacyPlanHelpers._tool_finish(self,outcome,reason)
