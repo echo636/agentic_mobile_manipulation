@@ -32,11 +32,12 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     if controller_dir:
         for event_index, event in enumerate(lines(controller_dir/'model_events.jsonl')):
             item = event.get('item',{})
+            if item.get('type') in {'agent_message','mcp_tool_call'}:
+                public_events.append(event)
             if event.get('type') != 'item.completed': continue
             if item.get('type') == 'agent_message':
                 pending.append({'id':item.get('id'),'text':item.get('text',''),
                                 'source_event_index':event_index,'source':'LLM public assistant message, verbatim'})
-                public_events.append(event)
             elif item.get('type') == 'mcp_tool_call':
                 model_index += 1
                 model_messages[model_index] = pending
@@ -45,7 +46,6 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                     'model_result_text':next((c.get('text','') for c in (item.get('result') or {}).get('content',[])
                                               if c.get('type')=='text'),None)}
                 pending = []
-                public_events.append(event)
 
     def observation(value):
         if not value:

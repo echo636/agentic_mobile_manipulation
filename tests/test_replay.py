@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from manipulation_agent.audit import audit_rgb_transport
 from manipulation_agent.replay import build_replay, render_replay
@@ -65,6 +66,24 @@ class ReplayEvidenceTests(unittest.TestCase):
         self.assertTrue(all(result['checks'].values()),result)
         self.assertEqual(result['image_content_count'],2)
         self.assertEqual(result['unique_model_image_count'],1)
+
+    def test_verbatim_public_messages_and_exact_mcp_text_without_private_reasoning(self):
+        controller=self.root/'controller';controller.mkdir()
+        (controller/'controller.json').write_text(json.dumps({'model':'fixture'}))
+        original='Original public message.\nNo translation.'
+        stream=[{'type':'item.started','item':{'type':'agent_message','id':'public','text':''}},
+                {'type':'item.completed','item':{'type':'reasoning','text':'HIDDEN_PRIVATE_REASONING'}},
+                {'type':'item.completed','item':{'type':'agent_message','id':'public','text':original}},
+                *self.models]
+        (controller/'model_events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in stream))
+        with patch('manipulation_agent.replay.audit_episode',return_value=None):
+            result=render_replay(self.root,controller)
+        self.assertEqual(result['steps'][0]['model_messages'][0]['text'],original)
+        self.assertEqual(result['steps'][0]['model_result_text'],self.models[0]['item']['result']['content'][0]['text'])
+        public=(self.root/'model_public_events.jsonl').read_text()
+        self.assertIn('item.started',public)
+        self.assertNotIn('HIDDEN_PRIVATE_REASONING',public)
+        self.assertNotIn('HIDDEN_PRIVATE_REASONING',(self.root/'replay.html').read_text())
 
     def test_tampered_image_fails(self):
         self.models[0]['item']['result']['content'][1]['data']=base64.b64encode(b'tampered').decode()
