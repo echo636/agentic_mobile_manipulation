@@ -18,7 +18,7 @@ Replay逐字展示模型实际的公开assistant输出与原始MCP消息，不�
 {"primitive":"grasp","target":{"image_ref":"最新图像引用","point":[0.5,0.6]},"revision":1}
 ```
 
-执行器内部将所选像素通过相机射线路由到底层目标，使用官方symbolic动作接口及逐控制步理想运动学导航。10个动作：navigate_to、grasp、place_inside、place_on_top、open、close、toggle_on、toggle_off、release、wait。搜索使用look（±90°，正值左转）。目标识别与选点由模型自己完成。
+V2执行器内部读取模型所选像素对应的渲染实例与线性深度，将该可见表面路由到底层目标（不搜索其他像素或任务对象），使用官方symbolic动作接口及逐控制步理想运动学导航。10个动作：navigate_to、grasp、place_inside、place_on_top、open、close、toggle_on、toggle_off、release、wait。搜索使用look（±90°，正值左转）。目标识别与选点由模型自己完成。
 
 ## 连续执行视频
 
@@ -52,7 +52,7 @@ PYTHONPATH=src python -m manipulation_agent.replay \
 
 - `tools/observation.py`、`tools/action.py`、`tools/session.py`：观察/执行/结束工具，另有`tools/skills.py`的两个skill工具，`tools/__init__.py`控制profile白名单。
 - `vision_policy.py`、`vision_harness.py`：直接RGB闭环、版本/预算、动作反馈与正式结束。
-- `executors/omnigibson_rgb.py`：机器人RGB、私有射线执行、离线第三人称与逐控制步录制。
+- `executors/omnigibson_rgb.py`：机器人RGB、私有像素执行、离线第三人称与逐控制步录制。
 - `video.py`：流式H.264编码、帧时间线和覆盖验证。
 - `replay.py`、`replay_assets/`：视频及逐步回放，skills/minimal模式不显示plan/memory面板。
 - `audit.py`：关联真实模型和仿真工具轨迹、图像字节与源码版本。

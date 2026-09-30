@@ -62,15 +62,17 @@ def make_panel(step,phase,run,total):
     draw.rectangle((1024,0,1919,1079),fill='#14283a')
     wrap('BEHAVIOR · RGB AGENT',1052,28,size=22,color='#64d9cb')
     number=step['index'] if step else 0
-    wrap(f'步骤 {number:02d} / {total:02d} · {PHASES[phase]}',1052,72,size=34,max_lines=2)
+    heading=f'步骤 {number:02d} / {total:02d} · {PHASES[phase]}' if step else PHASES[phase]
+    wrap(heading,1052,72,size=34,max_lines=2)
     tool=step['tool'] if step else 'observe'
     args=step['arguments'] if step else {}
     action=args.get('primitive',tool)
-    wrap(LABELS.get(action,action),1052,135,size=30,color='#ffffff')
+    wrap(LABELS.get(action,action) if step else '回放记录',1052,135,size=30,color='#ffffff')
     # Exact executable parameters, separate from the public decision text.
     call={k:v for k,v in args.items() if k!='decision'}
     if tool=='finish':call={'outcome':args.get('outcome')}
-    wrap(tool+'('+json.dumps(call,ensure_ascii=False,separators=(',',':'))+')',1052,186,size=21,color='#80c9ee',max_lines=4)
+    if step:
+        wrap(tool+'('+json.dumps(call,ensure_ascii=False,separators=(',',':'))+')',1052,186,size=21,color='#80c9ee',max_lines=4)
     y=315
     messages=step.get('model_messages',[]) if step else (run.get('_final_model_messages',[]) if phase=='final' else [])
     y=wrap('LLM 公开原文 · 未翻译 / 未改写',1052,y,size=22,color='#74c9bf')+12
