@@ -38,10 +38,24 @@ Use only these MCP tools. No shell, arbitrary files, code execution, external we
 Finish with achieved/blocked/aborted and a short reason based on your visual evidence. Receive closed=true before final text.
 This is an RGB agent with ideal motor execution, not an official physical-control leaderboard submission.
 '''
-SYSTEM_PROMPT = MINIMAL_PROMPT
+SKILLS_PROMPT = MINIMAL_PROMPT.replace(
+    'using RGB and four tools: observe, look, act, finish.',
+    'using RGB and six tools: observe, look, act, finish, list_skills, read_skill.').replace(
+    'First observe.',
+    'First list_skills, read visual-manipulation/SKILL.md, then observe. Read relevant skills as needed, including pick-and-place before carrying objects.').replace(
+    'There is no explicit planning tool, memory store or skill-reading phase.',
+    'There is no explicit planning tool or memory store. Skills are callable workflow documents, not autonomous executors.').replace(
+    'act takes primitive, revision and target=',
+    'act takes primitive, revision, decision and target=') + '''
+For EVERY act and look, include decision={observation, reason, expected}: three SHORT public sentences for the human replay.
+Write these summaries in Chinese. State the visible evidence/uncertainty, immediate purpose, and expected visible outcome.
+This is a concise decision explanation, not a private chain of thought. It is recorded before execution; never claim unseen success.
+Use normal conversation history to track progress; do not call plan/remember/recall (unavailable).
+'''
+SYSTEM_PROMPT = SKILLS_PROMPT
 
-def system_prompt(profile='minimal'):
-    return MINIMAL_PROMPT if profile == 'minimal' else WORKFLOW_PROMPT
+def system_prompt(profile='skills'):
+    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_PROMPT,'workflow':WORKFLOW_PROMPT}[profile]
 
 class RGBResponsesPolicy(ResponsesPolicy):
     def run(self,harness,instruction):

@@ -14,7 +14,7 @@ class MinimalLoopTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)/'run'
         self.recorder=Recorder(self.root,{'backend':'mock','observation_mode':'rgb_only'})
-        self.h=VisionHarness(MockRGBBackend(self.root),self.recorder)
+        self.h=VisionHarness(MockRGBBackend(self.root),self.recorder,profile='minimal')
 
     def test_default_has_only_four_tools_and_no_plan_memory_or_skills(self):
         self.assertEqual({t['name'] for t in self.h.tool_specs()},{'observe','look','act','finish'})

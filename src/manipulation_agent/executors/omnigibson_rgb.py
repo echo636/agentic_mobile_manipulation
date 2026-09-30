@@ -17,6 +17,7 @@ class RGBBackend(OmniGibsonBackend):
         self.video = None
         self.spectator = None
         self._spectator_anchor = None
+        self._spectator_choice = None
         self.image_size=512
         self.capture_index=0
         self.image_files={}
@@ -34,6 +35,8 @@ class RGBBackend(OmniGibsonBackend):
             self.spectator.load(None)
             self.spectator.initialize()
             self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size)
+            self._position_spectator()
+            for _ in range(20): self.og.sim.render()
 
     def _position_spectator(self):
         """Collision-aware filming camera; its geometry/poses stay offline."""
@@ -46,29 +49,29 @@ class RGBBackend(OmniGibsonBackend):
         if self._spectator_anchor is not None:
             old_pos,old_yaw = self._spectator_anchor
             delta = math.atan2(math.sin(yaw-old_yaw),math.cos(yaw-old_yaw))
-            if float(torch.linalg.norm(pos-old_pos)) < .12 and abs(delta) < .1: return
+            if float(torch.linalg.norm(pos-old_pos)) < .002: return
         lo,hi = self.robot.aabb
         target = (lo.cpu()+hi.cpu())/2
         ignore = [link.prim_path for link in self.robot.links.values()]
         best = None
         for i,angle in enumerate((135,-135,90,-90,180,0,45,-45)):
-            theta = yaw+math.radians(angle)
+            theta = math.radians(angle)
             for j,height in enumerate((.8,1.2)):
                 offset = torch.tensor([2.4*math.cos(theta),2.4*math.sin(theta),height])
                 distance = float(torch.linalg.norm(offset)); direction = offset/distance
                 hit = raytest(target,target+offset,ignore_bodies=ignore)
                 clearance = float(torch.linalg.norm(hit['position'].cpu()-target))-.25 if hit['hit'] else distance
                 usable = max(.12,min(distance,clearance))
-                score = usable-.015*i-.005*j
-                if best is None or score>best[0]: best=(score,target+direction*usable,usable)
-        _,camera,clearance = best
+                score = usable-.015*i-.005*j + (.65 if (i,j)==self._spectator_choice else 0)
+                if best is None or score>best[0]: best=(score,target+direction*usable,usable,(i,j))
+        _,camera,clearance,self._spectator_choice = best
         direction = target-camera; direction /= torch.linalg.norm(direction)
         right = torch.linalg.cross(direction,torch.tensor([0.,0.,1.]));right /= torch.linalg.norm(right)
         up = torch.linalg.cross(right,direction)
         orientation = T.mat2quat(torch.stack((right,up,-direction),dim=1))
         self.spectator.set_position_orientation(camera,orientation)
         self._spectator_anchor = (pos.clone(),yaw)
-        for _ in range(3): self.og.sim.render()
+        self.og.sim.render()
         with (self.output/'spectator_poses.jsonl').open('a') as stream:
             stream.write(json.dumps({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
                                      'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})+'\n')
@@ -181,18 +184,46 @@ class RGBBackend(OmniGibsonBackend):
 
     def _turn(self,degrees,max_steps):
         import omnigibson.utils.transform_utils as T
-        if max_steps<30: raise SkillError('action_timeout','Turn requires 30 settling steps')
+        pos,quat = self.robot.get_position_orientation()
+        rotation = T.quat2mat(quat)
+        yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
+
+    def _execute_base_path(self, points, end_yaw, max_steps):
+        """Execute each bounded ideal pose in simulation and capture its real RGB.
+
+        Privileged traversability and held-object attachment belong to the motor
+        executor only. This is kinematic actuation, not physical path control.
+        """
+        import omnigibson.utils.transform_utils as T
+        from .base_motion import trajectory
         pos,quat=self.robot.get_position_orientation()
+        rotation = T.quat2mat(quat)
+        yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        poses = trajectory(points,yaw,end_yaw,self.og.sim.get_sim_step_dt())
+        settling = 10
+        if len(poses)+settling > max_steps:
+            raise SkillError('action_timeout','Selected route exceeds bounded motor time; choose a nearer visible point')
         held=self.primitives._get_obj_in_hand()
         relative=T.relative_pose_transform(*held.get_position_orientation(),pos,quat) if held else None
-        delta=T.euler2quat(self.torch.tensor([0.,0.,math.radians(degrees)],device=quat.device))
-        new_quat=T.quat_multiply(delta,quat)
-        self.robot.set_position_orientation(pos,new_quat)
-        if held is not None:
-            held.set_position_orientation(*T.pose_transform(pos,new_quat,*relative));held.keep_still()
-        self.robot.keep_still()
-        for _ in range(30):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-        return {'motor':'ideal_in_place_turn','yaw_degrees':degrees}
+        before = self.steps
+        with (self.output/'base_motion.jsonl').open('a') as stream:
+            for x,y,angle in poses:
+                new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
+                new_quat=T.euler2quat(self.torch.tensor([0.,0.,angle],device=quat.device))
+                self.robot.set_position_orientation(new_pos,new_quat)
+                if held is not None:
+                    held.set_position_orientation(*T.pose_transform(new_pos,new_quat,*relative));held.keep_still()
+                self.robot.keep_still()
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                actual_pos,actual_quat=self.robot.get_position_orientation()
+                stream.write(json.dumps({'env_step':self.steps,'commanded_position':new_pos.tolist(),
+                    'actual_position':actual_pos.tolist(),'actual_orientation':actual_quat.tolist(),
+                    'commanded_yaw':angle,'audience':'executor_private'})+'\n')
+        for _ in range(settling):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        return {'motor':'ideal_kinematic_path','motion_steps':len(poses),'settling_steps':settling,
+                'steps':self.steps-before,'max_speed_m_s':.5,'max_yaw_speed_deg_s':60,
+                'physical_controller':False}
 
     def execute_visual(self,primitive,target,max_steps,**kwargs):
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
@@ -235,6 +266,7 @@ class RGBBackend(OmniGibsonBackend):
                       grounding='first_collision_on_agent_selected_RGB_pixel_ray',
                       model_visible_truth=False)
         result['record_video'] = self.record_video
+        result['base_execution'] = 'live_kinematic_path_0.5m_s_60deg_s; symbolic grasp/place remain instantaneous'
         return result
 
     def close(self):

@@ -12,7 +12,7 @@ from .skill_runtime import SkillLibrary
 from .tools import REGISTRY, tool_specs
 
 class VisionHarness:
-    def __init__(self, backend, recorder, budget=Budget(), *, profile='minimal'):
+    def __init__(self, backend, recorder, budget=Budget(), *, profile='skills'):
         self.backend,self.recorder,self.budget=backend,recorder,budget
         self.owner=threading.get_ident(); self.started=time.monotonic()
         self.revision=self.actions=self.calls=0; self.closed=False
@@ -22,6 +22,7 @@ class VisionHarness:
         self.skills = None
         if profile == 'workflow':
             self.plan,self.memory=[],{}
+        if profile in {'skills','workflow'}:
             self.skills=SkillLibrary(recorder.output)
         recorder.run['config']['agent_profile'] = profile
         self.snapshot=self.refresh()
@@ -55,10 +56,11 @@ class VisionHarness:
         try:
             if self.closed: raise SkillError('episode_closed','The episode is closed')
             if name not in self.catalog: raise SkillError('unknown_tool','Tool is not enabled in this agent profile')
-            validate(arguments,REGISTRY[name].schema)
+            validate(arguments,self.catalog[name]['inputSchema'])
             if name!='finish' and (self.calls>self.budget.max_calls or time.monotonic()-self.started>self.budget.wall_seconds):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')
-            result={'ok':True,**REGISTRY[name].handler(self,**arguments)}
+            execution_args = {k:v for k,v in arguments.items() if k != 'decision'}
+            result={'ok':True,**REGISTRY[name].handler(self,**execution_args)}
         except SkillError as exc:
             result={'ok':False,'error':{'code':exc.code,'message':str(exc)},'observation':self.snapshot}
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result})

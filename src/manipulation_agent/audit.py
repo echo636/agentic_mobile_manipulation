@@ -63,10 +63,17 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
             run.get('source', {}).get('dirty') is False and controller.get('source', {}).get('dirty') is False
             and bool(run['source'].get('source_sha256'))
             and run['source']['source_sha256'] == controller.get('source', {}).get('source_sha256'))
-        if run.get('config', {}).get('agent_profile', 'workflow') == 'workflow':
+        profile = run.get('config', {}).get('agent_profile', 'workflow')
+        if profile in {'workflow','skills'}:
             manifest = run_dir / 'skill_manifest.json'
             checks['frozen_skill_manifest'] = manifest.exists() and bool(run.get('skill_bundle_sha256')) and (
                 json.loads(manifest.read_text()).get('bundle_sha256') == run.get('skill_bundle_sha256'))
+            if profile == 'skills':
+                checks['skills_profile_on_both_sides'] = controller.get('agent_profile') == 'skills'
+                checks['no_plan_memory_tools_called'] = all(c['name'] in catalog for c in calls)
+                checks['public_decisions_on_motor_calls'] = all(
+                    set(c['arguments'].get('decision',{})) == {'observation','reason','expected'}
+                    for c in calls if c['name'] in {'act','look'})
         else:
             checks['minimal_profile_on_both_sides'] = controller.get('agent_profile') == 'minimal'
             checks['no_workflow_tools_called'] = all(c['name'] in {'observe','look','act','finish'} for c in calls)

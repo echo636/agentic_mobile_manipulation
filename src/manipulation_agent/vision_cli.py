@@ -23,7 +23,7 @@ def main():
     p.add_argument('--seed',type=int,default=0);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--instruction');p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
-    p.add_argument('--agent-profile', choices=['minimal','workflow'], default='minimal')
+    p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record every env.step (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)

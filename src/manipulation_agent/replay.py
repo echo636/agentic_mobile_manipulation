@@ -71,6 +71,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         seconds = (datetime.fromisoformat(event['at']) - datetime.fromisoformat(call['at'])).total_seconds() if event else None
         steps.append({'index': len(steps) + 1, 'event_id': call['id'], 'result_event_id': event['id'] if event else None,
                       'tool': name, 'arguments': args, 'result': result,
+                      'request_id':call['request_id'], 'decision':copy.deepcopy(args.get('decision')),
                       'at': call['at'], 'elapsed_seconds': (datetime.fromisoformat(call['at']) - start).total_seconds(),
                       'video_start_seconds': video_markers.get(call['request_id'],{}).get('seconds'),
                       'tool_seconds': seconds, 'is_motor_action': name in {'act', 'look'},

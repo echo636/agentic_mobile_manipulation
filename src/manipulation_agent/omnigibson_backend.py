@@ -265,6 +265,11 @@ class OmniGibsonBackend:
         new_pos[:2] = endpoint.to(start.device)
         yaw = math.atan2(float(goal[1] - new_pos[1]), float(goal[0] - new_pos[0]))
         new_quat = T.euler2quat(torch.tensor([0.0, 0.0, yaw], device=start.device))
+        if hasattr(self, '_execute_base_path'):
+            route = [start[:2].cpu().tolist(), *path.cpu().tolist(), endpoint.cpu().tolist()]
+            result = self._execute_base_path(route, yaw, max_steps)
+            self.navigation_distance += float(length)
+            return {**result,'path_distance_m':float(length),'dynamic_collision_check':False}
         held = self.primitives._get_obj_in_hand()
         relative = T.relative_pose_transform(*held.get_position_orientation(), start, orientation) if held else None
         self.robot.set_position_orientation(new_pos, new_quat)

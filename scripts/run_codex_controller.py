@@ -24,7 +24,7 @@ def main():
     p.add_argument("--mcp-args-json", required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--timeout", type=int, default=900)
-    p.add_argument('--agent-profile', choices=['minimal','workflow'], default='minimal')
+    p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
