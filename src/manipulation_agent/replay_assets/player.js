@@ -3,12 +3,12 @@
 const $=id=>document.getElementById(id),D=JSON.parse($('replay-data').textContent),video=$('episode-video');
 const embedded=new URLSearchParams(location.search).has('embed');if(embedded)document.body.classList.add('embedded');
 const views=['front','back','left','right','spectator'],names={front:'前视 RGB',back:'后视 RGB',left:'左视 RGB',right:'右视 RGB',spectator:'第三人称 · 回放'};
-const tiles=new Map(),imageCache=new Map();let mode='execution',index=0,phase='decision',manual=false,zoomView=null;
+const tiles=new Map(),imageCache=new Map();let mode='execution',index=-1,phase='initial',zoomView=null,state=null,pendingIndex=-1,loading=false;
 let edition=D.inspection_video?.status==='passed'?'inspection':'raw',record=null;
 const text=(id,value)=>$(id).textContent=value??'—',clock=s=>Number.isFinite(s)?Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'):'—';
 const step=()=>D.steps[index],action=s=>s?.arguments?.primitive||s?.tool||'等待记录';
-const phaseLabels={initial:'初始画面',decision:'模型决策',execution:'执行中',tool:'执行中',result:'工具返回',final:'结束输出',evaluation:'离线评分',outside_tool_wait:'调用间等待'};
-const conversation=new ReplayTranscript($('conversation'),$('follow'),number=>selectStep(D.steps.findIndex(s=>s.index===number),true));conversation.setData(D);
+const phaseLabels={initial:'初始画面',decision:'模型决策',execution:'执行中',tool:'执行中',result:'工具返回',final:'结束输出',evaluation:'离线评分',unmapped:'未标注区间',outside_tool_wait:'调用间等待'};
+const conversation=new ReplayTranscript($('conversation'),$('follow'),number=>selectStep(D.steps.findIndex(s=>s.index===number),true),()=>video.pause());conversation.setData(D);
 for(const name of views){
  const tile=document.createElement('figure');tile.className='camera-tile camera-'+name;
  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=512;canvas.setAttribute('aria-label',names[name]);
@@ -35,7 +35,7 @@ function cameraBox(name){
  }
  return [i%2*size,Math.floor(i/2)*size+26,size,size-26];
 }
-function observation(){return step()?.[$('input-side').value]}
+function observation(){const s=step()||(['final','evaluation'].includes(phase)?D.steps.at(-1):null);return s?.[$('input-side').value]}
 function paintCameras(){
  const obs=observation();
  for(const name of views){
@@ -59,55 +59,62 @@ function updateObservationNote(){
  text('observation-note',mode==='execution'?'运行时录制的连续画面 · 第三人称仅供回放':obs?'模型已收到 RGB · revision '+obs.revision+(obs.capture?' · '+obs.capture.captured_at.slice(11,19)+' UTC':''):'此时尚未通过工具向模型返回 RGB');
 }
 function setMode(value){mode=value;$('mode-execution').setAttribute('aria-pressed',String(mode==='execution'));$('mode-input').setAttribute('aria-pressed',String(mode==='input'));$('input-side').hidden=mode!=='input';updateObservationNote();paintCameras()}
-$('mode-execution').onclick=()=>setMode('execution');$('mode-input').onclick=()=>setMode('input');$('input-side').onchange=()=>{updateObservationNote();paintCameras()};
-function updateStep(){
- const s=step();$('step-select').value=String(index);$('prev').disabled=index<=0||!s;$('next').disabled=!s||index>=D.steps.length-1;
- $('current-step').replaceChildren();const title=document.createElement('span');title.textContent=s?String(s.index).padStart(2,'0')+' / '+D.steps.length+'  ·  '+action(s):'没有工具调用记录';
- const label=document.createElement('span');label.className='phase';label.textContent=phaseLabels[phase]||phase;$('current-step').append(title,label);
- conversation.setActive(s?.index,phase);updateObservationNote();paintCameras();
-}
-function segmentAt(time){return record?.segments?.find(seg=>seg.start_seconds<=time&&time<seg.end_seconds)||record?.segments?.at(-1)}
-function synchronize(){
- $('video-seek').value=video.currentTime;text('video-time',clock(video.currentTime)+' / '+clock(video.duration));
- if(manual&&video.paused)return;
- let current,nowPhase;
- if(edition!=='raw'){
-  const segment=segmentAt(video.currentTime);current=segment?.step?D.steps.findIndex(s=>s.index===segment.step):-1;nowPhase=segment?.phase||'initial';
- }else{
-  const s=D.steps.filter(s=>s.video_start_seconds!=null&&s.video_start_seconds<=video.currentTime).at(-1);current=s?D.steps.indexOf(s):-1;nowPhase='execution';
+$('mode-execution').onclick=()=>setMode('execution');$('mode-input').onclick=()=>setMode('input');$('input-side').disabled=true;$('input-side').title='由视频当前阶段自动选择，避免显示尚未收到的观测';
+const phaseTitle=document.createElement('span'),phaseLabel=document.createElement('span'),phaseProgress=document.createElement('progress');
+phaseLabel.className='phase';phaseProgress.id='phase-progress';phaseProgress.max=1;phaseProgress.setAttribute('aria-label','当前阶段进度');
+$('current-step').append(phaseTitle,phaseLabel,phaseProgress);
+function applyState(next){
+ const changed=state?.key!==next.key;state=next;index=state.index;phase=state.phase;
+ if(changed){
+  const s=step();$('step-select').value=String(index);$('prev').disabled=index<=0;$('next').disabled=!D.steps.length||index>=D.steps.length-1;
+  phaseTitle.textContent=s?String(s.index).padStart(2,'0')+' / '+D.steps.length+'  ·  '+action(s):phaseLabels[phase]||'尚未调用工具';
+  $('input-side').value=state.side;conversation.setActive(state,ReplayTiming.focus(D,edition,state));updateObservationNote();paintCameras();
  }
- if(current<0){if(phase!==nowPhase){phase=nowPhase;updateStep()}return}
- if(current!==index||phase!==nowPhase){index=current;phase=nowPhase;$('input-side').value=['result','outside_tool_wait'].includes(phase)?'after':'before';updateStep()}
+ const paging=state.pages>1?' · '+state.page+'/'+state.pages+' 页':'';
+ phaseLabel.textContent=(phaseLabels[phase]||phase)+paging+(state.duration?' · '+state.elapsed.toFixed(1)+' / '+state.duration.toFixed(1)+' s':'');
+ phaseProgress.value=state.duration?state.elapsed/state.duration:0;
+ $('current-step').dataset.time=state.time;$('current-step').dataset.step=state.step??'';$('current-step').dataset.phase=phase;
+}
+function synchronize(){
+ if(loading||!record)return;
+ $('video-seek').value=video.currentTime;text('video-time',clock(video.currentTime)+' / '+clock(video.duration));
+ applyState(ReplayTiming.locate(D,edition,video.currentTime));
+}
+function seekTo(time){
+ if(!record||!Number.isFinite(time))return;
+ video.pause();conversation.resumeFollow();
+ video.currentTime=Math.max(0,Math.min(time,Number.isFinite(video.duration)?Math.max(0,video.duration-.001):time));synchronize();
 }
 function selectStep(i,seek){
- if(i<0||i>=D.steps.length)return;index=i;phase='decision';$('input-side').value='before';
- if(seek){manual=true;video.pause();let time=step().video_start_seconds;
-  if(edition!=='raw')time=record?.segments?.find(s=>s.step===step().index&&(edition!=='walltime'||s.phase==='tool'))?.start_seconds;
-  if(time!=null&&record){const target=Math.min(time+0.04,(Number.isFinite(video.duration)?video.duration:record.duration_seconds)-0.001);if(video.readyState>=1)video.currentTime=Math.max(0,target);else video.addEventListener('loadedmetadata',()=>{video.currentTime=Math.max(0,target)},{once:true})}
- }
- if(!embedded)history.replaceState(null,'','#step='+step().index);updateStep();
+ if(i< -1||i>=D.steps.length)return;
+ if(loading){pendingIndex=i;return}
+ if(record){const time=i<0?0:ReplayTiming.seekTime(D,edition,i);if(time!=null&&seek)seekTo(time);else synchronize()}
+ else {conversation.resumeFollow();applyState({index:i,step:D.steps[i]?.index??null,phase:i<0?'initial':'decision',side:'before',key:'archive:'+i,time:0,duration:0,elapsed:0,page:null,pages:null})}
+ if(!embedded)history.replaceState(null,'',i<0?'#start':'#step='+D.steps[i].index);
 }
 function chooseEdition(){
- video.pause();edition=$('video-edition').value;record=edition==='inspection'?D.inspection_video:edition==='walltime'?D.walltime_video:D.video;
+ const desired=loading?pendingIndex:index;video.pause();loading=true;pendingIndex=desired;state=null;conversation.key=null;
+ edition=$('video-edition').value;record=edition==='inspection'?D.inspection_video:edition==='walltime'?D.walltime_video:D.video;
  if(!record||record.status!=='passed')record=null;
- $('video-play').disabled=!record;$('video-seek').disabled=!record;$('video-download').hidden=!record;
- if(!record){video.removeAttribute('src');text('time-note','未归档完整录像');setMode('input');updateStep();return}
- manual=true;video.src=record.file;video.load();video.playbackRate=Number($('video-speed').value);$('video-download').href=record.file;
- text('time-note',edition==='inspection'?'动作 1×；额外停留用于阅读':edition==='walltime'?'保留调用等待；工具内帧时间为估计':'连续仿真录像；模型等待已省略');
- video.addEventListener('loadedmetadata',()=>{$('video-seek').max=video.duration;selectStep(index,true);text('video-time',clock(video.currentTime)+' / '+clock(video.duration))},{once:true});
+ $('video-play').disabled=!record;$('video-seek').disabled=!record;$('video-download').hidden=!record;$('video-error').hidden=true;
+ if(!record){video.removeAttribute('src');video.load();loading=false;text('time-note','未归档完整录像 · 按步骤查看原始记录');text('video-time','—');$('video-seek').value=0;setMode('input');selectStep(desired,false);return}
+ video.src=record.file;video.load();video.playbackRate=Number($('video-speed').value);$('video-download').href=record.file;
+ text('time-note',edition==='inspection'?'按视频阶段同步；含阅读停留，非逐 token 时间':edition==='walltime'?'保留调用等待；工具内帧时间为估计':'连续仿真录像；模型等待已省略');
 }
+video.addEventListener('loadedmetadata',()=>{if(!record)return;loading=false;$('video-seek').max=video.duration;selectStep(pendingIndex,true);synchronize()});
 $('video-edition').value=edition;$('video-edition').querySelector('[value="inspection"]').disabled=D.inspection_video?.status!=='passed';$('video-edition').querySelector('[value="raw"]').disabled=D.video?.status!=='passed';$('video-edition').querySelector('[value="walltime"]').disabled=D.walltime_video?.status!=='passed';
 $('video-edition').onchange=chooseEdition;$('video-speed').onchange=()=>{video.playbackRate=Number($('video-speed').value)};
-$('video-play').onclick=()=>{if(!video.paused){video.pause();return}manual=false;video.play().catch(e=>{if(e.name!=='AbortError'){$('video-error').hidden=false;text('video-error','视频播放失败：'+e.message)}})};
-$('video-seek').oninput=()=>{manual=false;video.currentTime=Number($('video-seek').value);synchronize()};
+$('video-play').onclick=()=>{if(!video.paused){video.pause();return}conversation.resumeFollow();synchronize();video.play().catch(e=>{if(e.name!=='AbortError'){$('video-error').hidden=false;text('video-error','视频播放失败：'+e.message)}})};
+$('video-seek').oninput=()=>seekTo(Number($('video-seek').value));
 $('prev').onclick=()=>selectStep(index-1,true);$('next').onclick=()=>selectStep(index+1,true);$('step-select').onchange=()=>selectStep(Number($('step-select').value),true);
-for(const s of D.steps){const option=document.createElement('option');option.value=s.index-1;option.textContent=String(s.index).padStart(2,'0')+' · '+action(s);$('step-select').append(option)}
+const initialOption=document.createElement('option');initialOption.value='-1';initialOption.textContent='开始 / 结束画面';$('step-select').append(initialOption);
+for(const [i,s] of D.steps.entries()){const option=document.createElement('option');option.value=i;option.textContent=String(s.index).padStart(2,'0')+' · '+action(s);$('step-select').append(option)}
 $('step-select').disabled=!D.steps.length;
-for(const name of ['play','pause','ended'])video.addEventListener(name,()=>{text('video-play',video.paused?'▶ 播放':'Ⅱ 暂停');if(name==='play')manual=false});
+for(const name of ['play','pause','ended'])video.addEventListener(name,()=>{text('video-play',video.paused?'▶ 播放':'Ⅱ 暂停');if(name==='play')conversation.resumeFollow();synchronize()});
 video.addEventListener('error',()=>{if(record){$('video-error').hidden=false;text('video-error','录像读取失败，可继续查看模型输入与原始记录。')}});
-video.addEventListener('timeupdate',synchronize);for(const event of ['loadeddata','seeked'])video.addEventListener(event,()=>{synchronize();paintCameras()});
-if(video.requestVideoFrameCallback){const draw=()=>{paintCameras();video.requestVideoFrameCallback(draw)};video.requestVideoFrameCallback(draw)}
-else{const draw=()=>{if(!video.paused)paintCameras();requestAnimationFrame(draw)};requestAnimationFrame(draw)}
+for(const event of ['timeupdate','seeking'])video.addEventListener(event,synchronize);for(const event of ['loadeddata','seeked'])video.addEventListener(event,()=>{synchronize();paintCameras()});
+if(video.requestVideoFrameCallback){const draw=()=>{synchronize();paintCameras();video.requestVideoFrameCallback(draw)};video.requestVideoFrameCallback(draw)}
+else{const draw=()=>{if(!video.paused){synchronize();paintCameras()}requestAnimationFrame(draw)};requestAnimationFrame(draw)}
 document.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA','BUTTON','SUMMARY'].includes(e.target.tagName)||$('zoom').open)return;if(e.key==='ArrowRight'){e.preventDefault();selectStep(index+1,true)}if(e.key==='ArrowLeft'){e.preventDefault();selectStep(index-1,true)}if(e.code==='Space'){e.preventDefault();$('video-play').click()}});
 window.addEventListener('hashchange',()=>{const match=location.hash.match(/^#step=(\d+)$/);if(match)selectStep(Number(match[1])-1,true)});
 const evaluation=D.evaluation_offline_only||{},success=evaluation.task_success;
@@ -116,5 +123,5 @@ text('evaluation-badge',success===true?'独立评分：成功':success===false?'
 text('archive-summary','运行状态：'+D.status+' · 工具调用：'+D.steps.length+' · Q：'+(evaluation.evaluation?.goal_satisfaction_fraction??'未评测')+'。模型文字为已记录的原始输出与接口摘要；某一步没有新增文字时保持空缺。执行画面是运行时录像，不表示每帧都输入了模型。');
 text('provenance',JSON.stringify({evaluation,source:D.source,execution:D.execution,backend:D.backend,failure:D.failure},null,2));$('public-trace-link').hidden=!D.has_public_trace;$('audit-link').hidden=!D.audit;
 const hash=location.hash.match(/^#step=(\d+)$/);if(hash)index=Math.max(0,Math.min(D.steps.length-1,Number(hash[1])-1));
-chooseEdition();updateStep();
+applyState(ReplayTiming.locate(D,edition,0));if(hash)index=D.steps.findIndex(s=>s.index===Number(hash[1]));chooseEdition();
 })();

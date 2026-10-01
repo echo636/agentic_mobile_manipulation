@@ -1,12 +1,12 @@
 /* The conversation is built once. Playback only changes focus, never history. */
 window.ReplayTranscript = class ReplayTranscript {
-  constructor(root, follow, onSelect) {
-    this.root=root; this.follow=follow; this.onSelect=onSelect; this.entries=[]; this.groups=[];
+  constructor(root, follow, onSelect, onBrowse) {
+    this.onBrowse=onBrowse||(()=>{});this.root=root; this.follow=follow; this.onSelect=onSelect; this.entries=[]; this.groups=[];
     this.feed=document.createElement('div'); this.feed.className='conversation-feed'; this.feed.tabIndex=0;
     this.feed.setAttribute('aria-label','完整模型与工具会话'); root.replaceChildren(this.feed);
-    for(const event of ['wheel','touchstart']) this.feed.addEventListener(event,()=>{follow.checked=false},{passive:true});
-    this.feed.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(e.key)){follow.checked=false;e.stopPropagation()}});
-    follow.onchange=()=>{if(follow.checked)this.scrollCurrent()};
+    for(const event of ['wheel','touchstart']) this.feed.addEventListener(event,()=>{follow.checked=false;this.onBrowse()},{passive:true});
+    this.feed.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(e.key)){follow.checked=false;this.onBrowse();e.stopPropagation()}});
+    follow.onchange=()=>{if(follow.checked)this.scrollCurrent();else this.onBrowse()};
     if(window.ResizeObserver){this.resizeObserver=new ResizeObserver(()=>{if(follow.checked)this.scrollCurrent()});this.resizeObserver.observe(this.feed)}
   }
   node(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n}
@@ -17,7 +17,7 @@ window.ReplayTranscript = class ReplayTranscript {
     for(const [text,cls] of content)d.append(this.node('pre',text,cls));card.append(d);
   }
   setData(data){
-    this.feed.replaceChildren();this.entries=[];this.groups=[];this.key=null;this.follow.checked=true;
+    this.feed.replaceChildren();this.entries=[];this.groups=[];this.key=null;this.follow.checked=true;this.marked=[];
     const steps=new Map(data.steps.map(s=>[s.index,s]));let group=null;
     for(const entry of data.model_transcript||[]){
       if(!group||group.step!==entry.step){
@@ -63,12 +63,29 @@ window.ReplayTranscript = class ReplayTranscript {
     if(!this.entries.length)this.feed.append(this.node('p',data.failure?'运行在产生模型记录前结束。':'尚无已归档的模型输出。','empty-conversation'));
     this.feed.scrollTop=0;
   }
-  setActive(step,phase='decision'){
-    const key=String(step)+':'+phase;if(this.key===key)return;this.key=key;
+  resumeFollow(){this.follow.checked=true;this.scrollCurrent()}
+  setActive(state,focus){
+    if(this.key===state.key)return;this.key=state.key;
+    for(const pair of this.marked||[]){pair.card.querySelector('.conversation-original').textContent=pair.entry.text}this.marked=[];
+    const matching=new Set(focus.ranges.map(r=>r.sequence));if(focus.sequence!=null)matching.add(focus.sequence);
     let current=null;
-    for(const g of this.groups){const active=phase==='final'?g.step==null:g.step===step&&step!=null;g.box.classList.toggle('is-current',active);g.box.classList.toggle('is-future',g.step!=null&&step!=null&&g.step>step);if(active&&!current)current=g.box}
-    for(const {entry,card} of this.entries){const active=phase==='final'?entry.step==null:entry.step===step&&step!=null;card.classList.toggle('is-current',active);if(active)card.setAttribute('aria-current','true');else card.removeAttribute('aria-current')}
-    this.current=current;if(this.follow.checked)this.scrollCurrent();
+    for(const g of this.groups){
+      const active=this.entries.some(p=>p.group===g&&matching.has(p.entry.sequence));
+      g.box.classList.toggle('is-current',active);g.box.classList.toggle('is-future',state.phase==='initial'||g.step!=null&&state.step!=null&&g.step>state.step);
+    }
+    for(const pair of this.entries){
+      const {entry,card}=pair,active=matching.has(entry.sequence);card.classList.toggle('is-current',active);
+      card.classList.toggle('pending-result',entry.kind==='tool_result'&&entry.step===state.step&&['decision','execution','tool'].includes(state.phase));
+      if(active)card.setAttribute('aria-current','true');else card.removeAttribute('aria-current');
+      if(entry.sequence===focus.sequence)current=card;
+      const range=focus.ranges.find(r=>r.sequence===entry.sequence);
+      if(range){const original=card.querySelector('.conversation-original'),mark=this.node('mark',entry.text.slice(range.start,range.end),'current-text');
+        original.replaceChildren(document.createTextNode(entry.text.slice(0,range.start)),mark,document.createTextNode(entry.text.slice(range.end)));this.marked.push(pair);
+        if(entry.sequence===focus.sequence)current=mark;
+      }
+    }
+    this.root.dataset.step=state.step??'';this.root.dataset.phase=state.phase;this.root.dataset.page=state.page??'';this.root.dataset.sequence=focus.sequence??'';
+    this.current=current;if(this.follow.checked){if(state.phase==='initial')this.feed.scrollTop=0;else this.scrollCurrent()};
   }
   scrollCurrent(){if(!this.current)return;const top=this.current.getBoundingClientRect().top-this.feed.getBoundingClientRect().top+this.feed.scrollTop;this.feed.scrollTop=Math.max(0,top-this.feed.clientHeight*.15)}
 };

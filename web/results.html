@@ -14,7 +14,7 @@
 
 </head>
 <body>
-<div style="padding:12px;background:#dcefe9;text-align:center"><a href="../executor_fixes_20261001/index.html">执行器修复验证与回放更新 →</a> · <a href="../replay_trace_20261001/manipulation_runs/mas_trace_000_turning_on_radio_i301_s0_r1/replay.html#step=9">新增：含接口推理摘要的真实测试 →</a></div>
+<div style="padding:12px;background:#dcefe9;text-align:center"><a href="../replay_sync_diagnosis_20261001/index.html">视频时钟同步与低成功率诊断（最新） →</a> · <a href="../executor_fixes_20261001/index.html">执行器修复验证与回放更新 →</a> · <a href="../replay_trace_20261001/manipulation_runs/mas_trace_000_turning_on_radio_i301_s0_r1/replay.html#step=9">新增：含接口推理摘要的真实测试 →</a></div>
 <header><div class="eyebrow">MANIPULATION AGENTIC SYSTEM · EXPERIMENTS</div><h1>任务结果、失败证据与执行回放</h1><p>GT 导航接入后的 32 项复测 · 四路 RGB + 理想执行器 · BEHAVIOR 公开实例 301 · seed 0</p><p id="updated">正在读取实验记录…</p><nav><a href="#overview">实时进度</a><a href="#comparison">逐项对比</a><a href="#failures">失败分析</a><a href="#replay">视频与观测</a><a href="#timing">执行耗时</a><a href="../gt_navigation_20260930.html">导航实现与验证</a><a href="../replay_readable_20261001/index.html">新版回放与完整失败复核</a></nav></header>
 <main>
 <div id="load-error" class="error" hidden role="alert"></div>
@@ -54,7 +54,7 @@ async function selectRun(id,scroll=false){
  $('case-diagnosis').textContent=annotation?.summary||categoryNames[a?.category]||statusNames[row.status];
  $('finish-reason').textContent=a?.end_reason||a?.public_final_messages?.at(-1)||'没有模型结束声明。';
  const path=safePath(row.replay_url);$('replay-frame').hidden=!path;$('open-replay').hidden=!path;
- if(path){$('replay-frame').src=path+'?embed=1&ui=clean2';$('open-replay').href=path+'?ui=clean2'}else $('replay-frame').removeAttribute('src');
+ if(path){$('replay-frame').src=path+'?embed=1&ui=sync3';$('open-replay').href=path+'?ui=sync3'}else $('replay-frame').removeAttribute('src');
  $('trace-message').textContent=path?'':'该任务尚未归档回放。';
  $('case-links').innerHTML=(row.record_url?'<a href="'+esc(safePath(row.record_url))+'">原始运行记录</a>':'')+(row.baseline?.replay_url?'<a href="'+esc(safePath(row.baseline.replay_url))+'">旧批次回放</a>':'');
  renderRows();if(scroll)$('replay').scrollIntoView({behavior:'smooth',block:'start'});
