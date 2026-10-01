@@ -9,8 +9,8 @@
 *{box-sizing:border-box}body{margin:0}main{max-width:1720px;padding:18px 24px 28px;margin:auto}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}button,select{font:inherit;color:inherit}button,a,select,summary{touch-action:manipulation}button,select{border:1px solid var(--line);background:white;border-radius:7px;padding:7px 10px}button,summary{cursor:pointer}button:hover{background:#edf4f2}:focus-visible{outline:3px solid #a7d4c7;outline-offset:3px}[hidden]{display:none!important}
 .heading{display:flex;align-items:center;justify-content:space-between;gap:16px}h1{font-size:21px;font-weight:650;margin:0}.brand{font-size:12px;color:var(--muted);font-weight:400;margin-left:10px}.live{font-size:12px;color:var(--muted);white-space:nowrap}.live::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:#368b72}.summary{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:#657780;margin:12px 0 17px}.summary b{font-weight:600;color:#344953}.progress{display:flex;align-items:center;gap:9px}.progress progress{width:80px;height:4px;accent-color:var(--accent)}.success{color:#287354}.failure{color:#ac5a46}.unscored{color:#977544}.summary .queue{margin-left:auto}
 .selection{display:flex;align-items:center;gap:12px}.selection label{font-size:12px;color:var(--muted);white-space:nowrap}.selection select{font-size:15px;font-weight:550;min-width:0;width:min(650px,65%);padding:9px 12px}.selection .result{font-size:12px;white-space:nowrap}.selection a{margin-left:auto;font-size:12px;white-space:nowrap}.instruction{font-size:13px;line-height:1.6;margin:10px 0 14px;color:#61727c;overflow-wrap:anywhere}.viewer{position:relative}iframe{display:block;width:100%;height:680px;border:0;background:transparent}.notice{font-size:13px;color:#a45640;margin:10px 0}.empty{padding:70px 24px;text-align:center;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:white}
-.support{margin-top:18px;border-top:1px solid var(--line);font-size:12px;color:#6b7c85}.support details{border-bottom:1px solid var(--line);padding:13px 0}.support summary{width:fit-content;color:#586d78}.support summary span{margin-left:8px;color:#8b99a1}.detail-body{padding:14px 0 3px;line-height:1.8}.detail-links{display:flex;flex-wrap:wrap;gap:7px 20px;margin:10px 0}.detail-links button{font-size:12px;padding:2px 8px}.worker{margin:3px 0}.table-scroll{overflow-x:auto;margin-top:10px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid #e6ecef}th{font-weight:500;color:#8a98a0}td:first-child,th:first-child{padding-left:0;width:32px}.task-button{border:0;background:transparent;padding:0;color:var(--accent);text-align:left;font-size:12px}.task-button[aria-current=true]{font-weight:700}.metadata{display:flex;flex-wrap:wrap;gap:4px 22px}.metadata div{overflow-wrap:anywhere}.metadata dt{display:inline;color:#8b99a1;margin-right:6px}.metadata dd{display:inline;margin:0}p{margin:7px 0}.helper{color:#8b99a1;font-size:11px}
-@media(max-width:760px){main{padding:14px 12px 22px}h1{font-size:19px}.brand{display:none}.summary{gap:6px 12px;margin:10px 0 13px}.summary .queue{margin-left:0}.progress progress{width:45px}.selection{flex-wrap:wrap;gap:8px}.selection label{display:none}.selection select{width:100%;flex-basis:100%;font-size:14px}.instruction{font-size:12px;margin:9px 0 12px}.support{margin-top:12px}.live{font-size:11px}iframe{height:1200px}.support summary span{font-size:11px}.detail-links{gap:7px 14px}}
+.support{margin-top:18px;border-top:1px solid var(--line);font-size:12px;color:#6b7c85}.support details{border-bottom:1px solid var(--line);padding:13px 0}.support summary{width:fit-content;color:#586d78}.support summary span{margin-left:8px;color:#8b99a1}.detail-body{padding:14px 0 3px;line-height:1.8}.worker{margin:3px 0}.table-scroll{overflow-x:auto;margin-top:10px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid #e6ecef}th{font-weight:500;color:#8a98a0}td:first-child,th:first-child{padding-left:0;width:32px}.task-button{border:0;background:transparent;padding:0;color:var(--accent);text-align:left;font-size:12px}.task-button[aria-current=true]{font-weight:700}p{margin:7px 0}.helper{color:#8b99a1;font-size:11px}
+@media(max-width:760px){main{padding:14px 12px 22px}h1{font-size:19px}.brand{display:none}.summary{gap:6px 12px;margin:10px 0 13px}.summary .queue{margin-left:0}.progress progress{width:45px}.selection{flex-wrap:wrap;gap:8px}.selection label{display:none}.selection select{width:100%;flex-basis:100%;font-size:14px}.instruction{font-size:12px;margin:9px 0 12px}.support{margin-top:12px}.live{font-size:11px}iframe{height:1200px}.support summary span{font-size:11px}}
 </style>
 </head>
 <body><main>
@@ -35,13 +35,6 @@
  <details id="task-details"><summary>全部任务与运行状态<span id="task-count"></span></summary><div class="detail-body">
   <div id="workers"></div><p id="record-time" class="helper"></p>
   <div class="table-scroll"><table><thead><tr><th>#</th><th>任务</th><th>结果 / 阶段</th><th>Q</th><th>动作数</th></tr></thead><tbody id="tasks"></tbody></table></div>
- </div></details>
- <details id="experiment-details"><summary>实验资料与原始记录</summary><div class="detail-body">
-  <dl id="metadata" class="metadata"></dl>
-  <div class="detail-links"><a id="run-record" hidden>当前运行记录</a><a id="replay-record" hidden>当前 Replay JSON</a><button id="reload" disabled>重新载入当前回放</button></div>
-  <div class="detail-links"><a href="index.html">修复前后对比</a><a href="behavior100.html">运行账本</a><a href="executor_gap_audit.html">执行器问题</a><a href="omnigibson_action_catalog.html">动作接口</a><a href="behavior100/progress.json">批次数据</a></div>
-  <p>任务结果来自独立评估；无评分的故障保留在批次中。当前采用理想化执行器，属于项目研究评测。本批包含两个源码版本，具体版本见运行记录。</p>
-  <p>模型文字保留接口原始输出及返回的推理摘要。视频可在播放器中切换时间模式；第三人称仅供回放查看。</p>
  </div></details>
 </aside>
 </main>
@@ -94,7 +87,7 @@ function renderDetails(){
  $('tasks').querySelectorAll('[data-run]').forEach(b=>b.onclick=()=>{choose(b.dataset.run);$('run').focus();scrollTo({top:0,behavior:'smooth'})});
 }
 
-function choose(id,force=false){
+function choose(id){
  const t=data.tasks.find(t=>t.run_id===id);if(!validReplay(t))return;
  const changed=id!==current;current=id;$('run').value=id;
  $('result').textContent=outcome(t)+(t.actions==null?'':' · '+t.actions+' 次动作');
@@ -102,14 +95,10 @@ function choose(id,force=false){
  $('instruction').textContent=t.instruction||'';
  const diagnosis=diagnoses[t.run_id];$('run-diagnostic').hidden=!diagnosis;
  $('run-diagnostic').textContent=diagnosis?.explanation||'';
- $('open').href=t.replay_url;$('open').hidden=false;$('reload').disabled=false;
- const base=t.replay_url.replace('replay.html','');
- for(const [id,file] of [['run-record','run.json'],['replay-record','replay.json']]){$(id).href=base+file;$(id).hidden=false}
- const fields=[['场景',t.scene],['实例',t.instance],['种子',t.seed],['源码',(t.run_source?.commit||t.source?.commit||'—').slice(0,8)],['Q',t.q_score==null?'无评分':Number(t.q_score).toFixed(3)]];
- $('metadata').innerHTML=fields.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
+ $('open').href=t.replay_url;$('open').hidden=false;
  const url=new URL(location.href);url.searchParams.set('run',id);history.replaceState({},'',url);
  $('empty').hidden=true;$('replay').hidden=false;
- if(changed||force)$('replay').src=t.replay_url+'?embed=1'+(force?'&refresh='+Date.now():'');
+ if(changed)$('replay').src=t.replay_url+'?embed=1';
  renderDetails();fitReplay();
 }
 
@@ -135,7 +124,7 @@ async function refresh(){
   }else{$('empty').hidden=false;$('replay').hidden=true;renderDetails()}
  }catch(e){$('error').textContent='进度暂未更新，可继续观看已有回放。';$('error').hidden=false;$('updated').textContent='更新暂停'}
 }
-$('run').onchange=e=>choose(e.target.value);$('reload').onclick=()=>current&&choose(current,true);
+$('run').onchange=e=>choose(e.target.value);
 refresh();setInterval(refresh,30000);
 </script>
 </body></html>
