@@ -4,6 +4,8 @@ from pathlib import Path
 import queue
 import tempfile
 import threading
+import os
+from datetime import datetime, timezone
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
@@ -33,6 +35,13 @@ class WorkerTests(unittest.TestCase):
         c=self.config();del c['workers'];c['gpus']=[0,1]
         self.assertEqual([w['id'] for w in batch.worker_configs(c)],['gpu0','gpu1'])
 
+    def test_host_memory_reservation_cannot_overcommit(self):
+        c=self.config();c['workers'][1]['ssh']=['ssh','host-a']
+        c['host_worker_memory_budget_gib']={'host-a':28}
+        with self.assertRaises(ValueError):batch.worker_configs(c)
+        for w in c['workers']:w.update(memory_budget_gib=14,simulator_memory_max='14G')
+        self.assertEqual(len(batch.worker_configs(c)),2)
+
     def test_concurrent_workers_isolate_hosts_and_claim_each_task_once(self):
         with tempfile.TemporaryDirectory() as d:
             b=batch.Batch.__new__(batch.Batch)
@@ -60,6 +69,28 @@ class WorkerTests(unittest.TestCase):
             (b.root/'drain_requested.json').write_text('{}')
             b.rows=[{'status':'planned'}];b.queue=queue.Queue();b.publish=lambda:None;b.journal=lambda m:None
             b.run_one=Mock();b.run();b.run_one.assert_not_called();self.assertEqual(b.rows[0]['status'],'planned')
+
+    def test_handoff_finalizes_original_result_without_restarting_model(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);ctrl=root/'controller';ctrl.mkdir();(root/'logs').mkdir()
+            (ctrl/'controller.json').write_text(json.dumps({'started_at':datetime.now(timezone.utc).isoformat(),
+                'formal_finish_observed':True,'status':'passed','pid':345,'duration_seconds':25}))
+            b=batch.Batch.__new__(batch.Batch);b._config={'id':'a','ssh':['ssh','host-a']};b._worker_local=threading.local()
+            b.root=root;b.manifest={'model_timeout_seconds':100};b.unit_state=lambda unit:{'ActiveState':'inactive'}
+            b.update=lambda row,**kw:row.update(kw);b.journal=Mock();b.ssh=Mock(return_value=SimpleNamespace(stdout='',stderr=''))
+            def archive(row,*args):row.update(task_success=True,video_validation='passed',observation_validation='passed',evidence_alignment='passed')
+            b.archive=archive
+            row={'run_id':'original_r1','source':{'commit':'old'},'controller_output':str(ctrl),'simulator_output':'/original/run',
+                 'simulator_unit':'owned.service','port':29900,'controller_wrapper_pid':999999999}
+            b.adopt_one(row)
+            self.assertEqual(row['status'],'passed');self.assertEqual(row['source'],{'commit':'old'})
+            self.assertEqual(row['run_id'],'original_r1');self.assertEqual(row['model_duration_seconds'],25)
+            self.assertEqual(b.ssh.call_args.args[0][0],'journalctl')
+
+    def test_handoff_rejects_unrelated_process_and_memory_mismatch(self):
+        with self.assertRaises(RuntimeError):batch.controller_process_alive(os.getpid(),'/not-this-controller')
+        c=self.config();c['workers'][0].update(memory_budget_gib=14,simulator_memory_max='28G')
+        with self.assertRaises(ValueError):batch.worker_configs(c)
 
 
 class RenderTests(unittest.TestCase):

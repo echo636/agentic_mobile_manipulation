@@ -20,6 +20,7 @@ import sys
 import threading
 import time
 import traceback
+from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import now, write_json, read_run, source_version
@@ -56,7 +57,28 @@ def worker_configs(config):
         if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES'}:
             raise ValueError('Only reviewed recording options may be worker environment overrides')
         ids.add(worker_id);devices.add((host,gpu));ports.add((host,port));result.append(merged)
+    budgets=Counter()
+    for worker in result:budgets[worker['ssh'][-1]]+=worker.get('memory_budget_gib',28)
+    for host,limit in config.get('host_worker_memory_budget_gib',{}).items():
+        if budgets[host]>limit:raise ValueError('Combined worker hard limits exceed configured host allowance')
     return result
+
+
+def controller_process_alive(pid, output):
+    """Check an owned controller wrapper without signaling or restarting it."""
+    proc=Path('/proc')/str(pid)
+    try:
+        if proc.stat().st_uid!=os.getuid(): raise RuntimeError('Controller UID mismatch')
+        state=(proc/'stat').read_text().rsplit(') ',1)[1].split()[0]
+        if state=='Z': return False
+        args=(proc/'cmdline').read_bytes().decode().split('\0')
+    except FileNotFoundError:
+        return False
+    if not any(x.endswith('/scripts/run_codex_controller.py') for x in args):
+        raise RuntimeError('Controller PID reused by another process')
+    if '--output' not in args or args[args.index('--output')+1]!=str(output):
+        raise RuntimeError('Controller output ownership mismatch')
+    return True
 
 
 def prepolicy_failure(record, controller):
@@ -146,8 +168,15 @@ class Batch:
                 r.update(run_id=selection['run_id'],attempt=len(previous)+1,previous_attempts=previous,retry_reason=selection['reason'])
                 saved=self.root/'records'/f"{r['run_id']}.json"
             if saved.exists(): r.update(json.loads(saved.read_text()))
-            if r['status'] == 'running':
+            if r['status'] == 'running' and r['run_id'] not in config.get('adopt_inflight',{}):
                 raise RuntimeError('Unfinished attempt exists; reconcile its owned unit and archive before resume: '+r['run_id'])
+        adoptions=config.get('adopt_inflight',{})
+        for runid,worker_id in adoptions.items():
+            row=next((r for r in self.rows if r['run_id']==runid),None)
+            worker=next((w for w in self.workers if w['id']==worker_id),None)
+            if row is None or worker is None: raise RuntimeError('Unknown adoption target')
+            if row['status']=='running' and (row.get('gpu_index')!=worker['gpu'] or row.get('simulator_interpreter')!=worker['sim_python']):
+                raise RuntimeError('Inflight task must retain its original execution lane')
         if source_version()['dirty']: raise RuntimeError('Batch source must be a clean frozen checkout')
         self.environment={**os.environ,'PYTHONPATH':str(self.source/'src')}
         missing=[k for k in config.get('required_controller_env',[]) if not self.environment.get(k)]
@@ -372,6 +401,49 @@ class Batch:
         write_json(dest/'artifact_hashes.json',hashes)
         shutil.copyfile(dest/'artifact_hashes.json',public/'artifact_hashes.json')
 
+    def adopt_one(self, row):
+        """Finish an explicitly handed-over attempt with its original controller.
+
+        The migration procedure stops only the old coordinator, preserving the
+        live controller and remote simulator. No new model request or reset is
+        issued here. Previously recorded source/budget/attempt identity remain.
+        """
+        controller=Path(row['controller_output']);remote_run=Path(row['simulator_output'])
+        unit=row['simulator_unit'];port=row['port'];pid=row['controller_wrapper_pid']
+        state=self.unit_state(unit)
+        if state.get('ActiveState') in {'active','activating'}:
+            if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}" or int(state['MainPID'])!=row['simulator_pid']:
+                raise RuntimeError('Inflight simulator ownership check failed')
+        self.update(row,worker_id=self.c['id'],worker_host=self.c['ssh'][-1],coordinator_adopted_at=now())
+        self.journal('ADOPT '+row['run_id']+'; original model process, simulator, source and time budget retained.')
+        metadata=json.loads((controller/'controller.json').read_text())
+        deadline=datetime.fromisoformat(metadata['started_at']).timestamp()+self.manifest['model_timeout_seconds']+300
+        while controller_process_alive(pid,controller):
+            if time.time()>deadline: raise RuntimeError('Original controller exceeded its existing timeout plus cleanup allowance')
+            self.update(row,heartbeat_at=now());time.sleep(5)
+        metadata=json.loads((controller/'controller.json').read_text())
+        self.update(row,stage='finalizing',controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),
+                    model_duration_seconds=metadata.get('duration_seconds'))
+        if not metadata.get('formal_finish_observed'):
+            self.update(row,supervisor_intervention=True)
+            code="from manipulation_agent.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{port}')+",'finish',{'outcome':'aborted','reason':'Adopted original controller ended without formal finish'},'batch-supervisor-finish',timeout=30))"
+            finish=self.ssh(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],'-c',code],timeout=45)
+            (self.root/'logs'/f"{row['run_id']}_forced_finish.log").write_text(finish.stdout+finish.stderr)
+        for _ in range(24):
+            state=self.unit_state(unit)
+            if state.get('ActiveState') not in {'active','activating','deactivating'}:break
+            time.sleep(5)
+        if state.get('ActiveState') in {'active','activating','deactivating'}:
+            if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}":raise RuntimeError('Simulator ownership changed')
+            self.ssh(['systemctl','--user','stop',unit],timeout=60)
+        self.update(row,unit_final_state=self.unit_state(unit))
+        log=self.ssh(['journalctl','--user','-u',unit,'--no-pager','-o','short-iso'],timeout=60)
+        (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
+        self.archive(row,controller,remote_run)
+        passed=row.get('task_success') is True and all(row.get(k)=='passed' for k in ['controller_status','evidence_alignment','video_validation','observation_validation'])
+        self.update(row,status='passed' if passed else 'failed',stage='complete',finished_at=now())
+        self.journal(f"END adopted {row['run_id']}: {row['status']}; task_success={row.get('task_success')}; original attempt preserved.")
+
     def run(self,limit=None):
         self.publish()
         for row in self.rows:
@@ -382,6 +454,9 @@ class Batch:
             self.queue=limited
         def worker(config):
             self._worker_local.config=config
+            for row in self.rows:
+                if row['status']=='running' and self._config.get('adopt_inflight',{}).get(row['run_id'])==config['id']:
+                    self.adopt_one(row)
             while True:
                 if (self.root/'drain_requested.json').exists():
                     self.journal('Drain requested; '+config['id']+' leaves queued tasks untouched.')
