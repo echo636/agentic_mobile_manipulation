@@ -39,6 +39,18 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self._sensor_packets={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
+        # throttling extension toggles asynchronous rendering. Our capture
+        # contract requires synchronous render-only flushes on the owner thread.
+        import carb.settings
+        settings=carb.settings.get_settings()
+        settings.set_bool('/exts/isaacsim.core.throttling/enable_async',False)
+        settings.set_bool('/app/asyncRendering',False)
+        settings.set_int('/rtx/post/dlss/execMode',2)
+        (self.output/'render_settings.json').write_text(json.dumps({
+            'async_rendering':False,'throttling_enable_async':False,'dlss_exec_mode':2,
+            'source':'https://docs.isaacsim.omniverse.nvidia.com/5.1.0/overview/known_issues.html',
+            'purpose':'synchronous Replicator capture; not a proven native crash fix'},indent=2)+'\n')
         cameras = [n for n in self.robot.sensors if 'Camera' in n]
         if cameras:
             raise RuntimeError('Stock head/wrist camera exclusion was not applied')
