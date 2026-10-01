@@ -166,6 +166,8 @@ class Batch:
         try:
             check_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'preflight','--manifest',str(self.root/'manifest.json'),
                        '--gpu',str(gpu),'--port',str(port),'--data-root',self.c['data_root']]
+            if self.c.get('minimum_free_gpu_mib'):
+                check_cmd+=['--min-free-gpu-mib',str(self.c['minimum_free_gpu_mib'])]
             for attempt in range(61):
                 p=self.ssh(check_cmd)
                 if p.returncode: raise RuntimeError('Remote resource preflight command failed: '+p.stderr[-1200:])
@@ -183,6 +185,8 @@ class Batch:
             q=shlex.quote
             command=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'simulate','--manifest',str(self.root/'manifest.json'),
                      '--index',str(row['index']),'--run-id',runid,'--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root']]
+            if self.c.get('minimum_free_gpu_mib'):
+                command+=['--min-free-gpu-mib',str(self.c['minimum_free_gpu_mib'])]
             launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+'\nsource '+q(self.c['sim_env'])+
                                 '\nexport PYTHONPATH='+q(str(self.source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))+
                                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
