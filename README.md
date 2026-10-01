@@ -62,6 +62,8 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 
 ## 结果可视化
 
+[当前任务回放](http://10.76.5.241:8765/retest32_v7_20261001/replays.html)默认展示简洁进度、任务选择，以及同步的相机画面与模型时间线。全部任务、运行状态、版本与原始记录默认折叠；任务列表自动更新时保留播放位置。页面源码为 [web/replays.html](web/replays.html)，读取同目录的 `behavior100/progress.json`，以嵌入模式加载现有 Replay；不修改录像、模型输出或评分。`scripts/publish_results_page.py --output-dir <批次报告目录>` 同时发布回放入口与分析页。
+
 [v7 同批 32 条复测与修复前后对比](http://10.76.5.241:8765/retest32_v7_20261001/index.html)正在逐条更新；原 2/32 基线保留。[组件回归视频与原始证据](http://10.76.5.241:8765/executor_retest_20261001/components.html)单独展示脚本测试，不计入模型任务成功率。
 
 [实验结果与故障分析页面](http://10.76.5.241:8765/retest32_gt_20260930/results.html)展示 32 项重测的状态、旧新 Q 分数、失败证据、工具耗时，以及逐次工具调用前后的四路 RGB 和模型原文。默认详读版保留 1× 仿真动作，完整模型文本逐页停留；前视最大，另三路缩小，第三人称仅供回放。真实耗时、旧精简版与原始录像仍可切换。接口实际返回的 reasoning summary 与 assistant 输出分别显示，历史缺失不补写。[新版展示与完整 32 条失败复核](http://10.76.5.241:8765/replay_readable_20261001/index.html)。

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>任务回放 · OmniGibson</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#243443;background:#f5f7f8;color-scheme:light;--muted:#788792;--line:#e0e7ea;--accent:#227c70}
+*{box-sizing:border-box}body{margin:0}main{max-width:1720px;padding:18px 24px 28px;margin:auto}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}button,select{font:inherit;color:inherit}button,a,select,summary{touch-action:manipulation}button,select{border:1px solid var(--line);background:white;border-radius:7px;padding:7px 10px}button,summary{cursor:pointer}button:hover{background:#edf4f2}:focus-visible{outline:3px solid #a7d4c7;outline-offset:3px}[hidden]{display:none!important}
+.heading{display:flex;align-items:center;justify-content:space-between;gap:16px}h1{font-size:21px;font-weight:650;margin:0}.brand{font-size:12px;color:var(--muted);font-weight:400;margin-left:10px}.live{font-size:12px;color:var(--muted);white-space:nowrap}.live::before{content:"";display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:#368b72}.summary{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12px;color:#657780;margin:12px 0 17px}.summary b{font-weight:600;color:#344953}.progress{display:flex;align-items:center;gap:9px}.progress progress{width:80px;height:4px;accent-color:var(--accent)}.success{color:#287354}.failure{color:#ac5a46}.unscored{color:#977544}.summary .queue{margin-left:auto}
+.selection{display:flex;align-items:center;gap:12px}.selection label{font-size:12px;color:var(--muted);white-space:nowrap}.selection select{font-size:15px;font-weight:550;min-width:0;width:min(650px,65%);padding:9px 12px}.selection .result{font-size:12px;white-space:nowrap}.selection a{margin-left:auto;font-size:12px;white-space:nowrap}.instruction{font-size:13px;line-height:1.6;margin:10px 0 14px;color:#61727c;overflow-wrap:anywhere}.viewer{position:relative}iframe{display:block;width:100%;height:680px;border:0;background:transparent}.notice{font-size:13px;color:#a45640;margin:10px 0}.empty{padding:70px 24px;text-align:center;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:white}
+.support{margin-top:18px;border-top:1px solid var(--line);font-size:12px;color:#6b7c85}.support details{border-bottom:1px solid var(--line);padding:13px 0}.support summary{width:fit-content;color:#586d78}.support summary span{margin-left:8px;color:#8b99a1}.detail-body{padding:14px 0 3px;line-height:1.8}.detail-links{display:flex;flex-wrap:wrap;gap:7px 20px;margin:10px 0}.detail-links button{font-size:12px;padding:2px 8px}.worker{margin:3px 0}.table-scroll{overflow-x:auto;margin-top:10px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid #e6ecef}th{font-weight:500;color:#8a98a0}td:first-child,th:first-child{padding-left:0;width:32px}.task-button{border:0;background:transparent;padding:0;color:var(--accent);text-align:left;font-size:12px}.task-button[aria-current=true]{font-weight:700}.metadata{display:flex;flex-wrap:wrap;gap:4px 22px}.metadata div{overflow-wrap:anywhere}.metadata dt{display:inline;color:#8b99a1;margin-right:6px}.metadata dd{display:inline;margin:0}p{margin:7px 0}.helper{color:#8b99a1;font-size:11px}
+@media(max-width:760px){main{padding:14px 12px 22px}h1{font-size:19px}.brand{display:none}.summary{gap:6px 12px;margin:10px 0 13px}.summary .queue{margin-left:0}.progress progress{width:45px}.selection{flex-wrap:wrap;gap:8px}.selection label{display:none}.selection select{width:100%;flex-basis:100%;font-size:14px}.instruction{font-size:12px;margin:9px 0 12px}.support{margin-top:12px}.live{font-size:11px}iframe{height:1200px}.support summary span{font-size:11px}.detail-links{gap:7px 14px}}
+</style>
+</head>
+<body><main>
+<header>
+ <div class="heading"><h1>任务回放<span class="brand">OmniGibson</span></h1><span id="updated" class="live">读取进度…</span></div>
+ <div class="summary" aria-label="评测进度">
+  <span class="progress">已结束 <b id="ended">—</b><progress id="progress" value="0" max="32" aria-label="批次完成进度"></progress></span>
+  <span class="success">成功 <b id="passed">—</b></span><span class="failure">未成功 <b id="failed">—</b></span><span class="unscored">无评分 <b id="blocked">—</b></span>
+  <span class="queue"><span id="running">—</span> 进行中 · <span id="planned">—</span> 待开始</span>
+ </div>
+</header>
+<section aria-label="选择任务">
+ <div class="selection"><label for="run">任务</label><select id="run" aria-label="选择任务回放" disabled><option>读取任务…</option></select><span id="result" class="result"></span><a id="open" target="_blank" rel="noopener" hidden>独立打开 ↗</a></div>
+ <p id="instruction" class="instruction"></p><p id="error" class="notice" role="alert" hidden></p>
+</section>
+<section class="viewer" aria-label="任务回放">
+ <div id="empty" class="empty" hidden>还没有已发布的回放，任务完成后会出现在这里。</div>
+ <iframe id="replay" title="相机观测与模型时间线" allow="fullscreen" allowfullscreen hidden></iframe>
+</section>
+<aside class="support" aria-label="更多评测信息">
+ <details id="task-details"><summary>全部任务与运行状态<span id="task-count"></span></summary><div class="detail-body">
+  <div id="workers"></div><p id="record-time" class="helper"></p>
+  <div class="table-scroll"><table><thead><tr><th>#</th><th>任务</th><th>结果 / 阶段</th><th>Q</th><th>动作数</th></tr></thead><tbody id="tasks"></tbody></table></div>
+ </div></details>
+ <details id="experiment-details"><summary>实验资料与原始记录</summary><div class="detail-body">
+  <dl id="metadata" class="metadata"></dl>
+  <div class="detail-links"><a id="run-record" hidden>当前运行记录</a><a id="replay-record" hidden>当前 Replay JSON</a><button id="reload" disabled>重新载入当前回放</button></div>
+  <div class="detail-links"><a href="index.html">修复前后对比</a><a href="behavior100.html">运行账本</a><a href="executor_gap_audit.html">执行器问题</a><a href="omnigibson_action_catalog.html">动作接口</a><a href="behavior100/progress.json">批次数据</a></div>
+  <p>任务结果来自独立评估；无评分的故障保留在批次中。当前采用理想化执行器，属于项目研究评测。本批包含两个源码版本，具体版本见运行记录。</p>
+  <p>模型文字保留接口原始输出及返回的推理摘要。视频可在播放器中切换时间模式；第三人称仅供回放查看。</p>
+ </div></details>
+</aside>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=x=>String(x??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ended=t=>['passed','failed','blocked'].includes(t.status);
+const validReplay=t=>typeof t?.replay_url==='string'&&/^manipulation_runs\/[A-Za-z0-9_-]+\/replay\.html$/.test(t.replay_url);
+const name=t=>t.name||t.task;
+const stage=s=>({policy_running:'模型执行中',simulator_starting:'启动中',waiting_for_resources:'等待资源',complete:'已结束'}[s]||s||'等待调度');
+const outcome=t=>t.task_success===true?'成功':t.task_success===false?'未成功':t.status==='blocked'?'无评分 · 资源阻塞':t.status==='running'?stage(t.stage):t.status==='failed'?'无评分 · 运行故障':'待开始';
+let data=null,current=null,frameObserver=null;
+
+function fitReplay(){
+ const frame=$('replay');if(frame.hidden)return;
+ if(frame.clientWidth>680){
+  const top=frame.getBoundingClientRect().top+scrollY;
+  frame.style.height=Math.max(560,Math.min(1050,innerHeight-top-22))+'px';
+ }else{
+  const workspace=frame.contentDocument?.querySelector('.replay-workspace');
+  if(workspace)frame.style.height=Math.ceil(workspace.getBoundingClientRect().height+2)+'px';
+ }
+}
+
+$('replay').addEventListener('load',()=>{
+ const doc=$('replay').contentDocument;if(!doc?.querySelector('.replay-workspace'))return;
+ // This style applies only to the embedded view; original replay files stay intact.
+ const style=doc.createElement('style');style.textContent=`
+  html,body{margin:0;background:transparent}body.embedded main{max-width:none;padding:0}
+  .embedded .archive{display:none}.embedded .panel-heading .eyebrow{display:none}
+  .embedded .panel-heading{padding:13px 16px}.embedded .panel-heading h2{font-size:16px}
+  @media(min-width:681px){
+   .embedded .replay-workspace{height:100vh;gap:14px}
+   .embedded .observation-panel{display:flex;flex-direction:column;min-height:0}
+   .embedded .camera-grid{height:auto;min-height:180px;flex:1}
+   .embedded .observation-panel>div:not(.camera-grid){flex-shrink:0}
+  }
+ `;doc.head.append(style);
+ frameObserver?.disconnect();frameObserver=new ResizeObserver(()=>{if($('replay').clientWidth<=680)fitReplay()});
+ frameObserver.observe(doc.querySelector('.replay-workspace'));fitReplay();
+});
+addEventListener('resize',fitReplay);
+
+function renderDetails(){
+ const ts=data.tasks;
+ $('task-count').textContent=ts.length+' 条';
+ $('workers').innerHTML=ts.filter(t=>t.status==='running').map(t=>`<div class="worker">${esc(name(t))} · ${esc(stage(t.stage))}<span class="helper"> · ${esc(t.worker_id||t.simulator_host||'')}</span></div>`).join('')||'当前无运行中的任务';
+ $('tasks').innerHTML=ts.map(t=>`<tr><td>${t.index+1}</td><td>${validReplay(t)?`<button class="task-button" data-run="${esc(t.run_id)}" aria-current="${t.run_id===current}">${esc(name(t))}</button>`:esc(name(t))}</td><td title="${esc(t.failure||'')}">${esc(outcome(t))}</td><td>${t.q_score==null?'—':Number(t.q_score).toFixed(3)}</td><td>${esc(t.actions)}</td></tr>`).join('');
+ $('tasks').querySelectorAll('[data-run]').forEach(b=>b.onclick=()=>{choose(b.dataset.run);$('run').focus();scrollTo({top:0,behavior:'smooth'})});
+}
+
+function choose(id,force=false){
+ const t=data.tasks.find(t=>t.run_id===id);if(!validReplay(t))return;
+ const changed=id!==current;current=id;$('run').value=id;
+ $('result').textContent=outcome(t)+(t.actions==null?'':' · '+t.actions+' 次动作');
+ $('result').className='result '+(t.task_success===true?'success':t.task_success===false?'failure':'unscored');
+ $('instruction').textContent=t.instruction||'';
+ $('open').href=t.replay_url;$('open').hidden=false;$('reload').disabled=false;
+ const base=t.replay_url.replace('replay.html','');
+ for(const [id,file] of [['run-record','run.json'],['replay-record','replay.json']]){$(id).href=base+file;$(id).hidden=false}
+ const fields=[['场景',t.scene],['实例',t.instance],['种子',t.seed],['源码',(t.run_source?.commit||t.source?.commit||'—').slice(0,8)],['Q',t.q_score==null?'无评分':Number(t.q_score).toFixed(3)]];
+ $('metadata').innerHTML=fields.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
+ const url=new URL(location.href);url.searchParams.set('run',id);history.replaceState({},'',url);
+ $('empty').hidden=true;$('replay').hidden=false;
+ if(changed||force)$('replay').src=t.replay_url+'?embed=1'+(force?'&refresh='+Date.now():'');
+ renderDetails();fitReplay();
+}
+
+async function refresh(){
+ try{
+  const response=await fetch('behavior100/progress.json?'+Date.now());if(!response.ok)throw Error(response.status);
+  const next=await response.json();if(!Array.isArray(next.tasks))throw Error('进度格式异常');data=next;
+  const ts=data.tasks,done=ts.filter(ended);
+  $('ended').textContent=done.length+' / '+ts.length;$('progress').max=ts.length;$('progress').value=done.length;
+  $('passed').textContent=done.filter(t=>t.task_success===true).length;$('failed').textContent=done.filter(t=>t.task_success===false).length;$('blocked').textContent=done.filter(t=>t.task_success==null).length;
+  $('running').textContent=ts.filter(t=>t.status==='running').length;$('planned').textContent=ts.filter(t=>t.status==='planned').length;
+  const time=new Date(data.updated_at),opts={timeZone:'Asia/Shanghai',hour12:false};
+  $('updated').textContent=time.toLocaleTimeString('zh-CN',{...opts,hour:'2-digit',minute:'2-digit'})+' 更新';
+  $('record-time').textContent='记录时间：'+time.toLocaleString('zh-CN',opts)+'（北京时间）。每 30 秒更新进度；播放不受影响。';
+  $('error').hidden=true;
+  const available=ts.filter(validReplay),wanted=current||new URLSearchParams(location.search).get('run');
+  $('run').innerHTML=available.length?available.map(t=>`<option value="${esc(t.run_id)}">${t.index+1}. ${esc(name(t))} · ${esc(outcome(t))}</option>`).join(''):'<option>暂无已发布回放</option>';
+  $('run').disabled=!available.length;
+  if(available.length){
+   const selected=available.find(t=>t.run_id===wanted)||available.slice().sort((a,b)=>String(b.finished_at||'').localeCompare(String(a.finished_at||'')))[0];
+   choose(selected.run_id);
+  }else{$('empty').hidden=false;$('replay').hidden=true;renderDetails()}
+ }catch(e){$('error').textContent='进度暂未更新，可继续观看已有回放。';$('error').hidden=false;$('updated').textContent='更新暂停'}
+}
+$('run').onchange=e=>choose(e.target.value);$('reload').onclick=()=>current&&choose(current,true);
+refresh();setInterval(refresh,30000);
+</script>
+</body></html>
