@@ -1,5 +1,7 @@
 # Direct official symbolic executor
 
+Development branch: `explore/official-symbolic`. Historical simulator evidence below belongs to frozen mixed-branch commit `c91a054`; splitting branches does not rerun those experiments.
+
 Profile: `official`. Protocol: `rgb_official_symbolic_direct_v1`.
 
 This opt-in mode calls the pinned OmniGibson `SymbolicSemanticActionPrimitives.apply_ref` directly with the model-selected object and `attempts=1`. It retains four-camera RGB observation, revision checks, bounded execution, private evaluation, and replay. It is a symbolic execution experiment, not a physical-control challenge submission.
