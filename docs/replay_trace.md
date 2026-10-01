@@ -17,6 +17,35 @@ not included in model observations. The HTML shows front RGB prominently beside
 scrollable original model/tool text, with three small surround views and the
 third-person still. Video seeks and tool selection synchronize in both directions.
 
+The video sits beside the conversation. In the inspection edition, the page
+crops only the displayed MP4 viewport to its five-camera region; dedicated play
+and seek controls remain available. Downloaded video bytes are unchanged.
+
+The right panel is a **persistent chronological conversation**, rendered once
+per episode. Selecting a step or playing the video changes only the highlight
+and scroll position. All previous and later archived messages remain available,
+including final messages and transport failures without simulator records.
+Scrolling manually disables follow; the follow checkbox resumes synchronization.
+Tool arguments and every returned text block are retained, not only the first
+block. Images remain in the camera panel and downloadable original event stream.
+
+`model_transcript` records source event indices and IDs. Started calls and their
+completed results retain their separate positions, including intervening model
+messages. Readable public reasoning-summary events are preserved; matching session
+summaries are not duplicated. Summaries only available in the separate session
+log are explicitly aligned to their next timestamped tool boundary, not given an
+invented exact position relative to untimestamped assistant messages.
+
+Publish the results page and its shared viewer assets together:
+
+```bash
+python scripts/publish_results_page.py --output-dir REPORT_DIRECTORY
+```
+
+Standalone replays inline the same JavaScript and CSS and need no external viewer
+assets. `tests/test_transcript.py` covers event order, interleaving, full results,
+final/unmatched calls, and returned-summary provenance.
+
 ```bash
 python -m manipulation_agent.inspection_video --run-dir RUN --controller-dir CONTROLLER
 python -m manipulation_agent.replay --run-dir RUN --controller-dir CONTROLLER

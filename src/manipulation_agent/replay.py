@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .audit import audit_episode
 from .records import now, write_json, read_run
+from .transcript import build_transcript
 
 
 def lines(path: Path) -> list[dict]:
@@ -38,11 +39,15 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     summaries=lines(controller_dir/'model_reasoning_summaries.jsonl') if controller_dir else []
     summaries=[r for r in summaries if r.get('source')=='provider_returned_reasoning_summary' and r.get('verbatim') is True]
     summary_index=0
+    model_events = lines(controller_dir/'model_events.jsonl') if controller_dir else []
     if controller_dir:
-        for event_index, event in enumerate(lines(controller_dir/'model_events.jsonl')):
+        for event_index, event in enumerate(model_events):
             item = event.get('item',{})
             if item.get('type') in {'agent_message','mcp_tool_call'}:
                 public_events.append(event)
+            elif item.get('type') == 'reasoning' and isinstance(item.get('text'), str):
+                public_events.append({'type': event.get('type'), 'item': {
+                    'type': 'reasoning', 'id': item.get('id'), 'text': item['text']}})
             if event.get('type') != 'item.completed': continue
             if item.get('type') == 'agent_message':
                 pending.append({'id':item.get('id'),'text':item.get('text',''),
@@ -128,6 +133,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
             'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review, 'inspection_video':inspection,
             'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(controller_dir),
+            'model_transcript':build_transcript(model_events, steps, summaries),
             'model_reasoning_summaries':summaries,
             'model_final_reasoning_summaries':summaries[summary_index:],
             'reasoning_availability':'provider_returned_summary' if summaries else 'not_recorded_or_not_returned',
@@ -156,8 +162,8 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     # Escape < so task text cannot close a JSON script element.
     embedded = json.dumps(data, ensure_ascii=False, allow_nan=False).replace('<', '\\u003c').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
     page = template.replace('@@TITLE@@', html.escape(data['run_id']))
-    page = page.replace('@@CSS@@', (assets / 'style.css').read_text())
-    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', (assets / 'player.js').read_text())
+    page = page.replace('@@CSS@@', (assets / 'style.css').read_text() + (assets / 'transcript.css').read_text())
+    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', (assets / 'transcript.js').read_text() + '\n' + (assets / 'player.js').read_text())
     if not data['audit']:
         page = page.replace(' href="replay_audit.json"', '')
     if not data['video']:

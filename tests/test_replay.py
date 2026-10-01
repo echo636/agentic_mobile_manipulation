@@ -85,7 +85,7 @@ class ReplayEvidenceTests(unittest.TestCase):
         (controller/'controller.json').write_text(json.dumps({'model':'fixture'}))
         original='Original public message.\nNo translation.'
         stream=[{'type':'item.started','item':{'type':'agent_message','id':'public','text':''}},
-                {'type':'item.completed','item':{'type':'reasoning','text':'HIDDEN_PRIVATE_REASONING'}},
+                {'type':'item.completed','item':{'type':'reasoning','text':'Returned public summary','encrypted_content':'HIDDEN_PRIVATE_REASONING'}},
                 {'type':'item.completed','item':{'type':'agent_message','id':'public','text':original}},
                 *self.models]
         (controller/'model_events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in stream))
@@ -95,6 +95,8 @@ class ReplayEvidenceTests(unittest.TestCase):
         self.assertEqual(result['steps'][0]['model_result_text'],self.models[0]['item']['result']['content'][0]['text'])
         public=(self.root/'model_public_events.jsonl').read_text()
         self.assertIn('item.started',public)
+        self.assertIn('Returned public summary',public)
+        self.assertIn('Returned public summary',(self.root/'replay.html').read_text())
         self.assertNotIn('HIDDEN_PRIVATE_REASONING',public)
         self.assertNotIn('HIDDEN_PRIVATE_REASONING',(self.root/'replay.html').read_text())
 
