@@ -27,6 +27,9 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self.video = None
         self.video_render_stride = int(os.environ.get("MAS_VIDEO_RENDER_STRIDE", "2"))
         if self.video_render_stride not in (1,2,3): raise ValueError("Video render stride must be 1, 2 or 3")
+        self.video_render_flushes = int(os.environ.get('MAS_VIDEO_RENDER_FLUSHES', '4'))
+        if self.video_render_flushes not in (2, 3, 4):
+            raise ValueError('Video render flushes must be 2, 3 or 4; observation barriers stay at 4')
         self._recorded_pixels = None
         self._recorded_capture_step = None
         self.spectator = None
@@ -124,29 +127,34 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         orientation = torch.tensor(look_at_orientation(camera.tolist(),target.tolist()),dtype=camera.dtype)
         self.spectator.set_position_orientation(camera,orientation)
         self._spectator_anchor = (pos.clone(),yaw)
-        self.og.sim.render()
+        # The caller positions every camera before a shared render barrier.
+        # Rendering here would draw the old surround-camera poses unnecessarily.
         with (self.output/'spectator_poses.jsonl').open('a') as stream:
             stream.write(json.dumps({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
                                      'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})+'\n')
 
-    def _video_frame(self, kind):
+    def _video_frame(self, kind, rendered=None):
         if self.video is None or self.video.closed: return
         fresh=kind!='env_step' or self._recorded_pixels is None or self.steps%self.video_render_stride==0
         with component(self,'video_total'):
-            if fresh:
+            if rendered is not None:
+                self._recorded_pixels = rendered
+                self._recorded_capture_step = self.steps
+            elif fresh:
                 try:
                     with component(self,'spectator_pose'):self._position_spectator()
                 except Exception as exc:
                     with (self.output/'recording_warnings.jsonl').open('a') as stream:
                         stream.write(json.dumps({'at':now(),'env_step':self.steps,'component':'spectator_pose',
                             'type':type(exc).__name__,'error':str(exc),'fallback':'last_camera_pose'})+'\n')
-                self._recorded_pixels=self._render_rgb_views(include_spectator=True)
+                self._recorded_pixels=self._render_rgb_views(
+                    include_spectator=True, flushes=self.video_render_flushes)
                 self._recorded_capture_step=self.steps
             with component(self,'video_encode_submit'):
                 self.video.append(self._recorded_pixels,self.steps,kind,
                                   capture_env_step=self._recorded_capture_step,repeated=not fresh)
 
-    def _render_rgb_views(self, include_spectator=False):
+    def _render_rgb_views(self, include_spectator=False, flushes=4):
         """Render-product resizing can invalidate all cameras for several frames.
 
         Wait with render-only ticks; never advance physics to warm up recording.
@@ -156,7 +164,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         sensors = dict(self.rig)
         if include_spectator: sensors['spectator'] = self.spectator
         # Flush render-product latency after camera poses change, with physics frozen.
-        for _ in range(3):
+        for _ in range(flushes - 1):
             with component(self,'render'):self.og.sim.render()
         shapes = {}
         for attempt in range(30):
@@ -213,7 +221,11 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         start_step = self.steps
         before_pos,before_quat = self.robot.get_position_orientation()
         before_joints = self.robot.get_joint_positions().clone()
-        rendered = self._render_rgb_views()
+        if self.video is not None and not self.video.closed:
+            with component(self, 'spectator_pose'): self._position_spectator()
+        # The observation and its replay frame use identical RGB arrays, from
+        # one frozen simulation state and the unchanged four-tick barrier.
+        rendered = self._render_rgb_views(include_spectator=self.video is not None and not self.video.closed)
         self.capture_index+=1
         self.current_frames={}
         folder=self.output/'frames';folder.mkdir(exist_ok=True)
@@ -254,7 +266,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 'after_orientation':after_quat.tolist(),'rig_sensor_names':[s.name for s in self.rig.values()],
                 'stock_sensor_names':list(self.robot.sensors)})+'\n')
         if not unchanged: raise RuntimeError('Read-only camera capture changed robot state')
-        self._video_frame('observation_boundary')
+        self._video_frame('observation_boundary', rendered=rendered)
         return {'images':images,'observation_mode':self.mode,'capture':capture}
 
     def image_bytes(self,ref):
@@ -514,7 +526,10 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                       model_visible_truth=False)
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry}
         result['record_video'] = self.record_video
-        result['video_capture_policy'] = {'render_stride':self.video_render_stride,'fresh_observation_boundaries':True,'intermediate_frames':'explicit_previous_frame_hold','no_motion_interpolation':True}
+        result['video_capture_policy'] = {'render_stride':self.video_render_stride,
+            'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,
+            'observation_pixels_reused_for_video':True, 'fresh_observation_boundaries':True,
+            'intermediate_frames':'explicit_previous_frame_hold','no_motion_interpolation':True}
         result['placement'] = {'on_top':'selected_surface_cuboid_then_official_sampler',
             'inside':'official_volume','verification':'physical_selected_surface_support_or_official_OnTop; official_Inside',
             'failure_policy':'restore_pre_action_state','goal_access':False}

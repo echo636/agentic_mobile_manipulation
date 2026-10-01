@@ -29,6 +29,32 @@ from manipulation_agent.tools import tool_specs
 FINAL = {'passed','failed','blocked'}
 
 
+def worker_configs(config):
+    """Resolve explicit host/GPU lanes; legacy single-host configs still work."""
+    lanes = config.get('workers')
+    if lanes is None:
+        lanes = [{'id':f'gpu{gpu}', 'gpu':gpu} for gpu in config['gpus']]
+    if not lanes:
+        raise ValueError('At least one worker is required')
+    allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env',
+               'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
+               'simulator_env', 'expected_gpu_uuid'}
+    result=[]; ids=set(); devices=set(); ports=set()
+    for lane in lanes:
+        if set(lane)-allowed: raise ValueError('Unsupported worker fields')
+        merged={**config, **lane}
+        worker_id=lane.get('id')
+        if not worker_id or worker_id in ids: raise ValueError('Duplicate or missing worker id')
+        host=tuple(merged['ssh'][-1:]);gpu=merged['gpu'];port=merged['base_port']+gpu
+        if type(gpu) is not int or gpu<0 or not 1024<=port<=65535: raise ValueError('Invalid GPU or port')
+        if (host,gpu) in devices or (host,port) in ports: raise ValueError('Worker GPU or port collision')
+        env=merged.get('simulator_env',{})
+        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES'}:
+            raise ValueError('Only reviewed recording options may be worker environment overrides')
+        ids.add(worker_id);devices.add((host,gpu));ports.add((host,port));result.append(merged)
+    return result
+
+
 def prepolicy_failure(record, controller):
     if record.get('status')!='failed' or record.get('actions')!=0: return False
     stream=controller/'model_events.jsonl'
@@ -79,12 +105,24 @@ def render_dashboard(progress):
         c = progress['comparison']
         banner = '<article><b>GT 导航修复后重测</b><p>'+esc(c['scope'])+'</p><p><a href="'+esc(c['baseline_url'])+'">上次测试账本</a> · <a href="'+esc(c['report_url'])+'">修复与验证报告</a> · <a href="behavior100_realtime.html">真实耗时视频</a></p><p>本页仅统计新批次，不覆盖或合并旧成绩。其他任务未排队。</p></article>'
         page = page.replace('<div class="cards">',banner+'<div class="cards">',1)
+    if progress.get('workers'):
+        worker_rows=[]
+        for w in progress['workers']:
+            active=next((r for r in progress['tasks'] if r.get('worker_id')==w['id'] and r['status']=='running'),None)
+            worker_rows.append('<li>'+esc(w['id'])+' · '+esc(w['host'])+' · GPU '+str(w['gpu'])+' · '+(esc(active['task'])+' / '+esc(active.get('stage')) if active else '等待下一项 / 已结束')+'</li>')
+        panel='<article><b>独立仿真 workers</b><ul>'+''.join(worker_rows)+'</ul><p>源版本逐任务记录：'+esc(progress.get('run_source_commits',{}))+'。此前已完成和正在执行的尝试保留原始源码版本；不把不同渲染配置当成单变量实验。</p></article>'
+        page=page.replace('<div class="cards">',panel+'<div class="cards">',1)
     return page
 
 
 class Batch:
+    @property
+    def c(self):
+        return getattr(self._worker_local, 'config', self._config)
+
     def __init__(self, config):
-        self.c=config; self.root=Path(config['batch']); self.source=Path(__file__).resolve().parents[1]
+        self._config=config; self._worker_local=threading.local(); self.workers=worker_configs(config)
+        self.root=Path(config['batch']); self.source=Path(__file__).resolve().parents[1]
         self.manifest=json.loads((self.root/'manifest.json').read_text()); self.reports=Path(config['reports'])
         self.lock=threading.RLock(); self.queue=queue.Queue(); self.rows=self.manifest['tasks']
         for directory in ('records','preflight','controllers','runs','launchers','logs'):
@@ -126,7 +164,12 @@ class Batch:
     def publish(self):
         with self.lock:
             progress={'updated_at':now(),'source':source_version(),'supervisor':{'host':os.uname().nodename,'pid':os.getpid(),'unit':os.environ.get('MAS_UNIT'),'interpreter':sys.executable},
-                      'summary':summarize(self.rows),'tasks':self.rows,'comparison':self.manifest.get('comparison')}
+                      'summary':summarize(self.rows),'tasks':self.rows,'comparison':self.manifest.get('comparison'),
+                      'workers':[{'id':w['id'],'host':w['ssh'][-1], 'gpu':w['gpu'],
+                          'port':w['base_port']+w['gpu'], 'interpreter':w['sim_python'],
+                          'recording_options':w.get('simulator_env',{})} for w in self.workers],
+                      'draining':(self.root/'drain_requested.json').exists(),
+                      'run_source_commits':dict(Counter((r.get('run_source') or r.get('source') or {}).get('commit','pending') for r in self.rows))}
             write_json(self.root/'progress.json',progress)
             write_json(self.root/'run_records.json',{'updated_at':now(),'runs':self.rows})
             validation={'status':'running' if progress['summary']['execution_status']=='running' else ('passed' if all(r['status']=='passed' for r in self.rows) else 'failed'),
@@ -161,7 +204,9 @@ class Batch:
         controller=self.root/'controllers'/runid
         own_unit=False
         self.update(row,status='running',stage='preflight',started_at=now(),gpu_index=gpu,
-                    simulator_unit=unit,simulator_output=str(remote_run),controller_output=str(controller))
+                    simulator_unit=unit,simulator_output=str(remote_run),controller_output=str(controller),
+                    worker_id=self.c.get('id'), worker_host=self.c['ssh'][-1],
+                    recording_options=self.c.get('simulator_env',{}))
         self.journal(f"START {runid}; GPU index {gpu}; unit {unit}; output {remote_run}.")
         try:
             check_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'preflight','--manifest',str(self.root/'manifest.json'),
@@ -172,6 +217,8 @@ class Batch:
                 p=self.ssh(check_cmd)
                 if p.returncode: raise RuntimeError('Remote resource preflight command failed: '+p.stderr[-1200:])
                 check=json.loads(p.stdout)
+                if self.c.get('expected_gpu_uuid') and check.get('gpu_uuid')!=self.c['expected_gpu_uuid']:
+                    raise RuntimeError('GPU UUID changed; refusing physical-index reassignment')
                 write_json(self.root/'preflight'/f'{runid}_{attempt:02d}.json',check)
                 if check['status']=='passed': break
                 self.update(row,stage='waiting_for_resources',resource_checks=check['checks'])
@@ -187,7 +234,8 @@ class Batch:
                      '--index',str(row['index']),'--run-id',runid,'--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root']]
             if self.c.get('minimum_free_gpu_mib'):
                 command+=['--min-free-gpu-mib',str(self.c['minimum_free_gpu_mib'])]
-            launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+'\nsource '+q(self.c['sim_env'])+
+            overrides=''.join('\nexport '+key+'='+q(str(value)) for key,value in self.c.get('simulator_env',{}).items())
+            launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+'\nsource '+q(self.c['sim_env'])+overrides+
                                 '\nexport PYTHONPATH='+q(str(self.source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))+
                                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
             launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
@@ -220,6 +268,9 @@ class Batch:
                 self.update(row,controller_wrapper_pid=process.pid,controller_host=os.uname().nodename,controller_interpreter=sys.executable)
                 while process.poll() is None:
                     time.sleep(5)
+                    if time.monotonic()-getattr(process,'last_heartbeat',0)>30:
+                        process.last_heartbeat=time.monotonic()
+                        self.update(row,heartbeat_at=now())
                 self.update(row,controller_wrapper_exit_code=process.returncode,stage='finalizing')
             metadata=json.loads((controller/'controller.json').read_text()) if (controller/'controller.json').exists() else {}
             self.update(row,controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),model_duration_seconds=metadata.get('duration_seconds'))
@@ -323,13 +374,17 @@ class Batch:
             limited=queue.Queue()
             for _ in range(min(limit,self.queue.qsize())):limited.put(self.queue.get_nowait())
             self.queue=limited
-        def worker(gpu):
+        def worker(config):
+            self._worker_local.config=config
             while True:
+                if (self.root/'drain_requested.json').exists():
+                    self.journal('Drain requested; '+config['id']+' leaves queued tasks untouched.')
+                    return
                 try:row=self.queue.get_nowait()
                 except queue.Empty:return
-                self.run_one(row,gpu)
-        with ThreadPoolExecutor(max_workers=len(self.c['gpus'])) as pool:
-            futures=[pool.submit(worker,gpu) for gpu in self.c['gpus']]
+                self.run_one(row,config['gpu'])
+        with ThreadPoolExecutor(max_workers=len(self.workers)) as pool:
+            futures=[pool.submit(worker,config) for config in self.workers]
             for future in futures:future.result()
         self.publish()
 

@@ -40,6 +40,10 @@ class EpisodeVideo:
         self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
         self.closed = False; self.process = None; self.log = None
         self.encoder_pool = None; self.encoder_pending = deque()
+        self._font = None
+        self._camera_canvas = None
+        self._camera_hashes = None
+        self._camera_pixels = None
         self.fresh_frames = 0; self.held_frames = 0
         self.manifest = {'status':'running','file':'episode.mp4','poster':'video_poster.jpg',
                          'fps':self.fps,'width':self.width,'height':self.height,
@@ -64,16 +68,25 @@ class EpisodeVideo:
         tiles = {name: np.asarray(pixels[name], dtype=np.uint8) for name in self.views}
         if any(a.shape != (self.size, self.size, 3) for a in tiles.values()):
             raise ValueError('Invalid video camera shape')
-        canvas = Image.new('RGB', (self.width, self.height), '#102637')
+        if self._font is None:
+            font_path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+            self._font = ImageFont.truetype(str(font_path), 16) if font_path.exists() else ImageFont.load_default()
+        font = self._font
+        # An explicit frame hold reuses immutable camera arrays. Only the
+        # per-control-step annotation changes; hashes still describe raw RGB.
+        if not (repeated and pixels is self._camera_pixels and self._camera_canvas is not None):
+            self._camera_canvas = Image.new('RGB', (self.width, self.height), '#102637')
+            draw = ImageDraw.Draw(self._camera_canvas)
+            for i, name in enumerate(self.views):
+                x,y=(i%2)*self.size,(i//2)*self.size
+                self._camera_canvas.paste(Image.fromarray(tiles[name]), (x,y))
+                draw.rectangle((x,y,x+self.size,y+25), fill='#102637')
+                label = 'SPECTATOR - replay only' if name == 'spectator' else 'ROBOT RGB - '+name
+                draw.text((x+8,y+3),label,fill='white',font=font)
+            self._camera_hashes = {k:hashlib.sha256(v.tobytes()).hexdigest() for k,v in tiles.items()}
+            self._camera_pixels = pixels
+        canvas = self._camera_canvas.copy()
         draw = ImageDraw.Draw(canvas)
-        font_path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
-        font = ImageFont.truetype(str(font_path), 16) if font_path.exists() else ImageFont.load_default()
-        for i, name in enumerate(self.views):
-            x,y=(i%2)*self.size,(i//2)*self.size
-            canvas.paste(Image.fromarray(tiles[name]), (x,y))
-            draw.rectangle((x,y,x+self.size,y+25), fill='#102637')
-            label = 'SPECTATOR - replay only' if name == 'spectator' else 'ROBOT RGB - '+name
-            draw.text((x+8,y+3),label,fill='white',font=font)
         title = f"env.step {env_step} | capture {env_step if capture_env_step is None else capture_env_step} | {self.context.get('primitive','initial RGB')} | {kind}"
         draw.text((12,self.rows*self.size+7),title,fill='white',font=font)
         draw.text((12,self.rows*self.size+32),'Ideal executor: instantaneous pose/state changes are recorded as executed.',fill='#b6d6df',font=font)
@@ -101,7 +114,7 @@ class EpisodeVideo:
         row = {'frame_index':self.count,'video_seconds':self.count/self.fps,'env_step':env_step,
                'kind':kind, 'at':now(), 'camera_capture_env_step':env_step if capture_env_step is None else capture_env_step,
                'repeated_camera_frame':bool(repeated), **self.context,
-               'rgb_sha256':{k:hashlib.sha256(v.tobytes()).hexdigest() for k,v in tiles.items()}}
+               'rgb_sha256':dict(self._camera_hashes)}
         with (self.output/'video_frames.jsonl').open('a') as stream:
             stream.write(json.dumps(row)+'\n')
         if kind == 'env_step': self.env_steps.append(env_step)
