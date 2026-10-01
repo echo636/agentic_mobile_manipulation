@@ -68,7 +68,7 @@ v8 候选将选定表面作为放置约束，增加盘上物体等刚性承载�
 
 ## 结果可视化
 
-[当前任务回放](http://10.76.5.241:8765/retest32_v7_20261001/replays.html)默认展示简洁进度、任务选择，以及同步的相机画面与模型时间线。全部任务与运行状态默认折叠；任务列表自动更新时保留播放位置。页面源码为 [web/replays.html](web/replays.html)，读取同目录的 `behavior100/progress.json`，以嵌入模式加载现有 Replay；不修改录像、模型输出或评分。`scripts/publish_results_page.py --output-dir <批次报告目录>` 同时发布回放入口与分析页。
+[当前任务回放](http://10.76.5.241:8765/retest32_v7_20261001/replays.html)默认展示简洁进度、任务选择，以及同步的相机画面与模型时间线。全部任务与运行状态默认折叠；任务列表自动更新时保留播放位置。 同一任务的修复后尝试继续归入原批次，任务总数不重复计数；旧尝试与原有回放链接保留，逐次记录执行版本。页面源码为 [web/replays.html](web/replays.html)，读取同目录的 `behavior100/progress.json`，以嵌入模式加载现有 Replay；不修改录像、模型输出或评分。`scripts/publish_results_page.py --output-dir <批次报告目录>` 同时发布回放入口与分析页。
 
 [v7 同批 32 条复测与修复前后对比](http://10.76.5.241:8765/retest32_v7_20261001/index.html)正在逐条更新；原 2/32 基线保留。[组件回归视频与原始证据](http://10.76.5.241:8765/executor_retest_20261001/components.html)单独展示脚本测试，不计入模型任务成功率。
 

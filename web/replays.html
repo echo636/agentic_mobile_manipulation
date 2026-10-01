@@ -48,6 +48,7 @@ const name=t=>t.name||t.task;
 const stage=s=>({policy_running:'模型执行中',simulator_starting:'启动中',waiting_for_resources:'等待资源',complete:'已结束'}[s]||s||'等待调度');
 const outcome=t=>t.task_success===true?'成功':t.task_success===false?'未成功':t.status==='blocked'?'无评分 · 资源阻塞':t.status==='running'?stage(t.stage):t.status==='failed'?'无评分 · '+(diagnoses[t.run_id]?.label||'运行故障'):'待开始';
 let data=null,current=null,frameObserver=null,diagnoses={};
+const attempts=()=>data.tasks.flatMap(t=>[t,...(t.previous_attempts||[]).map(p=>({...t,...p,index:t.index,historical:true}))]);
 
 function fitReplay(){
  const frame=$('replay');if(frame.hidden)return;
@@ -88,9 +89,9 @@ function renderDetails(){
 }
 
 function choose(id){
- const t=data.tasks.find(t=>t.run_id===id);if(!validReplay(t))return;
+ const t=attempts().find(t=>t.run_id===id);if(!validReplay(t))return;
  const changed=id!==current;current=id;$('run').value=id;
- $('result').textContent=outcome(t)+(t.actions==null?'':' · '+t.actions+' 次动作');
+ $('result').textContent=(t.historical?'历史尝试 · ':'')+outcome(t)+(t.actions==null?'':' · '+t.actions+' 次动作');
  $('result').className='result '+(t.task_success===true?'success':t.task_success===false?'failure':'unscored');
  $('instruction').textContent=t.instruction||'';
  const diagnosis=diagnoses[t.run_id];$('run-diagnostic').hidden=!diagnosis;
@@ -116,7 +117,10 @@ async function refresh(){
   $('record-time').textContent='记录时间：'+time.toLocaleString('zh-CN',opts)+'（北京时间）。每 30 秒更新进度；播放不受影响。';
   $('error').hidden=true;
   const available=ts.filter(validReplay),wanted=current||new URLSearchParams(location.search).get('run');
-  $('run').innerHTML=available.length?available.map(t=>`<option value="${esc(t.run_id)}">${t.index+1}. ${esc(name(t))} · ${esc(outcome(t))}</option>`).join(''):'<option>暂无已发布回放</option>';
+  // Keep a bookmarked or currently playing historical attempt accessible.
+  const history=attempts().find(t=>t.run_id===wanted&&t.historical&&validReplay(t));
+  if(history)available.push(history);
+  $('run').innerHTML=available.length?available.map(t=>`<option value="${esc(t.run_id)}">${t.index+1}. ${esc(name(t))} · ${t.historical?'历史尝试 · ':''}${esc(outcome(t))}</option>`).join(''):'<option>暂无已发布回放</option>';
   $('run').disabled=!available.length;
   if(available.length){
    const selected=available.find(t=>t.run_id===wanted)||available.slice().sort((a,b)=>String(b.finished_at||'').localeCompare(String(a.finished_at||'')))[0];

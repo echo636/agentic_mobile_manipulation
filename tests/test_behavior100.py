@@ -8,6 +8,15 @@ spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolv
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_adopted_controller_outside_batch_keeps_stable_hash_keys(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);run=root/'original/runs/run1';run.mkdir(parents=True)
+            ctrl=root/'other/controllers/run1';ctrl.mkdir(parents=True)
+            (run/'run.json').write_text('{}');(ctrl/'model_events.jsonl').write_text('{}\n')
+            hashes=batch.episode_artifact_hashes('run1',run,ctrl)
+            self.assertEqual(set(hashes),{'runs/run1/run.json','controllers/run1/model_events.jsonl'})
+            self.assertTrue(all(len(value)==64 for value in hashes.values()))
+
     def test_model_decision_prevents_infrastructure_retry(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder);record={'status':'failed','actions':0,'controller_pid':123}
@@ -37,6 +46,17 @@ class BatchEvidenceTests(unittest.TestCase):
         self.assertEqual(result['final_evaluations'],2)
         self.assertEqual(result['complete_videos'],1)
         self.assertEqual(result['execution_status'],'running')
+
+    def test_executor_retest_keeps_task_denominator_and_first_result(self):
+        rows=[{'status':'passed','task_success':True,'retry_kind':'executor_fix',
+               'previous_attempts':[{'status':'failed','task_success':False}]},
+              {'status':'planned'}]
+        result=batch.summarize(rows)
+        self.assertEqual(result['total'],2)
+        self.assertEqual(result['task_successes'],1)
+        self.assertEqual(result['first_attempt_task_successes'],0)
+        self.assertEqual(result['extra_infrastructure_attempts'],0)
+        self.assertEqual(result['extra_policy_attempts'],1)
 
     def test_missing_video_does_not_get_a_fabricated_link(self):
         row={'index':0,'status':'failed','name':'Task <script>bad()</script>',
