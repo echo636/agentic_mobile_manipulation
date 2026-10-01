@@ -22,7 +22,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
         self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._object_anchor=None
         self.fixed_surround_rgb = True
-        self.private_viewer_grounding = True
+        self.private_viewer_grounding = False
         self.record_video = record_video
         self.video = None
         self.video_render_stride = int(os.environ.get("MAS_VIDEO_RENDER_STRIDE", "2"))
@@ -82,35 +82,6 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                                       views=(*DIRECTIONS,'spectator'))
             self._position_spectator()
             for _ in range(20): self.og.sim.render()
-        # Isaac Sim 5.1 offscreen instance mapping can crash populated scenes
-        # (upstream BEHAVIOR-1K #2312). The existing viewer pipeline supports it.
-        # This private query camera never replaces any of the four model RGBs.
-        self._instance_sensor=self.og.sim.viewer_camera
-        self._instance_sensor.focal_length=10.0
-        self._instance_sensor.horizontal_aperture=20.0
-        self._instance_sensor.add_modality('seg_semantic')
-        self._instance_sensor.add_modality('seg_instance')
-        for _ in range(8):self.og.sim.render()
-
-    def _private_instance_capture(self,sensor):
-        """Match one saved RGB pose with physics frozen; never rotate the robot."""
-        query=self._instance_sensor
-        pos,quat=sensor.get_position_orientation()
-        query.set_position_orientation(pos,quat)
-        if not self.torch.allclose(query.intrinsic_matrix,sensor.intrinsic_matrix,atol=1e-4):
-            raise RuntimeError('Private segmentation intrinsics differ from selected RGB')
-        before=self.steps
-        with component(self,'private_instance_capture'):
-            for _ in range(4):self.og.sim.render()
-            data,info=query.get_obs()
-            ids=data['seg_instance'].detach().cpu().clone()
-            labels={}
-            for label,name in info['seg_instance'].items():
-                obj=self.env.scene.object_registry('name',name)
-                labels[label]=obj.prim_path if obj is not None else name
-        if before!=self.steps or tuple(ids.shape)!=(self.image_size,self.image_size):
-            raise RuntimeError('Private segmentation synchronization failed')
-        return ids,labels
 
     def _position_rig(self):
         """Kinematic sensor mount only: never writes robot pose or advances physics."""
@@ -261,12 +232,10 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                    'intrinsic':sensor.intrinsic_matrix.clone(),'width':pixels.shape[1],'height':pixels.shape[0]}
             data,info=self._sensor_packets[view]
             frame['depth_linear']=data['depth_linear'].detach().cpu().clone()
-            frame['seg_instance_id'],frame['instance_paths']=self._private_instance_capture(sensor)
-            np.savez_compressed(private_folder/f'{ref}.npz',depth_linear=frame['depth_linear'].numpy(),seg_instance_id=frame['seg_instance_id'].numpy())
+            np.savez_compressed(private_folder/f'{ref}.npz',depth_linear=frame['depth_linear'].numpy())
             (private_folder/f'{ref}.json').write_text(json.dumps({'audience':'executor_private_only',
                 'image_ref':ref,'rgb_sha256':digest,
-                'position':position.tolist(),'orientation':orientation.tolist(),'intrinsic':frame['intrinsic'].tolist(),
-                'instance_paths':frame['instance_paths']}))
+                'position':position.tolist(),'orientation':orientation.tolist(),'intrinsic':frame['intrinsic'].tolist()}))
             self.current_frames[ref]=frame
             self.image_files[ref]=path
             images.append({'image_ref':ref,'view':view,'width':pixels.shape[1],'height':pixels.shape[0],
@@ -295,10 +264,10 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     def _ground(self,target):
         """Route exactly the chosen rendered pixel to the ideal actuator target.
 
-        Private render-instance identity and depth use exactly the selected RGB
+        Private visual triangle intersection and depth use exactly the selected RGB
         pixel. Collision disagreement is recorded without substituting another
         object. No class search, alternate pixels or task-scope lookup occurs;
-        segmentation and geometry never cross the model observation boundary.
+        geometry never crosses the model observation boundary.
         """
         from omnigibson.utils.sampling_utils import raytest
         import omnigibson.utils.transform_utils as T
@@ -319,14 +288,11 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         hit=raytest(start,start+unit*30.0,ignore_bodies=[link.prim_path for link in self.robot.links.values()])
         gap=float(self.torch.linalg.norm(hit['position'].cpu()-point)) if hit['hit'] else None
         tolerance=max(.03,.02*float(self.torch.linalg.norm(point-start)))
-        # The visible mesh at this exact RGB pixel owns the selection. Collision
-        # proxies can disagree with render meshes (door handles, thin surfaces).
-        # No search over nearby pixels, categories, task scope or goal states.
-        instance=int(frame['seg_instance_id'][py,px])
-        visual_path=frame['instance_paths'].get(instance,frame['instance_paths'].get(str(instance),''))
-        obj=next((o for o in self.env.scene.objects if visual_path==o.prim_path or visual_path.startswith(o.prim_path+'/')),None)
-        diagnostic={'at':now(),'routing':'same_pixel_render_instance_and_depth',
-            'rigid_body':hit.get('rigidBody',''),'visual_mesh':visual_path,'depth_linear':depth,
+        from .visual_mesh_grounding import query_visual_surface
+        with component(self,'visual_grounding'):
+            obj,visual=query_visual_surface(self,start,unit,point)
+        diagnostic={'at':now(),'routing':'same_pixel_depth_visual_triangle_ray',**visual,
+            'rigid_body':hit.get('rigidBody',''),'selected_object_prim':obj.prim_path,'depth_linear':depth,
             'hit_position':point.tolist(),'collision_position':hit['position'].tolist() if hit['hit'] else None,
             'depth_agreement_error_m':gap,'depth_agreement_tolerance_m':tolerance,
             'collision_agrees':gap is not None and gap<=tolerance,'selected_pixel':target['point'],
@@ -544,7 +510,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         result=super().provenance()
         result.update(executor='controlled_carry_and_checked_placement_plus_jinkai_gt_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_jinkai_gt_grid_navigation',
                       observation_mode=self.mode,image_size=self.image_size,
-                      grounding='same_pixel_render_instance_and_depth_private_executor_only',
+                      grounding='same_pixel_depth_visual_triangle_ray_private_executor_only',
                       model_visible_truth=False)
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry}
         result['record_video'] = self.record_video
@@ -559,10 +525,10 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             'geometry':'OmniGibson static eroded traversability grid',
             'habitat_native_navmesh':False,'dynamic_collision_check':False,
             'goal_selection':'jinkai visual-point candidate sampling and ranking',
-            'pixel_grounding':'same RGB pixel render instance and depth; no neighboring-pixel substitution',
+            'pixel_grounding':'same RGB pixel depth and visual mesh triangle ray; no neighboring-pixel substitution',
             'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
-        result['private_instance_provider']='viewer_pipeline_pose_matched_with_physics_frozen; not model RGB or spectator'
+        result['private_grounding_provider']='CPU visual mesh ray + selected-pixel depth; no segmentation annotator'
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,
             'mount_radius_m':0.35,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
