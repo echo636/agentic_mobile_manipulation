@@ -122,6 +122,10 @@ def summarize(rows):
 
 
 def render_dashboard(progress):
+    if progress.get('protocol',{}).get('comparison_arm'):
+        sys.path.insert(0,str(Path(__file__).resolve().parent))
+        from batch_comparison import render_arm_dashboard
+        return render_arm_dashboard(progress)
     esc=lambda x: html.escape(str(x))
     s=progress['summary']; rows=[]
     for r in progress['tasks']:
@@ -213,7 +217,7 @@ class Batch:
     def publish(self):
         with self.lock:
             progress={'updated_at':now(),'source':source_version(),'supervisor':{'host':os.uname().nodename,'pid':os.getpid(),'unit':os.environ.get('MAS_UNIT'),'interpreter':sys.executable},
-                      'summary':summarize(self.rows),'tasks':self.rows,'comparison':self.manifest.get('comparison'),
+                      'protocol':{k:v for k,v in self.manifest.items() if k!='tasks'},'summary':summarize(self.rows),'tasks':self.rows,'comparison':self.manifest.get('comparison'),
                       'workers':[{'id':w['id'],'host':w['ssh'][-1], 'gpu':w['gpu'],
                           'port':w['base_port']+w['gpu'], 'interpreter':w['sim_python'],
                           'recording_options':w.get('simulator_env',{})} for w in self.workers],
@@ -291,12 +295,14 @@ class Batch:
                                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
             launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
                     '-p','MemoryMax='+self.c.get('simulator_memory_max',str(self.c.get('memory_budget_gib',28))+'G'),'-p','CPUQuota=800%','-p',f"RuntimeMaxSec={self.manifest['simulator_runtime_max_seconds']}",
+                    '-p','TasksMax=2048','-p','LimitCORE=0',
                     '-p','TimeoutStopSec=30','-p','KillMode=control-group','-p','SuccessExitStatus=2',
                     '-p','WorkingDirectory='+str(self.source),'/bin/bash',str(launcher)]
             p=self.ssh(launch);(self.root/'logs'/f'{runid}_launch.log').write_text(p.stdout+p.stderr)
             if p.returncode: raise RuntimeError('Simulator unit launch failed')
             own_unit=True
-            self.update(row,stage='simulator_starting',gpu_uuid=check['gpu_uuid'],simulator_host=check['host'],
+            launched_state=self.unit_state(unit)
+            self.update(row,stage='simulator_starting',simulator_pid=int(launched_state.get('MainPID',0)),gpu_uuid=check['gpu_uuid'],simulator_host=check['host'],
                         simulator_interpreter=self.c['sim_python'],source=source_version(),port=port)
             deadline=time.monotonic()+self.manifest['startup_timeout_seconds']
             while time.monotonic()<deadline:
@@ -314,6 +320,7 @@ class Batch:
             cmd=[sys.executable,str(self.source/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
                  '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],'--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),
                  '--output',str(controller),'--timeout',str(self.manifest['model_timeout_seconds']),'--agent-profile',self.manifest['agent_profile']]
+            if self.c.get('isolate_client_storage'):cmd.append('--isolate-client-storage')
             with (self.root/'logs'/f'{runid}_controller.log').open('w') as log:
                 process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,env=self.environment)
                 self.update(row,controller_wrapper_pid=process.pid,controller_host=os.uname().nodename,controller_interpreter=sys.executable)
