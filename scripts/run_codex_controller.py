@@ -61,7 +61,7 @@ def main():
         state.mkdir(parents=True, exist_ok=False)
         command += ['-c', 'sqlite_home=' + json.dumps(str(state)),
                     '-c', 'log_dir=' + json.dumps(str((args.output / 'native_logs').resolve()))]
-        command = [wrapper, '--die-with-parent', '--bind', '/', '/', '--bind', str(native_sessions),
+        command = [wrapper, '--die-with-parent', '--bind', '/', '/', '--dev-bind', '/dev', '/dev', '--proc', '/proc', '--bind', str(native_sessions),
                    str(session_mount), '--', *command]
     for feature in ("shell_tool", "unified_exec", "plugins", "apps", "hooks", "view_image", "multi_agent", "browser_use",
                     "computer_use", "image_generation"):
@@ -83,7 +83,14 @@ def main():
                                       'auth_copied': False, 'home_changed': False}
     write_json(args.output / "controller.json", metadata)
     try:
-        metadata['mcp_preflight']=check_server(args.mcp_command,json.loads(args.mcp_args_json),tool_specs(args.agent_profile),args.output)
+        mcp_command=args.mcp_command; mcp_args=json.loads(args.mcp_args_json)
+        if native_sessions is not None:
+            # Validate the same namespace the model will use, including SSH's
+            # access to /dev/null. A host-only handshake misses mount failures.
+            prefix=command[:command.index('--')]
+            mcp_command=prefix[0];mcp_args=prefix[1:]+['--',args.mcp_command,*mcp_args]
+        metadata['mcp_preflight']=check_server(mcp_command,mcp_args,tool_specs(args.agent_profile),args.output)
+        metadata['mcp_preflight']['inside_client_storage_namespace']=native_sessions is not None
     except Exception as exc:
         metadata.update(status='failed',failure_stage='mcp_handshake',failure_type=type(exc).__name__,
                         finished_at=now(),formal_finish_observed=False,tools_called=[],task_success=None)
