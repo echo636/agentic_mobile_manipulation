@@ -29,7 +29,9 @@ async def run(url: str):
         health = json.loads(await asyncio.to_thread(fetch, url.rstrip("/") + "/healthz"))
         return [types.Tool(**spec) for spec in health["tools"]]
 
-    @server.call_tool()
+    # The owner-thread harness performs strict validation after filling only
+    # the versioned nullable defaults used by archived act clients.
+    @server.call_tool(validate_input=False)
     async def call_tool(name: str, arguments: dict):
         request_id = str(uuid.uuid4())
         result = await asyncio.to_thread(rpc, url, name, arguments, request_id)

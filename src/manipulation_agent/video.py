@@ -62,7 +62,7 @@ class EpisodeVideo:
             draw.rectangle((x,y,x+self.size,y+25), fill='#102637')
             label = 'SPECTATOR - replay only' if name == 'spectator' else 'ROBOT RGB - '+name
             draw.text((x+8,y+3),label,fill='white',font=font)
-        title = f"env.step {env_step} | {self.context.get('primitive','initial RGB')} | {kind}"
+        title = f"env.step {env_step} | capture {env_step if capture_env_step is None else capture_env_step} | {self.context.get('primitive','initial RGB')} | {kind}"
         draw.text((12,self.rows*self.size+7),title,fill='white',font=font)
         draw.text((12,self.rows*self.size+32),'Ideal executor: instantaneous pose/state changes are recorded as executed.',fill='#b6d6df',font=font)
         draw.text((12,self.rows*self.size+55),'Control-step timeline; labeled frame holds between captures. No motion interpolation.',fill='#b6d6df',font=font)

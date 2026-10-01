@@ -25,7 +25,7 @@ def main():
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
-                   help='Record every env.step (default on for OmniGibson); spectator RGB stays offline')
+                   help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
     a=p.parse_args()
     if a.record_video is None: a.record_video = a.backend == 'omnigibson'
