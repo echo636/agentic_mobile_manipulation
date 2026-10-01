@@ -102,7 +102,8 @@ class CheckedPlacement:
             adjacency = held.states[VerticalAdjacency].get_value()
             touching = bool(held.states[Touching].get_value(target))
             official_on_top = bool(held.states[OnTop].get_value(target))
-            supported, support = self._selected_surface_support(held, target, point, touching)
+            supported, support = self._selected_surface_support(held, target, point, touching,
+                                                               [obj for obj, _ in contents])
             self._placement_record({'status':'postcondition_check','target':target.name,'held':held.name,
                 'position':held.get_position_orientation()[0].tolist(),
                 'touching':touching,'official_on_top':official_on_top,'selected_surface_support':support,
@@ -115,7 +116,7 @@ class CheckedPlacement:
             self._verify_payload(dependencies)
         return 'selected_surface_contact_and_support_after_settling' if point is not None else 'official_OnTop'
 
-    def _selected_surface_support(self, held, target, point, touching):
+    def _selected_surface_support(self, held, target, point, touching, payload=()):
         """An actual lower shelf can support an object while official OnTop is false.
 
         This motor check is independent of task goals. It never writes predicates
@@ -126,7 +127,11 @@ class CheckedPlacement:
             return False, {'available':False,'reason':'No selected surface point'}
         lo,hi=held.aabb;center=(lo+hi)/2
         end=center.clone();end[2]=lo[2]-.08
-        hit=raytest(center,end,ignore_bodies=[link.prim_path for obj in (held,self.robot) for link in obj.links.values()])
+        # A shallow plate's AABB center can lie inside its food's collision
+        # proxy. The ray checks the support UNDER the entire carried assembly;
+        # internal payload contact must not hide the actual supporting surface.
+        ignored=[link.prim_path for obj in (held,self.robot,*payload) for link in obj.links.values()]
+        hit=raytest(center,end,ignore_bodies=ignored)
         target_paths={link.prim_path for link in target.links.values()}
         speed=float(self.torch.linalg.norm(held.get_linear_velocity()))
         gap=float(lo[2]-hit['position'][2]) if hit['hit'] else None
@@ -140,7 +145,8 @@ class CheckedPlacement:
                 'selected_shelf_height':height_error is not None and height_error<=.05,
                 'selected_surface_neighborhood':selected_xy_distance<=.20,'settled':speed<=.10}
         return all(checks.values()), {'checks':checks,'speed_m_s':speed,'bottom_gap_m':gap,
-            'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance}
+            'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance,
+            'support_hit_body':hit.get('rigidBody'),'ignored_payload_names':[obj.name for obj in payload]}
 
     def _checked_place_inside(self, target, max_steps):
         from omnigibson.object_states import Inside

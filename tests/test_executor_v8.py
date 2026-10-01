@@ -78,6 +78,27 @@ class MotorContractRegression(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
 class AnchoringAndPlacementRegression(unittest.TestCase):
+    def test_plate_support_ray_ignores_food_but_rejects_unrelated_support(self):
+        import torch
+        def obj(name):
+            return types.SimpleNamespace(name=name,links={'root':types.SimpleNamespace(prim_path='/'+name)})
+        plate,pizza,robot,table=[obj(name) for name in ('plate','pizza','robot','table')]
+        plate.aabb=(torch.tensor([-.2,-.2,0.]),torch.tensor([.2,.2,.02]))
+        plate.get_linear_velocity=lambda:torch.zeros(3)
+        b=CheckedPlacement();b.robot=robot;b.torch=torch;b._get_held=lambda:None
+        sampling=types.ModuleType('omnigibson.utils.sampling_utils');seen=[];support=['/table']
+        def raytest(start,end,ignore_bodies):
+            seen.append(ignore_bodies)
+            return {'hit':True,'rigidBody':support[0] if '/pizza' in ignore_bodies else '/pizza',
+                    'position':torch.zeros(3),'normal':torch.tensor([0.,0.,1.])}
+        sampling.raytest=raytest
+        with patch.dict('sys.modules',{'omnigibson.utils.sampling_utils':sampling}):
+            valid,_=b._selected_surface_support(plate,table,torch.zeros(3),True,[pizza])
+            self.assertTrue(valid);self.assertIn('/pizza',seen[-1]);self.assertNotIn('/table',seen[-1])
+            support[0]='/unrelated'
+            valid,_=b._selected_surface_support(plate,table,torch.zeros(3),True,[pizza])
+            self.assertFalse(valid)
+
     def test_sampler_physics_cannot_displace_base_and_wrapper_restores_on_error(self):
         import torch
         pose=torch.tensor([1.,2.,3.]);quat=torch.tensor([0.,0.,0.,1.]);calls=[]
