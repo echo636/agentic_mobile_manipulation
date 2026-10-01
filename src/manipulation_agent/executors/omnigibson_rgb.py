@@ -41,6 +41,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self.image_files={}
         self.current_frames={}
         self._sensor_packets={}
+        self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
@@ -67,6 +68,10 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
             sensor.load(None)
             sensor.initialize()
+            # Otherwise intrinsic_matrix lazily attaches a new annotator AFTER
+            # RGB readback and warms only four frames, sometimes returning a
+            # degenerate projection. Attach all before the shared barrier.
+            sensor.initialize_sensors(names='camera_params')
             self.rig[direction] = sensor
         self._position_rig()
         for _ in range(20): self.og.sim.render()
@@ -157,7 +162,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 self.video.append(self._recorded_pixels,self.steps,kind,
                                   capture_env_step=self._recorded_capture_step,repeated=not fresh)
 
-    def _render_rgb_views(self, include_spectator=False, flushes=4):
+    def _render_rgb_views(self, include_spectator=False, flushes=4, require_calibration=False):
         """Render-product resizing can invalidate all cameras for several frames.
 
         Wait with render-only ticks; never advance physics to warm up recording.
@@ -169,10 +174,10 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         # Flush render-product latency after camera poses change, with physics frozen.
         for _ in range(flushes - 1):
             with component(self,'render'):self.og.sim.render()
-        shapes = {}
+        shapes = {}; readiness_failures=[]
         for attempt in range(30):
             with component(self,'render'):self.og.sim.render()
-            pixels = {}; packets = {}
+            pixels = {}; packets = {}; intrinsics={}; pending={}
             for view,sensor in sensors.items():
                 with component(self,'sensor_readback'):data,info = sensor.get_obs()
                 raw = data.get('rgb')
@@ -180,12 +185,38 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 rgb = raw.detach().cpu().numpy()
                 shapes[view] = list(rgb.shape)
                 if rgb.ndim == 3 and rgb.shape[:2] == (self.image_size,self.image_size) and rgb.shape[2] >= 3:
+                    if require_calibration and view in self.rig:
+                        try:
+                            intrinsic=sensor.intrinsic_matrix.clone()
+                        except (AssertionError,KeyError) as exc:
+                            pending[view]=str(exc)
+                            continue
+                        matrix=intrinsic.detach().cpu().numpy()
+                        if (matrix.shape!=(3,3) or not np.isfinite(matrix).all()
+                            or matrix[0,0]<=0 or matrix[1,1]<=0 or abs(matrix[2,2]-1)>1e-6):
+                            pending[view]='invalid_camera_intrinsics'
+                            continue
+                        depth=data.get('depth_linear')
+                        if depth is None or tuple(depth.shape[:2])!=(self.image_size,self.image_size):
+                            pending[view]='depth_render_product_not_ready'
+                            continue
+                        intrinsics[view]=intrinsic
                     pixels[view] = rgb[...,:3].astype(np.uint8)
                     packets[view] = (data,info)
+            if pending:readiness_failures.append({'attempt':attempt+1,'pending':pending})
             if len(pixels) == len(sensors):
                 self._sensor_packets = packets
+                if require_calibration:
+                    self._sensor_intrinsics=intrinsics
+                    with (self.output/'camera_readiness.jsonl').open('a') as stream:
+                        stream.write(json.dumps({'status':'passed','env_step':self.steps,'render_attempts':attempt+1,
+                                                 'retries':readiness_failures,'physics_steps':0})+'\n')
                 return pixels
-        raise RuntimeError('RGB render products did not become ready: '+json.dumps(shapes))
+        if require_calibration:
+            with (self.output/'camera_readiness.jsonl').open('a') as stream:
+                stream.write(json.dumps({'status':'failed','env_step':self.steps,'render_attempts':30,
+                                         'retries':readiness_failures,'physics_steps':0})+'\n')
+        raise RuntimeError('Camera render products did not become ready: '+json.dumps({'rgb_shapes':shapes,'calibration':pending}))
 
     def _step(self, action):
         if self._base_target is not None:self._restore_base_target()
@@ -229,7 +260,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             self._prepare_spectator()
         # The observation and its replay frame use identical RGB arrays, from
         # one frozen simulation state and the unchanged four-tick barrier.
-        rendered = self._render_rgb_views(include_spectator=self.video is not None and not self.video.closed)
+        rendered = self._render_rgb_views(include_spectator=self.video is not None and not self.video.closed,
+                                          require_calibration=True)
         self.capture_index+=1
         self.current_frames={}
         folder=self.output/'frames';folder.mkdir(exist_ok=True)
@@ -245,7 +277,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             digest=hashlib.sha256(path.read_bytes()).hexdigest()
             position,orientation=sensor.get_position_orientation()
             frame={'sensor':sensor,'position':position.clone(),'orientation':orientation.clone(),
-                   'intrinsic':sensor.intrinsic_matrix.clone(),'width':pixels.shape[1],'height':pixels.shape[0]}
+                   'intrinsic':self._sensor_intrinsics[view],'width':pixels.shape[1],'height':pixels.shape[0]}
             data,info=self._sensor_packets[view]
             frame['depth_linear']=data['depth_linear'].detach().cpu().clone()
             np.savez_compressed(private_folder/f'{ref}.npz',depth_linear=frame['depth_linear'].numpy())

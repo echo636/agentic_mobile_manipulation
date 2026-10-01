@@ -25,6 +25,7 @@
 <section aria-label="选择任务">
  <div class="selection"><label for="run">任务</label><select id="run" aria-label="选择任务回放" disabled><option>读取任务…</option></select><span id="result" class="result"></span><a id="open" target="_blank" rel="noopener" hidden>独立打开 ↗</a></div>
  <p id="instruction" class="instruction"></p><p id="error" class="notice" role="alert" hidden></p>
+ <p id="run-diagnostic" class="notice" hidden></p>
 </section>
 <section class="viewer" aria-label="任务回放">
  <div id="empty" class="empty" hidden>还没有已发布的回放，任务完成后会出现在这里。</div>
@@ -52,8 +53,8 @@ const ended=t=>['passed','failed','blocked'].includes(t.status);
 const validReplay=t=>typeof t?.replay_url==='string'&&/^manipulation_runs\/[A-Za-z0-9_-]+\/replay\.html$/.test(t.replay_url);
 const name=t=>t.name||t.task;
 const stage=s=>({policy_running:'模型执行中',simulator_starting:'启动中',waiting_for_resources:'等待资源',complete:'已结束'}[s]||s||'等待调度');
-const outcome=t=>t.task_success===true?'成功':t.task_success===false?'未成功':t.status==='blocked'?'无评分 · 资源阻塞':t.status==='running'?stage(t.stage):t.status==='failed'?'无评分 · 运行故障':'待开始';
-let data=null,current=null,frameObserver=null;
+const outcome=t=>t.task_success===true?'成功':t.task_success===false?'未成功':t.status==='blocked'?'无评分 · 资源阻塞':t.status==='running'?stage(t.stage):t.status==='failed'?'无评分 · '+(diagnoses[t.run_id]?.label||'运行故障'):'待开始';
+let data=null,current=null,frameObserver=null,diagnoses={};
 
 function fitReplay(){
  const frame=$('replay');if(frame.hidden)return;
@@ -99,6 +100,8 @@ function choose(id,force=false){
  $('result').textContent=outcome(t)+(t.actions==null?'':' · '+t.actions+' 次动作');
  $('result').className='result '+(t.task_success===true?'success':t.task_success===false?'failure':'unscored');
  $('instruction').textContent=t.instruction||'';
+ const diagnosis=diagnoses[t.run_id];$('run-diagnostic').hidden=!diagnosis;
+ $('run-diagnostic').textContent=diagnosis?.explanation||'';
  $('open').href=t.replay_url;$('open').hidden=false;$('reload').disabled=false;
  const base=t.replay_url.replace('replay.html','');
  for(const [id,file] of [['run-record','run.json'],['replay-record','replay.json']]){$(id).href=base+file;$(id).hidden=false}
@@ -112,7 +115,8 @@ function choose(id,force=false){
 
 async function refresh(){
  try{
-  const response=await fetch('behavior100/progress.json?'+Date.now());if(!response.ok)throw Error(response.status);
+  const [response,diagnosticResponse]=await Promise.all([fetch('behavior100/progress.json?'+Date.now()),fetch('behavior100/diagnoses.json?'+Date.now()).catch(()=>null)]);if(!response.ok)throw Error(response.status);
+  if(diagnosticResponse?.ok)diagnoses=await diagnosticResponse.json();
   const next=await response.json();if(!Array.isArray(next.tasks))throw Error('进度格式异常');data=next;
   const ts=data.tasks,done=ts.filter(ended);
   $('ended').textContent=done.length+' / '+ts.length;$('progress').max=ts.length;$('progress').value=done.length;
