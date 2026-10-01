@@ -1,6 +1,6 @@
 # Astra direct motor experiment
 
-Branch: `explore/astra-primitive-composition`. Protocol: `rgb_physical_joint_program_v1`.
+Development branch: `explore/astra-motor`. Protocol: `rgb_physical_joint_program_v1`. Historical mixed branch: `explore/astra-primitive-composition`; recorded simulator commits below remain unchanged.
 
 This opt-in experiment lets Astra write bounded Python programs that directly command official OmniGibson joint-position and holonomic-base velocity controllers. The existing semantic action profiles remain available with their original defaults. This is a new control condition, not a claim of improved benchmark performance.
 

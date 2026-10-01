@@ -6,6 +6,8 @@ Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/a
 
 This exploration branch adds an opt-in **Astra direct motor profile**: bounded Python programs compose physical base velocity, arm/trunk joint deltas and gripper commands while retaining four-camera RGB observations. See [the experiment protocol](docs/astra_motor_experiment.md) and [the latest lvzhang interface audit](docs/lvzhang_primitive_audit_20261001.md). Existing profiles remain the default; this branch does not yet claim improved task performance.
 
+Development branch: **`explore/astra-motor`**. The official symbolic executor is maintained independently on [explore/official-symbolic](https://github.com/echo636/agentic_mobile_manipulation/tree/explore/official-symbolic). See [branch responsibilities and experiment provenance](docs/branches.md).
+
 ## Observation: four fixed cameras
 
 - Four 512 x 512 RGB views: **front, back, left, and right**, relative to the robot heading.
