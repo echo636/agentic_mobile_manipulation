@@ -60,6 +60,12 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 - [2026-09-30 实测结果](docs/four_camera_validation_20260930.md)：60项CPU测试、真实MCP四相机探针、radio实例301闭环通过；[网页与回放](http://10.76.5.241:8765/surround_observation.html)（实验室网络/VPN）。
 - [此前三相机实验记录](docs/history_before_four_camera.md)：历史成功结果不自动代表新相机配置通过。
 
+## 当前执行器修复验证
+
+v8 候选将选定表面作为放置约束，增加盘上物体等刚性承载关系的搬运，保护官方采样物理步中的底盘位姿，并统一导航线段碰撞检查。相机参数采集器提前初始化，四路 RGB、私有深度和内参一起通过有限的只渲染就绪检查；不会用伪造内参或移动机器人绕过初始化故障。
+
+134 项 CPU 测试通过；`preparing_lunch_box` 实例 301 的真实四相机启动复测通过。执行器组件探针与完整模型任务采用独立记录；代码测试或启动成功不代表任务完成，也不能证明执行器已经完美。[每轮修复与实际验证状态](http://10.76.5.241:8765/executor_v8_20261001/index.html)保留失败尝试与原始录像。[我们与 lvzhang、wenbo 的当前实现对比](http://10.76.5.241:8765/executor_v8_20261001/comparison.html)按固定源码快照区分程序策略、导航 harness 和本项目的 RGB 操作闭环。
+
 ## 结果可视化
 
 [当前任务回放](http://10.76.5.241:8765/retest32_v7_20261001/replays.html)默认展示简洁进度、任务选择，以及同步的相机画面与模型时间线。全部任务、运行状态、版本与原始记录默认折叠；任务列表自动更新时保留播放位置。页面源码为 [web/replays.html](web/replays.html)，读取同目录的 `behavior100/progress.json`，以嵌入模式加载现有 Replay；不修改录像、模型输出或评分。`scripts/publish_results_page.py --output-dir <批次报告目录>` 同时发布回放入口与分析页。
