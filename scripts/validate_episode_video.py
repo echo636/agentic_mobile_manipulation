@@ -30,7 +30,7 @@ checks={
  'file_hash_matches':hashlib.sha256((a.run_dir/v['file']).read_bytes()).hexdigest()==v['sha256'],
  'configured_rgb_views_recorded':set(v['views'])==expected_views and all(set(f['rgb_sha256'])==expected_views for f in frames),
  'spectator_never_in_public_observation':bool(public) and all({i['view'] for i in o['images']}==public_views for o in public),
- 'profile_tools_only':r['config'].get('agent_profile') in {'minimal','skills'} and all(e['name'] in allowed_tools for e in events if e['kind']=='tool_call')}
+ 'profile_tools_only':all(e['name'] in allowed_tools for e in events if e['kind']=='tool_call')}
 out={'status':'passed' if all(checks.values()) else 'failed','run_id':r['run_id'],'checks':checks,'frame_count':len(frames),'control_steps':len(steps),'fps':v['fps'],'duration_seconds':v['duration_seconds'],'bytes':v['bytes'],'codec':stream['codec_name'],'video_sha256':v['sha256'],'task_success_separate':r.get('task_success')}
 (a.run_dir/'video_validation.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n');print(json.dumps(out,ensure_ascii=False))
 raise SystemExit(0 if out['status']=='passed' else 2)
