@@ -24,3 +24,19 @@ Writable project-local copies of the pinned runtime and selected assets were pre
 Tests must include navigation timing with consistent capture policy, kitchen grasp, lower-shelf/container placement, fully opened doors and tool discovery. Scripted probes never count as autonomous task success. After these gates, rerun the same 32 tasks with the same instruction, instance 301, seed 0, model and action/model budgets, publishing every attempt and independent score. The changed motor protocol and any startup-budget/environment differences are explicit comparison limitations.
 
 Shared GPU use must be explicit and must pass a >=24 GiB free-memory check before every episode; the default still requires an idle GPU. Capacity is a point-in-time check, not an exclusive reservation. Native crashes and resource failures remain visible in the result denominator. Replicator asynchronous rendering toggling is disabled and DLSS uses Quality mode per [Isaac Sim 5.1 known issues](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/overview/known_issues.html). This did not resolve V03's native crash and is not presented as a proven crash fix.
+
+## Verified component results (2026-10-01)
+
+The production core is frozen at `318de33` for the matched cohort. Project operations retain every unsuccessful initialization / native-crash experiment, not just these completed probes.
+
+| Check | Result and limit |
+| --- | --- |
+| CPU contracts, pinned BDDL differential checks and real geometry dependencies | 111 tests passed, no skips in the complete V03 environment; CPU-only, no benchmark score |
+| MCP stdio | Nine exact schemas, four actual RGB image payloads and legacy act arguments validated with a fixture; no physical-world success claim |
+| Radio selected-pixel motor sequence | Four actions passed; native-debugger inferior exited normally. Debugger's final `bt` returned exit1 because the process had already exited; preserved separately |
+| Kitchen sequence | Nine actions passed, including full opening, grasp, transport, official Inside placement and the food-processor grasp that previously produced NaN |
+| Kitchen sustained carry / rollback | Repeated nine actions, 120 additional held-object steps, injected placement exception restoring carry ownership and pose, and 30 more finite-pose steps passed |
+| Shoe lower-shelf placement | Five actions passed; real contact and upward support, shelf-height agreement, release and zero final speed verified. Official OnTop remains false because the rack also extends above the shoe. The task's unchanged predicates require rack contact, no floor contact and pairwise proximity |
+| Garage loading-the-car initialization | Repaired floor geometry loads and four RGB cameras capture successfully; no navigation/task-completion claim from this startup-only probe |
+
+These scripted probes use private target reprojection and do not contribute to autonomous success rate. The 32-task model retest runs separately with immutable records and independent final task scoring. The repaired configuration is not an official challenge submission. Native simulator reliability beyond these completed checks remains an empirical question; the earlier crashes were not silently removed or represented as globally solved.
