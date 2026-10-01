@@ -17,7 +17,7 @@ def command(args):
     return {'exit_code': p.returncode, 'stdout': p.stdout, 'stderr': p.stderr}
 
 
-def preflight(gpu, port, data_root, min_free_gpu_mib=0):
+def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28):
     from manipulation_agent.video import ffmpeg_executable
     try:
         encoder = ffmpeg_executable()
@@ -51,16 +51,19 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0):
         port_free = sock.connect_ex(('127.0.0.1', port)) != 0
     if min_free_gpu_mib and min_free_gpu_mib<24576:
         raise ValueError('Shared GPU mode requires at least 24 GiB free before each episode')
+    if not 12<=memory_budget_gib<=28:
+        raise ValueError('Simulator working-memory budget must be between 12 and 28 GiB')
     checks = {'video_encoder': encoding_check['exit_code'] == 0,
               'gpu_capacity': (int(selected[3])-int(selected[2])>=min_free_gpu_mib) if min_free_gpu_mib else int(selected[2])<1024,
               'validated_driver_floor':tuple(map(int,selected[4].strip().split('.'))) >= (580,65,6),
               'host_memory_available_40GiB': int(mem['MemAvailable'].split()[0])*1024 > 40*1024**3,
-              'cgroup_reclaimable_headroom_28GiB': cg_free is None or cg_free > 28*1024**3,
+              'cgroup_reclaimable_headroom': cg_free is None or cg_free > memory_budget_gib*1024**3,
               'data_disk_free_40GiB': shutil.disk_usage(data_root).free > 40*1024**3,
               'bridge_port_free': port_free}
     return {'at': datetime.now(timezone.utc).isoformat(), 'host': socket.gethostname(),
             'interpreter': sys.executable, 'pid': os.getpid(), 'gpu_index': gpu,
             'gpu_uuid': selected[1].strip(), 'cgroup': cg, 'checks': checks,
+            'required_working_memory_gib':memory_budget_gib,
             'driver_version':selected[4].strip(),'gpu_policy':{'shared':bool(min_free_gpu_mib),'minimum_free_mib':min_free_gpu_mib},
             'status': 'passed' if all(checks.values()) else 'blocked', 'queries': queries}
 
@@ -95,11 +98,12 @@ def main():
     p.add_argument('--gpu',type=int); p.add_argument('--port',type=int); p.add_argument('--unit'); p.add_argument('--run-id')
     p.add_argument('--data-root',type=Path,required=True)
     p.add_argument('--min-free-gpu-mib',type=int,default=0)
+    p.add_argument('--memory-budget-gib',type=int,default=28)
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
     if a.mode == 'assets':
         print(json.dumps(assets(manifest,a.data_root))); return
     if a.mode == 'preflight':
-        print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib))); return
+        print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib))); return
     row=manifest['tasks'][a.index]
     if a.run_id:
         import re
@@ -107,7 +111,7 @@ def main():
             raise ValueError('Attempt ID must preserve the frozen task identity')
         row['run_id']=a.run_id
     os.environ['MAS_UNIT']=a.unit
-    result=preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib)
+    result=preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib)
     # Persist a second check inside the allocated unit, immediately before startup.
     check_path=a.manifest.parent/'preflight'/f"{row['run_id']}_in_unit.json"
     check_path.write_text(json.dumps(result,indent=2)+'\n')

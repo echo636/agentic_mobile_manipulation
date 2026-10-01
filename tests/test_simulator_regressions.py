@@ -61,7 +61,7 @@ class SimulatorRegressions(unittest.TestCase):
     def test_spectator_failure_does_not_abort_robot_video(self):
         with tempfile.TemporaryDirectory() as folder:
             b=RGBBackend.__new__(RGBBackend);b.output=Path(folder);b.steps=13
-            b._recorded_pixels=None;b._recorded_capture_step=None;b.video_render_stride=2
+            b._recorded_pixels=None;b._recorded_capture_step=None;b.video_render_stride=2;b.video_render_flushes=4
             calls=[];b.video=SimpleNamespace(closed=False,append=lambda *args,**kw:calls.append((args,kw)))
             def broken():raise AssertionError('torch compile regression fixture')
             b._position_spectator=broken;b._render_rgb_views=lambda **kw:{'front':'actual frame'}

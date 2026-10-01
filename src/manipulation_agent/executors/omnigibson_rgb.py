@@ -133,6 +133,14 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             stream.write(json.dumps({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
                                      'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})+'\n')
 
+    def _prepare_spectator(self):
+        try:
+            with component(self,'spectator_pose'): self._position_spectator()
+        except Exception as exc:
+            with (self.output/'recording_warnings.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at':now(),'env_step':self.steps,'component':'spectator_pose',
+                    'type':type(exc).__name__,'error':str(exc),'fallback':'last_camera_pose'})+'\n')
+
     def _video_frame(self, kind, rendered=None):
         if self.video is None or self.video.closed: return
         fresh=kind!='env_step' or self._recorded_pixels is None or self.steps%self.video_render_stride==0
@@ -141,12 +149,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 self._recorded_pixels = rendered
                 self._recorded_capture_step = self.steps
             elif fresh:
-                try:
-                    with component(self,'spectator_pose'):self._position_spectator()
-                except Exception as exc:
-                    with (self.output/'recording_warnings.jsonl').open('a') as stream:
-                        stream.write(json.dumps({'at':now(),'env_step':self.steps,'component':'spectator_pose',
-                            'type':type(exc).__name__,'error':str(exc),'fallback':'last_camera_pose'})+'\n')
+                self._prepare_spectator()
                 self._recorded_pixels=self._render_rgb_views(
                     include_spectator=True, flushes=self.video_render_flushes)
                 self._recorded_capture_step=self.steps
@@ -222,7 +225,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         before_pos,before_quat = self.robot.get_position_orientation()
         before_joints = self.robot.get_joint_positions().clone()
         if self.video is not None and not self.video.closed:
-            with component(self, 'spectator_pose'): self._position_spectator()
+            self._prepare_spectator()
         # The observation and its replay frame use identical RGB arrays, from
         # one frozen simulation state and the unchanged four-tick barrier.
         rendered = self._render_rgb_views(include_spectator=self.video is not None and not self.video.closed)

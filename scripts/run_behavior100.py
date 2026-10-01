@@ -38,7 +38,7 @@ def worker_configs(config):
         raise ValueError('At least one worker is required')
     allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env',
                'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
-               'simulator_env', 'expected_gpu_uuid'}
+               'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib'}
     result=[]; ids=set(); devices=set(); ports=set()
     for lane in lanes:
         if set(lane)-allowed: raise ValueError('Unsupported worker fields')
@@ -49,6 +49,10 @@ def worker_configs(config):
         if type(gpu) is not int or gpu<0 or not 1024<=port<=65535: raise ValueError('Invalid GPU or port')
         if (host,gpu) in devices or (host,port) in ports: raise ValueError('Worker GPU or port collision')
         env=merged.get('simulator_env',{})
+        budget=merged.get('memory_budget_gib',28)
+        if type(budget) is not int or not 12<=budget<=28: raise ValueError('Invalid memory budget')
+        if merged.get('simulator_memory_max',str(budget)+'G')!=str(budget)+'G':
+            raise ValueError('Resource admission and hard simulator memory limit must agree')
         if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES'}:
             raise ValueError('Only reviewed recording options may be worker environment overrides')
         ids.add(worker_id);devices.add((host,gpu));ports.add((host,port));result.append(merged)
@@ -210,7 +214,8 @@ class Batch:
         self.journal(f"START {runid}; GPU index {gpu}; unit {unit}; output {remote_run}.")
         try:
             check_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'preflight','--manifest',str(self.root/'manifest.json'),
-                       '--gpu',str(gpu),'--port',str(port),'--data-root',self.c['data_root']]
+                       '--gpu',str(gpu),'--port',str(port),'--data-root',self.c['data_root'],
+                       '--memory-budget-gib',str(self.c.get('memory_budget_gib',28))]
             if self.c.get('minimum_free_gpu_mib'):
                 check_cmd+=['--min-free-gpu-mib',str(self.c['minimum_free_gpu_mib'])]
             for attempt in range(61):
@@ -231,7 +236,8 @@ class Batch:
             launcher=self.root/'launchers'/f'{runid}.sh'
             q=shlex.quote
             command=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'simulate','--manifest',str(self.root/'manifest.json'),
-                     '--index',str(row['index']),'--run-id',runid,'--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root']]
+                     '--index',str(row['index']),'--run-id',runid,'--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root'],
+                     '--memory-budget-gib',str(self.c.get('memory_budget_gib',28))]
             if self.c.get('minimum_free_gpu_mib'):
                 command+=['--min-free-gpu-mib',str(self.c['minimum_free_gpu_mib'])]
             overrides=''.join('\nexport '+key+'='+q(str(value)) for key,value in self.c.get('simulator_env',{}).items())
@@ -239,7 +245,7 @@ class Batch:
                                 '\nexport PYTHONPATH='+q(str(self.source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))+
                                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
             launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
-                    '-p','MemoryMax='+self.c.get('simulator_memory_max','28G'),'-p','CPUQuota=800%','-p',f"RuntimeMaxSec={self.manifest['simulator_runtime_max_seconds']}",
+                    '-p','MemoryMax='+self.c.get('simulator_memory_max',str(self.c.get('memory_budget_gib',28))+'G'),'-p','CPUQuota=800%','-p',f"RuntimeMaxSec={self.manifest['simulator_runtime_max_seconds']}",
                     '-p','TimeoutStopSec=30','-p','KillMode=control-group','-p','SuccessExitStatus=2',
                     '-p','WorkingDirectory='+str(self.source),'/bin/bash',str(launcher)]
             p=self.ssh(launch);(self.root/'logs'/f'{runid}_launch.log').write_text(p.stdout+p.stderr)
