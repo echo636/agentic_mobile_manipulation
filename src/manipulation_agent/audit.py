@@ -74,6 +74,10 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
                 checks['recorded_summary_fields_valid_if_present'] = all(
                     set(c['arguments']['decision']) == {'observation','reason','expected'}
                     for c in calls if 'decision' in c['arguments'])
+        elif profile == 'official':
+            checks['official_profile_on_both_sides'] = controller.get('agent_profile') == 'official'
+            checks['official_executor_protocol'] = run.get('backend',{}).get('control_protocol') == 'rgb_official_symbolic_direct_v1'
+            checks['no_custom_executor'] = all(run.get('backend',{}).get(k) is False for k in ('custom_navigation','custom_carry','custom_placement'))
         elif profile == 'motor':
             checks['motor_profile_on_both_sides'] = controller.get('agent_profile') == 'motor'
             checks['no_semantic_tools_called'] = all(c['name'] in catalog for c in calls)

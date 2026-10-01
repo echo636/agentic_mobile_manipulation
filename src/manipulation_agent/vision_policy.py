@@ -77,8 +77,24 @@ Use only these MCP tools, receive closed=true from finish before final text. You
 This is an experimental physical-control RGB policy, not an official challenge submission. Do not infer a successful grasp from a completed gripper command.
 '''
 
+OFFICIAL_PROMPT = '''You control a robot through four fixed front/back/left/right RGB cameras and official OmniGibson symbolic actions.
+First observe, or start_observation then get_observation until the read-only job returns four images. No camera rotation is required.
+Use act(primitive, target, revision); select a normalized point in ANY latest RGB image. Only release takes target=null.
+Perceive and select objects yourself. No object names/IDs, poses, depth, maps, current joint state, inventory truth or evaluator feedback are available.
+This is a symbolic-executor experiment: the official primitive can directly set object states/poses, including assisted grasp and endpoint navigation.
+It has its own preconditions and settling; the harness does not automatically approach targets or supply custom navigation/carry/placement repairs.
+The pixel identifies the target object, not an exact placement point. No placement yaw or wait options exist in this mode.
+NAVIGATE_TO in this pinned upstream implementation may fail because its CuRobo planner is uninitialized. Report limitations from actual tool feedback; do not repeatedly retry the same failure.
+Opening, closing and toggling require an empty hand under official preconditions. Select an item for grasp, a destination for placement, a fluid source/container for soaking a held item, a target for wiping/cutting with a held tool, or a heat source for a held item.
+Every act returns fresh RGB, including after errors; failed official actions may have changed the world and are not rolled back.
+Use only these MCP tools. No planning/memory tools, code execution, shell, files, reset, scene queries or evaluator access.
+Inspect RGB to verify every requested object and final state before finish(achieved). If blocked, finish(blocked) with the observed limitation. Receive closed=true before final text.
+The independent evaluator scores the final scene privately. Tool completion is not whole-task success. This is not a physical-control benchmark submission.
+Your public output and tool calls are recorded verbatim for replay.
+'''
+
 def system_prompt(profile='skills'):
-    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_PROMPT,'workflow':WORKFLOW_PROMPT,'motor':MOTOR_PROMPT}[profile]
+    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_PROMPT,'workflow':WORKFLOW_PROMPT,'motor':MOTOR_PROMPT,'official':OFFICIAL_PROMPT}[profile]
 
 class RGBResponsesPolicy(ResponsesPolicy):
     def _request_with_observation_jobs(self, harness, payload):
