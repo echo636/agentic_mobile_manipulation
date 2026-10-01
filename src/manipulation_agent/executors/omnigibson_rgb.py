@@ -19,7 +19,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
-        self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
+        self.ideal_carry = not getattr(self, 'official_symbolic', False) and os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
         self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False

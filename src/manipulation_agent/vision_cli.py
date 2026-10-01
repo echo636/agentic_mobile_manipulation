@@ -23,7 +23,7 @@ def main():
     p.add_argument('--seed',type=int,default=0);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--instruction');p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
-    p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
+    p.add_argument('--agent-profile', choices=['minimal','skills','workflow','official'], default='skills')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
@@ -38,7 +38,11 @@ def main():
     config['validation_level']='cpu_rgb_contract_only' if a.backend=='mock' else 'rgb_simulator_requires_controller_image_evidence'
     recorder=Recorder(a.output,config);backend=None;harness=None
     try:
-        backend=MockRGBBackend(a.output) if a.backend=='mock' else RGBBackend(a.task,a.instance,a.output,seed=a.seed,max_steps=a.max_sim_steps,inside_placement=a.inside_placement,record_video=a.record_video)
+        if a.agent_profile=='official':
+            from .executors.official_symbolic import OfficialSymbolicBackend
+            backend=MockRGBBackend(a.output) if a.backend=='mock' else OfficialSymbolicBackend(a.task,a.instance,a.output,seed=a.seed,max_steps=a.max_sim_steps,record_video=a.record_video)
+        else:
+            backend=MockRGBBackend(a.output) if a.backend=='mock' else RGBBackend(a.task,a.instance,a.output,seed=a.seed,max_steps=a.max_sim_steps,inside_placement=a.inside_placement,record_video=a.record_video)
         harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps),profile=a.agent_profile)
         if policy:policy.run(harness,a.instruction)
         else:bridge.serve(harness,a.port)

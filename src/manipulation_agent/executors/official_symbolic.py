@@ -1,0 +1,174 @@
+"""Direct pinned upstream symbolic primitives with a private RGB target adapter.
+
+No custom navigation, carry, placement, preconditions, retries or state repair.
+Upstream can teleport objects and set semantic states; this is not physical control.
+"""
+from contextlib import contextmanager
+import hashlib
+import inspect
+import json
+import time
+import traceback
+from pathlib import Path
+
+from ..contracts import SkillError
+from ..omnigibson_backend import OmniGibsonBackend
+from ..records import now
+from .omnigibson_rgb import RGBBackend
+
+OFFICIAL_PRIMITIVES = (
+    'grasp', 'place_on_top', 'place_inside', 'open', 'close', 'toggle_on', 'toggle_off',
+    'soak_under', 'soak_inside', 'wipe', 'cut', 'place_near_heating_element',
+    'navigate_to', 'release',
+)
+PROTOCOL = 'rgb_official_symbolic_direct_v1'
+
+
+class OfficialSymbolicBackend(RGBBackend):
+    official_symbolic = True
+
+    def __init__(self, *args, **kwargs):
+        # The base class's volume-placement override must never be selected.
+        kwargs['inside_placement'] = 'symbolic_raycast'
+        super().__init__(*args, **kwargs)
+        from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitiveSet
+        from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveErrorGroup
+        self._primitive_enum = SymbolicSemanticActionPrimitiveSet
+        self._primitive_error_group = ActionPrimitiveErrorGroup
+        self._inside_primitive = False
+        self._official_terminated = False
+        if set(p.name.lower() for p in self._primitive_enum) != set(OFFICIAL_PRIMITIVES):
+            raise RuntimeError('Pinned official primitive inventory changed')
+        self._official_sources = {}
+        for cls in type(self.primitives).__mro__:
+            if cls is object:
+                continue
+            path = inspect.getsourcefile(cls)
+            if path:
+                self._official_sources[cls.__name__] = {'file': path, 'sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+
+    def _step(self, action):
+        # Deliberately bypass RGBBackend._step and its pose/carry projection.
+        if self._official_terminated:
+            raise SkillError('simulation_ended', 'Simulation has ended', changed=True)
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        self.steps += 1
+        for metric in self.evaluator.metrics:
+            metric.step(self.env, action, obs, reward, terminated, truncated, info)
+        # Goal success may terminate the task on the first yielded action; allow
+        # the upstream primitive to finish its own settling and postconditions.
+        # A time-limit truncation still prevents additional environment steps.
+        self._official_terminated = bool(truncated)
+        finite = bool(self.torch.isfinite(self.robot.get_joint_positions()).all())
+        with (self.output / 'official_control_steps.jsonl').open('a') as stream:
+            stream.write(json.dumps({'at': now(), 'sim_step': self.steps,
+                'action': action.detach().cpu().tolist(), 'finite_robot_joints': finite,
+                'terminated': bool(terminated), 'truncated': bool(truncated), 'audience': 'offline_only'}) + '\n')
+        if not finite:
+            raise SkillError('physics_instability', 'Nonfinite robot joints after official action', changed=True)
+        self._video_frame('env_step')
+
+    @contextmanager
+    def _bounded_internal_physics(self, max_steps):
+        """Count upstream sampler ticks separately, without pose/state repair."""
+        original = self.og.sim.step_physics
+        started = time.monotonic()
+        before = self.sampling_physics_steps
+
+        def step(*args, **kwargs):
+            if self._inside_primitive:
+                if self.sampling_physics_steps - before >= max_steps * 4 or time.monotonic() - started > 120:
+                    raise SkillError('sampling_budget_exhausted', 'Upstream internal physics/time budget exhausted', changed=True)
+                self.sampling_physics_steps += 1
+            return original(*args, **kwargs)
+
+        self.og.sim.step_physics = step
+        try:
+            yield
+        finally:
+            self.og.sim.step_physics = original
+            self._inside_primitive = False
+
+    def execute_visual(self, primitive, target, max_steps, **kwargs):
+        if primitive not in OFFICIAL_PRIMITIVES or kwargs:
+            raise SkillError('invalid_arguments', 'Only the official primitive signature is supported')
+        if max_steps <= 0 or self._official_terminated:
+            raise SkillError('budget_exhausted', 'No remaining simulation budget')
+        if (primitive == 'release') != (target is None):
+            raise SkillError('invalid_target', 'Only release takes a null target')
+        obj = None
+        grounding = None
+        if target is not None:
+            obj, _, grounding = self._ground(target)
+        enum = getattr(self._primitive_enum, primitive.upper())
+        before = self.steps
+        sampling_before = self.sampling_physics_steps
+        entry = {'at': now(), 'primitive': primitive, 'attempts': 1,
+                 'target_object': getattr(obj, 'name', None), 'grounding': grounding,
+                 'entrypoint': 'SymbolicSemanticActionPrimitives.apply_ref',
+                 'start_step': before, 'audience': 'executor_private'}
+        generator = None
+        started = time.monotonic()
+        try:
+            generator = self.primitives.apply_ref(enum, *([] if obj is None else [obj]), attempts=1)
+            with self._bounded_internal_physics(max_steps):
+                while True:
+                    if time.monotonic() - started > 120:
+                        raise SkillError('action_timeout', 'Official primitive time budget exhausted', changed=True)
+                    self._inside_primitive = True
+                    try:
+                        action = next(generator)
+                    except StopIteration:
+                        break
+                    finally:
+                        self._inside_primitive = False
+                    if self.steps - before >= max_steps:
+                        raise SkillError('action_timeout', 'Official primitive step budget exhausted', changed=True)
+                    self._step(action)
+            entry['status'] = 'passed'
+        except Exception as exc:
+            entry.update(status='failed', error_type=type(exc).__name__, error=str(exc), traceback=traceback.format_exc())
+            if isinstance(exc, SkillError):
+                raise
+            if isinstance(exc, self._primitive_error_group):
+                reason = exc.exceptions[-1].reason.name.lower() if exc.exceptions else 'execution_error'
+            else:
+                reason = 'execution_error'
+            # Preserve all upstream failure details privately; the public boundary
+            # supplies fixed text and never returns object names or state values.
+            raise SkillError(reason, str(exc), changed=True) from exc
+        finally:
+            if generator is not None:
+                generator.close()
+            entry.update(end_step=self.steps, env_steps=self.steps-before,
+                         internal_physics_ticks=self.sampling_physics_steps-sampling_before,
+                         duration_seconds=time.monotonic()-started)
+            with (self.output / 'official_primitives.jsonl').open('a') as stream:
+                stream.write(json.dumps(entry) + '\n')
+        return {'primitive': primitive, 'implementation': 'official_apply_ref', 'attempts': 1,
+                'steps': self.steps-before, 'internal_physics_ticks': self.sampling_physics_steps-sampling_before,
+                'postcondition': 'upstream_primitive_returned; not whole-task success'}
+
+    def provenance(self):
+        result = OmniGibsonBackend.provenance(self)
+        result.pop('inside_placement', None)
+        result.update(executor='official_symbolic_apply_ref', control_protocol=PROTOCOL,
+            symbolic_primitives=True, physical_control=False, official_attempts=1,
+            custom_navigation=False, custom_carry=False, custom_placement=False,
+            automatic_approach=False, failure_rollback=False, target_scope='selected_visual_object',
+            target_pixel_controls_placement_location=False, model_visible_truth=False,
+            robot_camera_views=['front','back','left','right'], stock_wrist_cameras_enabled=False,
+            record_video=self.record_video, upstream_sources=self._official_sources,
+            primitive_inventory=list(OFFICIAL_PRIMITIVES),
+            known_upstream_limitations=['NAVIGATE_TO uses an uninitialized CuRobo planner in the pinned symbolic implementation',
+                'Official symbolic grasp/toggle do not enforce this project\'s previous distance or automatic-approach checks'])
+        return result
+
+    def evaluate(self):
+        result = OmniGibsonBackend.evaluate(self)
+        result.pop('ideal_navigation_distance_m', None)
+        result.pop('inside_placement', None)
+        result.update(protocol=PROTOCOL, observation_mode='rgb_only', official_submission_eligible=False,
+            execution_kind='official_symbolic_state_and_pose_changes',
+            time_metric_scope='env.step only; upstream internal physics ticks counted separately')
+        return result

@@ -4,6 +4,8 @@ An independent research system for **RGB observation -> LLM action and target se
 
 Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/agentic_mobile_manipulation). Reference repositories and existing navigation environments remain separate from this project.
 
+This branch develops the **direct official symbolic profile** (`--agent-profile official`): four-camera RGB target selection calls the 14 upstream symbolic primitives through `apply_ref`. Upstream state/pose changes and errors are preserved without project navigation, carry or placement repairs. See [the protocol and validation limits](docs/official_symbolic_experiment.md). The motor-code experiment is maintained separately on [explore/astra-motor](https://github.com/echo636/agentic_mobile_manipulation/tree/explore/astra-motor). Original profiles remain available; the default is still `skills`.
+
 ## Observation: four fixed cameras
 
 - Four 512 x 512 RGB views: **front, back, left, and right**, relative to the robot heading.
