@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
+from collections import deque
 
 from .records import now, write_json
 
@@ -25,6 +27,8 @@ class EpisodeVideo:
         self.width = 2 * size; self.height = self.rows * size + 80
         self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
         self.closed = False; self.process = None; self.log = None
+        self.encoder_pool = None; self.encoder_pending = deque()
+        self.fresh_frames = 0; self.held_frames = 0
         self.manifest = {'status':'running','file':'episode.mp4','poster':'video_poster.jpg',
                          'fps':self.fps,'width':self.width,'height':self.height,
                          'started_at':now(),'frame_count':0,'scope':'every_env_step_plus_observation_boundaries',
@@ -39,7 +43,7 @@ class EpisodeVideo:
         self.context = {'tool':name,'primitive':arguments.get('primitive', name),'request_id':request_id}
         self.markers.append({**self.context,'frame_index':self.count,'seconds':self.count/self.fps})
 
-    def append(self, pixels, env_step: int, kind: str):
+    def append(self, pixels, env_step: int, kind: str, *, capture_env_step=None, repeated=False):
         import numpy as np
         from PIL import Image, ImageDraw, ImageFont
         if self.closed: return
@@ -61,7 +65,7 @@ class EpisodeVideo:
         title = f"env.step {env_step} | {self.context.get('primitive','initial RGB')} | {kind}"
         draw.text((12,self.rows*self.size+7),title,fill='white',font=font)
         draw.text((12,self.rows*self.size+32),'Ideal executor: instantaneous pose/state changes are recorded as executed.',fill='#b6d6df',font=font)
-        draw.text((12,self.rows*self.size+55),'Every control step recorded. Model wait time omitted. No motion interpolation.',fill='#b6d6df',font=font)
+        draw.text((12,self.rows*self.size+55),'Control-step timeline; labeled frame holds between captures. No motion interpolation.',fill='#b6d6df',font=font)
         if self.process is None:
             ffmpeg = shutil.which('ffmpeg')
             if not ffmpeg: raise RuntimeError('ffmpeg is required for --record-video')
@@ -72,13 +76,20 @@ class EpisodeVideo:
                        '-pix_fmt','yuv420p','-g',str(max(1,round(self.fps))),
                        '-movflags','+frag_keyframe+empty_moov+default_base_moof',str(self.output/'episode.mp4')]
             self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.log)
+            self.encoder_pool = ThreadPoolExecutor(max_workers=1,thread_name_prefix='mas-video-encoder')
             self.manifest['encoder_pid'] = self.process.pid
             self.manifest['encoder_command'] = command
             canvas.save(self.output/'video_poster.jpg',quality=90)
         raw = np.asarray(canvas).tobytes()
-        self.process.stdin.write(raw)
+        # Preserve order and bound queued memory to eight raw frames. Worker
+        # touches only ffmpeg's pipe, never the simulator or camera tensors.
+        while self.encoder_pending and (len(self.encoder_pending)>=8 or self.encoder_pending[0].done()):
+            self.encoder_pending.popleft().result(timeout=90)
+        self.encoder_pending.append(self.encoder_pool.submit(self.process.stdin.write,raw))
+        self.held_frames+=int(repeated);self.fresh_frames+=int(not repeated)
         row = {'frame_index':self.count,'video_seconds':self.count/self.fps,'env_step':env_step,
-               'kind':kind, **self.context,
+               'kind':kind, 'at':now(), 'camera_capture_env_step':env_step if capture_env_step is None else capture_env_step,
+               'repeated_camera_frame':bool(repeated), **self.context,
                'rgb_sha256':{k:hashlib.sha256(v.tobytes()).hexdigest() for k,v in tiles.items()}}
         with (self.output/'video_frames.jsonl').open('a') as stream:
             stream.write(json.dumps(row)+'\n')
@@ -96,11 +107,13 @@ class EpisodeVideo:
         self.closed = True
         if self.process:
             try:
+                while self.encoder_pending:self.encoder_pending.popleft().result(timeout=90)
                 self.process.stdin.close()
                 code = self.process.wait(timeout=90)
             except BaseException:
                 self.process.kill();self.process.wait();raise
             finally:
+                if self.encoder_pool:self.encoder_pool.shutdown(wait=True,cancel_futures=True)
                 self.log.close()
         else: code = None
         complete = self.env_steps == list(range(1,final_env_step+1))
@@ -108,7 +121,8 @@ class EpisodeVideo:
         self.manifest.update(status='passed' if valid else 'failed',finished_at=now(),frame_count=self.count,
                              duration_seconds=self.count/self.fps,final_env_step=final_env_step,
                              recorded_env_steps=len(self.env_steps),every_env_step_recorded=complete,
-                             encoder_exit_code=code,markers=self.markers)
+                             encoder_exit_code=code,markers=self.markers,fresh_camera_frames=self.fresh_frames,repeated_camera_frames=self.held_frames,
+                             capture_policy='control-step CFR; explicit previous-frame hold between fresh captures; fresh action observation boundaries')
         path = self.output/'episode.mp4'
         if path.exists():
             self.manifest.update(bytes=path.stat().st_size,sha256=hashlib.sha256(path.read_bytes()).hexdigest())

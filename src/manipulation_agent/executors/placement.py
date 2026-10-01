@@ -25,13 +25,16 @@ class CheckedPlacement:
         with (self.output / 'placement_diagnostics.jsonl').open('a') as stream:
             stream.write(json.dumps({'env_step': self.steps, **data}) + '\n')
 
-    def _surface_pose(self, held, target, point):
+    def _surface_pose(self, held, target, point, yaw_degrees=None):
         """Try the selected surface using upstream cuboid collision checks first."""
         from omnigibson.utils import sampling_utils as S
         from omnigibson.utils import transform_utils as T
         from omnigibson.object_states import OnTop
         torch = self.torch
         _, _, extents, bb_pos = held.get_base_aligned_bbox()
+        if yaw_degrees is not None:
+            # Conservative horizontal envelope contains every requested yaw.
+            extents=extents.clone();radius=torch.linalg.norm(extents[:2]);extents[:2]=radius
         if point is not None:
             # A short ray can reach a lower shelf; the upstream object-wide ray
             # always approaches from above the entire object's bounding box.
@@ -47,6 +50,9 @@ class CheckedPlacement:
                     max_angle_with_z_axis=.17)
                 if samples[0][0] is not None:
                     center, _, orientation = samples[0][:3]
+                    if yaw_degrees is not None:
+                        import math
+                        orientation=T.quat_multiply(T.euler2quat(torch.tensor([0.,0.,math.radians(yaw_degrees)])),held.get_position_orientation()[1])
                     matrix = T.pose2mat((center + torch.tensor([0.,0.,.02]), orientation)) @ T.pose_inv(
                         T.pose2mat((bb_pos, torch.tensor([0.,0.,0.,1.]))))
                     self._placement_record({'status':'sampled','method':'selected_surface_cuboid',
@@ -54,15 +60,17 @@ class CheckedPlacement:
                         'ray_height_m':height,'held_bbox_extent':extents.tolist()})
                     return T.mat2pose(matrix)
         # Same selected object and requested relation; no task-goal/object search.
+        if yaw_degrees is not None:
+            raise SkillError('sampling_error','No selected-surface pose satisfying the requested orientation')
         pose = self.primitives._sample_pose_with_object_and_predicate(OnTop, held, target)
         self._placement_record({'status':'sampled','method':'official_object_surface_sampler',
                                 'target':target.name,'held':held.name,'held_bbox_extent':extents.tolist()})
         return pose
 
-    def _checked_place_on_top(self, target, max_steps, point=None):
+    def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None):
         from omnigibson.object_states import OnTop
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
-        held = self.primitives._get_obj_in_hand()
+        held = self._get_held()
         if held is None:
             raise SkillError('empty_hand','No object is held')
         # A lower shelf can be geometrically valid but fail official OnTop:
@@ -71,7 +79,7 @@ class CheckedPlacement:
         attempts = [point, None] if point is not None and max_steps >= 100 else [point]
         for attempt, candidate in enumerate(attempts):
             try:
-                check = self._try_place_on_top(held, target, max_steps, candidate)
+                check = self._try_place_on_top(held, target, max_steps, candidate, yaw_degrees)
                 break
             except SkillError:
                 if attempt == len(attempts)-1:
@@ -80,19 +88,20 @@ class CheckedPlacement:
         return {'primitive':'place_on_top','implementation':'checked_selected_surface_then_official_sampler',
                 'postcondition':check,'failure_policy':'restore_pre_action_state'}
 
-    def _try_place_on_top(self, held, target, max_steps, point):
+    def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
-        with placement_transaction(self.og.sim, self._placement_record):
+        with self._placement_context():
             try:
-                pose = self._surface_pose(held, target, point)
+                pose = self._surface_pose(held, target, point, yaw_degrees)
             except ActionPrimitiveError as exc:
                 raise SkillError('sampling_error',str(exc)) from exc
             # Do not call upstream _release(): it runs physics while the object
             # is still next to the hand, BEFORE teleporting to the destination.
-            for arm in self.robot.arm_names:
-                self.robot.release_grasp_immediately(arm=arm)
+            contents=list(self._carry_contents) if self.ideal_carry else []
+            self._carry_detach()
             held.set_position_orientation(*pose)
+            self._relocate_contents(held,contents)
             held.keep_still()
             for _ in range(min(50,max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
@@ -105,7 +114,7 @@ class CheckedPlacement:
                 'touching':touching,'official_on_top':official_on_top,'selected_surface_support':support,
                 'target_below':target in adjacency.negative_neighbors,
                 'target_above':target in adjacency.positive_neighbors,
-                'grasp_released':self.primitives._get_obj_in_hand() is None})
+                'grasp_released':self._get_held() is None})
             if not (official_on_top or supported):
                 raise SkillError('postcondition_error','Object is not stably supported by the selected surface',changed=True)
         return 'official_OnTop' if official_on_top else 'selected_surface_contact_and_support_after_settling'
@@ -128,7 +137,7 @@ class CheckedPlacement:
         normal_z=float(hit['normal'][2]) if hit['hit'] else None
         height_error=abs(float(hit['position'][2]-point[2])) if hit['hit'] else None
         selected_xy_distance=float(self.torch.linalg.norm(center[:2]-point[:2]))
-        checks={'touching_selected_object':touching,'released':self.primitives._get_obj_in_hand() is None,
+        checks={'touching_selected_object':touching,'released':self._get_held() is None,
                 'support_ray_hits_selected_object':hit.get('rigidBody') in target_paths,
                 'upward_support':normal_z is not None and normal_z>=.9,
                 'bottom_near_support':gap is not None and -.03<=gap<=.06,
@@ -139,7 +148,7 @@ class CheckedPlacement:
 
     def _checked_place_inside(self, target, max_steps):
         from omnigibson.object_states import Inside
-        held = self.primitives._get_obj_in_hand()
+        held = self._get_held()
         if held is None:
             raise SkillError('empty_hand','No object is held')
         fillable = [link for link in target.links.values() if link.is_meta_link and
@@ -153,9 +162,9 @@ class CheckedPlacement:
                 raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
             self.sampling_physics_steps+=1
             return original_step(*args,**kwargs)
-        with placement_transaction(self.og.sim,self._placement_record):
-            for arm in self.robot.arm_names:
-                self.robot.release_grasp_immediately(arm=arm)
+        with self._placement_context():
+            contents=list(self._carry_contents) if self.ideal_carry else []
+            self._carry_detach()
             self.og.sim.step_physics=bounded_step
             try:
                 sampled=held.states[Inside].set_value(target,True)
@@ -164,6 +173,7 @@ class CheckedPlacement:
                 self.frames_revision=-1
             if not sampled:
                 raise SkillError('sampling_error','Official volume sampler could not find a valid placement',changed=True)
+            self._relocate_contents(held,contents)
             for _ in range(min(50,max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if not held.states[Inside].get_value(target):

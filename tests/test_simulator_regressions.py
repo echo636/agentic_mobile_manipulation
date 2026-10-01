@@ -61,11 +61,16 @@ class SimulatorRegressions(unittest.TestCase):
     def test_spectator_failure_does_not_abort_robot_video(self):
         with tempfile.TemporaryDirectory() as folder:
             b=RGBBackend.__new__(RGBBackend);b.output=Path(folder);b.steps=13
-            calls=[];b.video=SimpleNamespace(closed=False,append=lambda *args:calls.append(args))
+            b._recorded_pixels=None;b._recorded_capture_step=None;b.video_render_stride=2
+            calls=[];b.video=SimpleNamespace(closed=False,append=lambda *args,**kw:calls.append((args,kw)))
             def broken():raise AssertionError('torch compile regression fixture')
             b._position_spectator=broken;b._render_rgb_views=lambda **kw:{'front':'actual frame'}
             b._video_frame('env_step')
-            self.assertEqual(calls,[({'front':'actual frame'},13,'env_step')])
+            self.assertEqual(calls,[(({'front':'actual frame'},13,'env_step'),{'capture_env_step':13,'repeated':False})])
+            b.steps=15;b._video_frame('env_step')
+            self.assertEqual(calls[-1][1],{'capture_env_step':13,'repeated':True})
+            b._video_frame('observation_boundary')
+            self.assertEqual(calls[-1][1],{'capture_env_step':15,'repeated':False})
             self.assertIn('last_camera_pose',(b.output/'recording_warnings.jsonl').read_text())
 
     def test_legacy_robot_migration_retains_identity_and_asset_check(self):

@@ -32,6 +32,8 @@ ERROR_MESSAGES = {
     "fixed_object":"The selected object cannot be moved by this executor.",
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
     "sampling_error":"The executor could not find a valid placement; inspect the new RGB before recovery.",
+    "post_condition_error":"The executor could not verify its operation after settling; inspect the new RGB.",
+    "physics_instability":"The simulator reported an unstable physical state; do not repeat this action blindly.",
     "postcondition_error":"The executor could not complete the requested action; inspect the new RGB.",
     "execution_error":"Execution failed or partially completed; inspect the new RGB.",
     "action_timeout":"The executor exhausted this action's step budget.",

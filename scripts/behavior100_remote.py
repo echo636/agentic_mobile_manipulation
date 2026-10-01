@@ -29,12 +29,13 @@ def preflight(gpu, port, data_root):
     mem = dict(line.split(':', 1) for line in Path('/proc/meminfo').read_text().splitlines())
     cgroup = Path('/sys/fs/cgroup/user.slice') / f'user-{os.getuid()}.slice'
     cg = {k: (cgroup/k).read_text().strip() for k in ('memory.current', 'memory.max')}
-    cg_free = None if cg['memory.max'] == 'max' else int(cg['memory.max'])-int(cg['memory.current'])
+    cg['inactive_file']=int(dict(line.split() for line in (cgroup/'memory.stat').read_text().splitlines()).get('inactive_file',0))
+    cg_free = None if cg['memory.max'] == 'max' else int(cg['memory.max'])-int(cg['memory.current'])+cg['inactive_file']
     with socket.socket() as sock:
         port_free = sock.connect_ex(('127.0.0.1', port)) != 0
     checks = {'gpu_idle_under_1GiB': int(selected[2]) < 1024,
               'host_memory_available_40GiB': int(mem['MemAvailable'].split()[0])*1024 > 40*1024**3,
-              'cgroup_headroom_32GiB': cg_free is None or cg_free > 32*1024**3,
+              'cgroup_reclaimable_headroom_28GiB': cg_free is None or cg_free > 28*1024**3,
               'data_disk_free_40GiB': shutil.disk_usage(data_root).free > 40*1024**3,
               'bridge_port_free': port_free}
     return {'at': datetime.now(timezone.utc).isoformat(), 'host': socket.gethostname(),

@@ -53,6 +53,11 @@ All four cameras share capture_id/captured_at/sim_step. Directions are relative 
 Check job.stale. A cached job can become stale after an action or another capture. Act only on a fresh image_ref returned to you. Choose a pixel from ANY of the four current cameras; no preliminary robot rotation is needed merely to see behind or sideways.
 look remains an explicit robot turn when useful for an action, not the surround camera acquisition mechanism. All action responses also contain the new four-camera view.
 '''
+SKILLS_PROMPT += """
+The MCP tool catalog is checked before policy startup. If a tool seems unavailable, actually attempt list_skills/observe and report the returned error; do not infer unavailability from an empty workspace.
+For act, use placement_yaw_degrees=null and wait_seconds=null unless applicable. place_on_top can request a relative rotation about vertical with placement_yaw_degrees; wait can request 0.1–20 simulation seconds with wait_seconds. Use repeated bounded waits to allow a visible appliance process, checking RGB between waits.
+Before finish(achieved), obtain a fresh four-camera observation and verify every instructed item, destination, count and final door/appliance state. A tool returning completed is only evidence of that operation. If one item or required arrangement remains uncertain, keep inspecting or finish blocked; do not silently omit it.
+"""
 SYSTEM_PROMPT = SKILLS_PROMPT
 
 def system_prompt(profile='skills'):

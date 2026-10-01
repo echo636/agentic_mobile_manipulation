@@ -184,10 +184,10 @@ class Batch:
             command=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'simulate','--manifest',str(self.root/'manifest.json'),
                      '--index',str(row['index']),'--run-id',runid,'--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root']]
             launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+'\nsource '+q(self.c['sim_env'])+
-                                '\nexport PYTHONPATH='+q(str(self.source/'src'))+'\nexport OMNIGIBSON_APPDATA_PATH='+q(self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))+
+                                '\nexport PYTHONPATH='+q(str(self.source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))+
                                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
             launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
-                    '-p','MemoryMax=48G','-p','CPUQuota=800%','-p',f"RuntimeMaxSec={self.manifest['simulator_runtime_max_seconds']}",
+                    '-p','MemoryMax='+self.c.get('simulator_memory_max','28G'),'-p','CPUQuota=800%','-p',f"RuntimeMaxSec={self.manifest['simulator_runtime_max_seconds']}",
                     '-p','TimeoutStopSec=30','-p','KillMode=control-group','-p','SuccessExitStatus=2',
                     '-p','WorkingDirectory='+str(self.source),'/bin/bash',str(launcher)]
             p=self.ssh(launch);(self.root/'logs'/f'{runid}_launch.log').write_text(p.stdout+p.stderr)

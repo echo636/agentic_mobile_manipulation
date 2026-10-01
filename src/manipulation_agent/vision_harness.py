@@ -62,6 +62,10 @@ class VisionHarness:
         try:
             if self.closed: raise SkillError('episode_closed','The episode is closed')
             if name not in self.catalog: raise SkillError('unknown_tool','Tool is not enabled in this agent profile')
+            # Compatibility for archived callers; model schema explicitly carries
+            # nullable action options. Original input remains in the event ledger.
+            if name=='act' and isinstance(arguments,dict):
+                arguments={'placement_yaw_degrees':None,'wait_seconds':None,**arguments}
             validate(arguments,self.catalog[name]['inputSchema'])
             if name!='finish' and (self.calls>self.budget.max_calls or time.monotonic()-self.started>self.budget.wall_seconds):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')

@@ -123,7 +123,7 @@ class NavigationPlan:
 
 
 def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
-                    horizon=10000., max_expansions=250000):
+                    horizon=10000., max_expansions=250000, candidate_filter=None):
     """Project candidate goals, validate reachability, rank and plan one GT hop.
 
     One multi-goal Dijkstra search supplies exact grid geodesics for all
@@ -138,7 +138,8 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
         cell=grid.snap(raw,max_snap)
         if cell is not None:
             goal=grid.world(cell)
-            candidates.append((cell,math.dist(goal,raw),math.dist(goal,hint)))
+            if candidate_filter is None or candidate_filter(goal):
+                candidates.append((cell,math.dist(goal,raw),math.dist(goal,hint)))
     if not candidates:raise NavigationError('No bounded projection of the selected visual target is navigable')
     pending={c[0] for c in candidates};distances={start:0.};parents={};closed=set();queue=[(0.,start)]
     while queue and pending:

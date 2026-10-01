@@ -16,6 +16,7 @@ from manipulation_agent.tools import tool_specs
 from manipulation_agent.vision_policy import system_prompt
 from manipulation_agent.records import now, write_json, source_version
 from manipulation_agent.model_trace import export_summaries
+from manipulation_agent.mcp_preflight import check_server
 
 
 def main():
@@ -54,6 +55,14 @@ def main():
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": subprocess.check_output(["codex", "--version"], text=True).strip()}
     write_json(args.output / "controller.json", metadata)
+    try:
+        metadata['mcp_preflight']=check_server(args.mcp_command,json.loads(args.mcp_args_json),tool_specs(args.agent_profile),args.output)
+    except Exception as exc:
+        metadata.update(status='failed',failure_stage='mcp_handshake',failure_type=type(exc).__name__,
+                        finished_at=now(),formal_finish_observed=False,tools_called=[],task_success=None)
+        write_json(args.output/'controller.json',metadata)
+        return 2
+    metadata['policy_started_at']=now();write_json(args.output/'controller.json',metadata)
     started = time.monotonic()
     with (args.output / "model_events.jsonl").open("w") as stdout, (args.output / "client.stderr.log").open("w") as stderr:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, text=True,

@@ -13,3 +13,7 @@ description: Complete manipulation through RGB, callable workflow skills, bounde
 7. Verify the entire instruction from RGB and feedback. Finish achieved/blocked/aborted with a short evidence-based reason, and receive closed=true. The evaluator remains private.
 
 Read references/evidence.md for observation and completion rules.
+
+## Complete-task verification
+
+Before claiming achieved, request a fresh four-camera observation and account for every requested item/count, spatial relation, door state and appliance state using RGB plus the actions actually executed. Reinspect occluded items from a new viewpoint. Successful act responses are not an independent task score. Washing or heating needs an appropriate process interval; wait_seconds on wait requests 0.1–20 simulation seconds, default 5. Do not infer a completed process from one successful toggle or visual appearance alone. If required evidence remains missing, continue or report the unresolved part rather than claim full completion.
