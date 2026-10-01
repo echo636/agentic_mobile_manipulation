@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 from datetime import datetime, timezone
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 
 def command(args):
@@ -17,11 +18,22 @@ def command(args):
 
 
 def preflight(gpu, port, data_root, min_free_gpu_mib=0):
+    from manipulation_agent.video import ffmpeg_executable
+    try:
+        encoder = ffmpeg_executable()
+        encoding_check = command([encoder, '-hide_banner', '-loglevel', 'error',
+            '-f', 'lavfi', '-i', 'color=size=64x64:rate=1', '-frames:v', '1',
+            '-c:v', 'libx264', '-threads', '1', '-f', 'null', '-'])
+        encoding_check['executable'] = encoder
+        encoding_check['sha256'] = hashlib.sha256(Path(encoder).read_bytes()).hexdigest()
+    except Exception as exc:
+        encoding_check = {'exit_code': -1, 'error': str(exc)}
     queries = {
         'gpus': command(['nvidia-smi', '--query-gpu=index,uuid,memory.used,memory.total,driver_version', '--format=csv,noheader,nounits']),
         'gpu_processes': command(['nvidia-smi', '--query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory', '--format=csv,noheader']),
         'disk': command(['df', '-B1', str(data_root), os.getcwd()]),
         'quota': command(['quota', '-s']),
+        'video_encoder': encoding_check,
     }
     selected = next((s.split(',') for s in queries['gpus']['stdout'].splitlines() if s.split(',')[0].strip() == str(gpu)), None)
     if selected is None:
@@ -39,7 +51,8 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0):
         port_free = sock.connect_ex(('127.0.0.1', port)) != 0
     if min_free_gpu_mib and min_free_gpu_mib<24576:
         raise ValueError('Shared GPU mode requires at least 24 GiB free before each episode')
-    checks = {'gpu_capacity': (int(selected[3])-int(selected[2])>=min_free_gpu_mib) if min_free_gpu_mib else int(selected[2])<1024,
+    checks = {'video_encoder': encoding_check['exit_code'] == 0,
+              'gpu_capacity': (int(selected[3])-int(selected[2])>=min_free_gpu_mib) if min_free_gpu_mib else int(selected[2])<1024,
               'validated_driver_floor':tuple(map(int,selected[4].strip().split('.'))) >= (580,65,6),
               'host_memory_available_40GiB': int(mem['MemAvailable'].split()[0])*1024 > 40*1024**3,
               'cgroup_reclaimable_headroom_28GiB': cg_free is None or cg_free > 28*1024**3,

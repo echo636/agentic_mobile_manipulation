@@ -14,6 +14,18 @@ from collections import deque
 from .records import now, write_json
 
 
+def ffmpeg_executable():
+    """Use the system encoder or the pinned imageio package's bundled binary."""
+    executable = shutil.which('ffmpeg')
+    if executable:
+        return executable
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except (ImportError, RuntimeError) as exc:
+        raise RuntimeError('Recording requires ffmpeg or imageio-ffmpeg') from exc
+
+
 class EpisodeVideo:
     VIEWS = ('head', 'spectator', 'left_wrist', 'right_wrist')
 
@@ -67,8 +79,7 @@ class EpisodeVideo:
         draw.text((12,self.rows*self.size+32),'Ideal executor: instantaneous pose/state changes are recorded as executed.',fill='#b6d6df',font=font)
         draw.text((12,self.rows*self.size+55),'Control-step timeline; labeled frame holds between captures. No motion interpolation.',fill='#b6d6df',font=font)
         if self.process is None:
-            ffmpeg = shutil.which('ffmpeg')
-            if not ffmpeg: raise RuntimeError('ffmpeg is required for --record-video')
+            ffmpeg = ffmpeg_executable()
             self.log = (self.output/'video_encoder.log').open('wb')
             command = [ffmpeg,'-hide_banner','-loglevel','warning','-y','-f','rawvideo','-pixel_format','rgb24',
                        '-video_size',f'{self.width}x{self.height}','-framerate',str(self.fps),'-i','pipe:0',
