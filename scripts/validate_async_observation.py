@@ -24,7 +24,23 @@ def base_relative_forward(camera_quat, base_quat):
     return [sum(rotation[j][i]*v[j] for j in range(3)) for i in range(3)]
 
 
-def validate(root, probe=None):
+def async_checks(events, jobs, require_async=True):
+    """A policy may choose sync captures; an explicit async probe must exercise jobs."""
+    requested=any(e['kind']=='tool_call' and e['name']=='start_observation' for e in events)
+    if not jobs and not requested and not require_async:
+        return {}, 'not_exercised_sync_only'
+    checks={'all_jobs_terminal':bool(jobs) and all(j['status'] in {'passed','failed','cancelled'} for j in jobs),
+            'completed_async_capture':any(j['status']=='passed' for j in jobs)}
+    ordering=[]
+    for j in jobs:
+        ack=next((i for i,e in enumerate(events) if e['kind']=='tool_result' and e['name']=='start_observation' and e['result'].get('job',{}).get('job_id')==j['job_id']),None)
+        started=next((i for i,e in enumerate(events) if e['kind']=='observation_started' and e['job']['job_id']==j['job_id']),None)
+        if started is not None:ordering.append(ack is not None and ack<started)
+    checks['submission_returned_before_capture_started']=bool(ordering) and all(ordering)
+    return checks, 'required_or_exercised'
+
+
+def validate(root, probe=None, require_async=True):
     run=json.loads((root/'run.json').read_text())
     captures=read_lines(root/'captures.jsonl')
     audits=read_lines(root/'observation_capture_audit.jsonl')
@@ -54,26 +70,20 @@ def validate(root, probe=None):
         checks['four_distinct_direction_images'] &= len(set(hashes))==4
         dot=lambda a,b:sum(x*y for x,y in zip(axes[a],axes[b]))
         checks['cardinal_optical_axes'] &= abs(dot('front','back')+1)<1e-4 and abs(dot('left','right')+1)<1e-4 and abs(dot('front','left'))<1e-4
-    terminal={'passed','failed','cancelled'}
-    checks['all_jobs_terminal']=bool(jobs) and all(j['status'] in terminal for j in jobs)
-    checks['completed_async_capture']=any(j['status']=='passed' for j in jobs)
-    ordering=[]
-    for j in jobs:
-        ack=next((i for i,e in enumerate(events) if e['kind']=='tool_result' and e['name']=='start_observation' and e['result'].get('job',{}).get('job_id')==j['job_id']),None)
-        started=next((i for i,e in enumerate(events) if e['kind']=='observation_started' and e['job']['job_id']==j['job_id']),None)
-        if started is not None:ordering.append(ack is not None and ack<started)
-    checks['submission_returned_before_capture_started']=bool(ordering) and all(ordering)
+    lifecycle, async_scope=async_checks(events,jobs,require_async=require_async or probe is not None)
+    checks.update(lifecycle)
     if probe:
         result=json.loads((probe/'validation.json').read_text());checks['real_mcp_probe_passed']=result['status']=='passed'
         checks['read_only_probe_no_actions']=run.get('actions')==0 and run.get('sim_steps')==0
     result={'status':'passed' if all(checks.values()) else 'failed','run_id':run['run_id'],
             'validation_level':'fixed_four_camera_async_interface','task_success_separate':run.get('task_success'),
             'checks':checks,'captures':len(captures),'jobs':len(jobs),'source':run['source'],
-            'axis_reference_frame':'robot_base'}
+            'axis_reference_frame':'robot_base','async_lifecycle_scope':async_scope}
     (root/'observation_validation.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result));return 0 if result['status']=='passed' else 2
 
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--run-dir',type=Path,required=True);p.add_argument('--probe-dir',type=Path)
-    a=p.parse_args();raise SystemExit(validate(a.run_dir,a.probe_dir))
+    p.add_argument('--allow-sync-only',action='store_true',help='Episode policy may choose synchronous observation; still audit every capture and any async jobs used')
+    a=p.parse_args();raise SystemExit(validate(a.run_dir,a.probe_dir,require_async=not a.allow_sync_only))
