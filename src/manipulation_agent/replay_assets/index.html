@@ -1,20 +1,32 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@@TITLE@@ · Experiment Replay</title><style>@@CSS@@</style></head>
-<body><header><a class="back" href="/retest32_gt_20260930/results.html">← 实验报告</a><span class="eyebrow">BEHAVIOR · OBSERVATION / ACTION REPLAY</span><h1 id="title"></h1><p id="instruction"></p><div id="stats" class="stats"></div></header>
-<main><aside id="protocol" class="notice"></aside>
-<section id="video-panel" class="card video-panel" hidden><h2>任务全过程 · 模型原文与工具轨迹</h2><p>默认详读版保留 1× 仿真动作，长文本逐页停留；左侧前视最大、其余三路缩小，并显示仅供回放的第三人称视角。阅读停顿不代表模型耗时。真实耗时版和原始录像保留。Assistant output 与接口返回的 reasoning summary 分开显示，逐字保留，不翻译。旧实验没有保存的推理摘要标记为缺失；不补写。详读版将已记录的模型文本完整分页，右侧将全部模型输出、工具调用和返回依次保留在同一条会话中。切步只移动高亮；滚动查看历史会暂停自动跟随。</p><div id="live-phase" class="notice" aria-live="polite"></div><video id="episode-video" controls playsinline preload="metadata"></video><div class="video-controls"><label>版本 <select id="video-edition"><option value="inspection">详读版（动作 1× / 完整原文分页）</option><option value="review">精简版（动作 2× / 省略等待）</option><option value="walltime">真实耗时版（保留模型等待）</option><option value="explained">原始消息同步版</option><option value="raw">原始连续录像</option></select></label><label>播放速度 <select id="video-speed"><option value="1" selected>1× 正常</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="4">4×</option><option value="0.5">0.5× 慢放</option><option value="0.25">0.25× 慢放</option></select></label><label><input id="video-sync" type="checkbox" checked> 视频同步下方动作步骤</label><a id="video-download" download>下载完整 MP4</a><a href="video.json">录制与覆盖率记录</a></div><p id="video-summary" class="muted"></p></section>
-<div class="transport"><button id="prev" aria-label="上一步">← 上一步</button><button id="play">▶ 播放</button><button id="next" aria-label="下一步">下一步 →</button><label>步间隔 <select id="speed"><option value="10000">10 秒</option><option value="2500">2.5 秒</option><option value="1000">1 秒</option><option value="5000">5 秒</option></select></label><span id="position"></span><input id="seek" type="range" min="1" max="1" value="1" aria-label="轨迹进度"><span class="muted">← / → 切步 · 空格播放 · 离散步骤，非实时视频</span></div>
-<div class="layout"><aside class="timeline card"><div class="timeline-head"><strong>完整工具轨迹</strong><select id="filter" aria-label="筛选轨迹"><option value="all">全部步骤</option><option value="motor">机器人动作</option><option value="observation">含观测返回</option><option value="failed">失败 / 缺失</option></select></div><div id="timeline"></div></aside>
-<section class="workspace"><div class="step-heading"><div><span class="eyebrow" id="event"></span><h2 id="step-title"></h2></div><span id="step-status" class="badge"></span></div>
-<div class="inspection-workspace"><div class="inspection-visuals"><div class="camera-bar"><strong>机器人观测与第三人称</strong><select id="mosaic-side" aria-label="动作前后"><option value="before">调用前</option><option value="after">返回后</option></select></div><div id="inspection-cameras" class="inspection-cameras"></div><p id="inspection-camera-note" class="caption"></p><details><summary>单相机调用前后对比 / 选点</summary><div class="camera-bar" id="camera-bar"><span>相机</span><button data-view="head" aria-pressed="true">头部 RGB</button><button data-view="left_wrist" aria-pressed="false">左腕 RGB</button><button data-view="right_wrist" aria-pressed="false">右腕 RGB</button></div>
-<div class="frames"><figure class="card"><figcaption><strong>调用前 · Agent 已有观测</strong><small id="before-meta"></small></figcaption><div id="before-frame" class="frame"></div></figure><figure class="card"><figcaption><strong>返回后 · 最新可用观测</strong><small id="after-meta"></small></figcaption><div id="after-frame" class="frame"></div></figure></div>
-<p id="frame-note" class="caption"></p><article id="observation-job-card" class="card" hidden><h3>异步四相机观测任务</h3><p>四个固定朝向在同一仿真状态采集；没有转动机器人。stale 表示本批图像已被新观测替代。</p><pre id="observation-job"></pre></article>
-</details></div><div class="conversation-column"><div id="conversation"></div><details><summary>当前步骤详情</summary><div id="execution-panels" class="inspection-text"><article class="card"><h3>执行与结果</h3><p id="action"></p><p id="outcome"></p><p id="timing" class="muted"></p><details><summary>精确调用参数</summary><pre id="arguments"></pre></details><details><summary>原始 MCP 文本返回（图像见上方 / JSONL）</summary><pre id="result"></pre></details></article>
-<article id="reasoning-card" class="card"><h3>Provider reasoning summary · 原文</h3><p class="muted">接口实际返回的推理摘要；与 assistant 输出分开。不是完整内部思维链。</p><div id="reasoning"></div></article><article id="decision-card" class="card"><h3>Assistant output · 原文</h3><p class="muted">逐字保留 assistant 公开文本与事件 ID。此处不展示隐藏思维链，也不展示加工的中文决策摘要。</p><div id="decisions"></div></article></div></details></div></div>
-<article id="skill-card" class="card" hidden><h3>本步 Skill 调用</h3><p>Skill 是可读取的工作流指导文档；机器人动作由后续 act / look 执行。</p><pre id="current-skill"></pre></article>
-<div id="workflow-panels" class="info-grid"><article class="card"><h3>当前已接受的任务计划</h3><div id="plan"></div></article><article class="card"><h3>记忆与技能</h3><div id="memory"></div><details id="skill-detail" hidden><summary>本步读取的技能原文</summary><pre id="skill-text"></pre></details></article></div>
-</section></div>
-<section class="card evaluation"><h2>独立评估 · 实验结束后可见</h2><p>此区域用于研究者审阅，未作为观测反馈给 agent。任务成功、工具执行完成和模型声称完成分别记录。</p><div id="evaluation-stats" class="stats"></div><details><summary>评分、来源与执行环境</summary><pre id="evaluation"></pre></details><p id="audit-summary"></p><details id="transport-failures" hidden><summary>没有仿真端记录的原始模型调用（例如断线重试）</summary><pre id="unmatched-calls"></pre></details><details><summary>最后一次调用后的推理摘要原文</summary><pre id="final-reasoning"></pre></details><details><summary>LLM 结束后的公开原文</summary><pre id="final-model-message"></pre></details><p class="downloads"><a id="public-trace-link" href="model_public_events.jsonl" download>原始公开 LLM / MCP 事件流</a><a href="replay.json">Replay 数据</a><a href="run.json">原始 Run</a><a href="events.jsonl">离线诊断事件（含执行器私有信息）</a><a id="audit-link" href="replay_audit.json">图像与调用审计</a><a href="index.html">原始日志页</a></p></section>
-<footer id="limitations"></footer></main>
-<dialog id="zoom"><button id="close-zoom">关闭 ×</button><img alt="原始相机RGB放大"><p></p></dialog>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@@TITLE@@ · Replay</title><style>@@CSS@@</style></head>
+<body>
+<header class="app-header">
+  <div class="heading-line"><a class="back" href="/retest32_gt_20260930/results.html#replay">← 全部实验</a><span class="eyebrow">BEHAVIOR / REPLAY</span><span id="evaluation-badge" class="badge"></span></div>
+  <h1 id="title"></h1><p id="instruction"></p>
+</header>
+<main>
+  <div class="replay-workspace">
+    <section class="observation-panel" aria-label="同步观测">
+      <div class="panel-heading"><div><span class="eyebrow">OBSERVATION</span><h2>观测画面</h2></div><div class="view-tabs" role="group" aria-label="观测来源"><button id="mode-execution" aria-pressed="true">执行画面</button><button id="mode-input" aria-pressed="false">模型输入</button></div></div>
+      <div id="camera-grid" class="camera-grid"></div>
+      <div class="observation-caption"><span id="observation-note"></span><select id="input-side" aria-label="模型输入时点" hidden><option value="before">调用前已收到</option><option value="after">返回后已收到</option></select></div>
+      <video id="episode-video" playsinline preload="metadata" muted hidden></video>
+      <div id="video-error" role="status" hidden></div>
+      <div class="playback">
+        <div class="playback-progress"><input id="video-seek" type="range" min="0" max="1" value="0" step="0.01" aria-label="视频进度"><span id="video-time">0:00 / —</span></div>
+        <div class="playback-buttons"><button id="prev" aria-label="上一步">‹</button><button id="video-play" class="primary">▶ 播放</button><button id="next" aria-label="下一步">›</button><select id="step-select" aria-label="跳转步骤"></select><select id="video-speed" aria-label="播放速度"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div>
+      </div>
+      <div class="playback-options"><select id="video-edition" aria-label="时间模式"><option value="inspection">详读 · 含阅读停留</option><option value="raw">连续 · 仿真时间</option><option value="walltime">真实耗时 · 保留等待</option></select><span id="time-note"></span></div>
+    </section>
+    <section class="conversation-panel" aria-label="模型与动作时间线">
+      <div class="panel-heading"><div><span class="eyebrow">AGENT TIMELINE</span><h2>模型思考与行动</h2></div><label class="follow-label"><input id="follow" type="checkbox" checked> 跟随播放</label></div>
+      <div id="current-step" class="current-step" aria-live="polite"></div>
+      <div id="conversation"></div>
+      <div class="conversation-note">保留已记录的模型原文；工具参数与完整返回可展开查看。</div>
+    </section>
+  </div>
+  <details class="archive"><summary>实验结果与原始记录</summary><div id="archive-summary"></div><p class="downloads"><a id="video-download" download>下载完整视频</a><a href="replay.json">Replay JSON</a><a id="public-trace-link" href="model_public_events.jsonl">模型事件流</a><a href="run.json">原始运行记录</a><a id="audit-link" href="replay_audit.json">证据审计</a></p><details><summary>版本与执行环境</summary><pre id="provenance"></pre></details></details>
+</main>
+<dialog id="zoom"><button id="close-zoom" aria-label="关闭放大画面">关闭 ×</button><h3 id="zoom-title"></h3><canvas id="zoom-canvas"></canvas></dialog>
 <script type="application/json" id="replay-data">@@DATA@@</script><script>@@JS@@</script></body></html>

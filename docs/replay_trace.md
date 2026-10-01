@@ -1,4 +1,36 @@
-# Readable replay and model trace (2026-10-01)
+# Clean replay interface (2026-10-01)
+
+The current player has two panels: synchronized camera views and a persistent
+step timeline. Front RGB is large; back/left/right and replay-only third person
+are smaller. One hidden video decoder supplies five canvas viewports cropped from
+recorded camera tiles. The original MP4 is unchanged; no frames are synthesized.
+Only baked camera label strips are excluded from the displayed crop.
+
+The timeline groups consecutive records for the same step without changing source
+event order. Original assistant text and returned summaries are expanded; tool
+arguments, every returned text block and source IDs are under closed details.
+Missing text remains explicitly missing. Scrolling pauses follow; selecting a
+step only changes focus and video position, preserving the entire conversation.
+
+Two observation modes are explicit:
+
+- **Execution footage**: continuous recorded camera frames, synchronized to video.
+  These frames were not necessarily returned to the model.
+- **Model input**: the latest RGB actually returned before/after the selected call.
+  Before the first observation result there are no model-input images. Third
+  person remains replay-only in both modes.
+
+Readable, raw simulation-time, and wall-time editions share one play/seek control.
+Readable holds are editorial. Wall-time preserves call waiting but estimates frame
+spacing within tools. This is an archived replay, not a live simulator connection.
+
+The results dashboard embeds the same standalone player. `render_replay_page`
+can regenerate only the HTML from saved `replay.json`, preserving evidence bytes.
+The cleanup and validation records are in `operations/replay_clean_20261001`.
+
+---
+
+## Retained video formats and earlier iterations (2026-10-01)
 
 The default viewing edition is now `inspection.mp4`, produced by
 `inspection_video.py`. It retains every source frame in order at **1× simulation

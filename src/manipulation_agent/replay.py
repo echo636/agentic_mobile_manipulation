@@ -157,6 +157,12 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     write_json(run_dir / 'replay.json', data)
     if data['audit']:
         write_json(run_dir / 'replay_audit.json', data['audit'])
+    (run_dir / 'replay.html').write_text(render_replay_page(data))
+    return data
+
+
+def render_replay_page(data: dict) -> str:
+    """Render archived replay data without rebuilding or changing experiment evidence."""
     assets = Path(__file__).with_name('replay_assets')
     template = (assets / 'index.html').read_text()
     # Escape < so task text cannot close a JSON script element.
@@ -170,10 +176,7 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         page = page.replace(' href="video.json"', '')
     if not data['has_public_trace']:
         page = page.replace(' href="model_public_events.jsonl"', '')
-    if not (run_dir / 'index.html').is_file():
-        page = page.replace('<a href="index.html">原始日志页</a>', '')
-    (run_dir / 'replay.html').write_text(page)
-    return data
+    return page
 
 
 def main() -> None:

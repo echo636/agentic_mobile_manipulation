@@ -1,82 +1,120 @@
 (() => {
 'use strict';
-const D=JSON.parse(document.getElementById('replay-data').textContent), $=id=>document.getElementById(id);
-const labels={observe:'观察 RGB',look:'转向观察',act:'执行动作',update_plan:'更新计划',remember:'记录记忆',recall:'读取记忆',list_skills:'查看技能目录',read_skill:'阅读技能',finish:'结束任务',start_observation:'启动异步观测',get_observation:'获取四向RGB',cancel_observation:'取消观测任务'};
-const motors={navigate_to:'接近选定目标',grasp:'抓取',place_inside:'放入',place_on_top:'放到表面',open:'打开',close:'关闭',toggle_on:'开启',toggle_off:'关闭开关',release:'释放',wait:'等待'};
-let edition=D.inspection_video?.status==='passed'?'inspection':D.review_video?.status==='passed'?'review':D.walltime_video?.status==='passed'?'walltime':D.explained_video?.status==='passed'?'explained':'raw';
-const cameraViews=[...new Set(D.steps.flatMap(s=>[...(s.before?.images||[]),...(s.after?.images||[])]).map(i=>i.view))];
-let fromVideo=false,timelineSelection=false;let index=0,view=cameraViews.includes('front')?'front':'head',timer=null;
-const text=(id,value)=>$(id).textContent=value??'—';
-function node(tag,txt,cls){const n=document.createElement(tag);if(txt!==undefined)n.textContent=txt;if(cls)n.className=cls;return n}
-function stat(target,label,value){const n=node('div',undefined,'stat');n.append(node('strong',String(value??'未记录')),node('small',label));$(target).append(n)}
-function title(s){return s.tool==='act'?(motors[s.arguments.primitive||s.arguments.skill]||s.arguments.primitive||s.arguments.skill):labels[s.tool]||s.tool}
-function visible(){return D.steps.filter(s=>$('filter').value==='all'||($('filter').value==='motor'&&s.is_motor_action)||($('filter').value==='observation'&&s.new_observation)||($('filter').value==='failed'&&s.status!=='passed'))}
-function paintTimeline(){const root=$('timeline');root.replaceChildren();for(const s of visible()){const b=node('button',undefined,`timeline-step ${s.status} ${s.index===index+1?'active':''}`);b.dataset.step=s.index;b.setAttribute('aria-current',String(s.index===index+1));b.append(node('span',String(s.index).padStart(2,'0'),'step-number'));const wrap=node('span');wrap.append(node('b',title(s)),node('small',`${s.tool} · +${s.elapsed_seconds.toFixed(1)}s${s.status==='failed'?' · 失败':''}`));b.append(wrap);b.onclick=()=>{stop();select(s.index-1)};root.append(b)}if(!root.children.length)root.append(node('p','没有此类记录。','muted'))}
-function frame(side,obs,s){const root=$(side+'-frame');root.replaceChildren();const image=obs?.images.find(i=>i.view===view);if(!image?.file){root.append(node('div',obs?'该视角没有已归档图像。':'此时尚未通过工具返回任何RGB。','empty'));text(side+'-meta',obs?`revision ${obs.revision}`:'尚无模型观测');return}const img=node('img');img.src=image.file;img.alt=`${view} ${image.image_ref}`;img.onclick=()=>{const z=$('zoom');z.querySelector('img').src=image.file;z.querySelector('p').textContent=`${image.image_ref} · ${image.sha256?'SHA '+image.sha256:'历史画面未验证模型接收'}`;z.showModal()};root.append(img);text(side+'-meta',`${image.image_ref} · rev ${obs.revision} · env.step ${image.env_steps??'—'}`);if(obs.capture)text(side+'-meta',`${image.image_ref} · ${obs.capture.capture_id} · step ${obs.capture.sim_step} · ${obs.capture.captured_at}`);const target=s.arguments.target;if(side==='before'&&target&&typeof target==='object'&&target.image_ref===image.image_ref){const p=node('span',undefined,'point');p.style.left=target.point[0]*100+'%';p.style.top=target.point[1]*100+'%';p.title='模型传入的归一化像素目标；仅回放叠加';root.append(p)}}
-function paintMosaic(step){
- const root=$('inspection-cameras');root.replaceChildren();if(!step)return;
- const side=$('mosaic-side').value,obs=step[side];
- const order=['front','back','left','right'];
- const images=[...(obs?.images||[])].sort((a,b)=>order.indexOf(a.view)-order.indexOf(b.view));
- const spectator=D.inspection_video?.spectator_images?.[String(step.index)]?.[side];
- if(spectator)images.push({...spectator,view:'spectator'});
- for(const im of images){if(!im.file)continue;const f=node('figure',undefined,'camera-'+im.view),img=node('img');img.src=im.file;img.alt=im.view+' recorded RGB';img.onclick=()=>{const z=$('zoom');z.querySelector('img').src=im.file;z.querySelector('p').textContent=im.view==='spectator'?'Third person · replay only · not visible to model':im.image_ref;z.showModal()};f.append(img,node('figcaption',im.view==='spectator'?'THIRD PERSON · replay only':im.view.toUpperCase()+' · '+im.image_ref));root.append(f)}
- text('inspection-camera-note',obs?'Robot RGB: revision '+obs.revision+'. Third person is an archived video boundary, never model input.':'No RGB had been returned to the model at this point. Third person, if present, is replay only.');
+const $=id=>document.getElementById(id),D=JSON.parse($('replay-data').textContent),video=$('episode-video');
+const embedded=new URLSearchParams(location.search).has('embed');if(embedded)document.body.classList.add('embedded');
+const views=['front','back','left','right','spectator'],names={front:'前视 RGB',back:'后视 RGB',left:'左视 RGB',right:'右视 RGB',spectator:'第三人称 · 回放'};
+const tiles=new Map(),imageCache=new Map();let mode='execution',index=0,phase='decision',manual=false,zoomView=null;
+let edition=D.inspection_video?.status==='passed'?'inspection':'raw',record=null;
+const text=(id,value)=>$(id).textContent=value??'—',clock=s=>Number.isFinite(s)?Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'):'—';
+const step=()=>D.steps[index],action=s=>s?.arguments?.primitive||s?.tool||'等待记录';
+const phaseLabels={initial:'初始画面',decision:'模型决策',execution:'执行中',tool:'执行中',result:'工具返回',final:'结束输出',evaluation:'离线评分',outside_tool_wait:'调用间等待'};
+const conversation=new ReplayTranscript($('conversation'),$('follow'),number=>selectStep(D.steps.findIndex(s=>s.index===number),true));conversation.setData(D);
+for(const name of views){
+ const tile=document.createElement('figure');tile.className='camera-tile camera-'+name;
+ const canvas=document.createElement('canvas');canvas.width=512;canvas.height=512;canvas.setAttribute('aria-label',names[name]);
+ const caption=document.createElement('figcaption');caption.textContent=names[name];
+ const empty=document.createElement('span');empty.className='camera-empty';empty.textContent=name==='spectator'?'无第三人称录像':'等待观测';
+ tile.append(canvas,caption,empty);$('camera-grid').append(tile);tiles.set(name,{tile,canvas,empty});
+ tile.onclick=()=>{if(!tile.classList.contains('has-image'))return;zoomView=name;text('zoom-title',names[name]);paintZoom();$('zoom').showModal()};
 }
-$('mosaic-side').onchange=()=>paintMosaic(D.steps[index]);
-const conversation=new ReplayTranscript($('conversation'),step=>{stop();select(step-1)});
-conversation.setData(D);
-document.querySelector('.inspection-visuals').prepend($('video-panel'));
-const cameraVideo=new ReplayCameraVideo($('episode-video'));
-
-
-function render(){conversation.setActive(D.steps[index]?.index);paintTimeline();const s=D.steps[index];paintMosaic(s);$('observation-job-card').hidden=!s?.observation_job;text('observation-job',JSON.stringify(s?.observation_job||{},null,2));if(!s){text('step-title','没有可回放的工具调用');text('outcome',D.failure?JSON.stringify(D.failure):'启动阶段结束，未录到 agent 观测。');['prev','next','play','seek'].forEach(id=>$(id).disabled=true);text('position','0 / 0');frame('before',null,{arguments:{}});frame('after',null,{arguments:{}});return}text('position',`${index+1} / ${D.steps.length}`);$('seek').value=index+1;text('event',`${s.event_id} → ${s.result_event_id??'无返回'} · ${s.at}`);text('step-title',title(s));text('step-status',s.status==='passed'?'工具完成':s.status==='failed'?'调用被拒绝 / 失败':'缺少返回');$('step-status').className='badge '+s.status;frame('before',s.before,s);frame('after',s.after,s);text('frame-note',D.rgb_only?(s.new_observation?'本步返回RGB。十字仅表示模型本次传入的选点，原始输入图没有标注。':'本步没有返回新RGB；右侧沿用此前已返回的最近观测。'):'历史oracle协议：这些是仿真器归档画面，当时没有作为图像输入提供给模型。');text('action',s.tool==='act'?`${s.arguments.primitive||s.arguments.skill} · ${JSON.stringify(s.arguments.target)}`:s.tool==='look'?`原地转向 ${s.arguments.yaw_degrees}°（正值向左）`:s.tool==='read_skill'?`${s.arguments.name}/${s.arguments.resource}`:labels[s.tool]||s.tool);text('outcome',!s.result?'没有工具返回记录。':!s.result.ok?`${s.result.error?.code}: ${s.result.error?.message}`:s.result.effect?'底层操作报告完成；需要后续图像核查。':s.result.closed?'正式结束已接受；任务评分见下方独立评估。':s.tool==='observe'?'已返回当前观测。':'请求已接受。');text('timing',`距首个调用 ${s.elapsed_seconds.toFixed(2)} 秒 · 工具耗时 ${s.tool_seconds?.toFixed(2)??'—'} 秒`);text('arguments',JSON.stringify(s.arguments,null,2));text('result',s.model_result_text||JSON.stringify(s.result,null,2));$('decisions').replaceChildren();for(const m of s.model_messages||[]){const n=node('div',undefined,'decision');n.append(node('small',`原始公开消息 ${m.id} · 事件顺序 ${m.source_event_index}`),node('pre',m.text));$('decisions').append(n)}if(!s.model_messages?.length)$('decisions').append(node('p','此调用前没有新增的 LLM 公开文本。工具调用本身见左侧原始参数；不补写思考过程。','muted'));$('reasoning').replaceChildren();for(const m of s.model_reasoning_summaries||[]){const n=node('div',undefined,'decision');n.append(node('small',`Provider summary · ${m.at} · source line ${m.source_line}`),node('pre',m.text));$('reasoning').append(n)}if(!s.model_reasoning_summaries?.length)$('reasoning').append(node('p',D.reasoning_availability==='provider_returned_summary'?'No provider summary before this call.':'Not recorded / not returned in this run. No reconstructed reasoning.','muted'));$('plan').replaceChildren();for(const g of s.plan){const n=node('div',undefined,'goal');n.append(node('strong',`${g.status} · ${g.id}`),node('div',g.description),node('small',`依赖 ${(g.dependencies||[]).join(', ')||'无'} · 证据 ${g.evidence||'未引用'}`));$('plan').append(n)}if(!s.plan.length)$('plan').append(node('p','尚无已接受的计划。','muted'));$('memory').replaceChildren();for(const [key,m]of Object.entries(s.memory)){const n=node('div',undefined,'memory');n.append(node('strong',`${key} · rev ${m.revision}`),node('div',m.text));$('memory').append(n)}if(!Object.keys(s.memory).length)$('memory').append(node('p','尚无记忆条目。','muted'));$('skill-detail').hidden=!(s.tool==='read_skill'&&s.result?.text);text('skill-text',s.result?.text||'');$('skill-card').hidden=!['list_skills','read_skill'].includes(s.tool);text('current-skill',s.result?.text||JSON.stringify(s.result?.skills||[],null,2));const chosen=visible();$('prev').disabled=!chosen.some(x=>x.index<s.index);$('next').disabled=!chosen.some(x=>x.index>s.index)}
-function select(i){index=Math.max(0,Math.min(D.steps.length-1,i));if(!fromVideo&&D.video?.status==='passed'){timelineSelection=true;$('episode-video').pause();const sec=edition==='inspection'?D.inspection_video.segments.find(p=>p.step===index+1)?.start_seconds:edition==='review'?D.review_video.segments.find(p=>p.step===index+1)?.start_seconds:edition==='walltime'?D.walltime_video.segments.find(p=>p.step===index+1&&p.phase==='tool')?.start_seconds:edition==='explained'?D.explained_video.segments.find(p=>p.step===index+1)?.start_seconds:D.steps[index]?.video_start_seconds;if(sec!=null)$('episode-video').currentTime=Math.min(sec+0.04,$('episode-video').duration||sec+0.04)}if(D.steps.length)history.replaceState(null,'',`#step=${index+1}`);render()}
-function advance(delta){const list=visible().filter(s=>delta>0?s.index>index+1:s.index<index+1);const next=delta>0?list[0]:list.at(-1);if(next)select(next.index-1);else stop()}
-function stop(){if(timer)clearInterval(timer);timer=null;text('play','▶ 播放');$('play').classList.remove('playing')}
-function play(){if(timer){stop();return}if(!visible().some(s=>s.index>index+1)){const first=visible()[0];if(!first)return;select(first.index-1)}text('play','Ⅱ 暂停');$('play').classList.add('playing');timer=setInterval(()=>advance(1),Number($('speed').value))}
-const cameraNames={front:'前',back:'后',left:'左',right:'右',head:'头部',left_wrist:'左腕',right_wrist:'右腕'};const cameraBar=$('camera-bar');cameraBar.replaceChildren(node('span','相机'));for(const name of cameraViews){const b=node('button',(cameraNames[name]||name)+' RGB');b.dataset.view=name;b.setAttribute('aria-pressed',String(name===view));cameraBar.append(b)}
-text('title',D.config.task?`${D.config.task} / ${D.config.instance}`:D.run_id);text('instruction',D.instruction||'未记录任务指令');stat('stats','仿真后端',D.config.backend||'未记录');stat('stats','协议',D.rgb_only?'RGB → 理想执行器':'历史 Oracle');stat('stats','机器人动作',D.execution.actions??D.steps.filter(s=>s.is_motor_action).length);stat('stats','工具调用',D.steps.length);stat('stats','策略',D.model||D.config.policy||'未记录');const verified=D.audit?.evidence_alignment==='passed';text('protocol',D.rgb_only?`RGB闭环回放 · ${verified?'已核对控制器与仿真轨迹，以及实际传入模型的图像字节。':'尚未关联通过审计的模型图像传输记录。'} 大脑看图、按需读取 Skill、选点与核查，低层动作理想化。`:'历史oracle基线 · 模型当时收到真实对象状态和图片路径，没有收到RGB像素。本回放的画面仅辅助研究者审阅，不计入RGB实验成绩。');if(!D.rgb_only)$('protocol').classList.add('legacy');if(D.config.backend==='mock')text('protocol','CPU mock fixture：仅验证工具与记录软件，不是真实OmniGibson任务实验。');const e=D.evaluation_offline_only;stat('evaluation-stats','独立任务成功',e.task_success===true?'通过':e.task_success===false?'未完成':'未评测');stat('evaluation-stats','运行状态',D.status);stat('evaluation-stats','模型结束声明',e.agent_outcome||'没有正式结束');stat('evaluation-stats','BDDL Q',e.evaluation?.goal_satisfaction_fraction);text('evaluation',JSON.stringify({evaluation:e,source:D.source,execution:D.execution,backend:D.backend,failure:D.failure},null,2));text('audit-summary',D.audit?`证据对齐：${D.audit.evidence_alignment} · 实际ImageContent ${D.audit.rgb_evidence?.image_content_count??0} 个 · 独立图像 ${D.audit.rgb_evidence?.unique_model_image_count??0} 张 · 源码 ${D.source.commit}`:'无关联模型审计；仅展示本次仿真/脚本原始轨迹。');$('audit-link').hidden=!D.audit;text('limitations',D.limitations.join(' '));$('seek').max=Math.max(1,D.steps.length);$('seek').oninput=()=>{stop();select(Number($('seek').value)-1)};$('prev').onclick=()=>{stop();advance(-1)};$('next').onclick=()=>{stop();advance(1)};$('play').onclick=play;$('speed').onchange=()=>{if(timer){stop();play()}};$('filter').onchange=()=>{stop();const first=visible()[0];if(first&&!visible().some(s=>s.index===index+1))select(first.index-1);else render()};document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;document.querySelectorAll('[data-view]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render()});$('close-zoom').onclick=()=>$('zoom').close();document.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)||$('zoom').open)return;if(e.key==='ArrowRight'){e.preventDefault();stop();advance(1)}if(e.key==='ArrowLeft'){e.preventDefault();stop();advance(-1)}if(e.code==='Space'){e.preventDefault();play()}});window.addEventListener('hashchange',()=>{const h=location.hash.match(/^#step=(\d+)$/);if(h){stop();select(Number(h[1])-1)}});
-if(['minimal','skills'].includes(D.config.agent_profile)){$('workflow-panels').hidden=true;}
-
-if(D.video?.status==='passed'){
- const v=$('episode-video');$('video-panel').hidden=false;
- // A programmatic seek may decode an earlier video frame; keep the explicitly selected tool step.
- for(const event of ['play','pointerdown','keydown'])v.addEventListener(event,()=>{timelineSelection=false});
- const phaseNames={initial:'初始场景',decision:'LLM 公开原文 / 工具调用',execution:'执行工具',result:'工具返回与核查',evaluation:'独立评估（未提供给模型）',final:'LLM 结束后的公开原文'};
- function setEdition(){
-  cameraVideo.setInspection(edition==='inspection');
-  const record=edition==='inspection'?D.inspection_video:edition==='review'?D.review_video:edition==='walltime'?D.walltime_video:edition==='explained'?D.explained_video:D.video;
-  v.src=record.file;v.poster=record.poster;v.defaultPlaybackRate=1;v.playbackRate=Number($('video-speed').value);
-  $('video-download').href=record.file;
-  text('video-summary',edition==='inspection'?`详读版 ${record.duration_seconds.toFixed(1)} 秒 · 1× 仿真动作 · 完整模型文本分页 · 前视最大 / 三路环视 / 第三人称 · 阅读停顿不是推理耗时`:edition==='review'?`精简版 ${record.duration_seconds.toFixed(1)} 秒 · 动作 ${record.motion_speed_vs_source}× 仿真速度 · 等待省略 · ${record.source_frames_shown}/${record.source_frames} 原始帧 · 所有调用可追溯`:edition==='walltime'?`真实耗时 ${record.duration_seconds.toFixed(2)} 秒 · 同步工具 ${record.synchronous_tool_seconds.toFixed(2)} 秒 · 调用外等待 ${record.outside_tool_seconds.toFixed(2)} 秒 · 1× 保留实际等待，工具内帧时间为估计`:edition==='explained'?`原始消息同步版 ${record.duration_seconds.toFixed(1)} 秒 · 原始 ${D.video.frame_count} 帧全部按顺序保留 · 额外阅读停顿已标注 · 1920×1080 / ${record.fps} FPS`:`原始录像 ${record.duration_seconds.toFixed(1)} 秒 · ${record.frame_count} 帧 · 连续覆盖 ${record.recorded_env_steps}/${record.final_env_step} 个控制步`);
+function paintZoom(){if(!zoomView)return;const source=tiles.get(zoomView).canvas,target=$('zoom-canvas');if(target.width!==source.width||target.height!==source.height){target.width=source.width;target.height=source.height}target.getContext('2d').drawImage(source,0,0)}
+$('close-zoom').onclick=()=>{$('zoom').close();zoomView=null};
+function blank(name,message){const t=tiles.get(name);t.tile.classList.remove('has-image');t.empty.textContent=message;t.canvas.getContext('2d').clearRect(0,0,t.canvas.width,t.canvas.height);delete t.canvas.dataset.imageRef}
+function paint(name,source,x,y,w,h,imageRef){
+ const t=tiles.get(name);if(t.canvas.width!==w||t.canvas.height!==h){t.canvas.width=w;t.canvas.height=h}
+ t.canvas.getContext('2d').drawImage(source,x,y,w,h,0,0,w,h);t.tile.classList.add('has-image');
+ if(imageRef)t.canvas.dataset.imageRef=imageRef;else delete t.canvas.dataset.imageRef;
+}
+function cameraBox(name){
+ if(edition==='inspection'){const box=record?.camera_boxes?.[name];return box?[box[0],box[1]+26,box[2],box[2]-26]:null}
+ const i=(D.video?.views||[]).indexOf(name),size=D.video?.width/2;
+ if(i<0||!size)return null;
+ if(edition==='walltime'){
+  const scale=Math.min(1000/D.video.width,1078/D.video.height),w=Math.round(D.video.width*scale),h=Math.round(D.video.height*scale),sx=w/D.video.width,sy=h/D.video.height;
+  return [12+Math.floor((1000-w)/2)+i%2*size*sx,1+Math.floor((1078-h)/2)+(Math.floor(i/2)*size+26)*sy,size*sx,(size-26)*sy].map(Math.round);
  }
- $('video-edition').value=edition;if(D.inspection_video?.status!=='passed')$('video-edition').querySelector('[value="inspection"]').disabled=true;if(D.review_video?.status!=='passed')$('video-edition').querySelector('[value="review"]').disabled=true;
- if(D.walltime_video?.status!=='passed')$('video-edition').querySelector('[value="walltime"]').disabled=true;
- if(!D.explained_video||D.explained_video.status!=='passed')$('video-edition').querySelector('[value="explained"]').disabled=true;
- $('video-edition').onchange=()=>{edition=$('video-edition').value;setEdition();v.addEventListener('loadedmetadata',()=>select(index),{once:true})};
- $('video-speed').onchange=()=>v.playbackRate=Number($('video-speed').value);
- v.addEventListener('timeupdate',()=>{
-  let step;
-  if(edition==='walltime'){
-   const segment=D.walltime_video.segments.find(p=>p.start_seconds<=v.currentTime&&v.currentTime<p.end_seconds);
-   step=segment?.step?D.steps[segment.step-1]:null;
-   text('live-phase',`真实耗时 ${v.currentTime.toFixed(1)} / ${D.walltime_video.duration_seconds.toFixed(1)} 秒 · ${segment?.phase==='tool'?'工具执行：'+(segment.primitive||segment.tool):'模型 / 网络 / 异步等待'} · 本阶段 ${(v.currentTime-(segment?.start_seconds||0)).toFixed(1)} 秒`);
-  }else if(edition==='inspection'||edition==='explained'||edition==='review'){
-   const segment=(edition==='inspection'?D.inspection_video:edition==='review'?D.review_video:D.explained_video).segments.find(p=>p.start_seconds<=v.currentTime&&v.currentTime<p.end_seconds);
-   step=segment?.step?D.steps[segment.step-1]:null;
-   if(edition==='inspection'&&step){$('mosaic-side').value=segment.phase==='result'?'after':'before';paintMosaic(step)}
-   text('live-phase',`${segment?.pages?'Page '+segment.page+'/'+segment.pages+' · ':''}${step?'步骤 '+step.index+' / '+D.steps.length+' · ':''}${phaseNames[segment?.phase]||'播放结束'}${segment?.repeated_frame_hold?' · 阅读停顿（真实帧保持）':''}`);
-  }else{
-   step=D.steps.filter(s=>s.video_start_seconds!=null&&s.video_start_seconds<=v.currentTime).at(-1);
-   text('live-phase',`原始仿真时间 ${v.currentTime.toFixed(1)} 秒 · ${step?'步骤 '+step.index+' · '+title(step):'初始画面'}`);
-  }
-  if(!(timelineSelection&&v.paused)&&$('video-sync').checked&&step&&step.index!==index+1){fromVideo=true;select(step.index-1);fromVideo=false}
-  if(!(timelineSelection&&v.paused)&&$('video-sync').checked){const record=edition==='inspection'?D.inspection_video:edition==='review'?D.review_video:edition==='explained'?D.explained_video:edition==='walltime'?D.walltime_video:null;const phase=record?.segments.find(p=>p.start_seconds<=v.currentTime&&v.currentTime<p.end_seconds)?.phase;conversation.setActive(step?.index,phase||'decision')}
-
- });
- setEdition();
+ return [i%2*size,Math.floor(i/2)*size+26,size,size-26];
 }
-text('final-reasoning',(D.model_final_reasoning_summaries||[]).map(m=>m.text).join('\n\n')||'No provider summary recorded after the last call.');$('transport-failures').hidden=!D.model_calls_without_sim_record?.length;text('unmatched-calls',JSON.stringify(D.model_calls_without_sim_record||[],null,2));$('public-trace-link').hidden=!D.has_public_trace;text('final-model-message',[...(D.model_messages_after_last_sim_call||[]),...(D.model_final_messages||[])].map(m=>m.text).join('\n\n')||'没有单独的结束后公开文本。');
-const hash=location.hash.match(/^#step=(\d+)$/);index=hash?Math.max(0,Math.min(D.steps.length-1,Number(hash[1])-1)):0;if(hash)select(index);else{fromVideo=true;select(index);fromVideo=false}
+function observation(){return step()?.[$('input-side').value]}
+function paintCameras(){
+ const obs=observation();
+ for(const name of views){
+  if(mode==='input'&&name!=='spectator'){
+   const item=obs?.images?.find(im=>im.view===name);
+   if(!item?.file){blank(name,obs?'此视角未归档':'此时尚未收到 RGB');continue}
+   let image=imageCache.get(item.file);
+   if(!image){image=new Image();image.onload=paintCameras;image.onerror=()=>{image.dataset.failed='true';paintCameras()};image.src=item.file;imageCache.set(item.file,image);if(imageCache.size>64)imageCache.delete(imageCache.keys().next().value)}
+   if(image.complete&&image.naturalWidth)paint(name,image,0,0,image.naturalWidth,image.naturalHeight,item.image_ref);
+   else blank(name,image.dataset.failed?'图像读取失败':'读取 RGB…');
+  }else{
+   const box=cameraBox(name);
+   if(video.readyState>=2&&box)paint(name,video,...box);
+   else blank(name,record?'读取录像…':name==='spectator'?'没有第三人称录像':'没有连续录像');
+  }
+ }
+ if(zoomView&&$('zoom').open)paintZoom();
+}
+function updateObservationNote(){
+ const obs=observation();
+ text('observation-note',mode==='execution'?'运行时录制的连续画面 · 第三人称仅供回放':obs?'模型已收到 RGB · revision '+obs.revision+(obs.capture?' · '+obs.capture.captured_at.slice(11,19)+' UTC':''):'此时尚未通过工具向模型返回 RGB');
+}
+function setMode(value){mode=value;$('mode-execution').setAttribute('aria-pressed',String(mode==='execution'));$('mode-input').setAttribute('aria-pressed',String(mode==='input'));$('input-side').hidden=mode!=='input';updateObservationNote();paintCameras()}
+$('mode-execution').onclick=()=>setMode('execution');$('mode-input').onclick=()=>setMode('input');$('input-side').onchange=()=>{updateObservationNote();paintCameras()};
+function updateStep(){
+ const s=step();$('step-select').value=String(index);$('prev').disabled=index<=0||!s;$('next').disabled=!s||index>=D.steps.length-1;
+ $('current-step').replaceChildren();const title=document.createElement('span');title.textContent=s?String(s.index).padStart(2,'0')+' / '+D.steps.length+'  ·  '+action(s):'没有工具调用记录';
+ const label=document.createElement('span');label.className='phase';label.textContent=phaseLabels[phase]||phase;$('current-step').append(title,label);
+ conversation.setActive(s?.index,phase);updateObservationNote();paintCameras();
+}
+function segmentAt(time){return record?.segments?.find(seg=>seg.start_seconds<=time&&time<seg.end_seconds)||record?.segments?.at(-1)}
+function synchronize(){
+ $('video-seek').value=video.currentTime;text('video-time',clock(video.currentTime)+' / '+clock(video.duration));
+ if(manual&&video.paused)return;
+ let current,nowPhase;
+ if(edition!=='raw'){
+  const segment=segmentAt(video.currentTime);current=segment?.step?D.steps.findIndex(s=>s.index===segment.step):-1;nowPhase=segment?.phase||'initial';
+ }else{
+  const s=D.steps.filter(s=>s.video_start_seconds!=null&&s.video_start_seconds<=video.currentTime).at(-1);current=s?D.steps.indexOf(s):-1;nowPhase='execution';
+ }
+ if(current<0){if(phase!==nowPhase){phase=nowPhase;updateStep()}return}
+ if(current!==index||phase!==nowPhase){index=current;phase=nowPhase;$('input-side').value=['result','outside_tool_wait'].includes(phase)?'after':'before';updateStep()}
+}
+function selectStep(i,seek){
+ if(i<0||i>=D.steps.length)return;index=i;phase='decision';$('input-side').value='before';
+ if(seek){manual=true;video.pause();let time=step().video_start_seconds;
+  if(edition!=='raw')time=record?.segments?.find(s=>s.step===step().index&&(edition!=='walltime'||s.phase==='tool'))?.start_seconds;
+  if(time!=null&&record){const target=Math.min(time+0.04,(Number.isFinite(video.duration)?video.duration:record.duration_seconds)-0.001);if(video.readyState>=1)video.currentTime=Math.max(0,target);else video.addEventListener('loadedmetadata',()=>{video.currentTime=Math.max(0,target)},{once:true})}
+ }
+ if(!embedded)history.replaceState(null,'','#step='+step().index);updateStep();
+}
+function chooseEdition(){
+ video.pause();edition=$('video-edition').value;record=edition==='inspection'?D.inspection_video:edition==='walltime'?D.walltime_video:D.video;
+ if(!record||record.status!=='passed')record=null;
+ $('video-play').disabled=!record;$('video-seek').disabled=!record;$('video-download').hidden=!record;
+ if(!record){video.removeAttribute('src');text('time-note','未归档完整录像');setMode('input');updateStep();return}
+ manual=true;video.src=record.file;video.load();video.playbackRate=Number($('video-speed').value);$('video-download').href=record.file;
+ text('time-note',edition==='inspection'?'动作 1×；额外停留用于阅读':edition==='walltime'?'保留调用等待；工具内帧时间为估计':'连续仿真录像；模型等待已省略');
+ video.addEventListener('loadedmetadata',()=>{$('video-seek').max=video.duration;selectStep(index,true);text('video-time',clock(video.currentTime)+' / '+clock(video.duration))},{once:true});
+}
+$('video-edition').value=edition;$('video-edition').querySelector('[value="inspection"]').disabled=D.inspection_video?.status!=='passed';$('video-edition').querySelector('[value="raw"]').disabled=D.video?.status!=='passed';$('video-edition').querySelector('[value="walltime"]').disabled=D.walltime_video?.status!=='passed';
+$('video-edition').onchange=chooseEdition;$('video-speed').onchange=()=>{video.playbackRate=Number($('video-speed').value)};
+$('video-play').onclick=()=>{if(!video.paused){video.pause();return}manual=false;video.play().catch(e=>{if(e.name!=='AbortError'){$('video-error').hidden=false;text('video-error','视频播放失败：'+e.message)}})};
+$('video-seek').oninput=()=>{manual=false;video.currentTime=Number($('video-seek').value);synchronize()};
+$('prev').onclick=()=>selectStep(index-1,true);$('next').onclick=()=>selectStep(index+1,true);$('step-select').onchange=()=>selectStep(Number($('step-select').value),true);
+for(const s of D.steps){const option=document.createElement('option');option.value=s.index-1;option.textContent=String(s.index).padStart(2,'0')+' · '+action(s);$('step-select').append(option)}
+$('step-select').disabled=!D.steps.length;
+for(const name of ['play','pause','ended'])video.addEventListener(name,()=>{text('video-play',video.paused?'▶ 播放':'Ⅱ 暂停');if(name==='play')manual=false});
+video.addEventListener('error',()=>{if(record){$('video-error').hidden=false;text('video-error','录像读取失败，可继续查看模型输入与原始记录。')}});
+video.addEventListener('timeupdate',synchronize);for(const event of ['loadeddata','seeked'])video.addEventListener(event,()=>{synchronize();paintCameras()});
+if(video.requestVideoFrameCallback){const draw=()=>{paintCameras();video.requestVideoFrameCallback(draw)};video.requestVideoFrameCallback(draw)}
+else{const draw=()=>{if(!video.paused)paintCameras();requestAnimationFrame(draw)};requestAnimationFrame(draw)}
+document.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA','BUTTON','SUMMARY'].includes(e.target.tagName)||$('zoom').open)return;if(e.key==='ArrowRight'){e.preventDefault();selectStep(index+1,true)}if(e.key==='ArrowLeft'){e.preventDefault();selectStep(index-1,true)}if(e.code==='Space'){e.preventDefault();$('video-play').click()}});
+window.addEventListener('hashchange',()=>{const match=location.hash.match(/^#step=(\d+)$/);if(match)selectStep(Number(match[1])-1,true)});
+const evaluation=D.evaluation_offline_only||{},success=evaluation.task_success;
+text('title',(D.config.task||D.run_id).replaceAll('_',' '));text('instruction',D.instruction||'未记录任务指令');
+text('evaluation-badge',success===true?'独立评分：成功':success===false?'独立评分：未完成':'未取得最终评分');$('evaluation-badge').classList.add(success===true?'passed':success===false?'failed':'unknown');
+text('archive-summary','运行状态：'+D.status+' · 工具调用：'+D.steps.length+' · Q：'+(evaluation.evaluation?.goal_satisfaction_fraction??'未评测')+'。模型文字为已记录的原始输出与接口摘要；某一步没有新增文字时保持空缺。执行画面是运行时录像，不表示每帧都输入了模型。');
+text('provenance',JSON.stringify({evaluation,source:D.source,execution:D.execution,backend:D.backend,failure:D.failure},null,2));$('public-trace-link').hidden=!D.has_public_trace;$('audit-link').hidden=!D.audit;
+const hash=location.hash.match(/^#step=(\d+)$/);if(hash)index=Math.max(0,Math.min(D.steps.length-1,Number(hash[1])-1));
+chooseEdition();updateStep();
 })();
