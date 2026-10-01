@@ -4,6 +4,8 @@ This iteration is a research motor protocol behind the unchanged RGB-only model 
 
 ## Candidate changes
 
+- Restore only absent fixed floor meshes from the same supplied full scene template into the derived partial scene. Garage task partial templates contain two floors versus twelve in the full scene; task bindings and all existing objects remain untouched. This is an explicit scene-geometry repair with a new configured-scene hash, not an identical-environment ablation.
+
 - Private same-pixel render-instance identity plus depth routes the selected visible object. Collision-proxy disagreement is recorded separately, rather than rejecting a visually valid pixel or choosing a nearby object. No segmentation, object ID, world pose, target catalogue or goal value is given to the model.
 - GT navigation filters approach candidates for visibility and proximity to the selected target. Manipulation may spend part of its existing bounded motor budget approaching that same target. This does not implement a complete dynamic obstacle/held-object planner.
 - Controlled grasp lifts the selected object at its own XY and maintains its relative pose with no robot/object FixedJoint. Gravity and ordinary collisions remain enabled; the motor projects the held pose before and after control ticks. Contained rigid objects follow. This is ideal pose actuation, not physical grasp control. Particle/fluid carry and arbitrary articulated payload stability require separate real-simulator validation.

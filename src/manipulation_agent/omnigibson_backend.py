@@ -6,6 +6,7 @@ the simulator and its official primitives are imported only by the constructor.
 from __future__ import annotations
 
 import hashlib
+import copy
 import importlib.metadata as metadata
 import json
 import math
@@ -70,6 +71,24 @@ def select_compatible_scene(template: Path, instance_path: Path):
         rejected.append({'path': str(candidate), 'missing_instance_bindings': missing,
                          'sha256': hashlib.sha256(candidate.read_bytes()).hexdigest()})
     raise ValueError('Task instance and scene templates are incompatible: ' + json.dumps(rejected))
+
+
+def restore_static_floor_geometry(data, full):
+    """Restore omitted fixed floors from the same supplied scene template.
+
+    Partial-room assets can omit the corridor between two required rooms while
+    the full traversability map still routes through it. Never add task objects,
+    change bindings or modify a present object; only absent fixed floor meshes.
+    """
+    added=[];objects=data['objects_info']['init_info']
+    states=data['state']['registry']['object_registry']
+    for name,entry in full['objects_info']['init_info'].items():
+        args=entry.get('args',{})
+        if name in objects or args.get('category')!='floors' or args.get('fixed_base') is not True:continue
+        state=full['state']['registry']['object_registry'].get(name)
+        if state is None:raise ValueError('Missing pinned floor state: '+name)
+        objects[name]=copy.deepcopy(entry);states[name]=copy.deepcopy(state);added.append(name)
+    return added
 
 
 class OmniGibsonBackend:
@@ -233,6 +252,16 @@ class OmniGibsonBackend:
                 'selected': str(template), 'rejected': rejected,
                 'policy': 'use_supplied_full_template_with_matching_instance_bindings',
                 'original_assets_unmodified': True, 'task_instance_unchanged': True})
+        full_template=template.with_name(template.name.replace('-partial_rooms',''))
+        if full_template!=template and full_template.is_file():
+            full_data=json.loads(full_template.read_text())
+            restored_floors=restore_static_floor_geometry(data,full_data)
+            if restored_floors:
+                write_json(self.output/'scene_geometry_repair.json',{
+                    'policy':'restore_absent_fixed_floors_from_same_supplied_full_template',
+                    'added_floors':restored_floors,'full_template_sha256':hashlib.sha256(full_template.read_bytes()).hexdigest(),
+                    'task_object_bindings_unchanged':True,'original_assets_unmodified':True,
+                    'scope':'research_scene_geometry_repair_not_official_submission'})
         migrations = normalize_embedded_robot(data)
         if migrations:
             write_json(self.output/'scene_compatibility.json',{'changes':migrations,

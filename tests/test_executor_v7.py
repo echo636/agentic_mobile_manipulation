@@ -9,8 +9,20 @@ from manipulation_agent.executors.gt_navigation import GridMap,plan_navigation,N
 from manipulation_agent.mcp_preflight import check_server
 from manipulation_agent.tools.action import act
 from manipulation_agent.contracts import SkillError
+from manipulation_agent.omnigibson_backend import restore_static_floor_geometry
 
 class V7Contracts(unittest.TestCase):
+    def test_restore_only_missing_fixed_floors_without_goal_or_instance_changes(self):
+        import copy
+        data={'metadata':{'task':{'inst_to_name':{'goal':'cup'}}},'objects_info':{'init_info':{'cup':{'args':{'category':'cup'}}}},'state':{'registry':{'object_registry':{'cup':{'pose':'original'}}}}}
+        full={'objects_info':{'init_info':{'floor':{'args':{'category':'floors','fixed_base':True}},'extra_cup':{'args':{'category':'cup','fixed_base':True}}}},'state':{'registry':{'object_registry':{'floor':{'pose':'floor pose'},'extra_cup':{'pose':'not copied'}}}}}
+        original=copy.deepcopy(full)
+        self.assertEqual(restore_static_floor_geometry(data,full),['floor'])
+        self.assertEqual(data['metadata']['task']['inst_to_name'],{'goal':'cup'})
+        self.assertNotIn('extra_cup',data['objects_info']['init_info'])
+        self.assertEqual(data['state']['registry']['object_registry']['cup'],{'pose':'original'})
+        self.assertEqual(restore_static_floor_geometry(data,full),[]);self.assertEqual(full,original)
+
     def test_approach_filter_excludes_inaccessible_side(self):
         grid=GridMap(60,60,.1,(-3,-3),bytes([1])*3600)
         plan=plan_navigation(grid,(0,0),(1,0),candidate_filter=lambda xy:xy[0]<.7)
