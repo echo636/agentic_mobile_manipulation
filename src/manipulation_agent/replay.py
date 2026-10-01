@@ -30,6 +30,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     walltime = json.loads(walltime_path.read_text()) if walltime_path.exists() else None
     review_path = run_dir / 'review_video.json'
     review = json.loads(review_path.read_text()) if review_path.exists() else None
+    inspection_path = run_dir / 'inspection_video.json'
+    inspection = json.loads(inspection_path.read_text()) if inspection_path.exists() else None
     video_markers = {m['request_id']:m for m in (video or {}).get('markers', [])}
     audit = audit_episode(run_dir, controller_dir) if controller_dir else None
     model_messages = {}; model_payloads = {}; pending = []; public_events = []; model_index = 0
@@ -124,7 +126,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
             'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
-            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review,
+            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review, 'inspection_video':inspection,
             'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(controller_dir),
             'model_reasoning_summaries':summaries,
             'model_final_reasoning_summaries':summaries[summary_index:],

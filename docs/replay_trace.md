@@ -1,8 +1,48 @@
-# Compact replay and model trace (2026-10-01)
+# Readable replay and model trace (2026-10-01)
+
+The default viewing edition is now `inspection.mp4`, produced by
+`inspection_video.py`. It retains every source frame in order at **1× simulation
+speed**. The front camera is largest, the other three robot cameras are small,
+and the third-person camera is explicitly marked replay-only. All five views
+already existed in the original recording; no new simulator execution is needed.
+
+Public assistant text, returned reasoning summaries, and tool arguments are
+paginated without ellipsis or dropped characters. Each page stays for at least
+5 seconds and otherwise uses 24 characters/second. These added holds are reading
+time, not measured model inference. Tool-result status/error/effect is displayed
+in the MP4; the synchronized HTML retains the full returned text and images.
+The sidecar preserves exact page text, source-frame intervals, hashes and process
+provenance. Third-person boundary stills are extracted from the archived video,
+not included in model observations. The HTML shows front RGB prominently beside
+scrollable original model/tool text, with three small surround views and the
+third-person still. Video seeks and tool selection synchronize in both directions.
+
+```bash
+python -m manipulation_agent.inspection_video --run-dir RUN --controller-dir CONTROLLER
+python -m manipulation_agent.replay --run-dir RUN --controller-dir CONTROLLER
+```
+
+Reference: jinkai/harness at `0815cf234ee591bacd8017e9b1def4fac13e649b`,
+`tools/vis/rerun_nav_viewer.py` for first/third-person views, timestamped text and
+tool traces, and `tools/pluggable_harness/session_trace_adapters.py` for public
+assistant/tool alignment. Its Codex adapter can store assistant messages in a
+field named `reasoning`; that name alone does not establish full internal reasoning.
+
+[Readable replay and full 32-run failure review](http://10.76.5.241:8765/replay_readable_20261001/index.html).
+Validation and raw-preservation records are under
+`operations/replay_readable_20261001`. Rendering success is separate from task
+success. The source radio trace now has a 234.17-second readable edition; its
+original compact edition remains 24.57 seconds. The similar readable duration and
+229.05-second controller time are coincidental, not a latency reconstruction.
+
+## Retained compact edition
 
 `review_video.py` creates a new `review.mp4`; it does not overwrite `episode.mp4`, `walltime.mp4`, raw events, captures, or scores. Default motion is 2× the source simulation-time video. Source action endpoints remain visible, static non-motor intervals retain their final frame, and every tool call is represented. Bounded reading holds are editorial time, not model latency. No interpolated or resimulated frames are created. The JSON sidecar records frame selections, source/video hashes, tool identifiers, host, interpreter, PID/unit, and timing policy. Long panel text can be truncated; the HTML transcript preserves complete text.
 
-The player defaults to compact video and permits original simulation-time / wall-time editions. Renderer labels are English. Actual model text remains in its original language; no generated Chinese explanation substitutes for it.
+The player defaults to the readable edition when available; compact, original
+simulation-time and wall-time editions remain selectable. Renderer labels are
+English. Actual model text remains in its original language; no generated Chinese
+explanation substitutes for it.
 
 ## Two distinct model text channels
 
