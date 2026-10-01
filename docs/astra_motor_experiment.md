@@ -63,3 +63,26 @@ PYTHONPATH=src python -m manipulation_agent.vision_cli \
 Current experiment records live outside Git at `operations/astra_primitive_exploration_20261001/`. Consult their structured statuses for the actual validation level; this document does not certify task performance.
 
 Model integration follows [OpenAI's Astra model reference](https://developers.openai.com/api/docs/models/gpt-6-astra) and [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode), retaining the existing login and JSON event recorder. No credentials are copied into this repository.
+
+## First validation and task attempt — 2026-10-01
+
+Frozen source: `d3611a0e98a98e266247072c192d4e70bf21f521`. Simulator: OmniGibson 3.9.2 / Isaac Sim 5.1, S134 (`ZJU3DV-3090`), GPU UUID `GPU-99a7efe6-7e2d-a5b7-f781-c9856a61e8b4`. Task and asset hashes are in the run record.
+
+| Validation | Result |
+| --- | --- |
+| CPU suite | 143 passed, seven dependency-dependent skips; 150 total |
+| Scripted physical components | 13 checks passed over 56 physical steps |
+| Physical base movement | 0.02773 m measured displacement |
+| Physical arm movement | Requested 0.05 rad; measured 0.04983 rad |
+| Physical gripper movement | Opening and closing both measured |
+| Astra autonomous task | `turning_on_radio`, public instance 301, seed 0: **failed**, Q = 0 |
+| Model/controller lifecycle | Completed normally; explicit `finish(blocked)` |
+| Trace/observation alignment | Passed; matching source, tools, returned results and actual RGB bytes |
+
+The autonomous attempt used 17 MCP calls, 36 motor primitives and 1,139 physical steps. The model/controller interval was about 341 seconds; simulation time was 37.97 seconds. All physical steps were recorded, with explicit frame holds between fresh renders. The archive contains 12 provider-returned reasoning summaries, verbatim public output, all generated programs, and per-step control vectors. It does not expose hidden internal reasoning.
+
+The model approached the table, moved the right arm, attempted contacts around the radio's controls, and changed its view. It reported that it could not reliably identify or confirm power activation from RGB. Independent evaluation also found the radio goal unsatisfied. No motor tool error occurred in this attempt. These observations establish a functioning RGB → code → physical action → RGB loop; they do not establish reliable switch manipulation or an improved success rate. A single attempt is not a comparative benchmark.
+
+An earlier scripted probe failed before motion when the launcher's `TasksMax=256` prevented Isaac Sim from creating threads. The separate retry raised the limit to 2,048 and passed. Both attempts are preserved; the failed startup is not counted as a model task attempt.
+
+[Lab experiment page](http://10.76.5.241:8765/astra_primitive_exploration_20261001/) · [Autonomous task replay](http://10.76.5.241:8765/astra_primitive_exploration_20261001/runs/mas_astra_motor_radio_20261001/replay.html).
