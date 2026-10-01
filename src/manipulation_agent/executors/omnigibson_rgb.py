@@ -61,6 +61,10 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
                 modalities=['rgb','depth_linear','seg_semantic','seg_instance_id'],image_width=self.image_size,image_height=self.image_size,
                 focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
+            # The legacy instance-id reduction pipeline can segfault in Kit
+            # 107.3 on populated scenes. Keep the public sensor API and use
+            # Replicator's GPU-capable fast annotator for this private channel.
+            sensor._RAW_SENSOR_TYPES['seg_instance_id']='instance_id_segmentation_fast'
             sensor.load(None)
             sensor.initialize()
             self.rig[direction] = sensor
