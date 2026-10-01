@@ -405,26 +405,40 @@ class Batch:
         """Finish an explicitly handed-over attempt with its original controller.
 
         The migration procedure stops only the old coordinator, preserving the
-        live controller and remote simulator. No new model request or reset is
-        issued here. Previously recorded source/budget/attempt identity remain.
+        live controller and remote simulator. An existing model is never
+        restarted; if still initializing, its first policy starts only after
+        readiness within the original startup deadline. Source/budgets remain.
         """
         controller=Path(row['controller_output']);remote_run=Path(row['simulator_output'])
-        unit=row['simulator_unit'];port=row['port'];pid=row['controller_wrapper_pid']
+        unit=row['simulator_unit'];port=row['port'];pid=row.get('controller_wrapper_pid')
         state=self.unit_state(unit)
         if state.get('ActiveState') in {'active','activating'}:
-            if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}" or int(state['MainPID'])!=row['simulator_pid']:
+            if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}" or (row.get('simulator_pid') and int(state['MainPID'])!=row['simulator_pid']):
                 raise RuntimeError('Inflight simulator ownership check failed')
         self.update(row,worker_id=self.c['id'],worker_host=self.c['ssh'][-1],coordinator_adopted_at=now())
         self.journal('ADOPT '+row['run_id']+'; original model process, simulator, source and time budget retained.')
-        metadata=json.loads((controller/'controller.json').read_text())
-        deadline=datetime.fromisoformat(metadata['started_at']).timestamp()+self.manifest['model_timeout_seconds']+300
-        while controller_process_alive(pid,controller):
-            if time.time()>deadline: raise RuntimeError('Original controller exceeded its existing timeout plus cleanup allowance')
-            self.update(row,heartbeat_at=now());time.sleep(5)
-        metadata=json.loads((controller/'controller.json').read_text())
+        metadata={};started_process=None
+        try:
+            if pid is None:
+                started_process=self.start_adopted_policy(row)
+                pid=started_process.pid
+                deadline=time.time()+self.manifest['model_timeout_seconds']+300
+            else:
+                metadata=json.loads((controller/'controller.json').read_text())
+                deadline=datetime.fromisoformat(metadata['started_at']).timestamp()+self.manifest['model_timeout_seconds']+300
+            while controller_process_alive(pid,controller):
+                if time.time()>deadline: raise RuntimeError('Original controller exceeded its existing timeout plus cleanup allowance')
+                self.update(row,heartbeat_at=now());time.sleep(5)
+            if started_process is not None:
+                self.update(row,controller_wrapper_exit_code=started_process.wait(timeout=10))
+            metadata=json.loads((controller/'controller.json').read_text())
+        except Exception as exc:
+            metadata={}
+            self.update(row,failure=f'{type(exc).__name__}: {exc}',failure_stage='adopted_initialization_or_controller')
+            self.journal('ADOPTION FAILURE '+row['run_id']+': '+str(exc))
         self.update(row,stage='finalizing',controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),
                     model_duration_seconds=metadata.get('duration_seconds'))
-        if not metadata.get('formal_finish_observed'):
+        if not metadata.get('formal_finish_observed') and self.health(port):
             self.update(row,supervisor_intervention=True)
             code="from manipulation_agent.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{port}')+",'finish',{'outcome':'aborted','reason':'Adopted original controller ended without formal finish'},'batch-supervisor-finish',timeout=30))"
             finish=self.ssh(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],'-c',code],timeout=45)
@@ -443,6 +457,39 @@ class Batch:
         passed=row.get('task_success') is True and all(row.get(k)=='passed' for k in ['controller_status','evidence_alignment','video_validation','observation_validation'])
         self.update(row,status='passed' if passed else 'failed',stage='complete',finished_at=now())
         self.journal(f"END adopted {row['run_id']}: {row['status']}; task_success={row.get('task_success')}; original attempt preserved.")
+
+    def start_adopted_policy(self, row):
+        """Wait for an original initializing simulator, then start its first policy."""
+        spec=self._config['adopt_startup'][row['run_id']]
+        runtime=Path(spec['runtime']);deadline=float(spec['deadline_unix'])
+        original=subprocess.check_output(['git','-C',str(runtime),'rev-parse','HEAD'],text=True).strip()
+        if original!=row['source']['commit']:raise RuntimeError('Original inflight runtime source mismatch')
+        controller=Path(row['controller_output']);unit=row['simulator_unit'];port=row['port']
+        if (controller/'controller.json').exists():raise RuntimeError('Refusing to launch a duplicate model controller')
+        while time.time()<deadline:
+            state=self.unit_state(unit)
+            if state.get('ActiveState') not in {'active','activating'}:raise RuntimeError('Original simulator exited during initialization')
+            if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}" or int(state['MainPID'])!=spec['simulator_pid']:
+                raise RuntimeError('Original simulator identity changed during initialization')
+            h=self.health(port)
+            if h and h.get('ready') and not h.get('closed'):
+                if {t['name'] for t in h['tools']}!={t['name'] for t in tool_specs(self.manifest['agent_profile'])}:
+                    raise RuntimeError('Original bridge tool catalog mismatch')
+                break
+            self.update(row,heartbeat_at=now(),simulator_pid=spec['simulator_pid']);time.sleep(4)
+        else:raise TimeoutError('Original simulator startup exceeded its unchanged deadline')
+        self.update(row,stage='policy_running',bridge_ready_at=now(),simulator_pid=spec['simulator_pid'])
+        remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
+        cmd=[sys.executable,str(runtime/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
+             '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
+             '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
+             '--timeout',str(self.manifest['model_timeout_seconds']),'--agent-profile',self.manifest['agent_profile']]
+        with (self.root/'logs'/f"{row['run_id']}_controller.log").open('x') as log:
+            process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,
+                env={**self.environment,'PYTHONPATH':str(runtime/'src')})
+        self.update(row,controller_wrapper_pid=process.pid,controller_host=os.uname().nodename,controller_interpreter=sys.executable)
+        self.journal('READY adopted initialization '+row['run_id']+'; first model policy starts against the unchanged original simulator and source.')
+        return process
 
     def run(self,limit=None):
         self.publish()

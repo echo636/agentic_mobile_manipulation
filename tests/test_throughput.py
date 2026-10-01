@@ -8,7 +8,8 @@ import os
 from datetime import datetime, timezone
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+import time
 
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 
@@ -91,6 +92,30 @@ class WorkerTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):batch.controller_process_alive(os.getpid(),'/not-this-controller')
         c=self.config();c['workers'][0].update(memory_budget_gib=14,simulator_memory_max='28G')
         with self.assertRaises(ValueError):batch.worker_configs(c)
+
+    def test_initializing_handoff_preserves_source_and_deadline(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'logs').mkdir();runtime=root/'original_runtime'
+            row={'run_id':'original','source':{'commit':'old'},'controller_output':str(root/'controller'),
+                 'simulator_unit':'original.service','port':29001,'instruction':'Original instruction'}
+            b=batch.Batch.__new__(batch.Batch);b._worker_local=threading.local();b.root=root
+            spec={'runtime':str(runtime),'deadline_unix':time.time()+10,'simulator_pid':123}
+            b._config={'ssh':['ssh','original-host'],'sim_python':'/original/python','adopt_startup':{'original':spec}}
+            b.manifest={'agent_profile':'skills','model':'same-model','model_timeout_seconds':1800}
+            b.environment={};b.update=lambda r,**kw:r.update(kw);b.journal=Mock()
+            b.unit_state=lambda unit:{'ActiveState':'active','Description':'BEHAVIOR100 owned original','MainPID':'123'}
+            b.health=lambda port:{'ready':True,'closed':False,'tools':batch.tool_specs('skills')}
+            with patch.object(batch.subprocess,'check_output',return_value='old\n'), patch.object(batch.subprocess,'Popen') as start:
+                start.return_value.pid=987;b.start_adopted_policy(row)
+                args=start.call_args.args[0]
+                self.assertIn(str(runtime/'scripts/run_codex_controller.py'),args)
+                self.assertEqual(args[args.index('--timeout')+1],'1800')
+                self.assertEqual(start.call_args.kwargs['env']['PYTHONPATH'],str(runtime/'src'))
+                self.assertEqual(row['controller_wrapper_pid'],987)
+            spec['deadline_unix']=time.time()-1
+            with patch.object(batch.subprocess,'check_output',return_value='old\n'), patch.object(batch.subprocess,'Popen') as start:
+                with self.assertRaises(TimeoutError):b.start_adopted_policy(row)
+                start.assert_not_called()
 
 
 class RenderTests(unittest.TestCase):
