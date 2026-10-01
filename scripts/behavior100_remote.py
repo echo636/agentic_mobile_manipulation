@@ -49,8 +49,8 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28):
     cg_free = None if cg['memory.max'] == 'max' else int(cg['memory.max'])-int(cg['memory.current'])+cg['reclaimable_estimate']
     with socket.socket() as sock:
         port_free = sock.connect_ex(('127.0.0.1', port)) != 0
-    if min_free_gpu_mib and min_free_gpu_mib<24576:
-        raise ValueError('Shared GPU mode requires at least 24 GiB free before each episode')
+    if min_free_gpu_mib and min_free_gpu_mib<14336:
+        raise ValueError('Shared GPU mode requires at least 14 GiB free before each episode')
     if not 12<=memory_budget_gib<=28:
         raise ValueError('Simulator working-memory budget must be between 12 and 28 GiB')
     checks = {'video_encoder': encoding_check['exit_code'] == 0,

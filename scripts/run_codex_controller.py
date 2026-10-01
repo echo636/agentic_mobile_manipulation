@@ -27,6 +27,8 @@ def main():
     p.add_argument("--mcp-args-json", required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--timeout", type=int, default=900)
+    p.add_argument('--isolate-client-storage', action='store_true',
+                   help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
@@ -34,11 +36,33 @@ def main():
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     workspace = args.output / "empty_workspace"
     workspace.mkdir()
+    native_sessions = None
     command = ["codex", "exec", "--ignore-user-config", "--skip-git-repo-check", "--json",
                "--sandbox", "read-only", "--model", args.model, "--cd", str(workspace.resolve()),
                "-c", 'approval_policy="never"', "-c", 'web_search="disabled"',
                "-c", "project_doc_max_bytes=0", "-c", 'model_reasoning_summary="auto"',
                "-c", "developer_instructions=" + json.dumps(system_prompt(args.agent_profile))]
+    if args.isolate_client_storage:
+        # Only this child sees a different sessions directory. The host's original
+        # sessions and credential files are untouched. Keep SQLite on local disk.
+        wrapper = shutil.which('bwrap')
+        if not wrapper:
+            raise RuntimeError('Client storage isolation requires bubblewrap')
+        native_sessions = (args.output / 'native_sessions').resolve()
+        native_sessions.mkdir()
+        client_root = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex')))
+        session_mount = client_root / 'sessions'
+        if not session_mount.is_dir():
+            raise RuntimeError('Expected existing native sessions directory')
+        local_root = os.environ.get('MAS_CLIENT_STATE_ROOT')
+        if not local_root:
+            raise RuntimeError('MAS_CLIENT_STATE_ROOT must name project-local writable storage')
+        state = Path(local_root).resolve() / args.output.name
+        state.mkdir(parents=True, exist_ok=False)
+        command += ['-c', 'sqlite_home=' + json.dumps(str(state)),
+                    '-c', 'log_dir=' + json.dumps(str((args.output / 'native_logs').resolve()))]
+        command = [wrapper, '--die-with-parent', '--bind', '/', '/', '--bind', str(native_sessions),
+                   str(session_mount), '--', *command]
     for feature in ("shell_tool", "unified_exec", "plugins", "apps", "hooks", "view_image", "multi_agent", "browser_use",
                     "computer_use", "image_generation"):
         command += ["--disable", feature]
@@ -54,6 +78,9 @@ def main():
                 "host": os.uname().nodename, "controller": "codex_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": subprocess.check_output(["codex", "--version"], text=True).strip()}
+    if native_sessions is not None:
+        metadata['client_storage'] = {'sessions': str(native_sessions), 'sqlite': str(state),
+                                      'auth_copied': False, 'home_changed': False}
     write_json(args.output / "controller.json", metadata)
     try:
         metadata['mcp_preflight']=check_server(args.mcp_command,json.loads(args.mcp_args_json),tool_specs(args.agent_profile),args.output)
@@ -100,7 +127,7 @@ def main():
                     task_success=None, formal_finish_observed=closed, tools_called=calls,
                     validation_note="Client exit alone does not prove task success; join with simulator run.json")
     try:
-        metadata['reasoning_trace']=export_summaries(args.output,events,metadata['started_at'],metadata['finished_at'])
+        metadata['reasoning_trace']=export_summaries(args.output,events,metadata['started_at'],metadata['finished_at'],sessions_root=native_sessions)
     except Exception as exc:
         metadata['reasoning_trace']={'status':'failed','error_type':type(exc).__name__,
                                      'reason':'Run-local summary export failed; raw controller events preserved'}
