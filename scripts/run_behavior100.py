@@ -390,7 +390,7 @@ class Batch:
         errors=[]
         for script,filename in [('validate_async_observation.py','observation_validation.json'),('validate_episode_video.py','video_validation.json')]:
             cmd=[sys.executable,str(self.source/'scripts'/script)]
-            if script=='validate_async_observation.py': cmd.append('--run-dir')
+            if script=='validate_async_observation.py': cmd.extend(['--allow-sync-only','--run-dir'])
             cmd.append(str(dest))
             p=subprocess.run(cmd,capture_output=True,text=True,timeout=300,env=self.environment)
             (dest/(script+'.log')).write_text(p.stdout+p.stderr)
