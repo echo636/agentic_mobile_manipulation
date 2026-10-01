@@ -10,7 +10,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import Recorder,write_json
 from manipulation_agent.contracts import SkillError
 
-p=argparse.ArgumentParser();p.add_argument('--task',required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--events',type=Path,required=True);p.add_argument('--limit',type=int,default=12);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--task',required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--events',type=Path,required=True);p.add_argument('--limit',type=int,default=12);p.add_argument('--hold-steps',type=int,default=0);p.add_argument('--rollback-check',action='store_true');a=p.parse_args()
 r=Recorder(a.output,{'task':a.task,'instance':301,'seed':0,'policy':'scripted_private_reprojection',
  'source_events':str(a.events),'validation_level':'real_motor_regression_with_private_object_selection',
  'model_used':False,'not_a_benchmark_attempt':True});backend=None
@@ -82,9 +82,29 @@ try:
   held=b._get_held();result['held_pose_finite']=held is None or bool(all(b.torch.isfinite(v).all() for v in held.get_position_orientation()))
   results.append(result);r.event('diagnostic_result',result);print(json.dumps(result),flush=True)
   write_json(a.output/'validation_progress.json',{'status':'running','results':results})
+ stability={}
+ if a.hold_steps or a.rollback_check:
+  held=b._get_held()
+  if held is None:raise RuntimeError('Carry stability diagnostic requires a held object at sequence end')
+  for _ in range(a.hold_steps):b._step(b.robot.q_to_action(b.robot.get_joint_positions()))
+  stability={'hold_steps':a.hold_steps,'held_pose_finite':bool(all(b.torch.isfinite(v).all() for v in held.get_position_orientation()))}
+  if a.rollback_check:
+   before=tuple(v.clone() for v in held.get_position_orientation())
+   try:
+    with b._placement_context():
+     b._carry_detach();shifted=before[0].clone();shifted[2]+=.05;held.set_position_orientation(shifted,before[1])
+     raise SkillError('diagnostic_forced_placement_failure','Explicit component-only rollback injection')
+   except SkillError as exc:
+    if exc.code!='diagnostic_forced_placement_failure':raise
+   stability['rollback_restores_ownership']=b._get_held() is held
+   stability['rollback_restores_pose']=all(b.torch.allclose(x,y,atol=1e-4) for x,y in zip(before,held.get_position_orientation()))
+   for _ in range(30):b._step(b.robot.q_to_action(b.robot.get_joint_positions()))
+   stability['post_rollback_pose_finite']=bool(all(b.torch.isfinite(v).all() for v in held.get_position_orientation()))
+  r.event('diagnostic_carry_stability',stability)
+  if not all(v for k,v in stability.items() if k!='hold_steps'):raise RuntimeError('Carry/rollback stability diagnostic failed')
  validation={'status':'passed' if all(x['status']=='passed' and x['robot_pose_finite'] and x['held_pose_finite'] for x in results) else 'failed',
              'level':'scripted_motor_sequence_not_model_benchmark','model_used':False,'task_success_assessed':False,'action_results':results,
-             'all_poses_finite':all(x['robot_pose_finite'] and x['held_pose_finite'] for x in results)}
+             'all_poses_finite':all(x['robot_pose_finite'] and x['held_pose_finite'] for x in results),'carry_stability':stability}
  write_json(a.output/'validation.json',validation);r.finish({'status':validation['status'],'validation':validation,'task_success':None,'sim_steps':b.steps,'video':b.finalize_video()})
 except Exception as exc:
  (a.output/'traceback.txt').write_text(traceback.format_exc());write_json(a.output/'validation.json',{'status':'failed','error':str(exc),'level':'scripted_motor_regression'});r.finish({'status':'failed','failure':str(exc),'task_success':None});raise
