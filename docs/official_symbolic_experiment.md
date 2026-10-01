@@ -60,3 +60,24 @@ PYTHONPATH=src python -m manipulation_agent.vision_cli \
 Experiment records: `operations/official_symbolic_20261002/` outside Git. A scripted component probe is recorded separately from a fresh Astra episode. Existing batch workers continue on their frozen sources.
 
 [Official symbolic source](https://github.com/StanfordVL/BEHAVIOR-1K/blob/b1979916ec1549b10a4e65e630bc6504a9af1b00/OmniGibson/omnigibson/action_primitives/symbolic_semantic_action_primitives.py).
+
+## First validation — 2026-10-02
+
+Frozen implementation: `c91a054fd25092971c5a1e1237436db5d64bef00`. Simulator host: S134 (`ZJU3DV-3090`), GPU UUID `GPU-99a7efe6-7e2d-a5b7-f781-c9856a61e8b4`. The original evaluation workers were not changed.
+
+| Check | Result |
+| --- | --- |
+| CPU suite | 152 passed, seven dependency-dependent skips; 159 total |
+| Scripted component probe | Ten checks passed across 200 environment steps; private scripted target identity, no model and no task-success claim |
+| Native navigation | **Failed** with the expected absent-planner `AttributeError`; this is a reproduced upstream defect, not a passing capability |
+| Native toggle on/off | Both completed; actual official state changes verified |
+| Fresh Astra task | `turning_on_radio`, public instance 301, seed 0: **success**, official Q = 1 |
+| Policy calls | `observe` → `act(toggle_on)` → `finish(achieved)` |
+| Timing | Model/controller interval 49.20 seconds; one action, 100 environment steps (3.33 simulated seconds) |
+| Evidence | All audit checks passed: matching clean source, exact tool/result traces, RGB byte hashes and private scoring |
+
+Astra selected the radio in the left RGB view, invoked the original toggle primitive, and observed the green indicator in fresh RGB. It did not request navigation or perform physical button contact. Thus this result verifies the RGB-selection-to-official-symbolic-action loop; it does not establish navigation, physical manipulation or general reliability of all 14 actions. No success-rate improvement is inferred from one task or compared across different executor conditions.
+
+The archive retains actual model output and the single provider-returned reasoning summary, with no reconstruction of hidden reasoning. The first component startup spent several minutes in camera initialization; the fresh policy startup completed in about 1.5 minutes. Startup time is separate from the 49.20-second policy interval.
+
+[Experiment page](http://10.76.5.241:8765/official_symbolic_20261002/) · [Astra task replay](http://10.76.5.241:8765/official_symbolic_20261002/runs/mas_official_symbolic_radio_20261002/replay.html).
