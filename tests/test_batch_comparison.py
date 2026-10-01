@@ -40,5 +40,15 @@ class ComparisonTests(unittest.TestCase):
         rows = self.rows(); rows['official']['tasks'] = []
         with self.assertRaises(ValueError): comparison.summarize_comparison(rows)
 
+    def test_infrastructure_history_does_not_duplicate_tasks(self):
+        rows = self.rows()
+        rows['motor']['tasks'][0].update(status='running', retry_kind='infrastructure',
+                                         previous_attempts=[{'status': 'failed', 'task_success': False}])
+        summary = comparison.summarize_comparison(rows)['arms']['motor']
+        self.assertEqual(summary['infrastructure_retries'], 1)
+        self.assertEqual(summary['total'], 1)
+        self.assertEqual(summary['ended'], 0)
+        self.assertEqual(summary['scored'], 0)
+
 
 if __name__ == '__main__': unittest.main()
