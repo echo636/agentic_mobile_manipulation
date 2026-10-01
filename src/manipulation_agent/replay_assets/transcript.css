@@ -3,3 +3,5 @@
 @media(max-width:680px){#conversation{height:500px;flex:auto}.conversation-feed{position:relative;height:500px}.conversation-original{font-size:14px}}
 
 .current-text{background:#dcefe8;color:inherit;border-radius:2px;padding:1px 0}.conversation-entry.is-current .tool-line{color:#16735f;font-weight:650}.conversation-entry.is-current .tool-outcome{background:#e7f3ed;padding:5px 8px;border-radius:5px}.pending-result{opacity:.5}.pending-result .tool-outcome:before{content:'后续返回 · ';font-size:10px}.current-step{flex-wrap:wrap}.current-step .phase{white-space:nowrap}#phase-progress{width:100%;height:2px;appearance:none;border:0;background:#deebe6;border-radius:2px}#phase-progress::-webkit-progress-bar{background:#deebe6}#phase-progress::-webkit-progress-value{background:#5b9d8b}
+.conversation-program{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;padding:12px;border:1px solid #34485a;border-radius:6px;background:#0f1c2a;color:#d9e8f3;margin:8px 0}
+.motor-result-summary{font:12px/1.6 system-ui;color:#91c9b8;overflow-wrap:anywhere;margin:5px 0}

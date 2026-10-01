@@ -41,7 +41,12 @@ window.ReplayTranscript = class ReplayTranscript {
         const line=this.node('div',undefined,'tool-line');line.append(this.node('span','↗','tool-symbol'),this.node('strong',name));
         if(entry.tool==='read_skill'&&args.name)line.append(this.node('span',args.name,'tool-context'));
         if(entry.tool==='look'&&args.yaw_degrees!=null)line.append(this.node('span',args.yaw_degrees+'°','tool-context'));
-        card.append(line);this.detail(card,'调用参数',entry,[[JSON.stringify(entry.arguments,null,2),'conversation-arguments']]);
+        card.append(line);
+        if(entry.tool==='execute_code'&&typeof args.program==='string'){
+          card.append(this.node('div','Python program · verbatim','message-label'));
+          card.append(this.node('pre',args.program,'conversation-program'));
+        }
+        this.detail(card,'调用参数',entry,[[JSON.stringify(entry.arguments,null,2),'conversation-arguments']]);
       }else{
         let payload=entry.structured_content||{};
         for(const text of entry.text_blocks||[]){try{const value=JSON.parse(text);if(value&&typeof value==='object'&&!Array.isArray(value)){payload=value;break}}catch{}}
@@ -50,6 +55,10 @@ window.ReplayTranscript = class ReplayTranscript {
         const code=typeof error==='object'?error?.code||error?.message:typeof error==='string'?error:'';
         const status=failure?'调用失败'+(code?' · '+String(code).slice(0,130):''):entry.tool==='finish'?'结束请求已接受':entry.image_count?'已返回 '+entry.image_count+' 张 RGB':payload.job?.status?'观测任务 · '+payload.job.status:'工具已返回';
         card.append(this.node('div',status,'tool-outcome '+(failure?'failed':'ok')));
+        if(entry.tool==='execute_code'&&Array.isArray(payload.executed_primitives)){
+          const names=payload.executed_primitives.map(p=>p.primitive).join(' → ')||'No completed primitive';
+          card.append(this.node('div',names+' · '+(payload.sim_steps_used??0)+' simulation steps','motor-result-summary'));
+        }
         const content=(entry.text_blocks||[]).map(t=>[t,'conversation-result']);
         if(entry.error!=null)content.push([JSON.stringify(entry.error,null,2),'conversation-error']);
         if(entry.structured_content!=null)content.push([JSON.stringify(entry.structured_content,null,2),'conversation-result']);
