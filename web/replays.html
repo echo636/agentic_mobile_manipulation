@@ -47,8 +47,31 @@ const validReplay=t=>typeof t?.replay_url==='string'&&/^manipulation_runs\/[A-Za
 const name=t=>t.name||t.task;
 const stage=s=>({policy_running:'模型执行中',simulator_starting:'启动中',waiting_for_resources:'等待资源',complete:'已结束'}[s]||s||'等待调度');
 const outcome=t=>t.task_success===true?'成功':t.task_success===false?'未成功':t.status==='blocked'?'无评分 · 资源阻塞':t.status==='running'?stage(t.stage):t.status==='failed'?'无评分 · '+(diagnoses[t.run_id]?.label||'运行故障'):'待开始';
-let data=null,current=null,frameObserver=null,diagnoses={};
+let data=null,current=null,frameObserver=null,diagnoses={},refreshing=false;
 const attempts=()=>data.tasks.flatMap(t=>[t,...(t.previous_attempts||[]).map(p=>({...t,...p,index:t.index,historical:true}))]);
+
+async function fetchJSON(path){
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+ try{
+  const response=await fetch(path+'?'+Date.now(),{signal:controller.signal});
+  if(!response.ok)throw Error(response.status);
+  return await response.json();
+ }finally{clearTimeout(timer)}
+}
+
+function showDiagnostic(){
+ const diagnosis=diagnoses[current];$('run-diagnostic').hidden=!diagnosis;
+ $('run-diagnostic').textContent=diagnosis?.explanation||'';
+}
+
+function openReplay(id,url){
+ const frame=$('replay'),src=url+'?embed=1';
+ current=id;$('open').href=url;$('open').hidden=false;
+ $('empty').hidden=true;frame.hidden=false;
+ // Progress refreshes must never restart a video that is already playing.
+ if(frame.getAttribute('src')!==src)frame.src=src;
+ fitReplay();
+}
 
 function fitReplay(){
  const frame=$('replay');if(frame.hidden)return;
@@ -90,24 +113,22 @@ function renderDetails(){
 
 function choose(id){
  const t=attempts().find(t=>t.run_id===id);if(!validReplay(t))return;
- const changed=id!==current;current=id;$('run').value=id;
+ current=id;$('run').value=id;
  $('result').textContent=(t.historical?'历史尝试 · ':'')+outcome(t)+(t.actions==null?'':' · '+t.actions+' 次动作');
  $('result').className='result '+(t.task_success===true?'success':t.task_success===false?'failure':'unscored');
  $('instruction').textContent=t.instruction||'';
- const diagnosis=diagnoses[t.run_id];$('run-diagnostic').hidden=!diagnosis;
- $('run-diagnostic').textContent=diagnosis?.explanation||'';
- $('open').href=t.replay_url;$('open').hidden=false;
+ showDiagnostic();
  const url=new URL(location.href);url.searchParams.set('run',id);history.replaceState({},'',url);
- $('empty').hidden=true;$('replay').hidden=false;
- if(changed)$('replay').src=t.replay_url+'?embed=1';
+ openReplay(id,t.replay_url);
  renderDetails();fitReplay();
 }
 
 async function refresh(){
+ if(refreshing)return;refreshing=true;
+ // Optional diagnosis data must not block task selection or the replay.
+ fetchJSON('behavior100/diagnoses.json').then(value=>{diagnoses=value;showDiagnostic()}).catch(()=>{});
  try{
-  const [response,diagnosticResponse]=await Promise.all([fetch('behavior100/progress.json?'+Date.now()),fetch('behavior100/diagnoses.json?'+Date.now()).catch(()=>null)]);if(!response.ok)throw Error(response.status);
-  if(diagnosticResponse?.ok)diagnoses=await diagnosticResponse.json();
-  const next=await response.json();if(!Array.isArray(next.tasks))throw Error('进度格式异常');data=next;
+  const next=await fetchJSON('behavior100/progress.json');if(!Array.isArray(next.tasks))throw Error('进度格式异常');data=next;
   const ts=data.tasks,done=ts.filter(ended);
   $('ended').textContent=done.length+' / '+ts.length;$('progress').max=ts.length;$('progress').value=done.length;
   $('passed').textContent=done.filter(t=>t.task_success===true).length;$('failed').textContent=done.filter(t=>t.task_success===false).length;$('blocked').textContent=done.filter(t=>t.task_success==null).length;
@@ -127,8 +148,12 @@ async function refresh(){
    choose(selected.run_id);
   }else{$('empty').hidden=false;$('replay').hidden=true;renderDetails()}
  }catch(e){$('error').textContent='进度暂未更新，可继续观看已有回放。';$('error').hidden=false;$('updated').textContent='更新暂停'}
+ finally{refreshing=false}
 }
 $('run').onchange=e=>choose(e.target.value);
+// A bookmarked episode is usable even when live batch metadata is unavailable.
+const bookmarked=new URLSearchParams(location.search).get('run');
+if(/^mas_[A-Za-z0-9_-]+$/.test(bookmarked||''))openReplay(bookmarked,'manipulation_runs/'+bookmarked+'/replay.html');
 refresh();setInterval(refresh,30000);
 </script>
 </body></html>
