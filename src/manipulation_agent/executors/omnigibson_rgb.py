@@ -480,8 +480,9 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
                     raise SkillError('container_closed','Grasp through closed container rejected')
         base=self.robot.get_position_orientation()[0]
-        lo,hi=obj.aabb; nearest=self.torch.maximum(lo[:2],self.torch.minimum(base[:2],hi[:2]))
-        if float(self.torch.linalg.norm(base[:2]-nearest))>1.4:
+        # A long cabinet/floor AABB can contain the base while the selected
+        # visible surface is far away. Reach belongs to that selected point.
+        if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
             # Approach only the selected target, within this action's existing
             # step budget; no new object discovery or goal access.
             before_approach=self.steps
@@ -489,8 +490,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             self._navigate(anchor,max(1,max_steps-60))
             max_steps-=self.steps-before_approach
             base=self.robot.get_position_orientation()[0]
-            nearest=self.torch.maximum(lo[:2],self.torch.minimum(base[:2],hi[:2]))
-            if float(self.torch.linalg.norm(base[:2]-nearest))>1.4 or max_steps<30:
+            if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4 or max_steps<30:
                 raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
         if primitive=='grasp' and self.ideal_carry:
             result=self._ideal_grasp(obj,max_steps)
