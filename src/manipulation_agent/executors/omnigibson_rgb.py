@@ -22,6 +22,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
         self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._object_anchor=None
         self.fixed_surround_rgb = True
+        self.private_viewer_grounding = True
         self.record_video = record_video
         self.video = None
         self.video_render_stride = int(os.environ.get("MAS_VIDEO_RENDER_STRIDE", "2"))
@@ -59,12 +60,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self.rig_height = float(self.robot.aabb[1][2] - base_pos[2]) + 0.05
         for direction in DIRECTIONS:
             sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
-                modalities=['rgb','depth_linear','seg_semantic','seg_instance_id'],image_width=self.image_size,image_height=self.image_size,
+                modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
                 focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
-            # The legacy instance-id reduction pipeline can segfault in Kit
-            # 107.3 on populated scenes. Keep the public sensor API and use
-            # Replicator's GPU-capable fast annotator for this private channel.
-            sensor._RAW_SENSOR_TYPES['seg_instance_id']='instance_id_segmentation_fast'
             sensor.load(None)
             sensor.initialize()
             self.rig[direction] = sensor
@@ -85,6 +82,32 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                                       views=(*DIRECTIONS,'spectator'))
             self._position_spectator()
             for _ in range(20): self.og.sim.render()
+        # Isaac Sim 5.1 offscreen instance mapping can crash populated scenes
+        # (upstream BEHAVIOR-1K #2312). The existing viewer pipeline supports it.
+        # This private query camera never replaces any of the four model RGBs.
+        self._instance_sensor=self.og.sim.viewer_camera
+        self._instance_sensor.focal_length=10.0
+        self._instance_sensor.horizontal_aperture=20.0
+        self._instance_sensor.add_modality('seg_semantic')
+        self._instance_sensor.add_modality('seg_instance_id')
+        for _ in range(8):self.og.sim.render()
+
+    def _private_instance_capture(self,sensor):
+        """Match one saved RGB pose with physics frozen; never rotate the robot."""
+        query=self._instance_sensor
+        pos,quat=sensor.get_position_orientation()
+        query.set_position_orientation(pos,quat)
+        if not self.torch.allclose(query.intrinsic_matrix,sensor.intrinsic_matrix,atol=1e-4):
+            raise RuntimeError('Private segmentation intrinsics differ from selected RGB')
+        before=self.steps
+        with component(self,'private_instance_capture'):
+            for _ in range(4):self.og.sim.render()
+            data,info=query.get_obs()
+            ids=data['seg_instance_id'].detach().cpu().clone()
+            labels=dict(info['seg_instance_id'])
+        if before!=self.steps or tuple(ids.shape)!=(self.image_size,self.image_size):
+            raise RuntimeError('Private segmentation synchronization failed')
+        return ids,labels
 
     def _position_rig(self):
         """Kinematic sensor mount only: never writes robot pose or advances physics."""
@@ -235,8 +258,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                    'intrinsic':sensor.intrinsic_matrix.clone(),'width':pixels.shape[1],'height':pixels.shape[0]}
             data,info=self._sensor_packets[view]
             frame['depth_linear']=data['depth_linear'].detach().cpu().clone()
-            frame['seg_instance_id']=data['seg_instance_id'].detach().cpu().clone()
-            frame['instance_paths']=dict(info['seg_instance_id'])
+            frame['seg_instance_id'],frame['instance_paths']=self._private_instance_capture(sensor)
             np.savez_compressed(private_folder/f'{ref}.npz',depth_linear=frame['depth_linear'].numpy(),seg_instance_id=frame['seg_instance_id'].numpy())
             (private_folder/f'{ref}.json').write_text(json.dumps({'audience':'executor_private_only',
                 'image_ref':ref,'rgb_sha256':digest,
@@ -537,6 +559,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             'pixel_grounding':'same RGB pixel render instance and depth; no neighboring-pixel substitution',
             'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
+        result['private_instance_provider']='viewer_pipeline_pose_matched_with_physics_frozen; not model RGB or spectator'
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,
             'mount_radius_m':0.35,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),

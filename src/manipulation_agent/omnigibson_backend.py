@@ -135,7 +135,7 @@ class OmniGibsonBackend:
         if instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
             raise ValueError("Instance must belong to this pinned source's public test split")
         gm.HEADLESS = True
-        gm.RENDER_VIEWER_CAMERA = False
+        gm.RENDER_VIEWER_CAMERA = bool(getattr(self,'private_viewer_grounding',False))
         gm.ENABLE_HQ_RENDERING = False
         gm.USE_GPU_DYNAMICS = False
         gm.ENABLE_TRANSITION_RULES = True
@@ -289,6 +289,9 @@ class OmniGibsonBackend:
         config["scene"].update(scene_file=str(patched), trav_map_resolution=0.05,
                               default_erosion_radius=0.57, waypoint_resolution=0.1)
         config["env"].update(device=f"cuda:{gpu}", automatic_reset=False)
+        if getattr(self,'private_viewer_grounding',False):
+            # Set the initial product size; never resize it after rig creation.
+            config.setdefault('render',{}).update(viewer_width=image_size,viewer_height=image_size)
         config["task"]["termination_config"]["max_steps"] = max_steps
         return config
 
