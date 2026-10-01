@@ -49,7 +49,7 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 
 ## 执行和实验记录
 
-目标由模型在最新 RGB 中选点；执行器使用私有几何完成导航及官方 symbolic/volume 操作。底盘逐控制步理想运动，抓放可能瞬变；不是物理控制排行榜提交。最终 BDDL/TaskMetric 在结束后独立评分，不返回活动模型。
+目标由模型在最新 RGB 中选点；执行器用该像素的私有深度和视觉网格射线解析目标，执行 GT 导航、无 FixedJoint 的理想持物、官方状态设置及容器采样。底盘逐控制步理想运动，抓放可能瞬变；不是物理控制排行榜提交。最终 BDDL/TaskMetric 在结束后独立评分，不返回活动模型。[v7 修复、真实组件验证及限制](docs/executor_v7.md)。
 
 导航已接入 jinkai/harness 的 visual-point GT planner 策略：候选落脚点采样、可达性检查、目标距离评分，以及逐步位姿反馈。Habitat 原生 navmesh/follower 由 OmniGibson 的静态可通行网格和理想底盘适配替代；修复了微小位置偏差导致起点落入相邻障碍格的问题。当前仍不包含完整动态碰撞检查。[移植范围与验证](docs/gt_navigation.md)。原 100 条批量评测按用户要求暂停，开发更新不会自动恢复它。
 
@@ -61,6 +61,8 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 - [此前三相机实验记录](docs/history_before_four_camera.md)：历史成功结果不自动代表新相机配置通过。
 
 ## 结果可视化
+
+[v7 同批 32 条复测与修复前后对比](http://10.76.5.241:8765/retest32_v7_20261001/index.html)正在逐条更新；原 2/32 基线保留。[组件回归视频与原始证据](http://10.76.5.241:8765/executor_retest_20261001/components.html)单独展示脚本测试，不计入模型任务成功率。
 
 [实验结果与故障分析页面](http://10.76.5.241:8765/retest32_gt_20260930/results.html)展示 32 项重测的状态、旧新 Q 分数、失败证据、工具耗时，以及逐次工具调用前后的四路 RGB 和模型原文。默认详读版保留 1× 仿真动作，完整模型文本逐页停留；前视最大，另三路缩小，第三人称仅供回放。真实耗时、旧精简版与原始录像仍可切换。接口实际返回的 reasoning summary 与 assistant 输出分别显示，历史缺失不补写。[新版展示与完整 32 条失败复核](http://10.76.5.241:8765/replay_readable_20261001/index.html)。
 
