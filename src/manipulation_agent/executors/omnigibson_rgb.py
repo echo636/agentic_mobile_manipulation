@@ -89,7 +89,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self._instance_sensor.focal_length=10.0
         self._instance_sensor.horizontal_aperture=20.0
         self._instance_sensor.add_modality('seg_semantic')
-        self._instance_sensor.add_modality('seg_instance_id')
+        self._instance_sensor.add_modality('seg_instance')
         for _ in range(8):self.og.sim.render()
 
     def _private_instance_capture(self,sensor):
@@ -103,8 +103,11 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         with component(self,'private_instance_capture'):
             for _ in range(4):self.og.sim.render()
             data,info=query.get_obs()
-            ids=data['seg_instance_id'].detach().cpu().clone()
-            labels=dict(info['seg_instance_id'])
+            ids=data['seg_instance'].detach().cpu().clone()
+            labels={}
+            for label,name in info['seg_instance'].items():
+                obj=self.env.scene.object_registry('name',name)
+                labels[label]=obj.prim_path if obj is not None else name
         if before!=self.steps or tuple(ids.shape)!=(self.image_size,self.image_size):
             raise RuntimeError('Private segmentation synchronization failed')
         return ids,labels

@@ -46,7 +46,7 @@ try:
     if owner is obj and float(b.torch.linalg.norm(hit.cpu()-point))<.15:return candidate,'reprojected_recorded_world_point'
   candidates=[]
   for ref,frame in b.current_frames.items():
-   ids=[int(i) for i,path in frame['instance_paths'].items() if path.startswith(obj.prim_path+'/')]
+   ids=[int(i) for i,path in frame['instance_paths'].items() if path==obj.prim_path or path.startswith(obj.prim_path+'/')]
    if not ids:continue
    mask=np.isin(frame['seg_instance_id'].numpy(),ids).astype('uint8');distance=cv2.distanceTransform(mask,cv2.DIST_L2,3)
    py,px=np.unravel_index(distance.argmax(),distance.shape)
