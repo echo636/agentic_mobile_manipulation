@@ -25,6 +25,8 @@ ERROR_MESSAGES = {
     "no_surface_at_point":"The selected pixel could not be grounded to a surface. Inspect RGB and choose another point.",
     "invalid_visual_target":"The selected surface cannot be used for this action. Inspect RGB and select a different visible point.",
     "navigation_unreachable":"The motor executor could not reach the selected visual point. Choose a visible alternative.",
+    "navigation_invalid_start":"The executor cannot safely navigate from its current base position. Changing the target point will not repair this; stop repeating navigation and report blocked if the limitation persists.",
+    "navigation_stalled":"The navigation executor made no progress. Inspect the fresh RGB before trying one alternative; do not repeat the same request.",
     "out_of_reach":"The selected surface is beyond the executor's manipulation reach. Approach using RGB first.",
     "hand_occupied":"The executor cannot perform this action while carrying an object.",
     "empty_hand":"The executor cannot place or release without a held object.",

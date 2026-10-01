@@ -16,6 +16,28 @@ def camera_mount(direction, height, radius=0.35, pitch_degrees=20):
     return [radius*c, radius*s, height], rotation
 
 
+def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04):
+    """Candidate camera rays inside the real square 90-degree RGB frusta.
+
+    Uses the same four mount transforms as capture. Does not read scene truth,
+    move cameras, or claim that a geometrically in-frame point is unoccluded.
+    """
+    c,s=math.cos(yaw),math.sin(yaw)
+    rotation=((c,-s,0.),(s,c,0.),(0.,0.,1.))
+    rays=[]
+    for direction in DIRECTIONS:
+        offset,basis=camera_mount(direction,height)
+        origin=[sum(rotation[i][j]*offset[j] for j in range(3))+(*xy,base_z)[i] for i in range(3)]
+        world_basis=[[sum(rotation[i][k]*basis[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+        delta=[p-o for p,o in zip(point,origin)]
+        local=[sum(world_basis[i][j]*delta[i] for i in range(3)) for j in range(3)]
+        depth=-local[2]
+        if depth<=.02:continue
+        u=.5+.5*local[0]/depth;v=.5-.5*local[1]/depth
+        if margin<=u<=1-margin and margin<=v<=1-margin:rays.append((direction,origin,(u,v)))
+    return rays
+
+
 def look_at_orientation(camera, target):
     """Finite, normalized USD camera quaternion (xyzw), without torch compilation."""
     if not all(math.isfinite(v) for v in (*camera, *target)):

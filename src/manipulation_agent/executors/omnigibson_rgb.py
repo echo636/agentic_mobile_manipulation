@@ -20,7 +20,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
 
     def __init__(self,*args,record_video=False,**kwargs):
         self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
-        self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._object_anchor=None
+        self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False
         self.record_video = record_video
@@ -188,6 +188,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         raise RuntimeError('RGB render products did not become ready: '+json.dumps(shapes))
 
     def _step(self, action):
+        if self._base_target is not None:self._restore_base_target()
         self._restore_object_anchor()
         self._carry_follow()
         with component(self,'physics_and_metrics'):super()._step(action)
@@ -304,8 +305,16 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         gap=float(self.torch.linalg.norm(hit['position'].cpu()-point)) if hit['hit'] else None
         tolerance=max(.03,.02*float(self.torch.linalg.norm(point-start)))
         from .visual_mesh_grounding import query_visual_surface
-        with component(self,'visual_grounding'):
-            obj,visual=query_visual_surface(self,start,unit,point)
+        try:
+            with component(self,'visual_grounding'):
+                obj,visual=query_visual_surface(self,start,unit,point)
+        except SkillError as exc:
+            diagnostic={'at':now(),'status':'failed','code':exc.code,'detail':str(exc),
+                'selected_pixel':target['point'],'raster_pixel':[px,py],'image_ref':target['image_ref'],
+                'depth_linear':depth,'hit_position':point.tolist(),
+                'visual_query':getattr(exc,'diagnostics',{}),'audience':'executor_private'}
+            with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
+            raise
         diagnostic={'at':now(),'routing':'same_pixel_depth_visual_triangle_ray',**visual,
             'rigid_body':hit.get('rigidBody',''),'selected_object_prim':obj.prim_path,'depth_linear':depth,
             'hit_position':point.tolist(),'collision_position':hit['position'].tolist() if hit['hit'] else None,
@@ -325,19 +334,21 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
 
     def _approach_visible(self, xy, point, selected_object):
-        """Reject endpoints behind intervening geometry for this selected target."""
+        """Check the selected point in actual candidate camera frusta and rays."""
         from omnigibson.utils.sampling_utils import raytest
+        from ..observations.rig import visible_rig_rays
         torch=self.torch
         if math.dist(xy,point[:2].cpu().tolist())>1.4:return False
-        start=point.cpu().clone();start[0]=xy[0];start[1]=xy[1]
-        start[2]=max(float(self.robot.get_position_orientation()[0][2])+.65,float(point[2]))
         ignore=[l.prim_path for l in self.robot.links.values()]
         held=self._get_held()
         if held is not None:ignore.extend(l.prim_path for l in held.links.values())
-        hit=raytest(start,point.cpu(),ignore_bodies=ignore)
-        if not hit['hit']:return True
-        body=hit.get('rigidBody','')
-        return (selected_object is not None and body.startswith(selected_object.prim_path+'/')) or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10
+        ignore.extend(l.prim_path for obj,_ in self._carry_contents for l in obj.links.values())
+        yaw=math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
+        rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,point.cpu().tolist())
+        for _,origin,_ in rays:
+            hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
+            if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
+        return False
 
     def _navigate(self, target, max_steps):
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
@@ -357,7 +368,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
                                      candidate_filter=lambda xy:self._approach_visible(xy,point,getattr(target,'selected_object',None)))
         except NavigationError as exc:
-            raise SkillError('navigation_unreachable',str(exc)) from exc
+            raise SkillError(exc.code,str(exc)) from exc
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'plan':asdict(plan),'map_resolution_m':grid.resolution,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
@@ -413,7 +424,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             if final_error>follower.position_tolerance or not grid.navigable(grid.cell(actual_pos[:2].cpu().tolist())):
                 raise SkillError('navigation_unreachable','GT follower final pose verification failed',changed=self.steps>before)
         except NavigationError as exc:
-            raise SkillError('navigation_unreachable',str(exc),changed=self.steps>before) from exc
+            raise SkillError(exc.code,str(exc),changed=self.steps>before) from exc
         finally:
             self._base_target=None
         return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
@@ -468,7 +479,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         if primitive=='release' and self.ideal_carry:return self._ideal_release(max_steps)
         if primitive=='wait':
             count=min(max_steps,int(round(float(kwargs.get('seconds',5.0))/self.og.sim.get_sim_step_dt())))
-            for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            with self._anchored_operation():
+                for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
         if primitive=='release':return self.execute(primitive,None,max_steps)
         obj,point,grounding=self._ground(target)
@@ -516,7 +528,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
 
     def evaluate(self):
         result=super().evaluate()
-        result['protocol']='rgb_agent_ideal_executor_v7_controlled_carry'
+        result['protocol']='rgb_agent_ideal_executor_v8_surface_payload_anchor'
         result['observation_mode']=self.mode
         return result
 
@@ -527,14 +539,15 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                       observation_mode=self.mode,image_size=self.image_size,
                       grounding='same_pixel_depth_visual_triangle_ray_private_executor_only',
                       model_visible_truth=False)
-        result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry}
+        result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
             'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,
             'observation_pixels_reused_for_video':True, 'fresh_observation_boundaries':True,
             'intermediate_frames':'explicit_previous_frame_hold','no_motion_interpolation':True}
-        result['placement'] = {'on_top':'selected_surface_cuboid_then_official_sampler',
-            'inside':'official_volume','verification':'physical_selected_surface_support_or_official_OnTop; official_Inside',
+        result['placement'] = {'on_top':'strict_selected_surface_cuboid_no_object_wide_fallback',
+            'inside':'official_volume','verification':'selected_surface_contact_and_support_required; official_Inside_and_payload_relations',
+            'base_anchor':'control_and_sampler_physics_steps',
             'failure_policy':'restore_pre_action_state','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
@@ -542,6 +555,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
             'geometry':'OmniGibson static eroded traversability grid',
             'habitat_native_navmesh':False,'dynamic_collision_check':False,
+            'segment_validation':'exact_grid_supercover_for_planner_and_follower',
+            'approach_visibility':'actual_four_camera_frusta_and_collision_rays',
             'goal_selection':'jinkai visual-point candidate sampling and ranking',
             'pixel_grounding':'same RGB pixel depth and visual mesh triangle ray; no neighboring-pixel substitution',
             'model_visible_gt':False}

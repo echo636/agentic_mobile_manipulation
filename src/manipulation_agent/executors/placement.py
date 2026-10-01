@@ -59,7 +59,10 @@ class CheckedPlacement:
                         'target':target.name,'held':held.name,'selected_point':point.tolist(),
                         'ray_height_m':height,'held_bbox_extent':extents.tolist()})
                     return T.mat2pose(matrix)
-        # Same selected object and requested relation; no task-goal/object search.
+            # A model-selected surface is an actuator constraint. Never widen
+            # it to the whole object (e.g. another shelf or a fridge roof).
+            raise SkillError('sampling_error','No collision-free pose near the selected surface; choose another point on that surface')
+        # Legacy callers without a selected surface may request object-wide placement.
         if yaw_degrees is not None:
             raise SkillError('sampling_error','No selected-surface pose satisfying the requested orientation')
         pose = self.primitives._sample_pose_with_object_and_predicate(OnTop, held, target)
@@ -73,19 +76,9 @@ class CheckedPlacement:
         held = self._get_held()
         if held is None:
             raise SkillError('empty_hand','No object is held')
-        # A lower shelf can be geometrically valid but fail official OnTop:
-        # the same rack is also above the shoe. Check physical support on the
-        # selected surface, then retry its official sampler if necessary.
-        attempts = [point, None] if point is not None and max_steps >= 100 else [point]
-        for attempt, candidate in enumerate(attempts):
-            try:
-                check = self._try_place_on_top(held, target, max_steps, candidate, yaw_degrees)
-                break
-            except SkillError:
-                if attempt == len(attempts)-1:
-                    raise
+        check = self._try_place_on_top(held, target, max_steps, point, yaw_degrees)
         self.frames_revision = -1
-        return {'primitive':'place_on_top','implementation':'checked_selected_surface_then_official_sampler',
+        return {'primitive':'place_on_top','implementation':'strict_selected_surface_placement',
                 'postcondition':check,'failure_policy':'restore_pre_action_state'}
 
     def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
@@ -99,6 +92,7 @@ class CheckedPlacement:
             # Do not call upstream _release(): it runs physics while the object
             # is still next to the hand, BEFORE teleporting to the destination.
             contents=list(self._carry_contents) if self.ideal_carry else []
+            dependencies=list(getattr(self,'_carry_dependencies',[]))
             self._carry_detach()
             held.set_position_orientation(*pose)
             self._relocate_contents(held,contents)
@@ -115,9 +109,11 @@ class CheckedPlacement:
                 'target_below':target in adjacency.negative_neighbors,
                 'target_above':target in adjacency.positive_neighbors,
                 'grasp_released':self._get_held() is None})
-            if not (official_on_top or supported):
+            # Official OnTop alone says nothing about which shelf was selected.
+            if not (supported if point is not None else official_on_top):
                 raise SkillError('postcondition_error','Object is not stably supported by the selected surface',changed=True)
-        return 'official_OnTop' if official_on_top else 'selected_surface_contact_and_support_after_settling'
+            self._verify_payload(dependencies)
+        return 'selected_surface_contact_and_support_after_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching):
         """An actual lower shelf can support an object while official OnTop is false.
@@ -155,20 +151,37 @@ class CheckedPlacement:
                     link.meta_link_type in {'fillable','openfillable'}]
         if not fillable or Inside not in held.states:
             raise SkillError('unsupported_relation','Target has no supported fillable volume')
-        original_step=self.og.sim.step_physics
         start=time.monotonic();before=self.sampling_physics_steps
-        def bounded_step(*args,**kwargs):
-            if self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>120:
-                raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
-            self.sampling_physics_steps+=1
-            return original_step(*args,**kwargs)
         with self._placement_context():
             contents=list(self._carry_contents) if self.ideal_carry else []
+            dependencies=list(getattr(self,'_carry_dependencies',[]))
+            orientation=held.get_position_orientation()[1].clone()
             self._carry_detach()
+            # Capture the anchored physics wrapper installed by the context.
+            original_step=self.og.sim.step_physics
+            def bounded_step(*args,**kwargs):
+                if self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>120:
+                    raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
+                self.sampling_physics_steps+=1
+                if contents:
+                    # Randomly flipping a plate is not a valid way to place
+                    # its food. Preserve the carried assembly's orientation.
+                    held.set_position_orientation(held.get_position_orientation()[0],orientation)
+                self._relocate_contents(held,contents)
+                return original_step(*args,**kwargs)
             self.og.sim.step_physics=bounded_step
+            from omnigibson.utils.usd_utils import RigidContactAPI
+            original_contact=RigidContactAPI.is_in_contact
+            def assembly_contact(scene_idx,query_set,with_set,ignore_set,current_only):
+                if contents and len(query_set)==1 and next(iter(query_set)) is held and with_set is None:
+                    assembly=[held,*[obj for obj,_ in contents]]
+                    return original_contact(scene_idx,assembly,None,[*(ignore_set or []),*assembly],current_only)
+                return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
+            if contents:RigidContactAPI.is_in_contact=assembly_contact
             try:
                 sampled=held.states[Inside].set_value(target,True)
             finally:
+                if contents:RigidContactAPI.is_in_contact=original_contact
                 self.og.sim.step_physics=original_step
                 self.frames_revision=-1
             if not sampled:
@@ -178,6 +191,9 @@ class CheckedPlacement:
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if not held.states[Inside].get_value(target):
                 raise SkillError('postcondition_error','Object left container after settling',changed=True)
-        return {'primitive':'place_inside','implementation':'transactional_official_Inside_set_value',
+            self._verify_payload(dependencies)
+            if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
+                raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
+        return {'primitive':'place_inside','implementation':'transactional_official_Inside_with_rigid_payload_sampling',
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
                 'sampling_physics_steps':self.sampling_physics_steps-before}

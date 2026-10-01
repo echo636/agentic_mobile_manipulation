@@ -40,6 +40,8 @@ class V7Contracts(unittest.TestCase):
     def test_placement_rollback_restores_controlled_carry_ownership(self):
         obj=object();contents=[(object(),'relative child')];records=[];restored=[];follow=[]
         b=ControlledCarry();b._ideal_held=obj;b._carry_relative='relative';b._carry_contents=contents
+        from contextlib import nullcontext
+        b._anchored_operation=nullcontext
         b.og=SimpleNamespace(sim=SimpleNamespace(dump_state=lambda **k:'world',load_state=lambda s,**k:restored.append(s)))
         b._placement_record=records.append;b._carry_follow=lambda:follow.append(b._ideal_held)
         with self.assertRaises(SkillError),b._placement_context():

@@ -40,9 +40,15 @@ def query_visual_surface(backend, start, direction, point):
         if best is not None:matches.append((best[0],obj,best[1],best[2]))
     matches.sort(key=lambda row:row[0])
     if not matches or matches[0][0]>tolerance:
-        raise SkillError('invalid_visual_target','No visual triangle on the selected ray agrees with the selected depth')
+        exc=SkillError('invalid_visual_target','No visual triangle on the selected ray agrees with the selected depth')
+        exc.diagnostics={'reason':'depth_mesh_disagreement','nearest_gap_m':matches[0][0] if matches else None,
+                         'tolerance_m':tolerance,'meshes_tested':checked,'candidate_count':len(matches)}
+        raise exc
     if len(matches)>1 and matches[1][0]-matches[0][0]<.001:
-        raise SkillError('invalid_visual_target','Selected pixel lies on ambiguous touching visual surfaces')
+        exc=SkillError('invalid_visual_target','Selected pixel lies on ambiguous touching visual surfaces')
+        exc.diagnostics={'reason':'ambiguous_surface','nearest_gap_m':matches[0][0],
+                         'second_gap_m':matches[1][0],'meshes_tested':checked}
+        raise exc
     gap,obj,path,hit=matches[0]
     return obj,{'visual_mesh':path,'visual_triangle_position':hit,
                 'visual_depth_agreement_error_m':gap,'visual_depth_tolerance_m':tolerance,

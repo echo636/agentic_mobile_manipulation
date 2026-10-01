@@ -16,7 +16,9 @@ STRATEGY = 'jinkai_visual_point_gt_grid_v1'
 
 
 class NavigationError(Exception):
-    pass
+    def __init__(self, message, code='navigation_unreachable'):
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -71,15 +73,29 @@ class GridMap:
         return None if best is None else (best[1],best[2])
 
     def segment_free(self, a, b):
-        """Check dense samples and diagonal corner crossings on the static grid."""
-        count=max(1,math.ceil(math.dist(a,b)/(self.resolution/4)))
-        previous=None
-        for i in range(count+1):
-            cell=self.cell(tuple(x+(y-x)*i/count for x,y in zip(a,b)))
-            if not self.navigable(cell):return False
-            if previous and cell[0]!=previous[0] and cell[1]!=previous[1]:
-                if not self.navigable((previous[0],cell[1])) or not self.navigable((cell[0],previous[1])):return False
-            previous=cell
+        """Exact grid supercover, including both sides of edges and corners.
+
+        Check every crossed cell interval rather than distance-spaced samples.
+        Planning, pruning and follower subsegments therefore use the same
+        collision definition, independent of how a segment is subdivided.
+        """
+        self.cell(a);self.cell(b)  # Reject non-finite positions before traversal.
+        start=tuple((v-o)/self.resolution+.5 for v,o in zip(a,self.origin))
+        end=tuple((v-o)/self.resolution+.5 for v,o in zip(b,self.origin))
+        times={0.,1.}
+        for x,y in zip(start,end):
+            if abs(y-x)<1e-14:continue
+            for edge in range(math.ceil(min(x,y)),math.floor(max(x,y))+1):
+                t=(edge-x)/(y-x)
+                if 0.<t<1.:times.add(t)
+        times=sorted(times)
+        probes=times+[(x+y)/2 for x,y in zip(times,times[1:])]
+        for t in probes:
+            axes=[]
+            for x,y in zip(start,end):
+                value=x+(y-x)*t;nearest=round(value)
+                axes.append((nearest-1,nearest) if abs(value-nearest)<=1e-9 else (math.floor(value),))
+            if any(not self.navigable((row,col)) for col in axes[0] for row in axes[1]):return False
         return True
 
     def neighbors(self, cell):
@@ -132,7 +148,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     """
     current=tuple(map(float,current));hint=tuple(map(float,hint))
     start=grid.cell(current);grid.cell(hint)
-    if not grid.navigable(start):raise NavigationError('Start is outside the traversable grid; no unvalidated recovery teleport')
+    if not grid.navigable(start):raise NavigationError('Start is outside the traversable grid; no unvalidated recovery teleport','navigation_invalid_start')
     candidates=[]
     for raw in candidate_points(hint,current,standoff):
         cell=grid.snap(raw,max_snap)
@@ -201,13 +217,13 @@ class GreedyGridFollower:
     def next_pose(self, actual):
         x,y,yaw=map(float,actual)
         if not all(math.isfinite(v) for v in (x,y,yaw)):raise NavigationError('Non-finite actual robot pose')
-        if not self.grid.navigable(self.grid.cell((x,y))):raise NavigationError('Robot left the traversable grid during execution')
+        if not self.grid.navigable(self.grid.cell((x,y))):raise NavigationError('Robot left the traversable grid during execution','navigation_invalid_start')
         if self.last_actual is not None:
             error=math.dist((x,y),self.last_command[:2])
             if error>max(.10,self.distance_step*3):raise NavigationError('Robot diverged from the commanded path')
             progressed=math.dist((x,y),self.last_actual[:2])>1e-5 or abs(self.angle(yaw-self.last_actual[2]))>1e-5
             self.stall=0 if progressed else self.stall+1
-            if self.stall>=self.stall_steps:raise NavigationError('Navigation follower made no progress')
+            if self.stall>=self.stall_steps:raise NavigationError('Navigation follower made no progress','navigation_stalled')
         while self.index<len(self.plan.points) and math.dist((x,y),self.plan.points[self.index])<=self.position_tolerance:
             self.index+=1
         if self.index>=len(self.plan.points):
