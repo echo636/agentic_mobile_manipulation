@@ -119,7 +119,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                       **model_payloads.get(len(steps)+1,{}),
                       'at': call['at'], 'elapsed_seconds': (datetime.fromisoformat(call['at']) - start).total_seconds(),
                       'video_start_seconds': video_markers.get(call['request_id'],{}).get('seconds'),
-                      'tool_seconds': seconds, 'is_motor_action': name in {'act', 'look'},
+                      'tool_seconds': seconds, 'is_motor_action': name in {'act', 'look', 'execute_code'},
                       'status': 'missing_result' if result is None else ('passed' if result.get('ok') else 'failed'),
                       'before': before, 'after': copy.deepcopy(last_observation), 'new_observation': new_obs is not None,
                       'decisions': copy.deepcopy(decisions[-4:]), 'plan': copy.deepcopy(plan), 'memory': copy.deepcopy(notes)})

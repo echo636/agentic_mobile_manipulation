@@ -104,6 +104,57 @@ class VisionHarness:
         return {'effect':{'primitive':primitive,'status':'completed','verification':'executor_operation_only'},
                 'observation':self.snapshot,'actions_used':self.actions}
 
+    def execute_motor_program(self, program, revision):
+        from .motor_program import MotorProgram
+        if self.profile != 'motor': raise SkillError('unknown_tool','Motor profile required')
+        if revision != self.revision: raise SkillError('stale_observation','Use the latest observation revision')
+        start=self.backend.steps; start_actions=self.actions; primitives=[]; reads=0
+        def motor(name, arguments):
+            if self.actions>=self.budget.max_actions or self.actions-start_actions>=16:
+                raise SkillError('budget_exhausted','Motor action budget exhausted')
+            remaining=min(240-(self.backend.steps-start),self.budget.max_sim_steps-self.backend.steps,
+                          self.budget.max_steps_per_action)
+            if remaining<=0 or time.monotonic()-self.started>self.budget.wall_seconds:
+                raise SkillError('budget_exhausted','Motor step/time budget exhausted')
+            self.actions+=1
+            primitive_id=self.recorder.event('motor_primitive_call',{'primitive':name,'arguments':arguments,'sim_step':self.backend.steps})
+            try:
+                result=self.backend.execute_motor(name,arguments,remaining)
+            except SkillError as exc:
+                self.recorder.event('motor_primitive_result',{'call_id':primitive_id,'primitive':name,
+                    'ok':False,'code':exc.code,'sim_step':self.backend.steps})
+                raise
+            primitives.append(result)
+            self.recorder.event('motor_primitive_result',{'call_id':primitive_id,'primitive':name,
+                'ok':True,'result':result,'sim_step':self.backend.steps})
+            return result
+        def observe():
+            nonlocal reads
+            reads+=1
+            if reads>8 or time.monotonic()-self.started>self.budget.wall_seconds:
+                raise SkillError('program_limit','Program observation/time budget exhausted')
+            self.revision+=1
+            result=self.refresh()
+            self.recorder.event('program_observation',{'observation':result,'sim_step':self.backend.steps})
+            return result
+        bindings={
+            'base_velocity':lambda x=0,y=0,yaw=0,steps=30: motor('base_velocity',dict(x=x,y=y,yaw=yaw,steps=steps)),
+            'joint_delta':lambda group,delta,steps=30: motor('joint_delta',dict(group=group,delta=delta,steps=steps)),
+            'gripper':lambda hand,opening,steps=30: motor('gripper',dict(hand=hand,opening=opening,steps=steps)),
+            'hold':lambda steps=15: motor('hold',dict(steps=steps)), 'observe':observe}
+        interpreter=MotorProgram(program,bindings)
+        error=None; result=None
+        try: result=interpreter.run()
+        except SkillError as exc:
+            error={'code':exc.code,'message':str(exc),'world_may_have_changed':self.backend.steps!=start}
+            self.recorder.event('motor_program_error',error)
+        finally:
+            self.revision+=1
+            self.refresh()
+        return {'ok':error is None,'program_result':result,'error':error,
+                'executed_primitives':primitives,'sim_steps_used':self.backend.steps-start,
+                'actions_used':self.actions,'observation':self.snapshot}
+
     def update_plan(self,reason,subgoals): return LegacyPlanHelpers._tool_update_plan(self,reason,subgoals)
     def remember(self,key,text,revision): return LegacyPlanHelpers._tool_remember(self,key,text,revision)
     def recall(self): return LegacyPlanHelpers._tool_recall(self)

@@ -60,8 +60,25 @@ Before finish(achieved), obtain a fresh four-camera observation and verify every
 """
 SYSTEM_PROMPT = SKILLS_PROMPT
 
+MOTOR_PROMPT = '''You control an OmniGibson mobile manipulation robot through four fixed RGB cameras and direct physical motor programs.
+First describe_controls, then observe (or start_observation/get_observation). Read the returned units, joint ordering and limits.
+Use execute_code(program, revision) to submit Python defining run(). Compose base_velocity, joint_delta, gripper, hold and observe.
+The supported Python subset has helper functions, local variables, if, for/range, while, break, numeric arithmetic, JSON values and indexing.
+No imports, attributes, filesystem, simulator objects, object names/IDs, depth, maps, current joint/pose state or evaluator feedback are accessible.
+The model receives RGB only plus static robot control specifications and command execution feedback. Four directions are robot-relative; there is no wrist camera.
+Physical joint and base controllers execute your commands. There is no navigate_to, grasp, place, open, toggle, collision planner, automatic recovery or ideal object carry.
+Base x is forward, y is left, positive yaw turns left; use metres/second and radians/second. Joint deltas are radians, referenced once to the measured joints at primitive entry.
+Use short motion segments and reobserve RGB. Each program is limited to 240 simulation steps and 16 primitive attempts; each primitive accepts 1–90 steps, with an extra counted brake step for base_velocity.
+Every motor attempt consumes the episode action budget, including invalid attempts. Code errors may occur after earlier commands already moved the robot; do not blindly replay a program.
+The program must return a dict with status completed/partial/blocked and a nonempty reason. Program completed is not task success. Call finish separately with achieved/blocked/aborted and visual evidence or a concrete limitation.
+observe inside a program records a fresh capture and returns its metadata; RGB pixels are displayed to you when the MCP call returns. End a program whenever a new visual judgment is required.
+Do not expect Python local variables to persist across execute_code calls. Use ordinary conversation history for your progress; no planning or memory tools.
+Use only these MCP tools, receive closed=true from finish before final text. Your public model output and generated programs are recorded verbatim for replay.
+This is an experimental physical-control RGB policy, not an official challenge submission. Do not infer a successful grasp from a completed gripper command.
+'''
+
 def system_prompt(profile='skills'):
-    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_PROMPT,'workflow':WORKFLOW_PROMPT}[profile]
+    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_PROMPT,'workflow':WORKFLOW_PROMPT,'motor':MOTOR_PROMPT}[profile]
 
 class RGBResponsesPolicy(ResponsesPolicy):
     def _request_with_observation_jobs(self, harness, payload):

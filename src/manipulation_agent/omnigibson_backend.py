@@ -207,9 +207,10 @@ class OmniGibsonBackend:
         self.input_hashes["bddl_definition"] = hashlib.sha256(definition_path.read_bytes()).hexdigest()
         write_json(output / "dependency_versions.json", {d.metadata["Name"]: d.version for d in metadata.distributions() if d.metadata["Name"]})
         self.task_metric = next(m for m in self.evaluator.metrics if isinstance(m, TaskMetric))
-        from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitives
-        self.primitives = SymbolicSemanticActionPrimitives(self.env, self.robot)
-        self.primitives._enable_head_tracking = False
+        if not getattr(self, 'direct_motor', False):
+            from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitives
+            self.primitives = SymbolicSemanticActionPrimitives(self.env, self.robot)
+            self.primitives._enable_head_tracking = False
         with self._startup_stage('initial_goal_evaluation'):
             self.initial_goals = self._goal_options()
         # Keep original task-instance files intact. Evaluator performs its official restoration.
@@ -243,6 +244,7 @@ class OmniGibsonBackend:
             }
         # HolonomicBaseJointController fixes this internally and has no such constructor argument.
         robot_cfg["controller_config"]["base"].pop("use_delta_commands")
+        self._configure_robot_controls(robot_cfg)
         scene = task_cfg["scene_model"]
         template = instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json"
         instance_path = template.parent / f'{scene}_task_{task}_instances' / f'{scene}_task_{task}_0_{self.instance}_template-tro_state.json'
@@ -294,6 +296,10 @@ class OmniGibsonBackend:
             config.setdefault('render',{}).update(viewer_width=image_size,viewer_height=image_size)
         config["task"]["termination_config"]["max_steps"] = max_steps
         return config
+
+    def _configure_robot_controls(self, robot_cfg):
+        """Optional experiment hook before embedded robot configuration is serialized."""
+        pass
 
     def _objects(self) -> dict:
         return {key: obj for key, obj in self.env.task.object_scope.items()
