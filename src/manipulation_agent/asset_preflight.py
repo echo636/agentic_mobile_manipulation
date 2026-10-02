@@ -5,9 +5,11 @@ from pathlib import Path
 from .omnigibson_backend import select_compatible_scene, restore_static_floor_geometry
 
 
-def inspect_scene_assets(template, instance, asset_root, scene):
+def inspect_scene_assets(template, instance, asset_root, scene, *, task_name=None):
     asset_root = Path(asset_root)
-    selected, data, _ = select_compatible_scene(Path(template), Path(instance))
+    deferred = []
+    selected, data, _ = select_compatible_scene(
+        Path(template), Path(instance), task_name=task_name, deferred_bindings=deferred)
     full = selected.with_name(selected.name.replace('-partial_rooms', ''))
     if full != selected and full.is_file():
         restore_static_floor_geometry(data, json.loads(full.read_text()))
@@ -26,4 +28,5 @@ def inspect_scene_assets(template, instance, asset_root, scene):
             'level': 'template_bindings_referenced_model_usds_and_scene_layout_paths_only',
             'selected_template': str(selected), 'model_usds_checked': len(dependencies),
             'missing_model_usds': missing, 'scene_layout': str(layout),
+            'deferred_bindings': deferred,
             'scene_layout_exists': layout.is_dir(), 'full_simulator_load_verified': False}
