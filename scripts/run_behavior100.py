@@ -294,6 +294,8 @@ class Batch:
                 if self.c.get('expected_gpu_uuid') and check.get('gpu_uuid')!=self.c['expected_gpu_uuid']:
                     raise RuntimeError('GPU UUID changed; refusing physical-index reassignment')
                 write_json(self.root/'preflight'/f'{runid}_{attempt:02d}.json',check)
+                if check['checks'].get('pinned_source_imports') is False:
+                    raise RuntimeError('Pinned runtime imports unavailable or point to another source; see preflight source_imports')
                 if check['status']=='passed': break
                 self.update(row,stage='waiting_for_resources',resource_checks=check['checks'])
                 time.sleep(30)
