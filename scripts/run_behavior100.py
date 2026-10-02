@@ -30,6 +30,14 @@ from manipulation_agent.tools import tool_specs
 FINAL = {'passed','failed','blocked'}
 
 
+def evaluation_summary(evaluation):
+    """Keep combinatorial goal arrays in the immutable episode, not live progress."""
+    if not isinstance(evaluation, dict):
+        return evaluation
+    return {key: value for key, value in evaluation.items()
+            if key not in {'goal_options', 'initial_goal_options'}}
+
+
 def episode_artifact_hashes(runid, episode, controller):
     """Stable archive keys also cover an adopted controller in another batch."""
     hashes={}
@@ -401,7 +409,9 @@ class Batch:
                         failure_stage=row.get('failure_stage') or 'simulator_runtime',
                         simulator_failure_type=run['failure'])
         self.update(row,task_success=run.get('task_success'),actions=run.get('actions'),tool_calls=run.get('tool_calls'),
-                    sim_steps=run.get('sim_steps'),evaluation=run.get('evaluation'),q_score=(run.get('evaluation') or {}).get('official_metrics',{}).get('q_score',{}).get('final'),
+                    sim_steps=run.get('sim_steps'),evaluation=evaluation_summary(run.get('evaluation')),
+                    evaluation_record='runs/'+row['run_id']+'/run.json',
+                    q_score=(run.get('evaluation') or {}).get('official_metrics',{}).get('q_score',{}).get('final'),
                     run_source=run.get('source'),backend=run.get('backend'),agent_outcome=run.get('agent_outcome'),finish_reason=run.get('finish_reason'))
         errors=[]
         for script,filename in [('validate_async_observation.py','observation_validation.json'),('validate_episode_video.py','video_validation.json')]:
