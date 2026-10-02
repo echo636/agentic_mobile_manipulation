@@ -4,6 +4,7 @@ import unittest
 import json
 import tempfile
 import threading
+import queue
 from subprocess import CompletedProcess
 from unittest.mock import Mock
 
@@ -11,6 +12,24 @@ spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolv
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_broken_episode_stops_new_tasks_but_scored_failure_continues(self):
+        for broken in (False,True):
+            with self.subTest(broken=broken),tempfile.TemporaryDirectory() as folder:
+                runner=batch.Batch.__new__(batch.Batch)
+                runner.root=Path(folder);runner._worker_local=threading.local()
+                runner._config={'stop_on_infrastructure_failure':True}
+                runner.workers=[{'id':'one','gpu':1}];runner.lock=threading.RLock()
+                runner.queue=queue.Queue();runner.publish=Mock();runner.journal=Mock()
+                runner.rows=[{'run_id':str(i),'status':'planned'} for i in range(3)]
+                def run_one(row,gpu):
+                    row.update(status='failed',task_success=None if broken else False,
+                        video_validation='passed',observation_validation='passed',evidence_alignment='passed')
+                runner.run_one=Mock(side_effect=run_one)
+                runner.run()
+                self.assertEqual(runner.run_one.call_count,1 if broken else 3)
+                self.assertEqual((runner.root/'drain_requested.json').exists(),broken)
+                if broken:self.assertEqual(runner.rows[1]['status'],'planned')
+
     def test_progress_preserves_scores_without_copying_combinatorial_goal_arrays(self):
         goals = [[True, False] for _ in range(10000)]
         raw = {'goal_options': goals, 'initial_goal_options': goals,

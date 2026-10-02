@@ -50,6 +50,18 @@ def episode_artifact_hashes(runid, episode, controller):
     return hashes
 
 
+def infrastructure_failure(row):
+    """Keep normal scored policy/action failures separate from broken runs."""
+    if not isinstance(row.get('task_success'),bool):
+        return 'missing_final_score'
+    if row.get('archive_failure'):
+        return 'archive_failure'
+    for field in ('video_validation','observation_validation','evidence_alignment'):
+        if row.get(field)!='passed':
+            return field
+    return None
+
+
 def worker_configs(config):
     """Resolve explicit host/GPU lanes; legacy single-host configs still work."""
     lanes = config.get('workers')
@@ -557,6 +569,14 @@ class Batch:
                 try:row=self.queue.get_nowait()
                 except queue.Empty:return
                 self.run_one(row,config['gpu'])
+                if self._config.get('stop_on_infrastructure_failure'):
+                    reason=infrastructure_failure(row)
+                    if reason:
+                        with self.lock:
+                            write_json(self.root/'drain_requested.json',{'at':now(),'reason':reason,
+                                'trigger_run_id':row['run_id'],'automatic':True,'scope':'new_episodes_only'})
+                            self.journal('Infrastructure admission stopped new episodes: '+row['run_id']+' / '+reason)
+                        return
         with ThreadPoolExecutor(max_workers=len(self.workers)) as pool:
             futures=[pool.submit(worker,config) for config in self.workers]
             for future in futures:future.result()
