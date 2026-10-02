@@ -18,20 +18,23 @@ def atomic(path, data):
 
 
 def summarize_comparison(progress):
+    arms=tuple(arm for arm in ARMS if arm in progress)
+    if 'original' not in arms or len(arms)<2 or set(progress)-set(ARMS):
+        raise ValueError('Comparison requires original and at least one known paired arm')
     task_sets = [{r['task'] for r in p['tasks']} for p in progress.values()]
     if any(tasks != task_sets[0] for tasks in task_sets):
         raise ValueError('Comparison arms must contain identical task sets')
     maps = {arm: {r['task']: r for r in p['tasks']} for arm, p in progress.items()}
     tasks = []
     for template in progress['original']['tasks']:
-        rows = {arm: maps[arm][template['task']] for arm in ARMS}
+        rows = {arm: maps[arm][template['task']] for arm in arms}
         for key in ('instance', 'seed', 'instruction_sha256', 'bddl_sha256'):
             if len({r[key] for r in rows.values()}) != 1:
                 raise ValueError('Unmatched task inputs: ' + template['task'] + ' / ' + key)
         tasks.append({'index': template['index'], 'task': template['task'], 'name': template['name'],
                       'instruction': template['instruction'], 'arms': rows})
     summaries = {}
-    for arm in ARMS:
+    for arm in arms:
         rows = list(maps[arm].values())
         counts = dict(Counter(r['status'] for r in rows))
         summaries[arm] = {'total': len(rows), 'counts': counts,
@@ -45,7 +48,7 @@ def summarize_comparison(progress):
     paired = [t for t in tasks if all(r['status'] in ('passed', 'failed', 'blocked') and r.get('task_success') is not None for r in t['arms'].values())]
     return {'updated_at': datetime.now(timezone.utc).isoformat(), 'arms': summaries, 'tasks': tasks,
             'paired_scored_tasks': len(paired),
-            'paired_goal_successes': {arm: sum(t['arms'][arm]['task_success'] is True for t in paired) for arm in ARMS}}
+            'paired_goal_successes': {arm: sum(t['arms'][arm]['task_success'] is True for t in paired) for arm in arms}}
 
 
 def render_arm_dashboard(progress):
@@ -67,17 +70,41 @@ PAGE = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="vi
 <script>let data=null;const arms=['original','motor','official'],names=['原实现','Motor · 代码控制','Official · 符号动作'];const labels={planned:'待开始',running:'运行中',passed:'完整通过',failed:'未完整通过',blocked:'未启动 / 阻塞'};function node(tag,text,cls){let n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n}function render(){if(!data)return;document.querySelector('#updated').textContent='更新 '+new Date(data.updated_at).toLocaleString()+' · 每 10 秒刷新';let cards=document.querySelector('#cards');cards.replaceChildren();for(let i=0;i<3;i++){let a=arms[i],s=data.arms[a],c=node('div','', 'card');c.append(node('div',names[i]),node('strong',s.ended+' / '+s.total),node('div','已结束 · '+(s.counts.running||0)+' 运行中'),node('div','目标成功 '+s.official_goal_successes+' · 完整通过 '+s.fully_validated_successes),node('small','已评分 '+s.scored+' · 无评分故障 '+s.unscored_ended),node('small','基础设施重试 '+(s.infrastructure_retries||0)));cards.append(c)}document.querySelector('#paired').textContent='三组均有最终评分的配对任务：'+data.paired_scored_tasks+'；其中目标成功：原实现 '+data.paired_goal_successes.original+' / Motor '+data.paired_goal_successes.motor+' / Official '+data.paired_goal_successes.official;let body=document.querySelector('#rows');body.replaceChildren();let q=document.querySelector('#query').value.toLowerCase(),f=document.querySelector('#filter').value;for(let t of data.tasks){let rs=arms.map(a=>t.arms[a]);if(q&&!(t.name+' '+t.task+' '+t.instruction).toLowerCase().includes(q))continue;if(f==='running'&&!rs.some(r=>r.status==='running'))continue;if(f==='ended'&&!rs.every(r=>['passed','failed','blocked'].includes(r.status)))continue;if(f==='different'&&!(rs.every(r=>typeof r.task_success==='boolean')&&new Set(rs.map(r=>r.task_success)).size>1))continue;let tr=document.createElement('tr'),title=node('td',(t.index+1)+'. '+t.name);title.title=t.instruction;title.append(node('small',t.task));tr.append(title);for(let a of arms){let r=t.arms[a],td=node('td','');td.append(node('div',labels[r.status]||r.status,r.status),node('small',r.task_success===true?'目标成功 · Q='+r.q_score:r.task_success===false?'目标未完成 · Q='+r.q_score:['planned','running'].includes(r.status)?(r.stage||'queued'):'无最终评分'));if(r.worker_id)td.append(node('small',r.worker_id));if(r.model_duration_seconds!=null)td.append(node('small','模型 '+Math.round(r.model_duration_seconds)+' s'));if(r.replay_url){let link=node('a','打开回放 ↗');link.href=a+'/'+r.replay_url;link.target='_blank';link.rel='noopener';td.append(link)}if(r.previous_attempts?.length){let history=node('details',''),label=node('summary','启动重试 '+r.previous_attempts.length+' 次');history.append(label);for(let previous of r.previous_attempts){let item=node('small',previous.run_id+' · '+previous.status);if(previous.replay_url){let link=node('a','查看原始尝试 ↗');link.href=a+'/'+previous.replay_url;link.target='_blank';link.rel='noopener';item.append(document.createTextNode(' '),link)}history.append(item)}history.append(node('small',r.retry_reason||''));td.append(history)}tr.append(td)}body.append(tr)}}async function update(){try{let r=await fetch('comparison.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error(r.status);data=await r.json();render()}catch(e){document.querySelector('#updated').textContent='读取进度失败，将自动重试'}}document.querySelector('#query').oninput=render;document.querySelector('#filter').onchange=render;update();setInterval(update,10000)</script></html>'''
 
 
+def render_comparison_page(arms=ARMS):
+    """Display only arms admitted to this cohort; paused experiments stay archived."""
+    import re
+    arms=tuple(arms)
+    if not arms or set(arms)-set(ARMS):raise ValueError('Unknown comparison arms')
+    names=[LABELS[arm] for arm in arms]
+    page=PAGE.replace("const arms=['original','motor','official'],names=['原实现','Motor · 代码控制','Official · 符号动作'];",
+                      'const arms='+json.dumps(arms)+',names='+json.dumps(names,ensure_ascii=False)+';')
+    page=page.replace('for(let i=0;i<3;i++)','for(let i=0;i<arms.length;i++)')
+    page=re.sub(r"document.querySelector\('#paired'\).textContent=.*?;let body=",
+                "document.querySelector('#paired').textContent='各组均有评分的配对任务：'+data.paired_scored_tasks+'；目标成功：'+arms.map((a,i)=>names[i]+' '+data.paired_goal_successes[a]).join(' / ');let body=",page)
+    if arms!=ARMS:
+        page=page.replace('三种执行方式 · 100 任务对比','Original / Official · 100 任务对比')
+        page=page.replace('<h1>原实现 / Motor / Official</h1>','<h1>'+' / '.join(html.escape(n) for n in names)+'</h1>')
+        page=page.replace('repeat(3,1fr)','repeat('+str(len(arms))+',1fr)')
+        page=page.replace('<th>原实现</th><th>Motor</th><th>Official</th>', ''.join('<th>'+html.escape(n)+'</th>' for n in names))
+        page=page.replace('三组全新运行，共 300 条','本批次 '+str(len(arms))+' 组全新运行，共 '+str(100*len(arms))+' 条')
+        page=page.replace('Motor 由大脑写代码组合底盘、关节及夹爪控制；','')
+        page=page.replace('三组的命令粒度','各组的命令粒度').replace('三组都已结束','各组都已结束')
+    return page
+
+
 def publish(root):
     config = json.loads((root / 'comparison_config.json').read_text())
     progress = {}
-    for arm in ARMS:
-        p = root / arm / 'progress.json'
-        progress[arm] = json.loads(p.read_text()) if p.exists() else {'tasks': json.loads((root / arm / 'manifest.json').read_text())['tasks']}
+    arms=config.get('active_arms',ARMS)
+    for arm in arms:
+        batch=Path(config.get('arm_roots',{}).get(arm,root/arm))
+        p = batch / 'progress.json'
+        progress[arm] = json.loads(p.read_text()) if p.exists() else {'tasks': json.loads((batch / 'manifest.json').read_text())['tasks']}
     result = summarize_comparison(progress)
     atomic(root / 'comparison.json', result)
     report = Path(config['reports']); report.mkdir(parents=True, exist_ok=True)
     atomic(report / 'comparison.json', result)
-    (report / 'index.html').write_text(PAGE)
+    (report / 'index.html').write_text(render_comparison_page(arms))
     return result
 
 

@@ -50,5 +50,17 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(summary['ended'], 0)
         self.assertEqual(summary['scored'], 0)
 
+    def test_fresh_two_arm_cohort_does_not_import_paused_motor_scores(self):
+        rows=self.rows();del rows['motor']
+        for arm in rows:rows[arm]['tasks'][0].update(status='passed',task_success=True)
+        result=comparison.summarize_comparison(rows)
+        self.assertEqual(set(result['arms']),{'original','official'})
+        self.assertEqual(result['paired_scored_tasks'],1)
+        self.assertEqual(result['paired_goal_successes'],{'original':1,'official':1})
+        page=comparison.render_comparison_page(('original','official'))
+        self.assertIn('const arms=["original", "official"]',page)
+        self.assertNotIn('data.paired_goal_successes.motor',page)
+        self.assertNotIn('<th>Motor</th>',page)
+
 
 if __name__ == '__main__': unittest.main()
