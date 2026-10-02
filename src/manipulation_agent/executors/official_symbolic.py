@@ -21,7 +21,7 @@ OFFICIAL_PRIMITIVES = (
     'soak_under', 'soak_inside', 'wipe', 'cut', 'place_near_heating_element',
     'navigate_to', 'release',
 )
-PROTOCOL = 'rgb_official_symbolic_direct_v1'
+PROTOCOL = 'rgb_official_symbolic_initialized_navigation_v2'
 
 
 class OfficialSymbolicBackend(RGBBackend):
@@ -39,6 +39,21 @@ class OfficialSymbolicBackend(RGBBackend):
         self._official_terminated = False
         if set(p.name.lower() for p in self._primitive_enum) != set(OFFICIAL_PRIMITIVES):
             raise RuntimeError('Pinned official primitive inventory changed')
+        # Symbolic registers inherited NAVIGATE_TO but skips the planner in its
+        # constructor. Fail startup if the official planner cannot be prepared,
+        # instead of admitting 100 policies to a deterministically broken tool.
+        from omnigibson.action_primitives.curobo import CuRoboMotionGenerator, CuRoboEmbodimentSelection
+        with self._startup_stage('official_navigation_planner'):
+            configs=self.robot.curobo_path
+            required=(CuRoboEmbodimentSelection.DEFAULT,CuRoboEmbodimentSelection.BASE)
+            if not all(k in configs for k in required):
+                raise RuntimeError('Robot does not provide official arm/base navigation configurations')
+            self.primitives._motion_generator=CuRoboMotionGenerator(
+                robot=self.robot,robot_cfg_path={k:configs[k] for k in required},
+                device=f'cuda:{self.torch.cuda.current_device()}',
+                batch_size=self.primitives._curobo_batch_size,collision_activation_distance=.02)
+            if not all(k in self.primitives._motion_generator.mg for k in required):
+                raise RuntimeError('Official navigation planner is missing a required embodiment')
         self._official_sources = {}
         for cls in type(self.primitives).__mro__:
             if cls is object:
@@ -46,6 +61,8 @@ class OfficialSymbolicBackend(RGBBackend):
             path = inspect.getsourcefile(cls)
             if path:
                 self._official_sources[cls.__name__] = {'file': path, 'sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+        path=inspect.getsourcefile(CuRoboMotionGenerator)
+        self._official_sources['CuRoboMotionGenerator']={'file':path,'sha256':hashlib.sha256(Path(path).read_bytes()).hexdigest()}
 
     def _step(self, action):
         # Deliberately bypass RGBBackend._step and its pose/carry projection.
@@ -160,8 +177,9 @@ class OfficialSymbolicBackend(RGBBackend):
             robot_camera_views=['front','back','left','right'], stock_wrist_cameras_enabled=False,
             record_video=self.record_video, upstream_sources=self._official_sources,
             primitive_inventory=list(OFFICIAL_PRIMITIVES),
-            known_upstream_limitations=['NAVIGATE_TO uses an uninitialized CuRobo planner in the pinned symbolic implementation',
-                'Official symbolic grasp/toggle do not enforce this project\'s previous distance or automatic-approach checks'])
+            navigation_planner={'implementation':'upstream_CuRoboMotionGenerator','initialized':True,
+                'device':f'cuda:{self.torch.cuda.current_device()}','embodiments':['DEFAULT','BASE']},
+            known_upstream_limitations=['Official symbolic grasp/toggle do not enforce this project\'s previous distance or automatic-approach checks'])
         return result
 
     def evaluate(self):
