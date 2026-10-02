@@ -1,6 +1,7 @@
 """Host-side batch checks and launch, without importing the simulator for checks."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 def command(args):
     p = subprocess.run(args, capture_output=True, text=True, timeout=30)
     return {'exit_code': p.returncode, 'stdout': p.stdout, 'stderr': p.stderr}
+
+
+def source_import_readiness(data_root):
+    """Detect relocated editable installs without importing the GPU simulator."""
+    source = Path(data_root) / 'src/BEHAVIOR-1K'
+    packages = {'bddl': source / 'bddl3/bddl/__init__.py',
+                'omnigibson': source / 'OmniGibson/omnigibson/__init__.py',
+                'gello': source / 'joylo/gello/__init__.py'}
+    checks = {}
+    for name, expected in packages.items():
+        try:
+            spec = importlib.util.find_spec(name)
+            origin = Path(spec.origin) if spec is not None and spec.origin else None
+            matches = origin is not None and origin.is_file() and origin.resolve() == expected.resolve()
+            checks[name] = {'status': 'passed' if matches else 'failed',
+                            'origin': str(origin) if origin else None, 'expected': str(expected)}
+        except (ImportError, ValueError) as exc:
+            checks[name] = {'status': 'failed', 'error': str(exc), 'expected': str(expected)}
+    return {'status': 'passed' if all(x['status'] == 'passed' for x in checks.values()) else 'failed',
+            'packages': checks, 'simulator_imported': False}
 
 
 def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28):
@@ -53,7 +74,9 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28):
         raise ValueError('Shared GPU mode requires at least 14 GiB free before each episode')
     if not 12<=memory_budget_gib<=28:
         raise ValueError('Simulator working-memory budget must be between 12 and 28 GiB')
+    imports = source_import_readiness(data_root)
     checks = {'video_encoder': encoding_check['exit_code'] == 0,
+              'pinned_source_imports': imports['status'] == 'passed',
               'gpu_capacity': (int(selected[3])-int(selected[2])>=min_free_gpu_mib) if min_free_gpu_mib else int(selected[2])<1024,
               'validated_driver_floor':tuple(map(int,selected[4].strip().split('.'))) >= (580,65,6),
               'host_memory_available_40GiB': int(mem['MemAvailable'].split()[0])*1024 > 40*1024**3,
@@ -62,7 +85,7 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28):
               'bridge_port_free': port_free}
     return {'at': datetime.now(timezone.utc).isoformat(), 'host': socket.gethostname(),
             'interpreter': sys.executable, 'pid': os.getpid(), 'gpu_index': gpu,
-            'gpu_uuid': selected[1].strip(), 'cgroup': cg, 'checks': checks,
+            'gpu_uuid': selected[1].strip(), 'cgroup': cg, 'checks': checks, 'source_imports': imports,
             'required_working_memory_gib':memory_budget_gib,
             'driver_version':selected[4].strip(),'gpu_policy':{'shared':bool(min_free_gpu_mib),'minimum_free_mib':min_free_gpu_mib},
             'status': 'passed' if all(checks.values()) else 'blocked', 'queries': queries}
@@ -89,7 +112,7 @@ def assets(manifest, data_root):
         from manipulation_agent.asset_preflight import inspect_scene_assets
         try:
             row['runtime_assets'] = inspect_scene_assets(paths['scene_template'], paths['instance_state'],
-                data_root/'data/omnigibson/behavior-1k-assets', scene)
+                data_root/'data/omnigibson/behavior-1k-assets', scene, task_name=name)
         except (OSError, ValueError, KeyError) as exc:
             row['runtime_assets'] = {'status':'failed','error':str(exc)}
         row['status'] = 'passed' if all(v['exists'] for v in row['files'].values()) and row['scene_matches_catalog'] and row['bddl_matches_manifest'] and row['runtime_assets']['status']=='passed' else 'failed'

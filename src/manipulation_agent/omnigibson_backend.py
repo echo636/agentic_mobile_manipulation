@@ -20,6 +20,7 @@ from pathlib import Path
 from .contracts import SkillError
 from .records import write_json
 from .goal_grounding import efficient_grounding, evaluate_once_per_literal
+from .task_bindings import audit_wildcard_bindings, validate_runtime_bindings
 
 
 def normalize_embedded_robot(data, *, reset_controller_state=False):
@@ -60,7 +61,7 @@ def normalize_embedded_robot(data, *, reset_controller_state=False):
     return changes
 
 
-def select_compatible_scene(template: Path, instance_path: Path):
+def select_compatible_scene(template: Path, instance_path: Path, *, task_name=None, deferred_bindings=None):
     """Choose a supplied template whose object bindings cover the actual instance.
 
     Some challenge archives ship an obsolete partial-room template alongside a
@@ -80,10 +81,21 @@ def select_compatible_scene(template: Path, instance_path: Path):
         systems = data.get('state', {}).get('registry', {}).get('system_registry', {})
         missing = sorted(k for k in required if k not in bindings or
                          (not k.startswith('agent.') and bindings[k] not in objects and bindings[k] not in systems))
+        deferred = None
+        if missing and task_name is not None:
+            try:
+                deferred = audit_wildcard_bindings(data, required, task_name)
+            except (ValueError, KeyError) as exc:
+                deferred_error = str(exc)
+            else:
+                missing = []
         if not missing:
+            if deferred is not None and deferred_bindings is not None:
+                deferred_bindings.append({'template': str(candidate), **deferred})
             return candidate, data, rejected
         rejected.append({'path': str(candidate), 'missing_instance_bindings': missing,
-                         'sha256': hashlib.sha256(candidate.read_bytes()).hexdigest()})
+                         'sha256': hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                         **({'wildcard_check_error': deferred_error} if task_name is not None else {})})
     raise ValueError('Task instance and scene templates are incompatible: ' + json.dumps(rejected))
 
 
@@ -205,6 +217,13 @@ class OmniGibsonBackend:
             }))
         with self._startup_stage('initial_reset'):
             self.evaluator.reset()
+        with self._startup_stage('validate_runtime_task_bindings'):
+            binding_check = validate_runtime_bindings(
+                self.evaluator.env.task.object_scope, self.required_instance_bindings)
+            write_json(output / 'runtime_task_binding_validation.json', binding_check)
+            if binding_check['status'] != 'passed':
+                raise ValueError('Official scene initialization left missing instance entities: ' +
+                                 str(binding_check['missing_instances']))
         with self._startup_stage('load_task_instance'):
             self.evaluator.load_task_instance(instance)
         with self._startup_stage('instance_reset'):
@@ -260,7 +279,14 @@ class OmniGibsonBackend:
         scene = task_cfg["scene_model"]
         template = instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json"
         instance_path = template.parent / f'{scene}_task_{task}_instances' / f'{scene}_task_{task}_0_{self.instance}_template-tro_state.json'
-        template, data, rejected = select_compatible_scene(template, instance_path)
+        self.required_instance_bindings = set(json.loads(instance_path.read_text())) - {'robot_poses'}
+        deferred = []
+        template, data, rejected = select_compatible_scene(
+            template, instance_path, task_name=task, deferred_bindings=deferred)
+        if deferred:
+            write_json(self.output / 'deferred_task_bindings.json', {
+                'checks': deferred, 'original_template_unmodified': True,
+                'actual_binding_owner': 'official_BehaviorTask.initialize_activity'})
         if rejected:
             write_json(self.output / 'scene_template_selection.json', {
                 'selected': str(template), 'rejected': rejected,
