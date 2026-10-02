@@ -11,6 +11,18 @@ spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolv
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_progress_preserves_scores_without_copying_combinatorial_goal_arrays(self):
+        goals = [[True, False] for _ in range(10000)]
+        raw = {'goal_options': goals, 'initial_goal_options': goals,
+               'official_metrics': {'q_score': {'final': .5}}, 'task_success': False}
+        summary = batch.evaluation_summary(raw)
+        self.assertEqual(summary['official_metrics']['q_score']['final'], .5)
+        self.assertIs(summary['task_success'], False)
+        self.assertLess(len(json.dumps(summary)), 200)
+        self.assertIs(raw['goal_options'], goals)
+        self.assertEqual(len(raw['initial_goal_options']), 10000)
+        self.assertIsNone(batch.evaluation_summary(None))
+
     def test_missing_assets_block_before_gpu_wait_or_simulator_launch(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
