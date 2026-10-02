@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>任务回放 · OmniGibson</title>
+<title>任务结果与回放 · OmniGibson</title>
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#243443;background:#f5f7f8;color-scheme:light;--muted:#788792;--line:#e0e7ea;--accent:#227c70}
 *{box-sizing:border-box}body{margin:0}main{max-width:1720px;padding:18px 24px 28px;margin:auto}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}button,select{font:inherit;color:inherit}button,a,select,summary{touch-action:manipulation}button,select{border:1px solid var(--line);background:white;border-radius:7px;padding:7px 10px}button,summary{cursor:pointer}button:hover{background:#edf4f2}:focus-visible{outline:3px solid #a7d4c7;outline-offset:3px}[hidden]{display:none!important}
@@ -11,14 +11,17 @@
 .selection{display:flex;align-items:center;gap:12px}.selection label{font-size:12px;color:var(--muted);white-space:nowrap}.selection select{font-size:15px;font-weight:550;min-width:0;width:min(650px,65%);padding:9px 12px}.selection .result{font-size:12px;white-space:nowrap}.selection a{margin-left:auto;font-size:12px;white-space:nowrap}.instruction{font-size:13px;line-height:1.6;margin:10px 0 14px;color:#61727c;overflow-wrap:anywhere}.viewer{position:relative}iframe{display:block;width:100%;height:680px;border:0;background:transparent}.notice{font-size:13px;color:#a45640;margin:10px 0}.empty{padding:70px 24px;text-align:center;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:white}
 .support{margin-top:18px;border-top:1px solid var(--line);font-size:12px;color:#6b7c85}.support details{border-bottom:1px solid var(--line);padding:13px 0}.support summary{width:fit-content;color:#586d78}.support summary span{margin-left:8px;color:#8b99a1}.detail-body{padding:14px 0 3px;line-height:1.8}.worker{margin:3px 0}.table-scroll{overflow-x:auto;margin-top:10px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid #e6ecef}th{font-weight:500;color:#8a98a0}td:first-child,th:first-child{padding-left:0;width:32px}.task-button{border:0;background:transparent;padding:0;color:var(--accent);text-align:left;font-size:12px}.task-button[aria-current=true]{font-weight:700}p{margin:7px 0}.helper{color:#8b99a1;font-size:11px}
 @media(max-width:760px){main{padding:14px 12px 22px}h1{font-size:19px}.brand{display:none}.summary{gap:6px 12px;margin:10px 0 13px}.summary .queue{margin-left:0}.progress progress{width:45px}.selection{flex-wrap:wrap;gap:8px}.selection label{display:none}.selection select{width:100%;flex-basis:100%;font-size:14px}.instruction{font-size:12px;margin:9px 0 12px}.support{margin-top:12px}.live{font-size:11px}iframe{height:1200px}.support summary span{font-size:11px}}
+.batches{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:15px 0 8px}.batch{text-align:left;padding:11px 13px;background:#fff}.batch[aria-pressed=true]{border-color:var(--accent);background:#eaf4f0}.batch strong{display:block;font-size:13px}.batch small{display:block;font-size:11px;color:#667c82;margin-top:4px}.batch-note{font-size:12px;color:#6b7c85;line-height:1.65;margin:8px 0}.live.completed::before{background:#87959b}.selection select{flex:1}.search{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:8px;width:min(100%,340px);margin-bottom:8px}@media(max-width:760px){.batches{grid-template-columns:repeat(2,minmax(0,1fr))}.selection select{flex-basis:100%}.batch{padding:9px}.batch-note{font-size:11px}}
 </style>
 </head>
 <body><main>
 <header>
- <div class="heading"><h1>任务回放<span class="brand">OmniGibson</span></h1><span id="updated" class="live">读取进度…</span></div>
+ <div class="heading"><h1>任务结果与回放<span class="brand">OmniGibson</span></h1><span id="updated" class="live">读取进度…</span></div>
+ <nav id="batches" class="batches" aria-label="选择评测批次"></nav>
+ <p id="batch-note" class="batch-note"></p>
  <div class="summary" aria-label="评测进度">
   <span class="progress">已结束 <b id="ended">—</b><progress id="progress" value="0" max="32" aria-label="批次完成进度"></progress></span>
-  <span class="success">成功 <b id="passed">—</b></span><span class="failure">未成功 <b id="failed">—</b></span><span class="unscored">无评分 <b id="blocked">—</b></span>
+  <span class="success">目标成功 <b id="passed">—</b></span><span class="failure">目标未完成 <b id="failed">—</b></span><span class="unscored">无评分 <b id="blocked">—</b></span><span id="rate"></span>
   <span class="queue"><span id="running">—</span> 进行中 · <span id="planned">—</span> 待开始</span>
  </div>
 </header>
@@ -34,126 +37,10 @@
 <aside class="support" aria-label="更多评测信息">
  <details id="task-details"><summary>全部任务与运行状态<span id="task-count"></span></summary><div class="detail-body">
   <div id="workers"></div><p id="record-time" class="helper"></p>
+  <input id="task-search" class="search" type="search" placeholder="搜索任务" aria-label="搜索全部任务">
   <div class="table-scroll"><table><thead><tr><th>#</th><th>任务</th><th>结果 / 阶段</th><th>Q</th><th>动作数</th></tr></thead><tbody id="tasks"></tbody></table></div>
  </div></details>
 </aside>
 </main>
-<script>
-'use strict';
-const $=id=>document.getElementById(id);
-const esc=x=>String(x??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const ended=t=>['passed','failed','blocked'].includes(t.status);
-const validReplay=t=>typeof t?.replay_url==='string'&&/^manipulation_runs\/[A-Za-z0-9_-]+\/replay\.html$/.test(t.replay_url);
-const name=t=>t.name||t.task;
-const stage=s=>({policy_running:'模型执行中',simulator_starting:'启动中',waiting_for_resources:'等待资源',complete:'已结束'}[s]||s||'等待调度');
-const outcome=t=>t.task_success===true?'成功':t.task_success===false?'未成功':t.status==='blocked'?'无评分 · 资源阻塞':t.status==='running'?stage(t.stage):t.status==='failed'?'无评分 · '+(diagnoses[t.run_id]?.label||'运行故障'):'待开始';
-let data=null,current=null,frameObserver=null,diagnoses={},refreshing=false;
-const attempts=()=>data.tasks.flatMap(t=>[t,...(t.previous_attempts||[]).map(p=>({...t,...p,index:t.index,historical:true}))]);
-
-async function fetchJSON(path){
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
- try{
-  const response=await fetch(path+'?'+Date.now(),{signal:controller.signal});
-  if(!response.ok)throw Error(response.status);
-  return await response.json();
- }finally{clearTimeout(timer)}
-}
-
-function showDiagnostic(){
- const diagnosis=diagnoses[current];$('run-diagnostic').hidden=!diagnosis;
- $('run-diagnostic').textContent=diagnosis?.explanation||'';
-}
-
-function openReplay(id,url){
- const frame=$('replay'),src=url+'?embed=1';
- current=id;$('open').href=url;$('open').hidden=false;
- $('empty').hidden=true;frame.hidden=false;
- // Progress refreshes must never restart a video that is already playing.
- if(frame.getAttribute('src')!==src)frame.src=src;
- fitReplay();
-}
-
-function fitReplay(){
- const frame=$('replay');if(frame.hidden)return;
- if(frame.clientWidth>680){
-  const top=frame.getBoundingClientRect().top+scrollY;
-  frame.style.height=Math.max(560,Math.min(1050,innerHeight-top-22))+'px';
- }else{
-  const workspace=frame.contentDocument?.querySelector('.replay-workspace');
-  if(workspace)frame.style.height=Math.ceil(workspace.getBoundingClientRect().height+2)+'px';
- }
-}
-
-$('replay').addEventListener('load',()=>{
- const doc=$('replay').contentDocument;if(!doc?.querySelector('.replay-workspace'))return;
- // This style applies only to the embedded view; original replay files stay intact.
- const style=doc.createElement('style');style.textContent=`
-  html,body{margin:0;background:transparent}body.embedded main{max-width:none;padding:0}
-  .embedded .archive{display:none}.embedded .panel-heading .eyebrow{display:none}
-  .embedded .panel-heading{padding:13px 16px}.embedded .panel-heading h2{font-size:16px}
-  @media(min-width:681px){
-   .embedded .replay-workspace{height:100vh;gap:14px}
-   .embedded .observation-panel{display:flex;flex-direction:column;min-height:0}
-   .embedded .camera-grid{height:auto;min-height:180px;flex:1}
-   .embedded .observation-panel>div:not(.camera-grid){flex-shrink:0}
-  }
- `;doc.head.append(style);
- frameObserver?.disconnect();frameObserver=new ResizeObserver(()=>{if($('replay').clientWidth<=680)fitReplay()});
- frameObserver.observe(doc.querySelector('.replay-workspace'));fitReplay();
-});
-addEventListener('resize',fitReplay);
-
-function renderDetails(){
- const ts=data.tasks;
- $('task-count').textContent=ts.length+' 条';
- $('workers').innerHTML=ts.filter(t=>t.status==='running').map(t=>`<div class="worker">${esc(name(t))} · ${esc(stage(t.stage))}<span class="helper"> · ${esc(t.worker_id||t.simulator_host||'')}</span></div>`).join('')||'当前无运行中的任务';
- $('tasks').innerHTML=ts.map(t=>`<tr><td>${t.index+1}</td><td>${validReplay(t)?`<button class="task-button" data-run="${esc(t.run_id)}" aria-current="${t.run_id===current}">${esc(name(t))}</button>`:esc(name(t))}</td><td title="${esc(t.failure||'')}">${esc(outcome(t))}</td><td>${t.q_score==null?'—':Number(t.q_score).toFixed(3)}</td><td>${esc(t.actions)}</td></tr>`).join('');
- $('tasks').querySelectorAll('[data-run]').forEach(b=>b.onclick=()=>{choose(b.dataset.run);$('run').focus();scrollTo({top:0,behavior:'smooth'})});
-}
-
-function choose(id){
- const t=attempts().find(t=>t.run_id===id);if(!validReplay(t))return;
- current=id;$('run').value=id;
- $('result').textContent=(t.historical?'历史尝试 · ':'')+outcome(t)+(t.actions==null?'':' · '+t.actions+' 次动作');
- $('result').className='result '+(t.task_success===true?'success':t.task_success===false?'failure':'unscored');
- $('instruction').textContent=t.instruction||'';
- showDiagnostic();
- const url=new URL(location.href);url.searchParams.set('run',id);history.replaceState({},'',url);
- openReplay(id,t.replay_url);
- renderDetails();fitReplay();
-}
-
-async function refresh(){
- if(refreshing)return;refreshing=true;
- // Optional diagnosis data must not block task selection or the replay.
- fetchJSON('behavior100/diagnoses.json').then(value=>{diagnoses=value;showDiagnostic()}).catch(()=>{});
- try{
-  const next=await fetchJSON('behavior100/progress.json');if(!Array.isArray(next.tasks))throw Error('进度格式异常');data=next;
-  const ts=data.tasks,done=ts.filter(ended);
-  $('ended').textContent=done.length+' / '+ts.length;$('progress').max=ts.length;$('progress').value=done.length;
-  $('passed').textContent=done.filter(t=>t.task_success===true).length;$('failed').textContent=done.filter(t=>t.task_success===false).length;$('blocked').textContent=done.filter(t=>t.task_success==null).length;
-  $('running').textContent=ts.filter(t=>t.status==='running').length;$('planned').textContent=ts.filter(t=>t.status==='planned').length;
-  const time=new Date(data.updated_at),opts={timeZone:'Asia/Shanghai',hour12:false};
-  $('updated').textContent=time.toLocaleTimeString('zh-CN',{...opts,hour:'2-digit',minute:'2-digit'})+' 更新';
-  $('record-time').textContent='记录时间：'+time.toLocaleString('zh-CN',opts)+'（北京时间）。每 30 秒更新进度；播放不受影响。';
-  $('error').hidden=true;
-  const available=ts.filter(validReplay),wanted=current||new URLSearchParams(location.search).get('run');
-  // Keep a bookmarked or currently playing historical attempt accessible.
-  const history=attempts().find(t=>t.run_id===wanted&&t.historical&&validReplay(t));
-  if(history)available.push(history);
-  $('run').innerHTML=available.length?available.map(t=>`<option value="${esc(t.run_id)}">${t.index+1}. ${esc(name(t))} · ${t.historical?'历史尝试 · ':''}${esc(outcome(t))}</option>`).join(''):'<option>暂无已发布回放</option>';
-  $('run').disabled=!available.length;
-  if(available.length){
-   const selected=available.find(t=>t.run_id===wanted)||available.slice().sort((a,b)=>String(b.finished_at||'').localeCompare(String(a.finished_at||'')))[0];
-   choose(selected.run_id);
-  }else{$('empty').hidden=false;$('replay').hidden=true;renderDetails()}
- }catch(e){$('error').textContent='进度暂未更新，可继续观看已有回放。';$('error').hidden=false;$('updated').textContent='更新暂停'}
- finally{refreshing=false}
-}
-$('run').onchange=e=>choose(e.target.value);
-// A bookmarked episode is usable even when live batch metadata is unavailable.
-const bookmarked=new URLSearchParams(location.search).get('run');
-if(/^mas_[A-Za-z0-9_-]+$/.test(bookmarked||''))openReplay(bookmarked,'manipulation_runs/'+bookmarked+'/replay.html');
-refresh();setInterval(refresh,30000);
-</script>
+<script src="replay_portal.js"></script>
 </body></html>
