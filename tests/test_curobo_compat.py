@@ -17,3 +17,18 @@ class DeviceDefaultTests(unittest.TestCase):
                 raise ValueError('warmup failed')
         self.assertIs(vars(Config)['from_basic'],original)
         self.assertEqual(Config.from_basic(7),(7,.01,'cuda:0'))
+
+    def test_graph_rollout_keeps_subclass_binding(self):
+        class Base:
+            @classmethod
+            def from_dict(cls, robot, tensor_args='cuda:0'):
+                return cls, robot, tensor_args
+        class Arm(Base):
+            pass
+        original=vars(Base)['from_dict']
+        with trajectory_evaluator_device(Base,'cuda:4','from_dict'):
+            self.assertEqual(Base.from_dict('r'),(Base,'r','cuda:4'))
+            self.assertEqual(Arm.from_dict('r'),(Arm,'r','cuda:4'))
+            self.assertEqual(Arm.from_dict('r','cuda:2'),(Arm,'r','cuda:2'))
+        self.assertIs(vars(Base)['from_dict'],original)
+        self.assertEqual(Arm.from_dict('r'),(Arm,'r','cuda:0'))

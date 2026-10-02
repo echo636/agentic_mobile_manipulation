@@ -44,6 +44,7 @@ class OfficialSymbolicBackend(RGBBackend):
         # instead of admitting 100 policies to a deterministically broken tool.
         from omnigibson.action_primitives.curobo import CuRoboMotionGenerator, CuRoboEmbodimentSelection
         from curobo.wrap.reacher.evaluator import TrajEvaluatorConfig
+        from curobo.rollout.arm_base import ArmBaseConfig
         from curobo.types.base import TensorDeviceType
         from .curobo_compat import trajectory_evaluator_device
         with self._startup_stage('official_navigation_planner'):
@@ -52,7 +53,9 @@ class OfficialSymbolicBackend(RGBBackend):
             if not all(k in configs for k in required):
                 raise RuntimeError('Robot does not provide official arm/base navigation configurations')
             device=f'cuda:{self.torch.cuda.current_device()}'
-            with trajectory_evaluator_device(TrajEvaluatorConfig,TensorDeviceType(device=self.torch.device(device))):
+            tensor_args=TensorDeviceType(device=self.torch.device(device))
+            with trajectory_evaluator_device(TrajEvaluatorConfig,tensor_args), \
+                    trajectory_evaluator_device(ArmBaseConfig,tensor_args,'from_dict'):
                 self.primitives._motion_generator=CuRoboMotionGenerator(
                     robot=self.robot,robot_cfg_path={k:configs[k] for k in required},device=device,
                     batch_size=self.primitives._curobo_batch_size,collision_activation_distance=.02)
@@ -183,7 +186,7 @@ class OfficialSymbolicBackend(RGBBackend):
             primitive_inventory=list(OFFICIAL_PRIMITIVES),
             navigation_planner={'implementation':'upstream_CuRoboMotionGenerator','initialized':True,
                 'device':f'cuda:{self.torch.cuda.current_device()}','embodiments':['DEFAULT','BASE'],
-                'compatibility':'explicit_trajectory_evaluator_tensor_device'},
+                'compatibility':'explicit_trajectory_evaluator_and_graph_rollout_tensor_device'},
             known_upstream_limitations=['Official symbolic grasp/toggle do not enforce this project\'s previous distance or automatic-approach checks'])
         return result
 
