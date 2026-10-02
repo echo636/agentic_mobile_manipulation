@@ -49,7 +49,9 @@ class OfficialSymbolicBackend(RGBBackend):
         from .curobo_compat import trajectory_evaluator_device
         with self._startup_stage('official_navigation_planner'):
             configs=self.robot.curobo_path
-            required=(CuRoboEmbodimentSelection.DEFAULT,CuRoboEmbodimentSelection.BASE)
+            # Navigation also runs arm IK while validating a candidate base
+            # pose, so all three native embodiments are required.
+            required=(CuRoboEmbodimentSelection.DEFAULT,CuRoboEmbodimentSelection.ARM,CuRoboEmbodimentSelection.BASE)
             if not all(k in configs for k in required):
                 raise RuntimeError('Robot does not provide official arm/base navigation configurations')
             device=f'cuda:{self.torch.cuda.current_device()}'
@@ -185,7 +187,7 @@ class OfficialSymbolicBackend(RGBBackend):
             record_video=self.record_video, upstream_sources=self._official_sources,
             primitive_inventory=list(OFFICIAL_PRIMITIVES),
             navigation_planner={'implementation':'upstream_CuRoboMotionGenerator','initialized':True,
-                'device':f'cuda:{self.torch.cuda.current_device()}','embodiments':['DEFAULT','BASE'],
+                'device':f'cuda:{self.torch.cuda.current_device()}','embodiments':['DEFAULT','ARM','BASE'],
                 'compatibility':'explicit_trajectory_evaluator_and_graph_rollout_tensor_device'},
             known_upstream_limitations=['Official symbolic grasp/toggle do not enforce this project\'s previous distance or automatic-approach checks'])
         return result
