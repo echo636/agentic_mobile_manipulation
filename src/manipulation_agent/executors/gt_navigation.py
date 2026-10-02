@@ -59,18 +59,21 @@ class GridMap:
     def navigable(self, cell):
         return self.contains(cell) and bool(self.free[cell[0]*self.width+cell[1]])
 
-    def snap(self, xy, max_distance):
+    def snap(self, xy, max_distance, cell_filter=None):
         """Bounded analogue of PathFinder.snap_point, without crossing a floor."""
         row,col=self.cell(xy)
         radius=math.ceil(max_distance/self.resolution)+1
-        best=None
+        candidates=[]
         for r in range(max(0,row-radius),min(self.height,row+radius+1)):
             for c in range(max(0,col-radius),min(self.width,col+radius+1)):
                 if not self.navigable((r,c)):continue
                 distance=math.dist(xy,self.world((r,c)))
-                key=(distance,r,c)
-                if distance <= max_distance+1e-9 and (best is None or key<best):best=key
-        return None if best is None else (best[1],best[2])
+                if distance <= max_distance+1e-9:candidates.append((distance,r,c))
+        # Rejecting the nearest cell does not reject every other cell inside
+        # the same bounded projection neighborhood (e.g. beside a cabinet).
+        for _,r,c in sorted(candidates):
+            if cell_filter is None or cell_filter((r,c)):return r,c
+        return None
 
     def segment_free(self, a, b):
         """Exact grid supercover, including both sides of edges and corners.
@@ -149,13 +152,20 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     current=tuple(map(float,current));hint=tuple(map(float,hint))
     start=grid.cell(current);grid.cell(hint)
     if not grid.navigable(start):raise NavigationError('Start is outside the traversable grid; no unvalidated recovery teleport','navigation_invalid_start')
-    candidates=[]
-    for raw in candidate_points(hint,current,standoff):
-        cell=grid.snap(raw,max_snap)
-        if cell is not None:
-            goal=grid.world(cell)
-            if candidate_filter is None or candidate_filter(goal):
-                candidates.append((cell,math.dist(goal,raw),math.dist(goal,hint)))
+    visibility={}
+    def acceptable(cell):
+        if cell not in visibility:
+            visibility[cell]=candidate_filter is None or bool(candidate_filter(grid.world(cell)))
+        return visibility[cell]
+    def project(reachable=None):
+        projected=[]
+        for raw in candidate_points(hint,current,standoff):
+            cell=grid.snap(raw,max_snap,lambda c:(reachable is None or c in reachable) and acceptable(c))
+            if cell is not None:
+                goal=grid.world(cell)
+                projected.append((cell,math.dist(goal,raw),math.dist(goal,hint)))
+        return projected
+    candidates=project()
     if not candidates:raise NavigationError('No bounded projection of the selected visual target is navigable')
     pending={c[0] for c in candidates};distances={start:0.};parents={};closed=set();queue=[(0.,start)]
     while queue and pending:
@@ -173,6 +183,14 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
         if cell not in closed or distances[cell]>horizon:continue
         score=candidate_score(target_distance,snap_distance,distances[cell],standoff)
         viable.append((score,distances[cell],cell))
+    if not viable:
+        # If the nearest projections fell on another connected region, the
+        # exhausted search already tells us which cells are actually reachable.
+        # Reproject within the same distance bound; never cross walls or move
+        # the start pose to a different component.
+        candidates=project(closed)
+        for cell,snap_distance,target_distance in candidates:
+            viable.append((candidate_score(target_distance,snap_distance,distances[cell],standoff),distances[cell],cell))
     if not viable:raise NavigationError('No candidate near the visual target is reachable from this start')
     score,distance,goal_cell=min(viable)
     cells=[goal_cell]
