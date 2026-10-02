@@ -3,10 +3,21 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from manipulation_agent.audit import audit_episode
+from manipulation_agent.audit import audit_episode,official_executor_protocol
 
 
 class ModelEvidenceAudit(unittest.TestCase):
+    def test_native_planner_protocol_requires_complete_initialized_planner(self):
+        backend={'control_protocol':'rgb_official_symbolic_initialized_navigation_v2',
+            'navigation_planner':{'initialized':True,'implementation':'upstream_CuRoboMotionGenerator',
+                'embodiments':['DEFAULT','ARM','BASE']}}
+        self.assertTrue(official_executor_protocol(backend))
+        backend['navigation_planner']['embodiments'].remove('ARM')
+        self.assertFalse(official_executor_protocol(backend))
+        self.assertFalse(official_executor_protocol({'control_protocol':'rgb_official_symbolic_initialized_navigation_v2'}))
+        self.assertFalse(official_executor_protocol({'control_protocol':'unknown'}))
+        self.assertTrue(official_executor_protocol({'control_protocol':'rgb_official_symbolic_direct_v1'}))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.run_dir = Path(self.tmp.name) / 'sim'; self.run_dir.mkdir()

@@ -11,6 +11,18 @@ from .contracts import tool_specs
 from .records import now, write_json
 
 
+def official_executor_protocol(backend):
+    protocol=backend.get('control_protocol')
+    if protocol=='rgb_official_symbolic_direct_v1':
+        return True
+    if protocol!='rgb_official_symbolic_initialized_navigation_v2':
+        return False
+    planner=backend.get('navigation_planner',{})
+    return (planner.get('initialized') is True
+        and planner.get('implementation')=='upstream_CuRoboMotionGenerator'
+        and set(planner.get('embodiments',[]))=={'DEFAULT','ARM','BASE'})
+
+
 def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
     run = json.loads((run_dir / 'run.json').read_text())
     controller = json.loads((controller_dir / 'controller.json').read_text())
@@ -76,7 +88,7 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
                     for c in calls if 'decision' in c['arguments'])
         elif profile == 'official':
             checks['official_profile_on_both_sides'] = controller.get('agent_profile') == 'official'
-            checks['official_executor_protocol'] = run.get('backend',{}).get('control_protocol') == 'rgb_official_symbolic_direct_v1'
+            checks['official_executor_protocol'] = official_executor_protocol(run.get('backend',{}))
             checks['no_custom_executor'] = all(run.get('backend',{}).get(k) is False for k in ('custom_navigation','custom_carry','custom_placement'))
         else:
             checks['minimal_profile_on_both_sides'] = controller.get('agent_profile') == 'minimal'
