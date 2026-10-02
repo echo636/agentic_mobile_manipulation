@@ -50,7 +50,7 @@ with (b/'render_watch.lock').open('w') as lock:
      result['editions'][module]={k:edition.get(k) for k in ['status','file','duration_seconds','error']}
     render_replay(run,ctrl)
     if hashes(source)!=before:raise RuntimeError('Immutable policy/evaluator/video input changed')
-    files=[path for path in run.iterdir() if path.is_file() and (path.name.startswith(('walltime','inspection','replay','model_public')) or '_before_walltime.' in path.name)]
+    files=[path for path in run.iterdir() if path.is_file() and (path.name.startswith(('walltime','inspection','replay','model_public','browser_episode','browser_video.json')) or '_before_walltime.' in path.name)]
     dest.mkdir(exist_ok=True,parents=True)
     for path in files:
      tmp=dest/(path.name+'.tmp');shutil.copyfile(path,tmp);tmp.replace(dest/path.name)

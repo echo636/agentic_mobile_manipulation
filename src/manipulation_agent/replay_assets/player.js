@@ -98,7 +98,7 @@ function chooseEdition(){
  if(!record||record.status!=='passed')record=null;
  $('video-play').disabled=!record;$('video-seek').disabled=!record;$('video-download').hidden=!record;$('video-error').hidden=true;
  if(!record){video.removeAttribute('src');video.load();loading=false;text('time-note','未归档完整录像 · 按步骤查看原始记录');text('video-time','—');$('video-seek').value=0;setMode('input');selectStep(desired,false);return}
- video.src=record.file;video.load();video.playbackRate=Number($('video-speed').value);$('video-download').href=record.file;
+ video.src=record.playback_file||record.file;video.load();video.playbackRate=Number($('video-speed').value);$('video-download').href=record.file;
  text('time-note',edition==='inspection'?'按视频阶段同步；含阅读停留，非逐 token 时间':edition==='walltime'?'保留调用等待；工具内帧时间为估计':'连续仿真录像；模型等待已省略');
 }
 video.addEventListener('loadedmetadata',()=>{if(!record)return;loading=false;$('video-seek').max=video.duration;selectStep(pendingIndex,true);synchronize()});
