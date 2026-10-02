@@ -158,7 +158,8 @@ class CheckedPlacement:
         if not fillable or Inside not in held.states:
             raise SkillError('unsupported_relation','Target has no supported fillable volume')
         start=time.monotonic();before=self.sampling_physics_steps
-        with self._placement_context():
+        residents=self._container_payload(target)
+        with self._placement_context(target):
             contents=list(self._carry_contents) if self.ideal_carry else []
             dependencies=list(getattr(self,'_carry_dependencies',[]))
             orientation=held.get_position_orientation()[1].clone()
@@ -197,9 +198,11 @@ class CheckedPlacement:
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if not held.states[Inside].get_value(target):
                 raise SkillError('postcondition_error','Object left container after settling',changed=True)
+            self._verify_container_payload(target,residents)
             self._verify_payload(dependencies)
             if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
                 raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
         return {'primitive':'place_inside','implementation':'transactional_official_Inside_with_rigid_payload_sampling',
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
+                'target_root_anchored':True,'existing_containment_verified':len(residents),
                 'sampling_physics_steps':self.sampling_physics_steps-before}

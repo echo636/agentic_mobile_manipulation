@@ -33,14 +33,14 @@ class ControlledCarry:
         if obj is not None:self._object_anchor=(obj,tuple(v.clone() for v in obj.get_position_orientation()))
         original_step=self.og.sim.step_physics
         def anchored_physics(*args,**kwargs):
-            self._restore_base_target()
+            self._restore_base_target();self._restore_object_anchor()
             try:return original_step(*args,**kwargs)
-            finally:self._restore_base_target()
+            finally:self._restore_base_target();self._restore_object_anchor()
         self.og.sim.step_physics=anchored_physics
         try:yield
         finally:
             self.og.sim.step_physics=original_step
-            try:self._restore_base_target()
+            try:self._restore_base_target();self._restore_object_anchor()
             finally:self._base_target=previous;self._object_anchor=old_object
 
     def _restore_object_anchor(self):
@@ -49,19 +49,59 @@ class ControlledCarry:
 
     def _ideal_state_action(self, primitive, obj, max_steps):
         from omnigibson.object_states import Open,ToggledOn
+        from .placement import placement_transaction
         state=Open if primitive in {'open','close'} else ToggledOn
         wanted=primitive in {'open','toggle_on'}
         if state not in obj.states:raise SkillError('pre_condition_error','Selected object does not support this operation')
-        with self._anchored_operation(obj):
+        # Open.set_value teleports articulated joints. Drawer contents must move
+        # with their supporting volume, not be left at the previous world pose.
+        payload=self._container_payload(obj) if state is Open else []
+        with self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
             # Upstream symbolic OPEN samples a random opening and returns early
             # when already ajar. Fully open/close all annotated joints instead.
             accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
             if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
+            self._relocate_container_payload(payload)
             for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if bool(obj.states[state].get_value())!=wanted:
                 raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
-        return {'primitive':primitive,'implementation':'official_state_setter_with_root_anchor',
-                'fully_open_or_closed':state is Open,'postcondition':'official_state_after_settling'}
+            self._verify_container_payload(obj,payload)
+        return {'primitive':primitive,'implementation':'transactional_official_state_setter_with_link_payload',
+                'fully_open_or_closed':state is Open,'postcondition':'official_state_and_containment_after_settling',
+                'preserved_contained_objects':len(payload),'failure_policy':'restore_pre_action_state'}
+
+    def _container_payload(self, container):
+        """Snapshot existing rigid contents relative to their actual fillable link.
+
+        This observes executor geometry only; no task bindings or goals are read.
+        """
+        from omnigibson.object_states import Inside
+        from omnigibson.utils import transform_utils as T
+        links=[link for link in container.links.values() if link.is_meta_link and
+               link.meta_link_type in {'fillable','openfillable'}]
+        if not links:return []
+        payload=[]
+        lo,hi=container.aabb
+        for child in self.env.scene.objects:
+            if child in (container,self.robot) or getattr(child,'fixed_base',True) or Inside not in getattr(child,'states',{}):continue
+            a,b=child.aabb;center=(a+b)/2
+            if not bool(((center>=lo)&(center<=hi)).all()) or not child.states[Inside].get_value(container):continue
+            link=next((link for link in links if bool(link.check_points_in_volume(center.unsqueeze(0)).item())),None)
+            if link is None:
+                raise SkillError('pre_condition_error','Cannot identify the supporting volume of existing contents')
+            relative=T.relative_pose_transform(*child.get_position_orientation(),*link.get_position_orientation())
+            payload.append((child,link,relative))
+        return payload
+
+    def _relocate_container_payload(self,payload):
+        from omnigibson.utils import transform_utils as T
+        for child,link,relative in payload:
+            child.set_position_orientation(*T.pose_transform(*link.get_position_orientation(),*relative));child.keep_still()
+
+    def _verify_container_payload(self,container,payload):
+        from omnigibson.object_states import Inside
+        if any(not child.states[Inside].get_value(container) for child,_,_ in payload):
+            raise SkillError('postcondition_error','Operation displaced existing contents from the container',changed=True)
 
     def _get_held(self):
         return self._ideal_held if self.ideal_carry else self.primitives._get_obj_in_hand()
@@ -90,12 +130,12 @@ class ControlledCarry:
             self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[]
 
     @contextmanager
-    def _placement_context(self):
+    def _placement_context(self,target=None):
         from .placement import placement_transaction
         held=getattr(self,'_ideal_held',None);relative=getattr(self,'_carry_relative',None);contents=list(getattr(self,'_carry_contents',[]))
         dependencies=list(getattr(self,'_carry_dependencies',[]))
         try:
-            with self._anchored_operation(),placement_transaction(self.og.sim,self._placement_record):yield
+            with self._anchored_operation(target),placement_transaction(self.og.sim,self._placement_record):yield
         except Exception:
             self._ideal_held=held;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
             if held is not None:self._carry_follow()
