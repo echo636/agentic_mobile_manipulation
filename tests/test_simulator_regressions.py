@@ -16,6 +16,31 @@ validator=importlib.util.module_from_spec(spec);spec.loader.exec_module(validato
 
 
 class SimulatorRegressions(unittest.TestCase):
+    def test_particle_binding_resolves_to_serialized_system_not_rigid_object(self):
+        with tempfile.TemporaryDirectory() as folder:
+            scene = Path(folder) / 'template.json'
+            instance = Path(folder) / 'instance.json'
+            data = {'metadata': {'task': {'inst_to_name': {
+                'dirt.n.02_1': 'dirt', 'baseball_cap.n.01_1': 'cap'}}},
+                'objects_info': {'init_info': {'cap': {}}},
+                'state': {'registry': {'system_registry': {'dirt': {'n_particles': 40}}}}}
+            scene.write_text(json.dumps(data))
+            instance.write_text(json.dumps({'dirt.n.02_1': {}, 'baseball_cap.n.01_1': {}}))
+            before = scene.read_bytes()
+            selected, actual, rejected = select_compatible_scene(scene, instance)
+            self.assertEqual(selected, scene)
+            self.assertEqual(actual, data)
+            self.assertEqual(rejected, [])
+            self.assertEqual(scene.read_bytes(), before)
+            # A missing system or a missing rigid object must still fail.
+            for section, key in [(data['state']['registry']['system_registry'], 'dirt'),
+                                 (data['objects_info']['init_info'], 'cap')]:
+                value = section.pop(key)
+                scene.write_text(json.dumps(data))
+                with self.assertRaisesRegex(ValueError, 'incompatible'):
+                    select_compatible_scene(scene, instance)
+                section[key] = value
+
     def test_stale_partial_scene_uses_matching_supplied_full_template(self):
         with tempfile.TemporaryDirectory() as folder:
             partial=Path(folder)/'template-partial_rooms.json';full=Path(folder)/'template.json'

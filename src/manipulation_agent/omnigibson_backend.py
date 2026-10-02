@@ -64,8 +64,11 @@ def select_compatible_scene(template: Path, instance_path: Path):
         data = json.loads(candidate.read_text())
         bindings = data.get('metadata', {}).get('task', {}).get('inst_to_name', {})
         objects = data['objects_info']['init_info']
+        # Particle bindings are serialized in system_registry, not init_info.
+        # Accept only systems present in this supplied template's actual state.
+        systems = data.get('state', {}).get('registry', {}).get('system_registry', {})
         missing = sorted(k for k in required if k not in bindings or
-                         (not k.startswith('agent.') and bindings[k] not in objects))
+                         (not k.startswith('agent.') and bindings[k] not in objects and bindings[k] not in systems))
         if not missing:
             return candidate, data, rejected
         rejected.append({'path': str(candidate), 'missing_instance_bindings': missing,
