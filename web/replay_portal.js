@@ -58,6 +58,9 @@ $('replay').addEventListener('load', () => {
 addEventListener('resize', fitReplay);
 
 function renderBatches() {
+  $('batches').hidden = catalog.sources.length < 2;
+  $('summary-nav').hidden = !catalog.summary_url;
+  if (catalog.summary_url) $('summary-link').href = catalog.summary_url;
   $('batches').innerHTML = catalog.sources.map(s => {
     const d = datasets.get(s.id), n = d && stats(d);
     return `<button class="batch" data-batch="${esc(s.id)}" aria-pressed="${s.id === selected}"><strong>${esc(s.label)}</strong><small>${n ? `目标成功 ${n.success} · 已结束 ${n.done}/${n.total}${n.done === n.total ? ' · 已结束' : ''}` : '正在读取…'}</small></button>`;

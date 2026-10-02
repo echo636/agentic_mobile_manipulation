@@ -6,6 +6,7 @@ import copy
 from datetime import datetime
 import html
 import json
+import subprocess
 from pathlib import Path
 
 from .audit import audit_episode
@@ -150,6 +151,14 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
 
 def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     data = build_replay(run_dir, controller_dir)
+    if data['video'] and data['video'].get('status') == 'passed':
+        from .streaming_video import prepare_browser_video
+        try:
+            browser = prepare_browser_video(run_dir, data['video']['file'])
+            data['video']['playback_file'] = browser['file']
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+            # Display optimization cannot invalidate the recorded experiment.
+            write_json(run_dir / 'browser_video_warning.json', {'status':'failed', 'error':str(exc)})
     # Keep the downloadable original public stream separate: images may be large.
     public_events = data.pop('model_public_events')
     if controller_dir:
@@ -165,6 +174,14 @@ def render_replay_page(data: dict) -> str:
     """Render archived replay data without rebuilding or changing experiment evidence."""
     assets = Path(__file__).with_name('replay_assets')
     template = (assets / 'index.html').read_text()
+    # Combinatorial evaluator arrays can exceed hundreds of MB. They remain
+    # in archived JSON, but scores and scalar metrics suffice for the viewer.
+    offline = dict(data.get('evaluation_offline_only') or {})
+    evaluation = offline.get('evaluation')
+    if isinstance(evaluation, dict):
+        offline['evaluation'] = {k:v for k,v in evaluation.items()
+                                 if k not in {'goal_options','initial_goal_options'}}
+    data = {**data, 'evaluation_offline_only': offline}
     # Escape < so task text cannot close a JSON script element.
     embedded = json.dumps(data, ensure_ascii=False, allow_nan=False).replace('<', '\\u003c').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
     page = template.replace('@@TITLE@@', html.escape(data['run_id']))
