@@ -107,7 +107,8 @@ def main():
     p.add_argument('--memory-budget-gib',type=int,default=28)
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
     if a.mode == 'assets':
-        print(json.dumps(assets(manifest,a.data_root))); return
+        selected=manifest if a.index is None else {'tasks':[manifest['tasks'][a.index]]}
+        print(json.dumps(assets(selected,a.data_root))); return
     if a.mode == 'preflight':
         print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib))); return
     row=manifest['tasks'][a.index]
@@ -122,6 +123,11 @@ def main():
     check_path=a.manifest.parent/'preflight'/f"{row['run_id']}_in_unit.json"
     check_path.write_text(json.dumps(result,indent=2)+'\n')
     if result['status'] != 'passed': raise RuntimeError('Resource preflight blocked simulator startup')
+    asset_check=assets({'tasks':[row]},a.data_root)
+    asset_path=a.manifest.parent/'preflight'/f"{row['run_id']}_assets_in_unit.json"
+    asset_path.write_text(json.dumps(asset_check,indent=2)+'\n')
+    if asset_check['status'] != 'passed':
+        raise RuntimeError('Task asset preflight blocked simulator startup; see '+str(asset_path))
     os.environ['MAS_GPU_UUID']=result['gpu_uuid']
     args=[sys.executable,'-m','manipulation_agent.vision_cli','--backend','omnigibson','--policy','serve',
           '--task',row['task'],'--instance',str(row['instance']),'--seed',str(row['seed']),

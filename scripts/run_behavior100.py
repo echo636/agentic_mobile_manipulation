@@ -262,6 +262,18 @@ class Batch:
                     recording_options=self.c.get('simulator_env',{}))
         self.journal(f"START {runid}; GPU index {gpu}; unit {unit}; output {remote_run}.")
         try:
+            self.update(row,stage='asset_preflight')
+            asset_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'assets',
+                       '--manifest',str(self.root/'manifest.json'),'--index',str(row['index']),
+                       '--data-root',self.c['data_root']]
+            checked=self.ssh(asset_cmd)
+            if checked.returncode:
+                raise RuntimeError('Task asset preflight command failed: '+checked.stderr[-1200:])
+            asset_check=json.loads(checked.stdout)
+            write_json(self.root/'preflight'/f'{runid}_assets.json',asset_check)
+            if asset_check['status']!='passed':
+                raise RuntimeError('Task asset preflight failed; missing/incompatible assets recorded before simulator launch')
+            self.update(row,stage='preflight')
             check_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'preflight','--manifest',str(self.root/'manifest.json'),
                        '--gpu',str(gpu),'--port',str(port),'--data-root',self.c['data_root'],
                        '--memory-budget-gib',str(self.c.get('memory_budget_gib',28))]
@@ -384,6 +396,10 @@ class Batch:
             write_json(dest/'termination.json',{'status':'failed','at':now(),'reason':row.get('failure') or 'Simulator ended without final recorder',
                        'unit':row['simulator_unit'],'unit_state':row.get('unit_final_state'),'final_evaluation_available':False})
         run=read_run(dest)
+        if run.get('failure') and run.get('task_success') is None:
+            self.update(row,failure=row.get('failure') or 'Simulator runtime failure: '+str(run['failure']),
+                        failure_stage=row.get('failure_stage') or 'simulator_runtime',
+                        simulator_failure_type=run['failure'])
         self.update(row,task_success=run.get('task_success'),actions=run.get('actions'),tool_calls=run.get('tool_calls'),
                     sim_steps=run.get('sim_steps'),evaluation=run.get('evaluation'),q_score=(run.get('evaluation') or {}).get('official_metrics',{}).get('q_score',{}).get('final'),
                     run_source=run.get('source'),backend=run.get('backend'),agent_outcome=run.get('agent_outcome'),finish_reason=run.get('finish_reason'))

@@ -3,11 +3,36 @@ from pathlib import Path
 import unittest
 import json
 import tempfile
+import threading
+from subprocess import CompletedProcess
+from unittest.mock import Mock
 
 spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_missing_assets_block_before_gpu_wait_or_simulator_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            for directory in ('logs','preflight'):(root/directory).mkdir()
+            runner=batch.Batch.__new__(batch.Batch)
+            runner.root=root;runner.source=Path(__file__).resolve().parents[1]
+            runner._worker_local=threading.local()
+            runner._config={'base_port':31000,'batch_tag':'test','data_root':'/fixture',
+                            'sim_python':'/fixture/python','ssh':['ssh','fixture']}
+            runner.update=lambda row,**values:row.update(values)
+            runner.journal=Mock();runner.publish=Mock()
+            asset={'status':'failed','tasks':[{'runtime_assets':{'missing_model_usds':['missing.usd']}}]}
+            runner.ssh=Mock(return_value=CompletedProcess([],0,json.dumps(asset),''))
+            row={'index':0,'run_id':'fixture_r1','task':'fixture'}
+            runner.run_one(row,0)
+            self.assertEqual(row['status'],'blocked')
+            self.assertEqual(row['failure_stage'],'asset_preflight')
+            self.assertIsNone(row.get('task_success'))
+            self.assertEqual(runner.ssh.call_count,1)
+            self.assertIn('assets',runner.ssh.call_args.args[0])
+            self.assertEqual(json.loads((root/'preflight/fixture_r1_assets.json').read_text()),asset)
+
     def test_adopted_controller_outside_batch_keeps_stable_hash_keys(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);run=root/'original/runs/run1';run.mkdir(parents=True)
