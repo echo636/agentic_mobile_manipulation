@@ -22,7 +22,7 @@ from .records import write_json
 from .goal_grounding import efficient_grounding, evaluate_once_per_literal
 
 
-def normalize_embedded_robot(data):
+def normalize_embedded_robot(data, *, reset_controller_state=False):
     """Migrate the known legacy R1Pro serialization in a derived scene copy only."""
     changes = []
     for key, entry in data['objects_info']['init_info'].items():
@@ -46,6 +46,17 @@ def normalize_embedded_robot(data):
                     'old_controller_names': sorted(state['controllers']),
                     'policy': 'current_controller_defaults_then_evaluator_reset',
                     'physical_state_preserved': True})
+            if state is not None and reset_controller_state and state.get('controller_groups'):
+                # The modern serialization key does not imply controller
+                # compatibility: these templates also contain IK pose goals
+                # and scalar gripper goals. This adapter replaces them with
+                # absolute joint controllers, so none of those buffers may be
+                # restored into the new controller groups.
+                names=sorted(state['controller_groups'])
+                state['controller_groups']={}
+                changes.append({'object':key,'migration':'reconfigured_controller_state',
+                    'old_controller_names':names,'physical_state_preserved':True,
+                    'policy':'discard_saved_goals_when_replacing_controller_configuration'})
     return changes
 
 
@@ -265,7 +276,7 @@ class OmniGibsonBackend:
                     'added_floors':restored_floors,'full_template_sha256':hashlib.sha256(full_template.read_bytes()).hexdigest(),
                     'task_object_bindings_unchanged':True,'original_assets_unmodified':True,
                     'scope':'research_scene_geometry_repair_not_official_submission'})
-        migrations = normalize_embedded_robot(data)
+        migrations = normalize_embedded_robot(data, reset_controller_state=True)
         if migrations:
             write_json(self.output/'scene_compatibility.json',{'changes':migrations,
                        'original_template_unmodified':True,'asset_hash_check_preserved':True})
