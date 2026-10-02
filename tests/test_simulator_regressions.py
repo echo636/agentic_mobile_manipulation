@@ -128,5 +128,19 @@ class SimulatorRegressions(unittest.TestCase):
         self.assertEqual(normalize_embedded_robot(data),[])
         self.assertEqual(state['controller_groups']['arm_left']['goal']['target'],[1,2])
 
+    def test_modern_ik_buffers_are_discarded_when_controllers_are_reconfigured(self):
+        state={'joint_pos':[1,2,3],'root_link':{'pos':[300,300,300]},
+               'controller_groups':{'arm_left':{'goals':{'target_pos':[1,2,3],
+                    'target_ori_mat':[[1,0,0],[0,1,0],[0,0,1]]}},
+                    'gripper_left':{'goals':{'target':[1]}}}}
+        data={'objects_info':{'init_info':{'r':{'class_name':'Robot','args':{'model':'r1pro'}}}},
+              'state':{'registry':{'object_registry':{'r':state}}}}
+        changes=normalize_embedded_robot(data,reset_controller_state=True)
+        self.assertEqual(state['controller_groups'],{})
+        self.assertEqual(state['joint_pos'],[1,2,3])
+        self.assertEqual(state['root_link']['pos'],[300,300,300])
+        self.assertEqual(changes[0]['migration'],'reconfigured_controller_state')
+        self.assertEqual(normalize_embedded_robot(data,reset_controller_state=True),[])
+
 
 if __name__=='__main__':unittest.main()
