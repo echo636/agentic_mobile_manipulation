@@ -38,6 +38,24 @@ class GTNavigationTests(unittest.TestCase):
         self.assertIsNone(g.snap((1.,1.),.75))
         self.assertEqual(g.snap((.1,.1),.2),(0,0))
 
+    def test_projection_tries_visible_cell_beyond_rejected_nearest_cell(self):
+        g=grid(41,41,.1)
+        # None of the discrete radial samples rounds to this narrow visible
+        # opening, but it is well within the allowed projection distance.
+        allowed=g.world((22,22))
+        plan=plan_navigation(g,(.5,.5),(2.,2.),candidate_filter=lambda xy:xy==allowed)
+        self.assertEqual(plan.goal,allowed)
+        self.assertTrue(all(g.segment_free(a,b) for a,b in zip(plan.points,plan.points[1:])))
+
+    def test_snap_rejects_disconnected_nearest_without_crossing_wall(self):
+        g=grid(61,41,.1,blocked=[(r,15) for r in range(41)])
+        # Only two visible cells: nearest radial projections lie across the
+        # wall, while a bounded alternative is on the start's side.
+        reachable=g.world((20,14));isolated=g.world((20,16))
+        plan=plan_navigation(g,(.5,2.),(2.8,2.),candidate_filter=lambda xy:xy in (reachable,isolated))
+        self.assertEqual(plan.goal,reachable)
+        self.assertTrue(all(x<1.5 for x,y in plan.points))
+
     def test_really_occupied_start_is_rejected_without_teleport(self):
         g=grid(blocked=((10,10),))
         with self.assertRaisesRegex(NavigationError,'Start'):
