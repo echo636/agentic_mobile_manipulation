@@ -186,7 +186,7 @@ def render_replay_page(data: dict) -> str:
     embedded = json.dumps(data, ensure_ascii=False, allow_nan=False).replace('<', '\\u003c').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
     page = template.replace('@@TITLE@@', html.escape(data['run_id']))
     page = page.replace('@@CSS@@', (assets / 'style.css').read_text() + (assets / 'transcript.css').read_text())
-    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', '\n'.join((assets / name).read_text() for name in ('timing.js', 'transcript.js', 'player.js')))
+    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', '\n'.join((assets / name).read_text() for name in ('timing.js', 'transcript.js', 'navigation_target.js', 'player.js')))
     if not data['audit']:
         page = page.replace(' href="replay_audit.json"', '')
     if not data['video']:

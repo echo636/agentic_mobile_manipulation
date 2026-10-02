@@ -9,6 +9,7 @@ const text=(id,value)=>$(id).textContent=value??'—',clock=s=>Number.isFinite(s
 const step=()=>D.steps[index],action=s=>s?.arguments?.primitive||s?.tool||'等待记录';
 const phaseLabels={initial:'初始画面',decision:'模型决策',execution:'执行中',tool:'执行中',result:'工具返回',final:'结束输出',evaluation:'离线评分',unmapped:'未标注区间',outside_tool_wait:'调用间等待'};
 const conversation=new ReplayTranscript($('conversation'),$('follow'),number=>selectStep(D.steps.findIndex(s=>s.index===number),true),()=>video.pause());conversation.setData(D);
+const navigationTarget=new ReplayNavigationTarget($('navigation-target'),()=>{video.pause();zoomView='target';text('zoom-title',navigationTarget.title.textContent+' · 调用前原图');paintZoom();$('zoom').showModal()});
 for(const name of views){
  const tile=document.createElement('figure');tile.className='camera-tile camera-'+name;
  const canvas=document.createElement('canvas');canvas.width=512;canvas.height=512;canvas.setAttribute('aria-label',names[name]);
@@ -17,13 +18,14 @@ for(const name of views){
  tile.append(canvas,caption,empty);$('camera-grid').append(tile);tiles.set(name,{tile,canvas,empty});
  tile.onclick=()=>{if(!tile.classList.contains('has-image'))return;zoomView=name;text('zoom-title',names[name]);paintZoom();$('zoom').showModal()};
 }
-function paintZoom(){if(!zoomView)return;const source=tiles.get(zoomView).canvas,target=$('zoom-canvas');if(target.width!==source.width||target.height!==source.height){target.width=source.width;target.height=source.height}target.getContext('2d').drawImage(source,0,0)}
+function paintZoom(){if(!zoomView)return;const source=zoomView==='target'?navigationTarget.canvas:tiles.get(zoomView).canvas,target=$('zoom-canvas');if(target.width!==source.width||target.height!==source.height){target.width=source.width;target.height=source.height}target.getContext('2d').drawImage(source,0,0)}
 $('close-zoom').onclick=()=>{$('zoom').close();zoomView=null};
 function blank(name,message){const t=tiles.get(name);t.tile.classList.remove('has-image');t.empty.textContent=message;t.canvas.getContext('2d').clearRect(0,0,t.canvas.width,t.canvas.height);delete t.canvas.dataset.imageRef}
 function paint(name,source,x,y,w,h,imageRef){
  const t=tiles.get(name);if(t.canvas.width!==w||t.canvas.height!==h){t.canvas.width=w;t.canvas.height=h}
  t.canvas.getContext('2d').drawImage(source,x,y,w,h,0,0,w,h);t.tile.classList.add('has-image');
  if(imageRef)t.canvas.dataset.imageRef=imageRef;else delete t.canvas.dataset.imageRef;
+ if(imageRef)navigationTarget.mark(t.canvas,imageRef);
 }
 function cameraBox(name){
  if(edition==='inspection'){const box=record?.camera_boxes?.[name];return box?[box[0],box[1]+26,box[2],box[2]-26]:null}
@@ -68,7 +70,9 @@ function applyState(next){
  if(changed){
   const s=step();$('step-select').value=String(index);$('prev').disabled=index<=0;$('next').disabled=!D.steps.length||index>=D.steps.length-1;
   phaseTitle.textContent=s?String(s.index).padStart(2,'0')+' / '+D.steps.length+'  ·  '+action(s):phaseLabels[phase]||'尚未调用工具';
-  $('input-side').value=state.side;conversation.setActive(state,ReplayTiming.focus(D,edition,state));updateObservationNote();paintCameras();
+  $('input-side').value=state.side;conversation.setActive(state,ReplayTiming.focus(D,edition,state));
+  if(zoomView==='target'){$('zoom').close();zoomView=null}
+  navigationTarget.update(s,state);updateObservationNote();paintCameras();
  }
  const paging=state.pages>1?' · '+state.page+'/'+state.pages+' 页':'';
  phaseLabel.textContent=(phaseLabels[phase]||phase)+paging+(state.duration?' · '+state.elapsed.toFixed(1)+' / '+state.duration.toFixed(1)+' s':'');

@@ -11,6 +11,7 @@
       <div class="panel-heading"><div><span class="eyebrow">OBSERVATION</span><h2>观测画面</h2></div><div class="view-tabs" role="group" aria-label="观测来源"><button id="mode-execution" aria-pressed="true">执行画面</button><button id="mode-input" aria-pressed="false">模型输入</button></div></div>
       <div id="camera-grid" class="camera-grid"></div>
       <div class="observation-caption"><span id="observation-note"></span><select id="input-side" aria-label="模型输入时点" hidden><option value="before">调用前已收到</option><option value="after">返回后已收到</option></select></div>
+      <div id="navigation-target" class="navigation-target" aria-label="当前导航调用的目标" hidden></div>
       <video id="episode-video" playsinline preload="metadata" muted hidden></video>
       <div id="video-error" role="status" hidden></div>
       <div class="playback">
