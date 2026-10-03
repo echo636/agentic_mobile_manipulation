@@ -7,6 +7,27 @@ from manipulation_agent.audit import audit_episode,official_executor_protocol
 
 
 class ModelEvidenceAudit(unittest.TestCase):
+    def test_symbolic_endpoint_planner_requires_explicit_base_omission(self):
+        planner={'initialized':True,'implementation':'upstream_CuRoboMotionGenerator',
+            'embodiments':['DEFAULT','ARM'], 'unused_embodiments_omitted':['BASE'],
+            'embodiment_scope':'native_symbolic_collision_and_arm_ik; symbolic_pose_setter_endpoint'}
+        backend={'control_protocol':'rgb_official_symbolic_initialized_navigation_v2',
+            'navigation_planner':planner}
+        self.assertTrue(official_executor_protocol(backend))
+        for key,value in [
+            ('initialized',False),
+            ('implementation','custom_planner'),
+            ('embodiments',['DEFAULT']),
+            ('embodiments',['ARM']),
+            ('unused_embodiments_omitted',None),
+            ('unused_embodiments_omitted',['BASE','ARM']),
+            ('embodiment_scope',None),
+            ('embodiment_scope','native_base_motion_planner'),
+        ]:
+            with self.subTest(key=key,value=value):
+                self.assertFalse(official_executor_protocol({**backend,
+                    'navigation_planner':{**planner,key:value}}))
+
     def test_native_planner_protocol_requires_complete_initialized_planner(self):
         backend={'control_protocol':'rgb_official_symbolic_initialized_navigation_v2',
             'navigation_planner':{'initialized':True,'implementation':'upstream_CuRoboMotionGenerator',

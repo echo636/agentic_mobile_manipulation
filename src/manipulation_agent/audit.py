@@ -18,9 +18,19 @@ def official_executor_protocol(backend):
     if protocol!='rgb_official_symbolic_initialized_navigation_v2':
         return False
     planner=backend.get('navigation_planner',{})
-    return (planner.get('initialized') is True
-        and planner.get('implementation')=='upstream_CuRoboMotionGenerator'
-        and set(planner.get('embodiments',[]))=={'DEFAULT','ARM','BASE'})
+    if (planner.get('initialized') is not True
+        or planner.get('implementation')!='upstream_CuRoboMotionGenerator'):
+        return False
+    embodiments=set(planner.get('embodiments',[]))
+    if embodiments=={'DEFAULT','ARM','BASE'}:
+        return True
+    # Native symbolic navigation sets its endpoint pose directly. The known
+    # reduced configuration omits only the unused BASE motion planner; require
+    # its explicit provenance so an incomplete planner cannot silently pass.
+    return (embodiments=={'DEFAULT','ARM'}
+        and planner.get('unused_embodiments_omitted')==['BASE']
+        and planner.get('embodiment_scope')==
+            'native_symbolic_collision_and_arm_ik; symbolic_pose_setter_endpoint')
 
 
 def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
