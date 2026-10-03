@@ -109,16 +109,27 @@ def audit_rgb_transport(run_dir: Path, sim_events: list[dict], model_events: lis
     count = 0; refs = set(); latest = set(); errors = []
     for item, event in zip(items, results):
         try:
-            content = (item.get('result') or {}).get('content', [])
-            result = json.loads(content[0]['text'])
-            expected = {**event['result'], 'evidence_id': event['id']}
-            checks['model_results_match_simulator'] &= result == expected
             if item['tool'] == 'act' and item['arguments'].get('target') is not None:
                 target = item['arguments']['target']
                 valid = isinstance(target, dict) and set(target) == {'image_ref', 'point'}
                 valid = valid and target['image_ref'] in latest and isinstance(target['point'], list) and len(target['point']) == 2
                 valid = valid and all(type(v) in (int, float) and 0 <= v <= 1 for v in target['point'])
                 checks['pixel_actions_use_latest_images'] &= bool(valid)
+            content = (item.get('result') or {}).get('content', [])
+            if not content:
+                # The simulator can finish after the MCP client has timed out.
+                # Its private result is not evidence of delivery to the model.
+                checks['model_results_match_simulator'] = False
+                error = item.get('error')
+                message = str(error.get('message', '') if isinstance(error, dict) else error or '').lower()
+                errors.append({'event_id': event.get('id'), 'model_item_id': item.get('id'),
+                               'tool': item.get('tool'), 'error_type': 'ToolResponseUnavailable',
+                               'code': 'tool_response_timeout' if 'timed out' in message or 'timeout' in message else 'missing_tool_response',
+                               'response_received': False})
+                continue
+            result = json.loads(content[0]['text'])
+            expected = {**event['result'], 'evidence_id': event['id']}
+            checks['model_results_match_simulator'] &= result == expected
             observation = result.get('observation')
             images = [c for c in content if c.get('type') == 'image']
             if observation is None:

@@ -270,6 +270,44 @@ class Batch:
         p=self.ssh(['curl','--noproxy','*','-fsS','--max-time','3',f'http://127.0.0.1:{port}/healthz'])
         return json.loads(p.stdout) if p.returncode==0 else None
 
+    def cleanup_owned_unit(self, row):
+        """Verify this lane is reusable; episode evidence never decides that."""
+        unit=row['simulator_unit'];runid=row['run_id'];state={}
+        try:
+            state=self.unit_state(unit)
+            if state.get('ActiveState') in {'active','activating','deactivating'}:
+                if state.get('Description')!=f'BEHAVIOR100 owned {runid}':
+                    raise RuntimeError('Simulator ownership changed; refusing stop')
+                stopped=self.ssh(['systemctl','--user','stop',unit],timeout=60)
+                if stopped.returncode:
+                    raise RuntimeError('Owned simulator stop command failed: '+stopped.stderr[-1200:])
+                state=self.unit_state(unit)
+            # A collected transient unit may no longer retain its Description.
+            # Only the live unit being signaled needs the ownership match.
+            if state.get('ActiveState') not in {'inactive','failed'} or str(state.get('MainPID'))!='0':
+                raise RuntimeError('Simulator termination could not be verified')
+            cleanup={'status':'passed','at':now(),'unit':unit,'state':state}
+        except Exception as exc:
+            cleanup={'status':'blocked','at':now(),'unit':unit,'state':state,
+                     'reason':f'{type(exc).__name__}: {exc}'}
+            self.journal('WORKER CLEANUP BLOCKED '+runid+': '+cleanup['reason'])
+        self.update(row,unit_final_state=state,simulator_cleanup=cleanup)
+        return cleanup
+
+    def hold_worker_for_cleanup(self, row):
+        """Keep an unresolved simulator on its own lane, without draining peers."""
+        cleanup=row.get('simulator_cleanup') or {}
+        if cleanup.get('status')!='blocked':
+            return False
+        hold={'status':'blocked','at':now(),'worker_id':self.c['id'],
+              'host':self.c['ssh'][-1],'gpu':self.c['gpu'],
+              'run_id':row['run_id'],'unit':row.get('simulator_unit'),
+              'reason':cleanup['reason']}
+        self.update(row,worker_hold=hold)
+        self.journal('WORKER HELD '+self.c['id']+' after '+row['run_id']+
+                     '; other lanes continue: '+cleanup['reason'])
+        return True
+
     def run_one(self, row, gpu):
         runid=row['run_id']; port=self.c['base_port']+gpu
         unit=f"mas-b100-{row['index']:03d}-r{row.get('attempt',1)}-{self.c['batch_tag']}.service"
@@ -384,20 +422,18 @@ class Batch:
             self.journal(f"FAILURE {runid}; stage {row.get('stage')}; {type(exc).__name__}: {exc}")
         finally:
             if own_unit:
+                cleanup=self.cleanup_owned_unit(row)
                 try:
-                    state=self.unit_state(unit)
-                    if state.get('ActiveState') in {'active','activating','deactivating'}:
-                        if state.get('Description') != f'BEHAVIOR100 owned {runid}': raise RuntimeError('Ownership check failed; refusing stop')
-                        self.ssh(['systemctl','--user','stop',unit],timeout=60)
-                    state=self.unit_state(unit)
-                    self.update(row,unit_final_state=state)
                     p=self.ssh(['journalctl','--user','-u',unit,'--no-pager','-o','short-iso'],timeout=60)
                     (self.root/'logs'/f'{runid}_simulator.log').write_text(p.stdout+p.stderr)
-                    self.archive(row,controller,remote_run)
+                    if cleanup['status']=='passed':
+                        self.archive(row,controller,remote_run)
+                    else:
+                        self.update(row,archive_failure='Simulator cleanup unresolved; live output retained at '+str(remote_run))
                 except Exception as exc:
                     self.update(row,archive_failure=str(exc))
                     self.journal(f"ARCHIVE FAILURE {runid}: {exc}")
-            passed=row.get('task_success') is True and row.get('controller_status')=='passed' and row.get('evidence_alignment')=='passed' and row.get('video_validation')=='passed' and row.get('observation_validation')=='passed'
+            passed=row.get('task_success') is True and row.get('controller_status')=='passed' and row.get('evidence_alignment')=='passed' and row.get('video_validation')=='passed' and row.get('observation_validation')=='passed' and (row.get('simulator_cleanup') or {}).get('status')!='blocked'
             self.update(row,status='passed' if passed else ('blocked' if not own_unit else 'failed'),stage='complete',finished_at=now())
             self.journal(f"END {runid}: status={row['status']}; task_success={row.get('task_success')}; evidence={row.get('evidence_alignment')}; video={row.get('video_validation')}; actions={row.get('actions')}. All failures remain in the denominator.")
             self.publish()
@@ -505,14 +541,18 @@ class Batch:
             state=self.unit_state(unit)
             if state.get('ActiveState') not in {'active','activating','deactivating'}:break
             time.sleep(5)
-        if state.get('ActiveState') in {'active','activating','deactivating'}:
-            if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}":raise RuntimeError('Simulator ownership changed')
-            self.ssh(['systemctl','--user','stop',unit],timeout=60)
-        self.update(row,unit_final_state=self.unit_state(unit))
-        log=self.ssh(['journalctl','--user','-u',unit,'--no-pager','-o','short-iso'],timeout=60)
-        (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
-        self.archive(row,controller,remote_run)
-        passed=row.get('task_success') is True and all(row.get(k)=='passed' for k in ['controller_status','evidence_alignment','video_validation','observation_validation'])
+        cleanup=self.cleanup_owned_unit(row)
+        try:
+            log=self.ssh(['journalctl','--user','-u',unit,'--no-pager','-o','short-iso'],timeout=60)
+            (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
+            if cleanup['status']=='passed':
+                self.archive(row,controller,remote_run)
+            else:
+                self.update(row,archive_failure='Simulator cleanup unresolved; live output retained at '+str(remote_run))
+        except Exception as exc:
+            self.update(row,archive_failure=str(exc))
+            self.journal(f"ARCHIVE FAILURE {row['run_id']}: {exc}")
+        passed=cleanup['status']=='passed' and row.get('task_success') is True and all(row.get(k)=='passed' for k in ['controller_status','evidence_alignment','video_validation','observation_validation'])
         self.update(row,status='passed' if passed else 'failed',stage='complete',finished_at=now())
         self.journal(f"END adopted {row['run_id']}: {row['status']}; task_success={row.get('task_success')}; original attempt preserved.")
 
@@ -562,6 +602,7 @@ class Batch:
             for row in self.rows:
                 if row['status']=='running' and self._config.get('adopt_inflight',{}).get(row['run_id'])==config['id']:
                     self.adopt_one(row)
+                    if self.hold_worker_for_cleanup(row):return
             while True:
                 if (self.root/'drain_requested.json').exists():
                     self.journal('Drain requested; '+config['id']+' leaves queued tasks untouched.')
@@ -569,14 +610,11 @@ class Batch:
                 try:row=self.queue.get_nowait()
                 except queue.Empty:return
                 self.run_one(row,config['gpu'])
-                if self._config.get('stop_on_infrastructure_failure'):
-                    reason=infrastructure_failure(row)
-                    if reason:
-                        with self.lock:
-                            write_json(self.root/'drain_requested.json',{'at':now(),'reason':reason,
-                                'trigger_run_id':row['run_id'],'automatic':True,'scope':'new_episodes_only'})
-                            self.journal('Infrastructure admission stopped new episodes: '+row['run_id']+' / '+reason)
-                        return
+                # Missing scores or evidence stay attached to this attempt.
+                # Only an unresolved live simulator prevents reuse of its lane.
+                # Legacy stop_on_infrastructure_failure configs no longer turn
+                # an ordinary episode failure into a whole-batch drain.
+                if self.hold_worker_for_cleanup(row):return
         with ThreadPoolExecutor(max_workers=len(self.workers)) as pool:
             futures=[pool.submit(worker,config) for config in self.workers]
             for future in futures:future.result()
