@@ -27,7 +27,7 @@ def tool_specs(profile='skills'):
                 'For placement, the pixel selects the destination OBJECT, not the exact surface or placement point. '
                 'Upstream can directly change states/poses and uses its own preconditions; there is no project auto-approach, '
                 'GT navigator, placement fallback or rollback. One upstream attempt. Inspect fresh RGB after success or failure. '
-                'NAVIGATE_TO may fail because the pinned upstream symbolic implementation lacks its CuRobo planner. '
+                'NAVIGATE_TO uses an initialized native planner to check candidate base poses; sampling can still fail. '
                 'For soak_under/soak_inside select the fluid source/container while holding the item; wipe/cut select the target '
                 'while holding the appropriate tool; place_near_heating_element selects the heat source while holding the item. '
                 'Tool completion is not whole-task success.')

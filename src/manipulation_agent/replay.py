@@ -124,6 +124,11 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                       'status': 'missing_result' if result is None else ('passed' if result.get('ok') else 'failed'),
                       'before': before, 'after': copy.deepcopy(last_observation), 'new_observation': new_obs is not None,
                       'decisions': copy.deepcopy(decisions[-4:]), 'plan': copy.deepcopy(plan), 'memory': copy.deepcopy(notes)})
+    # Keep combinatorial goal arrays only in raw run.json, not replay exports.
+    evaluation = run.get('evaluation')
+    if isinstance(evaluation, dict):
+        evaluation = {k:v for k,v in evaluation.items()
+                      if k not in {'goal_options', 'initial_goal_options'}}
     # Only provider-returned summaries, never opaque/encrypted internal reasoning.
     return {'schema_version': 1, 'generated_at': now(), 'kind': 'discrete_observation_action_replay',
             'run_id': run['run_id'], 'status': run['status'], 'rgb_only': rgb,
@@ -141,7 +146,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             'model_messages_after_last_sim_call':[m for i,ms in model_messages.items() if i>len(steps) for m in ms],
             'model_calls_without_sim_record':[c for i,c in model_payloads.items() if i>len(steps)],
             'model_text_contract':'Verbatim assistant messages and provider-returned reasoning summaries are separate. No translation, rewritten decision summary or opaque internal reasoning. Assistant text uses event order; provider summaries use recorded timestamps.',
-            'evaluation_offline_only': {'task_success': run.get('task_success'), 'evaluation': run.get('evaluation'),
+            'evaluation_offline_only': {'task_success': run.get('task_success'), 'evaluation': evaluation,
                                         'agent_outcome': run.get('agent_outcome'), 'finish_reason': run.get('finish_reason')},
             'failure': run.get('failure') or run.get('error'),
             'limitations': ['连续录像保留实际控制步；讲解版额外停顿仅重复真实帧，省略模型等待，不插造运动。',
@@ -175,7 +180,7 @@ def render_replay_page(data: dict) -> str:
     assets = Path(__file__).with_name('replay_assets')
     template = (assets / 'index.html').read_text()
     # Combinatorial evaluator arrays can exceed hundreds of MB. They remain
-    # in archived JSON, but scores and scalar metrics suffice for the viewer.
+    # in raw run.json, but scores and scalar metrics suffice for the viewer.
     offline = dict(data.get('evaluation_offline_only') or {})
     evaluation = offline.get('evaluation')
     if isinstance(evaluation, dict):

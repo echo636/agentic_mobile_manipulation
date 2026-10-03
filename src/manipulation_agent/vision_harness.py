@@ -78,7 +78,8 @@ class VisionHarness:
         result['evidence_id']=event_id
         self.evidence[event_id]={'name':'act' if name in {'act','look'} else name,'ok':result['ok'],'revision':self.revision}
         self.cache[request_id]=(fingerprint,copy.deepcopy(result))
-        if self.closed: self.recorder.render()
+        # Batch archive / the CPU replay worker renders after the RPC returns.
+        # Large evaluator records must not delay closure or cached finish replies.
         return result
 
     def perform(self,primitive,target,revision,**kwargs):
@@ -111,4 +112,4 @@ class VisionHarness:
         self.surround.stop_for_finish()
         if hasattr(self.backend, 'finalize_video'):
             self.recorder.run['video'] = self.backend.finalize_video()
-        return LegacyPlanHelpers._tool_finish(self,outcome,reason)
+        return LegacyPlanHelpers._tool_finish(self,outcome,reason,render=False)

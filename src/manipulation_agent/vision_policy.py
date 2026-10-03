@@ -67,7 +67,7 @@ Perceive and select objects yourself. No object names/IDs, poses, depth, maps, c
 This is a symbolic-executor experiment: the official primitive can directly set object states/poses, including assisted grasp and endpoint navigation.
 It has its own preconditions and settling; the harness does not automatically approach targets or supply custom navigation/carry/placement repairs.
 The pixel identifies the target object, not an exact placement point. No placement yaw or wait options exist in this mode.
-NAVIGATE_TO in this pinned upstream implementation may fail because its CuRobo planner is uninitialized. Report limitations from actual tool feedback; do not repeatedly retry the same failure.
+NAVIGATE_TO uses an initialized native planner for candidate collision and arm-reachability checks; sampling a valid nearby pose can still fail. Report limitations from actual tool feedback; do not repeatedly retry the same failure.
 Opening, closing and toggling require an empty hand under official preconditions. Select an item for grasp, a destination for placement, a fluid source/container for soaking a held item, a target for wiping/cutting with a held tool, or a heat source for a held item.
 Every act returns fresh RGB, including after errors; failed official actions may have changed the world and are not rolled back.
 Use only these MCP tools. No planning/memory tools, code execution, shell, files, reset, scene queries or evaluator access.

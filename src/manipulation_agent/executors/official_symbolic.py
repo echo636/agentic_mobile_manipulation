@@ -33,8 +33,10 @@ class OfficialSymbolicBackend(RGBBackend):
         super().__init__(*args, **kwargs)
         from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitiveSet
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveErrorGroup
+        from .symbolic_compat import adapt_symbolic_navigation_signature
         self._primitive_enum = SymbolicSemanticActionPrimitiveSet
         self._primitive_error_group = ActionPrimitiveErrorGroup
+        self._navigation_endpoint_compat = adapt_symbolic_navigation_signature(self.primitives)
         self._inside_primitive = False
         self._official_terminated = False
         if set(p.name.lower() for p in self._primitive_enum) != set(OFFICIAL_PRIMITIVES):
@@ -189,6 +191,7 @@ class OfficialSymbolicBackend(RGBBackend):
             navigation_planner={'implementation':'upstream_CuRoboMotionGenerator','initialized':True,
                 'device':f'cuda:{self.torch.cuda.current_device()}','embodiments':['DEFAULT','ARM','BASE'],
                 'compatibility':'explicit_trajectory_evaluator_and_graph_rollout_tensor_device'},
+            navigation_endpoint_compatibility=self._navigation_endpoint_compat,
             known_upstream_limitations=['Official symbolic grasp/toggle do not enforce this project\'s previous distance or automatic-approach checks'])
         return result
 
