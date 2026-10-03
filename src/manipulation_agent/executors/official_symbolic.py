@@ -23,6 +23,9 @@ OFFICIAL_PRIMITIVES = (
     'navigate_to', 'release',
 )
 PROTOCOL = 'rgb_official_symbolic_initialized_navigation_v2'
+# Native symbolic navigation uses DEFAULT collision checks and ARM reachability.
+# Its pose-setter override never enters Starter's BASE trajectory planner.
+NAVIGATION_EMBODIMENTS = ('DEFAULT', 'ARM')
 
 
 class OfficialSymbolicBackend(RGBBackend):
@@ -54,11 +57,11 @@ class OfficialSymbolicBackend(RGBBackend):
                                     collision_mesh_cache_capacity)
         with self._startup_stage('official_navigation_planner'):
             configs=self.robot.curobo_path
-            # Navigation also runs arm IK while validating a candidate base
-            # pose, so all three native embodiments are required.
-            required=(CuRoboEmbodimentSelection.DEFAULT,CuRoboEmbodimentSelection.ARM,CuRoboEmbodimentSelection.BASE)
+            # Keep the native collision and IK planners, without allocating or
+            # warming the BASE trajectory planner unused by symbolic actions.
+            required=tuple(getattr(CuRoboEmbodimentSelection, name) for name in NAVIGATION_EMBODIMENTS)
             if not all(k in configs for k in required):
-                raise RuntimeError('Robot does not provide official arm/base navigation configurations')
+                raise RuntimeError('Robot does not provide official DEFAULT/ARM navigation configurations')
             device=f'cuda:{self.torch.cuda.current_device()}'
             tensor_args=TensorDeviceType(device=self.torch.device(device))
             self._navigation_mesh_cache = scene_mesh_cache_size(self.robot, self.og.sim.floor_plane)
@@ -240,7 +243,10 @@ class OfficialSymbolicBackend(RGBBackend):
             record_video=self.record_video, upstream_sources=self._official_sources,
             primitive_inventory=list(OFFICIAL_PRIMITIVES),
             navigation_planner={'implementation':'upstream_CuRoboMotionGenerator','initialized':True,
-                'device':f'cuda:{self.torch.cuda.current_device()}','embodiments':['DEFAULT','ARM','BASE'],
+                'device':f'cuda:{self.torch.cuda.current_device()}',
+                'embodiments':[k.name for k in self.primitives._motion_generator.mg],
+                'unused_embodiments_omitted':['BASE'],
+                'embodiment_scope':'native_symbolic_collision_and_arm_ik; symbolic_pose_setter_endpoint',
                 'compatibility':'explicit_trajectory_evaluator_and_graph_rollout_tensor_device',
                 'mesh_cache': self._navigation_mesh_cache},
             navigation_endpoint_compatibility=self._navigation_endpoint_compat,

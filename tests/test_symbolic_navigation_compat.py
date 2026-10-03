@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import unittest
 
 from manipulation_agent.executors.symbolic_compat import adapt_symbolic_navigation_signature
+from manipulation_agent.executors.official_symbolic import NAVIGATION_EMBODIMENTS
 
 
 def upstream_directory():
@@ -130,6 +131,61 @@ class DelegationTests(unittest.TestCase):
         self.assertFalse(adapt_symbolic_navigation_signature(native)['applied'])
         self.assertIs(native._navigate_to_pose.__func__, original)
         self.assertEqual(native._navigate_to_pose('pose', skip_obstacle_update=True), ('pose', True))
+
+
+class NativeSymbolicPlannerScopeTests(unittest.TestCase):
+    def test_all_native_symbolic_dispatch_paths_exclude_base_trajectory_planner(self):
+        """Audit the pinned inherited methods, not a mock list of primitive names.
+
+        Follow direct self-method calls from all fourteen native dispatch roots,
+        resolving Symbolic overrides before Starter methods. A future upstream
+        call into BASE planning must fail before omitting that planner is safe.
+        """
+        directory = upstream_directory()
+        classes = {}
+        for filename, name in [
+                ('starter_semantic_action_primitives.py', 'StarterSemanticActionPrimitives'),
+                ('symbolic_semantic_action_primitives.py', 'SymbolicSemanticActionPrimitives'),
+                ('curobo.py', 'CuRoboMotionGenerator')]:
+            tree = ast.parse((directory / filename).read_text())
+            cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == name)
+            classes[name] = {n.name: n for n in cls.body if isinstance(n, ast.FunctionDef)}
+        starter = classes['StarterSemanticActionPrimitives']
+        symbolic = classes['SymbolicSemanticActionPrimitives']
+        methods = {**starter, **symbolic}
+        dispatch = next(n.value for n in ast.walk(symbolic['__init__'])
+                        if isinstance(n, ast.Assign) and any(
+                            ast.unparse(t) == 'self.controller_functions' for t in n.targets))
+        roots = {n.attr for n in dispatch.values}
+        self.assertEqual(len(dispatch.keys), 14)
+        pending = list(roots)
+        visited = set()
+        while pending:
+            name = pending.pop()
+            if name in visited or name not in methods:
+                continue
+            visited.add(name)
+            for n in ast.walk(methods[name]):
+                if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                        and isinstance(n.func.value, ast.Name) and n.func.value.id == 'self'):
+                    pending.append(n.func.attr)
+        self.assertIn('_validate_poses', visited)
+        self.assertIn('_ik_solver_cartesian_to_joint_space', visited)
+        self.assertIn('_navigate_to_pose', visited)
+        self.assertIs(methods['_navigate_to_pose'], symbolic['_navigate_to_pose'])
+        self.assertNotIn('_plan_joint_motion', visited)
+        selected = set()
+        for name in visited:
+            selected.update(n.attr for n in ast.walk(methods[name])
+                            if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+                            and n.value.id == 'CuRoboEmbodimentSelection')
+        # Native collision checking requires DEFAULT; ARM is the reachability IK.
+        collision = classes['CuRoboMotionGenerator']['check_collisions']
+        selected.update(n.attr for n in ast.walk(collision)
+                        if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+                        and n.value.id == 'CuRoboEmbodimentSelection')
+        self.assertEqual(selected, set(NAVIGATION_EMBODIMENTS))
+        self.assertNotIn('BASE', selected)
 
 
 if __name__ == '__main__':
