@@ -8,6 +8,37 @@ from pathlib import Path
 import time
 
 
+def preferred_gpu_worker(workers, states, host, gpu_csv):
+    """Choose the most free eligible GPU from the existing admission snapshot.
+
+    Shared lab jobs can grow after admission. Prefer available headroom rather
+    than whichever worker thread wins the host lease; never claim another GPU
+    here or touch external processes. Busy lanes and known occupied ports are
+    excluded so preference cannot block independent lanes on that host.
+    """
+    memory = {}
+    for line in gpu_csv.splitlines():
+        fields = [v.strip() for v in line.split(',')]
+        try:
+            memory[int(fields[0])] = (int(fields[3]) - int(fields[2]), int(fields[2]))
+        except (ValueError, IndexError):
+            continue
+    busy = {'starting', 'controller_starting', 'running', 'cleanup_pending', 'disabled', 'drained'}
+    choices = []
+    for worker in workers:
+        if worker['ssh'][-1] != host or worker['gpu'] not in memory:
+            continue
+        state = states.get(worker['id'], {})
+        if state.get('stage') in busy or state.get('checks', {}).get('bridge_port_free') is False:
+            continue
+        free, used = memory[worker['gpu']]
+        minimum = worker.get('minimum_free_gpu_mib', 0)
+        if (minimum and free < minimum) or (not minimum and used >= 1024):
+            continue
+        choices.append((free, -worker['gpu'], worker['id']))
+    return max(choices)[2] if choices else None
+
+
 def classify_episode_outcome(row):
     """Task outcome is independent of optional replay/media validation.
 

@@ -11,13 +11,23 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage
+from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, preferred_gpu_worker
 
 spec=importlib.util.spec_from_file_location('lifecycle_batch',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_admission_prefers_real_057_headroom_without_claiming_busy_or_foreign_gpus(self):
+        workers=[{'id':f's115-gpu{i}','gpu':i,'ssh':['ssh','s115'],'minimum_free_gpu_mib':18432}
+                 for i in range(4)]
+        workers.append({'id':'foreign','gpu':4,'ssh':['ssh','s134'],'minimum_free_gpu_mib':18432})
+        snapshot='0, UUID0, 23525, 49140, 580.95.05\n2, UUID2, 14537, 49140, 580.95.05\n4, UUID4, 0, 49140, 580.95.05'
+        self.assertEqual(preferred_gpu_worker(workers,{},'s115',snapshot),'s115-gpu2')
+        for state in ({'stage':'running'}, {'stage':'disabled'}, {'checks':{'bridge_port_free':False}}):
+            self.assertEqual(preferred_gpu_worker(workers,{'s115-gpu2':state},'s115',snapshot),'s115-gpu0')
+        self.assertIsNone(preferred_gpu_worker(workers,{},'s115',''))
+
     def runner(self, root, count=2):
         b=batch.Batch.__new__(batch.Batch)
         b.root=Path(root);b._worker_local=threading.local();b.lock=threading.RLock()
