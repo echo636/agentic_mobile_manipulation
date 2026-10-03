@@ -45,10 +45,12 @@ class OfficialSymbolicBackend(RGBBackend):
         # constructor. Fail startup if the official planner cannot be prepared,
         # instead of admitting 100 policies to a deterministically broken tool.
         from omnigibson.action_primitives.curobo import CuRoboMotionGenerator, CuRoboEmbodimentSelection
+        from omnigibson.action_primitives import curobo as native_curobo
         from curobo.wrap.reacher.evaluator import TrajEvaluatorConfig
         from curobo.rollout.arm_base import ArmBaseConfig
         from curobo.types.base import TensorDeviceType
-        from .curobo_compat import trajectory_evaluator_device
+        from .curobo_compat import (trajectory_evaluator_device, scene_mesh_cache_size,
+                                    collision_mesh_cache_capacity)
         with self._startup_stage('official_navigation_planner'):
             configs=self.robot.curobo_path
             # Navigation also runs arm IK while validating a candidate base
@@ -58,13 +60,16 @@ class OfficialSymbolicBackend(RGBBackend):
                 raise RuntimeError('Robot does not provide official arm/base navigation configurations')
             device=f'cuda:{self.torch.cuda.current_device()}'
             tensor_args=TensorDeviceType(device=self.torch.device(device))
+            self._navigation_mesh_cache = scene_mesh_cache_size(self.robot, self.og.sim.floor_plane)
             with trajectory_evaluator_device(TrajEvaluatorConfig,tensor_args), \
-                    trajectory_evaluator_device(ArmBaseConfig,tensor_args,'from_dict'):
+                    trajectory_evaluator_device(ArmBaseConfig,tensor_args,'from_dict'), \
+                    collision_mesh_cache_capacity(native_curobo, self._navigation_mesh_cache['capacity']):
                 self.primitives._motion_generator=CuRoboMotionGenerator(
                     robot=self.robot,robot_cfg_path={k:configs[k] for k in required},device=device,
                     batch_size=self.primitives._curobo_batch_size,collision_activation_distance=.02)
             if not all(k in self.primitives._motion_generator.mg for k in required):
                 raise RuntimeError('Official navigation planner is missing a required embodiment')
+            self._record_navigation_diagnostics('initialized')
         self._official_sources = {}
         for cls in type(self.primitives).__mro__:
             if cls is object:
@@ -74,6 +79,18 @@ class OfficialSymbolicBackend(RGBBackend):
                 self._official_sources[cls.__name__] = {'file': path, 'sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()}
         path=inspect.getsourcefile(CuRoboMotionGenerator)
         self._official_sources['CuRoboMotionGenerator']={'file':path,'sha256':hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+
+    def _record_navigation_diagnostics(self, phase):
+        from .curobo_compat import planner_cache_snapshot
+        entry = {'at': now(), 'phase': phase, 'sim_step': self.steps,
+                 'audience': 'executor_private', 'allocation': self._navigation_mesh_cache}
+        # Diagnostic collection must not replace an original CUDA failure.
+        try:
+            entry.update(planner_cache_snapshot(self.primitives._motion_generator))
+        except Exception as exc:
+            entry['diagnostic_error'] = f'{type(exc).__name__}: {exc}'
+        with (self.output / 'official_navigation_diagnostics.jsonl').open('a') as stream:
+            stream.write(json.dumps(entry) + '\n')
 
     def _step(self, action):
         # Deliberately bypass RGBBackend._step and its pose/carry projection.
@@ -138,6 +155,8 @@ class OfficialSymbolicBackend(RGBBackend):
         generator = None
         started = time.monotonic()
         try:
+            if primitive == 'navigate_to':
+                self._record_navigation_diagnostics('before_navigate_to')
             generator = self.primitives.apply_ref(enum, *([] if obj is None else [obj]), attempts=1)
             with self._bounded_internal_physics(max_steps):
                 while True:
@@ -168,6 +187,8 @@ class OfficialSymbolicBackend(RGBBackend):
         finally:
             if generator is not None:
                 generator.close()
+            if primitive == 'navigate_to':
+                self._record_navigation_diagnostics('after_navigate_to')
             entry.update(end_step=self.steps, env_steps=self.steps-before,
                          internal_physics_ticks=self.sampling_physics_steps-sampling_before,
                          duration_seconds=time.monotonic()-started)
@@ -190,7 +211,8 @@ class OfficialSymbolicBackend(RGBBackend):
             primitive_inventory=list(OFFICIAL_PRIMITIVES),
             navigation_planner={'implementation':'upstream_CuRoboMotionGenerator','initialized':True,
                 'device':f'cuda:{self.torch.cuda.current_device()}','embodiments':['DEFAULT','ARM','BASE'],
-                'compatibility':'explicit_trajectory_evaluator_and_graph_rollout_tensor_device'},
+                'compatibility':'explicit_trajectory_evaluator_and_graph_rollout_tensor_device',
+                'mesh_cache': self._navigation_mesh_cache},
             navigation_endpoint_compatibility=self._navigation_endpoint_compat,
             known_upstream_limitations=['Official symbolic grasp/toggle do not enforce this project\'s previous distance or automatic-approach checks'])
         return result
