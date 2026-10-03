@@ -62,6 +62,13 @@ records for each tool call. Explicit planning and memory remain deferred.
 See [harness architecture and transport usage](docs/architecture.md) and
 [client capabilities and validation limits](src/manipulation_agent/clients/README.md).
 
+The 2026-10-04 acceptance used frozen `0760f64`: Astra through Codex and FastMCP
+completed radio instance 301 with Q=1 in 73.942 seconds of agent execution, excluding
+initialization. [Recorded replay](http://10.76.5.241:8765/manipulation_runs/mas_harness_phase1_original_000_turning_on_radio_i301_s0_r1/replay.html).
+This validates one Original episode; native Responses, OpenCode and Kimi do not
+inherit this real-client acceptance. CPU/interface validation passed 224 tests,
+with nine tests skipped for unavailable simulator dependencies.
+
 ## Execution and evidence
 
 The model selects a pixel in a current RGB image. The private executor resolves that pixel through depth and a visual-mesh ray, then performs GT navigation, controlled carrying without a robot/object fixed joint, official state operations, or placement sampling. Base motion uses incremental idealized pose control; grasp and placement can be discontinuous. This is not a physical-control leaderboard submission. Final BDDL predicates and TaskMetric are evaluated independently after termination and are not returned to the active model. See [executor v7 and validation limits](docs/executor_v7.md).
