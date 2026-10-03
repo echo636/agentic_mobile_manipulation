@@ -30,6 +30,13 @@ from manipulation_agent.tools import tool_specs
 FINAL = {'passed','failed','blocked'}
 
 
+def inline_systemd_launcher(script):
+    """Deliver launcher bytes without waiting for cross-host NAS visibility."""
+    # systemd expands ExecStart dollars before bash runs. Preserve them for the
+    # sourced simulator environment, including ${PYTHONPATH:-} and shell quotes.
+    return ['/bin/bash','-c',script.replace('$','$$')]
+
+
 def evaluation_summary(evaluation):
     """Keep combinatorial goal arrays in the immutable episode, not live progress."""
     if not isinstance(evaluation, dict):
@@ -369,7 +376,7 @@ class Batch:
                     '-p','MemoryMax='+self.c.get('simulator_memory_max',str(self.c.get('memory_budget_gib',28))+'G'),'-p','CPUQuota=800%','-p',f"RuntimeMaxSec={self.manifest['simulator_runtime_max_seconds']}",
                     '-p','TasksMax=2048','-p','LimitCORE=0',
                     '-p','TimeoutStopSec=30','-p','KillMode=control-group','-p','SuccessExitStatus=2',
-                    '-p','WorkingDirectory='+str(self.source),'/bin/bash',str(launcher)]
+                    '-p','WorkingDirectory='+str(self.source)]+inline_systemd_launcher(launcher.read_text())
             p=self.ssh(launch);(self.root/'logs'/f'{runid}_launch.log').write_text(p.stdout+p.stderr)
             if p.returncode: raise RuntimeError('Simulator unit launch failed')
             own_unit=True
