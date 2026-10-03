@@ -4,6 +4,7 @@ No custom navigation, carry, placement, preconditions, retries or state repair.
 Upstream can teleport objects and set semantic states; this is not physical control.
 """
 from contextlib import contextmanager
+import faulthandler
 import hashlib
 import inspect
 import json
@@ -114,6 +115,16 @@ class OfficialSymbolicBackend(RGBBackend):
         self._video_frame('env_step')
 
     @contextmanager
+    def _slow_action_trace(self):
+        """Capture native stacks on slow calls without signals or policy input."""
+        with (self.output / 'official_slow_action_stacks.log').open('a') as stream:
+            faulthandler.dump_traceback_later(60, repeat=True, file=stream)
+            try:
+                yield
+            finally:
+                faulthandler.cancel_dump_traceback_later()
+
+    @contextmanager
     def _bounded_internal_physics(self, max_steps):
         """Count upstream sampler ticks separately, without pose/state repair."""
         original = self.og.sim.step_physics
@@ -154,11 +165,25 @@ class OfficialSymbolicBackend(RGBBackend):
                  'start_step': before, 'audience': 'executor_private'}
         generator = None
         started = time.monotonic()
+
+        def check_planning_budget():
+            if time.monotonic() - started > 120:
+                raise SkillError('action_timeout', 'Official primitive time budget exhausted', changed=True)
+
+        def record_planning_phase(phase, status, duration):
+            with (self.output / 'official_planning_phases.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at': now(), 'primitive': primitive, 'phase': phase,
+                    'status': status, 'duration_seconds': duration,
+                    'action_elapsed_seconds': time.monotonic() - started,
+                    'audience': 'executor_private'}) + '\n')
+
+        from .symbolic_compat import native_planning_checkpoints
         try:
             if primitive == 'navigate_to':
                 self._record_navigation_diagnostics('before_navigate_to')
             generator = self.primitives.apply_ref(enum, *([] if obj is None else [obj]), attempts=1)
-            with self._bounded_internal_physics(max_steps):
+            with self._slow_action_trace(), self._bounded_internal_physics(max_steps), native_planning_checkpoints(
+                    self.primitives, check_planning_budget, record_planning_phase):
                 while True:
                     if time.monotonic() - started > 120:
                         raise SkillError('action_timeout', 'Official primitive time budget exhausted', changed=True)
