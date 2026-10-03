@@ -89,6 +89,7 @@ def serve(harness, port: int) -> None:
     server.daemon_threads = True
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
+    harness.start_standalone_clock()
     harness.recorder.event("bridge_started", {"host": "127.0.0.1", "port": server.server_port})
     print(f"MAS_BRIDGE_READY=http://127.0.0.1:{server.server_port}", flush=True)
     closed_at = None
@@ -101,7 +102,7 @@ def serve(harness, port: int) -> None:
                     break
             elif harness.deadline.expired:
                 harness.call('finish', {'outcome':'aborted','reason':'Episode wall-clock deadline exhausted'}, 'episode-deadline-finish')
-            elif time.monotonic() - harness.started > harness.budget.wall_seconds:
+            elif not harness.deadline.managed and time.monotonic() - harness.started > harness.budget.wall_seconds:
                 harness.call("finish", {"outcome": "aborted", "reason": "Service wall-clock budget exhausted"}, "service-timeout")
             if hasattr(harness, 'tick_background') and not harness.closed:
                 harness.tick_background()

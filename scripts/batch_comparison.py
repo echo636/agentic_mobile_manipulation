@@ -106,7 +106,7 @@ def render_comparison_page(arms=ARMS):
         page=page.replace('三组全新运行，共 300 条','本批次 '+str(len(arms))+' 组全新运行，共 '+str(100*len(arms))+' 条')
         page=page.replace('Motor 由大脑写代码组合底盘、关节及夹爪控制；','')
         page=page.replace('三组的命令粒度','各组的命令粒度').replace('三组都已结束','各组都已结束')
-    page=page.replace('模型 30 分钟', '任务启动后 30 分钟（新调度协议包含初始化、模型与动作；等资源不计时，历史记录保留原预算）')
+    page=page.replace('模型 30 分钟', '模型开始执行后 30 分钟（含推理、观测与动作；不含初始化和资源等待，历史记录保留原预算）')
     page=page.replace('“目标成功”来自独立官方评分；“完整通过”还要求控制器结束、观测、视频与轨迹校验通过。无评分故障保留在 100 条总数中。',
         '任务结果为成功、失败、超时。超时即使没有最终 Q 分数也是明确终态；运行故障标为失败并保留原因。评分、录像和证据质量分别记录，录像问题不会改变任务结果。')
     page=page.replace("node('div','已结束 · '+(s.counts.running||0)+' 运行中'),node('div','目标成功 '+s.official_goal_successes+' · 完整通过 '+s.fully_validated_successes),node('small','已评分 '+s.scored+' · 无评分故障 '+s.unscored_ended)",

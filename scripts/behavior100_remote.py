@@ -162,7 +162,7 @@ def main():
     p.add_argument('--min-free-gpu-mib',type=int,default=0)
     p.add_argument('--memory-budget-gib',type=int,default=28)
     p.add_argument('--light', action='store_true', help='Only recheck dynamic worker resources')
-    p.add_argument('--deadline-unix', type=float, help='Absolute task deadline, including simulator startup')
+    p.add_argument('--deadline-unix', type=float, help='Legacy absolute task deadline; new runs arm the execution clock after initialization')
     p.add_argument('--reserved-host-memory-gib',type=int,default=0)
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
     if a.mode == 'assets':

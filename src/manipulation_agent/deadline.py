@@ -1,26 +1,103 @@
-"""One absolute episode deadline, shared across startup, policy and actions.
+"""Private execution clock shared by controller and simulator after startup.
 
 Checks are cooperative. A supervisor owns the hard process limit when a native
 call cannot return to Python; score availability never determines a timeout.
 """
-from dataclasses import dataclass
+import fcntl
+import json
 import math
 import os
+from pathlib import Path
+import tempfile
 import time
 
 from .contracts import SkillError
 
 
-@dataclass(frozen=True)
-class EpisodeDeadline:
-    unix: float | None = None
+def validate_execution_clock(value):
+    """Validate clock data without accepting a new start or extending its budget."""
+    if not isinstance(value,dict):raise ValueError('Execution clock must be a JSON object')
+    keys=('execution_started_at_unix','episode_deadline_unix','execution_budget_seconds')
+    for key in keys:
+        number=value.get(key)
+        if isinstance(number,bool) or not isinstance(number,(int,float)) or not math.isfinite(number) or number<=0:
+            raise ValueError('Execution clock requires positive finite '+key)
+    if abs(value['episode_deadline_unix']-value['execution_started_at_unix']-value['execution_budget_seconds'])>.001:
+        raise ValueError('Execution clock deadline does not match its start and duration')
+    return dict(value)
 
-    def __post_init__(self):
-        if self.unix is not None and (not math.isfinite(self.unix) or self.unix <= 0):
+
+def write_execution_clock(path, duration_seconds):
+    """Atomically arm once, called privately after MCP handshake and before policy.
+
+    Repeated calls return the existing clock, including when already expired.
+    The model has neither this command nor access to its file.
+    """
+    if isinstance(duration_seconds,bool) or not math.isfinite(duration_seconds) or duration_seconds<=0:
+        raise ValueError('Execution duration must be positive and finite')
+    path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
+    with path.with_suffix(path.suffix+'.lock').open('a') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX)
+        if path.exists():return validate_execution_clock(json.loads(path.read_text()))
+        started=time.time()
+        record=validate_execution_clock({'schema_version':1,'clock_kind':'policy_execution',
+            'execution_started_at_unix':started,'episode_deadline_unix':started+duration_seconds,
+            'execution_budget_seconds':duration_seconds,'writer_pid':os.getpid()})
+        temporary=None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w',dir=path.parent,prefix=path.name+'.',delete=False) as stream:
+                temporary=Path(stream.name)
+                json.dump(record,stream,allow_nan=False);stream.write('\n');stream.flush();os.fsync(stream.fileno())
+            temporary.replace(path)
+        finally:
+            if temporary is not None:temporary.unlink(missing_ok=True)
+        return record
+
+
+class EpisodeDeadline:
+    def __init__(self, unix=None, *, clock_path=None):
+        if unix is not None and (isinstance(unix,bool) or not math.isfinite(unix) or unix<=0):
             raise ValueError('Episode deadline must be a positive finite Unix timestamp')
+        self._unix=unix
+        self.clock_path=Path(clock_path) if clock_path is not None else None
+        self._clock=None
+
+    @property
+    def managed(self):
+        """A pending external clock must suppress legacy ready-time timers too."""
+        return self.clock_path is not None or self._unix is not None
+
+    def _load_clock(self):
+        if self.clock_path is None or self._clock is not None:return
+        try:raw=self.clock_path.read_text()
+        except FileNotFoundError:return
+        self._clock=validate_execution_clock(json.loads(raw))
+        self._unix=self._clock['episode_deadline_unix']
+
+    @property
+    def unix(self):
+        self._load_clock()
+        return self._unix
+
+    @property
+    def clock(self):
+        self._load_clock()
+        return dict(self._clock) if self._clock is not None else None
+
+    def arm_local(self, duration_seconds):
+        """Standalone fallback at bridge readiness, never during construction."""
+        if not self.managed:
+            started=time.time()
+            self._clock=validate_execution_clock({'clock_kind':'standalone_ready',
+                'execution_started_at_unix':started,'episode_deadline_unix':started+duration_seconds,
+                'execution_budget_seconds':duration_seconds})
+            self._unix=self._clock['episode_deadline_unix']
+        return self.clock
 
     @classmethod
     def from_env(cls, *, default_unix=None):
+        clock_path=os.environ.get('MAS_EXECUTION_CLOCK_PATH')
+        if clock_path:return cls(clock_path=clock_path)
         value = os.environ.get('MAS_EPISODE_DEADLINE_UNIX')
         return cls(float(value) if value is not None else default_unix)
 

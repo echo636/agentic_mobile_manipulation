@@ -1,12 +1,13 @@
-"""CPU regressions for closure integrity and a shared startup-inclusive deadline."""
+"""CPU regressions for closure integrity and execution clocks excluding startup."""
 import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.deadline import EpisodeDeadline, write_execution_clock
 from manipulation_agent import bridge
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
@@ -114,6 +115,48 @@ class EpisodeDeadlineTests(unittest.TestCase):
         events=[json.loads(line) for line in (self.output/'events.jsonl').read_text().splitlines()]
         self.assertTrue(any(e['kind']=='tool_result' and e['request_id']=='episode-deadline-finish' for e in events))
 
+    def test_pending_external_clock_ignores_startup_age_and_rebases_observation_jobs(self):
+        path=Path(self.folder.name)/'execution_clock.json'
+        self.h.deadline=self.backend.deadline=EpisodeDeadline(clock_path=path)
+        self.h.started=time.monotonic()-4000
+        self.clock=4100
+        reply=self.h.call('observe',{},'before-model')
+        self.assertTrue(reply['ok'])
+        self.assertFalse(self.h.deadline.expired)
+        self.assertIsNone(self.h.deadline.unix)
+        clock=write_execution_clock(path,1800)
+        reply=self.h.call('observe',{},'model-first-observe')
+        self.assertTrue(reply['ok'])
+        self.assertEqual(self.recorder.run['execution_started_at_unix'],4100)
+        self.assertEqual(self.recorder.run['episode_deadline_unix'],5900)
+        self.assertLess(time.monotonic()-self.h.started,1)
+        job=self.h.surround.start()['job']['job_id']
+        self.h.surround.tick();self.h.surround.tick()
+        self.assertEqual(self.h.surround.get(job)['job']['status'],'passed')
+
+
+class ExecutionClockFileTests(unittest.TestCase):
+    def test_clock_is_atomic_idempotent_and_loaded_only_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'execution_clock.json';reader=EpisodeDeadline(clock_path=path)
+            with patch('manipulation_agent.deadline.time.time',return_value=100):
+                self.assertTrue(reader.managed)
+                self.assertIsNone(reader.unix)
+                self.assertFalse(reader.expired)
+            with patch('manipulation_agent.deadline.time.time',return_value=4000):
+                self.assertFalse(reader.expired)  # Arbitrarily long startup has no task deadline.
+                first=write_execution_clock(path,1800)
+                raw=path.read_bytes();mtime=path.stat().st_mtime_ns
+                self.assertEqual(reader.unix,5800)
+            with patch('manipulation_agent.deadline.time.time',return_value=4100):
+                second=write_execution_clock(path,3600)
+                self.assertEqual(first,second)
+                self.assertEqual(path.read_bytes(),raw)
+                self.assertEqual(path.stat().st_mtime_ns,mtime)
+            path.unlink()  # Proves a loaded reader does not poll or reset its clock.
+            with patch('manipulation_agent.deadline.time.time',return_value=5800):
+                self.assertTrue(reader.expired)
+
 
 class ControllerDeadlineTests(unittest.TestCase):
     def test_handshake_consumes_remaining_task_time_before_model_wait(self):
@@ -187,6 +230,50 @@ class ControllerDeadlineTests(unittest.TestCase):
             self.assertTrue(record['timeout'])
             self.assertEqual(record['event_decode_errors']['line_numbers'],[1])
             self.assertEqual((output/'model_events.jsonl').read_text(),'{"type":"unfinished')
+
+    def test_private_clock_arms_after_handshake_and_before_model_with_full_execution_budget(self):
+        path=Path(__file__).resolve().parents[1]/'scripts'/'run_codex_controller.py'
+        spec=importlib.util.spec_from_file_location('execution_clock_controller',path)
+        controller=importlib.util.module_from_spec(spec);spec.loader.exec_module(controller)
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)/'controller';clock_path=Path(folder)/'execution_clock.json'
+            now=[100.0];order=[];waits={}
+            def preflight(*args,**kwargs):
+                self.assertFalse(clock_path.exists());order.append('handshake')
+                waits['handshake']=kwargs['timeout'];now[0]=130.0
+                return {'status':'passed'}
+            def arm(command,**kwargs):
+                self.assertEqual(command,['fixture-clock']);self.assertEqual(order,['handshake'])
+                order.append('clock')
+                return type('Completed',(),{'stdout':json.dumps(write_execution_clock(clock_path,1800))})()
+            class Process:
+                pid=123456;returncode=0
+                def __init__(self,*args,**kwargs):
+                    assert clock_path.exists()
+                    order.append('model');self.stdout=kwargs['stdout']
+                def communicate(self,text,timeout):
+                    waits['model']=timeout
+                    self.stdout.write(json.dumps({'type':'item.completed','item':{
+                        'type':'mcp_tool_call','server':'manipulation','tool':'finish',
+                        'result':{'content':[{'type':'text','text':'{"closed":true}'}]}}})+'\n')
+                    return None,None
+            argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
+                  '--mcp-args-json','[]','--output',str(output),'--timeout','1800',
+                  '--execution-clock-command-json','["fixture-clock"]']
+            with patch('sys.argv',argv), patch('manipulation_agent.deadline.time.time',side_effect=lambda:now[0]), \
+                 patch.object(controller,'check_server',side_effect=preflight), \
+                 patch.object(controller.subprocess,'run',side_effect=arm), \
+                 patch.object(controller.subprocess,'Popen',Process), \
+                 patch.object(controller.subprocess,'check_output',return_value='fixture'), \
+                 patch.object(controller,'source_version',return_value={'fixture':True}), \
+                 patch.object(controller,'export_summaries',return_value={}):
+                self.assertEqual(controller.main(),0)
+            self.assertEqual(order,['handshake','clock','model'])
+            self.assertEqual(waits,{'handshake':90,'model':1800})
+            record=json.loads((output/'controller.json').read_text())
+            self.assertEqual(record['execution_started_at_unix'],130)
+            self.assertEqual(record['episode_deadline_unix'],1930)
+            self.assertTrue(record['startup_excluded_from_execution_budget'])
 
 
 if __name__=='__main__':unittest.main()
