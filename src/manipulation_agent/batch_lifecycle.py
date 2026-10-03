@@ -8,13 +8,14 @@ from pathlib import Path
 import time
 
 
-def preferred_gpu_worker(workers, states, host, gpu_csv):
+def preferred_gpu_worker(workers, states, host, gpu_csv, *, gpu_available=None):
     """Choose the most free eligible GPU from the existing admission snapshot.
 
     Shared lab jobs can grow after admission. Prefer available headroom rather
     than whichever worker thread wins the host lease; never claim another GPU
     here or touch external processes. Busy lanes and known occupied ports are
-    excluded so preference cannot block independent lanes on that host.
+    excluded so preference cannot block independent lanes on that host. The
+    optional lock probe also excludes GPUs leased by another coordinator.
     """
     memory = {}
     for line in gpu_csv.splitlines():
@@ -23,7 +24,7 @@ def preferred_gpu_worker(workers, states, host, gpu_csv):
             memory[int(fields[0])] = (int(fields[3]) - int(fields[2]), int(fields[2]))
         except (ValueError, IndexError):
             continue
-    busy = {'starting', 'controller_starting', 'running', 'cleanup_pending', 'disabled', 'drained'}
+    busy = {'starting', 'controller_starting', 'running', 'cleanup_pending', 'archive_pending', 'disabled', 'drained'}
     choices = []
     for worker in workers:
         if worker['ssh'][-1] != host or worker['gpu'] not in memory:
@@ -35,8 +36,32 @@ def preferred_gpu_worker(workers, states, host, gpu_csv):
         minimum = worker.get('minimum_free_gpu_mib', 0)
         if (minimum and free < minimum) or (not minimum and used >= 1024):
             continue
+        if gpu_available is not None and not gpu_available(worker):
+            continue
         choices.append((free, -worker['gpu'], worker['id']))
     return max(choices)[2] if choices else None
+
+
+def _gpu_lease_key(worker):
+    device = worker.get('expected_gpu_uuid') or worker['ssh'][-1] + ':' + str(worker['gpu'])
+    return hashlib.sha256(device.encode()).hexdigest()[:24]
+
+
+def gpu_lease_available(directory, worker):
+    """Probe only the GPU lock; never reserve a host slot or edit owner metadata.
+
+    The caller already owns its GPU/host lease and must exempt that GPU. A peer
+    blocked on the caller's host slot can still be preferred once we release it.
+    This is a preference hint; real admission still acquires both leases.
+    """
+    path = Path(directory) / ('gpu-' + _gpu_lease_key(worker) + '.lock')
+    with path.open('a+') as stream:
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        fcntl.flock(stream, fcntl.LOCK_UN)
+        return True
 
 
 def classify_episode_outcome(row):
@@ -149,8 +174,7 @@ class WorkerLease:
         if self.slot_count < 1:
             raise ValueError('Host budget has no usable simulator slot')
         self.host_key = hashlib.sha256(worker['ssh'][-1].encode()).hexdigest()[:20]
-        device = worker.get('expected_gpu_uuid') or worker['ssh'][-1] + ':' + str(worker['gpu'])
-        self.gpu_key = hashlib.sha256(device.encode()).hexdigest()[:24]
+        self.gpu_key = _gpu_lease_key(worker)
         self.host = self.gpu = None
 
     def acquire(self):
