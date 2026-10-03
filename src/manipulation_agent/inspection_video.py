@@ -7,6 +7,7 @@ latency. The spectator camera is replay-only. Original artifacts are untouched.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -62,6 +63,39 @@ def decision_text(step):
     return '\n\n'.join(sections)
 
 
+def source_markers(steps, raw):
+    """Keep post-close acknowledgments visible using an explicit last-frame hold."""
+    markers = {m['request_id']: m['frame_index'] for m in raw['markers']}
+    holds = []
+    for i, step in enumerate(steps):
+        if step['request_id'] in markers:
+            continue
+        before, after = step.get('before'), step.get('after')
+        try:
+            after_recording = datetime.fromisoformat(step['at']) > datetime.fromisoformat(raw['finished_at'])
+        except (KeyError, TypeError, ValueError):
+            after_recording = False
+        closed_boundary = any(
+            previous['tool'] == 'finish' and (previous.get('result') or {}).get('closed') is True
+            and markers.get(previous['request_id']) == raw['frame_count']
+            for previous in steps[:i])
+        if not (step['tool'] == 'finish' and after_recording and closed_boundary
+                and isinstance(raw.get('final_env_step'), int) and raw['frame_count'] > 0
+                and (step.get('result') or {}).get('error', {}).get('code') == 'episode_closed'
+                and before and before == after
+                and before.get('capture', {}).get('sim_step') == raw.get('final_env_step')
+                and before.get('images')
+                and all(image.get('env_steps') == raw.get('final_env_step') for image in before['images'])
+                and all(later['request_id'] not in markers for later in steps[i + 1:])):
+            raise ValueError('Missing source video marker')
+        markers[step['request_id']] = raw['frame_count']
+        holds.append({'request_id': step['request_id'], 'step': step['index'],
+            'source_frame': raw['frame_count'] - 1, 'source_env_step': raw['final_env_step'],
+            'reason': 'finish returned episode_closed after recording ended; unchanged final observation',
+            'synthetic_motion': False})
+    return markers, holds
+
+
 def build(run_dir: Path, controller_dir: Path | None = None, chars_per_second=24):
     from PIL import Image, ImageDraw
     from .explained_video import get_font, char_width
@@ -81,9 +115,8 @@ def build(run_dir: Path, controller_dir: Path | None = None, chars_per_second=24
     if source_hash != raw['sha256']:
         raise ValueError('Source video hash mismatch')
     steps = data['steps']; fps = raw['fps']; tile_size = raw['width'] // 2
-    markers = {m['request_id']: m['frame_index'] for m in raw['markers']}
-    if any(s['request_id'] not in markers for s in steps):
-        raise ValueError('Missing source video marker')
+    markers, post_recording_holds = source_markers(steps, raw)
+    post_recording_ids = {hold['request_id'] for hold in post_recording_holds}
     manifest = {
         'status': 'running', 'started_at': now(), 'host': platform.node(),
         'pid': os.getpid(), 'interpreter': sys.executable, 'gpu_uuid': None,
@@ -99,6 +132,7 @@ def build(run_dir: Path, controller_dir: Path | None = None, chars_per_second=24
         'text_contract': 'Only recorded public assistant output and provider-returned summaries, verbatim; no reconstructed hidden reasoning',
         'tool_result_scope': 'Video shows status/error/effect/job; full result and images are in synchronized HTML',
         'synthesized_motion': False, 'raw_evidence_modified': False,
+        'post_recording_holds': post_recording_holds,
         'renderer_source_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     }
     write_json(record, manifest)
@@ -128,7 +162,9 @@ def build(run_dir: Path, controller_dir: Path | None = None, chars_per_second=24
                  'No interpolated motion', 'Full tool result: HTML replay']
         for i, note in enumerate(notes):
             d.text((342, 796 + i * 43), note, font=get_font(22), fill='#b7cbd9')
-        d.text((1024, 1020), 'Pause to inspect | model/network waiting omitted', font=get_font(21), fill='#9cb8c9')
+        note = ('Recording ended | last recorded frame held' if step and
+                step['request_id'] in post_recording_ids else 'Pause to inspect | model/network waiting omitted')
+        d.text((1024, 1020), note, font=get_font(21), fill='#9cb8c9')
         return img
 
     def composite(base, frame):
@@ -156,6 +192,8 @@ def build(run_dir: Path, controller_dir: Path | None = None, chars_per_second=24
         out_count += count
 
     def entry(step, phase, begin, **extra):
+        if step and step['request_id'] in post_recording_ids:
+            extra.update(post_recording=True, footage_scope='last recorded frame; no new execution footage')
         ledger.append({'step': step['index'] if step else None,
             'request_id': step.get('request_id') if step else None,
             'phase': phase, 'start_frame': begin, 'end_frame_exclusive': out_count,
