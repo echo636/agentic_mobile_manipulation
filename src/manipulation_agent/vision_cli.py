@@ -31,6 +31,10 @@ def main():
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
+    p.add_argument('--model-max-turns', type=int, default=100, help='Native Responses loop only')
+    p.add_argument('--model-max-tokens', type=int, default=150000, help='Native Responses loop cumulative usage budget')
+    p.add_argument('--image-history-captures', type=int, default=0,
+                   help='Native loop: keep the latest N RGB captures in requests; zero preserves all. Raw records are retained.')
     a=p.parse_args()
     if a.record_video is None: a.record_video = a.backend == 'omnigibson'
     if a.instruction is None:
@@ -38,6 +42,11 @@ def main():
         a.instruction=catalog['tasks'].get(a.task,{}).get('instruction')
         if not a.instruction:p.error('Provide --instruction for this task')
     policy=RGBResponsesPolicy.from_env() if a.policy=='responses' else None
+    if policy is not None:
+        from .agent_loop import LoopConfig
+        LoopConfig(max_turns=a.model_max_turns, max_tokens=a.model_max_tokens,
+                   image_history_captures=a.image_history_captures)
+        policy.max_turns, policy.max_tokens = a.model_max_turns, a.model_max_tokens
     config=vars(a).copy();config['output']=str(a.output.resolve());config['observation_mode']='rgb_only'
     config['validation_level']='cpu_rgb_contract_only' if a.backend=='mock' else 'rgb_simulator_requires_controller_image_evidence'
     config['episode_deadline_unix']=deadline.unix
@@ -54,7 +63,7 @@ def main():
         harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps),profile=a.agent_profile)
         if policy:
             harness.start_standalone_clock()
-            policy.run(harness,a.instruction)
+            policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)
         else:bridge.serve(harness,a.port)
         return 0 if recorder.run.get('status')=='passed' else 2
     except BaseException as exc:

@@ -92,18 +92,31 @@ class ResponsesPolicy:
             raise ValueError("Missing model configuration: " + ", ".join(missing))
         return cls(model=os.environ["LLM_MODEL"], base_url=os.environ["LLM_BASE_URL"], key=os.environ["LLM_API_KEY"])
 
-    def _request(self, body):
+    def _request(self, body, *, deadline=None):
         request = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers={
             "Authorization": "Bearer " + self.key, "Content-Type": "application/json"})
         # No automatic mutation retry. Only model requests may be retried on transient status.
         for attempt in range(3):
+            if deadline is not None:
+                deadline.check()
+            timeout = self.timeout if deadline is None else deadline.remaining(self.timeout)
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    return json.load(response)
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    value = json.load(response)
+                    if deadline is not None:
+                        deadline.check()  # A slow response may finish after its absolute deadline.
+                    return value
             except urllib.error.HTTPError as exc:
                 if exc.code not in {429, 500, 502, 503, 504} or attempt == 2:
                     raise RuntimeError(f"Model HTTP {exc.code}; response body omitted to protect credentials") from None
-                time.sleep(2 ** attempt)
+                delay = 2 ** attempt
+                if deadline is not None:
+                    delay = deadline.remaining(delay)
+                time.sleep(delay)
+            except (TimeoutError, urllib.error.URLError):
+                if deadline is not None:
+                    deadline.check()  # Map only an expired episode; preserve independent network errors.
+                raise
         raise RuntimeError("Unreachable model retry state")
 
     def run(self, harness, instruction: str):

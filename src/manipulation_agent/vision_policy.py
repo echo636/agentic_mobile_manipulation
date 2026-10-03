@@ -1,10 +1,8 @@
 """RGB model instructions and a Responses loop that attaches actual image pixels."""
-import base64
-import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from .policies import ResponsesPolicy
-from .tools import tool_specs
+from .agent_loop import LoopConfig, VisualToolLoop
 
 WORKFLOW_PROMPT = '''You control a mobile manipulation robot through RGB images and structured MCP tools.
 Only the task instruction, RGB pixels, image/camera metadata, your notes and action execution feedback are available.
@@ -83,36 +81,15 @@ class RGBResponsesPolicy(ResponsesPolicy):
     def _request_with_observation_jobs(self, harness, payload):
         # Only network I/O runs on a worker; all render/physics stays on the owner thread.
         with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(self._request, payload)
+            future = pool.submit(self._request, payload, deadline=harness.deadline)
             while not future.done():
                 harness.tick_background()
                 time.sleep(.01)
             return future.result()
 
-    def run(self,harness,instruction):
-        specs=[{'type':'function','name':t['name'],'description':t['description'],'parameters':t['inputSchema'],'strict':True} for t in harness.tool_specs()]
-        history=[{'role':'user','content':instruction}];tokens=0
-        for turn in range(self.max_turns):
-            if harness.closed:return
-            if tokens>=self.max_tokens or time.monotonic()-harness.started>=harness.budget.wall_seconds:break
-            response=self._request_with_observation_jobs(harness,{'model':self.model,'instructions':system_prompt(harness.profile),'input':history,'tools':specs,
-                                    'parallel_tool_calls':False,'store':False,'max_output_tokens':4000})
-            output=response.get('output',[]);usage=response.get('usage') or {};tokens+=usage.get('total_tokens',0)
-            harness.recorder.event('model_response',{'turn':turn,'model':self.model,'output':[o for o in output if o.get('type') in {'message','function_call'}],'usage':usage})
-            history.extend(output)
-            calls=[o for o in output if o.get('type')=='function_call']
-            if not calls:
-                history.append({'role':'user','content':'Continue through RGB tools and formally call finish.'});continue
-            for call in calls:
-                try:args=json.loads(call['arguments'])
-                except (ValueError,KeyError):result={'ok':False,'error':{'code':'invalid_json'}}
-                else:result=harness.call(call['name'],args,call['call_id'])
-                history.append({'type':'function_call_output','call_id':call['call_id'],'output':json.dumps(result)})
-                content=[]
-                for frame in result.get('observation',{}).get('images',[]):
-                    data,mime=harness.image_bytes(frame['image_ref'])
-                    content.extend([{'type':'input_text','text':f"Robot RGB: {frame['view']} / {frame['image_ref']}"},
-                                    {'type':'input_image','image_url':'data:'+mime+';base64,'+base64.b64encode(data).decode(),'detail':'high'}])
-                if content:history.append({'role':'user','content':content})
-                if harness.closed:return
-        if not harness.closed:harness.call('finish',{'outcome':'aborted','reason':'Model budget exhausted'},'runner-budget-stop')
+    def run(self, harness, instruction, *, image_history_captures=0):
+        loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile),
+                              request=self._request_with_observation_jobs,
+                              config=LoopConfig(max_turns=self.max_turns, max_tokens=self.max_tokens,
+                                                image_history_captures=image_history_captures))
+        return loop.run(harness, instruction)

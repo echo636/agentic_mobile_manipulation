@@ -38,7 +38,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     video_markers = {m['request_id']:m for m in (video or {}).get('markers', [])}
     audit = audit_episode(run_dir, controller_dir) if controller_dir else None
     model_messages = {}; model_payloads = {}; pending = []; public_events = []; model_index = 0
-    summaries=lines(controller_dir/'model_reasoning_summaries.jsonl') if controller_dir else []
+    summaries=lines((controller_dir or run_dir)/'model_reasoning_summaries.jsonl')
     summaries=[r for r in summaries if r.get('source')=='provider_returned_reasoning_summary' and r.get('verbatim') is True]
     summary_index=0
     model_source = event_path(controller_dir or run_dir)
@@ -138,7 +138,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             'source': run.get('source', {}), 'execution': {k: run.get(k) for k in
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
-            'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else run.get('config', {}).get('model'),
+            'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else run.get('native_loop', {}).get('model', run.get('config', {}).get('model')),
             'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review, 'inspection_video':inspection,
             'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(model_events),
             'model_transcript':build_transcript(model_events, steps, summaries),
