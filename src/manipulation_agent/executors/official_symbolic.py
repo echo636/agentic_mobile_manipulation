@@ -79,6 +79,8 @@ class OfficialSymbolicBackend(RGBBackend):
                     batch_size=self.primitives._curobo_batch_size,collision_activation_distance=.02)
             if not all(k in self.primitives._motion_generator.mg for k in required):
                 raise RuntimeError('Official navigation planner is missing a required embodiment')
+            from .holonomic_navigation_frames import install_instance_adapter
+            self._navigation_frame_compat = install_instance_adapter(self.primitives)
             self._record_navigation_diagnostics('initialized')
         self._official_sources = {}
         for cls in type(self.primitives).__mro__:
@@ -260,6 +262,7 @@ class OfficialSymbolicBackend(RGBBackend):
                 'compatibility':'explicit_trajectory_evaluator_and_graph_rollout_tensor_device',
                 'mesh_cache': self._navigation_mesh_cache},
             navigation_endpoint_compatibility=self._navigation_endpoint_compat,
+            navigation_frame_compatibility=self._navigation_frame_compat,
             known_upstream_limitations=['Official symbolic grasp/toggle do not enforce this project\'s previous distance or automatic-approach checks'])
         return result
 
