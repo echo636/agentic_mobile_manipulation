@@ -33,6 +33,29 @@ class Harness:
         return {**self.backend.observe(), "revision": self.revision,
                 "observation_mode": self.backend.mode, "sim_steps": self.backend.steps}
 
+    def sync_execution_clock(self):
+        deadline=self.deadline.unix
+        if deadline is None or getattr(self,'_clock_recorded',False):return
+        self._clock_recorded=True
+        timing={'episode_deadline_unix':deadline}
+        clock=self.deadline.clock
+        if clock:
+            # Existing observation-job deadlines and wall-time diagnostics share
+            # the execution origin too; simulator construction is excluded.
+            self.started=time.monotonic()-max(0,time.time()-clock['execution_started_at_unix'])
+            timing.update(execution_started_at_unix=clock['execution_started_at_unix'],
+                          execution_budget_seconds=clock['execution_budget_seconds'],
+                          execution_clock_kind=clock.get('clock_kind','policy_execution'))
+        self.recorder.run.update(timing)
+        self.recorder.event('execution_clock_armed',timing)
+        write_json(self.recorder.output/'run.json',self.recorder.run)
+
+    def start_standalone_clock(self):
+        if not self.deadline.managed:
+            self.started=time.monotonic()
+            self.deadline.arm_local(self.budget.wall_seconds)
+        self.sync_execution_clock()
+
     def call(self, name: str, arguments: dict, request_id: str) -> dict:
         if threading.get_ident() != self.owner:
             raise RuntimeError("Simulator access must stay on its owning thread")
@@ -45,6 +68,7 @@ class Harness:
         if not isinstance(request_id, str) or not request_id or len(request_id) > 200:
             return {"ok": False, "error": {"code": "invalid_request_id", "message": "A bounded nonempty request ID is required"}}
         self.calls += 1
+        self.sync_execution_clock()
         self.recorder.event("tool_call", {"name": name, "arguments": arguments, "request_id": request_id})
         try:
             if self.closed:
@@ -53,7 +77,8 @@ class Harness:
                 raise SkillError("unknown_tool", "Tool is not in this episode's catalog")
             validate(arguments, self.schemas[name])
             if name != 'finish': self.deadline.check()
-            if name != "finish" and (self.calls > self.budget.max_calls or time.monotonic() - self.started > self.budget.wall_seconds):
+            if name != "finish" and (self.calls > self.budget.max_calls or
+                    (not self.deadline.managed and time.monotonic() - self.started > self.budget.wall_seconds)):
                 raise SkillError("budget_exhausted", "Call or wall-clock budget exhausted; finish the episode")
             result = {"ok": True, **getattr(self, f"_tool_{name}")(**arguments)}
         except SkillError as exc:

@@ -11,7 +11,7 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome
+from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage
 
 spec=importlib.util.spec_from_file_location('lifecycle_batch',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
@@ -139,6 +139,55 @@ class LifecycleTests(unittest.TestCase):
             b.capture_result(row,Path(tmp));b.complete_row(row)
             self.assertEqual(row['episode_outcome'],'success');self.assertEqual(row['q_score'],1)
 
+    def test_real_clock_command_and_delayed_model_start_exclude_initialization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,1);b.source=Path(__file__).resolve().parents[1]
+            b._config.update(id='a',gpu=0,ssh=['/bin/bash','-c'],sim_python=sys.executable)
+            clock=Path(tmp)/'remote run'/"execution clock'file.json"
+            command=b.execution_clock_command(clock,.15)
+            # Delayed initialization is longer than this test's model budget.
+            init_started=time.time();time.sleep(.2)
+            first=json.loads(subprocess.check_output(command,text=True))
+            second=json.loads(subprocess.check_output(command,text=True))
+            self.assertEqual(first,second)  # Restart never extends the clock.
+            self.assertGreater(first['execution_started_at_unix']-init_started,.15)
+            self.assertAlmostEqual(first['episode_deadline_unix']-first['execution_started_at_unix'],.15,places=3)
+            output=Path(tmp)/'controller';output.mkdir()
+            (output/'controller.json').write_text(json.dumps(first))
+            row=b.rows[0];row['startup_deadline_unix']=init_started+10
+            b.controller_metadata(row,output)
+            self.assertEqual(row['episode_deadline_unix'],first['episode_deadline_unix'])
+            self.assertEqual(row['budget_basis'],'model_execution_excludes_initialization')
+
+    def test_startup_watchdog_is_failure_and_not_execution_timeout(self):
+        row={'status':'failed','startup_timed_out':True,'termination_reason':'startup_timeout',
+             'controller_timeout':True,'task_success':None}
+        self.assertEqual(classify_episode_outcome(row),'failure')
+        active={**row,'startup_timed_out':False,'termination_reason':'episode_deadline_exceeded'}
+        self.assertEqual(classify_episode_outcome(active),'timeout')
+
+    def test_worker_or_archive_exit_cannot_silently_lose_tasks(self):
+        for phase in ('worker','archive'):
+            with self.subTest(phase=phase),tempfile.TemporaryDirectory() as tmp:
+                b=self.runner(tmp,1)
+                if phase=='worker':
+                    b.run_one=Mock(side_effect=RuntimeError('unexpected worker error'))
+                    b.update=Mock(side_effect=OSError('record storage unavailable'))
+                else:
+                    def run(row,gpu):
+                        row.update(status='running',execution_finished_at='now',simulator_cleanup={'status':'passed'})
+                        return Path(tmp),Path(tmp)
+                    b.run_one=run;b.finalize_episode=Mock(side_effect=RuntimeError('archive worker crashed'))
+                with self.assertRaisesRegex(RuntimeError,'Incomplete batch coverage'):b.run()
+                self.assertNotIn(b.rows[0]['status'],{'passed','failed'})
+
+    def test_manifest_rejects_missing_duplicate_or_changed_task_identity(self):
+        rows=[{'index':0,'run_id':'first','task':'radio'},{'index':1,'run_id':'second','task':'water'}]
+        validate_manifest_coverage(rows,2,{0:'radio',1:'water'})
+        with self.assertRaisesRegex(ValueError,'coverage'):validate_manifest_coverage(rows,100)
+        with self.assertRaisesRegex(ValueError,'duplicate'):validate_manifest_coverage([rows[0],rows[0]])
+        with self.assertRaisesRegex(ValueError,'identities'):validate_manifest_coverage(rows,2,{0:'radio',1:'other'})
+
     def test_ambiguous_remote_launch_still_attempts_owned_cleanup(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp,1)
@@ -156,7 +205,9 @@ class LifecycleTests(unittest.TestCase):
             b.cleanup_owned_unit=Mock(side_effect=lambda row:row.update(simulator_cleanup={'status':'blocked','reason':'SSH unavailable'}))
             b.run_one(b.rows[0],0)
             b.cleanup_owned_unit.assert_called_once()
-            self.assertIn('episode_deadline_unix',b.rows[0])
+            self.assertIn('startup_deadline_unix',b.rows[0])
+            self.assertNotIn('episode_deadline_unix',b.rows[0])
+            self.assertIn('simulator_started_at_unix',b.rows[0])
             self.assertEqual(b.rows[0]['simulator_cleanup']['status'],'blocked')
 
 if __name__=='__main__':unittest.main()

@@ -41,6 +41,9 @@ class VisionHarness:
 
     def tool_specs(self): return list(self.catalog.values())
 
+    def sync_execution_clock(self): return LegacyPlanHelpers.sync_execution_clock(self)
+    def start_standalone_clock(self): return LegacyPlanHelpers.start_standalone_clock(self)
+
     def refresh(self):
         self.snapshot=public_observation(self.backend.observe(),self.revision)
         return copy.deepcopy(self.snapshot)
@@ -62,6 +65,7 @@ class VisionHarness:
             if old!=fingerprint: return {'ok':False,'error':{'code':'request_id_conflict','message':'Use a new request ID'}}
             return copy.deepcopy(result)
         self.calls+=1
+        self.sync_execution_clock()
         self.recorder.event('tool_call',{'name':name,'arguments':arguments,'request_id':request_id})
         if hasattr(self.backend, 'mark_video_tool'):
             self.backend.mark_video_tool(name, arguments, request_id)
@@ -74,7 +78,8 @@ class VisionHarness:
                 arguments={'placement_yaw_degrees':None,'wait_seconds':None,**arguments}
             validate(arguments,self.catalog[name]['inputSchema'])
             if name!='finish': self.deadline.check()
-            if name!='finish' and (self.calls>self.budget.max_calls or time.monotonic()-self.started>self.budget.wall_seconds):
+            if name!='finish' and (self.calls>self.budget.max_calls or
+                    (not self.deadline.managed and time.monotonic()-self.started>self.budget.wall_seconds)):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')
             execution_args = {k:v for k,v in arguments.items() if k != 'decision'}
             result={'ok':True,**REGISTRY[name].handler(self,**execution_args)}

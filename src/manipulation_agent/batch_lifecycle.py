@@ -16,6 +16,10 @@ def classify_episode_outcome(row):
     """
     if row.get('status') not in {'passed', 'failed', 'blocked'} and not row.get('execution_finished_at'):
         return None
+    if row.get('startup_timed_out') or row.get('termination_reason')=='startup_timeout':
+        return 'failure'
+    if row.get('budget_basis')=='model_execution_excludes_initialization' and not isinstance(row.get('execution_started_at_unix'),(int,float)):
+        return 'failure'
     finished_in_time=(row.get('deadline_expired_at_finish') is False and
                       isinstance(row.get('execution_finished_at_unix'),(int,float)))
     if row.get('deadline_expired_at_finish') is True:
@@ -30,6 +34,28 @@ def classify_episode_outcome(row):
             (row.get('controller_status', 'passed') == 'passed' and not row.get('failure')))):
         return 'success'
     return 'failure'
+
+
+def validate_manifest_coverage(rows, expected_count=None, expected_tasks=None):
+    """Check identities only; never create outcomes for tasks that never ran."""
+    if expected_count is not None and len(rows)!=expected_count:
+        raise ValueError(f'Manifest coverage mismatch: expected {expected_count}, found {len(rows)}')
+    indices=[row['index'] for row in rows]
+    run_ids=[row['run_id'] for row in rows]
+    if len(set(indices))!=len(indices) or len(set(run_ids))!=len(run_ids):
+        raise ValueError('Manifest contains duplicate task indices or run IDs')
+    if expected_tasks is not None:
+        actual={row['index']:row['task'] for row in rows}
+        if actual!=expected_tasks:raise ValueError('Saved records changed frozen manifest task identities')
+
+
+def require_completed_scope(rows, *, draining=False):
+    if draining:return
+    pending=[row.get('run_id',str(row.get('index'))) for row in rows
+             if row.get('status') not in {'passed','failed','blocked'}]
+    if pending:
+        raise RuntimeError('Incomplete batch coverage: '+str(len(pending))+
+                           ' tasks remain nonterminal; resume existing records: '+', '.join(pending[:10]))
 
 
 class FileLease:

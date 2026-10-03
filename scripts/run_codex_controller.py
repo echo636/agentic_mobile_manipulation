@@ -17,7 +17,7 @@ from manipulation_agent.vision_policy import system_prompt
 from manipulation_agent.records import now, write_json, source_version
 from manipulation_agent.model_trace import export_summaries
 from manipulation_agent.mcp_preflight import check_server
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.deadline import EpisodeDeadline, validate_execution_clock
 
 
 def main():
@@ -28,13 +28,17 @@ def main():
     p.add_argument("--mcp-args-json", required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--timeout", type=int, default=900)
-    p.add_argument('--deadline-unix', type=float,
-                   help='Absolute task deadline including simulator startup; limits the remaining model time')
+    timing=p.add_mutually_exclusive_group()
+    timing.add_argument('--deadline-unix', type=float,
+                        help='Legacy absolute deadline; preserved for existing run configurations')
+    timing.add_argument('--execution-clock-command-json',
+                        help='Private argv JSON: atomically arm remote execution clock after MCP handshake')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow','official'], default='skills')
     args = p.parse_args()
-    deadline=EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env()
+    deadline=(EpisodeDeadline() if args.execution_clock_command_json is not None else
+              EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env())
     if args.timeout<=0:p.error('--timeout must be positive')
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
@@ -116,6 +120,23 @@ def main():
         write_json(args.output/'controller.json',metadata)
         return 2
     if deadline.expired:return expired_before_policy('before_model_start')
+    if args.execution_clock_command_json is not None:
+        try:
+            clock_command=json.loads(args.execution_clock_command_json)
+            if not isinstance(clock_command,list) or not clock_command or any(not isinstance(v,str) or not v for v in clock_command):
+                raise ValueError('Execution clock command must be a nonempty argv array')
+            armed=subprocess.run(clock_command,capture_output=True,text=True,timeout=30,check=True)
+            clock=validate_execution_clock(json.loads(armed.stdout))
+            deadline=EpisodeDeadline(clock['episode_deadline_unix'])
+            metadata.update(execution_clock=clock,execution_started_at_unix=clock['execution_started_at_unix'],
+                episode_deadline_unix=clock['episode_deadline_unix'],execution_budget_seconds=clock['execution_budget_seconds'],
+                timing_origin='model_execution_after_mcp_preflight',startup_excluded_from_execution_budget=True)
+        except Exception as exc:
+            metadata.update(status='failed',failure_stage='execution_clock',failure_type=type(exc).__name__,
+                            finished_at=now(),formal_finish_observed=False,tools_called=[],task_success=None)
+            write_json(args.output/'controller.json',metadata)
+            return 2
+        if deadline.expired:return expired_before_policy('execution_clock_already_expired')
     metadata['effective_timeout_seconds']=deadline.remaining(args.timeout)
     metadata['policy_started_at']=now();write_json(args.output/'controller.json',metadata)
     started = time.monotonic()

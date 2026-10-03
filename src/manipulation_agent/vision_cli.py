@@ -2,11 +2,9 @@
 import argparse
 import faulthandler
 import json
-import os
 from pathlib import Path
 import signal
 import traceback
-import time
 from .contracts import Budget
 from .deadline import EpisodeDeadline
 from .records import Recorder
@@ -18,10 +16,9 @@ from .vision_policy import RGBResponsesPolicy
 
 
 def main():
-    # A batch runner supplies the simulator launch deadline. Standalone runs use
-    # the entry-point start, so simulator construction consumes the same budget.
-    deadline=EpisodeDeadline.from_env(default_unix=time.time()+1800)
-    os.environ['MAS_EPISODE_DEADLINE_UNIX']=str(deadline.unix)
+    # Batch clocks arm privately after readiness + MCP handshake, immediately
+    # before model startup. Initialization has a separate supervisor watchdog.
+    deadline=EpisodeDeadline.from_env()
     faulthandler.enable();faulthandler.register(signal.SIGUSR1,all_threads=False)
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--backend',choices=['mock','omnigibson'],default='omnigibson')
@@ -44,6 +41,7 @@ def main():
     config=vars(a).copy();config['output']=str(a.output.resolve());config['observation_mode']='rgb_only'
     config['validation_level']='cpu_rgb_contract_only' if a.backend=='mock' else 'rgb_simulator_requires_controller_image_evidence'
     config['episode_deadline_unix']=deadline.unix
+    config['execution_clock_path']=str(deadline.clock_path) if deadline.clock_path is not None else None
     recorder=Recorder(a.output,config);backend=None;harness=None
     try:
         deadline.check()
@@ -54,7 +52,9 @@ def main():
             backend=MockRGBBackend(a.output) if a.backend=='mock' else RGBBackend(a.task,a.instance,a.output,seed=a.seed,max_steps=a.max_sim_steps,inside_placement=a.inside_placement,record_video=a.record_video)
         backend.deadline=deadline
         harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps),profile=a.agent_profile)
-        if policy:policy.run(harness,a.instruction)
+        if policy:
+            harness.start_standalone_clock()
+            policy.run(harness,a.instruction)
         else:bridge.serve(harness,a.port)
         return 0 if recorder.run.get('status')=='passed' else 2
     except BaseException as exc:

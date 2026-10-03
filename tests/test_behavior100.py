@@ -182,6 +182,9 @@ class BatchEvidenceTests(unittest.TestCase):
             self.assertEqual(launch[-3:],batch.inline_systemd_launcher(retained))
             self.assertNotIn(str(runner.root/'launchers/fixture_r1.sh'),launch)
             self.assertIn('${PYTHONPATH:-}',retained)
+            self.assertIn('unset MAS_EPISODE_DEADLINE_UNIX',retained)
+            self.assertIn('export MAS_EXECUTION_CLOCK_PATH=',retained)
+            self.assertNotIn('export MAS_EPISODE_DEADLINE_UNIX=',retained)
             self.assertEqual(shlex.split(shlex.join(launch)),launch)
 
     def test_inline_launcher_preserves_shell_bytes_through_real_systemd(self):
