@@ -49,6 +49,21 @@ PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1
 
 The [asynchronous MCP observation probe](scripts/probe_async_observation.py) validates a running bridge. It is a scripted interface test, not an autonomous task result.
 
+## Harness and model clients
+
+All MCP transports use the official SDK's `FastMCP`: stdio by default, plus SSE and
+Streamable HTTP on loopback. A shared tool registry and episode `ToolContext` serve
+both MCP clients and the native RGB loop. Each server represents one episode.
+
+The default Codex controller is preserved. A common `prepare_project -> run -> parse`
+interface also provides OpenCode and Kimi adapters; their live RGB integration is
+not yet validated. The native Responses loop has configurable turn/token budgets,
+verified image attachments and optional historical-image retention, with replay
+records for each tool call. Explicit planning and memory remain deferred.
+
+See [harness architecture and transport usage](docs/architecture.md) and
+[client capabilities and validation limits](src/manipulation_agent/clients/README.md).
+
 ## Execution and evidence
 
 The model selects a pixel in a current RGB image. The private executor resolves that pixel through depth and a visual-mesh ray, then performs GT navigation, controlled carrying without a robot/object fixed joint, official state operations, or placement sampling. Base motion uses incremental idealized pose control; grasp and placement can be discontinuous. This is not a physical-control leaderboard submission. Final BDDL predicates and TaskMetric are evaluated independently after termination and are not returned to the active model. See [executor v7 and validation limits](docs/executor_v7.md).
