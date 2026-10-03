@@ -5,6 +5,11 @@ import json
 import tempfile
 import threading
 import queue
+import shlex
+import shutil
+import subprocess
+import sys
+import uuid
 from subprocess import CompletedProcess
 from unittest.mock import Mock
 
@@ -147,6 +152,59 @@ class BatchEvidenceTests(unittest.TestCase):
             self.assertEqual(runner.ssh.call_count,1)
             self.assertIn('assets',runner.ssh.call_args.args[0])
             self.assertEqual(json.loads((root/'preflight/fixture_r1_assets.json').read_text()),asset)
+
+    def test_simulator_launch_sends_retained_script_instead_of_shared_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            runner=self.make_queue_runner(folder)
+            for directory in ('logs','preflight','launchers'):(runner.root/directory).mkdir()
+            runner.source=Path('/source snapshot')
+            runner.manifest={'simulator_runtime_max_seconds':1800}
+            runner._config.update(base_port=31000,batch_tag='test',data_root='/fixture',
+                                  sim_python='/fixture/python',sim_env="/fixture/source '$env.sh",
+                                  ssh=['ssh','fixture'])
+            runner.unit_state=Mock(return_value={'ActiveState':'inactive','MainPID':'0'})
+            def ssh(args,**kwargs):
+                if 'assets' in args:return CompletedProcess(args,0,'{"status":"passed"}','')
+                if 'preflight' in args:return CompletedProcess(args,0,'{"status":"passed","checks":{}}','')
+                return CompletedProcess(args,1,'','fixture stops after capturing launch')
+            runner.ssh=Mock(side_effect=ssh)
+            row={'index':0,'run_id':'fixture_r1','task':'fixture'}
+            runner.run_one(row,0)
+            launch=next(call.args[0] for call in runner.ssh.call_args_list if call.args[0][0]=='systemd-run')
+            retained=(runner.root/'launchers/fixture_r1.sh').read_text()
+            self.assertEqual(launch[-3:],batch.inline_systemd_launcher(retained))
+            self.assertNotIn(str(runner.root/'launchers/fixture_r1.sh'),launch)
+            self.assertIn('${PYTHONPATH:-}',retained)
+            self.assertEqual(shlex.split(shlex.join(launch)),launch)
+
+    def test_inline_launcher_preserves_shell_bytes_through_real_systemd(self):
+        if not shutil.which('systemd-run') or not shutil.which('systemctl'):
+            self.skipTest('systemd user service manager unavailable')
+        manager=subprocess.run(['systemctl','--user','show','--property=Version'],capture_output=True,timeout=10)
+        if manager.returncode:self.skipTest('systemd user service manager unavailable')
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);env_path=root/"environment '$literal.sh"
+            value="spaces 'quotes' \"double\" $VAR $(printf wrong) `printf wrong`\nnext line"
+            env_path.write_text('export LAUNCHER_VALUE='+shlex.quote(value)+'\n'
+                                'export PYTHONPATH='+shlex.quote('from sourced environment')+'\n')
+            probe=root/'probe.py'
+            probe.write_text('import json,os,sys\nprint(json.dumps(dict(argument=sys.argv[1],'
+                             'value=os.environ["LAUNCHER_VALUE"],pythonpath=os.environ["PYTHONPATH"])))\n')
+            prefix="source '$path with spaces"
+            script='#!/bin/bash\nset -euo pipefail\nsource '+shlex.quote(str(env_path))+'\n'
+            script+='export PYTHONPATH='+shlex.quote(prefix)+':${PYTHONPATH:-}\n'
+            script+='exec '+shlex.join([sys.executable,str(probe),value])+'\n'
+            archived=root/'launcher.sh';archived.write_text(script)
+            command=['systemd-run','--user','--quiet','--wait','--pipe','--collect',
+                     '--unit=mas-test-inline-launcher-'+uuid.uuid4().hex]
+            command+=batch.inline_systemd_launcher(archived.read_text())
+            archived.unlink()  # No launcher file is visible to the service host.
+            # Bash parsing here is the same additional quoting layer as SSH.
+            result=subprocess.run(['/bin/bash','-c','exec '+shlex.join(command)],
+                                  capture_output=True,text=True,timeout=20)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertEqual(json.loads(result.stdout),
+                             {'argument':value,'value':value,'pythonpath':prefix+':from sourced environment'})
 
     def test_adopted_controller_outside_batch_keeps_stable_hash_keys(self):
         with tempfile.TemporaryDirectory() as folder:
