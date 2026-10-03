@@ -78,6 +78,8 @@ The recorded v8 validation includes 134 CPU tests and a real four-camera startup
 
 ## Results and replay
 
+The [current system guide](http://10.76.5.241:8765/manipulation_system.html) explains the complete RGB loop and the Original / Official implementations with pinned source references. Its maintained source is [web/system_guide.html](web/system_guide.html); publish it with `python scripts/publish_system_guide.py --output-dir <report-root>`.
+
 The [current comparison](http://10.76.5.241:8765/compare100_20261002/index.html) shows the Original and Official 100-task queues. The [historical 32-task replay portal](http://10.76.5.241:8765/retest32_v7_20261001/replays.html) retains only that completed cohort, synchronized camera views, and the model timeline. The complete task table is collapsed by default. Refreshes preserve playback. Retried tasks remain in the original batch without increasing its task count; previous attempts and bookmarked URLs retain their original execution versions. Bookmarked replays load independently of live progress metadata.
 
 The portal source is [web/replays.html](web/replays.html). It reads `behavior100/progress.json` from the report directory and embeds existing replays without changing recordings, model outputs, or scores. `scripts/publish_results_page.py --output-dir <report-directory>` publishes the replay portal and analysis page.
