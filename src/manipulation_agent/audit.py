@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from .contracts import tool_specs
+from .clients.events import event_path
 from .records import now, write_json
 
 
@@ -37,7 +38,7 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
     run = json.loads((run_dir / 'run.json').read_text())
     controller = json.loads((controller_dir / 'controller.json').read_text())
     sim_events = [json.loads(s) for s in (run_dir / 'events.jsonl').read_text().splitlines()]
-    model_events = [json.loads(s) for s in (controller_dir / 'model_events.jsonl').read_text().splitlines()]
+    model_events = [json.loads(s) for s in event_path(controller_dir).read_text().splitlines()]
     sim_calls = [{'name': e['name'], 'arguments': e['arguments']} for e in sim_events if e['kind'] == 'tool_call']
     calls = []; unexpected = []; usage = {}; closed = False
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'

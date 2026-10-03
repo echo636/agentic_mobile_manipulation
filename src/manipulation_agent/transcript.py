@@ -65,7 +65,7 @@ def build_transcript(events: list[dict], steps: list[dict], summaries: list[dict
         item = event.get('item', {})
         kind = item.get('type')
         common = {'source_event_index': i, 'source_id': item.get('id'),
-                  'source': 'model_events.jsonl', 'alignment': 'source_event_order',
+                  'source': event.get('source', 'model_events.jsonl'), 'alignment': 'source_event_order',
                   'step': next_step[i]}
         if kind in {'agent_message', 'reasoning'} and event.get('type') == 'item.completed':
             text = item.get('text')
