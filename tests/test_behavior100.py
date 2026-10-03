@@ -21,7 +21,11 @@ class BatchEvidenceTests(unittest.TestCase):
         runner=batch.Batch.__new__(batch.Batch)
         runner.root=Path(folder);runner._worker_local=threading.local()
         # Existing configs need not be rewritten to remove the excessive drain.
-        runner._config={'stop_on_infrastructure_failure':True}
+        runner._config={'stop_on_infrastructure_failure':True,'id':'one','gpu':1,'ssh':['ssh','fixture'],
+                        'resource_poll_seconds':.005,'cleanup_retry_seconds':.005,'worker_yield_seconds':0}
+        runner.source_info={'commit':'fixture','dirty':False};runner.worker_states={}
+        runner.resource_admission=Mock(return_value=True)
+        runner.acquire_worker_lease=Mock(side_effect=lambda **kw:Mock())
         runner.workers=workers or [{'id':'one','gpu':1,'ssh':['ssh','fixture']}]
         runner.lock=threading.RLock();runner.queue=queue.Queue()
         runner.publish=Mock();runner.journal=Mock()
@@ -72,7 +76,11 @@ class BatchEvidenceTests(unittest.TestCase):
             workers=[{'id':'blocked','gpu':1,'ssh':['ssh','fixture']},
                      {'id':'healthy','gpu':2,'ssh':['ssh','fixture']}]
             runner=self.make_queue_runner(folder,workers,count=5)
-            blocked=threading.Event()
+            blocked=threading.Event();healthy_done=threading.Event();healthy_count=[]
+            def cleanup(row):
+                self.assertTrue(healthy_done.wait(5))
+                row['simulator_cleanup']={'status':'passed'}
+            runner.cleanup_owned_unit=cleanup
             def run_one(row,gpu):
                 row.update(status='failed',task_success=False)
                 if gpu==1:
@@ -82,6 +90,8 @@ class BatchEvidenceTests(unittest.TestCase):
                 else:
                     self.assertTrue(blocked.wait(5))
                     row.update(simulator_cleanup={'status':'passed'})
+                    healthy_count.append(row)
+                    if len(healthy_count)==4:healthy_done.set()
             runner.run_one=Mock(side_effect=run_one)
             runner.run()
             calls=runner.run_one.call_args_list
@@ -89,11 +99,8 @@ class BatchEvidenceTests(unittest.TestCase):
             self.assertEqual(sum(call.args[1]==2 for call in calls),4)
             self.assertFalse((runner.root/'drain_requested.json').exists())
             self.assertTrue(all(row['status']=='failed' for row in runner.rows))
-            held=[row for row in runner.rows if row.get('worker_hold')]
-            self.assertEqual(len(held),1)
-            self.assertEqual(held[0]['worker_hold']['worker_id'],'blocked')
-            self.assertEqual(held[0]['worker_hold']['gpu'],1)
-            self.assertEqual(held[0]['worker_hold']['run_id'],held[0]['run_id'])
+            self.assertTrue(healthy_done.is_set())
+            self.assertTrue(all(row['simulator_cleanup']['status']=='passed' for row in runner.rows))
 
     def test_owned_cleanup_verifies_exit_before_reusing_lane(self):
         owned={'ActiveState':'active','MainPID':'123','Description':'BEHAVIOR100 owned run1'}
@@ -136,9 +143,9 @@ class BatchEvidenceTests(unittest.TestCase):
             root=Path(folder)
             for directory in ('logs','preflight'):(root/directory).mkdir()
             runner=batch.Batch.__new__(batch.Batch)
-            runner.root=root;runner.source=Path(__file__).resolve().parents[1]
+            runner.root=root;runner.source=Path(__file__).resolve().parents[1];runner.source_info={'commit':'fixture'}
             runner._worker_local=threading.local()
-            runner._config={'base_port':31000,'batch_tag':'test','data_root':'/fixture',
+            runner._config={'id':'fixture','base_port':31000,'batch_tag':'test','data_root':'/fixture',
                             'sim_python':'/fixture/python','ssh':['ssh','fixture']}
             runner.update=lambda row,**values:row.update(values)
             runner.journal=Mock();runner.publish=Mock()
@@ -146,7 +153,7 @@ class BatchEvidenceTests(unittest.TestCase):
             runner.ssh=Mock(return_value=CompletedProcess([],0,json.dumps(asset),''))
             row={'index':0,'run_id':'fixture_r1','task':'fixture'}
             runner.run_one(row,0)
-            self.assertEqual(row['status'],'blocked')
+            self.assertEqual(row['status'],'failed')
             self.assertEqual(row['failure_stage'],'asset_preflight')
             self.assertIsNone(row.get('task_success'))
             self.assertEqual(runner.ssh.call_count,1)

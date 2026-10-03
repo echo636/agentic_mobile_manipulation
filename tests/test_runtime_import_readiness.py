@@ -11,6 +11,12 @@ spec.loader.exec_module(remote)
 
 
 class ImportReadinessTests(unittest.TestCase):
+    def test_numeric_quota_headroom_and_unlimited_filesystems(self):
+        text='Filesystem blocks quota limit grace files quota limit grace\n/dev/root 10485760 20971520 20971520 10 0 0\n/nas 999999999 0 0 10 0 0\n'
+        self.assertEqual(remote.quota_headroom(text),10*1024**3)
+        self.assertEqual(remote.quota_headroom('/dev/root 20971521* 20971520 20971520 10 0 0'),0)
+        self.assertIsNone(remote.quota_headroom('no quota configured'))
+
     def test_wrong_host_editable_and_missing_import_are_rejected_without_loading_simulator(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

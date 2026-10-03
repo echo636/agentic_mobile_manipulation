@@ -18,6 +18,22 @@ def command(args):
     return {'exit_code': p.returncode, 'stdout': p.stdout, 'stderr': p.stderr}
 
 
+def quota_headroom(output):
+    """Read numeric `quota -w -v` block limits without guessing human units."""
+    remaining=[]
+    for line in output.splitlines():
+        fields=line.split()
+        if len(fields)<4 or not fields[0].startswith('/'):
+            continue
+        try:
+            used,soft,hard=(int(v.rstrip('*')) for v in fields[1:4])
+        except ValueError:
+            continue
+        limit=min(v for v in (soft,hard) if v>0) if soft>0 or hard>0 else None
+        if limit is not None:remaining.append(max(0,limit-used)*1024)
+    return min(remaining) if remaining else None
+
+
 def source_import_readiness(data_root):
     """Detect relocated editable installs without importing the GPU simulator."""
     source = Path(data_root) / 'src/BEHAVIOR-1K'
@@ -38,24 +54,30 @@ def source_import_readiness(data_root):
             'packages': checks, 'simulator_imported': False}
 
 
-def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28):
-    from manipulation_agent.video import ffmpeg_executable
-    try:
-        encoder = ffmpeg_executable()
-        encoding_check = command([encoder, '-hide_banner', '-loglevel', 'error',
-            '-f', 'lavfi', '-i', 'color=size=64x64:rate=1', '-frames:v', '1',
-            '-c:v', 'libx264', '-threads', '1', '-f', 'null', '-'])
-        encoding_check['executable'] = encoder
-        encoding_check['sha256'] = hashlib.sha256(Path(encoder).read_bytes()).hexdigest()
-    except Exception as exc:
-        encoding_check = {'exit_code': -1, 'error': str(exc)}
+def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *, light=False,
+              reserved_host_memory_gib=0):
+    # A worker performs the full version/encoder check once. Resource polling
+    # only rechecks quantities that can change while it waits for a GPU lease.
+    encoding_check = None
+    if not light:
+        from manipulation_agent.video import ffmpeg_executable
+        try:
+            encoder = ffmpeg_executable()
+            encoding_check = command([encoder, '-hide_banner', '-loglevel', 'error',
+                '-f', 'lavfi', '-i', 'color=size=64x64:rate=1', '-frames:v', '1',
+                '-c:v', 'libx264', '-threads', '1', '-f', 'null', '-'])
+            encoding_check['executable'] = encoder
+            encoding_check['sha256'] = hashlib.sha256(Path(encoder).read_bytes()).hexdigest()
+        except Exception as exc:
+            encoding_check = {'exit_code': -1, 'error': str(exc)}
     queries = {
         'gpus': command(['nvidia-smi', '--query-gpu=index,uuid,memory.used,memory.total,driver_version', '--format=csv,noheader,nounits']),
-        'gpu_processes': command(['nvidia-smi', '--query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory', '--format=csv,noheader']),
         'disk': command(['df', '-B1', str(data_root), os.getcwd()]),
-        'quota': command(['quota', '-s']),
-        'video_encoder': encoding_check,
+        'quota': command(['quota', '-w', '-v']),
     }
+    if not light:
+        queries['gpu_processes'] = command(['nvidia-smi', '--query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory', '--format=csv,noheader'])
+        queries['video_encoder'] = encoding_check
     selected = next((s.split(',') for s in queries['gpus']['stdout'].splitlines() if s.split(',')[0].strip() == str(gpu)), None)
     if selected is None:
         raise RuntimeError('Selected physical GPU is unavailable')
@@ -74,20 +96,31 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28):
         raise ValueError('Shared GPU mode requires at least 14 GiB free before each episode')
     if not 12<=memory_budget_gib<=28:
         raise ValueError('Simulator working-memory budget must be between 12 and 28 GiB')
-    imports = source_import_readiness(data_root)
-    checks = {'video_encoder': encoding_check['exit_code'] == 0,
-              'pinned_source_imports': imports['status'] == 'passed',
-              'gpu_capacity': (int(selected[3])-int(selected[2])>=min_free_gpu_mib) if min_free_gpu_mib else int(selected[2])<1024,
+    if not 0<=reserved_host_memory_gib<=1024:
+        raise ValueError('Invalid shared host memory reservation')
+    imports = source_import_readiness(data_root) if not light else None
+    checks = {'gpu_capacity': (int(selected[3])-int(selected[2])>=min_free_gpu_mib) if min_free_gpu_mib else int(selected[2])<1024,
               'validated_driver_floor':tuple(map(int,selected[4].strip().split('.'))) >= (580,65,6),
               'host_memory_available_40GiB': int(mem['MemAvailable'].split()[0])*1024 > 40*1024**3,
               'cgroup_reclaimable_headroom': cg_free is None or cg_free > memory_budget_gib*1024**3,
               'data_disk_free_40GiB': shutil.disk_usage(data_root).free > 40*1024**3,
               'bridge_port_free': port_free}
+    host_available=int(mem['MemAvailable'].split()[0])*1024
+    checks['host_memory_including_peer_reservations']=host_available>(40+reserved_host_memory_gib)*1024**3
+    if not light:
+        checks.update(video_encoder=encoding_check['exit_code'] == 0,
+                      pinned_source_imports=imports['status'] == 'passed')
+    quota_free=quota_headroom(queries['quota']['stdout'])
+    if quota_free is not None:
+        checks['quota_headroom_2GiB']=quota_free>2*1024**3
     return {'at': datetime.now(timezone.utc).isoformat(), 'host': socket.gethostname(),
             'interpreter': sys.executable, 'pid': os.getpid(), 'gpu_index': gpu,
             'gpu_uuid': selected[1].strip(), 'cgroup': cg, 'checks': checks, 'source_imports': imports,
             'required_working_memory_gib':memory_budget_gib,
+            'quota_free_bytes':quota_free,
+            'host_available_bytes':host_available,'reserved_host_memory_gib':reserved_host_memory_gib,
             'driver_version':selected[4].strip(),'gpu_policy':{'shared':bool(min_free_gpu_mib),'minimum_free_mib':min_free_gpu_mib},
+            'validation_scope': 'dynamic_resources' if light else 'resources_and_static_runtime',
             'status': 'passed' if all(checks.values()) else 'blocked', 'queries': queries}
 
 
@@ -128,12 +161,16 @@ def main():
     p.add_argument('--data-root',type=Path,required=True)
     p.add_argument('--min-free-gpu-mib',type=int,default=0)
     p.add_argument('--memory-budget-gib',type=int,default=28)
+    p.add_argument('--light', action='store_true', help='Only recheck dynamic worker resources')
+    p.add_argument('--deadline-unix', type=float, help='Absolute task deadline, including simulator startup')
+    p.add_argument('--reserved-host-memory-gib',type=int,default=0)
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
     if a.mode == 'assets':
         selected=manifest if a.index is None else {'tasks':[manifest['tasks'][a.index]]}
         print(json.dumps(assets(selected,a.data_root))); return
     if a.mode == 'preflight':
-        print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib))); return
+        print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
+                                  reserved_host_memory_gib=a.reserved_host_memory_gib))); return
     row=manifest['tasks'][a.index]
     if a.run_id:
         import re
@@ -141,7 +178,12 @@ def main():
             raise ValueError('Attempt ID must preserve the frozen task identity')
         row['run_id']=a.run_id
     os.environ['MAS_UNIT']=a.unit
-    result=preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib)
+    if a.deadline_unix is not None:
+        if not __import__('math').isfinite(a.deadline_unix) or a.deadline_unix <= 0:
+            raise ValueError('Task deadline must be a finite epoch timestamp')
+        os.environ['MAS_EPISODE_DEADLINE_UNIX'] = str(a.deadline_unix)
+    result=preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
+                     reserved_host_memory_gib=a.reserved_host_memory_gib)
     # Persist a second check inside the allocated unit, immediately before startup.
     check_path=a.manifest.parent/'preflight'/f"{row['run_id']}_in_unit.json"
     check_path.write_text(json.dumps(result,indent=2)+'\n')

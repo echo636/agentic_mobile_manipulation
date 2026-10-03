@@ -6,6 +6,15 @@ import html
 import json
 from pathlib import Path
 import time
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
+
+def outcome(row):
+    """Keep timeout/failure terminal even when native shutdown lost its score."""
+    from manipulation_agent.batch_lifecycle import classify_episode_outcome
+    return classify_episode_outcome(row)
 
 ARMS = ('original', 'motor', 'official')
 LABELS = {'original': '原实现', 'motor': 'Motor · 代码控制', 'official': 'Official · 符号动作'}
@@ -24,7 +33,10 @@ def summarize_comparison(progress):
     task_sets = [{r['task'] for r in p['tasks']} for p in progress.values()]
     if any(tasks != task_sets[0] for tasks in task_sets):
         raise ValueError('Comparison arms must contain identical task sets')
-    maps = {arm: {r['task']: r for r in p['tasks']} for arm, p in progress.items()}
+    # Emit the same canonical classification used by aggregate counts. Rendering
+    # must not independently reinterpret timeouts, finish latches or media errors.
+    maps = {arm: {r['task']: {**r, 'episode_outcome': outcome(r)} for r in p['tasks']}
+            for arm, p in progress.items()}
     tasks = []
     for template in progress['original']['tasks']:
         rows = {arm: maps[arm][template['task']] for arm in arms}
@@ -37,7 +49,12 @@ def summarize_comparison(progress):
     for arm in arms:
         rows = list(maps[arm].values())
         counts = dict(Counter(r['status'] for r in rows))
+        outcomes = dict(Counter(outcome(r) for r in rows if outcome(r) is not None))
         summaries[arm] = {'total': len(rows), 'counts': counts,
+            'outcome_counts': outcomes,
+            'worker_states': progress[arm].get('worker_states', {}),
+            'active_executions': sum(r['status']=='running' and r.get('stage') not in
+                {'waiting_for_resources','waiting_for_lease','archiving','finalizing'} for r in rows),
             'ended': sum(counts.get(k, 0) for k in ('passed', 'failed', 'blocked')),
             'official_goal_successes': sum(r.get('task_success') is True for r in rows),
             'fully_validated_successes': counts.get('passed', 0),
@@ -58,7 +75,7 @@ def render_arm_dashboard(progress):
     rows = []
     for r in progress['tasks']:
         link = '<a href="' + esc(r['replay_url']) + '">Replay ↗</a>' if r.get('replay_url') else 'Pending'
-        rows.append('<tr><td>' + str(r['index'] + 1) + '</td><td>' + esc(r['name']) + '</td><td>' + esc(r['status']) + ' / ' + esc(r.get('stage', 'queued')) + '</td><td>' + esc(r.get('q_score', '—')) + '</td><td>' + link + '</td></tr>')
+        rows.append('<tr><td>' + str(r['index'] + 1) + '</td><td>' + esc(r['name']) + '</td><td>' + esc(outcome(r) or r['status']) + ' / ' + esc(r.get('stage', 'queued')) + '</td><td>' + esc(r.get('q_score', '—')) + '</td><td>' + link + '</td></tr>')
     return '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="30"><title>Execution comparison</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:32px auto;padding:0 20px}table{width:100%;border-collapse:collapse}td,th{padding:12px;text-align:left;border-bottom:1px solid #ddd}a{color:#087866}</style><h1>' + esc(title) + '</h1><p><a href="../">Three-arm comparison</a></p><p>Updated ' + esc(progress['updated_at']) + '. Task success and complete evidence are separate fields.</p><p>' + esc(protocol.get('protocol', 'Four-camera RGB; see frozen manifest for execution protocol')) + '</p><table><tr><th>#</th><th>Task</th><th>Status</th><th>Q</th><th>Replay</th></tr>' + ''.join(rows) + '</table></html>'
 
 
@@ -89,6 +106,13 @@ def render_comparison_page(arms=ARMS):
         page=page.replace('三组全新运行，共 300 条','本批次 '+str(len(arms))+' 组全新运行，共 '+str(100*len(arms))+' 条')
         page=page.replace('Motor 由大脑写代码组合底盘、关节及夹爪控制；','')
         page=page.replace('三组的命令粒度','各组的命令粒度').replace('三组都已结束','各组都已结束')
+    page=page.replace('模型 30 分钟', '任务启动后 30 分钟（新调度协议包含初始化、模型与动作；等资源不计时，历史记录保留原预算）')
+    page=page.replace('“目标成功”来自独立官方评分；“完整通过”还要求控制器结束、观测、视频与轨迹校验通过。无评分故障保留在 100 条总数中。',
+        '任务结果为成功、失败、超时。超时即使没有最终 Q 分数也是明确终态；运行故障标为失败并保留原因。评分、录像和证据质量分别记录，录像问题不会改变任务结果。')
+    page=page.replace("node('div','已结束 · '+(s.counts.running||0)+' 运行中'),node('div','目标成功 '+s.official_goal_successes+' · 完整通过 '+s.fully_validated_successes),node('small','已评分 '+s.scored+' · 无评分故障 '+s.unscored_ended)",
+        "node('div','已结束 · '+(s.active_executions||0)+' 执行中'),node('div','成功 '+(s.outcome_counts?.success||0)+' · 失败 '+(s.outcome_counts?.failure||0)+' · 超时 '+(s.outcome_counts?.timeout||0)),node('small','已取得 Q 评分 '+s.scored+' · 待开始 '+(s.counts.planned||0)),node('small','等待资源/名额的 worker '+Object.values(s.worker_states||{}).filter(w=>['waiting_for_resources','waiting_for_lease'].includes(w.stage)).length)")
+    page=page.replace("td.append(node('div',labels[r.status]||r.status,r.status),node('small',r.task_success===true?'目标成功 · Q='+r.q_score:r.task_success===false?'目标未完成 · Q='+r.q_score:['planned','running'].includes(r.status)?(r.stage||'queued'):'无最终评分'));",
+        "let result=r.episode_outcome||(r.controller_timeout||r.episode_timed_out?'timeout':['passed','failed','blocked'].includes(r.status)?(r.task_success===true&&r.controller_status!=='failed'?'success':'failure'):null);td.append(node('div',({success:'成功',failure:'失败',timeout:'超时'})[result]||labels[r.status]||r.status,r.status),node('small',result?(r.q_score!=null?'Q='+r.q_score:'Q 未取得；任务结果已确定'):(r.stage||'queued')));if(r.termination_reason)td.append(node('small',r.termination_reason));")
     return page
 
 
@@ -100,6 +124,14 @@ def publish(root):
         batch=Path(config.get('arm_roots',{}).get(arm,root/arm))
         p = batch / 'progress.json'
         progress[arm] = json.loads(p.read_text()) if p.exists() else {'tasks': json.loads((batch / 'manifest.json').read_text())['tasks']}
+        annotations=batch/'outcome_annotations.json'
+        if annotations.exists():
+            overlays=json.loads(annotations.read_text()).get('runs',{})
+            allowed={'episode_outcome','termination_reason','episode_timed_out','controller_timeout','timeout',
+                     'execution_finished_at_unix','deadline_expired_at_finish'}
+            for row in progress[arm]['tasks']:
+                for key,value in overlays.get(row.get('run_id'),{}).items():
+                    if key in allowed and row.get(key) is None:row[key]=value
     result = summarize_comparison(progress)
     atomic(root / 'comparison.json', result)
     report = Path(config['reports']); report.mkdir(parents=True, exist_ok=True)

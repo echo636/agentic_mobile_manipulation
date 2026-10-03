@@ -62,5 +62,18 @@ class ComparisonTests(unittest.TestCase):
         self.assertNotIn('data.paired_goal_successes.motor',page)
         self.assertNotIn('<th>Motor</th>',page)
 
+    def test_timeout_is_terminal_without_inventing_an_evaluator_score(self):
+        rows=self.rows();del rows['motor']
+        rows['original']['tasks'][0].update(status='failed',task_success=None,
+            episode_outcome='timeout',controller_timeout=True,controller_status='failed')
+        rows['official']['tasks'][0].update(status='failed',task_success=True,
+            controller_status='passed',video_validation='failed',episode_outcome='success')
+        result=comparison.summarize_comparison(rows)
+        self.assertEqual(result['arms']['original']['outcome_counts'],{'timeout':1})
+        self.assertEqual(result['arms']['original']['scored'],0)
+        self.assertEqual(result['arms']['official']['outcome_counts'],{'success':1})
+        self.assertEqual(result['arms']['official']['fully_validated_successes'],0)
+        self.assertIsNone(rows['original']['tasks'][0]['task_success'])
+
 
 if __name__ == '__main__': unittest.main()

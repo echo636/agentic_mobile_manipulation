@@ -35,6 +35,15 @@ def read_run(output: Path) -> dict:
         run={**run,'raw_recorder_status':run['status'],'external_termination':record}
         if run['status']=='running':
             run.update(status=record['status'],task_success=None,failure=record.get('reason'))
+        # The supervisor can know a hard wall-clock outcome even if CUDA died
+        # before Python could persist a score. Keep the score unknown rather
+        # than inventing Q=0; termination is nevertheless a final outcome.
+        for key in ('episode_outcome', 'termination_reason', 'deadline_exceeded',
+                    'episode_deadline_unix', 'evaluation_after_deadline', 'evaluation_finished_after_deadline',
+                    'deadline_expired_at_finish', 'execution_finished_at_unix',
+                    'evaluation_finished_at_unix'):
+            if key in record:
+                run[key] = record[key]
     return run
 
 

@@ -17,6 +17,7 @@ from manipulation_agent.vision_policy import system_prompt
 from manipulation_agent.records import now, write_json, source_version
 from manipulation_agent.model_trace import export_summaries
 from manipulation_agent.mcp_preflight import check_server
+from manipulation_agent.deadline import EpisodeDeadline
 
 
 def main():
@@ -27,10 +28,14 @@ def main():
     p.add_argument("--mcp-args-json", required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--timeout", type=int, default=900)
+    p.add_argument('--deadline-unix', type=float,
+                   help='Absolute task deadline including simulator startup; limits the remaining model time')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     args = p.parse_args()
+    deadline=EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env()
+    if args.timeout<=0:p.error('--timeout must be positive')
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
@@ -78,6 +83,7 @@ def main():
         command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
     command += ["-"]
     metadata = {"started_at": now(), "status": "running", "model": args.model, "observation_mode": "rgb_only",
+                "episode_deadline_unix":deadline.unix,"requested_timeout_seconds":args.timeout,
                 "agent_profile": args.agent_profile,
                 "host": os.uname().nodename, "controller": "codex_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
@@ -86,6 +92,13 @@ def main():
         metadata['client_storage'] = {'sessions': str(native_sessions), 'sqlite': str(state),
                                       'auth_copied': False, 'home_changed': False}
     write_json(args.output / "controller.json", metadata)
+    def expired_before_policy(stage):
+        metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
+                        failure_stage=stage,finished_at=now(),formal_finish_observed=False,
+                        tools_called=[],task_success=None,exit_code=124,effective_timeout_seconds=0)
+        write_json(args.output/'controller.json',metadata)
+        return 124
+    if deadline.expired:return expired_before_policy('before_mcp_handshake')
     try:
         mcp_command=args.mcp_command; mcp_args=json.loads(args.mcp_args_json)
         if native_sessions is not None:
@@ -93,13 +106,17 @@ def main():
             # access to /dev/null. A host-only handshake misses mount failures.
             prefix=command[:command.index('--')]
             mcp_command=prefix[0];mcp_args=prefix[1:]+['--',args.mcp_command,*mcp_args]
-        metadata['mcp_preflight']=check_server(mcp_command,mcp_args,tool_specs(args.agent_profile),args.output)
+        metadata['mcp_preflight']=check_server(mcp_command,mcp_args,tool_specs(args.agent_profile),args.output,
+                                               timeout=deadline.remaining(90))
         metadata['mcp_preflight']['inside_client_storage_namespace']=native_sessions is not None
     except Exception as exc:
+        if deadline.expired:return expired_before_policy('mcp_handshake')
         metadata.update(status='failed',failure_stage='mcp_handshake',failure_type=type(exc).__name__,
                         finished_at=now(),formal_finish_observed=False,tools_called=[],task_success=None)
         write_json(args.output/'controller.json',metadata)
         return 2
+    if deadline.expired:return expired_before_policy('before_model_start')
+    metadata['effective_timeout_seconds']=deadline.remaining(args.timeout)
     metadata['policy_started_at']=now();write_json(args.output/'controller.json',metadata)
     started = time.monotonic()
     with (args.output / "model_events.jsonl").open("w") as stdout, (args.output / "client.stderr.log").open("w") as stderr:
@@ -109,16 +126,29 @@ def main():
         write_json(args.output / "controller.json", metadata)
         try:
             process.communicate("Use only the manipulation MCP tools to complete this simulation task.\n" + args.instruction,
-                                timeout=args.timeout)
+                                timeout=deadline.remaining(args.timeout))
+            policy_finished_at=time.time()
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGTERM)
+            policy_finished_at=time.time()
+            try:os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:pass
             try:
                 process.wait(timeout=20)
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
+                try:os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:pass
                 process.wait(timeout=20)
             metadata["timeout"] = True
-    events = [json.loads(line) for line in (args.output / "model_events.jsonl").read_text().splitlines() if line.startswith("{")]
+            metadata['termination_reason']='episode_deadline_exceeded' if deadline.unix is not None and policy_finished_at>=deadline.unix else 'controller_timeout'
+    metadata['policy_finished_at_unix']=policy_finished_at
+    # Killing the model may leave its final JSONL row incomplete. Preserve raw
+    # bytes and the timeout record instead of losing closure to JSONDecodeError.
+    events=[];invalid_lines=[]
+    for number,line in enumerate((args.output/'model_events.jsonl').read_text().splitlines(),1):
+        if not line.startswith('{'):continue
+        try:events.append(json.loads(line))
+        except ValueError:invalid_lines.append(number)
+    if invalid_lines:metadata['event_decode_errors']={'line_numbers':invalid_lines,'raw_preserved':True}
     closed = False
     calls = []
     for event in events:
@@ -133,7 +163,9 @@ def main():
                         closed = closed or json.loads(content["text"]).get("closed", False)
                     except (ValueError, TypeError):
                         pass
-    metadata.update(status="passed" if process.returncode == 0 and closed else "failed", exit_code=process.returncode,
+    if deadline.unix is not None and policy_finished_at>=deadline.unix:
+        metadata.update(timeout=True,termination_reason='episode_deadline_exceeded')
+    metadata.update(status="passed" if process.returncode == 0 and closed and not metadata.get('timeout') else "failed", exit_code=process.returncode,
                     duration_seconds=time.monotonic() - started, finished_at=now(),
                     task_success=None, formal_finish_observed=closed, tools_called=calls,
                     validation_note="Client exit alone does not prove task success; join with simulator run.json")
@@ -144,7 +176,7 @@ def main():
                                      'reason':'Run-local summary export failed; raw controller events preserved'}
     write_json(args.output / "controller.json", metadata)
     print(json.dumps({k: metadata[k] for k in ("status", "exit_code", "model", "duration_seconds")}))
-    return process.returncode or (0 if closed else 2)
+    return process.returncode or (124 if metadata.get('timeout') else 0 if closed else 2)
 
 
 if __name__ == "__main__":

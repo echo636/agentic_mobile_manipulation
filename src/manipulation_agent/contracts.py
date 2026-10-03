@@ -17,7 +17,7 @@ class Budget:
     max_calls: int = 240
     max_sim_steps: int = 20000
     max_steps_per_action: int = 700
-    wall_seconds: float = 3600
+    wall_seconds: float = 1800
 
     def __post_init__(self):
         for value in asdict(self).values():
