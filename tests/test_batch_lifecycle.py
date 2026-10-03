@@ -11,7 +11,7 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, preferred_gpu_worker
+from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, preferred_gpu_worker, gpu_lease_available
 
 spec=importlib.util.spec_from_file_location('lifecycle_batch',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
@@ -24,7 +24,7 @@ class LifecycleTests(unittest.TestCase):
         workers.append({'id':'foreign','gpu':4,'ssh':['ssh','s134'],'minimum_free_gpu_mib':18432})
         snapshot='0, UUID0, 23525, 49140, 580.95.05\n2, UUID2, 14537, 49140, 580.95.05\n4, UUID4, 0, 49140, 580.95.05'
         self.assertEqual(preferred_gpu_worker(workers,{},'s115',snapshot),'s115-gpu2')
-        for state in ({'stage':'running'}, {'stage':'disabled'}, {'checks':{'bridge_port_free':False}}):
+        for state in ({'stage':'running'}, {'stage':'disabled'}, {'stage':'archive_pending'}, {'checks':{'bridge_port_free':False}}):
             self.assertEqual(preferred_gpu_worker(workers,{'s115-gpu2':state},'s115',snapshot),'s115-gpu0')
         self.assertIsNone(preferred_gpu_worker(workers,{},'s115',''))
 
@@ -47,13 +47,49 @@ class LifecycleTests(unittest.TestCase):
             try:
                 self.assertEqual(process.stdout.readline().strip(),'locked')
                 gpu=WorkerLease(tmp,worker,host_budget_gib=56);self.assertFalse(gpu.acquire())
+                metadata=gpu.directory/('gpu-'+gpu.gpu_key+'.json')
+                previous=metadata.read_bytes()
+                self.assertFalse(gpu_lease_available(tmp,worker))
+                self.assertEqual(metadata.read_bytes(),previous)
                 other=WorkerLease(tmp,{**worker,'gpu':1,'expected_gpu_uuid':'physical1'},host_budget_gib=28)
                 self.assertFalse(other.acquire())
+                # GPU preference must not demand a host slot currently held by
+                # the caller; the actual GPU is free despite host contention.
+                self.assertTrue(gpu_lease_available(tmp,other.worker))
                 process.stdin.write('\n');process.stdin.flush();process.wait(5)
+                self.assertTrue(gpu_lease_available(tmp,worker))
                 self.assertTrue(other.acquire());other.release(cleared=True)
             finally:
                 if process.poll() is None:process.kill();process.wait()
                 process.stdin.close();process.stdout.close()
+
+    def test_admission_does_not_yield_to_gpu_leased_by_another_arm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp);b.source=Path(__file__).resolve().parents[1]
+            (b.root/'preflight').mkdir()
+            current={**b.workers[0],'sim_python':sys.executable,'data_root':tmp,
+                     'base_port':30000,'minimum_free_gpu_mib':18432}
+            peer={**current,'id':'peer','gpu':1,'expected_gpu_uuid':'physical1'}
+            b.workers=[current,peer];b._worker_local.config=current
+            b.worker_states={'peer':{'stage':'waiting_for_lease'}}
+            directory=b._config['shared_lease_dir']
+            held=WorkerLease(directory,peer,host_budget_gib=56)
+            own=WorkerLease(directory,current,host_budget_gib=56)
+            self.assertTrue(held.acquire());self.assertTrue(own.acquire())
+            held.record(unit='other-arm.service',run_id='other-arm',released=False)
+            b._worker_local.lease=own
+            check={'status':'passed','gpu_uuid':'physical0','checks':{},'queries':{'gpus':{'stdout':
+                '0, physical0, 23000, 49140, 580\n1, physical1, 12000, 49140, 580'}}}
+            b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,json.dumps(check),''))
+            try:
+                self.assertTrue(batch.Batch.resource_admission(b))
+                self.assertEqual(held.gpu.owner['run_id'],'other-arm')
+                held.release(cleared=True)
+                # Once genuinely free, the higher-headroom peer can be selected.
+                self.assertFalse(batch.Batch.resource_admission(b))
+                self.assertEqual(b.worker_states[current['id']]['preferred_worker'],'peer')
+            finally:
+                held.release();own.release()
 
     def test_record_error_still_unlocks_both_resources(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,6 +131,34 @@ class LifecycleTests(unittest.TestCase):
                 row.update(status='passed',episode_outcome='success')
             b.run_one=run;b.finalize_episode=archive;b.run()
             self.assertTrue(next_task.is_set());self.assertTrue(all(r['status']=='passed' for r in b.rows))
+
+    def test_archive_backpressure_does_not_advertise_worker_as_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp);b._config['max_pending_archives']=1
+            first_archive=threading.Event();second_submission=threading.Event()
+            original_state=b.worker_state
+            def state(stage,**details):
+                original_state(stage,**details)
+                if stage=='archive_pending' and b.rows[1].get('execution_finished_at'):
+                    second_submission.set()
+            b.worker_state=state
+            def run(row,gpu):
+                if row['index']==1:self.assertTrue(first_archive.wait(5))
+                row.update(status='running',episode_started_at_unix=time.time(),execution_finished_at='now',
+                           simulator_cleanup={'status':'passed'},task_success=True)
+                return Path(tmp),Path(tmp)
+            def archive(row,*args):
+                if row['index']==0:
+                    first_archive.set();self.assertTrue(second_submission.wait(5))
+                    self.assertEqual(b.worker_states['a']['stage'],'archive_pending')
+                    self.assertIsNone(preferred_gpu_worker(b.workers,b.worker_states,'host',
+                                                          '0, physical0, 0, 49140, 580'))
+                    lease=WorkerLease(b._config['shared_lease_dir'],b.workers[0],host_budget_gib=28)
+                    self.assertTrue(lease.acquire());lease.release()
+                row.update(status='passed',episode_outcome='success')
+            b.run_one=run;b.finalize_episode=archive;b.run()
+            self.assertTrue(second_submission.is_set())
+            self.assertTrue(all(r['status']=='passed' for r in b.rows))
 
     def test_real_controller_process_stops_at_shared_execution_deadline(self):
         with tempfile.TemporaryDirectory() as tmp:

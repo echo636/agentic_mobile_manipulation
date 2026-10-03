@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import now, write_json, read_run, source_version
 from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker
+from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
 
 FINAL = {'passed','failed','blocked'}
 
@@ -404,9 +404,11 @@ class Batch:
             self.worker_state('waiting_for_resources',checks=check.get('checks',{}))
             return False
         if self._config.get('prefer_gpu_headroom', True):
+            directory=self._config.get('shared_lease_dir',str(self.root.parent/'resource_leases'))
             with self.lock:
                 preferred = preferred_gpu_worker(self.workers, self.worker_states,
-                    self.c['ssh'][-1], check.get('queries', {}).get('gpus', {}).get('stdout', ''))
+                    self.c['ssh'][-1], check.get('queries', {}).get('gpus', {}).get('stdout', ''),
+                    gpu_available=lambda worker: worker['id']==self.c['id'] or gpu_lease_available(directory,worker))
             if preferred is not None and preferred != self.c['id']:
                 self.worker_state('waiting_for_resources', reason='Prefer available GPU with more free memory',
                                   preferred_worker=preferred)
@@ -950,8 +952,9 @@ class Batch:
                     if row is None:time.sleep(poll)
                 # GPU and host capacity are free before any bulk copy or decode.
                 if row is not None:
-                    if cleared:self.worker_state('available')
+                    if cleared:self.worker_state('archive_pending')
                     submit_archive(row,paths,config)
+                    if cleared:self.worker_state('available')
                     time.sleep(self._config.get('worker_yield_seconds',1))
             self.worker_state('idle')
         with ThreadPoolExecutor(max_workers=self._config.get('archive_workers',2)) as archive_pool:
