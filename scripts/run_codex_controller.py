@@ -41,6 +41,8 @@ def main():
                "--sandbox", "read-only", "--model", args.model, "--cd", str(workspace.resolve()),
                "-c", 'approval_policy="never"', "-c", 'web_search="disabled"',
                "-c", "project_doc_max_bytes=0", "-c", 'model_reasoning_summary="auto"',
+               # A remote server can need more than Codex's optional 1s catalog grace.
+               "-c", "mcp_optional_startup_grace_ms=0",
                "-c", "developer_instructions=" + json.dumps(system_prompt(args.agent_profile))]
     if args.isolate_client_storage:
         # Only this child sees a different sessions directory. The host's original
@@ -68,6 +70,8 @@ def main():
         command += ["--disable", feature]
     server = {"command": args.mcp_command, "args": json.loads(args.mcp_args_json),
               "enabled_tools": [t["name"] for t in tool_specs(args.agent_profile)], "startup_timeout_sec": 60,
+              # Never start the policy with an empty manipulation tool catalog.
+              "required": True,
               "tool_timeout_sec": 300, "default_tools_approval_mode": "approve"}
     # JSON strings/arrays are also valid TOML values; these are subprocess arguments, not shell text.
     for key, value in server.items():
