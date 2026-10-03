@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import now, write_json, read_run, source_version
 from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope
+from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker
 
 FINAL = {'passed','failed','blocked'}
 
@@ -379,6 +379,7 @@ class Batch:
 
     def resource_admission(self):
         """No task is claimed here; immutable host checks run once per worker."""
+        self.worker_state('admitting')
         args=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'preflight',
               '--manifest',str(self.root/'manifest.json'),'--gpu',str(self.c['gpu']),
               '--port',str(self.c['base_port']+self.c['gpu']),'--data-root',self.c['data_root'],
@@ -402,6 +403,14 @@ class Batch:
         if check.get('status')!='passed':
             self.worker_state('waiting_for_resources',checks=check.get('checks',{}))
             return False
+        if self._config.get('prefer_gpu_headroom', True):
+            with self.lock:
+                preferred = preferred_gpu_worker(self.workers, self.worker_states,
+                    self.c['ssh'][-1], check.get('queries', {}).get('gpus', {}).get('stdout', ''))
+            if preferred is not None and preferred != self.c['id']:
+                self.worker_state('waiting_for_resources', reason='Prefer available GPU with more free memory',
+                                  preferred_worker=preferred)
+                return False
         self._worker_local.admission=check
         return True
 
@@ -941,6 +950,7 @@ class Batch:
                     if row is None:time.sleep(poll)
                 # GPU and host capacity are free before any bulk copy or decode.
                 if row is not None:
+                    if cleared:self.worker_state('available')
                     submit_archive(row,paths,config)
                     time.sleep(self._config.get('worker_yield_seconds',1))
             self.worker_state('idle')

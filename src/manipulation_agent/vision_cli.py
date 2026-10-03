@@ -79,5 +79,16 @@ def main():
             if harness is not None:harness.finalize_recording()
         finally:
             if backend is not None:backend.close()
+            elif a.backend == 'omnigibson':
+                # A failing constructor never assigns backend, even if Isaac
+                # already launched. Close that existing app before unwinding.
+                from .startup_cleanup import shutdown_partial_simulator
+                cleanup = shutdown_partial_simulator()
+                try:
+                    recorder.event('startup_cleanup', cleanup)
+                except Exception:
+                    # Primary failure/traceback were persisted above. A final
+                    # diagnostic write must not replace that original error.
+                    pass
 
 if __name__=='__main__':raise SystemExit(main())
