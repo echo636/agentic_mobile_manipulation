@@ -186,6 +186,19 @@ class BatchEvidenceTests(unittest.TestCase):
             self.assertIn('export MAS_EXECUTION_CLOCK_PATH=',retained)
             self.assertNotIn('export MAS_EPISODE_DEADLINE_UNIX=',retained)
             self.assertEqual(shlex.split(shlex.join(launch)),launch)
+            self.assertIs(row['native_fault_capture'],False)
+            self.assertNotIn('MAS_NATIVE_FAULT_DIR',retained)
+
+            runner._config['native_fault_capture']=True
+            captured={'index':0,'run_id':'fixture_r2','task':'fixture'}
+            runner.run_one(captured,0)
+            retained=(runner.root/'launchers/fixture_r2.sh').read_text()
+            command=shlex.split(next(line[5:] for line in retained.splitlines() if line.startswith('exec ')))
+            self.assertEqual(command[:5],['/usr/bin/gdb','--batch','-q','-nx','-x'])
+            self.assertEqual(command[5],'/source snapshot/scripts/capture_native_fault.gdb')
+            self.assertEqual(command[6:9],['--args','/fixture/python','/source snapshot/scripts/behavior100_remote.py'])
+            self.assertIn('export MAS_NATIVE_FAULT_DIR=/fixture/runs/fixture_r2',retained)
+            self.assertIs(captured['native_fault_capture'],True)
 
     def test_inline_launcher_preserves_shell_bytes_through_real_systemd(self):
         if not shutil.which('systemd-run') or not shutil.which('systemctl'):

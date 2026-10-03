@@ -568,11 +568,13 @@ class Batch:
         remote_run=Path(self.c['data_root'])/'runs'/runid
         controller=self.root/'controllers'/runid
         own_unit=False;launch_requested=False;process=None;deadline=None;startup_deadline=None
+        native_fault_capture=self.c.get('native_fault_capture',False) is True
         self.update(row,status='running',stage='asset_preflight',started_at=now(),gpu_index=gpu,
                     simulator_unit=unit,simulator_output=str(remote_run),controller_output=str(controller),
                     worker_id=self.c['id'],worker_host=self.c['ssh'][-1],runtime_source=str(self.source),
                     port=port,simulator_interpreter=self.c['sim_python'],source=self.source_info,
-                    recording_options=self.c.get('simulator_env',{}))
+                    recording_options=self.c.get('simulator_env',{}),
+                    native_fault_capture=native_fault_capture)
         self.journal(f'START {runid}; admitted worker {self.c["id"]}; unit {unit}.')
         try:
             asset_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'assets',
@@ -604,10 +606,18 @@ class Batch:
                 '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
                 '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0)),
                 '--light']
+            # Optional external first-fault capture; no in-process tracing thread.
+            # GDB follows the helper's execv into vision_cli and preserves normal
+            # exit codes. The capture script creates files only on a native fault.
+            fault_env=''
+            if native_fault_capture:
+                command=['/usr/bin/gdb','--batch','-q','-nx','-x',
+                    str(self.source/'scripts/capture_native_fault.gdb'),'--args',*command]
+                fault_env='\nexport MAS_NATIVE_FAULT_DIR='+q(str(remote_run))
             overrides=''.join('\nexport '+key+'='+q(str(value)) for key,value in self.c.get('simulator_env',{}).items())
             appdata=self.c.get('simulator_appdata_path',self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))
             launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+
-                '\nsource '+q(self.c['sim_env'])+overrides+'\nunset MAS_EPISODE_DEADLINE_UNIX'+
+                '\nsource '+q(self.c['sim_env'])+overrides+fault_env+'\nunset MAS_EPISODE_DEADLINE_UNIX'+
                 '\nexport MAS_EXECUTION_CLOCK_PATH='+q(str(clock_path))+
                 '\nexport PYTHONPATH='+q(str(self.source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(appdata)+
                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
