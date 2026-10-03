@@ -1,7 +1,7 @@
 """Bounded CPU publication of both real-time and readable editions for new runs."""
 import argparse,fcntl,hashlib,json,os,shutil,socket,subprocess,sys,time
 from pathlib import Path
-p=argparse.ArgumentParser();p.add_argument('--runtime',type=Path,required=True);p.add_argument('--batch',type=Path,required=True);p.add_argument('--reports',type=Path,required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--runtime',type=Path,required=True);p.add_argument('--batch',type=Path,required=True);p.add_argument('--reports',type=Path,required=True);p.add_argument('--newest-first',action='store_true',help='Render higher task indices first, then fill older missing editions');a=p.parse_args()
 b=a.batch;reports=a.reports
 sys.path.insert(0,str(a.runtime/'src'))
 from manipulation_agent.records import now,write_json,source_version
@@ -26,9 +26,14 @@ with (b/'render_watch.lock').open('w') as lock:
  fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
  index=json.loads(index_path.read_text()).get('runs',{}) if index_path.exists() else {}
  while True:
-  if not (b/'progress.json').exists():time.sleep(20);continue
-  progress=json.loads((b/'progress.json').read_text())
-  for row in progress['tasks']:
+  try:
+   progress=json.loads((b/'progress.json').read_text())
+  except (json.JSONDecodeError,FileNotFoundError) as exc:
+   with (b/'journal.md').open('a') as f:f.write('\n'+now()+' — Replay publisher waiting for readable progress.json: '+type(exc).__name__+'; retry next poll.\n')
+   time.sleep(20);continue
+  rows=progress['tasks']
+  if a.newest_first:rows=sorted(rows,key=lambda row:row.get('index',-1),reverse=True)
+  for row in rows:
    rid=row['run_id']
    if row['status'] not in {'passed','failed','blocked'} or index.get(rid,{}).get('status') in {'passed','failed','unavailable'}:continue
    run=b/'runs'/rid;ctrl=b/'controllers'/rid;dest=reports/'manipulation_runs'/rid
