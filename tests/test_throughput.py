@@ -77,7 +77,7 @@ class WorkerTests(unittest.TestCase):
             (ctrl/'controller.json').write_text(json.dumps({'started_at':datetime.now(timezone.utc).isoformat(),
                 'formal_finish_observed':True,'status':'passed','pid':345,'duration_seconds':25}))
             b=batch.Batch.__new__(batch.Batch);b._config={'id':'a','ssh':['ssh','host-a']};b._worker_local=threading.local()
-            b.root=root;b.manifest={'model_timeout_seconds':100};b.unit_state=lambda unit:{'ActiveState':'inactive'}
+            b.root=root;b.manifest={'model_timeout_seconds':100};b.unit_state=lambda unit:{'ActiveState':'inactive','MainPID':'0'}
             b.update=lambda row,**kw:row.update(kw);b.journal=Mock();b.ssh=Mock(return_value=SimpleNamespace(stdout='',stderr=''))
             def archive(row,*args):row.update(task_success=True,video_validation='passed',observation_validation='passed',evidence_alignment='passed')
             b.archive=archive
@@ -85,6 +85,7 @@ class WorkerTests(unittest.TestCase):
                  'simulator_unit':'owned.service','port':29900,'controller_wrapper_pid':999999999}
             b.adopt_one(row)
             self.assertEqual(row['status'],'passed');self.assertEqual(row['source'],{'commit':'old'})
+            self.assertEqual(row['simulator_cleanup']['status'],'passed')
             self.assertEqual(row['run_id'],'original_r1');self.assertEqual(row['model_duration_seconds'],25)
             self.assertEqual(b.ssh.call_args.args[0][0],'journalctl')
 

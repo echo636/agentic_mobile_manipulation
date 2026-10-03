@@ -12,23 +12,107 @@ spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolv
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
-    def test_broken_episode_stops_new_tasks_but_scored_failure_continues(self):
-        for broken in (False,True):
-            with self.subTest(broken=broken),tempfile.TemporaryDirectory() as folder:
-                runner=batch.Batch.__new__(batch.Batch)
-                runner.root=Path(folder);runner._worker_local=threading.local()
-                runner._config={'stop_on_infrastructure_failure':True}
-                runner.workers=[{'id':'one','gpu':1}];runner.lock=threading.RLock()
-                runner.queue=queue.Queue();runner.publish=Mock();runner.journal=Mock()
-                runner.rows=[{'run_id':str(i),'status':'planned'} for i in range(3)]
+    def make_queue_runner(self, folder, workers=None, count=3):
+        runner=batch.Batch.__new__(batch.Batch)
+        runner.root=Path(folder);runner._worker_local=threading.local()
+        # Existing configs need not be rewritten to remove the excessive drain.
+        runner._config={'stop_on_infrastructure_failure':True}
+        runner.workers=workers or [{'id':'one','gpu':1,'ssh':['ssh','fixture']}]
+        runner.lock=threading.RLock();runner.queue=queue.Queue()
+        runner.publish=Mock();runner.journal=Mock()
+        runner.update=lambda row,**values:row.update(values)
+        runner.rows=[{'run_id':str(i),'status':'planned'} for i in range(count)]
+        return runner
+
+    def test_episode_failures_remain_recorded_and_next_tasks_continue(self):
+        failures=[{'task_success':False}, {'task_success':None},
+                  {'video_validation':'failed'}, {'observation_validation':'failed'},
+                  {'evidence_alignment':'failed'}, {'archive_failure':'copy interrupted'},
+                  {'controller_status':'failed','failure':'Model timeout',
+                   'supervisor_intervention':True,'evidence_alignment':'failed'}]
+        for failure in failures:
+            with self.subTest(failure=failure),tempfile.TemporaryDirectory() as folder:
+                runner=self.make_queue_runner(folder)
                 def run_one(row,gpu):
-                    row.update(status='failed',task_success=None if broken else False,
-                        video_validation='passed',observation_validation='passed',evidence_alignment='passed')
+                    row.update(status='failed',task_success=False,video_validation='passed',
+                               observation_validation='passed',evidence_alignment='passed',
+                               simulator_cleanup={'status':'passed'})
+                    row.update(failure)
                 runner.run_one=Mock(side_effect=run_one)
                 runner.run()
-                self.assertEqual(runner.run_one.call_count,1 if broken else 3)
-                self.assertEqual((runner.root/'drain_requested.json').exists(),broken)
-                if broken:self.assertEqual(runner.rows[1]['status'],'planned')
+                self.assertEqual(runner.run_one.call_count,3)
+                self.assertFalse((runner.root/'drain_requested.json').exists())
+                for row in runner.rows:
+                    self.assertEqual(row['status'],'failed')
+                    for key,value in failure.items():self.assertEqual(row[key],value)
+
+    def test_explicit_drain_stops_new_admission(self):
+        for before_start in (False,True):
+            with self.subTest(before_start=before_start),tempfile.TemporaryDirectory() as folder:
+                runner=self.make_queue_runner(folder)
+                drain=runner.root/'drain_requested.json'
+                request={'automatic':False,'reason':'User requested pause'}
+                if before_start:drain.write_text(json.dumps(request))
+                def run_one(row,gpu):
+                    row.update(status='failed',task_success=False)
+                    drain.write_text(json.dumps(request))
+                runner.run_one=Mock(side_effect=run_one)
+                runner.run()
+                self.assertEqual(runner.run_one.call_count,0 if before_start else 1)
+                self.assertEqual(json.loads(drain.read_text()),request)
+                self.assertEqual(runner.rows[-1]['status'],'planned')
+
+    def test_unresolved_cleanup_holds_only_affected_worker(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workers=[{'id':'blocked','gpu':1,'ssh':['ssh','fixture']},
+                     {'id':'healthy','gpu':2,'ssh':['ssh','fixture']}]
+            runner=self.make_queue_runner(folder,workers,count=5)
+            blocked=threading.Event()
+            def run_one(row,gpu):
+                row.update(status='failed',task_success=False)
+                if gpu==1:
+                    row.update(simulator_unit='owned.service',
+                               simulator_cleanup={'status':'blocked','reason':'Still running'})
+                    blocked.set()
+                else:
+                    self.assertTrue(blocked.wait(5))
+                    row.update(simulator_cleanup={'status':'passed'})
+            runner.run_one=Mock(side_effect=run_one)
+            runner.run()
+            calls=runner.run_one.call_args_list
+            self.assertEqual(sum(call.args[1]==1 for call in calls),1)
+            self.assertEqual(sum(call.args[1]==2 for call in calls),4)
+            self.assertFalse((runner.root/'drain_requested.json').exists())
+            self.assertTrue(all(row['status']=='failed' for row in runner.rows))
+            held=[row for row in runner.rows if row.get('worker_hold')]
+            self.assertEqual(len(held),1)
+            self.assertEqual(held[0]['worker_hold']['worker_id'],'blocked')
+            self.assertEqual(held[0]['worker_hold']['gpu'],1)
+            self.assertEqual(held[0]['worker_hold']['run_id'],held[0]['run_id'])
+
+    def test_owned_cleanup_verifies_exit_before_reusing_lane(self):
+        owned={'ActiveState':'active','MainPID':'123','Description':'BEHAVIOR100 owned run1'}
+        terminal={'ActiveState':'inactive','MainPID':'0','Description':'owned.service'}
+        cases=[('stopped',[owned,terminal],0,'passed',1),
+               ('already_terminal',[terminal],0,'passed',0),
+               ('failed_terminal',[{**terminal,'ActiveState':'failed'}],0,'passed',0),
+               ('still_running',[owned,owned],0,'blocked',1),
+               ('stop_failed',[owned],1,'blocked',1),
+               ('ownership_changed',[{**owned,'Description':'unrelated'}],0,'blocked',0),
+               ('unverified_state',[{}],0,'blocked',0),
+               ('live_pid',[{**terminal,'MainPID':'123'}],0,'blocked',0),
+               ('ssh_error',[TimeoutError('SSH timed out')],0,'blocked',0)]
+        for label,states,returncode,expected,stop_calls in cases:
+            with self.subTest(case=label),tempfile.TemporaryDirectory() as folder:
+                runner=self.make_queue_runner(folder)
+                runner.unit_state=Mock(side_effect=states)
+                runner.ssh=Mock(return_value=CompletedProcess([],returncode,'','stop error'))
+                row={'run_id':'run1','simulator_unit':'owned.service'}
+                result=runner.cleanup_owned_unit(row)
+                self.assertEqual(result['status'],expected)
+                self.assertEqual(row['simulator_cleanup'],result)
+                self.assertEqual(runner.ssh.call_count,stop_calls)
+                if expected=='blocked':self.assertTrue(result['reason'])
 
     def test_progress_preserves_scores_without_copying_combinatorial_goal_arrays(self):
         goals = [[True, False] for _ in range(10000)]

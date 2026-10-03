@@ -1,4 +1,5 @@
 import base64
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -6,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.audit import audit_rgb_transport
+from manipulation_agent.audit import audit_episode, audit_rgb_transport
 from manipulation_agent.replay import build_replay, render_replay
 
 
@@ -79,6 +80,71 @@ class ReplayEvidenceTests(unittest.TestCase):
         self.assertTrue(all(result['checks'].values()),result)
         self.assertEqual(result['image_content_count'],2)
         self.assertEqual(result['unique_model_image_count'],1)
+
+    def append_observation_after_action(self):
+        call=copy.deepcopy(self.events[2]);call.update(id='call3',request_id='3')
+        result=copy.deepcopy(self.events[3]);result.update(id='res3',request_id='3')
+        self.events.extend([call,result])
+        model=copy.deepcopy(self.models[0])
+        model['item']['result']['content'][0]['text']=json.dumps({**result['result'],'evidence_id':'res3'})
+        self.models.append(model)
+
+    def test_missing_response_is_not_image_corruption_and_later_delivery_is_checked(self):
+        self.append_observation_after_action()
+        for response,error,code in [
+            (None,{'message':'timed out awaiting tools/call after 300s'},'tool_response_timeout'),
+            ({'content':[]},None,'missing_tool_response'),
+        ]:
+            with self.subTest(code=code):
+                self.models[1]['item'].update(id='timed_out_call',result=response,error=error,status='failed')
+                result=audit_rgb_transport(self.root,self.events,self.models)
+                self.assertFalse(result['checks']['model_results_match_simulator'])
+                self.assertTrue(result['checks']['image_bytes_hashes_and_archive_match'])
+                self.assertTrue(result['checks']['pixel_actions_use_latest_images'])
+                self.assertEqual(result['image_content_count'],2)
+                self.assertEqual(result['errors'],[{'event_id':'res2','model_item_id':'timed_out_call',
+                    'tool':'act','error_type':'ToolResponseUnavailable','code':code,'response_received':False}])
+
+    def test_timeout_does_not_hide_tampered_later_image_or_invalid_target(self):
+        self.append_observation_after_action()
+        self.models[1]['item'].update(result=None,error={'message':'tool timeout'},status='failed')
+        self.models[1]['item']['arguments']['target']['image_ref']='never_received'
+        self.models[2]['item']['result']['content'][1]['data']=base64.b64encode(b'tampered').decode()
+        result=audit_rgb_transport(self.root,self.events,self.models)
+        self.assertFalse(result['checks']['model_results_match_simulator'])
+        self.assertFalse(result['checks']['image_bytes_hashes_and_archive_match'])
+        self.assertFalse(result['checks']['pixel_actions_use_latest_images'])
+        self.assertEqual(result['image_content_count'],2)
+
+    def test_timeout_with_normal_finish_still_fails_complete_episode_evidence(self):
+        self.append_observation_after_action()
+        source={'commit':'abc','source_sha256':'digest','dirty':False}
+        run={'run_id':'test','config':{'backend':'omnigibson','observation_mode':'rgb_only','agent_profile':'minimal'},
+             'source':source,'task_success':False,'evaluation':{'official_task_success':False}}
+        (self.root/'run.json').write_text(json.dumps(run))
+        controller=self.root/'controller';controller.mkdir()
+        (controller/'controller.json').write_text(json.dumps({'model':'fixture','agent_profile':'minimal',
+            'status':'passed','exit_code':0,'source':source}))
+        args={'outcome':'blocked','reason':'Observed limitation'}
+        finish={'ok':True,'closed':True}
+        self.events.extend([{'kind':'tool_call','id':'call4','name':'finish','arguments':args},
+                            {'kind':'tool_result','id':'res4','name':'finish','result':finish}])
+        self.models.append({'type':'item.completed','item':{'type':'mcp_tool_call','tool':'finish','arguments':args,
+            'result':{'content':[{'type':'text','text':json.dumps({**finish,'evidence_id':'res4'})}]}}})
+        for event in self.models:event['item']['server']='manipulation'
+        self.save()
+        stream=controller/'model_events.jsonl'
+        stream.write_text(''.join(json.dumps(e)+'\n' for e in self.models))
+        self.assertEqual(audit_episode(self.root,controller)['evidence_alignment'],'passed')
+        self.models[1]['item'].update(result=None,error={'message':'timed out awaiting tools/call after 300s'},status='failed')
+        stream.write_text(''.join(json.dumps(e)+'\n' for e in self.models))
+        result=audit_episode(self.root,controller)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['evidence_alignment'],'failed')
+        self.assertTrue(result['checks']['formal_finish_in_model_trace'])
+        self.assertTrue(result['checks']['controller_calls_match_simulator_exactly'])
+        self.assertFalse(result['checks']['model_results_match_simulator'])
+        self.assertTrue(result['checks']['image_bytes_hashes_and_archive_match'])
 
     def test_verbatim_public_messages_and_exact_mcp_text_without_private_reasoning(self):
         controller=self.root/'controller';controller.mkdir()
