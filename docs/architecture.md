@@ -48,6 +48,10 @@ respect to the simulated world but updates image references, so it is not marked
 idempotent. Every executor attempt advances the revision, including partial
 failures. Invalid requests rejected before execution do not move the robot.
 
+The `official` profile exposes six tools: observation jobs, synchronous observe, act
+and finish. Its act schema contains fourteen upstream symbolic primitives and no
+Original placement-yaw or wait options.
+
 The default nine tools are `start_observation`, `get_observation`,
 `cancel_observation`, `observe`, `look`, `act`, `finish`, `list_skills`, and
 `read_skill`. Four workflow documents cover manipulation, exploration, pick and

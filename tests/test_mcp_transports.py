@@ -35,6 +35,7 @@ def free_port():
 
 @unittest.skipUnless(HAS_MCP, 'Install the pinned [mcp] extra for wire integration tests')
 class MCPTransports(unittest.IsolatedAsyncioTestCase):
+    profile = 'workflow'
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -51,7 +52,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         code = ('from manipulation_agent import bridge; bridge.CLOSED_REPLAY_SECONDS=0.1; '
                 'from manipulation_agent.vision_cli import main; raise SystemExit(main())')
         self.backend = subprocess.Popen([sys.executable, '-c', code, '--backend', 'mock',
-            '--port', str(self.port), '--output', str(self.output), '--agent-profile', 'workflow'],
+            '--port', str(self.port), '--output', str(self.output), '--agent-profile', self.profile],
             cwd=ROOT, env=self.env, stdout=subprocess.DEVNULL, stderr=self.errors)
         self.addCleanup(self.stop, self.backend)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -139,7 +140,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         async with self.client(transport) as session:
             listed = await session.list_tools()
             self.assertEqual({t.name: t.inputSchema for t in listed.tools},
-                             {t['name']: t['inputSchema'] for t in tool_specs('workflow')})
+                             {t['name']: t['inputSchema'] for t in tool_specs(self.profile)})
             observe_spec = next(t for t in listed.tools if t.name == 'observe')
             self.assertTrue(observe_spec.annotations.readOnlyHint)
             self.assertFalse(observe_spec.annotations.idempotentHint)
@@ -187,9 +188,14 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
     def test_existing_readonly_preflight_accepts_fastmcp(self):
         from manipulation_agent.mcp_preflight import check_server
         result = check_server(sys.executable, ['-m', 'manipulation_agent.mcp_server', '--bridge', self.url],
-                              tool_specs('workflow'), Path(self.temp.name), timeout=10)
+                              tool_specs(self.profile), Path(self.temp.name), timeout=10)
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['tool_calls'], 0)
+
+
+class OfficialMCPTransports(MCPTransports):
+    """The Official catalog keeps its fourteen-primitive schema on every wire."""
+    profile = 'official'
 
 
 class LoopbackBinding(unittest.TestCase):
