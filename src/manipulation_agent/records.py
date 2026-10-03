@@ -76,10 +76,11 @@ class Recorder:
             stream.flush()
         return event_id
 
-    def finish(self, result: dict) -> None:
+    def finish(self, result: dict, *, render: bool = True) -> None:
         self.run.update(result, finished_at=now())
         write_json(self.output / "run.json", self.run)
-        self.render()
+        if render:
+            self.render()
 
     def render(self) -> None:
         events_file = self.output / "events.jsonl"

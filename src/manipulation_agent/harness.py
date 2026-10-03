@@ -144,7 +144,7 @@ class Harness:
     def _tool_recall(self) -> dict:
         return {"plan": copy.deepcopy(self.plan), "memory": copy.deepcopy(self.memory), "revision": self.revision}
 
-    def _tool_finish(self, outcome: str, reason: str) -> dict:
+    def _tool_finish(self, outcome: str, reason: str, *, render: bool = True) -> dict:
         evaluation = self.backend.evaluate()
         self.closed = True
         result = {"status": "passed" if evaluation["task_success"] else "failed",
@@ -153,5 +153,5 @@ class Harness:
                   "actions": self.actions, "tool_calls": self.calls, "sim_steps": self.backend.steps,
                   "wall_seconds": time.monotonic() - self.started}
         self.recorder.event("independent_evaluation", result)
-        self.recorder.finish(result)
+        self.recorder.finish(result, render=render)
         return {"closed": True, "agent_outcome": outcome}

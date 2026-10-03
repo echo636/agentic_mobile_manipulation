@@ -62,6 +62,26 @@ class ReplayEvidenceTests(unittest.TestCase):
         (self.root/'run.json').write_text(json.dumps(run))
         self.assertTrue(build_replay(self.root)['evaluation_offline_only']['task_success'])
 
+    def test_replay_json_omits_goal_arrays_without_changing_raw_evidence_or_scores(self):
+        metrics = {'task_success':False, 'official_task_success':False,
+                   'goal_satisfaction_fraction':0.75,
+                   'official_metrics':{'q_score':{'final':0.75}, 'time':{'simulator_steps':120}}}
+        run_path = self.root/'run.json'
+        run = json.loads(run_path.read_text())
+        run.update(task_success=False, evaluation={**metrics,
+                   'goal_options':[[True, False], [False, True]],
+                   'initial_goal_options':[[False, False], [False, False]]})
+        run_path.write_text(json.dumps(run))
+        raw_paths = [run_path, self.root/'events.jsonl']
+        hashes = {p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in raw_paths}
+        result = render_replay(self.root)
+        exported = json.loads((self.root/'replay.json').read_text())
+        for data in (result, exported):
+            self.assertFalse(data['evaluation_offline_only']['task_success'])
+            self.assertEqual(data['evaluation_offline_only']['evaluation'], metrics)
+        self.assertEqual({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in raw_paths}, hashes)
+        self.assertEqual(json.loads(run_path.read_text())['evaluation'], run['evaluation'])
+
     def test_failed_plan_is_visible_but_does_not_overwrite_accepted_plan(self):
         self.events[4]['name']='update_plan'
         self.events[4]['arguments']={'reason':'proposed claim','subgoals':[{'id':'bad','status':'done'}]}
