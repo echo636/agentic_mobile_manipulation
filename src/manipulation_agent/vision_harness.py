@@ -5,6 +5,7 @@ import threading
 import time
 from dataclasses import asdict
 from .contracts import Budget, SkillError, validate
+from .deadline import EpisodeDeadline
 from .harness import Harness as LegacyPlanHelpers
 from .observations.boundary import public_observation, public_execution_error
 from .records import write_json
@@ -16,6 +17,9 @@ class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills'):
         self.backend,self.recorder,self.budget=backend,recorder,budget
         self.owner=threading.get_ident(); self.started=time.monotonic()
+        self.deadline=getattr(backend,'deadline',None) or EpisodeDeadline.from_env()
+        backend.deadline=self.deadline
+        self._video_finalized=False
         self.revision=self.actions=self.calls=0; self.closed=False
         self.profile = profile
         self.surround = SurroundJobs(self)
@@ -27,6 +31,8 @@ class VisionHarness:
         if profile in {'skills','workflow'}:
             self.skills=SkillLibrary(recorder.output)
         recorder.run['config']['agent_profile'] = profile
+        recorder.run['episode_deadline_unix']=self.deadline.unix
+        self.deadline.check()
         self.snapshot=self.refresh()
         recorder.run.update(backend=backend.provenance(),budget=asdict(budget),skill_bundle_sha256=self.skills.digest if self.skills else None,
                             observation_contract="rgb_four_camera_same_state_v1" if 'capture' in self.snapshot else "rgb_only_v1")
@@ -67,6 +73,7 @@ class VisionHarness:
             if name=='act' and self.profile!='official' and isinstance(arguments,dict):
                 arguments={'placement_yaw_degrees':None,'wait_seconds':None,**arguments}
             validate(arguments,self.catalog[name]['inputSchema'])
+            if name!='finish': self.deadline.check()
             if name!='finish' and (self.calls>self.budget.max_calls or time.monotonic()-self.started>self.budget.wall_seconds):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')
             execution_args = {k:v for k,v in arguments.items() if k != 'decision'}
@@ -83,6 +90,7 @@ class VisionHarness:
         return result
 
     def perform(self,primitive,target,revision,**kwargs):
+        self.deadline.check()
         if revision!=self.revision: raise SkillError('stale_observation','Use the latest observation revision')
         if self.actions>=self.budget.max_actions or self.backend.steps>=self.budget.max_sim_steps:
             raise SkillError('budget_exhausted','Action/step budget exhausted')
@@ -100,7 +108,10 @@ class VisionHarness:
             self.recorder.event('private_executor_error',{'code':exc.code,'detail':str(exc)})
             error=public_execution_error(exc)
         finally:
-            self.revision+=1; self.refresh()
+            self.revision+=1
+            # A timed-out action may have changed the world. Invalidate its RGB,
+            # but do not spend the expired task budget rendering another capture.
+            if not self.deadline.expired: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         return {'effect':{'primitive':primitive,'status':'completed','verification':'executor_operation_only'},
                 'observation':self.snapshot,'actions_used':self.actions}
@@ -110,6 +121,19 @@ class VisionHarness:
     def recall(self): return LegacyPlanHelpers._tool_recall(self)
     def finish(self,outcome,reason):
         self.surround.stop_for_finish()
-        if hasattr(self.backend, 'finalize_video'):
-            self.recorder.run['video'] = self.backend.finalize_video()
         return LegacyPlanHelpers._tool_finish(self,outcome,reason,render=False)
+
+    def finalize_recording(self):
+        """Offline closure after the finish reply; never replaces an evaluator result."""
+        if self._video_finalized or not hasattr(self.backend,'finalize_video'): return
+        self._video_finalized=True
+        try:
+            self.recorder.run['video']=self.backend.finalize_video()
+        except Exception as exc:
+            video_path=self.recorder.output/'video.json'
+            try: video=json.loads(video_path.read_text()) if video_path.exists() else {}
+            except (OSError,ValueError): video={}
+            video.update(status='failed',failure_type=type(exc).__name__,failure=str(exc))
+            self.recorder.run['video']=video
+            self.recorder.event('video_failure',{'type':type(exc).__name__,'message':str(exc)})
+        write_json(self.recorder.output/'run.json',self.recorder.run)

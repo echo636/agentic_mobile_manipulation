@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from ..contracts import SkillError
+from ..deadline import EpisodeDeadline
 from ..omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, look_at_orientation
 from ..records import now
@@ -19,6 +20,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
+        self.deadline=EpisodeDeadline.from_env()
+        self.deadline.check()
         self.ideal_carry = not getattr(self, 'official_symbolic', False) and os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
         self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
         self.fixed_surround_rgb = True
@@ -219,6 +222,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         raise RuntimeError('Camera render products did not become ready: '+json.dumps({'rgb_shapes':shapes,'calibration':pending}))
 
     def _step(self, action):
+        self.deadline.check(changed=True)
         if self._base_target is not None:self._restore_base_target()
         self._restore_object_anchor()
         self._carry_follow()

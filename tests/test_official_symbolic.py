@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import Mock
 
 from manipulation_agent.contracts import Budget, SkillError
+from manipulation_agent.deadline import EpisodeDeadline
 from manipulation_agent.executors.official_symbolic import OfficialSymbolicBackend, OFFICIAL_PRIMITIVES
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
@@ -25,6 +26,8 @@ class DirectDispatchTests(unittest.TestCase):
         self.b = OfficialSymbolicBackend.__new__(OfficialSymbolicBackend)
         b = self.b
         b.output = Path(self.tmp.name); b.steps = 0; b.sampling_physics_steps = 0
+        b.deadline = EpisodeDeadline()
+        b._navigation_mesh_cache = {'capacity': 2048, 'validation': 'CPU fixture only'}
         b._official_terminated = False; b._inside_primitive = False
         b._primitive_enum = SimpleNamespace(**{p.upper(): p.upper() for p in OFFICIAL_PRIMITIVES})
         b._primitive_error_group = UpstreamErrors
@@ -42,7 +45,10 @@ class DirectDispatchTests(unittest.TestCase):
                 yield 'official_action_2'
             finally:
                 self.closed.append(True)
-        b.primitives = SimpleNamespace(apply_ref=native)
+        b.primitives = SimpleNamespace(apply_ref=native,
+            _motion_generator=SimpleNamespace(update_obstacles=lambda *a, **k: None),
+            _validate_poses=lambda *a, **k: True,
+            _target_in_reach_of_robot=lambda *a, **k: True)
         for name in ['execute','_navigate','_ideal_grasp','_checked_place_inside','_checked_place_on_top','_ideal_state_action','_ideal_release','_carry_follow','_restore_base_target']:
             setattr(b, name, Mock(side_effect=AssertionError('Custom executor must not run: ' + name)))
 

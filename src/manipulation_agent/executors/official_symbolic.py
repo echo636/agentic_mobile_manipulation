@@ -94,6 +94,7 @@ class OfficialSymbolicBackend(RGBBackend):
             stream.write(json.dumps(entry) + '\n')
 
     def _step(self, action):
+        self.deadline.check(changed=True)
         # Deliberately bypass RGBBackend._step and its pose/carry projection.
         if self._official_terminated:
             raise SkillError('simulation_ended', 'Simulation has ended', changed=True)
@@ -133,6 +134,7 @@ class OfficialSymbolicBackend(RGBBackend):
 
         def step(*args, **kwargs):
             if self._inside_primitive:
+                self.deadline.check(changed=True)
                 if self.sampling_physics_steps - before >= max_steps * 4 or time.monotonic() - started > 120:
                     raise SkillError('sampling_budget_exhausted', 'Upstream internal physics/time budget exhausted', changed=True)
                 self.sampling_physics_steps += 1
@@ -146,6 +148,7 @@ class OfficialSymbolicBackend(RGBBackend):
             self._inside_primitive = False
 
     def execute_visual(self, primitive, target, max_steps, **kwargs):
+        self.deadline.check()
         if primitive not in OFFICIAL_PRIMITIVES or kwargs:
             raise SkillError('invalid_arguments', 'Only the official primitive signature is supported')
         if max_steps <= 0 or self._official_terminated:
@@ -167,6 +170,7 @@ class OfficialSymbolicBackend(RGBBackend):
         started = time.monotonic()
 
         def check_planning_budget():
+            self.deadline.check(changed=True)
             if time.monotonic() - started > 120:
                 raise SkillError('action_timeout', 'Official primitive time budget exhausted', changed=True)
 
@@ -185,6 +189,7 @@ class OfficialSymbolicBackend(RGBBackend):
             with self._slow_action_trace(), self._bounded_internal_physics(max_steps), native_planning_checkpoints(
                     self.primitives, check_planning_budget, record_planning_phase):
                 while True:
+                    self.deadline.check(changed=True)
                     if time.monotonic() - started > 120:
                         raise SkillError('action_timeout', 'Official primitive time budget exhausted', changed=True)
                     self._inside_primitive = True

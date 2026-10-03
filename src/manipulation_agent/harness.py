@@ -7,6 +7,7 @@ import time
 from dataclasses import asdict
 
 from .contracts import Backend, Budget, SkillError, tool_specs, validate
+from .deadline import EpisodeDeadline
 from .records import Recorder, write_json
 
 
@@ -17,6 +18,8 @@ class Harness:
         self.backend, self.recorder, self.budget = backend, recorder, budget
         self.owner = threading.get_ident()
         self.started = time.monotonic()
+        self.deadline = getattr(backend, 'deadline', None) or EpisodeDeadline.from_env()
+        backend.deadline = self.deadline
         self.revision = self.actions = self.calls = 0
         self.closed = False
         self.plan, self.memory, self.cache, self.evidence = [], {}, {}, {}
@@ -49,6 +52,7 @@ class Harness:
             if name not in self.schemas:
                 raise SkillError("unknown_tool", "Tool is not in this episode's catalog")
             validate(arguments, self.schemas[name])
+            if name != 'finish': self.deadline.check()
             if name != "finish" and (self.calls > self.budget.max_calls or time.monotonic() - self.started > self.budget.wall_seconds):
                 raise SkillError("budget_exhausted", "Call or wall-clock budget exhausted; finish the episode")
             result = {"ok": True, **getattr(self, f"_tool_{name}")(**arguments)}
@@ -68,6 +72,7 @@ class Harness:
         return {"observation": self.snapshot}
 
     def _tool_act(self, skill: str, target: str | None, revision: int) -> dict:
+        self.deadline.check()
         if revision != self.revision:
             raise SkillError("stale_observation", "Use the revision returned by the latest observation")
         if self.actions >= self.budget.max_actions or self.backend.steps >= self.budget.max_sim_steps:
@@ -145,13 +150,35 @@ class Harness:
         return {"plan": copy.deepcopy(self.plan), "memory": copy.deepcopy(self.memory), "revision": self.revision}
 
     def _tool_finish(self, outcome: str, reason: str, *, render: bool = True) -> dict:
-        evaluation = self.backend.evaluate()
+        # Persist evaluation independently of video/replay packaging. An evaluator
+        # exception is missing scoring, never a fabricated False or Q=0.
+        execution_finished_at = time.time()
+        expired = self.deadline.unix is not None and execution_finished_at >= self.deadline.unix
         self.closed = True
-        result = {"status": "passed" if evaluation["task_success"] else "failed",
-                  "task_success": evaluation["task_success"], "evaluation": evaluation,
+        self.recorder.run.update(scoring={'status':'running'},execution_finished_at_unix=execution_finished_at,
+                                 deadline_expired_at_finish=expired)
+        write_json(self.recorder.output / 'run.json', self.recorder.run)
+        try:
+            evaluation = self.backend.evaluate()
+            task_success = evaluation['task_success']
+            scoring = {'status': 'passed'}
+        except Exception as exc:
+            evaluation, task_success = {}, None
+            scoring = {'status': 'failed', 'failure_type': type(exc).__name__, 'failure': str(exc)}
+            self.recorder.event('evaluation_failure', scoring)
+        evaluation_finished_at = time.time()
+        result = {"status": "passed" if task_success and not expired else "failed",
+                  "task_success": task_success, "evaluation": evaluation, "scoring": scoring,
                   "agent_outcome": outcome, "finish_reason": reason,
                   "actions": self.actions, "tool_calls": self.calls, "sim_steps": self.backend.steps,
-                  "wall_seconds": time.monotonic() - self.started}
+                  "wall_seconds": time.monotonic() - self.started,
+                  "execution_finished_at_unix": execution_finished_at,
+                  "deadline_expired_at_finish": expired,
+                  "evaluation_finished_at_unix": evaluation_finished_at,
+                  "evaluation_finished_after_deadline": self.deadline.unix is not None and evaluation_finished_at >= self.deadline.unix}
+        if expired:
+            result.update(timeout=True, episode_outcome='timeout', termination_reason='episode_deadline_exceeded',
+                          episode_deadline_unix=self.deadline.unix)
         self.recorder.event("independent_evaluation", result)
         self.recorder.finish(result, render=render)
         return {"closed": True, "agent_outcome": outcome}

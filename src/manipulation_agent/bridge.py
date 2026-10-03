@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .contracts import tool_specs
 
+CLOSED_REPLAY_SECONDS = 10
 
 def rpc(url: str, name: str, arguments: dict, request_id: str, timeout: float = 300) -> dict:
     body = json.dumps({"name": name, "arguments": arguments, "request_id": request_id}).encode()
@@ -96,8 +97,10 @@ def serve(harness, port: int) -> None:
             # Keep a short replay window so a timed-out finish can be retried idempotently.
             if harness.closed:
                 closed_at = closed_at or time.monotonic()
-                if time.monotonic() - closed_at > 10:
+                if time.monotonic() - closed_at > CLOSED_REPLAY_SECONDS:
                     break
+            elif harness.deadline.expired:
+                harness.call('finish', {'outcome':'aborted','reason':'Episode wall-clock deadline exhausted'}, 'episode-deadline-finish')
             elif time.monotonic() - harness.started > harness.budget.wall_seconds:
                 harness.call("finish", {"outcome": "aborted", "reason": "Service wall-clock budget exhausted"}, "service-timeout")
             if hasattr(harness, 'tick_background') and not harness.closed:

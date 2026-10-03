@@ -38,7 +38,8 @@ ERROR_MESSAGES = {
     "physics_instability":"The simulator reported an unstable physical state; do not repeat this action blindly.",
     "postcondition_error":"The executor could not complete the requested action; inspect the new RGB.",
     "execution_error":"Execution failed or partially completed; inspect the new RGB.",
-    "action_timeout":"The executor exhausted this action's step budget.",
+    "action_timeout":"The executor exhausted this action's time or step budget.",
+    "episode_timeout":"The episode wall-clock deadline has expired; no further action can start.",
     "sampling_budget_exhausted":"The executor exhausted its placement sampling budget.",
     "unsupported_relation":"The selected surface does not support this placement operation.",
 }
