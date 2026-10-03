@@ -12,6 +12,7 @@ from pathlib import Path
 from .audit import audit_episode
 from .records import now, write_json, read_run
 from .transcript import build_transcript
+from .clients.events import event_path
 
 
 def lines(path: Path) -> list[dict]:
@@ -40,8 +41,9 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     summaries=lines(controller_dir/'model_reasoning_summaries.jsonl') if controller_dir else []
     summaries=[r for r in summaries if r.get('source')=='provider_returned_reasoning_summary' and r.get('verbatim') is True]
     summary_index=0
-    model_events = lines(controller_dir/'model_events.jsonl') if controller_dir else []
-    if controller_dir:
+    model_source = event_path(controller_dir or run_dir)
+    model_events = lines(model_source)
+    if model_events:
         for event_index, event in enumerate(model_events):
             item = event.get('item',{})
             if item.get('type') in {'agent_message','mcp_tool_call'}:
@@ -136,9 +138,9 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             'source': run.get('source', {}), 'execution': {k: run.get(k) for k in
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
-            'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
+            'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else run.get('config', {}).get('model'),
             'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review, 'inspection_video':inspection,
-            'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(controller_dir),
+            'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(model_events),
             'model_transcript':build_transcript(model_events, steps, summaries),
             'model_reasoning_summaries':summaries,
             'model_final_reasoning_summaries':summaries[summary_index:],
@@ -166,7 +168,7 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             write_json(run_dir / 'browser_video_warning.json', {'status':'failed', 'error':str(exc)})
     # Keep the downloadable original public stream separate: images may be large.
     public_events = data.pop('model_public_events')
-    if controller_dir:
+    if data.get('has_public_trace'):
         (run_dir/'model_public_events.jsonl').write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in public_events))
     write_json(run_dir / 'replay.json', data)
     if data['audit']:
