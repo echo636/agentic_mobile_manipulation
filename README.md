@@ -4,7 +4,7 @@ An independent research system for **RGB observation -> LLM action and target se
 
 Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/agentic_mobile_manipulation). Reference repositories and existing navigation environments remain separate from this project.
 
-This branch develops the **direct official symbolic profile** (`--agent-profile official`): four-camera RGB target selection calls the 14 upstream symbolic primitives through `apply_ref`. Upstream state/pose changes and errors are preserved without project navigation, carry or placement repairs. See [the protocol and validation limits](docs/official_symbolic_experiment.md). The motor-code experiment is maintained separately on [explore/astra-motor](https://github.com/echo636/agentic_mobile_manipulation/tree/explore/astra-motor). Original profiles remain available; the default is still `skills`. See [branch responsibilities and provenance](docs/branches.md).
+This branch develops the **direct official symbolic profile** (`--agent-profile official`): four-camera RGB target selection calls the 14 upstream symbolic primitives through `apply_ref`. Native sampling, collision/IK, state changes and settling remain in use, with explicit planner initialization, coordinate compatibility and episode-budget integration. It does not use the project's GT navigation, custom carrying or placement recovery. See [the protocol and validation limits](docs/official_symbolic_experiment.md). The motor-code experiment is maintained separately on [explore/astra-motor](https://github.com/echo636/agentic_mobile_manipulation/tree/explore/astra-motor). Original profiles remain available; the default is still `skills`. See [branch responsibilities and provenance](docs/branches.md).
 
 ## Observation: four fixed cameras
 
@@ -64,11 +64,41 @@ records for each tool call. Explicit planning and memory remain deferred.
 See [harness architecture and transport usage](docs/architecture.md) and
 [client capabilities and validation limits](src/manipulation_agent/clients/README.md).
 
+The 2026-10-04 acceptance used frozen `0760f64`: Astra through Codex and FastMCP
+completed radio instance 301 with Q=1 in 73.942 seconds of agent execution, excluding
+initialization. [Recorded replay](http://10.76.5.241:8765/manipulation_runs/mas_harness_phase1_original_000_turning_on_radio_i301_s0_r1/replay.html).
+This validates one Original episode; native Responses, OpenCode and Kimi do not
+inherit this real-client acceptance. CPU/interface validation passed 224 tests,
+with nine tests skipped for unavailable simulator dependencies.
+
+## Official executor profile
+
+This branch adds `--agent-profile official` to both the simulator and model
+controller. It exposes six tools and fourteen upstream symbolic primitives, with
+private RGB-pixel grounding. The `skills` profile still selects Original execution.
+Both profiles use the official SDK FastMCP server.
+
+Official navigation now converts world poses into the robot's virtual-anchor
+coordinates and preserves world height at the endpoint. Official actions use the
+remaining episode step budget and execution deadline; transport waits allow the
+30-minute episode to finish. The [alignment analysis](docs/official_alignment_20261004.md)
+records the reproduced coordinate error, budget mismatch, repairs and validation
+limits. These changes do not reclassify historical benchmark results.
+
+At frozen `8ec0fdb`, the repaired native navigation/grasp/release regression passed
+with actual hand-state checks. A fresh Astra/Codex Official radio episode then
+passed with Q=1 in 127.454 seconds excluding initialization: three native
+navigation actions and one toggle, all successful.
+[Official acceptance replay](http://10.76.5.241:8765/manipulation_runs/mas_harness_phase2_official_000_turning_on_radio_i301_s0_r1/replay.html).
+The independent task score passed; the agent's own finish was `blocked` because
+it could not visually verify the power indicator. Both results remain recorded.
+This is one complete episode acceptance, not a new 100-task result.
+
 ## Execution and evidence
 
-The model selects a pixel in a current RGB image. The private executor resolves that pixel through depth and a visual-mesh ray, then performs GT navigation, controlled carrying without a robot/object fixed joint, official state operations, or placement sampling. Base motion uses incremental idealized pose control; grasp and placement can be discontinuous. This is not a physical-control leaderboard submission. Final BDDL predicates and TaskMetric are evaluated independently after termination and are not returned to the active model. See [executor v7 and validation limits](docs/executor_v7.md).
+The model selects a pixel in a current RGB image. Both profiles privately resolve that pixel through depth and a visual-mesh ray. Original then performs GT navigation, controlled carrying without a robot/object fixed joint, state operations, or project placement sampling; its base motion uses incremental idealized pose control. Official passes the selected object to the upstream primitive, using native symbolic base-pose changes, assisted grasp with a fixed joint, relation sampling and state setters. Both can produce discontinuous motion and are not physical-control leaderboard submissions. Final BDDL predicates and TaskMetric are evaluated independently after termination and are not returned to the active model. See [Original executor v7](docs/executor_v7.md) and [Official semantics](docs/official_symbolic_experiment.md).
 
-Navigation adapts the visual-point GT planning strategy from `jinkai/harness`: approach candidates, reachability checks, target-distance ranking, and pose-feedback following. OmniGibson's static traversability grid and idealized base adapter replace Habitat's native navmesh and follower. Small pose offsets no longer incorrectly map a valid start into an adjacent obstacle cell. Full dynamic collision checking is still absent. See [navigation provenance and validation](docs/gt_navigation.md).
+Original navigation adapts the visual-point GT planning strategy from `jinkai/harness`: approach candidates, reachability checks, target-distance ranking, and pose-feedback following. OmniGibson's static traversability grid and idealized base adapter replace Habitat's native navmesh and follower. Small pose offsets no longer incorrectly map a valid start into an adjacent obstacle cell. Full dynamic collision checking is still absent from that path. Official uses its separate native sampler and CuRobo checks. See [Original navigation provenance and validation](docs/gt_navigation.md).
 
 ## Batch evaluation
 

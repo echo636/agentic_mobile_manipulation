@@ -2,7 +2,9 @@
 
 Development branch: `explore/official-symbolic`. Historical simulator evidence below belongs to frozen mixed-branch commit `c91a054`; splitting branches does not rerun those experiments.
 
-Profile: `official`. Protocol: `rgb_official_symbolic_direct_v1`.
+Profile: `official`. Current protocol: `rgb_official_symbolic_episode_budget_v3`.
+The [2026-10-04 alignment analysis](official_alignment_20261004.md) documents the
+current frame and budget repairs. The initial v1 experiment remains recorded below.
 
 This opt-in mode calls the pinned OmniGibson `SymbolicSemanticActionPrimitives.apply_ref` directly with the model-selected object and `attempts=1`. It retains four-camera RGB observation, revision checks, bounded execution, private evaluation, and replay. It is a symbolic execution experiment, not a physical-control challenge submission.
 
@@ -11,14 +13,14 @@ This opt-in mode calls the pinned OmniGibson `SymbolicSemanticActionPrimitives.a
 | Aspect | Existing `skills` executor | New `official` executor |
 | --- | --- | --- |
 | Target | RGB pixel mapped privately to an object and surface point | Same grounding; passes only the selected object to upstream |
-| Navigation | Project's Jinkai-style GT grid planner and incremental pose following | Original `NAVIGATE_TO`, including upstream defects |
+| Navigation | Project's Jinkai-style GT grid planner and incremental pose following | Native `NAVIGATE_TO`, initialized CuRobo and holonomic-frame compatibility |
 | Grasp / carry | Project controlled pose carry and payload following | Official forced assisted grasp / fixed joint |
 | Placement | Selected-surface checks, volume sampling, project recovery | Original relation-based sampler and placement; no surface/yaw constraint or project rollback |
 | Open / toggle | Project state-operation wrapper with anchoring and approach | Original official preconditions, state setter and settling |
 | Reach | Project distance checks / automatic approach | No added distance check or approach; upstream semantics apply |
 | Actions | Nine shared semantic names plus project `wait` | All 14 official enum members; no `wait` or `look` |
 
-The current `motor` profile is a third condition: model-written Python commands physical base, joint and gripper controllers. It does not call these symbolic primitives. FastMCP is unrelated to which executor runs; all profiles keep the existing official MCP SDK server.
+The separate, paused motor branch is a third condition: model-written Python commands physical base, joint and gripper controllers. It does not call these symbolic primitives. All current MCP transports in this branch use the official SDK FastMCP server; executor selection is independent of the transport.
 
 ## Model-facing contract
 
@@ -43,12 +45,12 @@ The initial profile omits workflow-skill documents because the existing document
 Pinned OmniGibson source: `b1979916ec1549b10a4e65e630bc6504a9af1b00` (3.9.2).
 
 - Symbolic actions can directly change states and poses. In particular, original grasp/toggle code does not enforce the old adapter's distance checks. A successful radio toggle may therefore require no approach. This cannot establish navigation or contact-control ability.
-- Symbolic initialization skips CuRobo, but inherited `NAVIGATE_TO` accesses that absent planner. The pinned implementation also has a navigation method signature mismatch farther down that path. This mode preserves errors and does not silently fall back to project navigation.
+- The upstream Symbolic constructor skips CuRobo. This adapter explicitly initializes its required DEFAULT/ARM planners and adapts the inherited endpoint signature. A measured world/virtual-anchor mismatch is corrected for candidate joints and endpoint world height. Sampling, collision and IK remain native; there is no project GT navigation fallback.
 - Tool completion is an upstream operation outcome, not task success. Failures can leave an object released or a state changed. No project scene rollback runs.
 - All 14 names are exposed; exposure and CPU dispatch checks do not establish that all 14 work physically or complete their associated tasks.
-- Primitive attempts use a 120-second cooperative time check, bounded yielded environment steps and a separate internal physics-tick cap (four times the action step budget). These checks cannot interrupt a native call that never returns; the process supervisor supplies the outer deadline.
+- Official primitives use the episode execution deadline and remaining environment steps. The former 120-second/700-step caps and separate internal physics cap were removed because they truncated legitimate native settling. MCP transport waits allow the episode deadline plus response/cleanup time. A process supervisor still handles native calls that cannot return.
 - One upstream attempt differs from the upstream default of three. This prevents hidden retry multiplication and is explicitly recorded.
-- Camera tracking is disabled to preserve the fixed RGB rig. Official primitive source files are not patched. Wrapper budgets and tracing are the only additions around primitive execution.
+- Camera tracking is disabled to preserve the fixed RGB rig. Upstream files stay unchanged. Required planner initialization, instance-scoped signature/frame compatibility and recorded execution budgets are explicit in provenance.
 
 `official_primitives.jsonl` privately records each upstream call, target binding, error and step count. `official_control_steps.jsonl` records every yielded action passed to the environment. Internal sampler ticks are counted separately from official environment-step timing. Source-file hashes and protocol flags are included in run provenance. Public feedback sanitizes simulator object/state details.
 
@@ -59,11 +61,16 @@ PYTHONPATH=src python -m manipulation_agent.vision_cli \
 # Use --agent-profile official on scripts/run_codex_controller.py as well.
 ```
 
-Experiment records: `operations/official_symbolic_20261002/` outside Git. A scripted component probe is recorded separately from a fresh Astra episode. Existing batch workers continue on their frozen sources.
+Experiment records: initial `operations/official_symbolic_20261002/` and current `operations/harness_upgrade_20261004/` outside Git. A scripted component probe is recorded separately from a fresh Astra episode. Existing batch workers continue on their frozen sources.
 
 [Official symbolic source](https://github.com/StanfordVL/BEHAVIOR-1K/blob/b1979916ec1549b10a4e65e630bc6504a9af1b00/OmniGibson/omnigibson/action_primitives/symbolic_semantic_action_primitives.py).
 
 ## First validation — 2026-10-02
+
+This is historical v1 evidence. The initial component probe accepted the expected
+navigation failure as a diagnostic check; the current probe requires navigation
+to actually return successfully. Do not read the old component total as a passing
+navigation capability.
 
 Frozen implementation: `c91a054fd25092971c5a1e1237436db5d64bef00`. Simulator host: S134 (`ZJU3DV-3090`), GPU UUID `GPU-99a7efe6-7e2d-a5b7-f781-c9856a61e8b4`. The original evaluation workers were not changed.
 
