@@ -11,6 +11,7 @@ from .observations.boundary import public_observation, public_execution_error
 from .records import write_json
 from .skill_runtime import SkillLibrary
 from .tools import REGISTRY, tool_specs
+from .tool_context import ToolContext
 from .surround import SurroundJobs
 
 class VisionHarness:
@@ -82,7 +83,8 @@ class VisionHarness:
                     (not self.deadline.managed and time.monotonic()-self.started>self.budget.wall_seconds)):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')
             execution_args = {k:v for k,v in arguments.items() if k != 'decision'}
-            result={'ok':True,**REGISTRY[name].handler(self,**execution_args)}
+            context=ToolContext(self, request_id=request_id, tool_name=name)
+            result={'ok':True,**REGISTRY[name].handler(context,**execution_args)}
         except SkillError as exc:
             result={'ok':False,'error':{'code':exc.code,'message':str(exc)}}
             result['observation']=self.snapshot
