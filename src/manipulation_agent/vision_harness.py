@@ -37,6 +37,11 @@ class VisionHarness:
         self.snapshot=self.refresh()
         recorder.run.update(backend=backend.provenance(),budget=asdict(budget),skill_bundle_sha256=self.skills.digest if self.skills else None,
                             observation_contract="rgb_four_camera_same_state_v1" if 'capture' in self.snapshot else "rgb_only_v1")
+        if profile == 'official':
+            recorder.run['budget']['max_steps_per_action'] = None
+            recorder.run['budget']['action_step_limit'] = 'remaining_episode_sim_steps'
+            recorder.run['budget']['action_wall_seconds'] = None
+            recorder.run['budget']['wall_scope'] = 'episode_execution_excludes_initialization'
         write_json(recorder.output/'run.json',recorder.run)
         recorder.event('episode_started',{'observation':self.snapshot})
 
@@ -106,7 +111,8 @@ class VisionHarness:
         if target and target['image_ref'] not in {i['image_ref'] for i in self.snapshot['images']}:
             raise SkillError('stale_image_ref','Select a point in the latest returned image')
         self.actions+=1
-        limit=min(self.budget.max_steps_per_action,self.budget.max_sim_steps-self.backend.steps)
+        remaining_steps=self.budget.max_sim_steps-self.backend.steps
+        limit=remaining_steps if self.profile=='official' else min(self.budget.max_steps_per_action,remaining_steps)
         error=None
         try:
             details=self.backend.execute_visual(primitive,target,limit,**kwargs)

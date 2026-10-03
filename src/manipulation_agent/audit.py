@@ -16,8 +16,17 @@ def official_executor_protocol(backend):
     protocol=backend.get('control_protocol')
     if protocol=='rgb_official_symbolic_direct_v1':
         return True
-    if protocol!='rgb_official_symbolic_initialized_navigation_v2':
+    if protocol not in {'rgb_official_symbolic_initialized_navigation_v2',
+                        'rgb_official_symbolic_episode_budget_v3'}:
         return False
+    if protocol=='rgb_official_symbolic_episode_budget_v3':
+        budget=backend.get('budget_policy',{})
+        if (budget.get('action_step_limit')!='remaining_episode_sim_steps'
+            or 'action_wall_seconds' not in budget or budget['action_wall_seconds'] is not None
+            or 'internal_physics_tick_limit' not in budget or budget['internal_physics_tick_limit'] is not None
+            or budget.get('deadline_scope')!='episode_execution_excludes_initialization'
+            or budget.get('native_sampling_limits')!='unchanged'):
+            return False
     planner=backend.get('navigation_planner',{})
     if (planner.get('initialized') is not True
         or planner.get('implementation')!='upstream_CuRoboMotionGenerator'):

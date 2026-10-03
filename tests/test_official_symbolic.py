@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from manipulation_agent.contracts import Budget, SkillError
 from manipulation_agent.deadline import EpisodeDeadline
@@ -46,6 +46,7 @@ class DirectDispatchTests(unittest.TestCase):
             finally:
                 self.closed.append(True)
         b.primitives = SimpleNamespace(apply_ref=native,
+            _settle_robot=lambda: iter(()),
             _motion_generator=SimpleNamespace(update_obstacles=lambda *a, **k: None),
             _validate_poses=lambda *a, **k: True,
             _target_in_reach_of_robot=lambda *a, **k: True)
@@ -90,16 +91,51 @@ class DirectDispatchTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 'pre_condition_error')
         self.assertEqual(native.call_count, 1)
 
-    def test_internal_physics_budget_restores_original_function(self):
+    def test_native_physics_ticks_are_not_limited_by_env_step_ratio(self):
         def loop(*args, **kwargs):
             for _ in range(20): self.b.og.sim.step_physics()
             yield 0
         self.b.primitives.apply_ref = loop
-        with self.assertRaises(SkillError) as error:
-            self.b.execute_visual('place_inside', {'image_ref':'rgb','point':[.4,.5]}, 2)
-        self.assertEqual(error.exception.code, 'sampling_budget_exhausted')
-        self.assertEqual(self.physics.call_count, 8)
+        result=self.b.execute_visual('place_inside', {'image_ref':'rgb','point':[.4,.5]}, 2)
+        self.assertEqual(result['internal_physics_ticks'],20)
+        self.assertEqual(self.physics.call_count,20)
         self.assertIs(self.b.og.sim.step_physics, self.physics)
+
+    def test_native_settling_beyond_old_700_steps_and_120_seconds_completes(self):
+        clock=[100.0]
+        def settle():
+            for _ in range(1100):
+                clock[0]+=.2
+                yield 0
+        self.b.primitives._settle_robot=settle
+        def native(*args,**kwargs):
+            yield from self.b.primitives._settle_robot()
+        self.b.primitives.apply_ref=native
+        self.b.deadline=EpisodeDeadline(1900)
+        with patch('manipulation_agent.deadline.time.time',side_effect=lambda:clock[0]), \
+             patch('manipulation_agent.executors.official_symbolic.time.monotonic',side_effect=lambda:clock[0]):
+            result=self.b.execute_visual('grasp',{'image_ref':'rgb','point':[.4,.5]},20000)
+        self.assertEqual(result['steps'],1100)
+        self.assertGreater(clock[0]-100,120)
+        self.assertIs(self.b.primitives._settle_robot,settle)
+        self.assertIs(self.b.og.sim.step_physics,self.physics)
+
+    def test_shared_episode_deadline_still_interrupts_internal_sampler(self):
+        clock=[100.0]
+        self.b.deadline=EpisodeDeadline(103)
+        self.physics.side_effect=lambda:clock.__setitem__(0,clock[0]+1)
+        def native(*args,**kwargs):
+            try:
+                for _ in range(20):self.b.og.sim.step_physics()
+                yield 0
+            finally:self.closed.append(True)
+        self.b.primitives.apply_ref=native
+        with patch('manipulation_agent.deadline.time.time',side_effect=lambda:clock[0]), self.assertRaises(SkillError) as exc:
+            self.b.execute_visual('place_inside',{'image_ref':'rgb','point':[.4,.5]},20000)
+        self.assertEqual(exc.exception.code,'episode_timeout')
+        self.assertEqual(self.physics.call_count,3)
+        self.assertEqual(self.closed,[True])
+        self.assertIs(self.b.og.sim.step_physics,self.physics)
 
     def test_custom_arguments_and_targetless_manipulation_rejected(self):
         for primitive, target, options in [('wait', None, {}), ('look',None,{}), ('grasp',None,{}),
@@ -120,6 +156,26 @@ class OfficialBoundaryTests(unittest.TestCase):
     def args(self, primitive='toggle_on'):
         return {'primitive':primitive,'revision':self.h.revision,
                 'target':{'image_ref':self.h.snapshot['images'][0]['image_ref'],'point':[.5,.5]}}
+
+    def test_official_receives_remaining_episode_steps_and_record_matches(self):
+        self.b.steps=725
+        execute=Mock(wraps=self.b.execute_visual)
+        self.b.execute_visual=execute
+        self.h.call('act',self.args(),'remaining')
+        self.assertEqual(execute.call_args.args[2],20000-725)
+        self.assertIsNone(self.rec.run['budget']['max_steps_per_action'])
+        self.assertEqual(self.rec.run['budget']['action_step_limit'],'remaining_episode_sim_steps')
+
+    def test_original_keeps_700_step_action_limit(self):
+        path=Path(self.tmp.name)/'original'
+        recorder=Recorder(path,{'backend':'mock','observation_mode':'rgb_only'})
+        backend=MockRGBBackend(path)
+        harness=VisionHarness(backend,recorder,Budget(),profile='minimal')
+        backend.execute_visual=Mock(wraps=backend.execute_visual)
+        target={'image_ref':harness.snapshot['images'][0]['image_ref'],'point':[.5,.5]}
+        harness.perform('toggle_on',target,harness.revision)
+        self.assertEqual(backend.execute_visual.call_args.args[2],700)
+        self.assertEqual(recorder.run['budget']['max_steps_per_action'],700)
 
     def test_catalog_isolation_and_no_custom_options(self):
         self.assertEqual(set(self.h.catalog), {'observe','act','finish','start_observation','get_observation','cancel_observation'})

@@ -39,6 +39,17 @@ class ModelEvidenceAudit(unittest.TestCase):
         self.assertFalse(official_executor_protocol({'control_protocol':'unknown'}))
         self.assertTrue(official_executor_protocol({'control_protocol':'rgb_official_symbolic_direct_v1'}))
 
+    def test_v3_budget_protocol_requires_explicit_episode_scope(self):
+        from manipulation_agent.executors.official_symbolic import OFFICIAL_BUDGET_POLICY, PROTOCOL
+        backend={'control_protocol':PROTOCOL,'budget_policy':dict(OFFICIAL_BUDGET_POLICY),
+            'navigation_planner':{'initialized':True,'implementation':'upstream_CuRoboMotionGenerator',
+                                 'embodiments':['DEFAULT','ARM','BASE']}}
+        self.assertTrue(official_executor_protocol(backend))
+        backend['budget_policy']['action_wall_seconds']=120
+        self.assertFalse(official_executor_protocol(backend))
+        backend.pop('budget_policy')
+        self.assertFalse(official_executor_protocol(backend))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.run_dir = Path(self.tmp.name) / 'sim'; self.run_dir.mkdir()

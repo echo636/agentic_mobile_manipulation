@@ -6,6 +6,65 @@ import time
 
 
 @contextmanager
+def trace_native_settling(primitives, record, interval=50):
+    """Observe native settling without changing its actions or stop condition.
+
+    All generator operations delegate to the original, including cancellation.
+    Sparse diagnostic failures must not replace the primitive's actual result.
+    """
+    missing = object()
+    previous = vars(primitives).get('_settle_robot', missing)
+    original = primitives._settle_robot
+
+    @wraps(original)
+    def traced(*args, **kwargs):
+        generated = original(*args, **kwargs)
+        count = 0
+
+        def emit(phase):
+            try:
+                record(phase, count)
+            except Exception:
+                pass
+
+        class ObservedGenerator:
+            def __iter__(self): return self
+
+            def observed(self, action):
+                nonlocal count
+                count += 1
+                if count % interval == 0:
+                    emit('yielded')
+                return action
+
+            def __next__(self): return self.observed(next(generated))
+            def send(self, value): return self.observed(generated.send(value))
+            def throw(self, *error): return self.observed(generated.throw(*error))
+            def close(self): return generated.close()
+
+        phase = 'failed'
+        emit('started')
+        try:
+            result = yield from ObservedGenerator()
+            phase = 'returned'
+            return result
+        except GeneratorExit:
+            phase = 'closed'
+            raise
+        finally:
+            emit(phase)
+
+    primitives._settle_robot = traced
+    try:
+        yield
+    finally:
+        if previous is missing:
+            delattr(primitives, '_settle_robot')
+        else:
+            primitives._settle_robot = previous
+
+
+@contextmanager
 def native_planning_checkpoints(primitives, check_budget, record_phase):
     """Check the existing action deadline inside a non-yielding native sampler.
 

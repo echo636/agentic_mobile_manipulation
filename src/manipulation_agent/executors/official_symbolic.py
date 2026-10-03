@@ -21,7 +21,14 @@ OFFICIAL_PRIMITIVES = (
     'soak_under', 'soak_inside', 'wipe', 'cut', 'place_near_heating_element',
     'navigate_to', 'release',
 )
-PROTOCOL = 'rgb_official_symbolic_initialized_navigation_v2'
+PROTOCOL = 'rgb_official_symbolic_episode_budget_v3'
+OFFICIAL_BUDGET_POLICY = {
+    'action_step_limit': 'remaining_episode_sim_steps',
+    'action_wall_seconds': None,
+    'internal_physics_tick_limit': None,
+    'deadline_scope': 'episode_execution_excludes_initialization',
+    'native_sampling_limits': 'unchanged',
+}
 # Native symbolic navigation uses DEFAULT collision checks and ARM reachability.
 # Its pose-setter override never enters Starter's BASE trajectory planner.
 NAVIGATION_EMBODIMENTS = ('DEFAULT', 'ARM')
@@ -118,17 +125,13 @@ class OfficialSymbolicBackend(RGBBackend):
         self._video_frame('env_step')
 
     @contextmanager
-    def _bounded_internal_physics(self, max_steps):
-        """Count upstream sampler ticks separately, without pose/state repair."""
+    def _counted_internal_physics(self):
+        """Count native sampler ticks; the shared episode clock bounds execution."""
         original = self.og.sim.step_physics
-        started = time.monotonic()
-        before = self.sampling_physics_steps
 
         def step(*args, **kwargs):
             if self._inside_primitive:
                 self.deadline.check(changed=True)
-                if self.sampling_physics_steps - before >= max_steps * 4 or time.monotonic() - started > 120:
-                    raise SkillError('sampling_budget_exhausted', 'Upstream internal physics/time budget exhausted', changed=True)
                 self.sampling_physics_steps += 1
             return original(*args, **kwargs)
 
@@ -157,14 +160,14 @@ class OfficialSymbolicBackend(RGBBackend):
         entry = {'at': now(), 'primitive': primitive, 'attempts': 1,
                  'target_object': getattr(obj, 'name', None), 'grounding': grounding,
                  'entrypoint': 'SymbolicSemanticActionPrimitives.apply_ref',
+                 'control_protocol': PROTOCOL, 'max_env_steps': max_steps,
+                 'budget_policy': dict(OFFICIAL_BUDGET_POLICY),
                  'start_step': before, 'audience': 'executor_private'}
         generator = None
         started = time.monotonic()
 
         def check_planning_budget():
             self.deadline.check(changed=True)
-            if time.monotonic() - started > 120:
-                raise SkillError('action_timeout', 'Official primitive time budget exhausted', changed=True)
 
         def record_planning_phase(phase, status, duration):
             with (self.output / 'official_planning_phases.jsonl').open('a') as stream:
@@ -173,7 +176,21 @@ class OfficialSymbolicBackend(RGBBackend):
                     'action_elapsed_seconds': time.monotonic() - started,
                     'audience': 'executor_private'}) + '\n')
 
-        from .symbolic_compat import native_planning_checkpoints
+        def record_settling(phase, yielded_actions):
+            velocity = self.robot.get_linear_velocity()
+            position, orientation = self.robot.get_position_orientation()
+            with (self.output / 'official_settling.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at': now(), 'primitive': primitive,
+                    'action_start_step': before, 'phase': phase,
+                    'yielded_actions': yielded_actions, 'sim_step': self.steps,
+                    'base_linear_velocity': velocity.detach().cpu().tolist(),
+                    'base_speed_m_s': float(velocity.norm().item()),
+                    'base_position': position.detach().cpu().tolist(),
+                    'base_orientation_xyzw': orientation.detach().cpu().tolist(),
+                    'action_elapsed_seconds': time.monotonic() - started,
+                    'audience': 'executor_private'}) + '\n')
+
+        from .symbolic_compat import native_planning_checkpoints, trace_native_settling
         try:
             if primitive == 'navigate_to':
                 self._record_navigation_diagnostics('before_navigate_to')
@@ -181,12 +198,11 @@ class OfficialSymbolicBackend(RGBBackend):
             # Do not run faulthandler.dump_traceback_later here: the pinned
             # simulator reproduced SIGSEGV in its watchdog's dump_frame().
             # Native fault capture belongs to the external batch debugger.
-            with self._bounded_internal_physics(max_steps), native_planning_checkpoints(
-                    self.primitives, check_planning_budget, record_planning_phase):
+            with self._counted_internal_physics(), native_planning_checkpoints(
+                    self.primitives, check_planning_budget, record_planning_phase), \
+                    trace_native_settling(self.primitives, record_settling):
                 while True:
                     self.deadline.check(changed=True)
-                    if time.monotonic() - started > 120:
-                        raise SkillError('action_timeout', 'Official primitive time budget exhausted', changed=True)
                     self._inside_primitive = True
                     try:
                         action = next(generator)
@@ -227,6 +243,7 @@ class OfficialSymbolicBackend(RGBBackend):
         result = OmniGibsonBackend.provenance(self)
         result.pop('inside_placement', None)
         result.update(executor='official_symbolic_apply_ref', control_protocol=PROTOCOL,
+            budget_policy=dict(OFFICIAL_BUDGET_POLICY),
             symbolic_primitives=True, physical_control=False, official_attempts=1,
             custom_navigation=False, custom_carry=False, custom_placement=False,
             automatic_approach=False, failure_rollback=False, target_scope='selected_visual_object',
