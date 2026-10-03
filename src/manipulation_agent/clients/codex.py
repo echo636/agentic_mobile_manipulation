@@ -50,7 +50,7 @@ class CodexAdapter(ClientAdapter):
             command += ["--disable", feature]
         server = {"command": config.mcp_command, "args": config.mcp_args, "enabled_tools": tool_names,
                   "startup_timeout_sec": 60, "required": True,
-                  "tool_timeout_sec": 300, "default_tools_approval_mode": "approve"}
+                  "tool_timeout_sec": config.timeout + 120 if config.agent_profile == "official" else 300, "default_tools_approval_mode": "approve"}
         for key, value in server.items():
             command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
         command += ["-"]

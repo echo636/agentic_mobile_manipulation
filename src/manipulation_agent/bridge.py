@@ -25,6 +25,10 @@ def rpc(url: str, name: str, arguments: dict, request_id: str, timeout: float = 
 def serve(harness, port: int) -> None:
     jobs = queue.Queue(maxsize=32)
     shutdown = threading.Event()
+    # A native symbolic action can legitimately take more than five minutes.
+    # Its execution deadline is checked by the owner/supervisor; transport waits
+    # must allow that deadline plus cleanup/score delivery, not truncate the RPC.
+    rpc_timeout = harness.budget.wall_seconds + 120 if getattr(harness, 'profile', None) == 'official' else 300
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
@@ -44,7 +48,7 @@ def serve(harness, port: int) -> None:
         def do_GET(self):
             if self.path == "/healthz":
                 catalog = harness.tool_specs() if hasattr(harness, "tool_specs") else tool_specs()
-                self.send(200, {"ready": True, "closed": harness.closed, "tools": catalog})
+                self.send(200, {"ready": True, "closed": harness.closed, "tools": catalog, "rpc_timeout_seconds": rpc_timeout})
             elif self.path.startswith("/image/") and hasattr(harness, "image_bytes"):
                 ref = self.path.removeprefix("/image/")
                 try:
@@ -79,7 +83,7 @@ def serve(harness, port: int) -> None:
             except (ValueError, queue.Full):
                 return self.send(400, {"error": "invalid_or_overloaded_request"})
             try:
-                result = future.result(timeout=300)
+                result = future.result(timeout=rpc_timeout)
             except concurrent.futures.TimeoutError:
                 # Do not claim cancellation: the action may already be running.
                 return self.send(504, {"error": "outcome_unknown", "retry_with_same_request_id": True})

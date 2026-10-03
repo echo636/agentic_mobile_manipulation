@@ -137,6 +137,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         return hashes
 
     async def exercise(self, transport):
+        self.assertEqual(self.health['rpc_timeout_seconds'], 1920 if self.profile == 'official' else 300)
         async with self.client(transport) as session:
             listed = await session.list_tools()
             self.assertEqual({t.name: t.inputSchema for t in listed.tools},
