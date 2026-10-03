@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 import unittest
 
-from manipulation_agent.executors.symbolic_compat import trace_native_settling
+from manipulation_agent.executors.symbolic_compat import trace_native_settling, native_planning_checkpoints
 
 
 class NativeSettlingTraceTests(unittest.TestCase):
@@ -61,6 +61,29 @@ class NativeSettlingTraceTests(unittest.TestCase):
             with trace_native_settling(primitive,broken_record):
                 list(primitive._settle_robot())
         self.assertIs(primitive._settle_robot,native)
+
+
+class NativePlanningTraceTests(unittest.TestCase):
+    def test_private_boolean_results_are_recorded_without_replacing_native_result(self):
+        mask=[False,True,False]
+        validate=lambda *args,**kwargs:mask
+        reachable=lambda *args,**kwargs:False
+        update=lambda:None
+        primitive=SimpleNamespace(_validate_poses=validate,_target_in_reach_of_robot=reachable,
+                                  _motion_generator=SimpleNamespace(update_obstacles=update))
+        events=[]
+        with native_planning_checkpoints(primitive,lambda:None,lambda *x:events.append(x)):
+            self.assertIs(primitive._validate_poses('candidate_batch'),mask)
+            self.assertFalse(primitive._target_in_reach_of_robot('target'))
+            self.assertIsNone(primitive._motion_generator.update_obstacles())
+        summaries={name:summary for name,status,_,summary in events if status=='returned'}
+        self.assertEqual(summaries['_validate_poses'],
+                         {'valid_mask':[False,True,False],'candidate_count':3,'valid_count':1})
+        self.assertEqual(summaries['_target_in_reach_of_robot'],{'reachable':False})
+        self.assertIsNone(summaries['update_obstacles'])
+        self.assertIs(primitive._validate_poses,validate)
+        self.assertIs(primitive._target_in_reach_of_robot,reachable)
+        self.assertIs(primitive._motion_generator.update_obstacles,update)
 
 
 if __name__=='__main__':unittest.main()

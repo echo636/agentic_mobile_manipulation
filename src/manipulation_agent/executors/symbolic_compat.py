@@ -76,9 +76,9 @@ def native_planning_checkpoints(primitives, check_budget, record_phase):
     missing = object()
     restore = []
 
-    def record(name, status, duration):
+    def record(name, status, duration, result_summary=None):
         try:
-            record_phase(name, status, duration)
+            record_phase(name, status, duration, result_summary)
         except OSError:
             # Diagnostics must not hide the original native exception or the
             # deadline, for example during a transient NAS write failure.
@@ -95,7 +95,14 @@ def native_planning_checkpoints(primitives, check_budget, record_phase):
             except Exception:
                 record(name, 'failed', time.monotonic() - started)
                 raise
-            record(name, 'returned', time.monotonic() - started)
+            result_summary = None
+            if name == '_target_in_reach_of_robot':
+                result_summary = {'reachable': bool(result)}
+            elif name == '_validate_poses':
+                valid_mask = [bool(value) for value in result]
+                result_summary = {'valid_mask': valid_mask,
+                                  'candidate_count': len(valid_mask), 'valid_count': sum(valid_mask)}
+            record(name, 'returned', time.monotonic() - started, result_summary)
             check_budget()
             return result
         return checked

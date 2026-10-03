@@ -169,10 +169,11 @@ class OfficialSymbolicBackend(RGBBackend):
         def check_planning_budget():
             self.deadline.check(changed=True)
 
-        def record_planning_phase(phase, status, duration):
+        def record_planning_phase(phase, status, duration, result_summary=None):
             with (self.output / 'official_planning_phases.jsonl').open('a') as stream:
                 stream.write(json.dumps({'at': now(), 'primitive': primitive, 'phase': phase,
                     'status': status, 'duration_seconds': duration,
+                    'result_summary': result_summary,
                     'action_elapsed_seconds': time.monotonic() - started,
                     'audience': 'executor_private'}) + '\n')
 
