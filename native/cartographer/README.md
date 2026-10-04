@@ -22,6 +22,8 @@ replacing them with the base origin would clear space the camera never saw.
 The output is an immutable occupancy snapshot per update: row-major bytes
 `0=observed free`, `100=occupied`, `255=unknown`, with columns increasing world
 X and rows increasing world Y. `origin` is the world center of cell `[0,0]`.
+It is computed in double precision from native map limits, keeping the world
+lattice fixed when the map expands or its known-area crop changes.
 Native probability updates use hit probability 0.55 and miss probability 0.49;
 the 0.5 posterior boundary separates occupied and free evidence. A persistent
 sensor-hit overlay immediately blocks newly observed obstacles even when prior

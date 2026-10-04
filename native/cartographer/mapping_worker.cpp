@@ -156,7 +156,13 @@ int main(int argc, char** argv) {
       // Cartographer indices are reverse Y/X. Export increasing world Y/X.
       const int width = extent.num_y_cells, height = extent.num_x_cells;
       if (width < 1 || height < 1) throw std::runtime_error("Empty grid limits");
-      const auto origin = grid->limits().GetCellCenter(offset + Eigen::Array2i(height - 1, width - 1));
+      const Eigen::Array2i first_cell = offset + Eigen::Array2i(height - 1, width - 1);
+      // GetCellCenter returns float32. Exporting it would shift the world lattice
+      // by sub-micrometres whenever the cropped bounds change. Preserve the
+      // MapLimits double precision so a fixed world goal stays in one lattice.
+      const Eigen::Vector2d origin(
+          grid->limits().max().x() - resolution * (first_cell.y() + .5),
+          grid->limits().max().y() - resolution * (first_cell.x() + .5));
       const std::string stem = "occupancy_" + std::to_string(sequence);
       const auto raw = output / (stem + ".bin");
       std::ofstream cells(raw, std::ios::binary);

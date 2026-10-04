@@ -54,7 +54,7 @@ class CartographerMapper:
         self.resolution = float(resolution)
         if not math.isfinite(self.resolution) or self.resolution <= 0:
             raise ValueError('Mapping resolution must be positive and finite')
-        default = Path(__file__).resolve().parents[5] / 'runtimes' / 'cartographer_probability_20261004'
+        default = Path(__file__).resolve().parents[5] / 'runtimes' / 'cartographer_probability_20261004_r2'
         self.runtime = Path(runtime or os.environ.get('MAS_CARTOGRAPHER_RUNTIME', default)).resolve()
         executable = self.runtime / 'bin' / 'mas_cartographer_worker'
         if not executable.is_file():

@@ -140,6 +140,20 @@ class NativeCartographerTests(unittest.TestCase):
         self.assertEqual(snapshot.metadata['misses'], 4096)
         self.assertEqual(value(snapshot, 2.025, .025), 0)
 
+    def test_crop_expansion_preserves_world_cell_centres_in_double_precision(self):
+        pose = (4.901851654052734, 3.8323161602020264, 0.)
+        initial = self.update([scan(misses=[(3.025, .025, 0)])], pose=pose)
+        fixed = (initial.origin[0] + 20*initial.resolution, initial.origin[1])
+        for step in range(1, 9):
+            snapshot = self.update([scan(origin=(-step*.25, -step*.1, 0),
+                misses=[(-2-step*.25, -1-step*.1, 0)])], pose=pose)
+            col = round((fixed[0]-snapshot.origin[0])/snapshot.resolution)
+            row = round((fixed[1]-snapshot.origin[1])/snapshot.resolution)
+            current = (snapshot.origin[0]+col*snapshot.resolution,
+                       snapshot.origin[1]+row*snapshot.resolution)
+            self.assertLess(math.dist(fixed, current), 1e-10)
+            self.assertEqual(value(snapshot, *fixed), 0)
+
 
 if __name__ == '__main__':
     unittest.main()
