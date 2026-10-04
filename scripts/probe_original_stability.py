@@ -35,17 +35,18 @@ def quat_yaw(quat):
     return math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
 
 
-def load_navigation_fixture(archive):
+def load_navigation_fixture(archive, case_indices=(0, 1)):
     """Read only three named archive files; do not import the simulator."""
     run = json.loads((archive / 'run.json').read_text())
     plans = read_jsonl(archive / 'navigation_plans.jsonl')
     motion = read_jsonl(archive / 'base_motion.jsonl')
-    if len(plans) != 2:
-        raise ValueError('This regression requires the archived pair of navigation plans')
+    if len(case_indices) != 2 or len(set(case_indices)) != 2 or any(i < 0 or i >= len(plans) for i in case_indices):
+        raise ValueError('Select two distinct existing zero-based archived navigation cases')
     timing = run['evaluation']['official_metrics']['time']
     dt = timing['simulator_time'] / timing['simulator_steps']
     cases = []
-    for index, record in enumerate(plans):
+    for index in case_indices:
+        record = plans[index]
         rows = [row for row in motion if record['at'] < row['at'] and
                 (index + 1 == len(plans) or row['at'] < plans[index + 1]['at'])]
         if not rows:
@@ -72,6 +73,7 @@ def load_navigation_fixture(archive):
                       'start_yaw': yaw, 'start_yaw_source': yaw_source,
                       'archived_motion_steps': len(rows), 'archived_sim_dt': dt})
     return {'archive_run': str(archive.resolve()), 'archive_source': run['source'],
+            'archive_navigation_count': len(plans), 'selected_case_indices': list(case_indices),
             'task': run['config']['task'], 'instance': run['config']['instance'],
             'seed': run['config']['seed'], 'cases': cases,
             'input_sha256': {name: hashlib.sha256((archive / name).read_bytes()).hexdigest()
@@ -126,9 +128,14 @@ def recorded_navigation(backend, recorder, fixture):
             item['actual_final_world_pose'] = [actual_pos.cpu().tolist(), actual_quat.cpu().tolist()]
             item['checks'].update(reached=item['result']['nav_status'] == 'reached',
                                  goal_within_2mm=math.dist(actual_pos[:2].cpu().tolist(), plan.goal) <= .002,
-                                 fewer_than_archived_steps=item['result']['motion_steps'] < case['archived_motion_steps'],
                                  fewer_than_690_steps=item['result']['motion_steps'] < 690,
                                  finite_joints=bool(backend.torch.isfinite(backend.robot.get_joint_positions()).all()))
+            # The060 baseline exhausted690steps. A055 failure can return after
+            # only96steps mid-turn; successful completion need not beat that
+            # premature abort. Preserve both counts without calling it slower.
+            item['archived_motion_steps'] = case['archived_motion_steps']
+            if case['archived_motion_steps'] == 690:
+                item['checks']['fewer_than_archived_steps'] = item['result']['motion_steps'] < 690
             observation = backend.observe()
             item['checks']['four_rgb_after'] = len(observation['images']) == 4
             recorder.event('diagnostic_navigation_result', {'case': case['index'], 'result': item['result'], 'observation': observation})
@@ -246,6 +253,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode', choices=('recorded-navigation', 'interrupt-action'), required=True)
     parser.add_argument('--archive-run', type=Path)
+    parser.add_argument('--navigation-case-indices', type=int, nargs=2, default=(0, 1), metavar=('FIRST', 'SECOND'),
+                        help='Two zero-based archived cases; defaults to the original060 pair0,1')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--task', default='scrubbing_bathroom_floor')
     parser.add_argument('--instance', type=int, default=301)
@@ -259,7 +268,7 @@ def main():
         parser.error('--execution-seconds must be positive and finite')
     if args.mode == 'recorded-navigation' and args.archive_run is None:
         parser.error('--archive-run is required for recorded-navigation')
-    fixture = load_navigation_fixture(args.archive_run) if args.mode == 'recorded-navigation' else None
+    fixture = load_navigation_fixture(args.archive_run, args.navigation_case_indices) if args.mode == 'recorded-navigation' else None
     if fixture is not None:
         args.task, args.instance, args.seed = (fixture[k] for k in ('task', 'instance', 'seed'))
     config = {'backend': 'omnigibson', 'task': args.task, 'instance': args.instance, 'seed': args.seed,
