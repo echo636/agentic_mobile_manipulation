@@ -11,6 +11,7 @@ dependencies = []
 
 [project.optional-dependencies]
 mcp = ["mcp==1.28.1"]
+navigation = ["numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.scripts]
 manip-agent = "manipulation_agent.vision_cli:main"

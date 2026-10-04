@@ -32,11 +32,11 @@ Four readable workflow skills are available: `visual-manipulation`, `visual-expl
 Python >=3.11 is required. The CPU core does not require simulator packages:
 
 ```bash
-python -m pip install -e '.[mcp]'
+python -m pip install -e '.[mcp,navigation]'
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-The recorded simulator environment uses OmniGibson 3.9.2, Isaac Sim 5.1.0, torch 2.7.0+cu128, and BDDL 3.7.0. BEHAVIOR assets must be installed under their official license and are not included in this repository.
+The recorded simulator environment uses OmniGibson 3.9.2, Isaac Sim 5.1.0, torch 2.7.0+cu128, and BDDL 3.7.0. BEHAVIOR assets must be installed under their official license and are not included in this repository. The online navigator also requires the [native Cartographer worker](native/cartographer/README.md). Set `MAS_CARTOGRAPHER_RUNTIME` to its packaged prefix before starting an OmniGibson episode; Python package installation alone does not build that worker.
 
 ```bash
 PYTHONPATH=src python -m manipulation_agent.vision_cli \
