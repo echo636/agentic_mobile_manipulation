@@ -13,6 +13,7 @@ from . import bridge
 from .executors.omnigibson_rgb import RGBBackend
 from .observations.mock_rgb import MockRGBBackend
 from .vision_policy import RGBResponsesPolicy
+from .startup_progress import startup_stage
 
 
 def main():
@@ -56,7 +57,8 @@ def main():
         deadline.check()
         backend=MockRGBBackend(a.output) if a.backend=='mock' else RGBBackend(a.task,a.instance,a.output,seed=a.seed,max_steps=a.max_sim_steps,inside_placement=a.inside_placement,record_video=a.record_video)
         backend.deadline=deadline
-        harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps),profile=a.agent_profile)
+        with startup_stage(a.output, 'first_observation_and_harness'):
+            harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps),profile=a.agent_profile)
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)

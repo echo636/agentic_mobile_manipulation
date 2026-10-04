@@ -28,6 +28,7 @@ from manipulation_agent.records import now, write_json, read_run, source_version
 from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
+from manipulation_agent.startup_progress import STARTUP_POLICY, startup_progress_update
 
 FINAL = {'passed','failed','blocked'}
 
@@ -547,6 +548,7 @@ class Batch:
         """Simulator/handshake startup and actual model execution have separate clocks."""
         while process.poll() is None:
             self.controller_metadata(row,controller)
+            self.refresh_startup_progress(row)
             deadline=row.get('episode_deadline_unix')
             cutoff=deadline or row['startup_deadline_unix']
             if time.time()>=cutoff:
@@ -561,6 +563,34 @@ class Batch:
             if time.monotonic()-getattr(process,'last_heartbeat',0)>30:
                 process.last_heartbeat=time.monotonic();self.update(row,heartbeat_at=now())
         return self.controller_metadata(row,controller)
+
+    def refresh_startup_progress(self, row):
+        """Read actual remote milestones, never mistake polling for progress."""
+        if row.get('startup_watchdog_policy') != STARTUP_POLICY or row.get('episode_deadline_unix'):
+            return
+        # Avoid launching a Python reader on every two-second health poll.
+        last=getattr(self._worker_local,'startup_progress_poll',None)
+        current=time.time()
+        if (last and last[0]==row['run_id'] and current-last[1]<10
+                and current<row['startup_deadline_unix']):
+            return
+        self._worker_local.startup_progress_poll=(row['run_id'],current)
+        path=Path(row['simulator_output'])/'startup_stages.jsonl'
+        code=("import json; from pathlib import Path; p=Path("+repr(str(path))+
+              "); result=[]\n"
+              "for line in (p.read_text().splitlines() if p.exists() else []):\n"
+              " try: result.append(json.loads(line))\n"
+              " except ValueError: pass\n"
+              "print(json.dumps(result))")
+        try:
+            result=self.ssh(['/usr/bin/python3','-c',code],timeout=15)
+            if result.returncode:return
+            events=json.loads(result.stdout)
+            if not isinstance(events,list):return
+            updates=startup_progress_update(row,events,time.time())
+        except (subprocess.TimeoutExpired,OSError,ValueError):
+            return  # Unreadable progress cannot extend the watchdog.
+        if updates:self.update(row,**updates)
 
     def run_one(self, row, gpu):
         runid=row['run_id'];port=self.c['base_port']+gpu
@@ -623,7 +653,7 @@ class Batch:
                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
             launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
                 '-p','MemoryMax='+self.c.get('simulator_memory_max',str(self.c.get('memory_budget_gib',28))+'G'),
-                '-p','CPUQuota=800%','-p',f'RuntimeMaxSec={startup_seconds+seconds+grace}',
+                '-p','CPUQuota=800%',
                 '-p','TasksMax=2048','-p','LimitCORE=0','-p','TimeoutStopSec=30',
                 '-p','KillMode=control-group','-p','SuccessExitStatus=2','-p','WorkingDirectory='+str(self.source)]
             launch+=inline_systemd_launcher(launcher.read_text())
@@ -631,6 +661,7 @@ class Batch:
             if lease:lease.record(run_id=runid,unit=unit,released=False)
             self.update(row,stage='simulator_starting',simulator_started_at_unix=started,
                         startup_deadline_unix=startup_deadline,startup_timeout_seconds=startup_seconds,
+                        startup_watchdog_policy=STARTUP_POLICY,
                         execution_clock_path=str(clock_path),deadline_origin='model_start_after_mcp_handshake',
                         budget_basis='model_execution_excludes_initialization',
                         episode_timeout_seconds=seconds,
@@ -649,7 +680,11 @@ class Batch:
                 port=port,simulator_started_at_unix=started,startup_deadline_unix=startup_deadline,
                 episode_timeout_seconds=seconds,cleanup_grace_seconds=grace)
             self.worker_state('starting',run_id=runid,startup_deadline_unix=startup_deadline)
-            while time.time()<startup_deadline:
+            while True:
+                self.refresh_startup_progress(row)
+                if time.time()>=row['startup_deadline_unix']:
+                    self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
+                    raise TimeoutError('Simulator initialization made no milestone progress before watchdog expiry')
                 state=self.unit_state(unit)
                 if state.get('ActiveState') not in {'active','activating'}:
                     raise RuntimeError('Simulator exited before bridge ready: '+str(state))
@@ -659,12 +694,9 @@ class Batch:
                         raise RuntimeError('Bridge tool profile mismatch')
                     write_json(self.root/'logs'/f'{runid}_health.json',health)
                     break
-                time.sleep(min(2,max(0,startup_deadline-time.time())))
-            else:
-                self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
-                raise TimeoutError('Simulator initialization watchdog expired before model start')
+                time.sleep(min(2,max(0,row['startup_deadline_unix']-time.time())))
             self.update(row,stage='controller_starting',bridge_ready_at=now())
-            self.worker_state('controller_starting',run_id=runid,startup_deadline_unix=startup_deadline)
+            self.worker_state('controller_starting',run_id=runid,startup_deadline_unix=row['startup_deadline_unix'])
             remote=shlex.join(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],
                 '-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
             cmd=[sys.executable,str(self.source/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
@@ -688,7 +720,7 @@ class Batch:
         except Exception as exc:
             deadline=row.get('episode_deadline_unix')
             expired=deadline is not None and time.time()>=deadline
-            if deadline is None and startup_deadline is not None and time.time()>=startup_deadline:
+            if deadline is None and startup_deadline is not None and time.time()>=row['startup_deadline_unix']:
                 self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
             self.update(row,failure=f'{type(exc).__name__}: {exc}',failure_stage=row.get('stage'),
                         episode_timed_out=bool(row.get('episode_timed_out') or expired))
@@ -821,6 +853,7 @@ class Batch:
                 process=self.start_adopted_policy(row);pid=process.pid
             while pid and controller_process_alive(pid,controller):
                 self.controller_metadata(row,controller)
+                self.refresh_startup_progress(row)
                 deadline=row.get('episode_deadline_unix')
                 cutoff=deadline or row['startup_deadline_unix']
                 if time.time()>=cutoff:
@@ -859,7 +892,13 @@ class Batch:
         if original!=row['source']['commit']:raise RuntimeError('Original inflight runtime source mismatch')
         controller=Path(row['controller_output']);unit=row['simulator_unit'];port=row['port']
         if (controller/'controller.json').exists():raise RuntimeError('Refusing to launch a duplicate model controller')
-        while time.time()<deadline:
+        while True:
+            self.refresh_startup_progress(row)
+            cutoff=row['startup_deadline_unix'] if row.get('startup_watchdog_policy')==STARTUP_POLICY else deadline
+            if time.time()>=cutoff:
+                raise TimeoutError('Original simulator startup exceeded its progress watchdog' if
+                    row.get('startup_watchdog_policy')==STARTUP_POLICY else
+                    'Original simulator startup exceeded its unchanged deadline')
             state=self.unit_state(unit)
             if state.get('ActiveState') not in {'active','activating'}:raise RuntimeError('Original simulator exited during initialization')
             if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}" or int(state['MainPID'])!=spec['simulator_pid']:
@@ -870,7 +909,6 @@ class Batch:
                     raise RuntimeError('Original bridge tool catalog mismatch')
                 break
             self.update(row,heartbeat_at=now(),simulator_pid=spec['simulator_pid']);time.sleep(4)
-        else:raise TimeoutError('Original simulator startup exceeded its unchanged deadline')
         self.update(row,stage='controller_starting' if row.get('execution_clock_path') else 'policy_running',
                     bridge_ready_at=now(),simulator_pid=spec['simulator_pid'])
         remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])

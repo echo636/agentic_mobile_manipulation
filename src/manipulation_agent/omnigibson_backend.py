@@ -14,11 +14,11 @@ import os
 import random
 import subprocess
 import time
-from contextlib import contextmanager
 from pathlib import Path
 
 from .contracts import SkillError
 from .records import write_json
+from .startup_progress import startup_stage
 from .goal_grounding import efficient_grounding, evaluate_once_per_literal
 from .task_bindings import audit_wildcard_bindings, validate_runtime_bindings
 
@@ -120,21 +120,8 @@ def restore_static_floor_geometry(data, full):
 class OmniGibsonBackend:
     mode = "oracle_task_state"
 
-    @contextmanager
     def _startup_stage(self, name):
-        start = time.monotonic()
-        def record(status, **extra):
-            with (self.output / 'startup_stages.jsonl').open('a') as stream:
-                stream.write(json.dumps({'stage': name, 'status': status,
-                    'elapsed_seconds': time.monotonic() - start, **extra}) + '\n')
-        record('running')
-        try:
-            yield
-        except BaseException as exc:
-            record('failed', error_type=type(exc).__name__, error=str(exc))
-            raise
-        else:
-            record('passed')
+        return startup_stage(self.output, name)
 
     def __init__(self, task: str, instance: int, output: Path, *, seed: int = 0, max_steps: int = 20000,
                  inside_placement: str = "symbolic_raycast"):
@@ -142,21 +129,24 @@ class OmniGibsonBackend:
         version = metadata.version("omnigibson")
         if version != "3.9.2":
             raise RuntimeError(f"This research adapter requires OmniGibson 3.9.2, got {version}")
-        import numpy as np
-        import torch
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        gpu = int(os.environ.get("OMNIGIBSON_GPU_ID", "0"))
-        torch.cuda.set_device(gpu)
-        import omnigibson as og
-        from omnigibson.macros import gm
-        from omnigibson.eval.evaluator import Evaluator, resolve_instance_ids
-        from omnigibson.eval.utils.eval_utils import NUM_PUBLIC_TEST_INSTANCES
-        from omnigibson.eval.utils.score_utils import load_human_stats
-        from omnigibson.metrics import TaskMetric
-        from omegaconf import OmegaConf
-        from gello.utils.og_teleop_cfg import DISABLED_TRANSITION_RULES
+        self.output = Path(output)
+        with self._startup_stage('import_numpy_torch'):
+            import numpy as np
+            import torch
+        with self._startup_stage('initialize_cuda_and_import_simulator'):
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.manual_seed(seed)
+            gpu = int(os.environ.get("OMNIGIBSON_GPU_ID", "0"))
+            torch.cuda.set_device(gpu)
+            import omnigibson as og
+            from omnigibson.macros import gm
+            from omnigibson.eval.evaluator import Evaluator, resolve_instance_ids
+            from omnigibson.eval.utils.eval_utils import NUM_PUBLIC_TEST_INSTANCES
+            from omnigibson.eval.utils.score_utils import load_human_stats
+            from omnigibson.metrics import TaskMetric
+            from omegaconf import OmegaConf
+            from gello.utils.og_teleop_cfg import DISABLED_TRANSITION_RULES
 
         if instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
             raise ValueError("Instance must belong to this pinned source's public test split")
@@ -173,8 +163,9 @@ class OmniGibsonBackend:
         self.navigation_distance = 0.0
         self.frames_revision = -1
         self.frames = []
-        config = self._config(task, gpu, max_steps)
-        write_json(output / "environment_config.json", config)
+        with self._startup_stage('prepare_environment_config'):
+            config = self._config(task, gpu, max_steps)
+            write_json(output / "environment_config.json", config)
 
         class PassivePolicy:
             def reset(self):
@@ -240,9 +231,10 @@ class OmniGibsonBackend:
         self.input_hashes["bddl_definition"] = hashlib.sha256(definition_path.read_bytes()).hexdigest()
         write_json(output / "dependency_versions.json", {d.metadata["Name"]: d.version for d in metadata.distributions() if d.metadata["Name"]})
         self.task_metric = next(m for m in self.evaluator.metrics if isinstance(m, TaskMetric))
-        from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitives
-        self.primitives = SymbolicSemanticActionPrimitives(self.env, self.robot)
-        self.primitives._enable_head_tracking = False
+        with self._startup_stage('construct_symbolic_primitives'):
+            from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitives
+            self.primitives = SymbolicSemanticActionPrimitives(self.env, self.robot)
+            self.primitives._enable_head_tracking = False
         with self._startup_stage('initial_goal_evaluation'):
             self.initial_goals = self._goal_options()
         # Keep original task-instance files intact. Evaluator performs its official restoration.

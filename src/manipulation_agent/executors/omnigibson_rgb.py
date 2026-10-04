@@ -65,34 +65,36 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         from omnigibson.sensors import VisionSensor
         base_pos = self.robot.get_position_orientation()[0]
         self.rig_height = float(self.robot.aabb[1][2] - base_pos[2]) + 0.05
-        for direction in DIRECTIONS:
-            sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
-                modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
-                focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
-            sensor.load(None)
-            sensor.initialize()
-            # Otherwise intrinsic_matrix lazily attaches a new annotator AFTER
-            # RGB readback and warms only four frames, sometimes returning a
-            # degenerate projection. Attach all before the shared barrier.
-            sensor.initialize_sensors(names='camera_params')
-            self.rig[direction] = sensor
-        self._position_rig()
-        for _ in range(20): self.og.sim.render()
-        if self.record_video:
-            from ..video import EpisodeVideo
-            from omnigibson.sensors import VisionSensor
-            # Use an independent offscreen render product at its final size. Do
-            # not resize/destroy the shared GUI viewer product: it invalidates
-            # robot RGB annotators in the pinned headless runtime.
-            self.spectator = VisionSensor(relative_prim_path='/mas_spectator',name='mas_spectator',
-                                          modalities=['rgb'],image_width=self.image_size,
-                                          image_height=self.image_size,viewport_name=None)
-            self.spectator.load(None)
-            self.spectator.initialize()
-            self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size,
-                                      views=(*DIRECTIONS,'spectator'))
-            self._position_spectator()
+        with self._startup_stage('surround_camera_setup_and_warmup'):
+            for direction in DIRECTIONS:
+                sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
+                    modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
+                    focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
+                sensor.load(None)
+                sensor.initialize()
+                # Otherwise intrinsic_matrix lazily attaches a new annotator AFTER
+                # RGB readback and warms only four frames, sometimes returning a
+                # degenerate projection. Attach all before the shared barrier.
+                sensor.initialize_sensors(names='camera_params')
+                self.rig[direction] = sensor
+            self._position_rig()
             for _ in range(20): self.og.sim.render()
+        with self._startup_stage('spectator_camera_setup_and_warmup'):
+            if self.record_video:
+                from ..video import EpisodeVideo
+                from omnigibson.sensors import VisionSensor
+                # Use an independent offscreen render product at its final size. Do
+                # not resize/destroy the shared GUI viewer product: it invalidates
+                # robot RGB annotators in the pinned headless runtime.
+                self.spectator = VisionSensor(relative_prim_path='/mas_spectator',name='mas_spectator',
+                                              modalities=['rgb'],image_width=self.image_size,
+                                              image_height=self.image_size,viewport_name=None)
+                self.spectator.load(None)
+                self.spectator.initialize()
+                self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size,
+                                          views=(*DIRECTIONS,'spectator'))
+                self._position_spectator()
+                for _ in range(20): self.og.sim.render()
 
     def _position_rig(self):
         """Kinematic sensor mount only: never writes robot pose or advances physics."""
