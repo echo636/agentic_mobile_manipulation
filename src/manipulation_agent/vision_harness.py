@@ -37,6 +37,12 @@ class VisionHarness:
         self.snapshot=self.refresh()
         recorder.run.update(backend=backend.provenance(),budget=asdict(budget),skill_bundle_sha256=self.skills.digest if self.skills else None,
                             observation_contract="rgb_four_camera_same_state_v1" if 'capture' in self.snapshot else "rgb_only_v1")
+        recorder.run['execution_limit_policy']={'clock':'episode_execution_excludes_initialization',
+            'managed_action_step_limit':'remaining_episode_sim_steps',
+            'unmanaged_action_step_limit':budget.max_steps_per_action,
+            'finish_interrupt':'cooperative_owner_thread_checkpoint',
+            'limits_still_configured':{'actions':budget.max_actions,'tool_calls':budget.max_calls,
+                                      'environment_steps':budget.max_sim_steps}}
         write_json(recorder.output/'run.json',recorder.run)
         recorder.event('episode_started',{'observation':self.snapshot})
 
@@ -50,6 +56,20 @@ class VisionHarness:
         return copy.deepcopy(self.snapshot)
 
     def image_bytes(self, image_ref): return self.backend.image_bytes(image_ref)
+
+    def request_finish(self, arguments, request_id):
+        """Accept closure intent from HTTP without touching the simulator."""
+        if self.closed or not isinstance(request_id,str) or not 0<len(request_id)<=200:
+            return
+        try:
+            validate(arguments,self.catalog['finish']['inputSchema'])
+            fingerprint=json.dumps(['finish',arguments],sort_keys=True,allow_nan=False)
+        except (SkillError,ValueError,TypeError):
+            return
+        cached=self.cache.get(request_id)
+        if cached is not None and cached[0]!=fingerprint:
+            return
+        self.deadline.request_stop()
 
     def tick_background(self):
         if threading.get_ident()!=self.owner: raise RuntimeError('Simulator owner thread required')
@@ -106,7 +126,10 @@ class VisionHarness:
         if target and target['image_ref'] not in {i['image_ref'] for i in self.snapshot['images']}:
             raise SkillError('stale_image_ref','Select a point in the latest returned image')
         self.actions+=1
-        limit=min(self.budget.max_steps_per_action,self.budget.max_sim_steps-self.backend.steps)
+        remaining=self.budget.max_sim_steps-self.backend.steps
+        # A managed episode already has one execution deadline. Do not impose
+        # a second 700-step cutoff on an otherwise progressing action.
+        limit=remaining if self.deadline.managed else min(self.budget.max_steps_per_action,remaining)
         error=None
         try:
             details=self.backend.execute_visual(primitive,target,limit,**kwargs)
@@ -118,7 +141,7 @@ class VisionHarness:
             self.revision+=1
             # A timed-out action may have changed the world. Invalidate its RGB,
             # but do not spend the expired task budget rendering another capture.
-            if not self.deadline.expired: self.refresh()
+            if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         return {'effect':{'primitive':primitive,'status':'completed','verification':'executor_operation_only'},
                 'observation':self.snapshot,'actions_used':self.actions}

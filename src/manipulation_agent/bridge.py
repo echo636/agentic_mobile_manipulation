@@ -10,10 +10,13 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .contracts import tool_specs
+from .deadline import tool_wait_seconds
+from .startup_progress import startup_event
 
 CLOSED_REPLAY_SECONDS = 10
 
-def rpc(url: str, name: str, arguments: dict, request_id: str, timeout: float = 300) -> dict:
+def rpc(url: str, name: str, arguments: dict, request_id: str,
+        timeout: float = tool_wait_seconds(1800)) -> dict:
     body = json.dumps({"name": name, "arguments": arguments, "request_id": request_id}).encode()
     request = urllib.request.Request(url.rstrip("/") + "/call", data=body,
                                      headers={"Content-Type": "application/json"})
@@ -25,6 +28,7 @@ def rpc(url: str, name: str, arguments: dict, request_id: str, timeout: float = 
 def serve(harness, port: int) -> None:
     jobs = queue.Queue(maxsize=32)
     shutdown = threading.Event()
+    rpc_timeout=tool_wait_seconds(harness.budget.wall_seconds)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
@@ -44,7 +48,8 @@ def serve(harness, port: int) -> None:
         def do_GET(self):
             if self.path == "/healthz":
                 catalog = harness.tool_specs() if hasattr(harness, "tool_specs") else tool_specs()
-                self.send(200, {"ready": True, "closed": harness.closed, "tools": catalog})
+                self.send(200, {"ready": True, "closed": harness.closed, "tools": catalog,
+                                "rpc_timeout_seconds":rpc_timeout})
             elif self.path.startswith("/image/") and hasattr(harness, "image_bytes"):
                 ref = self.path.removeprefix("/image/")
                 try:
@@ -76,10 +81,12 @@ def serve(harness, port: int) -> None:
                     raise ValueError("Invalid request types")
                 future = concurrent.futures.Future()
                 jobs.put_nowait((body, future))
+                if body['name']=='finish' and hasattr(harness,'request_finish'):
+                    harness.request_finish(body['arguments'],body['request_id'])
             except (ValueError, queue.Full):
                 return self.send(400, {"error": "invalid_or_overloaded_request"})
             try:
-                result = future.result(timeout=300)
+                result = future.result(timeout=rpc_timeout)
             except concurrent.futures.TimeoutError:
                 # Do not claim cancellation: the action may already be running.
                 return self.send(504, {"error": "outcome_unknown", "retry_with_same_request_id": True})
@@ -89,6 +96,7 @@ def serve(harness, port: int) -> None:
     server.daemon_threads = True
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
+    startup_event(harness.recorder.output,'bridge_ready','passed')
     harness.start_standalone_clock()
     harness.recorder.event("bridge_started", {"host": "127.0.0.1", "port": server.server_port})
     print(f"MAS_BRIDGE_READY=http://127.0.0.1:{server.server_port}", flush=True)

@@ -40,6 +40,7 @@ ERROR_MESSAGES = {
     "execution_error":"Execution failed or partially completed; inspect the new RGB.",
     "action_timeout":"The executor exhausted this action's time or step budget.",
     "episode_timeout":"The episode wall-clock deadline has expired; no further action can start.",
+    "episode_cancelled":"Episode closure was requested; the active action stopped before final scoring.",
     "sampling_budget_exhausted":"The executor exhausted its placement sampling budget.",
     "unsupported_relation":"The selected surface does not support this placement operation.",
 }

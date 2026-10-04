@@ -467,6 +467,9 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             self._base_target=None
         return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
                 'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
+                'heading_tolerance_rad':follower.heading_tolerance,
+                'final_yaw_tolerance_rad':follower.final_yaw_tolerance,
+                'progress_measure':'directed_path_distance_or_target_yaw_convergence',
                 'max_speed_m_s':.5,'max_yaw_speed_deg_s':60,'physical_controller':False}
 
     def _execute_base_path(self, points, end_yaw, max_steps):
@@ -566,7 +569,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
 
     def evaluate(self):
         result=super().evaluate()
-        result['protocol']='rgb_agent_ideal_executor_v8_surface_payload_anchor'
+        result['protocol']='rgb_agent_ideal_executor_v9_shared_episode_clock'
         result['observation_mode']=self.mode
         return result
 

@@ -122,6 +122,31 @@ watchdog. Native checks are cooperative; an external supervisor enforces process
 limits when native code cannot return. Source and protocol changes are recorded
 per attempt and do not rewrite historical benchmark scores.
 
+Current timing policy:
+
+- One execution deadline governs the model, environment steps and managed
+  placement sampling. Managed actions use remaining episode steps rather than a
+  separate 700-step cap; the former managed sampling 120-second/6000-tick cap is
+  also removed. Native finite sampling attempts and geometry checks remain.
+- FastMCP, the bridge and the Codex tool wait cover the configured execution
+  budget plus 120 seconds for closure. This transport allowance does not extend
+  the episode deadline. A validated `finish` request sets a thread-safe stop
+  intent; the active action unwinds at its next checkpoint and the simulator
+  owner then evaluates the actual state. No worker thread reads simulator state.
+- New batch attempts use an initialization **no-progress** watchdog: real new
+  startup milestones renew its 1800 seconds. Repeated heartbeats do not. There is
+  no independent total-startup wall cap; pre-existing attempts retain their
+  original startup policy. The execution clock takes over once the model starts.
+- The supervisor retains a bounded closure grace for scoring/cleanup and native
+  calls that never return. Network connection, image-download and SSH timeouts
+  remain communication checks, not task-success criteria. A native crash may
+  still make a final score unavailable; missing scores are never filled with zero.
+
+The experiment still configures 80 actions, 240 tool calls and 20,000 environment
+steps per episode. These count limits remain visible in run records; this change
+does not claim that all non-time limits have been removed. OpenCode and Kimi tool
+timeout behavior remains unvalidated because their live clients are unavailable.
+
 Validation levels remain separate: CPU contracts; real MCP transport with a mock;
 real simulator primitives; real model with a real simulator; repeated fixed-task
 evaluation; official physical-control evaluation. Passing one does not establish

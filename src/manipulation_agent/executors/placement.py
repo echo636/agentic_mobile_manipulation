@@ -167,7 +167,9 @@ class CheckedPlacement:
             # Capture the anchored physics wrapper installed by the context.
             original_step=self.og.sim.step_physics
             def bounded_step(*args,**kwargs):
-                if self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>120:
+                deadline=getattr(self,'deadline',None)
+                if deadline is not None:deadline.check(changed=True)
+                if not (deadline is not None and deadline.managed) and (self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>120):
                     raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
                 self.sampling_physics_steps+=1
                 if contents:

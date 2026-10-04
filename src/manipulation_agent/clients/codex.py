@@ -6,6 +6,7 @@ import shutil
 
 from .base import ClientAdapter
 from .types import PreparedProject
+from ..deadline import tool_wait_seconds
 
 
 class CodexAdapter(ClientAdapter):
@@ -50,7 +51,7 @@ class CodexAdapter(ClientAdapter):
             command += ["--disable", feature]
         server = {"command": config.mcp_command, "args": config.mcp_args, "enabled_tools": tool_names,
                   "startup_timeout_sec": 60, "required": True,
-                  "tool_timeout_sec": 300, "default_tools_approval_mode": "approve"}
+                  "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
         for key, value in server.items():
             command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
         command += ["-"]

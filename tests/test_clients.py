@@ -48,7 +48,7 @@ class ClientAdapterTests(unittest.TestCase):
             configs = [argv[i+1] for i, v in enumerate(argv[:-1]) if v == '-c']
             self.assertIn('mcp_servers.manipulation.enabled_tools=["observe", "finish"]', configs)
             self.assertIn('mcp_servers.manipulation.required=true', configs)
-            self.assertIn('mcp_servers.manipulation.tool_timeout_sec=300', configs)
+            self.assertIn('mcp_servers.manipulation.tool_timeout_sec=1020', configs)
             for tool in ['shell_tool', 'view_image', 'multi_agent', 'plugins']:
                 self.assertIn(tool, argv)
             self.assertEqual(prepared.env_overlay, {})

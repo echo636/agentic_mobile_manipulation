@@ -9,9 +9,17 @@ import math
 import os
 from pathlib import Path
 import tempfile
+import threading
 import time
 
 from .contracts import SkillError
+
+FINISH_GRACE_SECONDS = 120
+
+
+def tool_wait_seconds(execution_seconds):
+    """Transport waits may cover execution plus closure, never shorten the task."""
+    return math.ceil(float(execution_seconds) + FINISH_GRACE_SECONDS)
 
 
 def validate_execution_clock(value):
@@ -61,6 +69,15 @@ class EpisodeDeadline:
         self._unix=unix
         self.clock_path=Path(clock_path) if clock_path is not None else None
         self._clock=None
+        self._stop_requested=threading.Event()
+
+    def request_stop(self):
+        """Thread-safe intent only; physics and scoring still run on the owner."""
+        self._stop_requested.set()
+
+    @property
+    def stop_requested(self):
+        return self._stop_requested.is_set()
 
     @property
     def managed(self):
@@ -112,3 +129,5 @@ class EpisodeDeadline:
     def check(self, *, changed=False):
         if self.expired:
             raise SkillError('episode_timeout', 'The episode wall-clock deadline has expired.', changed=changed)
+        if self.stop_requested:
+            raise SkillError('episode_cancelled', 'Episode closure requested; stop the active action before scoring.', changed=changed)

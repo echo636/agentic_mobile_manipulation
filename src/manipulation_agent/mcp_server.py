@@ -18,6 +18,7 @@ import urllib.request
 from urllib.parse import quote
 
 from .bridge import rpc
+from .deadline import tool_wait_seconds
 
 
 def fetch(url):
@@ -55,6 +56,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
     if not health.get('ready'):
         raise RuntimeError('Simulator bridge is not ready')
     catalog = health['tools']
+    rpc_timeout=health.get('rpc_timeout_seconds',tool_wait_seconds(1800))
     if len({spec['name'] for spec in catalog}) != len(catalog):
         raise ValueError('Duplicate bridge tool names')
     lock = asyncio.Lock()
@@ -70,7 +72,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
             # Serialize actions and RGB downloads: another HTTP client cannot
             # expire returned image refs midway through response assembly.
             async with lock:
-                result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()))
+                result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
                 observation = result.get('observation', {})
                 if observation.get('observation_mode') == 'rgb_only':
