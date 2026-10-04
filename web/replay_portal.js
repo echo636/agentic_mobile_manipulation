@@ -160,7 +160,7 @@ function render() {
   $('ended').textContent = n.done + ' / ' + n.total; $('progress').max = Math.max(1, n.total); $('progress').value = n.done;
   $('passed').textContent = n.success; $('failed').textContent = n.failed; $('blocked').textContent = n.unscored;
   $('running').textContent = n.running; $('planned').textContent = n.planned;
-  $('rate').textContent = complete ? '全批成功率 ' + (100 * n.success / n.total).toFixed(2) + '%' : '评测进行中';
+  $('rate').textContent = complete ? '目标成功率 ' + (100 * n.success / n.total).toFixed(2) + '%' : '评测进行中';
   const time = new Date(d.updated_at), opts = {timeZone:'Asia/Shanghai', hour12:false};
   const stamp = Number.isNaN(time.valueOf()) ? '—' : time.toLocaleString('zh-CN', opts);
   $('updated').textContent = complete ? '本批已结束' : '更新 ' + (Number.isNaN(time.valueOf()) ? '—' : time.toLocaleTimeString('zh-CN', {...opts, hour:'2-digit', minute:'2-digit'}));
