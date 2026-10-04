@@ -155,6 +155,27 @@ def interrupt_action(backend, recorder, args):
     url = f'http://127.0.0.1:{args.port}'
     revision = harness.revision
     timeout = args.execution_seconds + 120
+    pending = {}
+    original_execute = backend.execute_visual
+
+    def execute_with_pending_observation(primitive, *action_args, **action_kwargs):
+        # This diagnostic setup runs from harness.perform on the bridge owner,
+        # after its ordinary background tick and immediately before physics.
+        # start + one tick schedules a running job; a second tick would capture.
+        if args.pending_observation and primitive == 'wait' and not pending:
+            if threading.get_ident() != harness.owner:
+                raise RuntimeError('Pending-observation fixture requires simulator owner thread')
+            pending['capture_index_before'] = backend.capture_index
+            submitted = harness.surround.start()
+            pending['job_id'] = submitted['job']['job_id']
+            harness.surround.tick()
+            pending['status_before_action'] = harness.surround.get(pending['job_id'])['job']['status']
+            pending['capture_index_after_schedule'] = backend.capture_index
+            recorder.event('diagnostic_pending_observation', {'fixture': dict(pending),
+                           'scope': 'private owner-thread cancellation fixture; not a model tool call'})
+        return original_execute(primitive, *action_args, **action_kwargs)
+
+    backend.execute_visual = execute_with_pending_observation
 
     def action_client():
         try:
@@ -197,6 +218,7 @@ def interrupt_action(backend, recorder, args):
     try:
         bridge.serve(harness, args.port)
     finally:
+        backend.execute_visual = original_execute
         client.join(timeout=2)
         harness.finalize_recording()
     checks = {'actual_physics_started': results.get('steps_at_finish_request', 0) >= 3,
@@ -206,6 +228,16 @@ def interrupt_action(backend, recorder, args):
               'stopped_before_wait_completed': backend.steps - start_steps < round(20 / backend.og.sim.get_sim_step_dt()),
               'base_anchor_restored': backend._base_target is None,
               'client_returned': not client.is_alive()}
+    if args.pending_observation:
+        final_job = harness.surround.get(pending['job_id']) if pending.get('job_id') else {}
+        pending.update(final_job=final_job, capture_index_after_finish=backend.capture_index)
+        checks.update(pending_job_started_without_capture=pending.get('status_before_action') == 'running' and
+                      pending.get('capture_index_after_schedule') == pending.get('capture_index_before'),
+                      pending_job_cancelled=final_job.get('job', {}).get('status') == 'cancelled',
+                      pending_job_has_no_captured_observation=final_job.get('job', {}).get('capture') is None and
+                      'observation' not in final_job,
+                      no_observation_capture_during_closure=backend.capture_index == pending.get('capture_index_before'))
+        results['pending_observation_fixture'] = pending
     write_json(backend.output / 'interruption_rpc.json', results)
     return {'checks': checks, 'rpc': results}
 
@@ -220,6 +252,8 @@ def main():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--execution-seconds', type=float, default=1800)
     parser.add_argument('--port', type=int, default=29983)
+    parser.add_argument('--pending-observation', action=argparse.BooleanOptionalAction, default=True,
+                        help='interrupt-action: owner schedules a running observation before wait; closure must cancel it without capture (default on)')
     args = parser.parse_args()
     if not math.isfinite(args.execution_seconds) or args.execution_seconds <= 0:
         parser.error('--execution-seconds must be positive and finite')
@@ -230,6 +264,7 @@ def main():
         args.task, args.instance, args.seed = (fixture[k] for k in ('task', 'instance', 'seed'))
     config = {'backend': 'omnigibson', 'task': args.task, 'instance': args.instance, 'seed': args.seed,
               'policy': 'private_scripted_component', 'mode': args.mode, 'model_used': False,
+              'pending_observation_fixture': args.mode == 'interrupt-action' and args.pending_observation,
               'not_a_benchmark_attempt': True, 'observation_mode': 'rgb_only', 'record_video': True,
               'validation_level': 'real_simulator_original_component_only',
               'script_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
