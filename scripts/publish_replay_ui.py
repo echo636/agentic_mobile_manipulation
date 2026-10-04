@@ -16,12 +16,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-DEFAULT_SCOPES = (
-    'compare100_20261002/original/manipulation_runs',
-    'compare100_20261002/official/manipulation_runs',
-    'retest32_v7_20261001/manipulation_runs',
-    'manipulation_runs',
-)
 
 
 def stamp() -> str:
@@ -60,8 +54,14 @@ def prepare(args: argparse.Namespace) -> dict:
         raise ValueError(f'Expected source {args.expected_source}; found {commit}')
     sys.path.insert(0, str(REPO / 'src'))
     from manipulation_agent.replay import render_replay_page
-    inputs = sorted({path for scope in args.scope or DEFAULT_SCOPES
-                     for path in within(root, scope).glob('*/replay.json')})
+    if args.selection_json:
+        selection = json.loads(args.selection_json.read_text())
+        inputs = sorted({within(root, value) for value in selection['replays']})
+        if any(path.name != 'replay.json' or not path.is_file() for path in inputs):
+            raise ValueError('Selection must contain existing replay.json paths')
+    else:
+        inputs = sorted({path for scope in args.scope
+                         for path in within(root, scope).glob('*/replay.json')})
     pages = []
     for source in inputs:
         target = source.with_name('replay.html')
@@ -91,6 +91,8 @@ def prepare(args: argparse.Namespace) -> dict:
                     *sorted((REPO / 'src/manipulation_agent/replay_assets').glob('*'))]
     manifest = {'status': 'planned', 'prepared_at': stamp(), 'source_commit': commit,
                 'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO, text=True).strip()),
+                'selection_file': str(args.selection_json.resolve()) if args.selection_json else None,
+                'selection_sha256': digest(args.selection_json) if args.selection_json else None,
                 'source_hashes': {str(p.relative_to(REPO)): digest(p) for p in source_files if p.is_file()},
                 'reports_root': str(root), 'pages': pages, 'html_only': True,
                 'media_encoded': False, 'evaluation_or_replay_json_modified': False}
@@ -147,7 +149,9 @@ def main() -> None:
     stage = commands.add_parser('prepare')
     stage.add_argument('--reports-root', type=Path, required=True)
     stage.add_argument('--record-dir', type=Path, required=True)
-    stage.add_argument('--scope', action='append', help='Relative run-parent directory; repeatable')
+    selection = stage.add_mutually_exclusive_group(required=True)
+    selection.add_argument('--selection-json', type=Path, help='Explicit {replays:[relative replay.json paths]} selection')
+    selection.add_argument('--scope', action='append', help='Explicit relative run-parent directory; includes all its attempts')
     stage.add_argument('--comparison', action='store_true', help='Also stage the existing comparison index')
     stage.add_argument('--expected-source', help='Require exact repository HEAD')
     publish = commands.add_parser('apply')
