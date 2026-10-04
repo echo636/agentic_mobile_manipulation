@@ -78,6 +78,11 @@ def main():
                 except Exception as exc:
                     action.update(status='failed', error_type=type(exc).__name__,
                                   error=str(exc), code=getattr(exc, 'code', None))
+                    # Same-pose render-only samples establish whether a one
+                    # frame depth spike persists. Do not insert these samples
+                    # into the map or attempt to recover the failed action.
+                    for _ in range(2):
+                        backend._update_online_map(diagnostic_only=True)
                     raise
                 finally:
                     action['finished_at'] = now()

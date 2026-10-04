@@ -10,6 +10,7 @@ from dataclasses import asdict
 import hashlib
 import json
 import math
+import os
 
 from ..contracts import SkillError
 from ..records import now
@@ -45,7 +46,7 @@ class OnlineNavigation:
         self._online_enabled = True
         self._online_self_filter = True
 
-    def _update_online_map(self, *, rendered=False):
+    def _update_online_map(self, *, rendered=False, diagnostic_only=False):
         """Capture calibrated four-depth packets without advancing physics.
 
         Public observe() already rendered these packets. During motion we make
@@ -55,6 +56,8 @@ class OnlineNavigation:
         import omnigibson.utils.transform_utils as T
         from .depth_scan import DepthFrame, ProjectionConfig, project_four_depth_frames, to_mapper_scans
         self.deadline.check(changed=True)
+        capture_started = now()
+        totals_before = {k:dict(v) for k,v in getattr(self, '_component_totals', {}).items()}
         with component(self, 'online_mapping'):
             if not rendered:
                 self._render_rgb_views(require_calibration=True)
@@ -71,6 +74,9 @@ class OnlineNavigation:
                     data['depth_linear'].detach().cpu().numpy(),
                     self._sensor_intrinsics[view].detach().cpu().numpy(), transform))
             projection = ProjectionConfig(self._online_floor_height)
+            raw_frames = frames
+            bodies = {}
+            self_reports = []
             if getattr(self, '_online_self_filter', False):
                 from .self_depth_filter import prepare_self_hulls, mask_self_depth
                 bodies = {}
@@ -81,6 +87,7 @@ class OnlineNavigation:
                 hulls, geometry_report = prepare_self_hulls(bodies)
                 masked = [mask_self_depth(frame, hulls, pixel_stride=projection.pixel_stride) for frame in frames]
                 frames = [frame for frame, _ in masked]
+                self_reports = [report for _, report in masked]
                 with (self.output/'online_mapping'/'self_filter.jsonl').open('a') as stream:
                     stream.write(json.dumps({'capture_id':capture_id, 'sim_step':self.steps,
                         'geometry':geometry_report, 'views':[report for _, report in masked],
@@ -89,8 +96,44 @@ class OnlineNavigation:
             position, orientation = self.robot.get_position_orientation()
             rotation = T.quat2mat(orientation)
             pose = (float(position[0]), float(position[1]), math.atan2(float(rotation[1, 0]), float(rotation[0, 0])))
-            self._online_snapshot = self._online_mapper.update(to_mapper_scans(scans, pose), pose=pose,
-                timestamp=self.steps*self.og.sim.get_sim_step_dt())
+            if not diagnostic_only:
+                self._online_snapshot = self._online_mapper.update(to_mapper_scans(scans, pose), pose=pose,
+                    timestamp=self.steps*self.og.sim.get_sim_step_dt())
+            # Explicit diagnostic-only capture. Record the inputs as read, with
+            # the independently sampled robot geometry, before a later physics
+            # tick can hide a renderer/transform synchronization discrepancy.
+            # This never changes pixels, free space, pose or mapping policy.
+            diagnostic_step = int(os.environ.get('MAS_ONLINE_CAPTURE_DIAGNOSTICS_FROM_STEP', '-1'))
+            if diagnostic_step >= 0 and self.steps >= diagnostic_step:
+                folder = self.output / 'online_mapping' / 'capture_diagnostics'
+                folder.mkdir(parents=True, exist_ok=True)
+                arrays = {'robot_position':position.detach().cpu().numpy(),
+                          'robot_orientation':orientation.detach().cpu().numpy(),
+                          'robot_joints':self.robot.get_joint_positions().detach().cpu().numpy()}
+                for raw, masked_frame in zip(raw_frames, frames):
+                    arrays['raw_depth_'+raw.view] = raw.depth_linear
+                    arrays['filtered_depth_'+raw.view] = masked_frame.depth_linear
+                    arrays['intrinsic_'+raw.view] = raw.intrinsic
+                    arrays['camera_to_world_'+raw.view] = raw.world_from_camera
+                    arrays['rgb_'+raw.view] = self._sensor_packets[raw.view][0]['rgb'].detach().cpu().numpy()
+                for name, vertices in bodies.items():
+                    arrays['own_visual_vertices_'+name] = vertices
+                np.savez_compressed(folder / (capture_id+'.npz'), **arrays)
+                with (folder / (capture_id+'.json')).open('w') as stream:
+                    allowed_metadata = {'frame','frame_id','rendering_frame','timestamp','time','render_time','capture_time','rendering_time'}
+                    sensor_metadata = {view:{k:v for k,v in info.items() if k in allowed_metadata and
+                        isinstance(v, (int,float,str))} for view, (_,info) in self._sensor_packets.items()}
+                    totals = getattr(self, '_component_totals', {})
+                    json.dump({'capture_id':capture_id, 'map_sequence':self._online_snapshot.sequence,
+                        'sim_step':self.steps, 'sim_timestamp':self.steps*self.og.sim.get_sim_step_dt(),
+                        'pose':pose, 'self_filter_reports':self_reports,
+                        'capture_started_at':capture_started, 'persisted_at':now(),
+                        'mapper_updated':not diagnostic_only, 'sensor_frame_metadata':sensor_metadata,
+                        'render_calls_during_update':totals.get('render',{}).get('calls',0)-totals_before.get('render',{}).get('calls',0),
+                        'sensor_readback_calls_during_update':totals.get('sensor_readback',{}).get('calls',0)-totals_before.get('sensor_readback',{}).get('calls',0),
+                        'per_camera_readback_timestamps_available':False,
+                        'audience':'executor_private_diagnostic_only',
+                        'inputs_unmodified':True}, stream, indent=2)
             return self._online_snapshot
 
     def _online_grid(self, snapshot):

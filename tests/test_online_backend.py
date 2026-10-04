@@ -1,5 +1,6 @@
 """Owner-thread integration checks without starting OmniGibson or a mapper."""
 import copy
+import json
 import math
 from pathlib import Path
 import tempfile
@@ -109,6 +110,29 @@ class OnlineBackendTests(unittest.TestCase):
             backend._update_online_map(rendered=True)
             packets = backend._online_mapper.update.call_args.args[0]
             self.assertTrue(all(not p['returns'] and not p['misses'] for p in packets))
+
+    def test_diagnostic_capture_preserves_raw_fields_without_map_or_physics_update(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict('sys.modules', fake_og_modules()), \
+                patch.dict('os.environ', {'MAS_ONLINE_CAPTURE_DIAGNOSTICS_FROM_STEP':'12'}):
+            backend, _ = self.backend(folder)
+            backend._online_snapshot = SimpleNamespace(sequence=71)
+            backend.robot.get_joint_positions = lambda: Tensor([.1, .2])
+            for data, _ in backend._sensor_packets.values():
+                data['rgb'] = Tensor(np.zeros((9, 9, 4), dtype=np.uint8))
+            backend._update_online_map(diagnostic_only=True)
+            backend._online_mapper.update.assert_not_called()
+            backend.og.sim.step.assert_not_called()
+            self.assertEqual(backend._online_snapshot.sequence, 71)
+            path = Path(folder)/'online_mapping/capture_diagnostics/nav-depth-000001'
+            arrays = np.load(path.with_suffix('.npz'))
+            np.testing.assert_allclose(arrays['raw_depth_front'], arrays['filtered_depth_front'])
+            self.assertEqual(arrays['camera_to_world_front'].shape, (4, 4))
+            self.assertEqual(arrays['rgb_front'].shape, (9, 9, 4))
+            self.assertEqual(arrays['intrinsic_front'].shape, (3, 3))
+            meta = json.loads(path.with_suffix('.json').read_text())
+            self.assertFalse(meta['mapper_updated'])
+            self.assertEqual(meta['map_sequence'], 71)
+            self.assertEqual(meta['sim_step'], 12)
 
     def test_config_mro_preserves_task_config_and_selects_registered_scene(self):
         original = {'scene': {'type': 'InteractiveTraversableScene', 'scene_model': 'fixture'},
