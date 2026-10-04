@@ -1,0 +1,162 @@
+"""Stage and publish presentation HTML from existing replay JSON, without encoding media.
+
+Prepare makes a reviewable manifest and staged pages. Apply verifies that the
+source JSON and currently published HTML still match that manifest, preserves
+old HTML, and replaces only HTML at the existing URLs.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+DEFAULT_SCOPES = (
+    'compare100_20261002/original/manipulation_runs',
+    'compare100_20261002/official/manipulation_runs',
+    'retest32_v7_20261001/manipulation_runs',
+    'manipulation_runs',
+)
+
+
+def stamp() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def digest(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def write_json(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n')
+    temporary.replace(path)
+
+
+def within(root: Path, relative: str) -> Path:
+    path = root / relative
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise ValueError(f'Path outside selected root: {relative}')
+    return path
+
+
+def prepare(args: argparse.Namespace) -> dict:
+    root = args.reports_root.resolve()
+    record = args.record_dir.resolve()
+    manifest_path = record / 'manifest.json'
+    if manifest_path.exists():
+        raise FileExistsError(f'Preserve existing publication record: {manifest_path}')
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=REPO, text=True).strip()
+    if args.expected_source and commit != args.expected_source:
+        raise ValueError(f'Expected source {args.expected_source}; found {commit}')
+    sys.path.insert(0, str(REPO / 'src'))
+    from manipulation_agent.replay import render_replay_page
+    inputs = sorted({path for scope in args.scope or DEFAULT_SCOPES
+                     for path in within(root, scope).glob('*/replay.json')})
+    pages = []
+    for source in inputs:
+        target = source.with_name('replay.html')
+        data = json.loads(source.read_text())
+        relative = target.relative_to(root).as_posix()
+        staged = within(record / 'staged', relative)
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_text(render_replay_page(data))
+        pages.append({'target': relative, 'input': source.relative_to(root).as_posix(),
+                      'input_sha256': digest(source), 'before_html_sha256': digest(target),
+                      'staged_html_sha256': digest(staged), 'run_id': data['run_id']})
+    if args.comparison:
+        path = root / 'compare100_20261002/comparison.json'
+        data = json.loads(path.read_text())
+        spec = importlib.util.spec_from_file_location('ui_batch_comparison', REPO / 'scripts/batch_comparison.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        relative = 'compare100_20261002/index.html'
+        staged = within(record / 'staged', relative)
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_text(module.render_comparison_page(tuple(data['arms'])))
+        pages.append({'target': relative, 'input': path.relative_to(root).as_posix(),
+                      'input_sha256': digest(path), 'before_html_sha256': digest(root / relative),
+                      'staged_html_sha256': digest(staged), 'kind': 'comparison'})
+    source_files = [REPO / 'src/manipulation_agent/replay.py',
+                    REPO / 'scripts/batch_comparison.py', REPO / 'scripts/comparison_dashboard.html',
+                    *sorted((REPO / 'src/manipulation_agent/replay_assets').glob('*'))]
+    manifest = {'status': 'planned', 'prepared_at': stamp(), 'source_commit': commit,
+                'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO, text=True).strip()),
+                'source_hashes': {str(p.relative_to(REPO)): digest(p) for p in source_files if p.is_file()},
+                'reports_root': str(root), 'pages': pages, 'html_only': True,
+                'media_encoded': False, 'evaluation_or_replay_json_modified': False}
+    write_json(manifest_path, manifest)
+    return manifest
+
+
+def apply(record: Path) -> dict:
+    record = record.resolve()
+    manifest = json.loads((record / 'manifest.json').read_text())
+    if manifest['status'] != 'planned':
+        raise ValueError('Only an unapplied, planned manifest can be applied')
+    root = Path(manifest['reports_root']).resolve()
+    # Check the whole plan before writing any destination. A later renderer must
+    # not silently replace a page or data updated since the preview was prepared.
+    for page in manifest['pages']:
+        if digest(within(root, page['input'])) != page['input_sha256']:
+            raise ValueError(f'Input changed after prepare: {page["input"]}')
+        if digest(within(root, page['target'])) != page['before_html_sha256']:
+            raise ValueError(f'Published HTML changed after prepare: {page["target"]}')
+        if digest(within(record / 'staged', page['target'])) != page['staged_html_sha256']:
+            raise ValueError(f'Staged HTML changed after prepare: {page["target"]}')
+    manifest['status'] = 'running'
+    manifest['started_at'] = stamp()
+    write_json(record / 'manifest.json', manifest)
+    published = []
+    try:
+        for page in manifest['pages']:
+            target = within(root, page['target'])
+            backup = within(record / 'before', page['target'])
+            if target.exists():
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                backup.write_bytes(target.read_bytes())
+                if digest(backup) != page['before_html_sha256']:
+                    raise ValueError(f'Backup mismatch: {page["target"]}')
+            temporary = target.with_name(target.name + '.ui-publish.tmp')
+            temporary.write_bytes(within(record / 'staged', page['target']).read_bytes())
+            temporary.replace(target)
+            published.append(page['target'])
+        manifest['status'] = 'passed'
+    except Exception as exc:
+        manifest.update(status='failed', error=str(exc))
+        raise
+    finally:
+        manifest['published'] = published
+        manifest['finished_at'] = stamp()
+        write_json(record / 'manifest.json', manifest)
+    return manifest
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    stage = commands.add_parser('prepare')
+    stage.add_argument('--reports-root', type=Path, required=True)
+    stage.add_argument('--record-dir', type=Path, required=True)
+    stage.add_argument('--scope', action='append', help='Relative run-parent directory; repeatable')
+    stage.add_argument('--comparison', action='store_true', help='Also stage the existing comparison index')
+    stage.add_argument('--expected-source', help='Require exact repository HEAD')
+    publish = commands.add_parser('apply')
+    publish.add_argument('--record-dir', type=Path, required=True)
+    args = parser.parse_args()
+    result = prepare(args) if args.command == 'prepare' else apply(args.record_dir)
+    print(json.dumps({'status': result['status'], 'pages': len(result['pages']),
+                      'record_dir': str(args.record_dir.resolve()), 'html_only': True}))
+
+
+if __name__ == '__main__':
+    main()
