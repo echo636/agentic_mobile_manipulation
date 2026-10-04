@@ -56,7 +56,7 @@ class OnlinePlannerTests(unittest.TestCase):
         self.assertGreater(plan.geodesic_m, 3.)
         self.assertGreater(len(plan.points), 2)
         self.assertTrue(all(grid.segment_free(a, b) for a, b in zip(plan.points, plan.points[1:])))
-        self.assertEqual(plan.goal, (3.8000000000000003, 2.))
+        self.assertEqual(plan.goal, (3.8, 2.))
 
     def test_unobserved_strip_blocks_route_until_new_sensor_snapshot(self):
         data = np.zeros((30, 65), dtype=np.uint8)
@@ -99,18 +99,20 @@ class OnlinePlannerTests(unittest.TestCase):
         grid = observed_grid(snapshot(values, .05, origin), robot_radius=radius)
         plan = plan_online_navigation(grid, (4.12717342376709, 3.6326491832733154),
                                       target, fixed_goal=goal)
-        self.assertGreater(math.dist(plan.goal, goal), 1e-7)
-        self.assertLess(math.dist(plan.goal, goal), grid.resolution * 1e-4)
-        # This tolerance must not silently move the requested fixed endpoint
-        # to a substantially different lattice, or accept an observed obstacle.
+        self.assertGreater(math.dist(grid.world(grid.cell(goal)), goal), 1e-7)
+        self.assertEqual(plan.goal, goal)
+        self.assertEqual(plan.points[-1], goal)
+        # Recentring the grid must not move a safe world destination either.
         shifted = observed_grid(snapshot(values, .05, (origin[0]+.001, origin[1])),
                                 robot_radius=radius)
-        with self.assertRaises(NavigationError):
-            plan_online_navigation(shifted, (4.127, 3.633), target, fixed_goal=goal)
-        values[grid.cell(goal)] = 100
-        blocked = observed_grid(snapshot(values, .05, origin), robot_radius=radius)
-        with self.assertRaises(NavigationError):
-            plan_online_navigation(blocked, (4.127, 3.633), target, fixed_goal=goal)
+        shifted_plan = plan_online_navigation(shifted, (4.127, 3.633), target, fixed_goal=goal)
+        self.assertEqual(shifted_plan.goal, goal)
+        self.assertEqual(shifted_plan.points[-1], goal)
+        for blocked_value in (100, 255):
+            values[grid.cell(goal)] = blocked_value
+            blocked = observed_grid(snapshot(values, .05, origin), robot_radius=radius)
+            with self.assertRaises(NavigationError):
+                plan_online_navigation(blocked, (4.127, 3.633), target, fixed_goal=goal)
 
     def test_clicked_object_can_be_occupied_but_approach_is_free(self):
         data = np.zeros((35, 50), dtype=np.uint8)

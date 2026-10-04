@@ -143,12 +143,14 @@ def plan_online_navigation(grid, current, target, *, standoff=.7,
     if fixed_goal is not None:
         fixed_goal = tuple(map(float, fixed_goal))
         cell = grid.cell(fixed_goal)
-        # Previously returned goals are cell centres. Float32 crop origins
-        # can drift by a few sub-micrometres during map growth; tolerate that
-        # representation error, while still rejecting a genuinely shifted
-        # cell lattice or an endpoint that is newly blocked.
-        if (not grid.navigable(cell) or not acceptable(cell)
-                or math.dist(grid.world(cell), fixed_goal) > grid.resolution * 1e-4):
+        # The destination is a world point, not a particular cropped map's
+        # cell centre. Preserve it exactly and validate its short connection
+        # to the current cell centre with the same collision geometry used
+        # by A*. This also handles float32 map-origin roundoff during growth.
+        if (not grid.navigable(cell)
+                or not grid.segment_free(grid.world(cell), fixed_goal)
+                or math.dist(fixed_goal, target) > max_target_distance + 1e-9
+                or (candidate_filter is not None and not candidate_filter(fixed_goal))):
             raise NavigationError('The selected endpoint is blocked or unobserved in the new map.',
                                   'navigation_path_blocked')
         candidates = {cell: 0.}
@@ -175,10 +177,14 @@ def plan_online_navigation(grid, current, target, *, standoff=.7,
             'Unknown space is blocked; refresh observations or choose another target.',
             'navigation_unobserved_route')
     score, distance, goal_cell = min(viable)
+    goal = fixed_goal if fixed_goal is not None else grid.world(goal_cell)
+    distance += math.dist(grid.world(goal_cell), goal)
     cells = [goal_cell]
     while cells[-1] != start:
         cells.append(parents[cells[-1]])
     points = [current, *[grid.world(c) for c in reversed(cells)]]
+    if points[-1] != goal:
+        points.append(goal)
     simplified, index = [current], 0
     while index < len(points) - 1:
         far = index + 1
@@ -189,9 +195,10 @@ def plan_online_navigation(grid, current, target, *, standoff=.7,
         if math.dist(simplified[-1], points[far]) > 1e-9:
             simplified.append(points[far])
         index = far
+    if simplified[-1] != goal:
+        simplified.append(goal)
     if not all(grid.segment_free(a, b) for a, b in zip(simplified, simplified[1:])):
         raise NavigationError('Route crossed an unobserved or occupied cell.', 'navigation_path_blocked')
-    goal = grid.world(goal_cell)
     return NavigationPlan(tuple(simplified), goal, target,
                           math.atan2(target[1] - goal[1], target[0] - goal[0]),
                           distance, score, len(candidates), len(viable),
