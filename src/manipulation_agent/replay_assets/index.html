@@ -1,33 +1,35 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@@TITLE@@ · Replay</title><style>@@CSS@@</style></head>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>@@TITLE@@ · Replay</title><style>@@CSS@@</style></head>
 <body>
 <header class="app-header">
-  <div class="heading-line"><a class="back" href="/retest32_gt_20260930/results.html#replay">← 全部实验</a><span class="eyebrow">BEHAVIOR / REPLAY</span><span id="evaluation-badge" class="badge"></span></div>
+  <div class="heading-line"><a class="back" href="/compare100_20261002/">← 评测总览</a><span class="eyebrow">BEHAVIOR · EPISODE REPLAY</span><span id="evaluation-badge" class="badge"></span></div>
   <h1 id="title"></h1><p id="instruction"></p>
 </header>
 <main>
   <div class="replay-workspace">
     <section class="observation-panel" aria-label="同步观测">
-      <div class="panel-heading"><div><span class="eyebrow">OBSERVATION</span><h2>观测画面</h2></div><div class="view-tabs" role="group" aria-label="观测来源"><button id="mode-execution" aria-pressed="true">执行画面</button><button id="mode-input" aria-pressed="false">模型输入</button></div></div>
+      <div class="panel-heading"><div><span class="eyebrow">ROBOT VIEW</span><h2>机器人视角</h2></div><div class="view-actions"><div class="view-tabs" role="group" aria-label="观测来源"><button id="mode-execution" aria-pressed="true">执行画面</button><button id="mode-input" aria-pressed="false">模型输入</button></div><button id="fullscreen" class="icon-button" title="全屏回放" aria-label="全屏回放">⛶</button></div></div>
       <div id="camera-grid" class="camera-grid"></div>
       <div class="observation-caption"><span id="observation-note"></span><select id="input-side" aria-label="模型输入时点" hidden><option value="before">调用前已收到</option><option value="after">返回后已收到</option></select></div>
       <div id="navigation-target" class="navigation-target" aria-label="当前导航调用的目标" hidden></div>
       <video id="episode-video" playsinline preload="metadata" muted hidden></video>
       <div id="video-error" role="status" hidden></div>
       <div class="playback">
-        <div class="playback-progress"><input id="video-seek" type="range" min="0" max="1" value="0" step="any" aria-label="视频进度"><span id="video-time">0:00 / —</span></div>
-        <div class="playback-buttons"><button id="prev" aria-label="上一步">‹</button><button id="video-play" class="primary">▶ 播放</button><button id="next" aria-label="下一步">›</button><select id="step-select" aria-label="跳转步骤"></select><select id="video-speed" aria-label="播放速度"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div>
+        <div class="playback-progress"><input id="video-seek" type="range" min="0" max="1" value="0" step="any" aria-label="回放进度"><span id="video-time">0:00 / —</span></div>
+        <div class="playback-buttons"><button id="prev" title="上一步 · ←" aria-label="上一步">‹</button><button id="video-play" class="primary">▶ 播放</button><button id="next" title="下一步 · →" aria-label="下一步">›</button><select id="step-select" aria-label="跳转步骤"></select><select id="video-speed" aria-label="播放速度"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div>
+        <div id="step-track" class="step-track" role="group" aria-label="工具调用步骤"></div>
       </div>
-      <div class="playback-options"><select id="video-edition" aria-label="时间模式"><option value="inspection">详读 · 含阅读停留</option><option value="raw">连续 · 仿真时间</option><option value="walltime">真实耗时 · 保留等待</option></select><span id="time-note"></span></div>
+      <div class="playback-options"><select id="video-edition" aria-label="时间模式"><option value="inspection">详读 · 含阅读停留</option><option value="raw">连续 · 仿真时间</option><option value="walltime">真实耗时 · 保留等待</option></select><a id="video-download" download title="下载录像">下载视频 ↗</a><span id="time-note"></span></div>
     </section>
     <section class="conversation-panel" aria-label="模型与动作时间线">
-      <div class="panel-heading"><div><span class="eyebrow">AGENT TIMELINE</span><h2>模型思考与行动</h2></div><label class="follow-label"><input id="follow" type="checkbox" checked> 同步跟随</label></div>
+      <div class="panel-heading"><div><span class="eyebrow">AGENT TRACE</span><h2>模型输出与行动</h2></div><div class="trace-options"><label class="follow-label"><input id="follow" type="checkbox" checked> 跟随播放</label><label class="follow-label"><input id="show-all" type="checkbox"> 显示后续</label></div></div>
       <div id="current-step" class="current-step" aria-live="polite"></div>
       <div id="conversation"></div>
-      <div class="conversation-note">滚动查看历史会暂停播放；播放或拖动进度条会恢复同步。</div>
+      <div class="conversation-note">按顺序保留接口原文；滚动历史暂停播放。点击步骤可定位画面。</div>
     </section>
   </div>
-  <details class="archive"><summary>实验结果与原始记录</summary><div id="archive-summary"></div><p class="downloads"><a id="video-download" download>下载完整视频</a><a href="replay.json">Replay JSON</a><a id="public-trace-link" href="model_public_events.jsonl">模型事件流</a><a href="run.json">原始运行记录</a><a id="audit-link" href="replay_audit.json">证据审计</a></p><details><summary>版本与执行环境</summary><pre id="provenance"></pre></details></details>
 </main>
 <dialog id="zoom"><button id="close-zoom" aria-label="关闭放大画面">关闭 ×</button><h3 id="zoom-title"></h3><canvas id="zoom-canvas"></canvas></dialog>
-<script type="application/json" id="replay-data">@@DATA@@</script><script>@@JS@@</script></body></html>
+<script type="application/json" id="replay-data">@@DATA@@</script><script>@@JS@@</script>
+</body></html>
