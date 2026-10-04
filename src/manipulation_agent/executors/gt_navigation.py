@@ -239,6 +239,7 @@ class GreedyGridFollower:
         self.last_phase=None;self.last_index=None
         self.advance_index=None;self.advance_best=None;self.advance_stall=0
         self.turn_target=None;self.turn_best=None;self.turn_stall=0
+        self.turn_progress=0.
 
     @staticmethod
     def angle(delta):return math.atan2(math.sin(delta),math.cos(delta))
@@ -258,9 +259,14 @@ class GreedyGridFollower:
             else:self.advance_stall+=1
             self.stall=self.advance_stall
         else:
-            error=abs(self.angle(self.turn_target-actual[2]))
-            if self.turn_best-error>=self.angle_progress:
-                self.turn_best=error;self.turn_stall=0
+            # Measure the turn that was actually commanded. A waypoint's
+            # bearing can change as XY feedback drifts; an old frozen bearing
+            # is no longer the target of subsequent commands.
+            requested=abs(self.angle(self.last_command[2]-self.last_actual[2]))
+            remaining=abs(self.angle(self.last_command[2]-actual[2]))
+            self.turn_progress+=requested-remaining
+            if self.turn_progress>=self.angle_progress:
+                self.turn_progress=0.;self.turn_stall=0
             else:self.turn_stall+=1
             self.stall=self.turn_stall
         if self.stall>=self.stall_steps:
@@ -277,28 +283,36 @@ class GreedyGridFollower:
         while self.index<len(self.plan.points) and math.dist((x,y),self.plan.points[self.index])<=self.position_tolerance:
             self.index+=1
         if self.index>=len(self.plan.points):
-            if math.dist((x,y),self.plan.goal)>self.position_tolerance:
-                raise NavigationError('Path ended before the selected goal was reached')
+            distance=math.dist((x,y),self.plan.goal)
             delta=self.angle(self.plan.final_yaw-yaw)
-            if abs(delta)<=self.final_yaw_tolerance:return None
+            if distance<=self.position_tolerance and abs(delta)<=self.final_yaw_tolerance:return None
             phase='turn';heading=self.plan.final_yaw
-            command=(x,y,yaw+max(-self.angle_step,min(self.angle_step,delta)))
+            # Hold the fixed endpoint during final orientation. Reusing actual
+            # XY accumulates a ~61um setter residual every turn on archived055.
+            amount=min(distance,self.distance_step)
+            xy=tuple(a+(g-a)*amount/distance for a,g in zip((x,y),self.plan.goal)) if distance else (x,y)
+            command=(*xy,yaw+max(-self.angle_step,min(self.angle_step,delta)))
         else:
             goal=self.plan.points[self.index];distance=math.dist((x,y),goal)
             heading=math.atan2(goal[1]-y,goal[0]-x);delta=self.angle(heading-yaw)
-            if abs(delta)>self.heading_tolerance:
+            if abs(delta)>self.heading_tolerance and distance>self.distance_step:
                 phase='turn'
                 command=(x,y,yaw+max(-self.angle_step,min(self.angle_step,delta)))
             else:
                 phase='advance'
                 amount=min(distance,self.distance_step)
-                command=(x+(goal[0]-x)*amount/distance,y+(goal[1]-y)*amount/distance,heading)
-                if not self.grid.segment_free((x,y),command[:2]):raise NavigationError('Next movement crosses an occupied grid cell')
+                # At sub-step range, converge XY while bounding yaw as usual.
+                # Turning toward a waypoint only2–4mm away otherwise chases
+                # bearing changes from tiny simulator position residuals.
+                command=(x+(goal[0]-x)*amount/distance,y+(goal[1]-y)*amount/distance,
+                         yaw+max(-self.angle_step,min(self.angle_step,delta)))
+        if math.dist((x,y),command[:2])>1e-12 and not self.grid.segment_free((x,y),command[:2]):
+            raise NavigationError('Next movement crosses an occupied grid cell')
         if phase=='advance' and self.advance_index!=self.index:
             self.advance_index=self.index;self.advance_best=self._remaining_on_segment((x,y),self.index)
             self.advance_stall=0
         if phase=='turn' and (self.last_phase!='turn' or self.last_index!=self.index):
-            self.turn_target=heading;self.turn_best=abs(self.angle(heading-yaw));self.turn_stall=0
+            self.turn_target=heading;self.turn_best=abs(self.angle(heading-yaw));self.turn_stall=0;self.turn_progress=0.
         self.last_phase=phase;self.last_index=self.index
         self.last_actual=(x,y,yaw);self.last_command=command
         return command

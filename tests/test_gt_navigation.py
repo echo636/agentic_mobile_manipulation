@@ -149,6 +149,44 @@ class GTNavigationTests(unittest.TestCase):
         else:self.fail('Noisy corner traversal failed to finish')
         self.assertLessEqual(math.dist(pose[:2],plan.goal),.002)
 
+    def follow_with_recorded_055_residual(self, plan, pose, limit=200):
+        g=GridMap(121,121,.05,(-5.,-5.),bytes([1])*121*121)
+        follower=GreedyGridFollower(g,plan,1/30)
+        for step in range(limit):
+            command=follower.next_pose(pose)
+            if command is None:break
+            self.assertLessEqual(math.dist(pose[:2],command[:2]),.5/30+1e-9)
+            self.assertLessEqual(abs(follower.angle(command[2]-pose[2])),math.pi/90+1e-9)
+            self.assertTrue(g.segment_free(pose[:2],command[:2]))
+            # Repeated exact residual measured in055: carrying books is not
+            # required for this float32 anchor/pose feedback effect.
+            pose=(command[0]-6.103515625e-5,command[1],command[2])
+        else:self.fail('Recorded055 feedback failed to converge')
+        self.assertLessEqual(math.dist(pose[:2],plan.goal),.002)
+        self.assertLessEqual(abs(follower.angle(pose[2]-plan.final_yaw)),1e-3)
+
+    def test_recorded_055_endpoint_drift_during_final_turn_is_corrected(self):
+        # Actual first055 NAV, row91: within1.858mm before a0.548rad final
+        # turn. Previously crossed2mm after6ticks and falsely reported no path.
+        start=(-2.6671555042266846,-1.372650146484375);goal=(-2.25,-2.15)
+        plan=NavigationPlan((start,goal),goal,(-1.65,-2.5),-.5110490694936745,1.,0.,1,1,0.,0)
+        self.follow_with_recorded_055_residual(plan,(-2.2509567737579346,-2.148406982421875,-1.0595019670653785))
+
+    def test_recorded_055_near_waypoint_does_not_chase_drifting_bearing(self):
+        # Actual055 NAV6, row314. A2.78mm waypoint and61um XY residual shift
+        # its bearing by~.02rad/tick even when each requested turn is executed.
+        start=(-2.4019274711608887,-3.39697265625);goal=(-2.,.1)
+        plan=NavigationPlan((start,goal),goal,(-2.5,-.8),-2.105430586900295,4.,0.,1,1,0.,0)
+        self.follow_with_recorded_055_residual(plan,(-2.0011701583862305,.09747314453125,1.1571827689689551))
+
+    def test_endpoint_correction_cannot_cross_an_occupied_cell(self):
+        g=grid(8,3,.005,blocked=((1,3),))
+        goal=(.02,.005);start=(.01,.005)
+        plan=NavigationPlan((goal,),goal,(.03,.005),math.pi,0.,0.,1,1,0.,0)
+        follower=GreedyGridFollower(g,plan,1/30)
+        with self.assertRaisesRegex(NavigationError,'occupied'):
+            follower.next_pose((*start,0.))
+
     def test_pose_divergence_and_invalid_state_stop_follower(self):
         g=grid();plan=plan_navigation(g,(.5,.5),(3.,2.));follower=GreedyGridFollower(g,plan,1/30)
         follower.next_pose((.5,.5,0.))
