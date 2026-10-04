@@ -143,6 +143,10 @@ Current timing policy:
   calls that never return. Network connection, image-download and SSH timeouts
   remain communication checks, not task-success criteria. A native crash may
   still make a final score unavailable; missing scores are never filled with zero.
+- The recorder's 90-second pipe stall watchdog runs in the encoder worker.
+  Bounded frame-queue backpressure checks episode cancellation every 50 ms.
+  A pipe failure disables recording and preserves available evidence without
+  aborting physics or replacing the independent final score.
 
 The experiment still configures 80 actions, 240 tool calls and 20,000 environment
 steps per episode. These count limits remain visible in run records; this change
