@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace, ModuleType
@@ -27,8 +28,17 @@ class CameraReadiness(unittest.TestCase):
         b.robot=SimpleNamespace(get_position_orientation=lambda:(Tensor([1.,2.,0.]),Tensor([0.,0.,0.,1.])),
                                 get_joint_positions=lambda:Tensor([.2,.4]))
         b._completed_render=0;b._test_require_barrier=True
+        b._test_editing_usd=False
+        @contextmanager
+        def editing_usd():
+            self.assertFalse(b._test_editing_usd, 'USD edit scopes cannot be nested')
+            b._test_editing_usd=True
+            try:yield
+            finally:b._test_editing_usd=False
+        b.og.sim.editing_usd=Mock(side_effect=editing_usd)
         def complete(**kwargs):
             self.assertEqual(kwargs,dict(delta_time=0.,pause_timeline=False,wait_for_render=True,rt_subframes=1))
+            self.assertTrue(b._test_editing_usd, 'Replicator USD writes need the OG edit scope')
             b._completed_render=b.og.sim.render.call_count
         b._test_orchestrator=SimpleNamespace(step=Mock(side_effect=complete))
         lazy=ModuleType('omnigibson.lazy')
@@ -39,6 +49,7 @@ class CameraReadiness(unittest.TestCase):
         mock_import.start();self.addCleanup(mock_import.stop)
         class Sensor:
             def get_obs(self):
+                if b._test_editing_usd:raise AssertionError('Readback preceded USD to Fabric synchronization')
                 if b._test_require_barrier and b._completed_render != b.og.sim.render.call_count:
                     raise AssertionError('Readback consumed a previous rendered pose')
                 return {'rgb':Tensor(np.full((8,8,4),b.og.sim.render.call_count)),
@@ -63,6 +74,8 @@ class CameraReadiness(unittest.TestCase):
             self.assertEqual(len(record['retries']),3)
             barriers=[json.loads(line) for line in (Path(d)/'annotation_barriers.jsonl').read_text().splitlines()]
             self.assertEqual(len(barriers),4)
+            self.assertEqual(b.og.sim.editing_usd.call_count,4)
+            self.assertFalse(b._test_editing_usd)
             self.assertTrue(all(r['before']==r['after'] and r['status']=='passed' for r in barriers))
 
     def test_permanent_invalid_calibration_fails_with_bounded_diagnostics(self):
@@ -96,6 +109,7 @@ class CameraReadiness(unittest.TestCase):
             b=self.backend(d,ready_after=1);b._test_require_barrier=False
             b._render_rgb_views(require_calibration=False)
             b._test_orchestrator.step.assert_not_called()
+            b.og.sim.editing_usd.assert_not_called()
             self.assertFalse((Path(d)/'annotation_barriers.jsonl').exists())
 
 

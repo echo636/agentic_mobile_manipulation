@@ -204,8 +204,12 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         # delta_time=0 is the official no-time-advance mode. Do not use
         # wait_until_complete(), which stops Replicator generation.
         with component(self, 'render_annotation_barrier'):
-            lazy.omni.replicator.core.orchestrator.step(
-                delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
+            # Replicator updates SDGPipeline USD attributes while dispatching
+            # the capture. OG requires these writes in its edit scope, whose
+            # exit also synchronizes the changes to Fabric.
+            with self.og.sim.editing_usd():
+                lazy.omni.replicator.core.orchestrator.step(
+                    delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
         after = state()
         changed = [key for key in ('env_step', 'sim_step_index') if before[key] != after[key]]
         changed += [key for key in ('sim_time', 'timeline_time')
