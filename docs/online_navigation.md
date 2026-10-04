@@ -9,11 +9,11 @@ recorded source; this change does not retroactively update their results.
 Four independent virtual head cameras capture front, back, left and right at
 one frozen simulation state. Their optical XY origins now coincide with the
 robot center, with a 20-degree downward pitch. The mount height is computed
-from the robot's visual geometry so its own body stays below the lower 20%
-of the image, with 5 cm clearance. The initial real test showed that the old
+from the robot's initial visual geometry so its body projects into the bottom
+20% of the image or below it, with 5 cm clearance. The R2 component measured
+a mount height of 1.811811 m relative to the robot base reference. The initial real test showed that the old
 collision-AABB height placed the centered front view behind the visible head.
-The
-previous 0.35 m outward ring left a central square unobserved by all four
+The previous 0.35 m outward ring left a central square unobserved by all four
 cameras. We changed the rig instead of inventing a free starting disk.
 
 The model still receives only RGB and public tool results. Calibrated axial
@@ -70,8 +70,11 @@ endpoint. The episode execution deadline is shared with the rest of the
 harness. Final RGB, private scoring and recording closure remain separate.
 
 This does not implement a physical wheel controller, full-body 3D collision
-checking, stair navigation, or a learned low-level policy. A successful
-navigation component is not a successful BEHAVIOR task.
+checking, stair navigation, or a learned low-level policy. The self-depth mask
+currently includes robot links only; it does not automatically include a held
+payload or enlarge the navigation footprint for that payload. Carrying while
+navigating requires separate validation. A successful navigation component is
+not a successful BEHAVIOR task.
 
 ## Runtime and validation
 
@@ -91,3 +94,76 @@ additional validation level. Per-attempt outcomes, source/runtime hashes and
 raw artifacts are recorded in `operations/jinkai_live_navigation_20261004`
 outside the source repository; consult the recorded level before claiming
 acceptance or task success.
+
+
+## Validated runtime and current acceptance level
+
+The tested runtime is `73b1b9a45275893c273fe5253a72f0ad968ebdd5`.
+The S115 R2 navigation component passed on 2026-10-04:
+
+| Recorded check | Result |
+| --- | --- |
+| Actual displacement | 1.1252775 m |
+| Replanning during motion | 7 replans |
+| Map sequence | 1 → 11 |
+| Simulator steps | 113 |
+| Precomputed traversability reads | 0 |
+| Initial and final four-view RGB | Passed |
+| Video | 115 frames, 3.8333 s of simulation time; verified |
+| Independent score and resource cleanup | Saved / passed |
+
+The component selected a visible floor point and tested navigation, not the
+radio task's goal. Its independent Q was 0; this is neither a complete task
+failure nor a task-success result. The complete Astra task was validated separately, as recorded below. Earlier checks
+include 35 focused CPU project tests and 9 tests using the actual native mapper.
+
+R1 exposed a map-crop coordinate roundoff (approximately 0.2 micrometers) and an
+incorrect requirement that the fixed endpoint exactly equal a newly cropped
+cell center. The tested version exports map origins in double precision and
+preserves the fixed WORLD endpoint through a checked free connection to the new
+grid. This correction does not clear unknown cells or change the intended goal.
+
+Evidence is kept in the shared workspace at
+`operations/jinkai_live_navigation_20261004/radio_r2_s115/component_result.json`,
+`validation.json`, and the referenced execution manifest. The existing Original
+100-task results still refer to their archived implementations, including the
+static-GT navigation path described at `ac2995b`; Official remains a separate
+native-symbolic implementation. The online component is not merged into either
+method's benchmark statistics.
+
+
+The existing system guide embeds `web/assets/online_navigation_r2.svg`, a plot
+of the actual initial/final occupancy files and recorded robot positions. It
+uses the same world extent in both panels and distinguishes the selected RGB
+floor hint from the fixed approach goal. It is executor-private diagnostic
+evidence, not an extra model observation. Regenerate it with
+`scripts/render_online_map_progress.py`; input hashes and coordinate conventions
+are recorded in the batch's `map_visualization.json`.
+
+
+## Complete Astra task acceptance
+
+The same runtime `73b1b9a` completed `turning_on_radio`, instance 301, seed 0,
+with official Q=1, `task_success=true`, and the model's formal
+`finish(outcome="achieved")`:
+
+- 4 actions and 14 tool calls; 337.48 seconds of model execution, excluding
+  simulator initialization.
+- 775 simulation control steps and 5.6996 m cumulative actual navigation.
+- 782 original video frames covering 26.0667 seconds of simulation time.
+- Video, four-camera observation, event alignment and resource cleanup checks
+  passed; the archived replay reported no replay errors.
+- The model navigated twice, toggled the radio on (including internal approach
+  to the same selected radio), then attempted a fourth navigation action for confirmation. That action
+  partially moved and returned `navigation_invalid_start`. The model read the
+  failure-recovery skill, used asynchronous observation to confirm the radio
+  indicator, and finished successfully. **The task passed with one local
+  navigation failure; it was not an error-free sequence of actions.**
+
+[Open the complete model replay](http://10.76.5.241:8765/manipulation_runs/mas_online_navigation_original_000_turning_on_radio_i301_s0_r1/replay.html).
+
+This is one complete task acceptance, not a 100-task success rate. It does not
+exercise carrying or placing objects. The R2 map figure remains a separate,
+no-model navigation component with Q=0; it is not relabeled as the Astra task's
+map or trajectory. Frozen Original/Official benchmark statistics remain
+separate from both new validations.
