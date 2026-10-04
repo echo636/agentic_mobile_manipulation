@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from ..contracts import SkillError
 from ..deadline import EpisodeDeadline
 from ..omnigibson_backend import OmniGibsonBackend
-from ..observations.rig import DIRECTIONS, camera_mount, look_at_orientation
+from ..observations.rig import DIRECTIONS, camera_mount, centered_head_height, look_at_orientation
 from ..records import now
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
@@ -69,7 +69,12 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
             raise RuntimeError('Stock head/wrist camera exclusion was not applied')
         from omnigibson.sensors import VisionSensor
         base_pos = self.robot.get_position_orientation()[0]
-        self.rig_height = float(self.robot.aabb[1][2] - base_pos[2]) + 0.05
+        visual_points = []
+        for link in self.robot.links.values():
+            points = link.visual_boundary_points_world
+            if points is not None:
+                visual_points.extend(points.detach().cpu().tolist())
+        self.rig_height = centered_head_height(visual_points, base_pos.detach().cpu().tolist())
         with self._startup_stage('surround_camera_setup_and_warmup'):
             for direction in DIRECTIONS:
                 sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
@@ -592,6 +597,7 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,
             'mount_radius_m':self.rig_radius,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
+            'height_policy':'own_visual_geometry_below_lower_20_percent_with_5cm_clearance',
             'stock_wrist_cameras_enabled':False}
         return result
 

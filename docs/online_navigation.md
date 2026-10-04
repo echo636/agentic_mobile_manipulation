@@ -8,7 +8,11 @@ recorded source; this change does not retroactively update their results.
 
 Four independent virtual head cameras capture front, back, left and right at
 one frozen simulation state. Their optical XY origins now coincide with the
-robot center, at the existing head height and 20-degree downward pitch. The
+robot center, with a 20-degree downward pitch. The mount height is computed
+from the robot's visual geometry so its own body stays below the lower 20%
+of the image, with 5 cm clearance. The initial real test showed that the old
+collision-AABB height placed the centered front view behind the visible head.
+The
 previous 0.35 m outward ring left a central square unobserved by all four
 cameras. We changed the rig instead of inventing a free starting disk.
 

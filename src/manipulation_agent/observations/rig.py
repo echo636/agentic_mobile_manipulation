@@ -5,6 +5,32 @@ DIRECTIONS = ('front', 'back', 'left', 'right')
 YAW_DEGREES = {'front': 0, 'back': 180, 'left': 90, 'right': -90}
 
 
+def centered_head_height(visual_points, base_position, *, pitch_degrees=20,
+                         vertical_fov_degrees=90, body_below_fraction=.8, clearance=.05):
+    """Place the virtual head rig above its own visible body, using robot geometry.
+
+    A collision AABB can exclude the rendered head shell. This uses visual
+    vertices and leaves the body below the lower 20% of each square image.
+    The radial bound is conservative for all four directions. No scene geometry
+    or traversability information enters this mount calculation.
+    """
+    if not .5 < body_below_fraction < 1 or clearance < 0:
+        raise ValueError('Invalid head-camera clearance policy')
+    angle = math.radians(pitch_degrees) + math.atan(
+        (2*body_below_fraction-1)*math.tan(math.radians(vertical_fov_degrees)/2))
+    if not 0 < angle < math.pi/2:
+        raise ValueError('Head-camera lower-body angle must be below the horizon')
+    base_x, base_y, base_z = map(float, base_position)
+    required = []
+    for x, y, z in visual_points:
+        if not all(math.isfinite(float(v)) for v in (x, y, z, base_x, base_y, base_z)):
+            raise ValueError('Robot visual geometry must be finite')
+        required.append(float(z)-base_z+math.hypot(float(x)-base_x,float(y)-base_y)*math.tan(angle))
+    if not required:
+        raise ValueError('Robot visual geometry is required for the centered head rig')
+    return max(required)+clearance
+
+
 def camera_mount(direction, height, radius=0.35, pitch_degrees=20):
     yaw, pitch = math.radians(YAW_DEGREES[direction]), math.radians(pitch_degrees)
     c, s, cp, sp = math.cos(yaw), math.sin(yaw), math.cos(pitch), math.sin(pitch)
