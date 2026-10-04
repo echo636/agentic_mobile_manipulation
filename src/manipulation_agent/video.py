@@ -5,13 +5,19 @@ frames are streamed rather than accumulated in memory. No synthesized motion.
 """
 import hashlib
 import json
+import os
 from pathlib import Path
+import select
 import shutil
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, wait
 from collections import deque
 
 from .records import now, write_json
+
+ENCODER_STALL_SECONDS = 90
 
 
 def ffmpeg_executable():
@@ -40,6 +46,9 @@ class EpisodeVideo:
         self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
         self.closed = False; self.process = None; self.log = None
         self.encoder_pool = None; self.encoder_pending = deque()
+        self._encoder_stop = threading.Event()
+        self._encoded_frames = 0
+        self.recording_failure = None
         self._font = None
         self._camera_canvas = None
         self._camera_hashes = None
@@ -59,7 +68,58 @@ class EpisodeVideo:
         self.context = {'tool':name,'primitive':arguments.get('primitive', name),'request_id':request_id}
         self.markers.append({**self.context,'frame_index':self.count,'seconds':self.count/self.fps})
 
-    def append(self, pixels, env_step: int, kind: str, *, capture_env_step=None, repeated=False):
+    def _write_frame(self, raw):
+        """Worker-only pipe I/O; no simulator or camera access here."""
+        fd = self.process.stdin.fileno()
+        remaining = memoryview(raw)
+        last_progress = time.monotonic()
+        while remaining:
+            if self._encoder_stop.is_set():
+                raise OSError('Encoder recording stopped')
+            idle = time.monotonic() - last_progress
+            if idle >= ENCODER_STALL_SECONDS:
+                raise TimeoutError('Encoder pipe made no write progress within its stall limit')
+            if not select.select([], [fd], [], min(.05, ENCODER_STALL_SECONDS-idle))[1]:
+                continue
+            try:
+                written = os.write(fd, remaining)
+            except BlockingIOError:
+                continue
+            if written <= 0:
+                raise BrokenPipeError('Encoder pipe accepted no bytes')
+            remaining = remaining[written:]
+            last_progress = time.monotonic()
+        self._encoded_frames += 1
+
+    def _disable_encoder(self, exc):
+        """Isolate failed recording and keep already written evidence intact."""
+        self.closed = True
+        self.recording_failure = {'failure_type':type(exc).__name__, 'failure':str(exc)}
+        self._encoder_stop.set()
+        if self.process is not None:
+            if self.process.poll() is None:
+                self.process.kill()
+            try:
+                self.process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.manifest['encoder_cleanup_pending'] = True
+        if self.encoder_pool is not None:
+            # The writer polls stop every 50ms and never uses blocking writes.
+            # Join before closing the fd, so it cannot write to a reused number.
+            self.encoder_pool.shutdown(wait=True, cancel_futures=True)
+        if self.process is not None and self.process.stdin is not None:
+            self.process.stdin.close()
+        if self.log is not None:
+            self.log.close()
+        self.manifest.update(status='failed', recording_disabled=True,
+            finished_at=now(), frame_count=self.count, recorded_env_steps=len(self.env_steps),
+            encoded_frames_completed=self._encoded_frames, every_env_step_recorded=False,
+            encoder_exit_code=self.process.poll() if self.process is not None else None,
+            markers=self.markers, **self.recording_failure)
+        write_json(self.output/'video.json', self.manifest)
+
+    def append(self, pixels, env_step: int, kind: str, *, capture_env_step=None, repeated=False,
+               check_active=None):
         import numpy as np
         from PIL import Image, ImageDraw, ImageFont
         if self.closed: return
@@ -99,7 +159,13 @@ class EpisodeVideo:
                        '-an','-c:v','libx264','-threads','2','-preset','fast','-crf','20',
                        '-pix_fmt','yuv420p','-g',str(max(1,round(self.fps))),
                        '-movflags','+frag_keyframe+empty_moov+default_base_moof',str(self.output/'episode.mp4')]
-            self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.log)
+            try:
+                self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                                                stderr=self.log, bufsize=0)
+                os.set_blocking(self.process.stdin.fileno(), False)
+            except OSError as exc:
+                self._disable_encoder(exc)
+                return
             self.encoder_pool = ThreadPoolExecutor(max_workers=1,thread_name_prefix='mas-video-encoder')
             self.manifest['encoder_pid'] = self.process.pid
             self.manifest['encoder_command'] = command
@@ -108,8 +174,19 @@ class EpisodeVideo:
         # Preserve order and bound queued memory to eight raw frames. Worker
         # touches only ffmpeg's pipe, never the simulator or camera tensors.
         while self.encoder_pending and (len(self.encoder_pending)>=8 or self.encoder_pending[0].done()):
-            self.encoder_pending.popleft().result(timeout=90)
-        self.encoder_pending.append(self.encoder_pool.submit(self.process.stdin.write,raw))
+            pending = self.encoder_pending[0]
+            while not pending.done():
+                # Backpressure remains bounded in memory, but closure can
+                # interrupt it without waiting for the encoder's 90s watchdog.
+                if check_active is not None: check_active()
+                wait([pending], timeout=.05)
+            self.encoder_pending.popleft()
+            try:
+                pending.result()
+            except (OSError, TimeoutError) as exc:
+                self._disable_encoder(exc)
+                return
+        self.encoder_pending.append(self.encoder_pool.submit(self._write_frame, raw))
         self.held_frames+=int(repeated);self.fresh_frames+=int(not repeated)
         row = {'frame_index':self.count,'video_seconds':self.count/self.fps,'env_step':env_step,
                'kind':kind, 'at':now(), 'camera_capture_env_step':env_step if capture_env_step is None else capture_env_step,
@@ -127,15 +204,24 @@ class EpisodeVideo:
             write_json(self.output/'video.json', self.manifest)
 
     def finish(self, final_env_step):
+        if self.recording_failure is not None:
+            self.manifest.update(final_env_step=final_env_step,
+                encoded_frames_completed=self._encoded_frames)
+            path = self.output/'episode.mp4'
+            if path.exists():
+                self.manifest.update(bytes=path.stat().st_size,sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+            write_json(self.output/'video.json', self.manifest)
+            return self.manifest
         if self.closed: return self.manifest
         self.closed = True
         if self.process:
             try:
-                while self.encoder_pending:self.encoder_pending.popleft().result(timeout=90)
+                while self.encoder_pending:self.encoder_pending.popleft().result(timeout=ENCODER_STALL_SECONDS)
                 self.process.stdin.close()
-                code = self.process.wait(timeout=90)
-            except BaseException:
-                self.process.kill();self.process.wait();raise
+                code = self.process.wait(timeout=ENCODER_STALL_SECONDS)
+            except (OSError, TimeoutError, subprocess.TimeoutExpired) as exc:
+                self._disable_encoder(exc)
+                return self.finish(final_env_step)
             finally:
                 if self.encoder_pool:self.encoder_pool.shutdown(wait=True,cancel_futures=True)
                 self.log.close()

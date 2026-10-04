@@ -165,7 +165,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 self._recorded_capture_step=self.steps
             with component(self,'video_encode_submit'):
                 self.video.append(self._recorded_pixels,self.steps,kind,
-                                  capture_env_step=self._recorded_capture_step,repeated=not fresh)
+                                  capture_env_step=self._recorded_capture_step,repeated=not fresh,
+                                  check_active=lambda:self.deadline.check(changed=True))
 
     def _render_rgb_views(self, include_spectator=False, flushes=4, require_calibration=False):
         """Render-product resizing can invalidate all cameras for several frames.

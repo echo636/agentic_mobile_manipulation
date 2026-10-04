@@ -131,6 +131,7 @@ class RenderTests(unittest.TestCase):
         pixels={view:object() for view in ['front','back','left','right','spectator']}
         b._video_frame('observation_boundary',rendered=pixels)
         args,kwargs=b.video.append.call_args
+        self.assertTrue(callable(kwargs.pop('check_active')))
         self.assertIs(args[0],pixels);self.assertEqual(kwargs,{'capture_env_step':7,'repeated':False})
 
     def test_video_flush_option_does_not_reduce_observation_barrier(self):
