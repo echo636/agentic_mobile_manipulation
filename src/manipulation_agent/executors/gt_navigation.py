@@ -228,9 +228,43 @@ class GreedyGridFollower:
         self.distance_step,self.angle_step=speed*dt,turn_speed*dt
         self.index=1;self.last_actual=None;self.last_command=None;self.stall=0;self.stall_steps=stall_steps
         self.position_tolerance=.002
+        # Recorded OG pose feedback has ~1e-4 rad yaw residual after a setter.
+        # Demanding a smaller error before any translation causes endless tiny
+        # turns. Translation still follows the exact checked path segment and
+        # the command's yaw change remains bounded by angle_step.
+        self.heading_tolerance=min(math.radians(.5),self.angle_step)
+        self.final_yaw_tolerance=1e-3
+        self.distance_progress=min(self.distance_step*.25,.002)
+        self.angle_progress=min(self.angle_step*.25,1e-3)
+        self.last_phase=None;self.last_index=None
+        self.advance_index=None;self.advance_best=None;self.advance_stall=0
+        self.turn_target=None;self.turn_best=None;self.turn_stall=0
 
     @staticmethod
     def angle(delta):return math.atan2(math.sin(delta),math.cos(delta))
+
+    def _remaining_on_segment(self, xy, index):
+        """Directed route progress, rather than arbitrary pose displacement."""
+        start,end=self.plan.points[index-1:index+1]
+        length=math.dist(start,end)
+        if length<=1e-12:return 0.
+        return length-sum((v-s)*(e-s)/length for v,s,e in zip(xy,start,end))
+
+    def _check_progress(self, actual):
+        if self.last_phase=='advance':
+            remaining=self._remaining_on_segment(actual[:2],self.last_index)
+            if self.advance_best-remaining>=self.distance_progress:
+                self.advance_best=remaining;self.advance_stall=0
+            else:self.advance_stall+=1
+            self.stall=self.advance_stall
+        else:
+            error=abs(self.angle(self.turn_target-actual[2]))
+            if self.turn_best-error>=self.angle_progress:
+                self.turn_best=error;self.turn_stall=0
+            else:self.turn_stall+=1
+            self.stall=self.turn_stall
+        if self.stall>=self.stall_steps:
+            raise NavigationError('Navigation follower made no progress toward its path or heading','navigation_stalled')
 
     def next_pose(self, actual):
         x,y,yaw=map(float,actual)
@@ -239,25 +273,32 @@ class GreedyGridFollower:
         if self.last_actual is not None:
             error=math.dist((x,y),self.last_command[:2])
             if error>max(.10,self.distance_step*3):raise NavigationError('Robot diverged from the commanded path')
-            progressed=math.dist((x,y),self.last_actual[:2])>1e-5 or abs(self.angle(yaw-self.last_actual[2]))>1e-5
-            self.stall=0 if progressed else self.stall+1
-            if self.stall>=self.stall_steps:raise NavigationError('Navigation follower made no progress','navigation_stalled')
+            self._check_progress((x,y,yaw))
         while self.index<len(self.plan.points) and math.dist((x,y),self.plan.points[self.index])<=self.position_tolerance:
             self.index+=1
         if self.index>=len(self.plan.points):
             if math.dist((x,y),self.plan.goal)>self.position_tolerance:
                 raise NavigationError('Path ended before the selected goal was reached')
             delta=self.angle(self.plan.final_yaw-yaw)
-            if abs(delta)<=1e-4:return None
+            if abs(delta)<=self.final_yaw_tolerance:return None
+            phase='turn';heading=self.plan.final_yaw
             command=(x,y,yaw+max(-self.angle_step,min(self.angle_step,delta)))
         else:
             goal=self.plan.points[self.index];distance=math.dist((x,y),goal)
             heading=math.atan2(goal[1]-y,goal[0]-x);delta=self.angle(heading-yaw)
-            if abs(delta)>1e-4:
+            if abs(delta)>self.heading_tolerance:
+                phase='turn'
                 command=(x,y,yaw+max(-self.angle_step,min(self.angle_step,delta)))
             else:
+                phase='advance'
                 amount=min(distance,self.distance_step)
                 command=(x+(goal[0]-x)*amount/distance,y+(goal[1]-y)*amount/distance,heading)
                 if not self.grid.segment_free((x,y),command[:2]):raise NavigationError('Next movement crosses an occupied grid cell')
+        if phase=='advance' and self.advance_index!=self.index:
+            self.advance_index=self.index;self.advance_best=self._remaining_on_segment((x,y),self.index)
+            self.advance_stall=0
+        if phase=='turn' and (self.last_phase!='turn' or self.last_index!=self.index):
+            self.turn_target=heading;self.turn_best=abs(self.angle(heading-yaw));self.turn_stall=0
+        self.last_phase=phase;self.last_index=self.index
         self.last_actual=(x,y,yaw);self.last_command=command
         return command

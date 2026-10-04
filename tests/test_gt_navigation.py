@@ -2,7 +2,7 @@ import math
 import unittest
 
 from manipulation_agent.executors.gt_navigation import (
-    GridMap, GreedyGridFollower, NavigationError, candidate_score, plan_navigation,
+    GridMap, GreedyGridFollower, NavigationError, NavigationPlan, candidate_score, plan_navigation,
 )
 
 
@@ -101,6 +101,53 @@ class GTNavigationTests(unittest.TestCase):
         g=grid();plan=plan_navigation(g,(.5,.5),(3.,2.));follower=GreedyGridFollower(g,plan,1/30,stall_steps=3)
         with self.assertRaisesRegex(NavigationError,'no progress'):
             for _ in range(5):follower.next_pose((.5,.5,0.))
+
+    def test_recorded_060_pose_residual_does_not_block_forward_motion(self):
+        # Archived task060 median feedback residuals. The old 1e-4 rad gate
+        # keeps turning indefinitely under this measured 1.055e-4 rad error.
+        g=grid();plan=plan_navigation(g,(.5,.5),(2.,.5))
+        follower=GreedyGridFollower(g,plan,1/30);pose=(.5,.5,0.)
+        for step in range(200):
+            command=follower.next_pose(pose)
+            if command is None:break
+            self.assertTrue(g.segment_free(pose[:2],command[:2]))
+            pose=(command[0]+6.103515625e-5,command[1],command[2]-0.00010552782906014802)
+        else:self.fail('Measured settling residual trapped the follower in microturns')
+        self.assertLess(step,100)
+        self.assertLessEqual(math.dist(pose[:2],plan.goal),.002)
+        self.assertLessEqual(abs(follower.angle(pose[2]-plan.final_yaw)),1e-3)
+
+    def test_tiny_drift_and_yaw_jitter_are_not_translation_progress(self):
+        g=grid();plan=plan_navigation(g,(.5,.5),(2.,.5))
+        follower=GreedyGridFollower(g,plan,1/30)
+        # Translation commands are not executed. Even drift *toward* the goal
+        # must not reset the stall counter every frame, as the old code did.
+        with self.assertRaisesRegex(NavigationError,'no progress'):
+            for step in range(25):
+                follower.next_pose((.5+step*6.103515625e-5,.5,(-1)**step*0.00010552782906014802))
+
+    def test_yaw_jitter_does_not_mask_a_stalled_large_turn(self):
+        g=grid();plan=plan_navigation(g,(.5,.5),(2.,.5))
+        follower=GreedyGridFollower(g,plan,1/30)
+        with self.assertRaisesRegex(NavigationError,'no progress'):
+            for step in range(25):
+                follower.next_pose((.5,.5,math.pi/2+(-1)**step*0.00010552782906014802))
+
+    def test_turn_and_follow_around_obstacle_under_recorded_noise(self):
+        g=grid(31,31,.1,blocked=((10,10),))
+        points=((.5,.5),(1.5,.5),(1.5,1.5))
+        plan=NavigationPlan(points,points[-1],(1.5,2.2),math.pi/2,2.,0.,1,1,0.,0)
+        self.assertFalse(g.segment_free(points[0],points[-1]))
+        follower=GreedyGridFollower(g,plan,1/30);pose=(*points[0],math.pi)
+        for step in range(400):
+            command=follower.next_pose(pose)
+            if command is None:break
+            self.assertLessEqual(math.dist(pose[:2],command[:2]),.5/30+1e-9)
+            self.assertLessEqual(abs(follower.angle(command[2]-pose[2])),math.pi/90+1e-9)
+            self.assertTrue(g.segment_free(pose[:2],command[:2]))
+            pose=(command[0]+6.103515625e-5,command[1],command[2]-0.00010552782906014802)
+        else:self.fail('Noisy corner traversal failed to finish')
+        self.assertLessEqual(math.dist(pose[:2],plan.goal),.002)
 
     def test_pose_divergence_and_invalid_state_stop_follower(self):
         g=grid();plan=plan_navigation(g,(.5,.5),(3.,2.));follower=GreedyGridFollower(g,plan,1/30)
