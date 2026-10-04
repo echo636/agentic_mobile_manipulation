@@ -7,7 +7,9 @@ recorded source; this change does not retroactively update their results.
 ## Sensor and policy boundary
 
 Four independent virtual head cameras capture front, back, left and right at
-one frozen simulation state. Their optical XY origins now coincide with the
+one frozen simulation state. Calibrated capture now waits for official
+Replicator frame completion before reading annotations, as detailed below.
+Their optical XY origins now coincide with the
 robot center, with a 20-degree downward pitch. The mount height is computed
 from the robot's initial visual geometry so its body projects into the bottom
 20% of the image or below it, with 5 cm clearance. The R2 component measured
@@ -96,9 +98,43 @@ outside the source repository; consult the recorded level before claiming
 acceptance or task success.
 
 
-## Validated runtime and current acceptance level
+## Latest autonomous task acceptance (4493295)
 
-The tested runtime is `73b1b9a45275893c273fe5253a72f0ad968ebdd5`.
+The corrected runtime `449329523a74191889532c037bc2e72f939dfab9` passed a fresh
+Astra attempt of `turning_on_radio`, instance 301, seed 0. The task prompt was
+unchanged; this was an autonomous model run, separate from the scripted
+four-action regression below.
+
+| Recorded check | Result |
+| --- | --- |
+| Independent official task result | `task_success=true`, Q=1 |
+| Model's formal finish | `achieved`, accepted and closed |
+| Actions | 4; each returned success |
+| Model tool calls | 13 |
+| Model execution time, initialization excluded | 189.3089 seconds |
+| Simulator steps / cumulative actual navigation | 398 / 2.4541642 m |
+| Four-camera captures / async observation jobs | 7 / 2 |
+| Replay video | 405 frames, 13.5 seconds at 30 fps |
+| Video, observation, evidence alignment and cleanup | Passed |
+
+The model chose `navigate_to → look(45°) → toggle_on → navigate_to`, then used
+fresh observations to confirm the illuminated radio before `finish`.
+[Open the corrected autonomous replay](http://10.76.5.241:8765/manipulation_runs/mas_online_navigation_original_000_turning_on_radio_i301_s0_r2/replay.html).
+The simulator's physics-time metric is 13.2667 seconds; the video also includes
+observation-boundary frames. These are separate from model wall-clock time.
+
+This is a repeat of one task, not an additional distinct benchmark task or a
+100-task success rate. It does not exercise carrying or placing objects. The
+earlier component map below and the first autonomous attempt retain their own
+source, trajectory and outcome; neither is relabeled as this corrected run.
+Run records and validation are under
+`operations/jinkai_live_navigation_20261004/e2e_radio_s115_r2`.
+
+
+## First navigation component acceptance (historical 73b1b9a)
+
+This earlier component used `73b1b9a45275893c273fe5253a72f0ad968ebdd5`.
+The current render-synchronized runtime is `449329523a74191889532c037bc2e72f939dfab9`.
 The S115 R2 navigation component passed on 2026-10-04:
 
 | Recorded check | Result |
@@ -141,7 +177,7 @@ evidence, not an extra model observation. Regenerate it with
 are recorded in the batch's `map_visualization.json`.
 
 
-## Complete Astra task acceptance
+## First complete Astra attempt (historical 73b1b9a)
 
 The same runtime `73b1b9a` completed `turning_on_radio`, instance 301, seed 0,
 with official Q=1, `task_success=true`, and the model's formal
@@ -167,3 +203,45 @@ exercise carrying or placing objects. The R2 map figure remains a separate,
 no-model navigation component with Q=0; it is not relabeled as the Astra task's
 map or trajectory. Frozen Original/Official benchmark statistics remain
 separate from both new validations.
+
+
+## Frame-completion correction and real four-action regression
+
+Geometric comparison and the controlled regression identify a stale-depth /
+current-pose mismatch behind the first autonomous attempt's fourth navigation
+failure: the depth matched approximately one earlier control step (about
+1.67 cm of base movement). Backprojecting that depth using the new pose caused
+an own-left-arm surface to escape the self filter and enter the occupancy map
+as a false obstacle. A valid tensor shape and additional fixed render ticks did
+not guarantee that the annotation belonged to the current pose. The internal
+GPU scheduling itself was not instrumented; the diagnosis comes from the
+measured surface alignment and the corrected regression.
+
+Runtime `449329523a74191889532c037bc2e72f939dfab9` now calls the official
+Replicator completion operation before calibrated readback:
+
+```python
+with og.sim.editing_usd():
+    replicator.orchestrator.step(
+        delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1
+    )
+```
+
+The edit scope permits Replicator's SDGPipeline attribute updates and lets
+OmniGibson synchronize them to Fabric. The zero time delta preserves the
+simulation state while waiting for completion. This fix does not expand the
+self-body mask or clear occupied/unknown map cells.
+
+The real S115 four-action regression replayed the recorded action sequence
+without a model. All four actions completed, including the formerly failing
+last navigation. It recorded 832 simulator steps, 5.9329273 m cumulative
+navigation, final map sequence 77, and independent Q=1. All 77 completion
+barriers preserved physics time, timeline time, robot pose and joints; four-view
+RGB, video and resource cleanup checks passed. Evidence is under
+`operations/jinkai_live_navigation_20261004/radio_barrier_r2_regression_s115`.
+
+The separate fresh autonomous Astra attempt with this runtime passed, as
+recorded above. This scripted regression is not an additional model benchmark
+success. Single-floor planar
+mapping, ideal private localization, kinematic execution and the unvalidated
+held-payload footprint remain the same experimental scope.
