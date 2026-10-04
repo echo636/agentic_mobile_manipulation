@@ -181,6 +181,45 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
                                   capture_env_step=self._recorded_capture_step,repeated=not fresh,
                                   check_active=lambda:self.deadline.check(changed=True))
 
+    def _wait_for_rgb_annotations(self):
+        """Finish Replicator capture at the current pose without advancing time.
+
+        Shape-valid annotator buffers can still contain a previous camera pose.
+        Isaac Sim 5.1's documented completion barrier waits for its render
+        dispatcher; additional arbitrary render ticks are not that guarantee.
+        This is called only by the simulator owner, for calibrated observations.
+        """
+        import numpy as np
+        import omnigibson.lazy as lazy
+        timeline = lazy.omni.timeline.get_timeline_interface()
+        def state():
+            position, orientation = self.robot.get_position_orientation()
+            return {'env_step': self.steps, 'sim_time': float(self.og.sim.current_time),
+                    'sim_step_index': int(self.og.sim.current_time_step_index),
+                    'timeline_time': float(timeline.get_current_time()),
+                    'position': position.detach().cpu().numpy().tolist(),
+                    'orientation': orientation.detach().cpu().numpy().tolist(),
+                    'joints': self.robot.get_joint_positions().detach().cpu().numpy().tolist()}
+        before = state()
+        # delta_time=0 is the official no-time-advance mode. Do not use
+        # wait_until_complete(), which stops Replicator generation.
+        with component(self, 'render_annotation_barrier'):
+            lazy.omni.replicator.core.orchestrator.step(
+                delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
+        after = state()
+        changed = [key for key in ('env_step', 'sim_step_index') if before[key] != after[key]]
+        changed += [key for key in ('sim_time', 'timeline_time')
+                    if not math.isclose(before[key], after[key], rel_tol=0., abs_tol=1e-10)]
+        changed += [key for key in ('position', 'orientation', 'joints')
+                    if not np.allclose(before[key], after[key], rtol=0., atol=1e-6)]
+        with (self.output / 'annotation_barriers.jsonl').open('a') as stream:
+            stream.write(json.dumps({'at': now(), 'audience': 'executor_private',
+                'status': 'failed' if changed else 'passed', 'api': 'replicator.orchestrator.step',
+                'delta_time': 0., 'pause_timeline': False, 'wait_for_render': True, 'rt_subframes': 1,
+                'before': before, 'after': after, 'changed_fields': changed}) + '\n')
+        if changed:
+            raise RuntimeError('Replicator capture changed simulation state: ' + ', '.join(changed))
+
     def _render_rgb_views(self, include_spectator=False, flushes=4, require_calibration=False):
         """Render-product resizing can invalidate all cameras for several frames.
 
@@ -196,6 +235,8 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         shapes = {}; readiness_failures=[]
         for attempt in range(30):
             with component(self,'render'):self.og.sim.render()
+            if require_calibration:
+                self._wait_for_rgb_annotations()
             pixels = {}; packets = {}; intrinsics={}; pending={}
             for view,sensor in sensors.items():
                 with component(self,'sensor_readback'):data,info = sensor.get_obs()
