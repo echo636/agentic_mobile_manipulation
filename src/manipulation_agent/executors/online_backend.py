@@ -43,6 +43,7 @@ class OnlineNavigation:
             raise ValueError('Robot base geometry does not supply a usable navigation footprint')
         self._online_mapper = CartographerMapper(self.output / 'online_mapping', deadline=self.deadline)
         self._online_enabled = True
+        self._online_self_filter = True
 
     def _update_online_map(self, *, rendered=False):
         """Capture calibrated four-depth packets without advancing physics.
@@ -69,7 +70,22 @@ class OnlineNavigation:
                 frames.append(DepthFrame(view, capture_id, self.steps,
                     data['depth_linear'].detach().cpu().numpy(),
                     self._sensor_intrinsics[view].detach().cpu().numpy(), transform))
-            scans = project_four_depth_frames(frames, ProjectionConfig(self._online_floor_height))
+            projection = ProjectionConfig(self._online_floor_height)
+            if getattr(self, '_online_self_filter', False):
+                from .self_depth_filter import prepare_self_hulls, mask_self_depth
+                bodies = {}
+                for name, link in self.robot.links.items():
+                    points = link.visual_boundary_points_world
+                    if points is not None:
+                        bodies[name] = points.detach().cpu().numpy()
+                hulls, geometry_report = prepare_self_hulls(bodies)
+                masked = [mask_self_depth(frame, hulls, pixel_stride=projection.pixel_stride) for frame in frames]
+                frames = [frame for frame, _ in masked]
+                with (self.output/'online_mapping'/'self_filter.jsonl').open('a') as stream:
+                    stream.write(json.dumps({'capture_id':capture_id, 'sim_step':self.steps,
+                        'geometry':geometry_report, 'views':[report for _, report in masked],
+                        'masked_ray_policy':'no_evidence; never free behind the body'})+'\n')
+            scans = project_four_depth_frames(frames, projection)
             position, orientation = self.robot.get_position_orientation()
             rotation = T.quat2mat(orientation)
             pose = (float(position[0]), float(position[1]), math.atan2(float(rotation[1, 0]), float(rotation[0, 0])))
@@ -188,6 +204,9 @@ class OnlineNavigation:
                 'max_speed_m_s':.5, 'max_yaw_speed_deg_s':60, 'physical_controller':False}
         except NavigationError as exc:
             raise SkillError(exc.code, str(exc), changed=self.steps>before) from exc
+        except SkillError as exc:
+            exc.changed = exc.changed or self.steps > before
+            raise
         finally:
             self.navigation_distance += travelled
             self._base_target = None
