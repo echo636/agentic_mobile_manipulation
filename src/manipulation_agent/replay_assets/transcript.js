@@ -17,7 +17,7 @@ window.ReplayTranscript = class ReplayTranscript {
     for(const [text,cls] of content)d.append(this.node('pre',text,cls));card.append(d);
   }
   setData(data){
-    this.feed.replaceChildren();this.entries=[];this.groups=[];this.key=null;this.follow.checked=true;this.marked=[];
+    this.data=data;this.feed.replaceChildren();this.entries=[];this.groups=[];this.key=null;this.follow.checked=true;this.marked=[];
     const steps=new Map(data.steps.map(s=>[s.index,s]));let group=null;
     for(const entry of data.model_transcript||[]){
       if(!group||group.step!==entry.step){
@@ -27,7 +27,7 @@ window.ReplayTranscript = class ReplayTranscript {
         if(step){const button=this.node('button',title,'step-jump');button.onclick=()=>this.onSelect(step.index);heading.append(button);box.dataset.step=step.index}
         else heading.append(this.node('strong',title));
         if(step?.tool_seconds!=null)heading.append(this.node('span',step.tool_seconds.toFixed(1)+' s','step-duration'));
-        box.append(heading);group={step:entry.step,box,hasText:false};this.groups.push(group);this.feed.append(box);
+        box.append(heading);group={step:entry.step,box,hasText:false,entries:[]};this.groups.push(group);this.feed.append(box);
       }
       const card=this.node('article',undefined,'conversation-entry kind-'+entry.kind);card.dataset.kind=entry.kind;card.dataset.sequence=entry.sequence;
       if(entry.step!=null)card.dataset.step=entry.step;
@@ -55,26 +55,29 @@ window.ReplayTranscript = class ReplayTranscript {
         if(entry.structured_content!=null)content.push([JSON.stringify(entry.structured_content,null,2),'conversation-result']);
         this.detail(card,'完整返回'+(content.length?' · '+content.length+' 段文本':''),entry,content);
       }
-      group.box.append(card);this.entries.push({entry,card,group});
+      const pair={entry,card,group};group.box.append(card);this.entries.push(pair);group.entries.push(pair);
     }
     const returned=new Set((data.model_transcript||[]).filter(e=>e.kind==='tool_result').map(e=>e.call_id));
     for(const {entry,card} of this.entries)if(entry.kind==='tool_call'&&!returned.has(entry.call_id))card.append(this.node('div','未记录工具返回','tool-outcome failed'));
     for(const g of this.groups)if(!g.hasText)g.box.querySelector('.step-group-heading').after(this.node('p','本步直接调用工具，无新增模型文字','no-model-text'));
-    if(!this.entries.length)this.feed.append(this.node('p',data.failure?'运行在产生模型记录前结束。':'尚无已归档的模型输出。','empty-conversation'));
+    this.waiting=this.node('p',this.entries.length?'播放后按顺序显示模型记录；已发生内容会保留。':data.failure?'运行在产生模型记录前结束。':'尚无已归档的模型输出。','empty-conversation');this.feed.append(this.waiting);
+    if(!this.entries.length&&data.failure)this.feed.append(this.node('pre',typeof data.failure==='string'?data.failure:JSON.stringify(data.failure,null,2),'conversation-result'));
     this.feed.scrollTop=0;
   }
   resumeFollow(){this.follow.checked=true;this.scrollCurrent()}
-  setActive(state,focus){
-    if(this.key===state.key)return;this.key=state.key;
+  setActive(state,focus,showAll=false){
+    const key=state.key+':'+showAll;if(this.key===key)return;this.key=key;
+    const cutoff=ReplayTiming.visibleThrough(this.data,state);
     for(const pair of this.marked||[]){pair.card.querySelector('.conversation-original').textContent=pair.entry.text}this.marked=[];
     const matching=new Set(focus.ranges.map(r=>r.sequence));if(focus.sequence!=null)matching.add(focus.sequence);
     let current=null;
     for(const g of this.groups){
-      const active=this.entries.some(p=>p.group===g&&matching.has(p.entry.sequence));
-      g.box.classList.toggle('is-current',active);g.box.classList.toggle('is-future',state.phase==='initial'||g.step!=null&&state.step!=null&&g.step>state.step);
+      const active=g.entries.some(p=>matching.has(p.entry.sequence));
+      const future=g.entries.every(p=>p.entry.sequence>cutoff);
+      g.box.hidden=!showAll&&future;g.box.classList.toggle('is-current',active);g.box.classList.toggle('is-future',future);
     }
     for(const pair of this.entries){
-      const {entry,card}=pair,active=matching.has(entry.sequence);card.classList.toggle('is-current',active);
+      const {entry,card}=pair,active=matching.has(entry.sequence);card.hidden=!showAll&&entry.sequence>cutoff;card.classList.toggle('is-current',active);
       card.classList.toggle('pending-result',entry.kind==='tool_result'&&entry.step===state.step&&['decision','execution','tool'].includes(state.phase));
       if(active)card.setAttribute('aria-current','true');else card.removeAttribute('aria-current');
       if(entry.sequence===focus.sequence)current=card;
@@ -84,6 +87,7 @@ window.ReplayTranscript = class ReplayTranscript {
         if(entry.sequence===focus.sequence)current=mark;
       }
     }
+    this.waiting.hidden=this.entries.some(p=>!p.card.hidden);
     this.root.dataset.step=state.step??'';this.root.dataset.phase=state.phase;this.root.dataset.page=state.page??'';this.root.dataset.sequence=focus.sequence??'';
     this.current=current;if(this.follow.checked){if(state.phase==='initial')this.feed.scrollTop=0;else this.scrollCurrent()};
   }
