@@ -233,12 +233,26 @@ def main():
                 validation['checks']['video_finalized'] = False
                 validation['video_error'] = str(exc)
             recorder.run['sim_steps'] = backend.steps
+        # OmniGibson's application shutdown may terminate the interpreter and
+        # never return. Persist the actual navigation/scoring/video outcome
+        # first. The launcher separately verifies that the owned unit and its
+        # process group are inactive before releasing their admission lease.
+        passed = (validation.get('error') is None and bool(validation['checks'])
+                  and all(validation['checks'].values()))
+        validation.update(status='passed' if passed else 'failed', finished_at=now(),
+                          cleanup={'status':'requested', 'verification':'launcher_owned_unit_exit'})
+        write_json(args.output/'validation.json', validation)
+        recorder.run['component_validation'] = validation
+        recorder.finish({'status':validation['status'],'task_success':None}, render=False)
+        if backend is not None:
             try:
                 backend.close()
                 validation['checks']['backend_closed'] = True
+                validation['cleanup'] = {'status':'passed', 'verification':'backend_close_returned'}
             except Exception as exc:
                 validation['checks']['backend_closed'] = False
                 validation['close_error'] = str(exc)
+                validation['cleanup'] = {'status':'failed', 'error':str(exc)}
         else:
             from manipulation_agent.startup_cleanup import shutdown_partial_simulator
             recorder.event('startup_cleanup', shutdown_partial_simulator())

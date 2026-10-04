@@ -143,10 +143,12 @@ def plan_online_navigation(grid, current, target, *, standoff=.7,
     if fixed_goal is not None:
         fixed_goal = tuple(map(float, fixed_goal))
         cell = grid.cell(fixed_goal)
-        # Previously returned goals are cell centres. A shifted/expanded map
-        # can retain that world point only if it still maps to the same centre.
+        # Previously returned goals are cell centres. Float32 crop origins
+        # can drift by a few sub-micrometres during map growth; tolerate that
+        # representation error, while still rejecting a genuinely shifted
+        # cell lattice or an endpoint that is newly blocked.
         if (not grid.navigable(cell) or not acceptable(cell)
-                or math.dist(grid.world(cell), fixed_goal) > 1e-7):
+                or math.dist(grid.world(cell), fixed_goal) > grid.resolution * 1e-4):
             raise NavigationError('The selected endpoint is blocked or unobserved in the new map.',
                                   'navigation_path_blocked')
         candidates = {cell: 0.}

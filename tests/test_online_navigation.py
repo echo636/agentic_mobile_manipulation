@@ -88,6 +88,30 @@ class OnlinePlannerTests(unittest.TestCase):
             plan_online_navigation(third, (1., 2.), (4.5, 2.), fixed_goal=plan.goal)
         self.assertEqual(raised.exception.code, 'navigation_path_blocked')
 
+    def test_fixed_endpoint_survives_float32_crop_origin_roundoff(self):
+        # Real radio r1 map13 -> map14 retained the same free world cell,
+        # but a float32 crop origin shifted its reported centre by 0.2um.
+        values = np.zeros((240, 310), dtype=np.uint8)
+        radius = .40188753604888916
+        goal = (2.47685170173645, 3.2073160171508794)
+        target = (2.903395652770996, 3.911875009536743)
+        origin = (-3.4731483459472656, -4.342683792114258)
+        grid = observed_grid(snapshot(values, .05, origin), robot_radius=radius)
+        plan = plan_online_navigation(grid, (4.12717342376709, 3.6326491832733154),
+                                      target, fixed_goal=goal)
+        self.assertGreater(math.dist(plan.goal, goal), 1e-7)
+        self.assertLess(math.dist(plan.goal, goal), grid.resolution * 1e-4)
+        # This tolerance must not silently move the requested fixed endpoint
+        # to a substantially different lattice, or accept an observed obstacle.
+        shifted = observed_grid(snapshot(values, .05, (origin[0]+.001, origin[1])),
+                                robot_radius=radius)
+        with self.assertRaises(NavigationError):
+            plan_online_navigation(shifted, (4.127, 3.633), target, fixed_goal=goal)
+        values[grid.cell(goal)] = 100
+        blocked = observed_grid(snapshot(values, .05, origin), robot_radius=radius)
+        with self.assertRaises(NavigationError):
+            plan_online_navigation(blocked, (4.127, 3.633), target, fixed_goal=goal)
+
     def test_clicked_object_can_be_occupied_but_approach_is_free(self):
         data = np.zeros((35, 50), dtype=np.uint8)
         data[13:18, 33:38] = 100
