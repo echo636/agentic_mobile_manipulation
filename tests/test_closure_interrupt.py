@@ -17,6 +17,22 @@ from manipulation_agent.vision_harness import VisionHarness
 
 
 class ClosureInterruptTests(unittest.TestCase):
+    def test_observation_queue_wait_uses_the_episode_clock(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)/'episode'
+            backend=MockRGBBackend(output)
+            backend.deadline=EpisodeDeadline(time.time()+1000)
+            harness=VisionHarness(backend,Recorder(output,{}),profile='minimal')
+            job=harness.surround.start()['job']['job_id']
+            harness.surround.tick()
+            with patch('manipulation_agent.surround.time.monotonic',return_value=time.monotonic()+31):
+                harness.surround.tick()
+            self.assertEqual(harness.surround.get(job)['job']['status'],'passed')
+            job=harness.surround.start()['job']['job_id']
+            with patch('manipulation_agent.deadline.time.time',return_value=harness.deadline.unix+1):
+                harness.surround.tick()
+            self.assertEqual(harness.surround.get(job)['job']['error']['code'],'observation_timeout')
+
     def test_finish_interrupts_active_action_and_persists_actual_score(self):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'episode'
@@ -37,6 +53,8 @@ class ClosureInterruptTests(unittest.TestCase):
                     def long_action(*args,**kwargs):
                         state['step_limit']=args[2]
                         backend.on=True;backend.steps+=1
+                        state['observation_job']=harness.surround.start()['job']['job_id']
+                        harness.surround.tick()  # Running, waiting for its atomic RGB capture.
                         entered.set()
                         while True:
                             backend.deadline.check(changed=True)
@@ -71,6 +89,7 @@ class ClosureInterruptTests(unittest.TestCase):
                     self.assertEqual(interrupted['error']['code'],'episode_cancelled')
                     self.assertTrue(interrupted['error']['world_may_have_changed'])
                     self.assertEqual(state['backend'].capture,capture)
+                    self.assertEqual(state['harness'].surround.get(state['observation_job'])['job']['status'],'cancelled')
                     self.assertEqual(state['step_limit'],20000)
                     self.assertEqual(state['evaluator_thread'],state['owner_thread'])
                     run=json.loads((output/'run.json').read_text())

@@ -34,7 +34,9 @@ class SurroundJobs:
                'error': None, 'submitted_revision': self.h.revision, 'observation': None}
         self.jobs[ident] = job
         self.active_id = ident
-        self.deadline = min(self.h.started + self.h.budget.wall_seconds, time.monotonic() + 30)
+        # Observation may legitimately wait behind a long owner-thread action.
+        # It shares the episode clock, not an independent 30-second queue timer.
+        self.deadline = self.h.started + self.h.budget.wall_seconds
         self._save(job, 'observation_planned')
         return self.get(ident)
 
@@ -76,7 +78,11 @@ class SurroundJobs:
         if job['cancel_requested']:
             self._end('cancelled')
             return
-        if time.monotonic() >= self.deadline:
+        if self.h.deadline.stop_requested:
+            self.stop_for_finish()
+            return
+        expired=self.h.deadline.expired if self.h.deadline.managed else time.monotonic()>=self.deadline
+        if expired:
             self._end('failed', {'code': 'observation_timeout', 'message': 'Observation job timed out.'})
             return
         if job['status'] == 'planned':

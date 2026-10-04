@@ -112,7 +112,7 @@ def serve(harness, port: int) -> None:
                 harness.call('finish', {'outcome':'aborted','reason':'Episode wall-clock deadline exhausted'}, 'episode-deadline-finish')
             elif not harness.deadline.managed and time.monotonic() - harness.started > harness.budget.wall_seconds:
                 harness.call("finish", {"outcome": "aborted", "reason": "Service wall-clock budget exhausted"}, "service-timeout")
-            if hasattr(harness, 'tick_background') and not harness.closed:
+            if hasattr(harness, 'tick_background') and not harness.closed and not harness.deadline.stop_requested:
                 harness.tick_background()
             try:
                 active = getattr(getattr(harness, 'surround', None), 'active', False)

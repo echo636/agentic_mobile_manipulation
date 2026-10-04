@@ -133,6 +133,8 @@ Current timing policy:
   the episode deadline. A validated `finish` request sets a thread-safe stop
   intent; the active action unwinds at its next checkpoint and the simulator
   owner then evaluates the actual state. No worker thread reads simulator state.
+  Pending observations also use the episode clock rather than a 30-second queue
+  timer, and are cancelled before any further background render on closure.
 - New batch attempts use an initialization **no-progress** watchdog: real new
   startup milestones renew its 1800 seconds. Repeated heartbeats do not. There is
   no independent total-startup wall cap; pre-existing attempts retain their
