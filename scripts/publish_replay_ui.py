@@ -1,8 +1,9 @@
-"""Stage and publish presentation HTML from existing replay JSON, without encoding media.
+"""Stage replay HTML and actual MCP attachment assets without encoding media.
 
 Prepare makes a reviewable manifest and staged pages. Apply verifies that the
 source JSON and currently published HTML still match that manifest, preserves
-old HTML, and replaces only HTML at the existing URLs.
+old HTML, and atomically installs derived attachments before their HTML pages.
+Original replay JSON, raw event streams, archived images and videos stay intact.
 """
 from __future__ import annotations
 
@@ -69,10 +70,17 @@ def prepare(args: argparse.Namespace) -> dict:
         relative = target.relative_to(root).as_posix()
         staged = within(record / 'staged', relative)
         staged.parent.mkdir(parents=True, exist_ok=True)
-        staged.write_text(render_replay_page(data))
+        trace_stats = {}
+        staged.write_text(render_replay_page(data, source_dir=source.parent,
+                                            asset_dir=staged.parent, trace_stats=trace_stats))
         pages.append({'target': relative, 'input': source.relative_to(root).as_posix(),
                       'input_sha256': digest(source), 'before_html_sha256': digest(target),
-                      'staged_html_sha256': digest(staged), 'run_id': data['run_id']})
+                      'staged_html_sha256': digest(staged), 'run_id': data['run_id'],
+                      'trace': trace_stats,
+                      'attachments': [
+                          {'target': (target.parent / name).relative_to(root).as_posix(),
+                           'sha256': sha, 'before_sha256': digest(target.parent / name)}
+                          for name, sha in trace_stats['asset_files'].items()]})
     if args.comparison:
         path = root / 'compare100_20261002/comparison.json'
         data = json.loads(path.read_text())
@@ -86,7 +94,8 @@ def prepare(args: argparse.Namespace) -> dict:
         pages.append({'target': relative, 'input': path.relative_to(root).as_posix(),
                       'input_sha256': digest(path), 'before_html_sha256': digest(root / relative),
                       'staged_html_sha256': digest(staged), 'kind': 'comparison'})
-    source_files = [REPO / 'src/manipulation_agent/replay.py',
+    source_files = [REPO / 'src/manipulation_agent/replay.py', REPO / 'src/manipulation_agent/tool_trace.py',
+                    REPO / 'scripts/publish_replay_ui.py',
                     REPO / 'scripts/batch_comparison.py', REPO / 'scripts/comparison_dashboard.html',
                     *sorted((REPO / 'src/manipulation_agent/replay_assets').glob('*'))]
     manifest = {'status': 'planned', 'prepared_at': stamp(), 'source_commit': commit,
@@ -94,7 +103,9 @@ def prepare(args: argparse.Namespace) -> dict:
                 'selection_file': str(args.selection_json.resolve()) if args.selection_json else None,
                 'selection_sha256': digest(args.selection_json) if args.selection_json else None,
                 'source_hashes': {str(p.relative_to(REPO)): digest(p) for p in source_files if p.is_file()},
-                'reports_root': str(root), 'pages': pages, 'html_only': True,
+                'reports_root': str(root), 'pages': pages,
+                'html_only': not any(p.get('attachments') for p in pages),
+                'derived_attachment_count': sum(len(p.get('attachments', [])) for p in pages),
                 'media_encoded': False, 'evaluation_or_replay_json_modified': False}
     write_json(manifest_path, manifest)
     return manifest
@@ -115,12 +126,35 @@ def apply(record: Path) -> dict:
             raise ValueError(f'Published HTML changed after prepare: {page["target"]}')
         if digest(within(record / 'staged', page['target'])) != page['staged_html_sha256']:
             raise ValueError(f'Staged HTML changed after prepare: {page["target"]}')
+        run_root = within(root, page['input']).parent
+        for name, sha in page.get('trace', {}).get('source_files', {}).items():
+            if digest(within(run_root, name)) != sha:
+                raise ValueError(f'Trace evidence changed after prepare: {page["input"]}: {name}')
+        for attachment in page.get('attachments', []):
+            if digest(within(root, attachment['target'])) != attachment['before_sha256']:
+                raise ValueError(f'Attachment destination changed: {attachment["target"]}')
+            if digest(within(record / 'staged', attachment['target'])) != attachment['sha256']:
+                raise ValueError(f'Staged attachment changed: {attachment["target"]}')
     manifest['status'] = 'running'
     manifest['started_at'] = stamp()
     write_json(record / 'manifest.json', manifest)
     published = []
+    published_attachments = []
     try:
         for page in manifest['pages']:
+            for attachment in page.get('attachments', []):
+                target_asset = within(root, attachment['target'])
+                if attachment['before_sha256'] == attachment['sha256']:
+                    continue
+                if target_asset.exists():
+                    backup_asset = within(record / 'before', attachment['target'])
+                    backup_asset.parent.mkdir(parents=True, exist_ok=True)
+                    backup_asset.write_bytes(target_asset.read_bytes())
+                target_asset.parent.mkdir(parents=True, exist_ok=True)
+                temporary_asset = target_asset.with_name(target_asset.name + '.ui-publish.tmp')
+                temporary_asset.write_bytes(within(record / 'staged', attachment['target']).read_bytes())
+                temporary_asset.replace(target_asset)
+                published_attachments.append(attachment['target'])
             target = within(root, page['target'])
             backup = within(record / 'before', page['target'])
             if target.exists():
@@ -137,6 +171,7 @@ def apply(record: Path) -> dict:
         manifest.update(status='failed', error=str(exc))
         raise
     finally:
+        manifest['published_attachments'] = published_attachments
         manifest['published'] = published
         manifest['finished_at'] = stamp()
         write_json(record / 'manifest.json', manifest)
@@ -159,7 +194,8 @@ def main() -> None:
     args = parser.parse_args()
     result = prepare(args) if args.command == 'prepare' else apply(args.record_dir)
     print(json.dumps({'status': result['status'], 'pages': len(result['pages']),
-                      'record_dir': str(args.record_dir.resolve()), 'html_only': True}))
+                      'record_dir': str(args.record_dir.resolve()), 'html_only': result.get('html_only'),
+                      'derived_attachments': result.get('derived_attachment_count', 0)}))
 
 
 if __name__ == '__main__':

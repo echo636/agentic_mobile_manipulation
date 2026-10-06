@@ -12,6 +12,7 @@ from pathlib import Path
 from .audit import audit_episode
 from .records import now, write_json, read_run
 from .transcript import build_transcript
+from .tool_trace import enrich_tool_trace
 from .clients.events import event_path
 
 
@@ -170,15 +171,20 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     public_events = data.pop('model_public_events')
     if data.get('has_public_trace'):
         (run_dir/'model_public_events.jsonl').write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in public_events))
+    data = enrich_tool_trace(data, run_dir, run_dir)
     write_json(run_dir / 'replay.json', data)
     if data['audit']:
         write_json(run_dir / 'replay_audit.json', data['audit'])
-    (run_dir / 'replay.html').write_text(render_replay_page(data))
+    (run_dir / 'replay.html').write_text(render_replay_page(data, source_dir=run_dir, asset_dir=run_dir))
     return data
 
 
-def render_replay_page(data: dict) -> str:
+def render_replay_page(data: dict, source_dir: Path | None = None,
+                       asset_dir: Path | None = None, *, trace_stats: dict | None = None) -> str:
     """Render archived replay data without rebuilding or changing experiment evidence."""
+    data = enrich_tool_trace(data, source_dir, asset_dir)
+    if trace_stats is not None:
+        trace_stats.update(data['tool_trace_stats'])
     assets = Path(__file__).with_name('replay_assets')
     template = (assets / 'index.html').read_text()
     # Combinatorial evaluator arrays can exceed hundreds of MB. They remain
@@ -192,8 +198,8 @@ def render_replay_page(data: dict) -> str:
     # Escape < so task text cannot close a JSON script element.
     embedded = json.dumps(data, ensure_ascii=False, allow_nan=False).replace('<', '\\u003c').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
     page = template.replace('@@TITLE@@', html.escape(data['run_id']))
-    page = page.replace('@@CSS@@', (assets / 'style.css').read_text() + (assets / 'transcript.css').read_text())
-    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', '\n'.join((assets / name).read_text() for name in ('timing.js', 'transcript.js', 'navigation_target.js', 'player.js')))
+    page = page.replace('@@CSS@@', (assets / 'style.css').read_text() + (assets / 'transcript.css').read_text() + (assets / 'trace.css').read_text())
+    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', '\n'.join((assets / name).read_text() for name in ('timing.js', 'transcript.js', 'navigation_target.js', 'player.js', 'trace.js', 'trace_mode.js')))
     if not data['audit']:
         page = page.replace(' href="replay_audit.json"', '')
     if not data['video']:
