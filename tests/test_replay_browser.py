@@ -62,6 +62,7 @@ class ReplayBrowserTests(unittest.TestCase):
         self.errors = []
         self.page.on("pageerror", lambda error: self.errors.append(str(error)))
         self.page.set_content(render_replay_page(fixture()))
+        self.page.locator("#view-video").click()
 
     def test_default_first_step_and_future_are_hidden(self):
         self.assertEqual(self.page.locator("#current-step").get_attribute("data-step"), "1")
@@ -108,7 +109,9 @@ class ReplayBrowserTests(unittest.TestCase):
     def test_initialization_failure_has_no_fake_playback(self):
         data = fixture()
         data.update(steps=[], model_transcript=[], failure="TimeoutError: fixture initialization failed")
+        self.page.goto("about:blank")
         self.page.set_content(render_replay_page(data))
+        self.page.locator("#view-video").click()
         self.assertTrue(self.page.locator("#video-play").is_disabled())
         self.assertTrue(self.page.locator("#video-seek").is_disabled())
         self.assertIn(data["failure"], self.page.locator("#conversation").inner_text())

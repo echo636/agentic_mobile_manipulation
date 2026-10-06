@@ -39,16 +39,16 @@ function fitReplay() {
   if (frame.hidden) return;
   if (!mobile.matches) { frame.style.height = ''; return; }
   try {
-    const workspace = frame.contentDocument?.querySelector('.replay-workspace');
-    if (workspace) frame.style.height = Math.ceil(workspace.getBoundingClientRect().height + 2) + 'px';
+    const workspace = frame.contentDocument?.querySelector('.trace-workspace:not([hidden]), .replay-workspace:not([hidden])');
+    if (workspace) { const toolbar = frame.contentDocument.querySelector('.replay-viewbar'); frame.style.height = Math.ceil(workspace.getBoundingClientRect().height + (toolbar?.getBoundingClientRect().height || 0) + 2) + 'px'; }
   } catch (e) { /* The independent replay link remains available for other origins. */ }
 }
 $('replay').addEventListener('load', () => {
   $('replay').setAttribute('aria-busy', 'false');
   frameObserver?.disconnect();
   try {
-    const workspace = $('replay').contentDocument?.querySelector('.replay-workspace');
-    if (workspace) { frameObserver = new ResizeObserver(fitReplay); frameObserver.observe(workspace); }
+    const workspace = $('replay').contentDocument?.querySelector('.trace-workspace:not([hidden]), .replay-workspace:not([hidden])');
+    if (workspace) { frameObserver = new ResizeObserver(fitReplay); for (const panel of $('replay').contentDocument.querySelectorAll('.trace-workspace,.replay-workspace')) frameObserver.observe(panel); }
   } catch (e) { /* Cross-origin players retain their own scrolling viewport. */ }
   fitReplay();
 });

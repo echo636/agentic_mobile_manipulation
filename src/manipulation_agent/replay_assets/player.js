@@ -1,4 +1,5 @@
-(() => {
+window.startReplayPlayer = function () {
+if(window.replayPlayerStarted)return;window.replayPlayerStarted=true;
 'use strict';
 const $=id=>document.getElementById(id),D=JSON.parse($('replay-data').textContent),video=$('episode-video');
 // Missing model transport records must not hide simulator tool failures.
@@ -186,4 +187,4 @@ const hash=location.hash.match(/^#step=(\d+)$/);
 applyState(ReplayTiming.locate(D,edition,0));
 index=hash?D.steps.findIndex(s=>s.index===Number(hash[1])):location.hash==='#start'||!D.steps.length?-1:0;
 chooseEdition();
-})();
+};

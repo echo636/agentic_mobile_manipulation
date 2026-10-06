@@ -7,7 +7,16 @@
   <h1 id="title"></h1><p id="instruction"></p>
 </header>
 <main>
-  <div class="replay-workspace">
+  <nav class="replay-viewbar" aria-label="回放展示方式">
+    <div class="replay-view-tabs"><button id="view-trace" aria-pressed="true">完整过程</button><button id="view-video" aria-pressed="false">视频回放</button></div>
+    <span id="trace-stats" class="trace-stats"></span>
+    <button id="trace-top" class="trace-top" title="返回过程开头">↑ 顶部</button>
+  </nav>
+  <section id="trace-workspace" class="trace-workspace" aria-label="完整模型与工具过程">
+    <div class="trace-caption">按记录顺序展示模型原文、工具调用及实际返回的图片。点击图片可放大，点击“回放此步”可跳到视频。</div>
+    <div id="tool-trace-feed"></div>
+  </section>
+  <div class="replay-workspace" id="video-workspace" hidden>
     <section class="observation-panel" aria-label="同步观测">
       <div class="panel-heading"><div><span class="eyebrow">ROBOT VIEW</span><h2>机器人视角</h2></div><div class="view-actions"><div class="view-tabs" role="group" aria-label="观测来源"><button id="mode-execution" aria-pressed="true">执行画面</button><button id="mode-input" aria-pressed="false">模型输入</button></div><button id="fullscreen" class="icon-button" title="全屏回放" aria-label="全屏回放">⛶</button></div></div>
       <div id="camera-grid" class="camera-grid"></div>
@@ -31,5 +40,6 @@
   </div>
 </main>
 <dialog id="zoom"><button id="close-zoom" aria-label="关闭放大画面">关闭 ×</button><h3 id="zoom-title"></h3><canvas id="zoom-canvas"></canvas></dialog>
+<dialog id="trace-image-dialog"><div class="trace-image-heading"><h3 id="trace-image-title"></h3><button id="trace-image-close" aria-label="关闭原始图像">关闭 ×</button></div><div class="trace-image-stage"><img id="trace-image-full" alt="工具返回的原始图像"><span id="trace-image-marker" class="tt-point-marker" hidden></span></div><p id="trace-image-note"></p></dialog>
 <script type="application/json" id="replay-data">@@DATA@@</script><script>@@JS@@</script>
 </body></html>
