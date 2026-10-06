@@ -78,6 +78,10 @@ window.ReplayToolTrace = class ReplayToolTrace {
     picture.alt = `${image.view || 'RGB'} · ${image.image_ref || '工具返回原图'}`;
     picture.loading = 'lazy';
     picture.decoding = 'async';
+    if ([image.width, image.height].every(value => Number.isInteger(value) && value > 0)) {
+      picture.width = image.width;
+      picture.height = image.height;
+    }
     picture.addEventListener('error', () => {
       picture.hidden = true;
       if (!wrap.querySelector('.tt-image-error')) wrap.append(this.node('span', '原图读取失败', 'tt-note tt-image-error'));
@@ -157,16 +161,12 @@ window.ReplayToolTrace = class ReplayToolTrace {
     }
   }
 
-  replayLink(card, header, step) {
+  replayLink(header, step) {
     if (step === undefined || step === null || typeof this.onReplay !== 'function') return;
     const button = this.node('button', '回放此步', 'tt-replay');
     button.type = 'button';
     button.addEventListener('click', event => { event.stopPropagation(); this.onReplay(step); });
     header.append(button);
-    card.addEventListener('click', event => {
-      if (event.target.closest('a,button,details,summary,pre') || !window.getSelection()?.isCollapsed) return;
-      this.onReplay(step);
-    });
   }
 
   render(data = this.data) {
@@ -176,6 +176,8 @@ window.ReplayToolTrace = class ReplayToolTrace {
     this.root.replaceChildren();
     this.previousImages = new Map();
     const entries = Array.isArray(this.data.tool_trace) ? this.data.tool_trace : (this.data.model_transcript || []);
+    const steps = new Map((this.data.steps || []).map(step => [step.index, step]));
+    const calls = new Map(entries.filter(entry => entry.kind === 'tool_call' && entry.call_id).map(entry => [entry.call_id, entry]));
     const returned = new Set(entries.filter(entry => entry.kind === 'tool_result' && entry.call_id).map(entry => entry.call_id));
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index];
@@ -194,13 +196,22 @@ window.ReplayToolTrace = class ReplayToolTrace {
         header.append(this.node('strong', entry.kind === 'assistant' ? '模型输出' : '推理摘要 · 接口原文', 'tt-label'));
       } else {
         header.append(this.node('span', entry.kind === 'tool_result' ? 'tool result' : 'tool', 'tt-badge'));
-        header.append(this.node('strong', entry.tool || '工具记录', 'tt-tool-name'));
+        const arguments_ = entry.arguments || calls.get(entry.call_id)?.arguments;
+        const detail = arguments_?.primitive || (entry.tool === 'read_skill' ? arguments_?.name : null);
+        const label = (entry.tool || '工具记录') + (detail ? ' · ' + detail : '');
+        header.append(this.node('strong', label, 'tt-tool-name'));
         if (result) {
           const count = result.image_delivery?.attachment_count ?? result.image_count;
           if (Number.isFinite(count)) header.append(this.node('span', `${count} 张图像`, 'tt-count'));
+          const step = steps.get(result.step ?? entry.step);
+          if (step?.tool === entry.tool && Number.isFinite(step.tool_seconds) && step.tool_seconds >= 0) {
+            const duration = this.node('span', `工具 ${step.tool_seconds.toFixed(1)} s`, 'tt-duration');
+            duration.title = '服务端记录的工具耗时';
+            header.append(duration);
+          }
         }
       }
-      this.replayLink(card, header, entry.step ?? result?.step);
+      this.replayLink(header, entry.step ?? result?.step);
       card.append(header);
       if (message) {
         card.append(this.node('div', entry.text ?? '', 'tt-original'));

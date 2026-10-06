@@ -145,6 +145,23 @@ class ToolTraceBrowserTests(unittest.TestCase):
         self.assertIn("先前工具返回原图未核验", self.page.locator("#tool-trace-feed").inner_text())
         self.assertEqual(self.errors, [])
 
+    def test_action_labels_recorded_tool_duration_and_explicit_replay_only(self):
+        output = result(2, call_id="act", images=[])
+        output["tool"] = "act"
+        self.render([event("tool_call", 1, call_id="act", tool="act", step=1,
+                           arguments={"primitive": "toggle_on"}), output,
+                     event("tool_call", 3, call_id="skill", tool="read_skill", step=2,
+                           arguments={"name": "visual-exploration"})],
+                    steps=[{"index": 1, "tool": "act", "tool_seconds": 45.84}])
+        self.assertEqual(self.page.locator(".tt-tool-name").all_text_contents(),
+                         ["act · toggle_on", "read_skill · visual-exploration"])
+        self.assertEqual(self.page.locator(".tt-duration").all_text_contents(), ["工具 45.8 s"])
+        self.assertEqual(self.page.locator(".tt-duration").get_attribute("title"), "服务端记录的工具耗时")
+        self.page.locator(".tt-tool-name").first.click()
+        self.assertEqual(self.page.evaluate("replays"), [])
+        self.page.locator(".tt-replay").first.click()
+        self.assertEqual(self.page.evaluate("replays"), [1])
+
 
 if __name__ == "__main__":
     unittest.main()
