@@ -97,7 +97,7 @@ window.ReplayToolTrace = class ReplayToolTrace {
       figure.dataset.point = JSON.stringify(target.point);
     }
     const caption = target
-      ? `${image.view || 'RGB'} · 调用前原图；黄圈为模型选点，不是机器人最终位置`
+      ? `${image.view || 'RGB'} · 调用前原图；红圈为模型选点，不是机器人最终位置`
       : `${image.view || 'RGB'} · 工具返回原图${image.image_ref ? ' · ' + image.image_ref : ''}`;
     figure.append(wrap, this.node('figcaption', caption, 'tt-caption'));
     return figure;
