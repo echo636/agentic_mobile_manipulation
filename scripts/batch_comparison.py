@@ -71,12 +71,25 @@ def summarize_comparison(progress):
 def render_arm_dashboard(progress):
     esc = lambda x: html.escape(str(x))
     protocol = progress.get('protocol') or {}
-    title = protocol.get('comparison_arm', protocol.get('agent_profile', 'original'))
+    standalone = protocol.get('standalone_batch') is True
+    title = (protocol.get('batch_title') if standalone else None) or protocol.get('comparison_arm', protocol.get('agent_profile', 'original'))
+    page_title = title if standalone else 'Execution comparison'
+    navigation = '' if standalone else '<p><a href="../">Three-arm comparison</a></p>'
+    summary = ''
+    extra_style = ''
+    if standalone:
+        counts = Counter(outcome(r) or ('queued' if r['status'] in ('planned', 'queued') else r['status']) for r in progress['tasks'])
+        summary = '<p id="batch-counts">' + ' · '.join(
+            label + ' ' + str(counts.get(key, 0)) for key, label in (
+                ('success', 'Success'), ('failure', 'Failed'), ('timeout', 'Timeout'),
+                ('running', 'Running'), ('queued', 'Queued'))) + '</p>'
+        summary += '<p><a href="behavior100/progress.json">Progress JSON</a> · <a href="behavior100/manifest.json">Frozen manifest</a></p>'
+        extra_style = 'h1,td,th{overflow-wrap:anywhere}table{table-layout:fixed}td,th{padding:8px}th:nth-child(1){width:7%}th:nth-child(2){width:35%}th:nth-child(3){width:28%}th:nth-child(4){width:7%}th:nth-child(5){width:23%}'
     rows = []
     for r in progress['tasks']:
         link = '<a href="' + esc(r['replay_url']) + '">Replay ↗</a>' if r.get('replay_url') else 'Pending'
         rows.append('<tr><td>' + str(r['index'] + 1) + '</td><td>' + esc(r['name']) + '</td><td>' + esc(outcome(r) or r['status']) + ' / ' + esc(r.get('stage', 'queued')) + '</td><td>' + esc(r.get('q_score', '—')) + '</td><td>' + link + '</td></tr>')
-    return '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="30"><title>Execution comparison</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:32px auto;padding:0 20px}table{width:100%;border-collapse:collapse}td,th{padding:12px;text-align:left;border-bottom:1px solid #ddd}a{color:#087866}</style><h1>' + esc(title) + '</h1><p><a href="../">Three-arm comparison</a></p><p>Updated ' + esc(progress['updated_at']) + '. Task success and complete evidence are separate fields.</p><p>' + esc(protocol.get('protocol', 'Four-camera RGB; see frozen manifest for execution protocol')) + '</p><table><tr><th>#</th><th>Task</th><th>Status</th><th>Q</th><th>Replay</th></tr>' + ''.join(rows) + '</table></html>'
+    return '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="30"><title>' + esc(page_title) + '</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:32px auto;padding:0 20px}table{width:100%;border-collapse:collapse}td,th{padding:12px;text-align:left;border-bottom:1px solid #ddd}a{color:#087866}' + extra_style + '</style><h1>' + esc(title) + '</h1>' + navigation + summary + '<p>Updated ' + esc(progress['updated_at']) + '. Task success and complete evidence are separate fields.</p><p>' + esc(protocol.get('protocol', 'Four-camera RGB; see frozen manifest for execution protocol')) + '</p><table><tr><th>#</th><th>Task</th><th>Status</th><th>Q</th><th>Replay</th></tr>' + ''.join(rows) + '</table></html>'
 
 
 DASHBOARD_VERSION = 2
