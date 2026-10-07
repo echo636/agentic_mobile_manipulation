@@ -17,7 +17,7 @@ class AsyncObservationTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)/'episode'
         self.backend = MockRGBBackend(self.root)
-        self.h = VisionHarness(self.backend, Recorder(self.root, {'backend':'mock','observation_mode':'rgb_only'}))
+        self.h = VisionHarness(self.backend, Recorder(self.root, {'backend':'mock','observation_mode':'rgb_only'}), profile='workflow')
         self.calls = 0
 
     def call(self, name, **args):

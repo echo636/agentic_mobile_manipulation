@@ -65,7 +65,7 @@ class RGBBoundary(unittest.TestCase):
         self.assertTrue(result['closed']);self.assertNotIn('evaluation',result)
         self.assertFalse(self.recorder.run['task_success'])
     def test_tool_surface_has_workflows_and_look(self):
-        self.assertEqual({x['name'] for x in tool_specs('workflow')},{'observe','look','act','update_plan','remember','recall','list_skills','read_skill','finish','start_observation','get_observation','cancel_observation'})
+        self.assertEqual({x['name'] for x in tool_specs('workflow')},{'initialize','observe','look','act','update_plan','remember','recall','list_skills','read_skill','finish','start_observation','get_observation','cancel_observation'})
     def test_duplicate_request_does_not_repeat_motion(self):
         args={'primitive':'toggle_on','target':self.target(),'revision':0}
         one=self.h.call('act',args,'repeat');two=self.h.call('act',args,'repeat')

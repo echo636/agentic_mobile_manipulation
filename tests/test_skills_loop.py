@@ -12,13 +12,13 @@ class SkillsLoopTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/'run';r=Recorder(root,{'backend':'mock','observation_mode':'rgb_only'})
             h=VisionHarness(MockRGBBackend(root),r)
-            self.assertEqual({t['name'] for t in h.tool_specs()},{'observe','look','act','finish','list_skills','read_skill','start_observation','get_observation','cancel_observation'})
+            self.assertEqual({t['name'] for t in h.tool_specs()},{'initialize','look','act','finish','list_skills','read_skill'})
             self.assertFalse(hasattr(h,'plan'));self.assertFalse(hasattr(h,'memory'))
             self.assertTrue(h.call('list_skills',{},'ls')['skills'])
             self.assertTrue(h.call('read_skill',{'name':'pick-and-place','resource':'SKILL.md'},'read')['text'])
-            for name in ['update_plan','remember','recall']:
+            for name in ['update_plan','remember','recall','observe','start_observation','get_observation','cancel_observation']:
                 self.assertEqual(h.call(name,{},name)['error']['code'],'unknown_tool')
-            obs=h.call('observe',{},'obs')['observation']
+            obs=h.call('initialize',{},'obs')['observation']
             args={'primitive':'toggle_on','revision':0,'target':{'image_ref':obs['images'][0]['image_ref'],'point':[.5,.5]}}
             self.assertTrue(h.call('act',args,'valid')['ok'])
             self.assertTrue(h.call('finish',{'outcome':'achieved','reason':'验证灯光'},'done')['closed'])

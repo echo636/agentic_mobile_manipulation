@@ -51,6 +51,10 @@ class VisionHarness:
     def sync_execution_clock(self): return LegacyPlanHelpers.sync_execution_clock(self)
     def start_standalone_clock(self): return LegacyPlanHelpers.start_standalone_clock(self)
 
+    def initialize(self):
+        """Deliver the ready episode snapshot without reset, physics or rendering."""
+        return {'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
+
     def refresh(self):
         self.snapshot=public_observation(self.backend.observe(),self.revision)
         return copy.deepcopy(self.snapshot)

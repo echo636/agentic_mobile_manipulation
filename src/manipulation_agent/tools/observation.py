@@ -1,6 +1,10 @@
 from .base import register
 from ..contracts import object_schema, INT
 
+@register("initialize", "Receive the prepared episode's current four RGB views. Call once before acting; each look or act returns the next observation. Repeated calls return the current snapshot without resetting the episode or taking another capture.", object_schema({}))
+def initialize(ctx):
+    return ctx.initialize()
+
 @register("observe", "Receive fresh RGB camera images. No object list, labels, distance, depth or state truth. Old image refs expire.", object_schema({}))
 def observe(ctx):
     return {"observation": ctx.refresh()}

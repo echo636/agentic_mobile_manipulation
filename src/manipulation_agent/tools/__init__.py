@@ -4,11 +4,12 @@ from .base import REGISTRY, ToolMetadata
 from . import observation, action, planning, memory, skills, session, surround
 from copy import deepcopy
 
-MINIMAL_TOOLS = frozenset({'observe', 'look', 'act', 'finish'})
-SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill', 'start_observation', 'get_observation', 'cancel_observation'}
+MINIMAL_TOOLS = frozenset({'initialize', 'look', 'act', 'finish'})
+SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill'}
 
 # Execution hints, not additional permission gates or changed input contracts.
 _METADATA = {
+    'initialize': ToolMetadata(read_only=True, idempotent=True),
     'observe': ToolMetadata(read_only=True),
     'look': ToolMetadata(mutates_world=True, requires_fresh_observation=True),
     'act': ToolMetadata(mutates_world=True, requires_fresh_observation=True),
