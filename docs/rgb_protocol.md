@@ -1,32 +1,36 @@
 # RGB agent protocol · skills profile / rendered-pixel executor
 
-The current default exposes start_observation, get_observation, cancel_observation, observe, look, act, finish, list_skills and read_skill. Explicit plan and memory stores are deferred. The agent performs RGB search, recognition, action choice, recovery and verification; only motor execution is idealized. Public model messages and MCP results are replayed verbatim without forced Chinese decision summaries. v0.1 oracle runs remain historical harness probes, not validation of this RGB protocol.
+The current default exposes initialize, look, act, finish, list_skills and read_skill. Explicit plan and memory stores are deferred. The agent performs RGB search, recognition, action choice, recovery and verification; only motor execution is idealized. Public model messages and MCP results are replayed verbatim without forced Chinese decision summaries. v0.1 oracle runs remain historical harness probes, not validation of this RGB protocol.
 
 ## Three distinct layers
 
 - `skills/*/SKILL.md`: agent workflow instructions, with references; no simulator code. Four packages: visual-manipulation, visual-exploration, pick-and-place, failure-recovery.
-- `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry: nine current tools. The optional historical workflow profile additionally exposes update_plan, remember and recall; minimal reproduces the older four-tool interface.
+- `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry. `minimal` exposes initialize/look/act/finish; `skills` adds list_skills/read_skill. The optional historical `workflow` profile retains observe, asynchronous observation jobs, update_plan, remember and recall for compatibility.
 - `src/manipulation_agent/executors/`: ten motor primitives and the OmniGibson adapter. Primitives are not the workflow skill packages.
 
 `skill_runtime.py` freezes skill text and references into each run, hashes the bundle and permits only enumerated resources through read_skill. This lets a model consume skill documents without an arbitrary file-reading tool. This is a human-authored skill library, not automatic skill learning or evolution.
 
 ## Observation and action contract
 
+Call initialize({}) first. It returns the prepared episode's current snapshot without resetting the scene or performing an additional render. After inspecting the initial images, choose an act or look and inspect the next four-camera snapshot included in that same response. There is no observation-job submission or polling step in the default model loop.
+
 The public observation contains observation_mode=rgb_only, revision, image metadata (image_ref, view, dimensions, MIME type and content hash), and a common capture_id/captured_at/sim_step/sim_time_seconds record. Four fixed camera views are returned at 512x512: front/back/left/right. No wrist cameras are active. Acquisition does not rotate the robot or advance physics. MCP attaches actual image content for every observation-bearing response; a file path is not used as a substitute for image input.
 
 No task-object list, object names/IDs/categories, world poses, distances, depth, segmentation, scene graph, Inside/OnTop/Open/ToggledOn flags, inventory truth, global map or task score is returned. Normal conversation history contains the model's own hypotheses; optional historical workflow notes/plans are also hypotheses. Execution status/error categories are feedback about the requested motor operation, not a semantic state observation.
 
-The model selects `target={image_ref, point:[x,y]}` in the latest RGB. x increases left-to-right, y top-to-bottom; both are normalized to [0,1]. `act(primitive,target,revision)` rejects names and stale references. release/wait use null target. look(yaw_degrees,revision) performs a bounded in-place turn; positive turns left. Every attempt returns fresh RGB.
+The model selects `target={image_ref, point:[x,y]}` in the latest RGB. x increases left-to-right, y top-to-bottom; both are normalized to [0,1]. `act(primitive,target,revision)` rejects names and stale references. release/wait use null target. look(yaw_degrees,revision) performs a bounded in-place turn; positive turns left. Executor attempts return the resulting RGB, including after an execution failure. Invalid requests rejected before execution do not move the robot.
+
+All four current views are valid point-selection surfaces; no robot turn is needed simply to see another direction. Use the newest returned image_ref and revision after each action. If an appliance process needs time, use act with primitive=wait, target=null and wait_seconds, then inspect its returned RGB. Check the complete instruction against the latest returned images and feedback before finish; no extra capture is required solely for final verification. An executed operation and a model's finish claim remain separate from independent task success.
 
 Inside the current V3 motor executor, the exact selected pixel indexes private linear depth captured with the RGB. A ray through that pixel ignores robot collision proxies and accepts the first external hit only when it agrees with the rendered depth (within max(3cm, 2% of camera-to-surface distance)). There is no object-name search, task-scope filtering, candidate generation, nearby-pixel snapping or hidden-target selection. Depth/calibration are archived privately in executor_frames, never exposed in MCP. V1 could hit invisible self collision proxies; V2 added rendered instance maps but its trial ended in a native render crash. V3 removes segmentation as a mitigation; this does not establish the crash's root cause.
 
-start_observation queues a read-only job and returns its ID immediately. get_observation returns planned/running, or passed with actual four-image content. cancel_observation requests cancellation; already completed jobs are immutable. A job records common capture time and simulation step. The bridge services capture on the simulator owner thread while external LLM/network work proceeds independently. No worker thread calls renderer/physics APIs. A render/capture batch is atomic, so a cancel arriving after completion cannot undo it.
+## Legacy workflow compatibility
 
-The job's stale flag compares its frozen result with the current observation. Cached old frames remain available as evidence but act rejects expired refs. All four current camera images are valid point-selection surfaces; no robot turn is needed simply to observe another direction. Pending capture does not reserve robot motion; serialized scheduling ensures capture occurs wholly before or after a motor operation, never across one.
+Only the optional workflow profile exposes observe and start_observation/get_observation/cancel_observation. These retain their older synchronous or queued-capture behavior for recorded workflows and compatibility tests. Background capture stays on the simulator owner thread; no worker calls renderer/physics APIs. Cached job results can be stale, and their old refs cannot target a new action. See [legacy asynchronous acquisition](async_observation.md). Default prompts and skills do not use this interface.
 
 ## Comparison to the proposed harness diagram
 
-The core loop and asynchronous four-direction observation are implemented. Explicit initial decomposition/task-step Stack and independent plan/memory remain deferred. The same LLM judges continuation or finish; there is no forced separate completion-model stage. The private final evaluator is not model input.
+The core loop returns four-direction RGB at initialization and after each action. Explicit initial decomposition/task-step Stack and independent plan/memory remain deferred. The same LLM judges continuation or finish; there is no forced separate completion-model stage. The private final evaluator is not model input.
 
 
 ## Running

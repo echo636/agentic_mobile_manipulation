@@ -5,6 +5,16 @@
 `types.py`. The controller owns simulator/MCP preflight and the execution clock;
 client setup is excluded when `--execution-clock-command-json` is used.
 
+The controller passes `vision_policy.system_prompt(profile)` unchanged to each
+adapter. Codex receives it as developer instructions, OpenCode as the configured
+agent prompt, and Kimi through its project-local system.md. Native Responses uses
+the same function. The current minimal catalog is initialize/look/act/finish;
+skills adds list_skills/read_skill. Initialize supplies the prepared episode's
+current four-camera RGB, and act/look supply the next images in their results.
+Clients need no separate capture request or polling loop. Legacy observe and
+observation-job calls remain parseable in historical traces and are exposed only
+by the workflow profile.
+
 The existing `scripts/run_codex_controller.py` interface and Codex argv remain the
 batch default. `scripts/run_model_controller.py --client codex|opencode|kimi` uses
 the same lifecycle and arguments. `--client kimi --probe` requires no model or MCP

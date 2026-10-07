@@ -14,16 +14,17 @@ Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/a
 ## Observation and action tools
 
 ```text
-start_observation({}) -> job_id, status=planned (returns immediately)
-get_observation({job_id}) -> planned/running, or passed with four RGB images
-cancel_observation({job_id}) -> request cancellation of an unfinished job
+initialize({}) -> current revision and the prepared episode's first four RGB views
+act({...})     -> execution feedback, next revision and four RGB views
+look({...})    -> turn feedback, next revision and four RGB views
+finish({...})  -> formal episode closure
 ```
 
-Capture runs at background scheduling points on the simulator's owning thread while network requests and model inference can continue. No concurrent thread manipulates OmniGibson. Capture is an indivisible read-only operation; a render already in progress cannot be interrupted. The final job status resolves cancellation races.
+Call `initialize` first and inspect the returned images. It exposes the prepared episode's current snapshot without resetting the scene or rendering an extra frame. Each subsequent `act` or `look` completes on the simulator's owning thread and returns its resulting four-camera snapshot in the same response. The model receives those pixels before choosing its next action.
 
-Results include `stale`. Older captures remain available, but cannot target a new action after another action or capture supersedes them. Any current camera view can supply an action target without rotating the robot first.
+Use the latest returned revision and image references for the next action. Older captures remain historical evidence and cannot target a new action after they are superseded. Any current camera view can supply an action target without rotating the robot first. `look` explicitly turns the base; it is not surround capture. If the world needs time to change, use `act` with `primitive="wait"`, `target=null` and an appropriate `wait_seconds`, then inspect the returned RGB. The latest action images can support final verification; no extra observation request is required before `finish`.
 
-The default profile exposes nine MCP tools: `start_observation`, `get_observation`, `cancel_observation`, `observe`, `look`, `act`, `finish`, `list_skills`, and `read_skill`. `observe` is the synchronous compatibility entry point. `look` explicitly turns the base; it is not surround capture. Actions return four RGB views from one simulation state.
+The default `skills` profile exposes six MCP tools: `initialize`, `look`, `act`, `finish`, `list_skills`, and `read_skill`. `minimal` exposes the first four. The legacy `workflow` profile retains `observe` and asynchronous observation jobs for compatibility; they are absent from the default tool catalog.
 
 Four readable workflow skills are available: `visual-manipulation`, `visual-exploration`, `pick-and-place`, and `failure-recovery`. Explicit planning stacks and memory are currently deferred. Skills provide guidance; the LLM selects actions through tools.
 
@@ -45,7 +46,7 @@ PYTHONPATH=src python -m manipulation_agent.vision_cli \
 PYTHONPATH=src python -m manipulation_agent.mcp_server --bridge http://127.0.0.1:29440
 ```
 
-The [asynchronous MCP observation probe](scripts/probe_async_observation.py) validates a running bridge. It is a scripted interface test, not an autonomous task result.
+The [asynchronous MCP observation probe](scripts/probe_async_observation.py) covers the legacy `workflow` observation interface. It is a scripted compatibility test, not a test of the default tool catalog or an autonomous task result.
 
 ## Harness and model clients
 
@@ -88,7 +89,7 @@ Launch a frozen checkout with `scripts/start_behavior100_service.py --config <co
 Each run retains video, images, available model messages and returned reasoning summaries, tool traces, skill snapshots, versions, host/interpreter/GPU/PID provenance, and failure records. Replays do not invent hidden reasoning or unrecorded arm motion. Raw experiment data, credentials, and assets are excluded from Git.
 
 - [Observation and tool protocol](docs/rgb_protocol.md)
-- [Asynchronous four-camera design](docs/async_observation.md)
+- [Legacy asynchronous four-camera compatibility](docs/async_observation.md)
 - [2026-09-30 validation](docs/four_camera_validation_20260930.md): 60 CPU checks, a real four-camera MCP probe, and a successful radio instance 301 loop; [report and replay](http://10.76.5.241:8765/surround_observation.html) require the lab network or VPN.
 - [Earlier three-camera experiments](docs/history_before_four_camera.md): historical results do not validate a different camera configuration.
 

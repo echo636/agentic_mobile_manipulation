@@ -48,9 +48,13 @@ respect to the simulated world but updates image references, so it is not marked
 idempotent. Every executor attempt advances the revision, including partial
 failures. Invalid requests rejected before execution do not move the robot.
 
-The default nine tools are `start_observation`, `get_observation`,
-`cancel_observation`, `observe`, `look`, `act`, `finish`, `list_skills`, and
-`read_skill`. Four workflow documents cover manipulation, exploration, pick and
+The default six tools are `initialize`, `look`, `act`, `finish`, `list_skills`, and
+`read_skill`; minimal exposes the first four. `initialize` returns the prepared
+episode's current snapshot without resetting or rendering again. Each act/look
+response includes its resulting four-camera RGB, so the next decision uses that
+response directly. Use the wait action when simulation time must pass. Final
+verification can use the last action's images without an additional capture.
+Four workflow documents cover manipulation, exploration, pick and
 place, and recovery. They guide the model; they do not secretly run actions.
 
 ## FastMCP and concurrency
@@ -74,12 +78,14 @@ an external client. One server represents **one shared episode**. Multiple clien
 share the robot, revisions, budgets and finish state; HTTP sessions do not create
 independent worlds. Calls through the proxy are serialized through RGB assembly.
 Only the simulator's creating thread performs render, physics or state operations.
-Background observation jobs run at owner-thread scheduling points, including while
-the native model request waits on network I/O.
+The legacy workflow profile retains observe and asynchronous capture jobs. Those
+jobs run at owner-thread scheduling points, including while the native model
+request waits on network I/O. They are absent from the default model tool catalog.
 
 A transport timeout does not cancel an action or prove its failure. The bridge
 uses request IDs for duplicate RPCs, but a new MCP call gets a new operation ID.
-After an uncertain call, observe before deciding whether another action is needed.
+After an uncertain call, retrieve the current snapshot with initialize and inspect
+its images and revision before deciding whether another action is needed.
 Cross-process exactly-once recovery is not claimed.
 
 ## Policy clients and native loop
@@ -91,6 +97,9 @@ capability probes, project preparation, process execution and event parsing.
 MCP preflight, formal finish check and execution clock. Configuration support is
 separate from installation, authenticated execution and verified RGB delivery.
 OpenCode and Kimi have configuration/parser tests but are not yet live-validated.
+Every client receives its profile instructions from vision_policy.system_prompt.
+Default instructions start with initialize and consume act/look result images;
+the adapters do not add a separate observation or polling loop.
 
 The separate `agent_loop.py` implements the native Responses loop. It requests
 one tool call at a time, executes through the same harness, attaches fresh image

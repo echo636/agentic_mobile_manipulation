@@ -4,9 +4,9 @@ description: Search and revisit places using current RGB, bounded turns, visible
 ---
 # Visual exploration
 
-Call start_observation({}) to queue a four-camera capture without waiting, then get_observation(job_id). Read relevant skills while capture runs. When passed, inspect front/back/left/right RGB; these are simultaneous fixed-camera views, not a robot turn or panorama sweep. All four share a capture timestamp and simulation step. No wrist images are available.
+Call initialize({}) first and inspect its front/back/left/right RGB. Continue with the four images returned by every act/look. These fixed-camera views share a capture timestamp and simulation step; acquisition does not turn the robot or perform a panorama sweep. No wrist images are available. Read relevant skills as needed.
 
-Choose visible openings and target candidates from any of the four images. Only current refs are valid act targets. If a completed job is marked stale, request a new capture; previous images remain historical evidence. look(yaw_degrees, revision) still turns the robot explicitly when a new physical orientation is useful, but it is not needed merely to collect surround RGB.
+Choose visible openings and target candidates from any of the four images. Only the latest returned refs and revision are valid act targets; previous images remain historical evidence. look(yaw_degrees, revision) turns the robot explicitly when a new physical orientation is useful, but it is not needed merely to collect surround RGB. To let an ongoing process advance, use act with primitive=wait and target=null, then inspect the returned images.
 
 For movement use act(navigate_to, target={image_ref, point:[x,y]}, revision). Mark an object surface or visible floor beyond an opening. The executor follows only that pixel; it will not find a named room or object. A floor point near your feet may produce no movement; select a clearly farther visible surface. Do not try to act through a wall or remember an expired pixel.
 

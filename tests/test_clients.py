@@ -13,7 +13,9 @@ from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.base import run_process
 from manipulation_agent.clients.events import parse_events, write_derived_events, event_path
 from manipulation_agent.clients.types import PreparedProject, ClientCapability
+from manipulation_agent.tools import tool_specs
 from manipulation_agent.transcript import build_transcript
+from manipulation_agent.vision_policy import system_prompt
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'clients'
 
@@ -42,11 +44,11 @@ class ClientAdapterTests(unittest.TestCase):
 
     def test_codex_preparation_keeps_profile_and_non_policy_tools_disabled(self):
         with tempfile.TemporaryDirectory() as folder:
-            prepared = get_adapter('codex').prepare_project(self.config(Path(folder)), 'Task-only policy', ['observe', 'finish'])
+            prepared = get_adapter('codex').prepare_project(self.config(Path(folder)), 'Task-only policy', ['initialize', 'finish'])
             argv = prepared.argv
             self.assertEqual(argv[:6], ['codex','exec','--ignore-user-config','--skip-git-repo-check','--json','--sandbox'])
             configs = [argv[i+1] for i, v in enumerate(argv[:-1]) if v == '-c']
-            self.assertIn('mcp_servers.manipulation.enabled_tools=["observe", "finish"]', configs)
+            self.assertIn('mcp_servers.manipulation.enabled_tools=["initialize", "finish"]', configs)
             self.assertIn('mcp_servers.manipulation.required=true', configs)
             self.assertIn('mcp_servers.manipulation.tool_timeout_sec=1020', configs)
             for tool in ['shell_tool', 'view_image', 'multi_agent', 'plugins']:
@@ -58,12 +60,12 @@ class ClientAdapterTests(unittest.TestCase):
     def test_non_codex_projects_have_explicit_tool_boundary_without_auth_copy(self):
         for client in ['opencode', 'kimi']:
             with self.subTest(client=client), tempfile.TemporaryDirectory() as folder:
-                prepared = get_adapter(client).prepare_project(self.config(Path(folder), client), 'Task-only policy', ['observe','finish'])
+                prepared = get_adapter(client).prepare_project(self.config(Path(folder), client), 'Task-only policy', ['initialize','finish'])
                 self.assertNotIn('HOME', prepared.env_overlay)
                 self.assertNotIn('CODEX_HOME', prepared.env_overlay)
                 if client == 'opencode':
                     cfg = json.loads((prepared.cwd/'opencode.json').read_text())
-                    self.assertEqual(cfg['permission'], {'*':'deny','manipulation_observe':'allow','manipulation_finish':'allow'})
+                    self.assertEqual(cfg['permission'], {'*':'deny','manipulation_initialize':'allow','manipulation_finish':'allow'})
                     self.assertEqual(cfg['agent']['manipulation']['prompt'], 'Task-only policy')
                 else:
                     agent = (prepared.cwd/'agent.yaml').read_text()
@@ -71,6 +73,46 @@ class ClientAdapterTests(unittest.TestCase):
                     self.assertNotIn('extend:', agent)
                     self.assertIn('--mcp-config-file', prepared.argv)
                     self.assertEqual(set(json.loads((prepared.cwd/'mcp.json').read_text())['mcpServers']), {'manipulation'})
+
+    def test_each_client_receives_the_selected_profile_prompt_and_catalog(self):
+        for profile in ['minimal', 'skills', 'workflow']:
+            instructions = system_prompt(profile)
+            names = [tool['name'] for tool in tool_specs(profile)]
+            self.assertIn('initialize', names)
+            for client in ['codex', 'opencode', 'kimi']:
+                with self.subTest(profile=profile, client=client), tempfile.TemporaryDirectory() as folder:
+                    prepared = get_adapter(client).prepare_project(
+                        self.config(Path(folder), client, agent_profile=profile), instructions, names)
+                    if client == 'codex':
+                        configs = dict(value.split('=', 1) for index, value in enumerate(prepared.argv)
+                                       if index > 0 and prepared.argv[index - 1] == '-c')
+                        actual = json.loads(configs['developer_instructions'])
+                        self.assertEqual(json.loads(configs['mcp_servers.manipulation.enabled_tools']), names)
+                    elif client == 'opencode':
+                        config = json.loads((prepared.cwd / 'opencode.json').read_text())
+                        actual = config['agent']['manipulation']['prompt']
+                        self.assertEqual(config['permission'],
+                                         {'*': 'deny', **{'manipulation_' + name: 'allow' for name in names}})
+                    else:
+                        actual = (prepared.cwd / 'system.md').read_text().removesuffix('\n')
+                        self.assertIn('system_prompt_path: ./system.md',
+                                      (prepared.cwd / 'agent.yaml').read_text())
+                    self.assertEqual(actual, instructions)
+                    self.assertIn('First call initialize({})', actual)
+
+    def test_default_prompts_and_skills_do_not_require_hidden_observation_tools(self):
+        hidden_tools = r'\b(?:observe|start_observation|get_observation|cancel_observation)\b'
+        for profile in ['minimal', 'skills']:
+            with self.subTest(profile=profile):
+                instructions = system_prompt(profile)
+                self.assertNotRegex(instructions, hidden_tools)
+                self.assertIn('four views returned by act/look', instructions)
+                self.assertIn('No additional observation call is required before finish.', instructions)
+                self.assertIn('wait_seconds', instructions)
+        skill_root = Path(__file__).resolve().parents[1] / 'skills'
+        for resource in sorted(skill_root.glob('*/SKILL.md')) + sorted(skill_root.glob('*/references/*.md')):
+            with self.subTest(resource=resource.relative_to(skill_root)):
+                self.assertNotRegex(resource.read_text(), hidden_tools)
 
     def test_recorded_codex_finish_preserved_byte_for_byte(self):
         source = FIXTURES/'codex_recorded.jsonl'
