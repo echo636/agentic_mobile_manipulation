@@ -31,11 +31,15 @@ class NativeLoopTests(unittest.TestCase):
             requests.append(copy.deepcopy(payload))
             turn = len(requests)
             if turn == 1:
-                return self.response('observe', {}, 'observe')
+                return self.response('initialize', {}, 'initialize')
             if turn in (2, 3):
                 blocks = payload['input'][-1]['content']
                 pictures = [b for b in blocks if b['type'] == 'input_image']
                 self.assertEqual(len(pictures), 4)
+                if turn == 2:
+                    self.assertEqual(harness.backend.capture, 1)
+                    self.assertEqual({t['name'] for t in payload['tools']},
+                                     {'initialize', 'look', 'act', 'finish'})
                 self.assertTrue(base64.b64decode(pictures[0]['image_url'].split(',')[1]).startswith(b'\x89PNG'))
                 self.assertNotIn('PRIVATE_OBJECT_NAME', json.dumps(payload))
                 if turn == 2:

@@ -51,7 +51,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         code = ('from manipulation_agent import bridge; bridge.CLOSED_REPLAY_SECONDS=0.1; '
                 'from manipulation_agent.vision_cli import main; raise SystemExit(main())')
         self.backend = subprocess.Popen([sys.executable, '-c', code, '--backend', 'mock',
-            '--port', str(self.port), '--output', str(self.output), '--agent-profile', 'workflow'],
+            '--port', str(self.port), '--output', str(self.output), '--agent-profile', 'skills'],
             cwd=ROOT, env=self.env, stdout=subprocess.DEVNULL, stderr=self.errors)
         self.addCleanup(self.stop, self.backend)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -139,20 +139,26 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         async with self.client(transport) as session:
             listed = await session.list_tools()
             self.assertEqual({t.name: t.inputSchema for t in listed.tools},
-                             {t['name']: t['inputSchema'] for t in tool_specs('workflow')})
-            observe_spec = next(t for t in listed.tools if t.name == 'observe')
+                             {t['name']: t['inputSchema'] for t in tool_specs('skills')})
+            self.assertEqual({t.name for t in listed.tools},
+                             {'initialize', 'look', 'act', 'finish', 'list_skills', 'read_skill'})
+            observe_spec = next(t for t in listed.tools if t.name == 'initialize')
             self.assertTrue(observe_spec.annotations.readOnlyHint)
-            self.assertFalse(observe_spec.annotations.idempotentHint)
+            self.assertTrue(observe_spec.annotations.idempotentHint)
             self.assertFalse(observe_spec.meta['mas']['mutates_world'])
-            observed = await session.call_tool('observe', {})
+            observed = await session.call_tool('initialize', {})
             observation = self.result(observed)
             before = self.check_images(observed, observation)
+            self.assertTrue(observation['initialized'])
+            self.assertEqual(observation['observation']['capture']['capture_id'], 'mock-capture-1')
+            again = self.result(await session.call_tool('initialize', {}))
+            self.assertEqual(again['observation'], observation['observation'])
             target = {'image_ref': observation['observation']['images'][0]['image_ref'], 'point': [.5, .5]}
             args = {'primitive': 'toggle_on', 'target': target, 'revision': 0}
             # Owner-thread validation must see booleans/strings/extras unchanged.
             bad = await session.call_tool('act', {**args, 'revision': True})
             self.assertEqual(self.result(bad)['error']['code'], 'invalid_arguments')
-            bad_extra = await session.call_tool('observe', {'unexpected': 'preserve me'})
+            bad_extra = await session.call_tool('initialize', {'unexpected': 'preserve me'})
             self.assertEqual(self.result(bad_extra)['error']['code'], 'invalid_arguments')
             # Archived clients can omit nullable options; exact advertised schema
             # is still unchanged and the harness owns compatibility defaults.
@@ -187,7 +193,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
     def test_existing_readonly_preflight_accepts_fastmcp(self):
         from manipulation_agent.mcp_preflight import check_server
         result = check_server(sys.executable, ['-m', 'manipulation_agent.mcp_server', '--bridge', self.url],
-                              tool_specs('workflow'), Path(self.temp.name), timeout=10)
+                              tool_specs('skills'), Path(self.temp.name), timeout=10)
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['tool_calls'], 0)
 
@@ -213,17 +219,17 @@ class ToolContextBinding(unittest.TestCase):
             output = Path(tmp) / 'episode'
             harness = VisionHarness(MockRGBBackend(output), Recorder(output, {}), profile='minimal')
             contexts = []
-            original = REGISTRY['observe']
+            original = REGISTRY['initialize']
             def capture(context):
                 contexts.append(context)
                 return original.handler(context)
-            with patch.dict(REGISTRY, observe=replace(original, handler=capture)):
-                first = harness.call('observe', {}, 'request-one')
-                second = harness.call('observe', {}, 'request-two')
+            with patch.dict(REGISTRY, initialize=replace(original, handler=capture)):
+                first = harness.call('initialize', {}, 'request-one')
+                second = harness.call('initialize', {}, 'request-two')
             self.assertTrue(first['ok'] and second['ok'])
             self.assertTrue(all(isinstance(ctx, ToolContext) for ctx in contexts))
             self.assertEqual([ctx.request_id for ctx in contexts], ['request-one', 'request-two'])
-            self.assertEqual(contexts[0].tool_name, 'observe')
+            self.assertEqual(contexts[0].tool_name, 'initialize')
             self.assertEqual(contexts[0].profile, 'minimal')
             harness.call('act', {'primitive': 'release', 'target': None, 'revision': 0}, 'move')
             self.assertEqual(contexts[0].revision, 1)

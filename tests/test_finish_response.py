@@ -44,7 +44,7 @@ class FinishResponseTests(unittest.TestCase):
                     self.assertTrue(ready.wait(5))
                     self.assertFalse(failures,failures)
                     url=state['url']
-                    observation=bridge.rpc(url,'observe',{},'observe',timeout=2)['observation']
+                    observation=bridge.rpc(url,'initialize',{},'initialize',timeout=2)['observation']
                     bridge.rpc(url,'act',{'primitive':'toggle_on','target':{
                         'image_ref':observation['images'][0]['image_ref'],'point':[.5,.5]},
                         'revision':observation['revision']},'act',timeout=2)

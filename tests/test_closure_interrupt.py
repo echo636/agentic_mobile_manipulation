@@ -75,7 +75,7 @@ class ClosureInterruptTests(unittest.TestCase):
                 try:
                     self.assertTrue(ready.wait(5));self.assertFalse(failures,failures)
                     url=state['url']
-                    obs=bridge.rpc(url,'observe',{},'observe',timeout=2)['observation']
+                    obs=bridge.rpc(url,'initialize',{},'initialize',timeout=2)['observation']
                     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                         action=pool.submit(bridge.rpc,url,'act',{'primitive':'toggle_on',
                             'target':{'image_ref':obs['images'][0]['image_ref'],'point':[.5,.5]},

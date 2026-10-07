@@ -77,7 +77,7 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
                     for c in calls if 'decision' in c['arguments'])
         else:
             checks['minimal_profile_on_both_sides'] = controller.get('agent_profile') == 'minimal'
-            checks['no_workflow_tools_called'] = all(c['name'] in {'observe','look','act','finish'} for c in calls)
+            checks['no_workflow_tools_called'] = all(c['name'] in catalog for c in calls)
     evidence_ok = all(v for k, v in checks.items() if k not in {'independent_task_success', 'official_task_success'})
     return {'schema_version': 1, 'audited_at': now(), 'run_id': run['run_id'], 'model': controller['model'],
             'status': 'passed' if all(checks.values()) else 'failed',

@@ -120,12 +120,12 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.h.deadline=self.backend.deadline=EpisodeDeadline(clock_path=path)
         self.h.started=time.monotonic()-4000
         self.clock=4100
-        reply=self.h.call('observe',{},'before-model')
+        reply=self.h.call('initialize',{},'before-model')
         self.assertTrue(reply['ok'])
         self.assertFalse(self.h.deadline.expired)
         self.assertIsNone(self.h.deadline.unix)
         clock=write_execution_clock(path,1800)
-        reply=self.h.call('observe',{},'model-first-observe')
+        reply=self.h.call('initialize',{},'model-first-observe')
         self.assertTrue(reply['ok'])
         self.assertEqual(self.recorder.run['execution_started_at_unix'],4100)
         self.assertEqual(self.recorder.run['episode_deadline_unix'],5900)
