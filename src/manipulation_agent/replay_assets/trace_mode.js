@@ -27,7 +27,7 @@ function showImage(item,context={}){
  const point=context.target?.point||context.target;
  marker.hidden=!(Array.isArray(point)&&point.length>=2);
  if(!marker.hidden){marker.style.left=(point[0]*100)+'%';marker.style.top=(point[1]*100)+'%';}
- $('trace-image-note').textContent=marker.hidden?'实际工具返回的图像附件':'模型在此前观测中的选点；标记不代表机器人最终停靠位置。';
+ $('trace-image-note').textContent=marker.hidden?'实际工具返回的图像附件':context.target?.description||'模型在此前观测中的选点；标记不代表机器人最终停靠位置。';
  dialog.showModal();
 }
 const trace=new ReplayToolTrace($('tool-trace-feed'),data,{onReplay:replay,onImage:showImage});

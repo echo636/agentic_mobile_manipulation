@@ -154,13 +154,51 @@ class ToolTraceBrowserTests(unittest.TestCase):
                            arguments={"name": "visual-exploration"})],
                     steps=[{"index": 1, "tool": "act", "tool_seconds": 45.84}])
         self.assertEqual(self.page.locator(".tt-tool-name").all_text_contents(),
-                         ["act · toggle_on", "read_skill · visual-exploration"])
+                         ["act · toggle_on", "read_skill · visual-exploration · SKILL.md"])
         self.assertEqual(self.page.locator(".tt-duration").all_text_contents(), ["工具 45.8 s"])
         self.assertEqual(self.page.locator(".tt-duration").get_attribute("title"), "服务端记录的工具耗时")
         self.page.locator(".tt-tool-name").first.click()
         self.assertEqual(self.page.evaluate("replays"), [])
         self.page.locator(".tt-replay").first.click()
         self.assertEqual(self.page.evaluate("replays"), [1])
+
+    def test_manipulation_targets_use_input_attachment_and_describe_selection(self):
+        for primitive in ("toggle_on", "toggle_off", "open", "close", "grasp", "place_inside", "place_on_top"):
+            with self.subTest(primitive=primitive):
+                self.render([
+                    result(1, images=[image("left", "input-left", "frames/input.png")]),
+                    event("tool_call", 2, call_id="act", tool="act", arguments={
+                        "primitive": primitive, "target": {"image_ref": "input-left", "point": [.2, .8]}}),
+                    result(3, call_id="act", images=[image("left", "output-left", "frames/output.png")]),
+                ])
+                target = self.page.locator(".tt-target")
+                self.assertEqual(target.locator("img").get_attribute("src"),
+                                 "https://trace.test/reports/run/frames/input.png")
+                self.assertEqual(self.page.locator(".tt-point-marker").count(), 1)
+                self.assertIn("左视 · input-left · (u=0.2, v=0.8)", target.inner_text())
+                meaning = "容器或承载面，不是手中物体" if primitive.startswith("place") else "操作对象，不代表按钮或夹爪的精确接触点"
+                self.assertIn(meaning, target.inner_text())
+                target.locator("a").click()
+                opened = self.page.evaluate("opened[0]")
+                self.assertEqual(opened["target"]["point"], [.2, .8])
+                self.assertIn(meaning, opened["target"]["description"])
+                self.assertEqual(self.errors, [])
+
+    def test_skill_resources_have_distinct_titles_and_one_card_per_call(self):
+        entries = []
+        for sequence, resource in ((1, "SKILL.md"), (3, "references/evidence.md")):
+            call_id = f"skill-{sequence}"
+            entries.extend([
+                event("tool_call", sequence, call_id=call_id, tool="read_skill",
+                      arguments={"name": "visual-manipulation", "resource": resource}),
+                event("tool_result", sequence + 1, call_id=call_id, tool="read_skill", text_blocks=["Exact resource text"]),
+            ])
+        self.render(entries)
+        self.assertEqual(self.page.locator(".tt-entry").count(), 2)
+        self.assertEqual(self.page.locator(".tt-tool-name").all_text_contents(), [
+            "read_skill · visual-manipulation · SKILL.md",
+            "read_skill · visual-manipulation · references/evidence.md",
+        ])
 
 
 if __name__ == "__main__":

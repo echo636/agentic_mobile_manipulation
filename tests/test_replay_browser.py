@@ -4,6 +4,7 @@ Run with the docs interpreter and PLAYWRIGHT_BROWSERS_PATH when Chromium is
 installed. Core replay evidence tests do not require this optional dependency.
 """
 import unittest
+import base64
 
 from manipulation_agent.replay import render_replay_page
 
@@ -104,6 +105,46 @@ class ReplayBrowserTests(unittest.TestCase):
         self.page.locator(".camera-spectator").click()
         self.assertTrue(self.page.locator(".camera-spectator").evaluate("e=>e.classList.contains('camera-primary')"))
         self.assertFalse(self.page.locator(".camera-front").evaluate("e=>e.classList.contains('camera-primary')"))
+        self.assertEqual(self.errors, [])
+
+    def test_action_target_is_hidden_before_call_and_stays_on_input_image(self):
+        data = fixture()
+        target = {"image_ref": "input-left", "point": [.25, .75]}
+        data["steps"][1]["arguments"].update(primitive="toggle_on", target=target)
+        before = {"revision": 1, "images": [{"view": "left", "image_ref": "input-left", "file": "input.png"}]}
+        after = {"revision": 2, "images": [{"view": "left", "image_ref": "output-left", "file": "output.png"}]}
+        data["steps"][0]["after"] = before
+        data["steps"][1].update(before=before, after=after)
+        png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jZWQAAAAASUVORK5CYII=")
+        self.page.route("https://replay.test/run/*.png", lambda route: route.fulfill(content_type="image/png", body=png))
+        self.page.route("https://replay.test/run/replay.html", lambda route: route.fulfill(
+            content_type="text/html", body=render_replay_page(data)))
+        self.page.goto("https://replay.test/run/replay.html")
+        self.page.locator("#view-video").click()
+        self.page.locator("#mode-input").click()
+        times = self.page.evaluate("""() => ReplayTiming.review(JSON.parse(document.getElementById('replay-data').textContent))
+          .segments.filter(s=>s.step===2).map(s=>({phase:s.phase,time:s.start_seconds+.01}))""")
+        for segment in times:
+            self.page.locator("#video-seek").evaluate("(e,t)=>{e.value=t;e.dispatchEvent(new Event('input'))}", segment["time"])
+            panel = self.page.locator("#navigation-target")
+            if segment["phase"] == "decision":
+                self.assertTrue(panel.is_hidden())
+                self.assertIsNone(panel.get_attribute("data-point"))
+                continue
+            self.page.locator(".navigation-target-image").wait_for(state="visible")
+            self.assertEqual(panel.get_attribute("data-image-ref"), "input-left")
+            self.assertEqual(panel.get_attribute("data-point"), "[0.25,0.75]")
+            self.assertIn("toggle_on", panel.inner_text())
+            self.assertIn("操作对象，不代表按钮或夹爪的精确接触点", panel.inner_text())
+            expected = "output-left" if segment["phase"] == "result" else "input-left"
+            self.page.wait_for_function("ref => document.querySelector('.camera-left canvas').dataset.imageRef === ref", arg=expected)
+            if segment["phase"] == "result":
+                pixel = self.page.locator(".camera-left canvas").evaluate("e=>Array.from(e.getContext('2d').getImageData(0,0,1,1).data)")
+                self.assertEqual(pixel[0], pixel[1])  # Source is gray; no red marker on the output image.
+            self.page.locator(".navigation-target-image").click()
+            self.assertTrue(self.page.locator("#zoom").is_visible())
+            self.assertIn("toggle_on", self.page.locator("#zoom-title").inner_text())
+            self.page.locator("#close-zoom").click()
         self.assertEqual(self.errors, [])
 
     def test_initialization_failure_has_no_fake_playback(self):

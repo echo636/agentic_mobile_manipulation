@@ -43,7 +43,7 @@ function paint(name,source,x,y,w,h,imageRef){
  const t=tiles.get(name);if(t.canvas.width!==w||t.canvas.height!==h){t.canvas.width=w;t.canvas.height=h}
  t.canvas.getContext('2d').drawImage(source,x,y,w,h,0,0,w,h);t.tile.classList.add('has-image');
  if(imageRef)t.canvas.dataset.imageRef=imageRef;else delete t.canvas.dataset.imageRef;
- if(imageRef)navigationTarget.mark(t.canvas,imageRef);
+ if(imageRef&&state?.side==='before')navigationTarget.mark(t.canvas,imageRef);
 }
 function cameraBox(name){
  if(edition==='inspection'){const box=record?.camera_boxes?.[name];return box?[box[0],box[1]+26,box[2],box[2]-26]:null}
