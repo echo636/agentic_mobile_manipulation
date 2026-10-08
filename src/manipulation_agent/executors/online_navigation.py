@@ -96,8 +96,8 @@ def _astar_goals(grid, start, goals, check_cancel=None):
     return costs, parents, closed
 
 
-def plan_online_navigation(grid, current, target, *, standoff=.7,
-                           max_target_distance=1.4, max_snap=.75,
+def plan_online_navigation(grid, current, target, *, standoff=1.15,
+                           min_target_distance=1.0, max_target_distance=1.4, max_snap=.75,
                            candidate_filter=None, fixed_goal=None,
                            check_cancel=None):
     """Select a visible approach or replan to a previously selected endpoint.
@@ -110,8 +110,10 @@ def plan_online_navigation(grid, current, target, *, standoff=.7,
     The returned NavigationPlan works with the existing feedback follower.
     """
     if not all(math.isfinite(float(x)) and float(x) >= 0
-               for x in (standoff, max_snap, max_target_distance)):
+               for x in (standoff, min_target_distance, max_snap, max_target_distance)):
         raise ValueError('Finite nonnegative approach distances required')
+    standoff = min(standoff, max_target_distance)
+    min_target_distance = min(min_target_distance, standoff)
     current, target = tuple(map(float, current)), tuple(map(float, target))
     start = grid.cell(current)
     grid.cell(target)
@@ -125,7 +127,8 @@ def plan_online_navigation(grid, current, target, *, standoff=.7,
     visibility = {}
     def acceptable(cell):
         xy = grid.world(cell)
-        if math.dist(xy, target) > max_target_distance + 1e-9:
+        distance = math.dist(xy, target)
+        if distance < min_target_distance - 1e-9 or distance > max_target_distance + 1e-9:
             return False
         if cell not in visibility:
             visibility[cell] = candidate_filter is None or bool(candidate_filter(xy))

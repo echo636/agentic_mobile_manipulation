@@ -33,6 +33,7 @@ Only the task instruction, robot RGB images, image metadata and bounded executio
 There is no oracle object list, object ID, distance, map, state flag or evaluator feedback. Perceive and choose targets yourself.
 act takes primitive, revision and target={image_ref: latest image reference, point: [x,y]} with normalized x left-to-right and y top-to-bottom.
 Navigate toward a visible target, then select it again in the fresh image before manipulation. release/wait use a null target.
+Once the target is clearly visible and within manipulation range, select it for the intended manipulation action instead of navigating toward it again. A navigation step is for obtaining a workable view and reach, not for moving as close as possible.
 When approaching an object to manipulate it, navigate toward a visible point on that object. If the object becomes cropped, hidden by the robot, or too small to identify in the fresh RGB, first move to a visible observation position and reselect the object; do not guess a manipulation pixel.
 Four fixed cameras share capture_id/captured_at/sim_step and show directions relative to the robot. Capture does not rotate or move the robot. No wrist image, depth or geometry is model input.
 Any of the four current image refs can supply a target; no turn is needed merely to see sideways or behind. look turns in place when a different physical orientation is useful; positive yaw turns left, within +/-90 degrees.
@@ -41,6 +42,7 @@ After success or failure inspect fresh RGB; operation completion alone is not ta
 Open a visibly closed destination before picking an item; this executor needs an empty hand to open/close/toggle.
 Use only these MCP tools. No shell, arbitrary files, code execution, external web, reset or evaluation access.
 For act, use placement_yaw_degrees=null and wait_seconds=null unless applicable. place_on_top can request a relative rotation about vertical with placement_yaw_degrees. wait can request 0.1–20 simulation seconds with wait_seconds; inspect its returned RGB before another bounded wait.
+For attachment tasks, grasp the movable child, then use attach on a fresh RGB point of the compatible parent. The ideal executor aligns the pair's attachment links and verifies the simulator attachment state. Inspect the result; a successful tool response is not the independent task score.
 Verify every instructed item, destination, count and final door/appliance state using the latest returned RGB and action feedback. No additional observation call is required before finish. If a process needs simulation time, use wait rather than repeatedly fetching images.
 Finish with achieved/blocked/aborted and a short reason based on your visual evidence. Receive closed=true before final text.
 This is an RGB agent with ideal motor execution, not an official physical-control leaderboard submission.

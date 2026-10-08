@@ -45,6 +45,50 @@ class GridSupercoverRegression(unittest.TestCase):
 
 
 class MotorContractRegression(unittest.TestCase):
+    def test_attach_is_available_to_visual_skills_agent(self):
+        from manipulation_agent.tools import tool_specs
+        act=next(tool for tool in tool_specs('skills') if tool['name']=='act')
+        self.assertIn('attach',act['inputSchema']['properties']['primitive']['enum'])
+
+    def test_attach_rejects_unavailable_link_before_releasing_child(self):
+        attached=type('AttachedTo',(),{})
+        state=types.SimpleNamespace(parent=None,_find_attachment_links=lambda *a,**k:(None,None))
+        child=types.SimpleNamespace(states={attached:state})
+        parent=types.SimpleNamespace(states={attached:object()})
+        backend=ControlledCarry();backend.ideal_carry=True;backend._get_held=lambda:child
+        backend._carry_detach=lambda:self.fail('carry released before attachment preflight')
+        states=types.ModuleType('omnigibson.object_states');states.AttachedTo=attached
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            with self.assertRaises(SkillError) as failure:
+                backend._checked_attach(parent,30)
+        self.assertEqual(failure.exception.code,'unsupported_relation')
+
+    def test_attach_commits_only_after_official_state_persists(self):
+        attached=type('AttachedTo',(),{})
+        calls=[];linked=[False]
+        def set_value(parent,value,**options):
+            calls.append(options);linked[0]=value;return True
+        state=types.SimpleNamespace(parent=None,_find_attachment_links=lambda *a,**k:(object(),object()),
+                                    set_value=set_value,get_value=lambda parent:linked[0])
+        child=types.SimpleNamespace(states={attached:state})
+        parent=types.SimpleNamespace(states={attached:object()})
+        backend=ControlledCarry();backend.ideal_carry=True;backend._get_held=lambda:child
+        backend._carry_contents=[];backend._carry_dependencies=[];backend.frames_revision=0
+        backend._placement_context=lambda target:nullcontext()
+        backend._carry_detach=lambda:calls.append('released')
+        backend._relocate_contents=lambda *a:None
+        backend._verify_payload=lambda *a:None
+        backend._step=lambda *a:None
+        backend.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
+        states=types.ModuleType('omnigibson.object_states');states.AttachedTo=attached
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            result=backend._checked_attach(parent,2)
+        self.assertEqual(result['primitive'],'attach')
+        self.assertEqual(calls[0],'released')
+        self.assertEqual(calls[1],{'bypass_alignment_checking':True,'check_physics_stability':False,
+                                   'can_joint_break':False})
+        self.assertEqual(backend.frames_revision,-1)
+
     def test_support_payload_closure_includes_nested_items_without_cycles(self):
         plate,pizza,cup,contents,unrelated=[object() for _ in range(5)]
         relationships={(pizza,plate):'OnTop',(cup,plate):'OnTop',(contents,cup):'Inside',(plate,pizza):'OnTop'}

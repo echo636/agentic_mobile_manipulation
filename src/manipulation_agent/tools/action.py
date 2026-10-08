@@ -6,7 +6,7 @@ VISUAL_TARGET = object_schema({"image_ref": {"type":"string"}, "point": {
     "type":"array", "minItems":2, "maxItems":2, "items":{"type":"number","minimum":0,"maximum":1}}})
 VISUAL_TARGET["type"] = ["object", "null"]
 
-@register("act", "Execute one robot primitive on a point YOU select in the latest RGB. x: left=0/right=1, y: top=0/bottom=1. No object IDs or names accepted. release/wait use target=null. For wait use wait_seconds (0.1–20 simulation seconds, null defaults to 5). For place_on_top placement_yaw_degrees optionally rotates the carried item about world-up relative to its current orientation. Use null for both options on other primitives. Tool completion is not task success; inspect returned RGB.", object_schema({
+@register("act", "Execute one robot primitive on a point YOU select in the latest RGB. x: left=0/right=1, y: top=0/bottom=1. No object IDs or names accepted. attach connects the held object to the selected compatible parent using the simulator's attachment state. release/wait use target=null. For wait use wait_seconds (0.1–20 simulation seconds, null defaults to 5). For place_on_top placement_yaw_degrees optionally rotates the carried item about world-up relative to its current orientation. Use null for both options on other primitives. Tool completion is not task success; inspect returned RGB.", object_schema({
     "primitive":{"type":"string","enum":list(PRIMITIVES)}, "target":VISUAL_TARGET, "revision":INT,
     "placement_yaw_degrees":{"type":["number","null"],"minimum":-180,"maximum":180},
     "wait_seconds":{"type":["number","null"],"minimum":0.1,"maximum":20}}))

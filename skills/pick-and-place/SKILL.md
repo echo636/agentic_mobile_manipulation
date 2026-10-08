@@ -1,16 +1,18 @@
 ---
 name: pick-and-place
-description: Prepare a destination, visually select and grasp one object, carry it and verify placement using RGB.
+description: Prepare a destination, visually grasp and carry an object, then place or attach it using RGB.
 ---
 # Pick and place
 
 1. Identify the item and intended destination in RGB. If the destination is not visible, search for it first or remember the item's visual location before exploring.
 2. If the destination visibly has a closed door/lid, approach and open it before grasping the item. Do not call open just because an object is a container; an open bin may have no opening mechanism.
-3. Approach the item by marking it in the current RGB. Reinspect after navigation; mark its body again for grasp. Do not mark the supporting table/floor.
+3. Approach the item by marking it in the current RGB. Reinspect after navigation; if its body is clearly visible and reachable, grasp it without another approach. If it is cropped or hidden, change to a viewpoint that restores visibility. Do not mark the supporting table/floor.
 4. Inspect the new four-camera RGB and action feedback for evidence of the result. Gripper visibility may be limited; do not infer held-object truth from an unavailable wrist camera. Maintain this as your belief. Carry only one item with the default arm.
-5. Approach the destination using fresh RGB points. Mark the visible container body/interior for place_inside or the support surface for place_on_top.
+5. Approach the destination using fresh RGB points. Once the destination is clearly visible and reachable, act on it instead of navigating closer. Mark the visible container body/interior for place_inside or the support surface for place_on_top.
 6. Inspect the returned RGB to verify visible placement and, if visible, the released object. If uncertain, change viewpoint rather than inventing an Inside/OnTop flag.
 7. Record completed items and remaining ones with visual descriptions. Repeat, then close containers if the instruction requires it.
+
+For an attachment instruction, use `attach` after grasping the child. Select a visible point on the compatible parent in the latest RGB, such as the tripod body or mount for a camera. The executor aligns the pair's attachment links and reports whether the attachment state persisted after settling. Inspect the returned RGB and feedback before finishing; the independent evaluator decides task success.
 
 release and wait require target=null. open/close/toggle operations require an empty default hand. Failed placement restores the pre-action state when recovery succeeds. Inspect post-failure RGB and error feedback before retrying; do not assume either an empty hand or a successful placement.
 

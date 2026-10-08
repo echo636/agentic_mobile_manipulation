@@ -563,7 +563,7 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         held=self._get_held()
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
-        if primitive in {'place_inside','place_on_top'} and held is None: raise SkillError('empty_hand','Empty hand')
+        if primitive in {'attach','place_inside','place_on_top'} and held is None: raise SkillError('empty_hand','Empty hand')
         if primitive in {'open','close','toggle_on','toggle_off'} and held is not None: raise SkillError('hand_occupied','Hand occupied')
         from omnigibson.object_states import Open,Inside
         if primitive=='place_inside' and Open in obj.states and not obj.states[Open].get_value():
@@ -587,6 +587,8 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
                 raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
         if primitive=='grasp' and self.ideal_carry:
             result=self._ideal_grasp(obj,max_steps)
+        elif primitive=='attach':
+            result=self._checked_attach(obj,max_steps)
         elif primitive in {'open','close','toggle_on','toggle_off'} and self.ideal_carry:
             result=self._ideal_state_action(primitive,obj,max_steps)
         elif primitive=='place_on_top':

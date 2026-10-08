@@ -7,6 +7,7 @@ import numpy as np
 
 from manipulation_agent.executors.gt_navigation import NavigationError
 from manipulation_agent.executors.online_navigation import observed_grid, plan_online_navigation
+from manipulation_agent.observations.rig import visible_rig_rays
 
 
 def snapshot(array, resolution=.1, origin=(0., 0.), sequence=1):
@@ -48,6 +49,19 @@ class ObservedGridTests(unittest.TestCase):
 
 
 class OnlinePlannerTests(unittest.TestCase):
+    def test_navigation_keeps_selected_object_in_an_observable_distance_band(self):
+        grid = observed_grid(snapshot(np.zeros((50, 70), dtype=np.uint8)), robot_radius=.1)
+        target = (4.5, 2.5)
+        plan = plan_online_navigation(grid, (1., 2.5), target)
+        self.assertGreaterEqual(math.dist(plan.goal, target), 1.0)
+        self.assertLessEqual(math.dist(plan.goal, target), 1.4)
+
+    def test_low_target_can_leave_real_camera_at_old_standoff(self):
+        target = (1.15, 0., .45)
+        self.assertFalse(visible_rig_rays((.45, 0.), 0., 0., 1.53, target, margin=.15))
+        rays = visible_rig_rays((0., 0.), 0., 0., 1.53, target, margin=.15)
+        self.assertTrue(any(view == 'front' for view, _, _ in rays))
+
     def test_routes_around_obstacle_without_corner_cutting(self):
         data = np.zeros((40, 55), dtype=np.uint8)
         data[10:31, 25] = 100
@@ -121,7 +135,7 @@ class OnlinePlannerTests(unittest.TestCase):
         plan = plan_online_navigation(grid, (1., 1.5), (3.5, 1.5))
         self.assertFalse(grid.navigable(grid.cell(plan.target)))
         self.assertTrue(grid.navigable(grid.cell(plan.goal)))
-        self.assertAlmostEqual(math.dist(plan.goal, plan.target), .7, delta=.13)
+        self.assertAlmostEqual(math.dist(plan.goal, plan.target), 1.15, delta=.13)
         self.assertLessEqual(math.dist(plan.goal, plan.target), 1.4)
 
     def test_disconnected_nearest_candidate_does_not_cross_unknown(self):
