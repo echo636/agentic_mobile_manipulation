@@ -1,29 +1,121 @@
+"""Real triangle-ray ownership; rendered depth does not choose an object."""
 import importlib.util
 import sys
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from types import SimpleNamespace
+
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.visual_mesh_grounding import query_visual_surface
 
-@unittest.skipUnless(importlib.util.find_spec('torch') and importlib.util.find_spec('trimesh'),'Requires motor environment geometry dependencies')
+
+@unittest.skipUnless(importlib.util.find_spec('torch') and importlib.util.find_spec('trimesh'),
+                     'Requires torch and trimesh geometry dependencies')
 class VisualRayOwnership(unittest.TestCase):
-    def test_exact_depth_ray_and_live_transform_without_semantic_lookup(self):
+    def setUp(self):
         import torch
         import trimesh
-        geometry=trimesh.creation.box()
-        transform=torch.eye(4);transform[0,3]=2
-        mesh=SimpleNamespace(visible=True,scaled_transform=transform,prim_path='/object/mesh',prim=object())
-        obj=SimpleNamespace(aabb=(torch.tensor([1.5,-.5,-.5]),torch.tensor([2.5,.5,.5])),links={'link':SimpleNamespace(visual_meshes={'mesh':mesh})})
-        backend=SimpleNamespace(robot=object(),env=SimpleNamespace(scene=SimpleNamespace(objects=[obj])))
-        source=types.ModuleType('omnigibson.utils.usd_utils');source.mesh_prim_to_trimesh_mesh=lambda *a,**k:geometry
-        with patch.dict(sys.modules,{'omnigibson':types.ModuleType('omnigibson'),'omnigibson.utils':types.ModuleType('omnigibson.utils'),'omnigibson.utils.usd_utils':source}):
-            origin=torch.tensor([2.,0.,3.]);direction=torch.tensor([0.,0.,-1.]);point=torch.tensor([2.,0.,.5])
-            owner,result=query_visual_surface(backend,origin,direction,point)
-            self.assertIs(owner,obj);self.assertLess(result['visual_depth_agreement_error_m'],1e-6)
-            # A geometry hit alone is insufficient when the rendered depth disagrees.
-            with self.assertRaises(SkillError):query_visual_surface(backend,origin,direction,torch.tensor([2.,0.,.3]))
-            transform[0,3]=3;obj.aabb=(torch.tensor([2.5,-.5,-.5]),torch.tensor([3.5,.5,.5]))
-            owner,_=query_visual_surface(backend,torch.tensor([3.,0.,3.]),direction,torch.tensor([3.,0.,.5]))
-            self.assertIs(owner,obj)
+        self.torch = torch
+        self.geometry = trimesh.creation.box()
+        source = types.ModuleType('omnigibson.utils.usd_utils')
+        self.loader = source.mesh_prim_to_trimesh_mesh = Mock(return_value=self.geometry)
+        modules = {'omnigibson': types.ModuleType('omnigibson'),
+                   'omnigibson.utils': types.ModuleType('omnigibson.utils'),
+                   'omnigibson.utils.usd_utils': source}
+        override = patch.dict(sys.modules, modules)
+        override.start()
+        self.addCleanup(override.stop)
+        self.origin = torch.tensor([.1, .15, 3.])
+        self.direction = torch.tensor([0., 0., -1.])
+
+    def box(self, name, center, *, visible=True):
+        torch = self.torch
+        center = torch.tensor(center, dtype=torch.float32)
+        transform = torch.eye(4)
+        transform[:3, 3] = center
+        mesh = SimpleNamespace(visible=visible, scaled_transform=transform,
+                               prim_path='/'+name+'/mesh', prim=object(),
+                               points=torch.tensor(self.geometry.vertices.copy(), dtype=torch.float32))
+        return SimpleNamespace(prim_path='/'+name, aabb=(center-.5, center+.5),
+            links={'link': SimpleNamespace(visual_meshes={'mesh': mesh})}), mesh
+
+    def backend(self, objects, robot=None):
+        return SimpleNamespace(robot=robot if robot is not None else SimpleNamespace(links={}),
+                               env=SimpleNamespace(scene=SimpleNamespace(objects=objects)))
+
+    def test_nearest_positive_visual_hit_wins_independent_of_scene_order(self):
+        near, near_mesh = self.box('near', [0., 0., 1.])
+        far, far_mesh = self.box('far', [0., 0., -2.])
+        behind, _ = self.box('behind_camera', [0., 0., 5.])
+        off_ray, off_mesh = self.box('off_ray', [10., 0., 0.])
+        backend = self.backend([far, behind, off_ray, near])
+        owner, result = query_visual_surface(backend, self.origin, self.direction)
+        self.assertIs(owner, near)
+        self.torch.testing.assert_close(self.torch.tensor(result['visual_triangle_position']),
+                                       self.torch.tensor([.1, .15, 1.5]))
+        # Coarse bounds must reject meshes before expensive USD conversion.
+        self.assertEqual(result['visual_meshes_tested'], 2)
+        self.assertCountEqual([call.args[0] for call in self.loader.call_args_list],
+                              [far_mesh.prim, near_mesh.prim])
+        # A mesh excluded by the first ray remains available to later rays.
+        shifted = self.origin+self.torch.tensor([10., 0., 0.])
+        self.assertIs(query_visual_surface(backend, shifted, self.direction)[0], off_ray)
+        self.assertCountEqual([call.args[0] for call in self.loader.call_args_list],
+                              [far_mesh.prim, near_mesh.prim, off_mesh.prim])
+
+    def test_cached_local_geometry_uses_live_transform_without_collision_aabb(self):
+        near, mesh = self.box('moving', [0., 0., 1.])
+        far, _ = self.box('far', [0., 0., -2.])
+        backend = self.backend([far, near])
+        self.assertIs(query_visual_surface(backend, self.origin, self.direction)[0], near)
+        conversions = self.loader.call_count
+        mesh.scaled_transform[0, 3] = 2.
+        # A stale collision AABB cannot veto the current visible-mesh pose.
+        near.aabb = (self.torch.tensor([40., 40., 40.]), self.torch.tensor([41., 41., 41.]))
+        owner, result = query_visual_surface(backend, self.origin+self.torch.tensor([2., 0., 0.]),
+                                             self.direction)
+        self.assertIs(owner, near)
+        self.assertAlmostEqual(result['visual_triangle_position'][0], 2.1, places=5)
+        self.assertIs(query_visual_surface(backend, self.origin, self.direction)[0], far)
+        self.assertEqual(self.loader.call_count, conversions)
+
+    def test_robot_visual_surface_blocks_objects_behind_it(self):
+        robot, _ = self.box('robot', [0., 0., 1.])
+        far, _ = self.box('target_behind_robot', [0., 0., -2.])
+        with self.assertRaises(SkillError) as error:
+            query_visual_surface(self.backend([far, robot], robot), self.origin, self.direction)
+        self.assertEqual(error.exception.code, 'invalid_visual_target')
+
+    def test_cloth_owns_occluding_ray_and_new_points_replace_old_geometry(self):
+        torch = self.torch
+        # ClothPrim is itself the mesh and has no rigid visual_meshes mapping.
+        link = SimpleNamespace(visible=True, prim_path='/cloth/link', prim=object(),
+            scaled_transform=torch.eye(4),
+            points=torch.tensor([[-.5, -.5, 1.], [.5, -.5, 1.],
+                                 [.5, .5, 1.], [-.5, .5, 1.]]),
+            faces=torch.tensor([[0, 1, 2], [0, 2, 3]]))
+        cloth = SimpleNamespace(prim_path='/cloth', links={'cloth': link})
+        far, _ = self.box('behind_cloth', [0., 0., -2.])
+        backend = self.backend([far, cloth])
+        owner, result = query_visual_surface(backend, self.origin, self.direction)
+        self.assertIs(owner, cloth)
+        self.assertAlmostEqual(result['visual_triangle_position'][2], 1.)
+        link.points = link.points + torch.tensor([3., 0., 0.])
+        owner, result = query_visual_surface(backend, self.origin, self.direction)
+        self.assertIs(owner, far)
+        self.assertAlmostEqual(result['visual_triangle_position'][2], -1.5)
+        # Only the unchanged rigid box uses cached USD-to-mesh conversion.
+        self.assertEqual(self.loader.call_count, 1)
+
+    def test_invisible_mesh_is_not_an_occluder_and_no_forward_hit_fails(self):
+        near, _ = self.box('invisible', [0., 0., 1.], visible=False)
+        far, _ = self.box('far', [0., 0., -2.])
+        self.assertIs(query_visual_surface(self.backend([near, far]), self.origin, self.direction)[0], far)
+        with self.assertRaises(SkillError) as error:
+            query_visual_surface(self.backend([near]), self.origin, self.direction)
+        self.assertEqual(error.exception.code, 'invalid_visual_target')
+
+
+if __name__ == '__main__':
+    unittest.main()

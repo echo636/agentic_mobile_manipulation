@@ -5,6 +5,14 @@ The default RGB executor now uses the visual-point GT planning strategy from
 `0815cf234ee591bacd8017e9b1def4fac13e649b`. Attribution and the source license
 are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
+The current harness restores this static-grid navigator as the default. It does
+not construct or update the online Cartographer mapper. The latest observation
+protocol is retained: `initialize` returns the prepared first four RGB images;
+each subsequent `act` or `look` returns the resulting four-camera capture. The
+centered camera rig, calibrated render barrier, and current-image targeting rules
+remain unchanged. Frozen online-navigation evaluations retain their original
+source and results; restoring the default does not rewrite those runs.
+
 The model still supplies exactly `act(primitive="navigate_to", target={image_ref,
 point}, revision)`. It does not receive maps, depth, real object names, world
 coordinates, path lengths, or task evaluator state. Manipulation primitives
@@ -27,10 +35,19 @@ This is a strategy port with an explicit grid/kinematic adapter. Navigation
 checks static grid occupancy. It does **not** provide full dynamic body/held-object
 collision checking. Native navmesh geometry may be more permissive or accurate.
 
-The existing exact-pixel depth/raycast target grounding is retained. The
-reference's neighboring-pixel search and GT scene-graph object selection are
-not enabled. No task object is silently substituted for the model's selected
-target. Public tool schemas and RGB-only response filtering are unchanged.
+Base execution uses bounded incremental ideal pose updates, at most 0.5 m/s and
+60 degrees/s, with simulation steps and actual pose feedback between updates.
+It does not jump directly to the final destination. It is still kinematic
+actuation, not a physical wheel controller; grasp and placement retain their
+separate idealized state/pose operations.
+
+The navigation target is the direct backprojection of the exact selected pixel
+and its captured linear depth. Navigation performs no object lookup or mesh/depth
+consistency check. The reference's neighboring-pixel search and GT scene-graph
+object selection are not enabled. No task object is silently substituted for
+the model's selected target. Public tool schemas and RGB-only response filtering
+are unchanged. Manipulation's separate object-handle query is described in the
+[RGB protocol](rgb_protocol.md).
 
 ## Grid-boundary regression
 
@@ -57,9 +74,10 @@ yaw after each simulation step and verifies the final position.
   regression using archived geometry. It does not run an LLM or count toward
   the benchmark. Its result is separate from the 100-task batch.
 
-The original 100-task runtime remains frozen and paused at the user's request.
-No automatic batch resume is part of this change. A future evaluation must use
-a new recorded executor version and retain original failed/interrupted attempts.
+The checks below describe historical validation of the GT strategy. They do not
+establish real-simulator or task success for the restored current default. New
+evaluations must record their own source, assets, task instance and outcome;
+previous attempts and their results remain unchanged.
 
 ## Validation on 2026-09-30 and scoped retest
 

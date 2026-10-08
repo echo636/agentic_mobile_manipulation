@@ -8,7 +8,7 @@ Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/a
 
 - Four 512 x 512 RGB views: **front, back, left, and right**, relative to the robot heading.
 - Cameras follow the robot rigidly. All four render products are read after a shared render barrier and carry the same `capture_id`, `captured_at`, and `sim_step`. Observation does not rotate the robot or advance physics.
-- The research rig replaces stock head and wrist sensors. Its fixed base-relative height is 5 cm above the robot's initial highest point, with a 35 cm mounting radius, 90-degree horizontal field of view, and 20-degree downward pitch. This is a recorded simulation configuration, not a real-hardware calibration claim.
+- The research rig replaces stock head and wrist sensors. The four cameras share an optical XY center; their fixed base-relative height is fitted to the robot's initial visual geometry, with 5 cm clearance. They use a 90-degree horizontal field of view and 20-degree downward pitch. This is a recorded simulation configuration, not a real-hardware calibration claim.
 - The model receives RGB and capture metadata. Depth, camera extrinsics, simulator object identity, and task ground truth remain inside the executor or offline evaluator.
 
 ## Observation and action tools
@@ -37,7 +37,7 @@ python -m pip install -e '.[mcp,navigation]'
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-The recorded simulator environment uses OmniGibson 3.9.2, Isaac Sim 5.1.0, torch 2.7.0+cu128, and BDDL 3.7.0. BEHAVIOR assets must be installed under their official license and are not included in this repository. The online navigator also requires the [native Cartographer worker](native/cartographer/README.md). Set `MAS_CARTOGRAPHER_RUNTIME` to its packaged prefix before starting an OmniGibson episode; Python package installation alone does not build that worker.
+The recorded simulator environment uses OmniGibson 3.9.2, Isaac Sim 5.1.0, torch 2.7.0+cu128, and BDDL 3.7.0. BEHAVIOR assets must be installed under their official license and are not included in this repository. Default navigation uses the scene's private static traversability grid and does not require Cartographer or `MAS_CARTOGRAPHER_RUNTIME`. The retained [online mapping experiment](docs/online_navigation.md) has a separate native runtime dependency.
 
 ```bash
 PYTHONPATH=src python -m manipulation_agent.vision_cli \
@@ -72,9 +72,9 @@ with nine tests skipped for unavailable simulator dependencies.
 
 ## Execution and evidence
 
-The model selects a pixel in a current RGB image. The private executor resolves that pixel through depth and a visual-mesh ray, then performs navigation, controlled carrying without a robot/object fixed joint, official state operations, or placement sampling. Base motion uses incremental idealized pose control; grasp and placement can be discontinuous. This is not a physical-control leaderboard submission. Final BDDL predicates and TaskMetric are evaluated independently after termination and are not returned to the active model. See [executor v7 and validation limits](docs/executor_v7.md).
+The model selects a pixel in a current RGB image. The private executor directly backprojects that pixel with its captured depth to obtain the target position, without a depth-to-mesh consistency check. Navigation uses that point without an object lookup. Manipulation additionally identifies the first visual object on the selected ray, solely to obtain its simulator handle; the mesh intersection never replaces the backprojected position. The executor then performs navigation, controlled carrying without a robot/object fixed joint, official state operations, or placement sampling. Base motion uses incremental idealized pose control; grasp and placement can be discontinuous. This is not a physical-control leaderboard submission. Final BDDL predicates and TaskMetric are evaluated independently after termination and are not returned to the active model. See the [RGB protocol](docs/rgb_protocol.md) and [executor v7 history](docs/executor_v7.md).
 
-On this harness branch, navigation builds a fresh Cartographer probability map from four calibrated depth views and uses A* over observed free space. Precomputed traversability loading is disabled; there is no static-map fallback. Private simulator pose supplies ideal localization. The four head cameras now share an optical XY center to avoid an unobserved starting region. Movement refreshes the map and replans every 25 cm or 15 degrees. This remains an ideal kinematic actuator with a planar collision model. See [online navigation, runtime and validation levels](docs/online_navigation.md). Frozen earlier Original evaluations used the [previous GT-grid navigation](docs/gt_navigation.md); their results retain that implementation.
+Default navigation backprojects the model's selected RGB pixel with private calibrated depth, selects a reachable approach position on the scene's global static traversability grid, and follows the path with bounded incremental ideal pose updates and actual pose feedback. The GT grid and simulator pose stay private; the model receives no map or world coordinates. This is ideal kinematic movement, not a physical wheel controller or a single teleport to the destination, and the static grid does not provide dynamic or held-object collision checking. See [GT-grid navigation](docs/gt_navigation.md). The latest `initialize` → action → four-RGB protocol and centered camera rig remain in use. [Online Cartographer navigation](docs/online_navigation.md) is retained as an experimental module and is not called by the default RGB executor; frozen evaluations retain their recorded implementation.
 
 ## Batch evaluation
 

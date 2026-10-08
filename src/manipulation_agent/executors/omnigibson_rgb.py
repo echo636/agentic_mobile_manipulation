@@ -15,9 +15,8 @@ from ..records import now
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
-from .online_backend import OnlineNavigation
 
-class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
@@ -41,9 +40,8 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         self._spectator_choice = None
         self._base_target = None
         self.image_size=512
-        # Four simultaneous virtual head cameras share an optical XY centre.
-        # An outward 0.35m ring leaves a central unobserved square, unsuitable
-        # for bootstrapping a map that does not assume unseen cells are free.
+        # Preserve the current four simultaneous virtual head cameras.
+        # Their private depth is used only to ground the selected RGB pixel.
         self.rig_radius=0.0
         self.capture_index=0
         self.image_files={}
@@ -105,9 +103,6 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
                                           views=(*DIRECTIONS,'spectator'))
                 self._position_spectator()
                 for _ in range(20): self.og.sim.render()
-
-        with self._startup_stage('online_depth_mapper_setup'):
-            self._initialize_online_navigation()
 
     def _position_rig(self):
         """Kinematic sensor mount only: never writes robot pose or advances physics."""
@@ -367,8 +362,6 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
                 'after_orientation':after_quat.tolist(),'rig_sensor_names':[s.name for s in self.rig.values()],
                 'stock_sensor_names':list(self.robot.sensors)})+'\n')
         if not unchanged: raise RuntimeError('Read-only camera capture changed robot state')
-        if getattr(self, '_online_enabled', False):
-            self._update_online_map(rendered=True)
         self._video_frame('observation_boundary', rendered=rendered)
         return {'images':images,'observation_mode':self.mode,'capture':capture}
 
@@ -376,15 +369,14 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         if ref not in self.image_files: raise KeyError(ref)
         return self.image_files[ref].read_bytes(),'image/jpeg'
 
-    def _ground(self,target):
-        """Route exactly the chosen rendered pixel to the ideal actuator target.
+    def _ground(self,target, *, require_object=True):
+        """Use the chosen pixel's depth backprojection directly as the target.
 
-        Private visual triangle intersection and depth use exactly the selected RGB
-        pixel. Collision disagreement is recorded without substituting another
-        object. No class search, alternate pixels or task-scope lookup occurs;
-        geometry never crosses the model observation boundary.
+        Navigation needs only this point. Manipulation additionally resolves the
+        first visual object on the same ray, solely for its simulator handle.
+        No mesh/collision depth comparison, point replacement, alternate pixel,
+        semantic target search or task-scope lookup occurs.
         """
-        from omnigibson.utils.sampling_utils import raytest
         import omnigibson.utils.transform_utils as T
         frame=self.current_frames.get(target['image_ref'])
         if frame is None: raise SkillError('stale_image_ref','Expired RGB capture')
@@ -399,30 +391,24 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
             raise SkillError('no_surface_at_point','No supported visible surface at selected pixel')
         direction=T.quat2mat(frame['orientation'].cpu()) @ local
         point=start+direction*depth
-        unit=direction/self.torch.linalg.norm(direction)
-        hit=raytest(start,start+unit*30.0,ignore_bodies=[link.prim_path for link in self.robot.links.values()])
-        gap=float(self.torch.linalg.norm(hit['position'].cpu()-point)) if hit['hit'] else None
-        tolerance=max(.03,.02*float(self.torch.linalg.norm(point-start)))
-        from .visual_mesh_grounding import query_visual_surface
-        try:
-            with component(self,'visual_grounding'):
-                obj,visual=query_visual_surface(self,start,unit,point)
-        except SkillError as exc:
-            diagnostic={'at':now(),'status':'failed','code':exc.code,'detail':str(exc),
-                'selected_pixel':target['point'],'raster_pixel':[px,py],'image_ref':target['image_ref'],
-                'depth_linear':depth,'hit_position':point.tolist(),
-                'visual_query':getattr(exc,'diagnostics',{}),'audience':'executor_private'}
-            with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
-            raise
-        diagnostic={'at':now(),'routing':'same_pixel_depth_visual_triangle_ray',**visual,
-            'rigid_body':hit.get('rigidBody',''),'selected_object_prim':obj.prim_path,'depth_linear':depth,
-            'hit_position':point.tolist(),'collision_position':hit['position'].tolist() if hit['hit'] else None,
-            'depth_agreement_error_m':gap,'depth_agreement_tolerance_m':tolerance,
-            'collision_agrees':gap is not None and gap<=tolerance,'selected_pixel':target['point'],
+        diagnostic={'at':now(),'routing':'direct_pixel_depth_backprojection',
+            'depth_linear':depth,'hit_position':point.tolist(),'depth_consistency_check':False,
+            'object_resolution_required':require_object,'selected_pixel':target['point'],
             'raster_pixel':[px,py],'image_ref':target['image_ref'],'audience':'executor_private'}
+        obj=None
+        if require_object:
+            from .visual_mesh_grounding import query_visual_surface
+            unit=direction/self.torch.linalg.norm(direction)
+            try:
+                with component(self,'visual_grounding'):
+                    obj,visual=query_visual_surface(self,start,unit)
+            except SkillError as exc:
+                diagnostic.update(status='failed',code=exc.code,detail=str(exc),
+                                  visual_query=getattr(exc,'diagnostics',{}))
+                with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
+                raise
+            diagnostic.update(visual,selected_object_prim=obj.prim_path)
         with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
-        if obj is None or obj is self.robot:
-            raise SkillError('invalid_visual_target','Selected RGB pixel has no supported non-robot visual object')
         return obj,point,diagnostic
 
     def _turn(self,degrees,max_steps):
@@ -448,6 +434,38 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
         return False
+
+    def _navigate(self, target, max_steps):
+        """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
+        from dataclasses import asdict
+        from .gt_navigation import GridMap, NavigationError, plan_navigation, STRATEGY
+        trav=self.env.scene.trav_map
+        position,_=self.robot.get_position_orientation()
+        point=target.get_position_orientation()[0]
+        floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
+        occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
+        height,width=occupancy.shape
+        grid=GridMap(width,height,float(trav.map_resolution),
+                     (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
+                     (occupancy!=0).astype('uint8').tobytes())
+        try:
+            with component(self,'navigation_planning'):
+                plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
+                                     candidate_filter=lambda xy:self._approach_visible(xy,point,getattr(target,'selected_object',None)))
+        except NavigationError as exc:
+            raise SkillError(exc.code,str(exc)) from exc
+        details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
+                 'plan':asdict(plan),'map_resolution_m':grid.resolution,
+                 'map_sha256':hashlib.sha256(grid.free).hexdigest(),
+                 'dynamic_collision_check':False,'collision_substrate':'static_eroded_grid',
+                 'precomputed_walkability':True,'online_mapping':False}
+        with (self.output/'navigation_plans.jsonl').open('a') as stream:
+            stream.write(json.dumps(details)+'\n')
+        result=self._execute_gt_plan(grid,plan,max_steps)
+        self.navigation_distance+=result['actual_path_distance_m']
+        return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
+                'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
+                'start_grid_offset_m':plan.start_grid_offset_m,'dynamic_collision_check':False}
 
     def _execute_gt_plan(self, grid, plan, max_steps):
         """Follow the GT path using actual pose feedback and bounded commands."""
@@ -554,7 +572,7 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
                 for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
         if primitive=='release':return self.execute(primitive,None,max_steps)
-        obj,point,grounding=self._ground(target)
+        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to')
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
@@ -608,12 +626,16 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         return result
 
     def provenance(self):
-        from .online_navigation import SOURCE_COMMIT, STRATEGY
+        from .gt_navigation import SOURCE_COMMIT, STRATEGY
         result=super().provenance()
-        result.update(executor='controlled_carry_checked_placement_online_depth_navigation' if self.ideal_carry else 'symbolic_manipulation_online_depth_navigation',
+        result.update(executor='controlled_carry_and_checked_placement_plus_jinkai_gt_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_jinkai_gt_grid_navigation',
                       observation_mode=self.mode,image_size=self.image_size,
-                      grounding='same_pixel_depth_visual_triangle_ray_private_executor_only',
+                      grounding='direct_pixel_depth_backprojection_private_executor_only',
                       model_visible_truth=False)
+        result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
+            'depth_consistency_check':False, 'navigation_object_lookup':False,
+            'manipulation_object_lookup':'first_visual_surface_on_selected_ray',
+            'mesh_hit_replaces_backprojected_point':False, 'robot_mesh_blocks_object_selection':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
@@ -625,20 +647,20 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
             'base_anchor':'control_and_sampler_physics_steps',
             'failure_policy':'restore_pre_action_state','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
-        result['base_execution'] = 'observed_grid_feedback_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
+        result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
-            'source_branch':'jiarui/memory-slam','source_commit':SOURCE_COMMIT,
-            'geometry':'fresh online Cartographer probability grid from four calibrated depth cameras',
-            'map_input':'valid measured depth rays; invalid depth is unknown',
-            'localization':'private simulator pose; no scan-matching localization claim',
-            'precomputed_walkability':False,'static_map_loader_disabled':True,
-            'habitat_native_navmesh':False,'dynamic_collision_check':'observed_map_at_latest_capture',
-            'map_refresh_motion_m':.25,'map_refresh_rotation_degrees':15,
+            'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
+            'geometry':'OmniGibson static eroded traversability grid',
+            'map_input':'precomputed scene floor traversability; selected-pixel depth supplies the target only',
+            'localization':'private simulator pose',
+            'precomputed_walkability':True,'static_map_loader_disabled':False,'online_mapping':False,
+            'habitat_native_navmesh':False,'dynamic_collision_check':False,
+            'erosion':{'implementation':'pinned OmniGibson _erode_trav_map without robot argument',
+                'configured_default_erosion_radius':0.57,'map_resolution_m':0.05,
+                'kernel':'12x12 square at configured resolution; parameter is not a disk radius'},
             'segment_validation':'exact_grid_supercover_for_planner_and_follower',
-            'approach_visibility':'candidate_four_camera_frusta; no scene-wide geometry lookup',
-            'goal_selection':'visual-point standoff candidates on observed free space',
-            'robot_radius_m':self._online_robot_radius,
-            'planar_projection_limit':'2D ray projection, not a full-height 3D collision certificate',
+            'approach_visibility':'actual_four_camera_frusta_and_collision_rays',
+            'goal_selection':'jinkai visual-point candidate sampling and ranking',
             'pixel_grounding':'same RGB pixel depth and visual mesh triangle ray; no neighboring-pixel substitution',
             'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
@@ -654,7 +676,4 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         try:
             self.finalize_video()
         finally:
-            try:
-                self._close_online_navigation()
-            finally:
-                super().close()
+            super().close()

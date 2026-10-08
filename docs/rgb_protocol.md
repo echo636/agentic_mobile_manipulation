@@ -22,7 +22,29 @@ The model selects `target={image_ref, point:[x,y]}` in the latest RGB. x increas
 
 All four current views are valid point-selection surfaces; no robot turn is needed simply to see another direction. Use the newest returned image_ref and revision after each action. If an appliance process needs time, use act with primitive=wait, target=null and wait_seconds, then inspect its returned RGB. Check the complete instruction against the latest returned images and feedback before finish; no extra capture is required solely for final verification. An executed operation and a model's finish claim remain separate from independent task success.
 
-Inside the current V3 motor executor, the exact selected pixel indexes private linear depth captured with the RGB. A ray through that pixel ignores robot collision proxies and accepts the first external hit only when it agrees with the rendered depth (within max(3cm, 2% of camera-to-surface distance)). There is no object-name search, task-scope filtering, candidate generation, nearby-pixel snapping or hidden-target selection. Depth/calibration are archived privately in executor_frames, never exposed in MCP. V1 could hit invisible self collision proxies; V2 added rendered instance maps but its trial ended in a native render crash. V3 removes segmentation as a mitigation; this does not establish the crash's root cause.
+The exact selected pixel indexes private linear depth captured with the RGB.
+The executor directly backprojects it through the calibrated camera into world
+coordinates. This is the target position: no collision-ray or visual-mesh depth
+agreement check is performed, and no mesh hit replaces the backprojected point.
+Depth must still be finite, positive and below the executor's existing 30 m limit;
+an absent depth sample cannot define a 3D position.
+
+Navigation uses the backprojected point directly, without an object lookup.
+Grasp, placement and state operations also need a simulator object handle. For
+these actions, a separate query finds the first positive visual-mesh hit on the
+exact selected camera ray. This query does not receive depth. Its broad phase
+uses visual mesh bounds; cached local geometry uses the links' current transforms.
+The robot participates in occlusion: selecting its body cannot silently select an
+object behind it. A ray without an object, or a ray hitting the robot first,
+still cannot designate a manipulation object. No object-name search, task-scope
+filtering or nearby-pixel substitution occurs.
+
+The previous visual-depth tolerance (at least 1.5 cm) and depth-based ownership
+ranking have been removed. Earlier collision-agreement gates and segmentation
+experiments are historical, not current behavior. Segmentation is not re-enabled:
+earlier annotator probes crashed, without establishing a general crash cause.
+Depth, calibration, mesh ownership and query diagnostics remain private in the
+executor records; the model receives RGB and public execution feedback only.
 
 ## Legacy workflow compatibility
 
