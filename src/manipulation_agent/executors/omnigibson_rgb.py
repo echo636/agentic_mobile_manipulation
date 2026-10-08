@@ -582,7 +582,12 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
         if primitive in {'place_inside','place_on_top'} and held is None: raise SkillError('empty_hand','Empty hand')
-        if primitive in {'open','close','toggle_on','toggle_off'} and held is not None: raise SkillError('hand_occupied','Hand occupied')
+        if held is not None and primitive in {'open','close','toggle_on','toggle_off'}:
+            # Controlled carry can operate the switch on the object already
+            # being carried. This does not grant an extra hand for a different
+            # object, or change articulated-container handling while carrying.
+            held_self_toggle=self.ideal_carry and held is obj and primitive in {'toggle_on','toggle_off'}
+            if not held_self_toggle:raise SkillError('hand_occupied','Hand occupied')
         from omnigibson.object_states import Open,Inside
         if primitive=='place_inside' and Open in obj.states and not obj.states[Open].get_value():
             raise SkillError('container_closed','Placement into closed container rejected')
@@ -639,7 +644,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             'observation_pixels_reused_for_video':True, 'fresh_observation_boundaries':True,
             'intermediate_frames':'explicit_previous_frame_hold','no_motion_interpolation':True}
         result['placement'] = {'on_top':'strict_selected_surface_cuboid_no_object_wide_fallback',
-            'inside':'official_volume','verification':'selected_surface_contact_and_support_required; official_Inside_and_payload_relations',
+            'inside':'official_volume','verification':'selected_surface_geometric_support_required; contact_predicate_diagnostic_only; official_Inside_and_payload_relations',
             'base_anchor':'control_and_sampler_physics_steps',
             'failure_policy':'restore_pre_action_state','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'

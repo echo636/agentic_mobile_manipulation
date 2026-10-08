@@ -75,6 +75,9 @@ def render_arm_dashboard(progress):
     title = (protocol.get('batch_title') if standalone else None) or protocol.get('comparison_arm', protocol.get('agent_profile', 'original'))
     page_title = title if standalone else 'Execution comparison'
     navigation = '' if standalone else '<p><a href="../">Three-arm comparison</a></p>'
+    if protocol.get('episode_budget_policy') == 'execution_deadline_only':
+        navigation += ('<p>Execution budget: ' + esc(protocol.get('model_timeout_seconds', 1800)) +
+                       ' seconds after initialization and MCP readiness. Action counts, tool calls and simulator steps are recorded without separate episode cutoffs.</p>')
     summary = ''
     extra_style = ''
     if standalone:

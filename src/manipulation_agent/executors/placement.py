@@ -114,7 +114,7 @@ class CheckedPlacement:
             if not (supported if point is not None else official_on_top):
                 raise SkillError('postcondition_error','Object is not stably supported by the selected surface',changed=True)
             self._verify_payload(dependencies)
-        return 'selected_surface_contact_and_support_after_settling' if point is not None else 'official_OnTop'
+        return 'selected_surface_geometric_support_after_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=()):
         """An actual lower shelf can support an object while official OnTop is false.
@@ -138,13 +138,18 @@ class CheckedPlacement:
         normal_z=float(hit['normal'][2]) if hit['hit'] else None
         height_error=abs(float(hit['position'][2]-point[2])) if hit['hit'] else None
         selected_xy_distance=float(self.torch.linalg.norm(center[:2]-point[:2]))
-        checks={'touching_selected_object':touching,'released':self._get_held() is None,
+        # The contact predicate can be false for a motionless object whose
+        # bottom is flush with the selected support (archived cabinet-door
+        # placement: 6e-8 m gap). Keep it as evidence, not a second veto on the
+        # geometric support check. Wrong surfaces and side contact still fail.
+        checks={'released':self._get_held() is None,
                 'support_ray_hits_selected_object':hit.get('rigidBody') in target_paths,
                 'upward_support':normal_z is not None and normal_z>=.9,
                 'bottom_near_support':gap is not None and -.03<=gap<=.06,
                 'selected_shelf_height':height_error is not None and height_error<=.05,
                 'selected_surface_neighborhood':selected_xy_distance<=.20,'settled':speed<=.10}
-        return all(checks.values()), {'checks':checks,'speed_m_s':speed,'bottom_gap_m':gap,
+        return all(checks.values()), {'checks':checks,'touching_selected_object':touching,
+            'speed_m_s':speed,'bottom_gap_m':gap,
             'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance,
             'support_hit_body':hit.get('rigidBody'),'ignored_payload_names':[obj.name for obj in payload]}
 

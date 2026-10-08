@@ -5,7 +5,7 @@ import threading
 import time
 from dataclasses import asdict
 from .contracts import Budget, SkillError, validate
-from .deadline import EpisodeDeadline
+from .deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
 from .harness import Harness as LegacyPlanHelpers
 from .observations.boundary import public_observation, public_execution_error
 from .records import write_json
@@ -20,6 +20,10 @@ class VisionHarness:
         self.owner=threading.get_ident(); self.started=time.monotonic()
         self.deadline=getattr(backend,'deadline',None) or EpisodeDeadline.from_env()
         backend.deadline=self.deadline
+        # Select this policy before a standalone client can arm its local clock.
+        # Only a clock supplied by the external episode supervisor replaces the
+        # legacy counters; standalone / CPU callers retain their stated budgets.
+        self.execution_deadline_only=self.deadline.managed
         self._video_finalized=False
         self.revision=self.actions=self.calls=0; self.closed=False
         self.profile = profile
@@ -38,11 +42,14 @@ class VisionHarness:
         recorder.run.update(backend=backend.provenance(),budget=asdict(budget),skill_bundle_sha256=self.skills.digest if self.skills else None,
                             observation_contract="rgb_four_camera_same_state_v1" if 'capture' in self.snapshot else "rgb_only_v1")
         recorder.run['execution_limit_policy']={'clock':'episode_execution_excludes_initialization',
-            'managed_action_step_limit':'remaining_episode_sim_steps',
+            'managed_action_step_limit':'execution_deadline_only',
             'unmanaged_action_step_limit':budget.max_steps_per_action,
             'finish_interrupt':'cooperative_owner_thread_checkpoint',
-            'limits_still_configured':{'actions':budget.max_actions,'tool_calls':budget.max_calls,
-                                      'environment_steps':budget.max_sim_steps}}
+            'episode_budget_policy':'execution_deadline_only' if self.execution_deadline_only else 'legacy_counters_and_clock',
+            'limits_still_configured':({} if self.execution_deadline_only else
+                {'actions':budget.max_actions,'tool_calls':budget.max_calls,
+                 'environment_steps':budget.max_sim_steps}),
+            'legacy_limits_active':not self.execution_deadline_only}
         write_json(recorder.output/'run.json',recorder.run)
         recorder.event('episode_started',{'observation':self.snapshot})
 
@@ -103,7 +110,8 @@ class VisionHarness:
                 arguments={'placement_yaw_degrees':None,'wait_seconds':None,**arguments}
             validate(arguments,self.catalog[name]['inputSchema'])
             if name!='finish': self.deadline.check()
-            if name!='finish' and (self.calls>self.budget.max_calls or
+            if name!='finish' and (
+                    (not self.execution_deadline_only and self.calls>self.budget.max_calls) or
                     (not self.deadline.managed and time.monotonic()-self.started>self.budget.wall_seconds)):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')
             execution_args = {k:v for k,v in arguments.items() if k != 'decision'}
@@ -123,16 +131,17 @@ class VisionHarness:
     def perform(self,primitive,target,revision,**kwargs):
         self.deadline.check()
         if revision!=self.revision: raise SkillError('stale_observation','Use the latest observation revision')
-        if self.actions>=self.budget.max_actions or self.backend.steps>=self.budget.max_sim_steps:
+        if not self.execution_deadline_only and (
+                self.actions>=self.budget.max_actions or self.backend.steps>=self.budget.max_sim_steps):
             raise SkillError('budget_exhausted','Action/step budget exhausted')
         no_target=primitive in {'look','release','wait'}
         if no_target!=(target is None): raise SkillError('invalid_target','Use a current RGB point, or null for release/wait')
         if target and target['image_ref'] not in {i['image_ref'] for i in self.snapshot['images']}:
             raise SkillError('stale_image_ref','Select a point in the latest returned image')
         self.actions+=1
-        remaining=self.budget.max_sim_steps-self.backend.steps
-        # A managed episode already has one execution deadline. Do not impose
-        # a second 700-step cutoff on an otherwise progressing action.
+        remaining=(DEADLINE_STEP_SENTINEL if self.execution_deadline_only else self.budget.max_sim_steps)-self.backend.steps
+        # A managed episode has one execution deadline. Counters remain recorded,
+        # but neither episode totals nor the legacy per-action limit end it early.
         limit=remaining if self.deadline.managed else min(self.budget.max_steps_per_action,remaining)
         error=None
         try:

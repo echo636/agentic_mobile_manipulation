@@ -12,6 +12,6 @@ description: Prepare a destination, visually select and grasp one object, carry 
 6. Inspect the returned RGB to verify visible placement and, if visible, the released object. If uncertain, change viewpoint rather than inventing an Inside/OnTop flag.
 7. Record completed items and remaining ones with visual descriptions. Repeat, then close containers if the instruction requires it.
 
-release and wait require target=null. open/close/toggle operations require an empty default hand. Failed placement restores the pre-action state when recovery succeeds. Inspect post-failure RGB and error feedback before retrying; do not assume either an empty hand or a successful placement.
+release and wait require target=null. open/close operations require an empty default hand. You may toggle the object you are currently carrying by selecting it in current RGB; toggling a different object requires an empty hand. Failed placement restores the pre-action state when recovery succeeds. Inspect post-failure RGB and error feedback before retrying; do not assume either an empty hand or a successful placement.
 
 For place_on_top, click the actual intended empty support surface and shelf level. Optional placement_yaw_degrees rotates the carried item about vertical relative to its current orientation; use it to arrange items side by side, then verify from a clear RGB viewpoint. A neighboring shelf or a different part of a large support is not evidence that the intended arrangement succeeded. Use null for this option on other actions.

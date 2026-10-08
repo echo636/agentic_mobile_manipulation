@@ -37,7 +37,7 @@ Four fixed cameras share capture_id/captured_at/sim_step and show directions rel
 Any of the four current image refs can supply a target; no turn is needed merely to see sideways or behind. look turns in place when a different physical orientation is useful; positive yaw turns left, within +/-90 degrees.
 The ideal motor executor can use private geometry to execute your selected action; it cannot find or choose the target for you.
 After success or failure inspect fresh RGB; operation completion alone is not task success. Try a bounded alternative when needed.
-Open a visibly closed destination before picking an item; this executor needs an empty hand to open/close/toggle.
+Open a visibly closed destination before picking an item; open/close need an empty hand. You may toggle the object you are currently carrying by selecting it in current RGB; toggling a different object needs an empty hand.
 Use only these MCP tools. No shell, arbitrary files, code execution, external web, reset or evaluation access.
 For act, use placement_yaw_degrees=null and wait_seconds=null unless applicable. place_on_top can request a relative rotation about vertical with placement_yaw_degrees. wait can request 0.1–20 simulation seconds with wait_seconds; inspect its returned RGB before another bounded wait.
 Verify every instructed item, destination, count and final door/appliance state using the latest returned RGB and action feedback. No additional observation call is required before finish. If a process needs simulation time, use wait rather than repeatedly fetching images.
