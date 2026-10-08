@@ -35,7 +35,8 @@ class VisualRayOwnership(unittest.TestCase):
         transform = torch.eye(4)
         transform[:3, 3] = center
         mesh = SimpleNamespace(visible=visible, scaled_transform=transform,
-                               prim_path='/'+name+'/mesh', prim=object())
+                               prim_path='/'+name+'/mesh', prim=object(),
+                               points=torch.tensor(self.geometry.vertices.copy(), dtype=torch.float32))
         return SimpleNamespace(prim_path='/'+name, aabb=(center-.5, center+.5),
             links={'link': SimpleNamespace(visual_meshes={'mesh': mesh})}), mesh
 
@@ -44,17 +45,24 @@ class VisualRayOwnership(unittest.TestCase):
                                env=SimpleNamespace(scene=SimpleNamespace(objects=objects)))
 
     def test_nearest_positive_visual_hit_wins_independent_of_scene_order(self):
-        near, _ = self.box('near', [0., 0., 1.])
-        far, _ = self.box('far', [0., 0., -2.])
+        near, near_mesh = self.box('near', [0., 0., 1.])
+        far, far_mesh = self.box('far', [0., 0., -2.])
         behind, _ = self.box('behind_camera', [0., 0., 5.])
-        off_ray, _ = self.box('off_ray', [10., 0., 0.])
+        off_ray, off_mesh = self.box('off_ray', [10., 0., 0.])
         backend = self.backend([far, behind, off_ray, near])
         owner, result = query_visual_surface(backend, self.origin, self.direction)
         self.assertIs(owner, near)
         self.torch.testing.assert_close(self.torch.tensor(result['visual_triangle_position']),
                                        self.torch.tensor([.1, .15, 1.5]))
-        # Bounds exclude behind-camera/off-ray geometry from triangle queries.
+        # Coarse bounds must reject meshes before expensive USD conversion.
         self.assertEqual(result['visual_meshes_tested'], 2)
+        self.assertCountEqual([call.args[0] for call in self.loader.call_args_list],
+                              [far_mesh.prim, near_mesh.prim])
+        # A mesh excluded by the first ray remains available to later rays.
+        shifted = self.origin+self.torch.tensor([10., 0., 0.])
+        self.assertIs(query_visual_surface(backend, shifted, self.direction)[0], off_ray)
+        self.assertCountEqual([call.args[0] for call in self.loader.call_args_list],
+                              [far_mesh.prim, near_mesh.prim, off_mesh.prim])
 
     def test_cached_local_geometry_uses_live_transform_without_collision_aabb(self):
         near, mesh = self.box('moving', [0., 0., 1.])

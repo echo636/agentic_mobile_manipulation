@@ -38,6 +38,9 @@ def query_visual_surface(backend, start, direction):
     cache = getattr(backend, '_visual_mesh_cache', None)
     if cache is None:
         cache = backend._visual_mesh_cache = {}
+    bounds_cache = getattr(backend, '_visual_mesh_bounds_cache', None)
+    if bounds_cache is None:
+        bounds_cache = backend._visual_mesh_bounds_cache = {}
     best = None
     checked = 0
     objects = list(backend.env.scene.objects)
@@ -53,6 +56,23 @@ def query_visual_surface(backend, start, direction):
                 if not mesh.visible:
                     continue
                 path = mesh.prim_path
+                transform = mesh.scaled_transform.cpu().numpy()
+                inverse = np.linalg.inv(transform)
+                local_origin = (inverse @ np.r_[origin, 1.])[:3]
+                local_vector = inverse[:3, :3] @ vector
+                if rigid and path in bounds_cache:
+                    bounds = bounds_cache[path]
+                else:
+                    vertices = mesh.points.cpu().numpy()
+                    if not len(vertices):
+                        continue
+                    bounds = np.stack((vertices.min(axis=0), vertices.max(axis=0)))
+                    if rigid:
+                        bounds_cache[path] = bounds
+                # Convert faces/build triangle query data only for meshes whose
+                # visual vertex bounds intersect this ray, not the entire scene.
+                if not _ray_intersects_bounds(local_origin, local_vector, bounds):
+                    continue
                 if rigid:
                     if path not in cache:
                         cache[path] = mesh_prim_to_trimesh_mesh(
@@ -60,15 +80,9 @@ def query_visual_surface(backend, start, direction):
                     geometry = cache[path]
                 else:
                     import trimesh
-                    geometry = trimesh.Trimesh(vertices=mesh.points.cpu().numpy(),
+                    geometry = trimesh.Trimesh(vertices=vertices,
                                                faces=mesh.faces.cpu().numpy(), process=False)
                 if geometry.is_empty:
-                    continue
-                transform = mesh.scaled_transform.cpu().numpy()
-                inverse = np.linalg.inv(transform)
-                local_origin = (inverse @ np.r_[origin, 1.])[:3]
-                local_vector = inverse[:3, :3] @ vector
-                if not _ray_intersects_bounds(local_origin, local_vector, geometry.bounds):
                     continue
                 locations, _, _ = geometry.ray.intersects_location(
                     [local_origin], [local_vector], multiple_hits=True)
