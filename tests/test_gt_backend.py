@@ -146,7 +146,7 @@ class GTBackendTests(unittest.TestCase):
         target = {'image_ref': first_image['image_ref'], 'point': [.5, .5]}
         action = h.call('act', {'primitive': 'navigate_to', 'target': target, 'revision': 0}, 'navigate')
         self.assertTrue(action['ok'], action)
-        b._ground.assert_called_once_with(target)
+        b._ground.assert_called_once_with(target, require_object=False)
         looked = h.call('look', {'yaw_degrees': 45, 'revision': 1}, 'look')
         self.assertTrue(looked['ok'], looked)
         for result, revision in [(initial, 0), (action, 1), (looked, 2)]:

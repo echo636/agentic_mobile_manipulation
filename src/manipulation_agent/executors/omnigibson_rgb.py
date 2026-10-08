@@ -369,15 +369,14 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         if ref not in self.image_files: raise KeyError(ref)
         return self.image_files[ref].read_bytes(),'image/jpeg'
 
-    def _ground(self,target):
-        """Route exactly the chosen rendered pixel to the ideal actuator target.
+    def _ground(self,target, *, require_object=True):
+        """Use the chosen pixel's depth backprojection directly as the target.
 
-        Private visual triangle intersection and depth use exactly the selected RGB
-        pixel. Collision disagreement is recorded without substituting another
-        object. No class search, alternate pixels or task-scope lookup occurs;
-        geometry never crosses the model observation boundary.
+        Navigation needs only this point. Manipulation additionally resolves the
+        first visual object on the same ray, solely for its simulator handle.
+        No mesh/collision depth comparison, point replacement, alternate pixel,
+        semantic target search or task-scope lookup occurs.
         """
-        from omnigibson.utils.sampling_utils import raytest
         import omnigibson.utils.transform_utils as T
         frame=self.current_frames.get(target['image_ref'])
         if frame is None: raise SkillError('stale_image_ref','Expired RGB capture')
@@ -392,30 +391,24 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             raise SkillError('no_surface_at_point','No supported visible surface at selected pixel')
         direction=T.quat2mat(frame['orientation'].cpu()) @ local
         point=start+direction*depth
-        unit=direction/self.torch.linalg.norm(direction)
-        hit=raytest(start,start+unit*30.0,ignore_bodies=[link.prim_path for link in self.robot.links.values()])
-        gap=float(self.torch.linalg.norm(hit['position'].cpu()-point)) if hit['hit'] else None
-        tolerance=max(.03,.02*float(self.torch.linalg.norm(point-start)))
-        from .visual_mesh_grounding import query_visual_surface
-        try:
-            with component(self,'visual_grounding'):
-                obj,visual=query_visual_surface(self,start,unit,point)
-        except SkillError as exc:
-            diagnostic={'at':now(),'status':'failed','code':exc.code,'detail':str(exc),
-                'selected_pixel':target['point'],'raster_pixel':[px,py],'image_ref':target['image_ref'],
-                'depth_linear':depth,'hit_position':point.tolist(),
-                'visual_query':getattr(exc,'diagnostics',{}),'audience':'executor_private'}
-            with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
-            raise
-        diagnostic={'at':now(),'routing':'same_pixel_depth_visual_triangle_ray',**visual,
-            'rigid_body':hit.get('rigidBody',''),'selected_object_prim':obj.prim_path,'depth_linear':depth,
-            'hit_position':point.tolist(),'collision_position':hit['position'].tolist() if hit['hit'] else None,
-            'depth_agreement_error_m':gap,'depth_agreement_tolerance_m':tolerance,
-            'collision_agrees':gap is not None and gap<=tolerance,'selected_pixel':target['point'],
+        diagnostic={'at':now(),'routing':'direct_pixel_depth_backprojection',
+            'depth_linear':depth,'hit_position':point.tolist(),'depth_consistency_check':False,
+            'object_resolution_required':require_object,'selected_pixel':target['point'],
             'raster_pixel':[px,py],'image_ref':target['image_ref'],'audience':'executor_private'}
+        obj=None
+        if require_object:
+            from .visual_mesh_grounding import query_visual_surface
+            unit=direction/self.torch.linalg.norm(direction)
+            try:
+                with component(self,'visual_grounding'):
+                    obj,visual=query_visual_surface(self,start,unit)
+            except SkillError as exc:
+                diagnostic.update(status='failed',code=exc.code,detail=str(exc),
+                                  visual_query=getattr(exc,'diagnostics',{}))
+                with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
+                raise
+            diagnostic.update(visual,selected_object_prim=obj.prim_path)
         with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
-        if obj is None or obj is self.robot:
-            raise SkillError('invalid_visual_target','Selected RGB pixel has no supported non-robot visual object')
         return obj,point,diagnostic
 
     def _turn(self,degrees,max_steps):
@@ -579,7 +572,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
         if primitive=='release':return self.execute(primitive,None,max_steps)
-        obj,point,grounding=self._ground(target)
+        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to')
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
@@ -633,8 +626,12 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         result=super().provenance()
         result.update(executor='controlled_carry_and_checked_placement_plus_jinkai_gt_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_jinkai_gt_grid_navigation',
                       observation_mode=self.mode,image_size=self.image_size,
-                      grounding='same_pixel_depth_visual_triangle_ray_private_executor_only',
+                      grounding='direct_pixel_depth_backprojection_private_executor_only',
                       model_visible_truth=False)
+        result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
+            'depth_consistency_check':False, 'navigation_object_lookup':False,
+            'manipulation_object_lookup':'first_visual_surface_on_selected_ray',
+            'mesh_hit_replaces_backprojected_point':False, 'robot_mesh_blocks_object_selection':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,

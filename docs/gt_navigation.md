@@ -41,10 +41,13 @@ It does not jump directly to the final destination. It is still kinematic
 actuation, not a physical wheel controller; grasp and placement retain their
 separate idealized state/pose operations.
 
-The existing exact-pixel depth/raycast target grounding is retained. The
-reference's neighboring-pixel search and GT scene-graph object selection are
-not enabled. No task object is silently substituted for the model's selected
-target. Public tool schemas and RGB-only response filtering are unchanged.
+The navigation target is the direct backprojection of the exact selected pixel
+and its captured linear depth. Navigation performs no object lookup or mesh/depth
+consistency check. The reference's neighboring-pixel search and GT scene-graph
+object selection are not enabled. No task object is silently substituted for
+the model's selected target. Public tool schemas and RGB-only response filtering
+are unchanged. Manipulation's separate object-handle query is described in the
+[RGB protocol](rgb_protocol.md).
 
 ## Grid-boundary regression
 
