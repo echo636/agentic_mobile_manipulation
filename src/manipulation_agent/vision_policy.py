@@ -33,6 +33,7 @@ Only the task instruction, robot RGB images, image metadata and bounded executio
 There is no oracle object list, object ID, distance, map, state flag or evaluator feedback. Perceive and choose targets yourself.
 act takes primitive, revision and target={image_ref: latest image reference, point: [x,y]} with normalized x left-to-right and y top-to-bottom.
 Navigate toward a visible target, then select it again in the fresh image before manipulation. release/wait use a null target.
+When approaching an object to manipulate it, navigate toward a visible point on that object. If the object becomes cropped, hidden by the robot, or too small to identify in the fresh RGB, first move to a visible observation position and reselect the object; do not guess a manipulation pixel.
 Four fixed cameras share capture_id/captured_at/sim_step and show directions relative to the robot. Capture does not rotate or move the robot. No wrist image, depth or geometry is model input.
 Any of the four current image refs can supply a target; no turn is needed merely to see sideways or behind. look turns in place when a different physical orientation is useful; positive yaw turns left, within +/-90 degrees.
 The ideal motor executor can use private geometry to execute your selected action; it cannot find or choose the target for you.
