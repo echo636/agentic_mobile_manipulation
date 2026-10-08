@@ -576,6 +576,8 @@ class RGBBackend(OnlineNavigation, ControlledCarry, CheckedPlacement, OmniGibson
         # A long cabinet/floor AABB can contain the base while the selected
         # visible surface is far away. Reach belongs to that selected point.
         if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
+            if primitive=='attach':
+                raise SkillError('out_of_reach','Navigate to a visible approach to the selected parent before attaching')
             # Approach only the selected target, within this action's existing
             # step budget; no new object discovery or goal access.
             before_approach=self.steps

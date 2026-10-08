@@ -12,7 +12,7 @@ description: Prepare a destination, visually grasp and carry an object, then pla
 6. Inspect the returned RGB to verify visible placement and, if visible, the released object. If uncertain, change viewpoint rather than inventing an Inside/OnTop flag.
 7. Record completed items and remaining ones with visual descriptions. Repeat, then close containers if the instruction requires it.
 
-For an attachment instruction, use `attach` after grasping the child. Select a visible point on the compatible parent in the latest RGB, such as the tripod body or mount for a camera. The executor aligns the pair's attachment links and reports whether the attachment state persisted after settling. Inspect the returned RGB and feedback before finishing; the independent evaluator decides task success.
+For an attachment instruction, grasp the child, navigate to a visible approach to the compatible parent if needed, then use `attach` within reach. Select a visible point on the parent in the latest RGB, such as the tripod body or mount for a camera. If the executor reports `out_of_reach`, change viewpoint or select a different visible navigation approach before retrying. The executor aligns the pair's attachment links and reports whether the attachment state persisted after settling. Inspect the returned RGB and feedback before finishing; the independent evaluator decides task success.
 
 release and wait require target=null. open/close/toggle operations require an empty default hand. Failed placement restores the pre-action state when recovery succeeds. Inspect post-failure RGB and error feedback before retrying; do not assume either an empty hand or a successful placement.
 

@@ -50,6 +50,23 @@ class MotorContractRegression(unittest.TestCase):
         act=next(tool for tool in tool_specs('skills') if tool['name']=='act')
         self.assertIn('attach',act['inputSchema']['properties']['primitive']['enum'])
 
+    @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
+    def test_distant_attach_requests_navigation_without_hidden_approach(self):
+        import torch
+        from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+        selected=types.SimpleNamespace(states={})
+        backend=types.SimpleNamespace(
+            _ground=lambda target:(selected,torch.tensor([2.,0.,0.]),{}),
+            _get_held=lambda:object(),
+            _navigate=lambda *a:self.fail('attach silently initiated navigation'),
+            robot=types.SimpleNamespace(get_position_orientation=lambda:(torch.zeros(3),None)),
+            torch=torch,steps=0)
+        states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            with self.assertRaises(SkillError) as failure:
+                RGBBackend.execute_visual.__wrapped__(backend,'attach',object(),700)
+        self.assertEqual(failure.exception.code,'out_of_reach')
+
     def test_attach_rejects_unavailable_link_before_releasing_child(self):
         attached=type('AttachedTo',(),{})
         state=types.SimpleNamespace(parent=None,_find_attachment_links=lambda *a,**k:(None,None))
@@ -118,6 +135,12 @@ class MotorContractRegression(unittest.TestCase):
         self.assertEqual(error['code'],'navigation_invalid_start')
         self.assertNotIn('xyz',error['message'])
         self.assertIn('stop repeating',error['message'])
+
+    def test_blocked_navigation_feedback_preserves_actionable_code(self):
+        error=public_execution_error(SkillError('navigation_path_blocked','private map coordinate'))
+        self.assertEqual(error['code'],'navigation_path_blocked')
+        self.assertIn('different visible approach',error['message'])
+        self.assertNotIn('coordinate',error['message'])
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
