@@ -1,8 +1,17 @@
-# Online depth navigation on the harness branch
+# Experimental online depth navigation
 
-This branch replaces the Original executor's precomputed traversability lookup
-with a map built during the episode. Frozen benchmark workers retain their
-recorded source; this change does not retroactively update their results.
+The default RGB executor now uses [private static GT-grid navigation](gt_navigation.md).
+It does not initialize, update or close a Cartographer mapper and does not need
+`MAS_CARTOGRAPHER_RUNTIME`. The online mapping/planning modules remain available
+for experimental integration and CPU tests; they are not a selectable default
+mode. Existing online probe scripts require a compatible online-wired runtime.
+
+The implementation and acceptance records below describe the earlier online
+executor, which replaced precomputed traversability with a map built during the
+episode. Frozen runs retain that source and those results. Restoring GT navigation
+preserves the latest `initialize` → action → four-RGB observation protocol and the
+centered calibrated camera rig; it does not restore legacy observation-job tools
+to the default catalog.
 
 ## Sensor and policy boundary
 
