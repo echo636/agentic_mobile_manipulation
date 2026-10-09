@@ -262,3 +262,25 @@ The model later selected another pixel and grasped a jar, but its subsequent
 selected-surface placements failed sampling. The skill now asks for the middle
 of an exposed jar face. Neither diagnostic replay nor skill edit is counted as
 a whole-task success.
+
+The fresh autonomous trash r8 trial used the corrected container-settling
+code. The first can was placed successfully, but the remaining two official
+`Inside` goals were false at formal finish. The model reported that the bin
+had tipped during later navigation; subsequent placement returned
+`unsupported_relation` and `sampling_error`. The dedicated-key controller,
+video and visible-motion checks passed, while the official task check failed.
+This is a new scene-stability problem rather than a pass for the three-can
+task.
+
+The first Easter-egg demo trial r7 moved all three eggs out of the basket and
+formally finished with a valid video, but the official evaluator rejected the
+shared-tree `NextTo` conditions. Visual proximity on the lawn is insufficient.
+The motor interface now exposes `place_next_to`: the model selects a current
+RGB pixel on the intended tree or fixture; the executor searches nearby
+supported floor poses and accepts only an official `NextTo` relation after
+settling. The related `place_under` action uses the official `Under` sampler,
+which addresses the mousetrap r7 finding: all four traps met `OnTop` for one
+floor, but fewer than two met `Under` or `NextTo` for the same sink. Both new
+actions preserve the model's choice of target and require independent
+whole-task evaluation. Their later model trials are separate from these r7
+diagnoses; no success is inferred from adding the actions.
