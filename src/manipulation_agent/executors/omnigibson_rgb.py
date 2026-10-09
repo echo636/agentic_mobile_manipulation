@@ -304,12 +304,20 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self.deadline.check(changed=True)
         if self._base_target is not None:self._restore_base_target()
         self._restore_object_anchor()
+        self._restore_stabilized_containers()
         self._carry_follow()
         with component(self,'physics_and_metrics'):super()._step(action)
         if self._base_target is not None:
             self._restore_base_target()
-        self._restore_object_anchor();self._carry_follow()
+        self._restore_object_anchor();self._restore_stabilized_containers();self._carry_follow()
         self._video_frame('env_step')
+
+    def _restore_stabilized_containers(self):
+        # Ideal support keeps a filled movable container upright when a later
+        # navigation path brushes its body. This does not inspect task goals.
+        for obj,pose in getattr(self,'_stabilized_containers',{}).items():
+            if obj is not self._get_held():
+                obj.set_position_orientation(*pose);obj.keep_still()
 
     def _restore_base_target(self):
         """Ideal base actuator holds posture while moving; no passive joint drift."""

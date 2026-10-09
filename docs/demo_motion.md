@@ -271,6 +271,13 @@ had tipped during later navigation; subsequent placement returned
 video and visible-motion checks passed, while the official task check failed.
 This is a new scene-stability problem rather than a pass for the three-can
 task.
+The later selected RGB ray hit the can being carried instead of the bin, and
+the next successful bin ray was about 27 cm away from its first placement ray.
+This supports the model's report that the movable bin shifted. The ideal
+executor now holds the pose of a movable container after a verified
+`place_inside` while subsequent environment steps run, releasing that hold if
+the model explicitly grasps the container. This stabilization needs a fresh
+autonomous trash trial and official evaluation before it can count as a fix.
 
 The first Easter-egg demo trial r7 moved all three eggs out of the basket and
 formally finished with a valid video, but the official evaluator rejected the

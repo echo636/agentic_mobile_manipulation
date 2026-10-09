@@ -189,6 +189,9 @@ class ControlledCarry:
         if self._ideal_held is obj:return {'primitive':'grasp','postcondition':'selected_object_already_held'}
         if self._ideal_held is not None:raise SkillError('hand_occupied','A carry relationship already exists')
         if obj.fixed_base:raise SkillError('fixed_object','The selected object has a fixed base')
+        # A container stabilized after an earlier placement becomes movable
+        # again when the model explicitly chooses to carry that container.
+        getattr(self,'_stabilized_containers',{}).pop(obj,None)
         # Preserve both contained objects and supported objects (e.g. food on a
         # plate), including nested payloads. Fixed scene objects never follow.
         original=obj.get_position_orientation()
