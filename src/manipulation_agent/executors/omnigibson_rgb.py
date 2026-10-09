@@ -316,6 +316,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         for obj,pose in getattr(self,'_stabilized_containers',{}).items():
             if obj is not self._get_held():
                 obj.set_position_orientation(*pose);obj.keep_still()
+                payload=getattr(self,'_stabilized_container_payloads',{}).get(obj,())
+                if payload:self._relocate_container_payload(payload)
 
     def _restore_base_target(self):
         """Ideal base actuator holds posture while moving; no passive joint drift."""

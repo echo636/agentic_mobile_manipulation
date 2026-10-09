@@ -319,6 +319,7 @@ class CheckedPlacement:
         residents=self._container_payload(target)
         resident_count=len(residents)
         settling_payload=[]
+        stabilized_payload=None
         with self._placement_context(target):
             contents=list(self._carry_contents) if self.ideal_carry else []
             dependencies=list(getattr(self,'_carry_dependencies',[]))
@@ -393,9 +394,13 @@ class CheckedPlacement:
             self._verify_payload(dependencies)
             if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
                 raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
+            if not getattr(target,'fixed_base',True):
+                stabilized_payload=self._container_payload(target)
         if not getattr(target,'fixed_base',True):
             if not hasattr(self,'_stabilized_containers'):self._stabilized_containers={}
             self._stabilized_containers[target]=tuple(v.clone() for v in target.get_position_orientation())
+            if not hasattr(self,'_stabilized_container_payloads'):self._stabilized_container_payloads={}
+            self._stabilized_container_payloads[target]=stabilized_payload
         return {'primitive':'place_inside','implementation':'transactional_official_Inside_with_rigid_payload_sampling',
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
                 'target_root_anchored':True,'existing_containment_verified':resident_count,

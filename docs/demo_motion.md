@@ -316,3 +316,19 @@ other movable items, and verifies official `OnTop` for that support after
 settling. A privileged single-egg probe at the tree pixel from r8 produced
 both `NextTo(tree)=true` and `OnTop(lawn)=true`. This is a geometric check,
 not an autonomous model task pass.
+The same privileged diagnostic repeated the placement for all three public
+instance eggs, using one selected tree point. All three finished `NextTo` that
+tree and `OnTop` the same lawn, at distinct supported poses. The agent still
+needs to find the eggs and tree through RGB and pass a fresh whole-task trial.
+
+The autonomous trash r9 trial used the stabilized bin and formally finished,
+but the official three-can goal was 0/3. The model marked a point below the
+visible bin for its second `place_inside`; that pixel hit a non-fillable
+surface, and the model later released the can. It also described one can as
+visibly inside while the final evaluator said otherwise. The executor now
+preserves the accepted link-relative poses of contents in a movable filled
+container across later control steps, and removes an item from that
+preservation list if the model explicitly grasps it. The skill now describes
+where to select a small bin and how to recover from `unsupported_relation`.
+These changes require another autonomous whole-task audit; the r9 video is
+not a pass.

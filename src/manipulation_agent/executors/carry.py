@@ -192,6 +192,10 @@ class ControlledCarry:
         # A container stabilized after an earlier placement becomes movable
         # again when the model explicitly chooses to carry that container.
         getattr(self,'_stabilized_containers',{}).pop(obj,None)
+        payloads=getattr(self,'_stabilized_container_payloads',{})
+        payloads.pop(obj,None)
+        for container,records in list(payloads.items()):
+            payloads[container]=[record for record in records if record[0] is not obj]
         # Preserve both contained objects and supported objects (e.g. food on a
         # plate), including nested payloads. Fixed scene objects never follow.
         original=obj.get_position_orientation()
