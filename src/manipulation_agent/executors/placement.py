@@ -28,6 +28,7 @@ class CheckedPlacement:
     def _checked_place_under(self, target, max_steps):
         """Place the carried item under the model-selected parent using OG's Under sampler."""
         from omnigibson.object_states import Under
+        from omnigibson.utils.sampling_utils import raytest
         held = self._get_held()
         if held is None:
             raise SkillError('empty_hand', 'No object is held')
@@ -36,17 +37,50 @@ class CheckedPlacement:
         with self._placement_context(target):
             contents = list(self._carry_contents) if self.ideal_carry else []
             dependencies = list(getattr(self, '_carry_dependencies', []))
+            pose = held.get_position_orientation()
+            lo, _ = held.aabb
+            bottom_offset = float(pose[0][2] - lo[2])
             self._carry_detach()
-            if not held.states[Under].set_value(target, True, use_trav_map=False):
-                raise SkillError('sampling_error', 'Official Under sampler found no valid pose', changed=True)
+            sampled = held.states[Under].set_value(target, True, use_trav_map=False)
+            method = 'official_Under_sampler'
+            if not sampled:
+                # The upstream sampler can reject a reachable floor patch
+                # under low furniture. Search only within the selected
+                # parent's bounds, and accept only the official relation.
+                target_lo, target_hi = target.aabb
+                ignored = [link.prim_path for obj in (held, target, self.robot)
+                           for link in obj.links.values()]
+                for fx, fy in ((.5,.5),(.25,.5),(.75,.5),(.5,.25),(.5,.75),
+                               (.25,.25),(.75,.25),(.25,.75),(.75,.75)):
+                    xy = target_lo[:2] + (target_hi[:2]-target_lo[:2]) * self.torch.tensor([fx,fy], device=target_lo.device)
+                    start = self.torch.tensor([float(xy[0]),float(xy[1]),float(target_hi[2])+.3],device=xy.device)
+                    end = start.clone();end[2] = min(float(target_lo[2])-1.5,-.5)
+                    hit = raytest(start,end,ignore_bodies=ignored)
+                    if not hit['hit'] or float(hit['normal'][2]) < .9:
+                        continue
+                    place=pose[0].clone();place[:2]=xy;place[2]=hit['position'][2]+bottom_offset+.003
+                    held.set_position_orientation(place,pose[1]);held.keep_still()
+                    self._relocate_contents(held,contents)
+                    if held.states[Under].get_value(target):
+                        sampled=True;method='verified_floor_pose_under_selected_parent'
+                        break
+            if not sampled:
+                raise SkillError('sampling_error', 'No supported pose satisfied Under for the selected parent', changed=True)
             self._relocate_contents(held, contents)
+            accepted_pose=held.get_position_orientation()
             for _ in range(min(50, max_steps)):
+                if method != 'official_Under_sampler':
+                    held.set_position_orientation(*accepted_pose);held.keep_still()
+                    self._relocate_contents(held,contents)
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if method != 'official_Under_sampler':
+                held.set_position_orientation(*accepted_pose);held.keep_still()
+                self._relocate_contents(held,contents)
             if not held.states[Under].get_value(target):
                 raise SkillError('postcondition_error', 'Object is no longer under the selected target', changed=True)
             self._verify_payload(dependencies)
         self.frames_revision = -1
-        return {'primitive': 'place_under', 'implementation': 'transactional_official_Under_sampler',
+        return {'primitive': 'place_under', 'implementation': method,
                 'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
 
     def _checked_place_next_to(self, target, max_steps, point):
