@@ -32,6 +32,8 @@ def main():
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
+    p.add_argument('--wall-seconds',type=float,default=1800,
+                   help='Policy execution budget after bridge readiness (default: 1800 seconds)')
     p.add_argument('--model-max-turns', type=int, default=100, help='Native Responses loop only')
     p.add_argument('--model-max-tokens', type=int, default=150000, help='Native Responses loop cumulative usage budget')
     p.add_argument('--image-history-captures', type=int, default=0,
@@ -58,7 +60,8 @@ def main():
         backend=MockRGBBackend(a.output) if a.backend=='mock' else RGBBackend(a.task,a.instance,a.output,seed=a.seed,max_steps=a.max_sim_steps,inside_placement=a.inside_placement,record_video=a.record_video)
         backend.deadline=deadline
         with startup_stage(a.output, 'first_observation_and_harness'):
-            harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps),profile=a.agent_profile)
+            harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
+                                                          wall_seconds=a.wall_seconds),profile=a.agent_profile)
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)

@@ -56,7 +56,7 @@ class MotorContractRegression(unittest.TestCase):
         from manipulation_agent.executors.omnigibson_rgb import RGBBackend
         selected=types.SimpleNamespace(states={})
         backend=types.SimpleNamespace(
-            _ground=lambda target:(selected,torch.tensor([2.,0.,0.]),{}),
+            _ground=lambda target,**kwargs:(selected,torch.tensor([2.,0.,0.]),{}),
             _get_held=lambda:object(),
             _navigate=lambda *a:self.fail('attach silently initiated navigation'),
             robot=types.SimpleNamespace(get_position_orientation=lambda:(torch.zeros(3),None)),
@@ -66,6 +66,23 @@ class MotorContractRegression(unittest.TestCase):
             with self.assertRaises(SkillError) as failure:
                 RGBBackend.execute_visual.__wrapped__(backend,'attach',object(),700)
         self.assertEqual(failure.exception.code,'out_of_reach')
+
+    @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
+    def test_hang_routes_visible_nail_to_attachment_state(self):
+        import torch
+        from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+        nail=types.SimpleNamespace(states={},category='wall_nail')
+        backend=types.SimpleNamespace(
+            _ground=lambda target,**kwargs:(nail,torch.tensor([.5,0.,0.]),{}),
+            _get_held=lambda:object(),
+            _checked_attach=lambda obj,max_steps:{'primitive':'attach','selected':obj.category},
+            robot=types.SimpleNamespace(get_position_orientation=lambda:(torch.zeros(3),None)),
+            torch=torch,steps=0)
+        states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            result=RGBBackend.execute_visual.__wrapped__(backend,'hang',object(),30)
+        self.assertEqual(result['primitive'],'hang')
+        self.assertEqual(result['selected'],'wall_nail')
 
     def test_attach_rejects_unavailable_link_before_releasing_child(self):
         attached=type('AttachedTo',(),{})

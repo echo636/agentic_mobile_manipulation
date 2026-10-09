@@ -127,6 +127,20 @@ def candidate_score(target_distance, snap_distance, geodesic, standoff=.7, goal_
     return round(2*abs(target_distance-standoff)+snap_distance+(1 if geodesic<goal_radius+.15 else 0),4)
 
 
+def visual_approach_settings(camera_height, base_z, target_z):
+    """Navigation standoff and image margin for a selected target point."""
+    if target_z-base_z >= .35:
+        return .7, .04
+    # A ground-level handheld object almost vanishes below a 1.83 m head rig
+    # at the usual 0.7 m navigation standoff. Keep it above image y=0.82 so
+    # the model can select the *body* rather than its clipped tip or the floor.
+    pitch=math.radians(20.)
+    max_downward_angle=pitch+math.atan(2*(.82-.5))
+    height_delta=max(0.,camera_height+base_z-target_z)
+    standoff=min(2.,max(1.4,height_delta/math.tan(max_downward_angle)+.15))
+    return standoff, .18
+
+
 @dataclass(frozen=True)
 class NavigationPlan:
     points: tuple[tuple[float,float], ...]

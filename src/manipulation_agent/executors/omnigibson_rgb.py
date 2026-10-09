@@ -15,8 +15,9 @@ from ..records import now
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
+from .material_actions import CheckedMaterialActions
 
-class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
@@ -39,7 +40,12 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self._spectator_anchor = None
         self._spectator_choice = None
         self._base_target = None
-        self.image_size=512
+        self.image_size=int(os.environ.get('MAS_RGB_IMAGE_SIZE','512'))
+        if self.image_size not in (512,768,1024):
+            raise ValueError('RGB image size must be 512, 768 or 1024')
+        self.rgb_jpeg_quality=int(os.environ.get('MAS_RGB_JPEG_QUALITY','92'))
+        if self.rgb_jpeg_quality not in range(70,96):
+            raise ValueError('RGB JPEG quality must be between 70 and 95')
         # Preserve the current four simultaneous virtual head cameras.
         # Their private depth is used only to ground the selected RGB pixel.
         self.rig_radius=0.0
@@ -333,7 +339,7 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             ref=f'rgb-{self.capture_index:05d}-{view}'
             pixels=rendered[view]
             path=folder/f'{ref}.jpg'
-            Image.fromarray(pixels).save(path,quality=92)
+            Image.fromarray(pixels).save(path,quality=self.rgb_jpeg_quality)
             digest=hashlib.sha256(path.read_bytes()).hexdigest()
             position,orientation=sensor.get_position_orientation()
             frame={'sensor':sensor,'position':position.clone(),'orientation':orientation.clone(),
@@ -418,30 +424,33 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
 
-    def _approach_visible(self, xy, point, selected_object):
+    def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=1.4):
         """Check the selected point in actual candidate camera frusta and rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
         torch=self.torch
-        if math.dist(xy,point[:2].cpu().tolist())>1.4:return False
+        if math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
         ignore=[l.prim_path for l in self.robot.links.values()]
         held=self._get_held()
         if held is not None:ignore.extend(l.prim_path for l in held.links.values())
         ignore.extend(l.prim_path for obj,_ in self._carry_contents for l in obj.links.values())
         yaw=math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
-        rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,point.cpu().tolist(),radius=self.rig_radius)
+        rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,
+                              point.cpu().tolist(),margin=margin,radius=self.rig_radius)
         for _,origin,_ in rays:
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
         return False
 
-    def _navigate(self, target, max_steps):
+    def _navigate(self, target, max_steps, *, for_manipulation=False):
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
         from dataclasses import asdict
-        from .gt_navigation import GridMap, NavigationError, plan_navigation, STRATEGY
+        from .gt_navigation import GridMap, NavigationError, plan_navigation, visual_approach_settings, STRATEGY
         trav=self.env.scene.trav_map
         position,_=self.robot.get_position_orientation()
         point=target.get_position_orientation()[0]
+        standoff,margin=(.7,.04) if for_manipulation else visual_approach_settings(
+            self.rig_height,float(position[2]),float(point[2]))
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
         height,width=occupancy.shape
@@ -451,11 +460,15 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         try:
             with component(self,'navigation_planning'):
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
-                                     candidate_filter=lambda xy:self._approach_visible(xy,point,getattr(target,'selected_object',None)))
+                                     standoff=standoff,
+                                     candidate_filter=lambda xy:self._approach_visible(
+                                         xy,point,getattr(target,'selected_object',None),
+                                         margin=margin,max_distance=max(1.4,standoff+.35)))
         except NavigationError as exc:
             raise SkillError(exc.code,str(exc)) from exc
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'plan':asdict(plan),'map_resolution_m':grid.resolution,
+                 'visual_standoff_m':standoff,'visual_margin':margin,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  'dynamic_collision_check':False,'collision_substrate':'static_eroded_grid',
                  'precomputed_walkability':True,'online_mapping':False}
@@ -581,7 +594,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         held=self._get_held()
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
-        if primitive in {'attach','place_inside','place_on_top'} and held is None: raise SkillError('empty_hand','Empty hand')
+        if primitive in {'attach','hang','place_inside','place_on_top','wipe','sweep','vacuum',
+                         'spray','spread','soak','cut'} and held is None: raise SkillError('empty_hand','Empty hand')
         if primitive in {'open','close','toggle_on','toggle_off'} and held is not None: raise SkillError('hand_occupied','Hand occupied')
         from omnigibson.object_states import Open,Inside
         if primitive=='place_inside' and Open in obj.states and not obj.states[Open].get_value():
@@ -594,21 +608,31 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         # A long cabinet/floor AABB can contain the base while the selected
         # visible surface is far away. Reach belongs to that selected point.
         if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
-            if primitive=='attach':
+            if primitive in {'attach','hang'}:
                 raise SkillError('out_of_reach','Navigate to a visible approach to the selected parent before attaching')
             # Approach only the selected target, within this action's existing
             # step budget; no new object discovery or goal access.
             before_approach=self.steps
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
-            self._navigate(anchor,max(1,max_steps-60))
+            self._navigate(anchor,max(1,max_steps-60),for_manipulation=True)
             max_steps-=self.steps-before_approach
             base=self.robot.get_position_orientation()[0]
             if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4 or max_steps<30:
                 raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
         if primitive=='grasp' and self.ideal_carry:
             result=self._ideal_grasp(obj,max_steps)
-        elif primitive=='attach':
+        elif primitive in {'attach','hang'}:
+            if primitive=='hang' and not any(word in str(obj.category).lower() for word in ('nail','hook','hanger')):
+                raise SkillError('unsupported_relation','Selected object is not a hanging anchor')
             result=self._checked_attach(obj,max_steps)
+            if primitive=='hang':
+                result={**result,'primitive':'hang'}
+        elif primitive in {'wipe','sweep','vacuum','spray','spread'}:
+            result=self._checked_surface_action(primitive,obj,max_steps)
+        elif primitive=='soak':
+            result=self._checked_soak(obj,max_steps)
+        elif primitive=='cut':
+            result=self._checked_cut(obj,max_steps)
         elif primitive in {'open','close','toggle_on','toggle_off'} and self.ideal_carry:
             result=self._ideal_state_action(primitive,obj,max_steps)
         elif primitive=='place_on_top':

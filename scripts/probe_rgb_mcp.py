@@ -31,6 +31,9 @@ async def probe(output):
         async with stdio_client(params) as (read,write):
             async with ClientSession(read,write) as client:
                 await client.initialize();tools=await client.list_tools();assert {t.name for t in tools.tools}=={'initialize','look','act','finish','list_skills','read_skill'}
+                added={'wipe','cut','soak','sweep','spray','spread','hang','vacuum'}
+                act_schema=next(t.inputSchema for t in tools.tools if t.name=='act')
+                assert added <= set(act_schema['properties']['primitive']['enum'])
                 catalog=await client.call_tool('list_skills',{}); assert json.loads(catalog.content[0].text)['skills']
                 skill=await client.call_tool('read_skill',{'name':'pick-and-place','resource':'SKILL.md'}); assert json.loads(skill.content[0].text)['text']
                 result=await client.call_tool('initialize',{})
@@ -39,13 +42,23 @@ async def probe(output):
                 binary=base64.b64decode(images[0].data)
                 assert hashlib.sha256(binary).hexdigest()==frame['sha256']
                 assert binary.startswith(b'\x89PNG')
+                for primitive in sorted(added):
+                    args={'primitive':primitive,'target':{'image_ref':frame['image_ref'],'point':[0.5,0.5]},
+                          'revision':payload['observation']['revision']}
+                    called=await client.call_tool('act',args)
+                    payload=json.loads(called.content[0].text)
+                    assert payload['ok'] and payload['effect']['primitive']==primitive
+                    assert len([c for c in called.content if c.type=='image'])==4
+                    frame=payload['observation']['images'][0]
                 args={'primitive':'toggle_on','target':{'image_ref':frame['image_ref'],'point':[0.5,0.5]},'revision':payload['observation']['revision']}
                 action=await client.call_tool('act',args);a=json.loads(action.content[0].text);assert a['ok']
                 assert len([c for c in action.content if c.type=='image'])==4
                 stale=await client.call_tool('act',args);assert not json.loads(stale.content[0].text)['ok']
                 finish=await client.call_tool('finish',{'outcome':'achieved','reason':'CPU image transport fixture complete'})
                 assert json.loads(finish.content[0].text)['closed']
-        (output/'validation.json').write_text(json.dumps({'status':'passed','level':'real_mcp_cpu_rgb_fixture','tools':len(tools.tools),'image_bytes':len(binary),'image_hash_verified':True,'pixel_payload_delivered':True,'task_success_claim':'mock only'},indent=2))
+        (output/'validation.json').write_text(json.dumps({'status':'passed','level':'real_mcp_cpu_rgb_fixture','tools':len(tools.tools),
+            'new_primitives_schema_and_dispatch':sorted(added),'image_bytes':len(binary),
+            'image_hash_verified':True,'pixel_payload_delivered':True,'task_success_claim':'mock only'},indent=2))
         print((output/'validation.json').read_text())
     finally:
         if process.poll() is None:
