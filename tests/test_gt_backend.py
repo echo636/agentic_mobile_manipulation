@@ -121,6 +121,19 @@ class GTBackendTests(unittest.TestCase):
         self.assertFalse(record['online_mapping'])
         b._update_online_map.assert_not_called()
 
+    def test_public_navigation_checks_own_silhouette_but_selected_pixel_reach_may_cross_it(self):
+        b=self.backend()
+        target=SimpleNamespace(get_position_orientation=lambda:(Tensor([1.,0.,1.]),None))
+        seen=[]
+        b._navigation_self_hulls=lambda:(('arm_hull',),{'hulls_prepared':1})
+        b._approach_visible=lambda xy,point,selected,**kw:(seen.append(kw['self_hulls']) or xy[0]>=.5)
+        b._navigate(target,700)
+        self.assertIn(('arm_hull',),seen)
+        seen.clear()
+        b._navigate(target,700,for_manipulation=True)
+        self.assertTrue(seen)
+        self.assertTrue(all(hulls==() for hulls in seen))
+
     def test_disconnected_static_grid_fails_before_any_actuator_or_mapper(self):
         b = self.backend(blocked=True)
         target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 0.]), None))

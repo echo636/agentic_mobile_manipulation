@@ -165,6 +165,16 @@ object or modify the public RGB. A synthetic arm-occlusion regression covers
 the rejected endpoint. The subsequent public-task model run and video review
 must still validate the change in the simulator.
 
+The first dedicated-key trash attempt (r5) confirmed that public navigation
+used 38 own-link hulls and avoided treating the robot as transparent. It also
+exposed an overconstraint: `grasp` automatically moves closer to its already
+selected pixel, and the reaching arm may necessarily cross the camera ray.
+That internal move was rejected as `navigation_unreachable` even though the
+can remained visible in the current RGB. The own-silhouette check is now
+limited to public `navigate_to` endpoints; the bounded in-action reach keeps
+its existing scene visibility and contact checks. The r5 attempt is retained
+as a failed model run, not scored as a successful demonstration.
+
 The fourth trash attempt exposed a separate placement boundary: the official
 `Inside.set_value` accepted the first can, but the can left the bin during the
 action's subsequent physics settling ticks, so the postcondition rejected the

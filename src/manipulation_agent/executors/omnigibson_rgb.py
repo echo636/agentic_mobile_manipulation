@@ -501,7 +501,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         grid=GridMap(width,height,float(trav.map_resolution),
                      (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
                      (occupancy!=0).astype('uint8').tobytes())
-        self_hulls,self_report=self._navigation_self_hulls()
+        # Public navigation must leave the selected surface observable in the
+        # resulting RGB. An in-action reach may move closer after the model has
+        # already selected its pixel; its hand is expected to enter that ray.
+        self_hulls,self_report=((),{'policy':'selected_pixel_reach_may_occlude'}) if for_manipulation else self._navigation_self_hulls()
         try:
             with component(self,'navigation_planning'):
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
