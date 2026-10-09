@@ -175,6 +175,13 @@ limited to public `navigate_to` endpoints; the bounded in-action reach keeps
 its existing scene visibility and contact checks. The r5 attempt is retained
 as a failed model run, not scored as a successful demonstration.
 
+In the next dedicated-key attempt (r6), the model's first `grasp` succeeded
+and its public navigation while carrying the can succeeded with 39 own/carry
+visual hulls participating in candidate validation. The resulting front RGB
+still showed the trash can above the robot silhouette. These observations
+validate this reach/navigation segment only; the task requires three cans
+and an independent whole-task success result.
+
 The fourth trash attempt exposed a separate placement boundary: the official
 `Inside.set_value` accepted the first can, but the can left the bin during the
 action's subsequent physics settling ticks, so the postcondition rejected the
