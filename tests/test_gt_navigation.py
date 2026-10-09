@@ -3,7 +3,9 @@ import unittest
 
 from manipulation_agent.executors.gt_navigation import (
     GridMap, GreedyGridFollower, NavigationError, NavigationPlan, candidate_score, plan_navigation,
+    visual_approach_settings,
 )
+from manipulation_agent.observations.rig import visible_rig_rays
 
 
 def grid(width=81, height=81, resolution=.05, blocked=()):
@@ -13,6 +15,21 @@ def grid(width=81, height=81, resolution=.05, blocked=()):
 
 
 class GTNavigationTests(unittest.TestCase):
+    def test_low_handheld_target_remains_clear_of_lower_image_edge(self):
+        # Measured spray episode: head RGB camera at 1.83 m, atomizer at 0.09 m.
+        # A roughly 0.95 m navigation endpoint put its body at image y≈0.96.
+        g=GridMap(80,50,.1,(-1.,-1.),bytes([1])*(80*50))
+        target=(3.8,2.,.09);height=1.83
+        standoff,margin=visual_approach_settings(height,0.,target[2])
+        def projected(xy,required_margin):
+            yaw=math.atan2(target[1]-xy[1],target[0]-xy[0])
+            return visible_rig_rays(xy,yaw,0.,height,target,margin=required_margin,radius=0.)
+        plan=plan_navigation(g,(0.,2.),target[:2],standoff=standoff,
+                             candidate_filter=lambda xy:bool(projected(xy,margin)))
+        rays=projected(plan.goal,0.)
+        self.assertTrue(rays)
+        self.assertLessEqual(rays[0][2][1],.82)
+
     def test_archived_mousetrap_pose_does_not_enter_neighbor_obstacle(self):
         # Actual failure: [-.75, 2.25] acquired sub-micrometre settling error.
         g=GridMap(3,3,.05,(-.8,2.2),bytes([0,0,0,0,1,0,0,0,0]))

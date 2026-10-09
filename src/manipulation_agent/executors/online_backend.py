@@ -149,7 +149,8 @@ class OnlineNavigation:
         def in_camera(candidate):
             yaw = math.atan2(hint[1]-candidate[1], hint[0]-candidate[0])
             return bool(visible_rig_rays(candidate, yaw, float(position[2]), self.rig_height,
-                                         point.detach().cpu().tolist(), radius=self.rig_radius))
+                                         point.detach().cpu().tolist(), margin=.15,
+                                         radius=self.rig_radius))
         with component(self, 'navigation_planning'):
             plan = plan_online_navigation(grid, xy, hint, fixed_goal=fixed_goal, candidate_filter=in_camera,
                                           check_cancel=self.deadline.check)

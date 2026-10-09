@@ -27,9 +27,11 @@ ERROR_MESSAGES = {
     "navigation_unreachable":"The motor executor could not reach the selected visual point. Choose a visible alternative.",
     "navigation_invalid_start":"The executor cannot safely navigate from its current base position. Changing the target point will not repair this; stop repeating navigation and report blocked if the limitation persists.",
     "navigation_stalled":"The navigation executor made no progress. Inspect the fresh RGB before trying one alternative; do not repeat the same request.",
+    "navigation_path_blocked":"The selected navigation endpoint became blocked or unobserved. Inspect fresh RGB and choose a different visible approach.",
+    "navigation_unobserved_route":"No observed free route reaches this point. Inspect fresh RGB and choose a different visible approach.",
     "out_of_reach":"The selected surface is beyond the executor's manipulation reach. Approach using RGB first.",
     "hand_occupied":"The executor cannot perform this action while carrying an object.",
-    "empty_hand":"The executor cannot place or release without a held object.",
+    "empty_hand":"The executor cannot place, attach or release without a held object.",
     "container_closed":"The executor could not access the requested placement or grasp. Reinspect the opening in RGB.",
     "fixed_object":"The selected object cannot be moved by this executor.",
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
@@ -42,7 +44,7 @@ ERROR_MESSAGES = {
     "episode_timeout":"The episode wall-clock deadline has expired; no further action can start.",
     "episode_cancelled":"Episode closure was requested; the active action stopped before final scoring.",
     "sampling_budget_exhausted":"The executor exhausted its placement sampling budget.",
-    "unsupported_relation":"The selected surface does not support this placement operation.",
+    "unsupported_relation":"The selected object does not support this placement or attachment operation.",
 }
 
 def public_execution_error(exc: SkillError) -> dict:

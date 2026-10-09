@@ -25,7 +25,7 @@ manipulation_agent = ["tasks.json", "replay_assets/*.html", "replay_assets/*.css
 
 [tool.setuptools.data-files]
 "share/manipulation-agentic-system/skills/visual-manipulation" = ["skills/visual-manipulation/SKILL.md"]
-"share/manipulation-agentic-system/skills/visual-manipulation/references" = ["skills/visual-manipulation/references/evidence.md"]
+"share/manipulation-agentic-system/skills/visual-manipulation/references" = ["skills/visual-manipulation/references/evidence.md", "skills/visual-manipulation/references/material-actions.md"]
 "share/manipulation-agentic-system/skills/visual-exploration" = ["skills/visual-exploration/SKILL.md"]
 "share/manipulation-agentic-system/skills/pick-and-place" = ["skills/pick-and-place/SKILL.md"]
 "share/manipulation-agentic-system/skills/failure-recovery" = ["skills/failure-recovery/SKILL.md"]

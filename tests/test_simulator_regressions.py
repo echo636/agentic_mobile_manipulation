@@ -91,11 +91,16 @@ class SimulatorRegressions(unittest.TestCase):
             def broken():raise AssertionError('torch compile regression fixture')
             b._position_spectator=broken;b._render_rgb_views=lambda **kw:{'front':'actual frame'}
             b._video_frame('env_step')
-            self.assertEqual(calls,[(({'front':'actual frame'},13,'env_step'),{'capture_env_step':13,'repeated':False})])
+            self.assertEqual(calls[0][0],({'front':'actual frame'},13,'env_step'))
+            self.assertEqual({k:v for k,v in calls[0][1].items() if k!='check_active'},
+                             {'capture_env_step':13,'repeated':False})
+            self.assertTrue(callable(calls[0][1]['check_active']))
             b.steps=15;b._video_frame('env_step')
-            self.assertEqual(calls[-1][1],{'capture_env_step':13,'repeated':True})
+            self.assertEqual({k:v for k,v in calls[-1][1].items() if k!='check_active'},
+                             {'capture_env_step':13,'repeated':True})
             b._video_frame('observation_boundary')
-            self.assertEqual(calls[-1][1],{'capture_env_step':15,'repeated':False})
+            self.assertEqual({k:v for k,v in calls[-1][1].items() if k!='check_active'},
+                             {'capture_env_step':15,'repeated':False})
             self.assertIn('last_camera_pose',(b.output/'recording_warnings.jsonl').read_text())
 
     def test_legacy_robot_migration_retains_identity_and_asset_check(self):

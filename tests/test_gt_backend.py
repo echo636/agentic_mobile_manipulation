@@ -49,7 +49,7 @@ class GTBackendTests(unittest.TestCase):
         b.record_video = False
         b.video = None
         b.video_render_stride, b.video_render_flushes = 2, 4
-        b.image_size, b.rig_radius, b.rig_height = 8, 0., 1.8
+        b.image_size, b.rgb_jpeg_quality, b.rig_radius, b.rig_height = 8, 92, 0., 1.8
         b.image_files, b.current_frames = {}, {}
         b._position = Tensor([-1., 0., 0.])
         b._orientation = Tensor([0., 0., 0., 1.])
@@ -65,7 +65,7 @@ class GTBackendTests(unittest.TestCase):
         trav = SimpleNamespace(floor_heights=[0.], map_resolution=.1,
                                floor_map=[Tensor(occupancy)], _erode_trav_map=lambda x: x)
         b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav))
-        b._approach_visible = lambda xy, point, selected: xy[0] >= .5
+        b._approach_visible = lambda xy, point, selected, **kwargs: xy[0] >= .5
         b._ground = Mock(return_value=(None, Tensor([1., 0., 0.]),
                                        {'object': 'PRIVATE_OBJECT', 'world_point': [1., 0., 0.]}))
         b.rig = {v: SimpleNamespace(name='camera_'+v,
@@ -105,7 +105,7 @@ class GTBackendTests(unittest.TestCase):
 
     def test_static_grid_plans_through_doorway_and_records_private_provenance(self):
         b = self.backend()
-        target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 0.]), None))
+        target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 1.]), None))
         result = b._navigate(target, 700)
         grid, plan, limit = b._execute_gt_plan.call_args.args
         self.assertFalse(grid.segment_free((-1., 0.), plan.goal))
