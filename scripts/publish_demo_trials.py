@@ -69,6 +69,7 @@ def main():
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>可见操纵 · 模型自主实验</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:1400px;margin:30px auto;padding:0 18px;background:#f4f7fa;color:#183041}section{background:white;padding:18px 24px;margin:18px 0;border:1px solid #d7e1e8;border-radius:10px}table{border-collapse:collapse;width:100%;background:white}th,td{padding:10px;border:1px solid #d7e1e8;text-align:left;vertical-align:top}a{color:#086b95}</style>
 <h1>可见操纵 · 模型自主实验</h1><section><p>模型只接收四路 RGB，通过 MCP act 自主选动作与像素。机器人伸手、抬起、运输与工具划动由真实模拟控制步录制；物体接触和最终状态仍由理想化执行器处理。第三视角只供审阅，模型不可见。每次尝试均保留，不把脚本诊断计入模型成功。</p><p>早期 first-ten 尝试误用了桌面 ccswitch 线路，429 属于该线路。新尝试使用仓库外的独立实验凭据和 api.gpt.ge；表中只显示服务域名，不显示密钥。</p></section>
+<section><p>相机诊断：旧版中心相机把机器人头部拍进前向 RGB。相同机器人位置下，前移 0.35 米并下俯 35 度可移除这块固定遮挡，同时保留近处垃圾桶。以下是无模型、同场景的相机对照，不计入任务成功。</p><a href="demo_camera_radius_comparison.jpg"><img src="demo_camera_radius_comparison.jpg" alt="相机位置对比" style="max-width:100%"></a><a href="demo_camera_pitch_comparison.jpg"><img src="demo_camera_pitch_comparison.jpg" alt="相机俯视角对比" style="max-width:100%"></a></section>
 <table><thead><tr><th>尝试</th><th>任务</th><th>模型与推理强度</th><th>模型服务线路</th><th>审查</th><th>模型 act 序列</th><th>证据</th></tr></thead><tbody>'''+''.join(rows)+'''</tbody></table>
 <section><p>通过标准：模型正式 finish、调用序列对齐、模型选中且成功执行目标动作、官方整项任务成功、连续五视角录像通过、机器人运动被记录。各尝试的具体失败检查见审查 JSON。</p></section></html>'''
     (site / args.index_name).write_text(page)

@@ -1,10 +1,21 @@
 import math
 import unittest
 
-from manipulation_agent.observations.rig import camera_mount, centered_head_height, DIRECTIONS
+from manipulation_agent.observations.rig import camera_mount, centered_head_height, visible_rig_rays, DIRECTIONS
 
 
 class CenteredRigTests(unittest.TestCase):
+    def test_forward_demo_camera_keeps_near_container_inside_clear_rgb_band(self):
+        # Same 1.81 m camera height and near-bin distance as the real probe.
+        target=(1.25,0.,.5)
+        shallow=visible_rig_rays((0.,0.),0.,0.,1.81,target,
+                                  margin=.18,radius=.35,pitch_degrees=20)
+        demo=visible_rig_rays((0.,0.),0.,0.,1.81,target,
+                               margin=.18,radius=.35,pitch_degrees=35)
+        self.assertFalse(shallow)
+        self.assertTrue(demo)
+        self.assertLessEqual(demo[0][2][1],.82)
+
     def test_visual_head_and_shoulders_stay_below_lower_image_band(self):
         # A visual head above its collision AABB and wide lower shoulders:
         # using collision_top + .05 would place the old camera inside the head.

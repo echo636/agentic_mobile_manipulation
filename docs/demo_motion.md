@@ -181,8 +181,37 @@ In the next dedicated-key attempt (r6), the model's first `grasp` succeeded
 and its public navigation while carrying the can succeeded with 39 own/carry
 visual hulls participating in candidate validation. The resulting front RGB
 still showed the trash can above the robot silhouette. These observations
-validate this reach/navigation segment only; the task requires three cans
-and an independent whole-task success result.
+validate this reach/navigation segment only. The model formally finished, all
+call alignment and video checks passed, but the official three-can goal was
+false after `place_inside` returned a sampling error. Its independent audit
+therefore failed; the provider produced no 429 in this attempt.
+
+## Demo camera clearance
+
+The old four-camera mount had radius 0 m and a 20° downward pitch. Its
+1.81 m height was explicitly calculated to put the robot's own visible body
+below image row 0.8, **not** outside the image. This is why a fixed dark head
+shape appeared along the front RGB's lower edge even while standing still.
+Navigation cannot remove a mount-relative silhouette. A same-pose,
+no-model OmniGibson probe at the r6 kitchen pose compared radius 0, 0.35 and
+0.55 m: 0.35 m removed the head, but at 20° the nearby trash can was clipped
+by the lower edge. Holding radius 0.35 m and varying pitch 20°, 30°, 35° and
+40° showed that 35° keeps the whole can in view and leaves useful room context.
+The back, left and right RGB views were also inspected at that configuration.
+Comparison images are published on the first-ten internal review index. This
+is a camera diagnostic, not a model trial or task-success claim.
+
+Demo mode now uses four cameras at 0.35 m radius and 35° downward pitch. The
+non-demo rig stays at its old 0 m / 20° mount. Capture and candidate visibility
+share the same extrinsics; the selected RGB pixel remains the only action
+target. The fresh `turning_on_radio` public instance 301 / seed 0 trial used
+`gpt-6-astra` at `low` through the isolated experiment key. The model chose
+its `navigate_to` and `toggle_on` actions and RGB points, formally finished,
+and passed all seven demo audit checks including the independent whole-task
+goal and continuous five-view video. Initial and final model-facing RGB have
+no fixed head obstruction. During the short reach, the moving head/arm can
+temporarily enter the frame; the arm retracts before the final observation.
+This proves the camera fix on one complete public task, not all ten tasks.
 
 The fourth trash attempt exposed a separate placement boundary: the official
 `Inside.set_value` accepted the first can, but the can left the bin during the

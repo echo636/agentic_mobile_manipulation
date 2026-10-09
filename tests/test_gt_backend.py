@@ -50,6 +50,7 @@ class GTBackendTests(unittest.TestCase):
         b.video = None
         b.video_render_stride, b.video_render_flushes = 2, 4
         b.image_size, b.rgb_jpeg_quality, b.rig_radius, b.rig_height = 8, 92, 0., 1.8
+        b.rig_pitch_degrees=20.
         b.image_files, b.current_frames = {}, {}
         b._position = Tensor([-1., 0., 0.])
         b._orientation = Tensor([0., 0., 0., 1.])
