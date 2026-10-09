@@ -20,7 +20,11 @@ class VisualRayOwnership(unittest.TestCase):
         self.geometry = trimesh.creation.box()
         source = types.ModuleType('omnigibson.utils.usd_utils')
         self.loader = source.mesh_prim_to_trimesh_mesh = Mock(return_value=self.geometry)
+        lazy = types.ModuleType('omnigibson.lazy')
+        lazy.pxr = SimpleNamespace(UsdGeom=SimpleNamespace(Imageable=lambda prim:
+            SimpleNamespace(ComputePurpose=lambda: prim.computed_purpose)))
         modules = {'omnigibson': types.ModuleType('omnigibson'),
+                   'omnigibson.lazy': lazy,
                    'omnigibson.utils': types.ModuleType('omnigibson.utils'),
                    'omnigibson.utils.usd_utils': source}
         override = patch.dict(sys.modules, modules)
@@ -29,13 +33,13 @@ class VisualRayOwnership(unittest.TestCase):
         self.origin = torch.tensor([.1, .15, 3.])
         self.direction = torch.tensor([0., 0., -1.])
 
-    def box(self, name, center, *, visible=True):
+    def box(self, name, center, *, visible=True, purpose='default'):
         torch = self.torch
         center = torch.tensor(center, dtype=torch.float32)
         transform = torch.eye(4)
         transform[:3, 3] = center
         mesh = SimpleNamespace(visible=visible, scaled_transform=transform,
-                               prim_path='/'+name+'/mesh', prim=object(),
+                               prim_path='/'+name+'/mesh', prim=SimpleNamespace(computed_purpose=purpose),
                                points=torch.tensor(self.geometry.vertices.copy(), dtype=torch.float32))
         return SimpleNamespace(prim_path='/'+name, aabb=(center-.5, center+.5),
             links={'link': SimpleNamespace(visual_meshes={'mesh': mesh})}), mesh
@@ -90,7 +94,8 @@ class VisualRayOwnership(unittest.TestCase):
     def test_cloth_owns_occluding_ray_and_new_points_replace_old_geometry(self):
         torch = self.torch
         # ClothPrim is itself the mesh and has no rigid visual_meshes mapping.
-        link = SimpleNamespace(visible=True, prim_path='/cloth/link', prim=object(),
+        link = SimpleNamespace(visible=True, prim_path='/cloth/link',
+            prim=SimpleNamespace(computed_purpose='default'),
             scaled_transform=torch.eye(4),
             points=torch.tensor([[-.5, -.5, 1.], [.5, -.5, 1.],
                                  [.5, .5, 1.], [-.5, .5, 1.]]),
@@ -115,6 +120,31 @@ class VisualRayOwnership(unittest.TestCase):
         with self.assertRaises(SkillError) as error:
             query_visual_surface(self.backend([near]), self.origin, self.direction)
         self.assertEqual(error.exception.code, 'invalid_visual_target')
+
+    def test_guide_fill_volume_does_not_occlude_food_but_container_body_does(self):
+        container, helper = self.box('fridge/meta__base_link_fillable', [0., 0., 1.],
+                                     purpose='guide')
+        food, food_mesh = self.box('egg', [0., 0., -1.])
+        _, body = self.box('fridge/door', [2., 0., 1.])
+        container.links['door'] = SimpleNamespace(visual_meshes={'mesh': body})
+        backend = self.backend([container, food])
+        owner, result = query_visual_surface(backend, self.origin, self.direction)
+        self.assertIs(owner, food)
+        self.assertEqual(result['guide_meshes_skipped'], 1)
+        self.assertEqual(result['visual_mesh_purpose'], 'default')
+        self.assertEqual([c.args[0] for c in self.loader.call_args_list], [food_mesh.prim])
+        # A click on the actual fridge door must still resolve to the fridge.
+        self.assertIs(query_visual_surface(backend, self.origin+self.torch.tensor([2., 0., 0.]),
+                                          self.direction)[0], container)
+        # Visibility/purpose changes must not be hidden by the geometry cache.
+        helper.prim.computed_purpose = 'render'
+        self.assertIs(query_visual_surface(backend, self.origin, self.direction)[0], container)
+
+    def test_visible_meta_toggle_button_remains_an_occluding_target(self):
+        appliance, _ = self.box('appliance/meta__togglebutton', [0., 0., 1.])
+        food, _ = self.box('behind_button', [0., 0., -1.])
+        self.assertIs(query_visual_surface(self.backend([food, appliance]),
+                                          self.origin, self.direction)[0], appliance)
 
 
 if __name__ == '__main__':
