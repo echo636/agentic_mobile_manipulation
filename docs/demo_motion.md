@@ -240,3 +240,25 @@ models this bypass and failed before the fix; the exact five-action simulator
 replay changed from four successes plus failed `place_inside` to five
 successes. This diagnostic does not establish a model-driven whole-task pass;
 a fresh autonomous trial and official evaluator are still required.
+
+The r7 Halloween trial moved several objects but ended before `finish` when
+the configured provider returned a `v_api_biz_error` about a missing reasoning
+item. The simulator was closed by the supervisor; the attempt is a failure.
+The r7 plates/food trial formally finished but failed the official goal: its
+first `grasp` pixel was on the breakfast table between the plates, so the
+executor carried the table and six supported objects; the refrigerator's
+official volume sampler then could not place that assembly. The generic
+pick-and-place skill now tells the model to select an exposed item surface and
+inspect the returned carried-assembly count before traveling. This remains a
+model-selected action, not a scripted replacement pixel.
+
+The r7 `can_meat` trial also formally finished without the official goal.
+The first jar `grasp` point lay on its left lower visual edge. The old executor
+reported a hidden cabinet fill-volume guide mesh; after porting the upstream
+guide-purpose filter, a scripted replay of the same RGB selections still
+resolved that boundary pixel to the cabinet's real base mesh. This narrows the
+remaining issue to an ambiguous visible edge, not an invisible guide volume.
+The model later selected another pixel and grasped a jar, but its subsequent
+selected-surface placements failed sampling. The skill now asks for the middle
+of an exposed jar face. Neither diagnostic replay nor skill edit is counted as
+a whole-task success.
