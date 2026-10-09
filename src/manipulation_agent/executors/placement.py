@@ -303,7 +303,7 @@ class CheckedPlacement:
             def bounded_step(*args,**kwargs):
                 deadline=getattr(self,'deadline',None)
                 if deadline is not None:deadline.check(changed=True)
-                if not (deadline is not None and deadline.managed) and (self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>120):
+                if self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>180:
                     raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
                 self.sampling_physics_steps+=1
                 if contents:
