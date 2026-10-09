@@ -224,3 +224,19 @@ one. A CPU regression covers an accepted can being ejected by settling, and
 the full suite passes. The fourth model attempt was already running with the
 older loaded code, so only a later independent model attempt can validate this
 change in the public task.
+
+The dedicated-key trash r7 trial formally finished, and its model calls,
+video, and motion checks passed, but the official three-can goal remained
+false. Its first `place_inside` selected the bin's fillable visual surface and
+the official setter initially put the can `Inside`; the can left during the
+following 50 environment settling steps. An exact scripted replay of the
+first five recorded RGB selections reproduced the same failure. Boundary
+records showed the can was included in the link-relative preservation list,
+but the preservation callback was never invoked during `env.step`: that path
+does not call the patched `sim.step_physics` used by the official sampler.
+Placement now restores the accepted link-relative pose before and after each
+settling `env.step`, as well as around sampler physics. The CPU regression
+models this bypass and failed before the fix; the exact five-action simulator
+replay changed from four successes plus failed `place_inside` to five
+successes. This diagnostic does not establish a model-driven whole-task pass;
+a fresh autonomous trial and official evaluator are still required.

@@ -173,6 +173,9 @@ class CheckedPlacement:
             self._carry_detach()
             # Capture the anchored physics wrapper installed by the context.
             original_step=self.og.sim.step_physics
+            def preserve_payload_poses():
+                if residents:self._relocate_container_payload(residents)
+                if settling_payload:self._relocate_container_payload(settling_payload)
             def preserve_residents(*args,**kwargs):
                 # The near-bin arm can push an earlier item out while the
                 # official sampler or the settling steps advance physics.
@@ -180,12 +183,10 @@ class CheckedPlacement:
                 # state; keep their link-relative poses until this placement
                 # has been checked. The new item is free during sampling, then
                 # kept at its accepted pose during settling.
-                if residents:self._relocate_container_payload(residents)
-                if settling_payload:self._relocate_container_payload(settling_payload)
+                preserve_payload_poses()
                 try:return original_step(*args,**kwargs)
                 finally:
-                    if residents:self._relocate_container_payload(residents)
-                    if settling_payload:self._relocate_container_payload(settling_payload)
+                    preserve_payload_poses()
             def bounded_step(*args,**kwargs):
                 deadline=getattr(self,'deadline',None)
                 if deadline is not None:deadline.check(changed=True)
@@ -226,7 +227,11 @@ class CheckedPlacement:
                                         if record[0] is held)
                 self._relocate_contents(held,contents)
                 for _ in range(min(50,max_steps)):
-                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                    # Environment.step does not dispatch through the patched
+                    # sim.step_physics method used by the official sampler.
+                    preserve_payload_poses()
+                    try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                    finally:preserve_payload_poses()
             finally:
                 self.og.sim.step_physics=original_step
             if not held.states[Inside].get_value(target):

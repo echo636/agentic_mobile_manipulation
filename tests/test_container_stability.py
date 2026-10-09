@@ -97,7 +97,9 @@ class ContainerStabilityTests(unittest.TestCase):
         b._relocate_container_payload=lambda payload:[setattr(obj,'position',0.) for obj,_,_ in payload]
         b._placement_context=lambda container:nullcontext()
         b._relocate_contents=lambda held,contents:None
-        b._step=lambda action:sim.step_physics()
+        # Environment.step advances physics without calling the patched
+        # sim.step_physics method used by the official volume sampler.
+        b._step=lambda action:physics()
         b._verify_container_payload=lambda container,residents:(
             None if resident.states[Inside].get_value(container) else
             (_ for _ in ()).throw(SkillError('postcondition_error','Existing item escaped')))
