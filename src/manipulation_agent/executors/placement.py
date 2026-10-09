@@ -49,6 +49,61 @@ class CheckedPlacement:
         return {'primitive': 'place_under', 'implementation': 'transactional_official_Under_sampler',
                 'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
 
+    def _checked_place_next_to(self, target, max_steps, point):
+        """Search floor poses near the selected parent pixel; accept only official NextTo."""
+        import math
+        from omnigibson.object_states import NextTo
+        from omnigibson.utils.sampling_utils import raytest
+        held = self._get_held()
+        if held is None:
+            raise SkillError('empty_hand', 'No object is held')
+        if held is target or NextTo not in held.states:
+            raise SkillError('unsupported_relation', 'Carried object cannot be placed next to this target')
+        pose = held.get_position_orientation()
+        lo, _ = held.aabb
+        bottom_offset = float(pose[0][2] - lo[2])
+        ignored = [link.prim_path for obj in (held, target, self.robot)
+                   for link in obj.links.values()]
+        candidates = [(radius, angle) for radius in (.12, .22, .34, .48)
+                      for angle in (0, 45, 90, 135, 180, 225, 270, 315)]
+        with self._placement_context(target):
+            contents = list(self._carry_contents) if self.ideal_carry else []
+            dependencies = list(getattr(self, '_carry_dependencies', []))
+            self._carry_detach()
+            accepted = None
+            for radius, angle in candidates:
+                theta = math.radians(angle)
+                xy = point[:2] + self.torch.tensor([radius * math.cos(theta),
+                    radius * math.sin(theta)], device=point.device)
+                start = self.torch.tensor([float(xy[0]), float(xy[1]), float(point[2]) + .6], device=point.device)
+                end = start.clone(); end[2] = min(float(point[2]) - 1.5, -.5)
+                hit = raytest(start, end, ignore_bodies=ignored)
+                if not hit['hit'] or float(hit['normal'][2]) < .9:
+                    continue
+                place = pose[0].clone(); place[:2] = xy
+                place[2] = hit['position'][2] + bottom_offset + .003
+                held.set_position_orientation(place, pose[1]); held.keep_still()
+                self._relocate_contents(held, contents)
+                if held.states[NextTo].get_value(target):
+                    accepted = (radius, angle, place.clone())
+                    break
+            if accepted is None:
+                raise SkillError('sampling_error', 'No supported floor pose satisfied NextTo near the selected parent point', changed=True)
+            for _ in range(min(50, max_steps)):
+                held.set_position_orientation(accepted[2], pose[1]); held.keep_still()
+                self._relocate_contents(held, contents)
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            held.set_position_orientation(accepted[2], pose[1]); held.keep_still()
+            self._relocate_contents(held, contents)
+            if not held.states[NextTo].get_value(target):
+                raise SkillError('postcondition_error', 'Object is no longer next to the selected target', changed=True)
+            self._verify_payload(dependencies)
+            self._placement_record({'status': 'next_to_verified', 'target': target.name,
+                                    'held': held.name, 'radius_m': accepted[0], 'angle_deg': accepted[1]})
+        self.frames_revision = -1
+        return {'primitive': 'place_next_to', 'implementation': 'selected_parent_floor_search',
+                'postcondition': 'NextTo.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
+
     def _surface_pose(self, held, target, point, yaw_degrees=None):
         """Try the selected surface using upstream cuboid collision checks first."""
         from omnigibson.utils import sampling_utils as S
