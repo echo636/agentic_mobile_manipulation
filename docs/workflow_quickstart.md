@@ -42,8 +42,11 @@ supply a target. Re-mark an object in the returned RGB after approaching it.
 positive yaw turns left. It is useful for changing physical viewpoint, not for
 acquiring the four surrounding views.
 
-The ten primitives are navigate_to, grasp, place_inside, place_on_top, open,
-close, toggle_on, toggle_off, release and wait. Release and wait use target=null.
+The primitive catalog is defined by `executors/primitives.py`. It includes
+navigation, grasp/placement/attachment, state controls, and checked material
+actions (`wipe`, `sweep`, `vacuum`, `spray`, `spread`, `soak`, `cut`). `hang` uses
+the attachment state for a compatible nail or hook. Material actions require a
+compatible held tool and a visible selected target. Release and wait use target=null.
 Use wait_seconds with the wait action when an appliance process needs simulation
 time, and inspect the returned RGB before another action. Reading images alone
 does not advance that process. Execution attempts can change the scene even when
@@ -97,3 +100,5 @@ original protocol; they do not validate the current initialize/action protocol.
 See [the current RGB contract](rgb_protocol.md),
 [harness architecture](architecture.md), [replay records](replay_trace.md) and
 [historical four-camera validation](four_camera_validation_20260930.md).
+For atomic-action experiments and publication, follow
+[the acceptance requirements](atomic_action_experiment_requirements.md).

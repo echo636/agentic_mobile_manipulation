@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from manipulation_agent import bridge
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
 from manipulation_agent.vision_harness import VisionHarness
@@ -90,7 +90,7 @@ class ClosureInterruptTests(unittest.TestCase):
                     self.assertTrue(interrupted['error']['world_may_have_changed'])
                     self.assertEqual(state['backend'].capture,capture)
                     self.assertEqual(state['harness'].surround.get(state['observation_job'])['job']['status'],'cancelled')
-                    self.assertEqual(state['step_limit'],20000)
+                    self.assertEqual(state['step_limit'],DEADLINE_STEP_SENTINEL)
                     self.assertEqual(state['evaluator_thread'],state['owner_thread'])
                     run=json.loads((output/'run.json').read_text())
                     self.assertTrue(run['task_success'])

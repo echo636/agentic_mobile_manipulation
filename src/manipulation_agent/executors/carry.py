@@ -70,6 +70,44 @@ class ControlledCarry:
                 'fully_open_or_closed':state is Open,'postcondition':'official_state_and_containment_after_settling',
                 'preserved_contained_objects':len(payload),'failure_policy':'restore_pre_action_state'}
 
+    def _checked_attach(self, parent, max_steps):
+        """Attach the carried child to the visually selected compatible parent."""
+        from omnigibson.object_states import AttachedTo
+        if not self.ideal_carry:
+            raise SkillError('pre_condition_error','Attach requires controlled carry mode')
+        child=self._get_held()
+        if child is None:
+            raise SkillError('empty_hand','No carried object')
+        if child is parent or AttachedTo not in child.states or AttachedTo not in parent.states:
+            raise SkillError('unsupported_relation','Selected objects do not support attachment')
+        state=child.states[AttachedTo]
+        if state.parent is not None and state.parent is not parent:
+            raise SkillError('pre_condition_error','Carried object is attached to another parent')
+        if state.parent is not parent:
+            child_link, parent_link = state._find_attachment_links(parent, bypass_alignment_checking=True)
+            if child_link is None or parent_link is None:
+                raise SkillError('unsupported_relation','Selected parent has no available compatible attachment link')
+        contents=list(self._carry_contents)
+        dependencies=list(self._carry_dependencies)
+        try:
+            with self._placement_context(parent):
+                self._carry_detach()
+                accepted=state.set_value(parent,True,bypass_alignment_checking=True,
+                                         check_physics_stability=False,can_joint_break=False)
+                if not accepted:
+                    raise SkillError('execution_error','Attachment state setter rejected the selected pair',changed=True)
+                self._relocate_contents(child,contents)
+                for _ in range(min(30,max_steps)):
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                if not state.get_value(parent):
+                    raise SkillError('postcondition_error','Attachment did not remain after settling',changed=True)
+                self._verify_payload(dependencies)
+        finally:
+            self.frames_revision=-1
+        return {'primitive':'attach','implementation':'transactional_official_AttachedTo_state_setter',
+                'postcondition':'AttachedTo.get_value_after_settling',
+                'preserved_carried_objects':len(contents),'failure_policy':'restore_pre_action_state'}
+
     def _container_payload(self, container):
         """Snapshot existing rigid contents relative to their actual fillable link.
 

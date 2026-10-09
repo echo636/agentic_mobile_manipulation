@@ -6,7 +6,7 @@ The current default exposes initialize, look, act, finish, list_skills and read_
 
 - `skills/*/SKILL.md`: agent workflow instructions, with references; no simulator code. Four packages: visual-manipulation, visual-exploration, pick-and-place, failure-recovery.
 - `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry. `minimal` exposes initialize/look/act/finish; `skills` adds list_skills/read_skill. The optional historical `workflow` profile retains observe, asynchronous observation jobs, update_plan, remember and recall for compatibility.
-- `src/manipulation_agent/executors/`: ten motor primitives and the OmniGibson adapter. Primitives are not the workflow skill packages.
+- `src/manipulation_agent/executors/`: the motor primitive catalog and OmniGibson adapter. Primitives are not the workflow skill packages.
 
 `skill_runtime.py` freezes skill text and references into each run, hashes the bundle and permits only enumerated resources through read_skill. This lets a model consume skill documents without an arbitrary file-reading tool. This is a human-authored skill library, not automatic skill learning or evolution.
 
@@ -30,6 +30,20 @@ Depth must still be finite, positive and below the executor's existing 30 m limi
 an absent depth sample cannot define a 3D position.
 
 Navigation uses the backprojected point directly, without an object lookup.
+The four RGB views are 512×512 by default. Experiments may set
+`MAS_RGB_IMAGE_SIZE` to 768 or 1024 to test small-object perception; the
+selected normalized pixel still refers to the returned image's own dimensions.
+`MAS_RGB_JPEG_QUALITY` defaults to 92 and permits 70–95 for transport-size
+experiments without changing grounding coordinates.
+`vision_cli --wall-seconds` sets the episode execution budget after bridge
+readiness; autonomous experiments must keep that budget at least as long as
+their model-controller timeout.
+For a low selected point, public navigation now chooses a camera-visible
+standoff from the measured head-camera height and keeps that point above the
+lower image edge. A later grasp can approach the already selected object to
+reach it; the model must select the object again from the fresh RGB returned by
+navigation. This prevents a small ground-level tool from becoming only a few
+pixels at the bottom of the image after the model navigates toward it.
 Grasp, placement and state operations also need a simulator object handle. For
 these actions, a separate query finds the first positive visual-mesh hit on the
 exact selected camera ray. This query does not receive depth. Its broad phase
