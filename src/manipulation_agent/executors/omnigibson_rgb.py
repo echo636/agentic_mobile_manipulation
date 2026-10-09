@@ -655,7 +655,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             self._demo_arm=None
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
-        if primitive in {'attach','hang','place_inside','place_on_top','wipe','sweep','vacuum',
+        if primitive in {'attach','hang','place_inside','place_on_top','place_under','wipe','sweep','vacuum',
                          'spray','spread','soak','cut'} and held is None: raise SkillError('empty_hand','Empty hand')
         if held is not None and primitive in {'open','close','toggle_on','toggle_off'}:
             # Controlled carry can operate the switch on the object already
@@ -748,11 +748,13 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             result=self._ideal_state_action(primitive,obj,max_steps)
         elif primitive=='place_on_top':
             result=self._checked_place_on_top(obj,max_steps,point,kwargs.get('placement_yaw_degrees'))
+        elif primitive=='place_under':
+            result=self._checked_place_under(obj,max_steps)
         elif primitive=='place_inside' and self.inside_placement=='official_volume':
             result=self._checked_place_inside(obj,max_steps)
         else:
             result=self.execute(primitive,obj.name,max_steps)
-        if shown and primitive in {'place_inside','place_on_top','attach','hang','open','close',
+        if shown and primitive in {'place_inside','place_on_top','place_under','attach','hang','open','close',
                                    'toggle_on','toggle_off'}:
             # A stretched arm must not sweep the destination over when the
             # model's next navigation action moves the base away.

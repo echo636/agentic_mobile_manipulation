@@ -25,6 +25,30 @@ class CheckedPlacement:
         with (self.output / 'placement_diagnostics.jsonl').open('a') as stream:
             stream.write(json.dumps({'env_step': self.steps, **data}) + '\n')
 
+    def _checked_place_under(self, target, max_steps):
+        """Place the carried item under the model-selected parent using OG's Under sampler."""
+        from omnigibson.object_states import Under
+        held = self._get_held()
+        if held is None:
+            raise SkillError('empty_hand', 'No object is held')
+        if held is target or Under not in held.states:
+            raise SkillError('unsupported_relation', 'Carried object cannot be placed under this target')
+        with self._placement_context(target):
+            contents = list(self._carry_contents) if self.ideal_carry else []
+            dependencies = list(getattr(self, '_carry_dependencies', []))
+            self._carry_detach()
+            if not held.states[Under].set_value(target, True, use_trav_map=False):
+                raise SkillError('sampling_error', 'Official Under sampler found no valid pose', changed=True)
+            self._relocate_contents(held, contents)
+            for _ in range(min(50, max_steps)):
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if not held.states[Under].get_value(target):
+                raise SkillError('postcondition_error', 'Object is no longer under the selected target', changed=True)
+            self._verify_payload(dependencies)
+        self.frames_revision = -1
+        return {'primitive': 'place_under', 'implementation': 'transactional_official_Under_sampler',
+                'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
+
     def _surface_pose(self, held, target, point, yaw_degrees=None):
         """Try the selected surface using upstream cuboid collision checks first."""
         from omnigibson.utils import sampling_utils as S
