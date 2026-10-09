@@ -48,7 +48,10 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
             raise ValueError('RGB JPEG quality must be between 70 and 95')
         # Preserve the current four simultaneous virtual head cameras.
         # Their private depth is used only to ground the selected RGB pixel.
-        self.rig_radius=0.0
+        # Put the model-facing cameras ahead of the robot head. The steeper
+        # pitch keeps nearby floor targets in frame at navigation distance.
+        self.rig_radius=0.35
+        self.rig_pitch_degrees=35.0
         self.capture_index=0
         self.image_files={}
         self.current_frames={}
@@ -116,7 +119,8 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         base_pos, base_quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(base_quat)
         for direction, sensor in self.rig.items():
-            offset, basis = camera_mount(direction, self.rig_height, radius=self.rig_radius)
+            offset, basis = camera_mount(direction, self.rig_height, radius=self.rig_radius,
+                                         pitch_degrees=self.rig_pitch_degrees)
             offset = self.torch.tensor(offset, device=base_pos.device)
             basis = self.torch.tensor(basis, device=base_pos.device)
             sensor.set_position_orientation(base_pos + rotation @ offset, T.mat2quat(rotation @ basis))
@@ -436,7 +440,8 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         ignore.extend(l.prim_path for obj,_ in self._carry_contents for l in obj.links.values())
         yaw=math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
         rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,
-                              point.cpu().tolist(),margin=margin,radius=self.rig_radius)
+                              point.cpu().tolist(),margin=margin,radius=self.rig_radius,
+                              pitch_degrees=self.rig_pitch_degrees)
         for _,origin,_ in rays:
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
@@ -690,9 +695,9 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         result['robot_camera_views'] = list(DIRECTIONS)
         result['private_grounding_provider']='CPU visual mesh ray + selected-pixel depth; no segmentation annotator'
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
-        result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,
+        result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':self.rig_pitch_degrees,
             'mount_radius_m':self.rig_radius,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
-            'height_policy':'own_visual_geometry_below_lower_20_percent_with_5cm_clearance',
+            'height_policy':'own_visual_geometry_centered_reference_with_5cm_clearance',
             'stock_wrist_cameras_enabled':False}
         return result
 
