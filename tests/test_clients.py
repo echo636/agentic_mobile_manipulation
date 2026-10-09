@@ -57,6 +57,65 @@ class ClientAdapterTests(unittest.TestCase):
             self.assertIsNone(prepared.cwd)
             self.assertTrue(prepared.stdin.endswith('Inspect and finish.'))
 
+    def test_codex_run_records_explicit_effort_and_only_selected_provider(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'CODEX_HOME': folder}):
+            Path(folder, 'config.toml').write_text('''[model_providers.example]
+name = "Private endpoint"
+base_url = "https://example.invalid/v1"
+requires_openai_auth = true
+wire_api = "responses"
+[mcp_servers.unrelated]
+command = "ignored"
+''')
+            prepared = get_adapter('codex').prepare_project(
+                self.config(Path(folder), reasoning_effort='low', model_provider_profile='example'),
+                'Task-only policy', ['initialize', 'finish'])
+            configs = [prepared.argv[i+1] for i, token in enumerate(prepared.argv[:-1]) if token == '-c']
+            self.assertIn('model_reasoning_effort="low"', configs)
+            self.assertIn('model_provider="example"', configs)
+            self.assertIn('model_providers.example.base_url="https://example.invalid/v1"', configs)
+            self.assertFalse(any('unrelated' in value for value in configs))
+
+    def test_codex_resume_keeps_model_tool_boundary_and_workspace(self):
+        with tempfile.TemporaryDirectory() as folder:
+            adapter = get_adapter('codex')
+            original = adapter.prepare_project(
+                self.config(Path(folder), reasoning_effort='low'),
+                'Task-only policy', ['initialize', 'look', 'act', 'finish'])
+            thread_id = '01a12027-d1b5-7c40-a929-4936344a9ad5'
+            resumed = adapter.prepare_resume(original, thread_id, 'Continue from RGB.')
+            self.assertEqual(resumed.argv[:3], ['codex', 'exec', 'resume'])
+            self.assertEqual(resumed.argv[-2:], [thread_id, '-'])
+            self.assertEqual(resumed.cwd, Path(folder, 'empty_workspace'))
+            self.assertEqual(resumed.stdin, 'Continue from RGB.')
+            self.assertNotIn('--cd', resumed.argv)
+            self.assertNotIn('--sandbox', resumed.argv)
+            self.assertIn('sandbox_mode="read-only"', resumed.argv)
+            self.assertIn('model_reasoning_effort="low"', resumed.argv)
+            self.assertIn('mcp_servers.manipulation.enabled_tools=["initialize", "look", "act", "finish"]',
+                          resumed.argv)
+            for feature in ('shell_tool', 'plugins', 'multi_agent'):
+                self.assertIn(feature, resumed.argv)
+
+    def test_codex_accepts_private_http_provider_without_url_credentials(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'CODEX_HOME': folder}):
+            config_file = Path(folder, 'config.toml')
+            config_file.write_text('''[model_providers.local]
+name = "Internal endpoint"
+base_url = "http://10.130.136.133/v1"
+requires_openai_auth = true
+wire_api = "responses"
+''')
+            prepared = get_adapter('codex').prepare_project(
+                self.config(Path(folder), model_provider_profile='local'), 'Task-only policy', ['finish'])
+            self.assertIn('model_providers.local.base_url="http://10.130.136.133/v1"', prepared.argv)
+            config_file.write_text(config_file.read_text().replace('/v1"', '/v1?token=secret"'))
+            second = Path(folder, 'second')
+            second.mkdir()
+            with self.assertRaisesRegex(ValueError, 'without embedded credentials'):
+                get_adapter('codex').prepare_project(
+                    self.config(second, model_provider_profile='local'), 'Task-only policy', ['finish'])
+
     def test_non_codex_projects_have_explicit_tool_boundary_without_auth_copy(self):
         for client in ['opencode', 'kimi']:
             with self.subTest(client=client), tempfile.TemporaryDirectory() as folder:

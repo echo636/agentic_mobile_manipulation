@@ -15,6 +15,11 @@ def grid(width=81, height=81, resolution=.05, blocked=()):
 
 
 class GTNavigationTests(unittest.TestCase):
+    def test_elevated_target_keeps_lower_robot_band_outside_selected_point(self):
+        standoff,margin=visual_approach_settings(1.83,0.,.7)
+        self.assertEqual(standoff,.7)
+        self.assertGreaterEqual(margin,.18)
+
     def test_low_handheld_target_remains_clear_of_lower_image_edge(self):
         # Measured spray episode: head RGB camera at 1.83 m, atomizer at 0.09 m.
         # A roughly 0.95 m navigation endpoint put its body at image y≈0.96.
@@ -29,6 +34,38 @@ class GTNavigationTests(unittest.TestCase):
         rays=projected(plan.goal,0.)
         self.assertTrue(rays)
         self.assertLessEqual(rays[0][2][1],.82)
+
+    def test_low_target_approach_projects_inside_the_configured_camera(self):
+        g=GridMap(80,50,.1,(-1.,-1.),bytes([1])*(80*50))
+        # The high rig covers a wider initial robot pose. At this height,
+        # ignoring the 35 cm camera offset puts the target below the margin.
+        for height,pitch,radius,base_z in ((1.83,20.,0.,0.),
+                                         (1.81,35.,.35,.2),(2.85,35.,.35,1.2)):
+            with self.subTest(height=height,pitch=pitch,radius=radius):
+                target=(3.8,2.,base_z+.09)
+                standoff,margin=visual_approach_settings(
+                    height,base_z,target[2],pitch_degrees=pitch,radius=radius)
+                def projected(xy,required_margin):
+                    yaw=math.atan2(target[1]-xy[1],target[0]-xy[0])
+                    return visible_rig_rays(xy,yaw,base_z,height,target,
+                                            margin=required_margin,radius=radius,
+                                            pitch_degrees=pitch)
+                # Check the preferred approach itself, before a candidate
+                # filter could conceal an incorrect distance by rejecting it.
+                preferred=(target[0]-standoff,target[1])
+                rays=projected(preferred,margin)
+                self.assertTrue(rays)
+                self.assertLessEqual(rays[0][2][1],.82)
+                plan=plan_navigation(g,(0.,2.),target[:2],standoff=standoff,
+                                     candidate_filter=lambda xy:bool(projected(xy,margin)))
+                rays=projected(plan.goal,margin)
+                self.assertTrue(rays)
+                self.assertLessEqual(rays[0][2][1],.82)
+
+    def test_steeper_camera_does_not_keep_old_distant_approach_preference(self):
+        shallow,_=visual_approach_settings(2.05,0.,.09,pitch_degrees=20,radius=.35)
+        configured,_=visual_approach_settings(2.05,0.,.09,pitch_degrees=35,radius=.35)
+        self.assertLess(configured,shallow)
 
     def test_archived_mousetrap_pose_does_not_enter_neighbor_obstacle(self):
         # Actual failure: [-.75, 2.25] acquired sub-micrometre settling error.

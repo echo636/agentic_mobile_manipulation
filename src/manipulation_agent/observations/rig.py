@@ -5,14 +5,16 @@ DIRECTIONS = ('front', 'back', 'left', 'right')
 YAW_DEGREES = {'front': 0, 'back': 180, 'left': 90, 'right': -90}
 
 
-def centered_head_height(visual_points, base_position, *, pitch_degrees=20,
+def centered_head_height(visual_points, base_position, *, pitch_degrees=20, radius=0.,
                          vertical_fov_degrees=90, body_below_fraction=.8, clearance=.05):
     """Place the virtual head rig above its own visible body, using robot geometry.
 
     A collision AABB can exclude the rendered head shell. This uses visual
-    vertices and leaves the body below the lower 20% of each square image.
-    The radial bound is conservative for all four directions. No scene geometry
-    or traversability information enters this mount calculation.
+    vertices and leaves this body's pose below the lower 20% of each image.
+    Each camera is displaced outward by radius along its own viewing direction.
+    The radial bound is conservative for all four directions and base yaws;
+    radius=0 preserves the centered rig. Later arm poses are not part of this
+    initialization-time bound. No scene geometry enters this calculation.
     """
     if not .5 < body_below_fraction < 1 or clearance < 0:
         raise ValueError('Invalid head-camera clearance policy')
@@ -25,7 +27,11 @@ def centered_head_height(visual_points, base_position, *, pitch_degrees=20,
     for x, y, z in visual_points:
         if not all(math.isfinite(float(v)) for v in (x, y, z, base_x, base_y, base_z)):
             raise ValueError('Robot visual geometry must be finite')
-        required.append(float(z)-base_z+math.hypot(float(x)-base_x,float(y)-base_y)*math.tan(angle))
+        # The forward coordinate relative to any outward-facing camera is at
+        # most rho-radius. Clamping at zero also keeps the camera above points
+        # behind its lens, even when the entire head lies inside the mount ring.
+        forward_bound=max(0.,math.hypot(float(x)-base_x,float(y)-base_y)-radius)
+        required.append(float(z)-base_z+forward_bound*math.tan(angle))
     if not required:
         raise ValueError('Robot visual geometry is required for the centered head rig')
     return max(required)+clearance
@@ -42,7 +48,8 @@ def camera_mount(direction, height, radius=0.35, pitch_degrees=20):
     return [radius*c, radius*s, height], rotation
 
 
-def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04, radius=.35):
+def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04, radius=.35,
+                     pitch_degrees=20):
     """Candidate camera rays inside the real square 90-degree RGB frusta.
 
     Uses the same four mount transforms as capture. Does not read scene truth,
@@ -52,7 +59,8 @@ def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04, radius=.35):
     rotation=((c,-s,0.),(s,c,0.),(0.,0.,1.))
     rays=[]
     for direction in DIRECTIONS:
-        offset,basis=camera_mount(direction,height,radius=radius)
+        offset,basis=camera_mount(direction,height,radius=radius,
+                                  pitch_degrees=pitch_degrees)
         origin=[sum(rotation[i][j]*offset[j] for j in range(3))+(*xy,base_z)[i] for i in range(3)]
         world_basis=[[sum(rotation[i][k]*basis[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
         delta=[p-o for p,o in zip(point,origin)]

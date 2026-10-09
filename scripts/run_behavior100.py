@@ -705,6 +705,8 @@ class Batch:
                  '--timeout',str(seconds),'--execution-clock-command-json',
                  json.dumps(self.execution_clock_command(clock_path,seconds)),
                  '--agent-profile',self.manifest['agent_profile']]
+            if self.manifest.get('model_reasoning_effort'):
+                cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
             if self.c.get('isolate_client_storage'):cmd.append('--isolate-client-storage')
             with (self.root/'logs'/f'{runid}_controller.log').open('w') as log:
                 process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,env=self.environment)
@@ -916,6 +918,8 @@ class Batch:
              '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
              '--timeout',str(self.manifest['model_timeout_seconds']),'--agent-profile',self.manifest['agent_profile']]
+        if self.manifest.get('model_reasoning_effort'):
+            cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
         if row.get('execution_clock_path'):
             cmd+=['--execution-clock-command-json',json.dumps(self.execution_clock_command(
                 row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime))]

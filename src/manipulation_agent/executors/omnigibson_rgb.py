@@ -16,14 +16,20 @@ from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
 from .material_actions import CheckedMaterialActions
+from .demo_motion import DemoMotion
 
-class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
         self.deadline=EpisodeDeadline.from_env()
         self.deadline.check()
         self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
+        self.demo_motion = os.environ.get('MAS_DEMO_MOTION','0') in {'1','true','yes'}
+        if self.demo_motion and not self.ideal_carry:
+            raise ValueError('Demo motion requires controlled carry')
+        self._demo_arm = None
+        self._demo_focus = None
         self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False
@@ -48,7 +54,10 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
             raise ValueError('RGB JPEG quality must be between 70 and 95')
         # Preserve the current four simultaneous virtual head cameras.
         # Their private depth is used only to ground the selected RGB pixel.
-        self.rig_radius=0.0
+        # Put the model-facing cameras ahead of the robot head. The steeper
+        # pitch keeps nearby floor targets in frame at navigation distance.
+        self.rig_radius=0.35
+        self.rig_pitch_degrees=35.0
         self.capture_index=0
         self.image_files={}
         self.current_frames={}
@@ -56,6 +65,8 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
+                                 if self.demo_motion else None)
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
         # throttling extension toggles asynchronous rendering. Our capture
         # contract requires synchronous render-only flushes on the owner thread.
@@ -78,7 +89,9 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
             points = link.visual_boundary_points_world
             if points is not None:
                 visual_points.extend(points.detach().cpu().tolist())
-        self.rig_height = centered_head_height(visual_points, base_pos.detach().cpu().tolist())
+        self.rig_height = centered_head_height(
+            visual_points, base_pos.detach().cpu().tolist(),
+            pitch_degrees=self.rig_pitch_degrees, radius=self.rig_radius)
         with self._startup_stage('surround_camera_setup_and_warmup'):
             for direction in DIRECTIONS:
                 sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
@@ -106,7 +119,7 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
                 self.spectator.load(None)
                 self.spectator.initialize()
                 self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size,
-                                          views=(*DIRECTIONS,'spectator'))
+                                          views=(*DIRECTIONS,'spectator'),demo_motion=self.demo_motion)
                 self._position_spectator()
                 for _ in range(20): self.og.sim.render()
 
@@ -116,7 +129,8 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         base_pos, base_quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(base_quat)
         for direction, sensor in self.rig.items():
-            offset, basis = camera_mount(direction, self.rig_height, radius=self.rig_radius)
+            offset, basis = camera_mount(direction, self.rig_height, radius=self.rig_radius,
+                                         pitch_degrees=self.rig_pitch_degrees)
             offset = self.torch.tensor(offset, device=base_pos.device)
             basis = self.torch.tensor(basis, device=base_pos.device)
             sensor.set_position_orientation(base_pos + rotation @ offset, T.mat2quat(rotation @ basis))
@@ -135,6 +149,9 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
             if float(torch.linalg.norm(pos-old_pos)) < .002: return
         lo,hi = self.robot.aabb
         target = (lo.cpu()+hi.cpu())/2
+        if self._demo_focus is not None:
+            # Film the selected interaction, while keeping part of the robot in shot.
+            target = (target+self._demo_focus.cpu())/2
         ignore = [link.prim_path for link in self.robot.links.values()]
         best = None
         for i,angle in enumerate((135,-135,90,-90,180,0,45,-45)):
@@ -287,12 +304,22 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         self.deadline.check(changed=True)
         if self._base_target is not None:self._restore_base_target()
         self._restore_object_anchor()
+        self._restore_stabilized_containers()
         self._carry_follow()
         with component(self,'physics_and_metrics'):super()._step(action)
         if self._base_target is not None:
             self._restore_base_target()
-        self._restore_object_anchor();self._carry_follow()
+        self._restore_object_anchor();self._restore_stabilized_containers();self._carry_follow()
         self._video_frame('env_step')
+
+    def _restore_stabilized_containers(self):
+        # Ideal support keeps a filled movable container upright when a later
+        # navigation path brushes its body. This does not inspect task goals.
+        for obj,pose in getattr(self,'_stabilized_containers',{}).items():
+            if obj is not self._get_held():
+                obj.set_position_orientation(*pose);obj.keep_still()
+                payload=getattr(self,'_stabilized_container_payloads',{}).get(obj,())
+                if payload:self._relocate_container_payload(payload)
 
     def _restore_base_target(self):
         """Ideal base actuator holds posture while moving; no passive joint drift."""
@@ -424,10 +451,36 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
 
-    def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=1.4):
-        """Check the selected point in actual candidate camera frusta and rays."""
+    def _navigation_self_hulls(self):
+        """Current visible robot and carried geometry in yaw-local base coordinates."""
+        import numpy as np
+        import omnigibson.utils.transform_utils as T
+        from .self_depth_filter import prepare_self_hulls
+        position,orientation=self.robot.get_position_orientation()
+        rotation=T.quat2mat(orientation)
+        yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        c,s=math.cos(yaw),math.sin(yaw)
+        inverse=np.array([[c,s,0.],[-s,c,0.],[0.,0.,1.]])
+        base=position.detach().cpu().numpy()
+        objects=[self.robot]
+        held=self._get_held()
+        if held is not None:objects.append(held)
+        objects.extend(obj for obj,_ in self._carry_contents)
+        vertices={}
+        for obj in objects:
+            for link in obj.links.values():
+                points=link.visual_boundary_points_world
+                if points is not None:
+                    vertices[link.prim_path]=(points.detach().cpu().numpy()-base)@inverse.T
+        hulls,report=prepare_self_hulls(vertices)
+        return hulls,report
+
+    def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=1.4,
+                          self_hulls=()):
+        """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
+        from .self_depth_filter import segment_hits_self_hull
         torch=self.torch
         if math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
         ignore=[l.prim_path for l in self.robot.links.values()]
@@ -436,8 +489,16 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         ignore.extend(l.prim_path for obj,_ in self._carry_contents for l in obj.links.values())
         yaw=math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
         rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,
-                              point.cpu().tolist(),margin=margin,radius=self.rig_radius)
+                              point.cpu().tolist(),margin=margin,radius=self.rig_radius,
+                              pitch_degrees=self.rig_pitch_degrees)
+        c,s=math.cos(yaw),math.sin(yaw)
+        base_z=float(self.robot.get_position_orientation()[0][2])
+        def local(world):
+            dx,dy,dz=world[0]-xy[0],world[1]-xy[1],world[2]-base_z
+            return (c*dx+s*dy,-s*dx+c*dy,dz)
         for _,origin,_ in rays:
+            if segment_hits_self_hull(local(origin),local(point.cpu().tolist()),self_hulls):
+                continue
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
         return False
@@ -450,25 +511,32 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         position,_=self.robot.get_position_orientation()
         point=target.get_position_orientation()[0]
         standoff,margin=(.7,.04) if for_manipulation else visual_approach_settings(
-            self.rig_height,float(position[2]),float(point[2]))
+            self.rig_height,float(position[2]),float(point[2]),
+            pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
         height,width=occupancy.shape
         grid=GridMap(width,height,float(trav.map_resolution),
                      (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
                      (occupancy!=0).astype('uint8').tobytes())
+        # Public navigation must leave the selected surface observable in the
+        # resulting RGB. An in-action reach may move closer after the model has
+        # already selected its pixel; its hand is expected to enter that ray.
+        self_hulls,self_report=((),{'policy':'selected_pixel_reach_may_occlude'}) if for_manipulation else self._navigation_self_hulls()
         try:
             with component(self,'navigation_planning'):
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
                                      standoff=standoff,
                                      candidate_filter=lambda xy:self._approach_visible(
                                          xy,point,getattr(target,'selected_object',None),
-                                         margin=margin,max_distance=max(1.4,standoff+.35)))
+                                         margin=margin,max_distance=max(1.4,standoff+.35),
+                                         self_hulls=self_hulls))
         except NavigationError as exc:
             raise SkillError(exc.code,str(exc)) from exc
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'plan':asdict(plan),'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
+                 'self_occlusion_geometry':self_report,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  'dynamic_collision_check':False,'collision_substrate':'static_eroded_grid',
                  'precomputed_walkability':True,'online_mapping':False}
@@ -577,6 +645,8 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
 
     @action_profile
     def execute_visual(self,primitive,target,max_steps,**kwargs):
+        if primitive in {'look','navigate_to','release','wait'} and getattr(self,'_demo_focus',None) is not None:
+            self._demo_focus=None;self._spectator_anchor=None
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
         if primitive=='release' and self.ideal_carry:return self._ideal_release(max_steps)
         if primitive=='wait':
@@ -591,10 +661,14 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
+        if primitive=='place_next_to' and str(getattr(obj,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
+            raise SkillError('unsupported_relation','Select the visible tree or fixture itself for place_next_to')
         held=self._get_held()
+        if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
+            self._demo_arm=None
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
-        if primitive in {'attach','hang','place_inside','place_on_top','wipe','sweep','vacuum',
+        if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','wipe','sweep','vacuum',
                          'spray','spread','soak','cut'} and held is None: raise SkillError('empty_hand','Empty hand')
         if held is not None and primitive in {'open','close','toggle_on','toggle_off'}:
             # Controlled carry can operate the switch on the object already
@@ -612,7 +686,8 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         base=self.robot.get_position_orientation()[0]
         # A long cabinet/floor AABB can contain the base while the selected
         # visible surface is far away. Reach belongs to that selected point.
-        if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
+        reach_limit=1.4
+        if float(self.torch.linalg.norm(base[:2]-point[:2]))>reach_limit:
             if primitive in {'attach','hang'}:
                 raise SkillError('out_of_reach','Navigate to a visible approach to the selected parent before attaching')
             # Approach only the selected target, within this action's existing
@@ -622,10 +697,54 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
             self._navigate(anchor,max(1,max_steps-60),for_manipulation=True)
             max_steps-=self.steps-before_approach
             base=self.robot.get_position_orientation()[0]
-            if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4 or max_steps<30:
+            if float(self.torch.linalg.norm(base[:2]-point[:2]))>reach_limit or max_steps<30:
                 raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
+        shown = (self._demo_reach(point,max_steps,anchor=None if obj is held else obj,
+                                  arm=self._demo_arm if held is not None else None,
+                                  action=primitive)
+                 if getattr(self,'demo_motion',False) else 0)
+        max_steps -= shown
+        contact_limit=(.45 if primitive=='spray' else .30 if primitive=='vacuum' else .18)
+        if (shown and self._demo_last_reach_error>contact_limit and obj is not held
+                and max_steps>170):
+            # A visual standoff may keep the selected pixel in view while the
+            # posture-limited hand cannot touch it. Reuse that exact pixel for
+            # one closer, visibility-checked approach; never select a new goal.
+            first_error=self._demo_last_reach_error
+            anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),
+                                   selected_object=obj)
+            before_retry=self.steps
+            self._navigate(anchor,max_steps-120,for_manipulation=True)
+            max_steps-=self.steps-before_retry
+            self._demo_record(action=primitive,status='approach_retry',first_error_m=first_error,
+                              target_point=point.tolist())
+            retry=self._demo_reach(point,max_steps,anchor=obj,
+                                   arm=self._demo_arm if held is not None else None,
+                                   action=primitive+'_after_approach')
+            shown+=retry;max_steps-=retry
+        if shown and self._demo_last_reach_error>contact_limit:
+            raise SkillError('out_of_reach',
+                             'Robot hand could not approach the selected surface; choose a closer visible approach',
+                             changed=True)
+        if shown and primitive in {'wipe','sweep','vacuum','spray','spread','soak','cut'}:
+            stroke=point.clone()
+            if primitive in {'soak','cut'}:
+                stroke[2]-=.06
+            else:
+                stroke[0]+=.08
+            stroke_steps=self._demo_reach(stroke,max_steps,anchor=obj,
+                                          arm=self._demo_arm,action=primitive+'_stroke')
+            shown+=stroke_steps;max_steps-=stroke_steps
+        before_effect_steps=self.steps if shown else 0
         if primitive=='grasp' and self.ideal_carry:
+            before_grasp=self.steps
             result=self._ideal_grasp(obj,max_steps)
+            if shown and self._demo_arm is not None:
+                hand=self.robot.eef_links[self._demo_arm].get_position_orientation()[0]
+                lifted=hand.clone();lifted[2]+=.16
+                shown+=self._demo_reach(lifted,max_steps-(self.steps-before_grasp),
+                                        arm=self._demo_arm,action='lift_after_grasp')
+                shown+=self._demo_transport_pose(max_steps-(self.steps-before_grasp))
         elif primitive in {'attach','hang'}:
             if primitive=='hang' and not any(word in str(obj.category).lower() for word in ('nail','hook','hanger')):
                 raise SkillError('unsupported_relation','Selected object is not a hanging anchor')
@@ -642,23 +761,35 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
             result=self._ideal_state_action(primitive,obj,max_steps)
         elif primitive=='place_on_top':
             result=self._checked_place_on_top(obj,max_steps,point,kwargs.get('placement_yaw_degrees'))
+        elif primitive=='place_under':
+            result=self._checked_place_under(obj,max_steps)
+        elif primitive=='place_next_to':
+            result=self._checked_place_next_to(obj,max_steps,point)
         elif primitive=='place_inside' and self.inside_placement=='official_volume':
             result=self._checked_place_inside(obj,max_steps)
         else:
             result=self.execute(primitive,obj.name,max_steps)
+        if shown and primitive in {'place_inside','place_on_top','place_under','place_next_to','attach','hang','open','close',
+                                   'toggle_on','toggle_off'}:
+            # A stretched arm must not sweep the destination over when the
+            # model's next navigation action moves the base away.
+            shown+=self._demo_transport_pose(max_steps-(self.steps-before_effect_steps))
+        if shown:
+            result={**result,'demo_motion':{'real_env_steps':shown,'ideal_contact':True}}
         return {**result,'private_grounding':grounding}
 
     def evaluate(self):
         result=super().evaluate()
         result['protocol']='rgb_agent_ideal_executor_v9_shared_episode_clock'
         result['observation_mode']=self.mode
+        result['demo_motion']=getattr(self,'demo_motion',False)
         return result
 
     def provenance(self):
         from .gt_navigation import SOURCE_COMMIT, STRATEGY
         result=super().provenance()
         result.update(executor='controlled_carry_and_checked_placement_plus_jinkai_gt_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_jinkai_gt_grid_navigation',
-                      observation_mode=self.mode,image_size=self.image_size,
+                      observation_mode=self.mode,image_size=self.image_size,demo_motion=getattr(self,'demo_motion',False),
                       grounding='direct_pixel_depth_backprojection_private_executor_only',
                       model_visible_truth=False)
         result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
@@ -695,9 +826,9 @@ class RGBBackend(CheckedMaterialActions, ControlledCarry, CheckedPlacement, Omni
         result['robot_camera_views'] = list(DIRECTIONS)
         result['private_grounding_provider']='CPU visual mesh ray + selected-pixel depth; no segmentation annotator'
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
-        result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,
+        result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':self.rig_pitch_degrees,
             'mount_radius_m':self.rig_radius,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
-            'height_policy':'own_visual_geometry_below_lower_20_percent_with_5cm_clearance',
+            'height_policy':'initial_visual_body_below_lower_20_percent_at_configured_pitch_and_radius_with_5cm_clearance',
             'stock_wrist_cameras_enabled':False}
         return result
 

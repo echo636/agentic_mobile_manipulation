@@ -18,6 +18,14 @@ def command(args):
     return {'exit_code': p.returncode, 'stdout': p.stdout, 'stderr': p.stderr}
 
 
+def manifest_task(manifest, index):
+    """Resolve the benchmark identity, including in a selected-task manifest."""
+    for row in manifest['tasks']:
+        if row['index'] == index:
+            return row
+    raise ValueError(f'Task index {index} is absent from this manifest')
+
+
 def quota_headroom(output):
     """Read numeric `quota -w -v` block limits without guessing human units."""
     remaining=[]
@@ -166,12 +174,12 @@ def main():
     p.add_argument('--reserved-host-memory-gib',type=int,default=0)
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
     if a.mode == 'assets':
-        selected=manifest if a.index is None else {'tasks':[manifest['tasks'][a.index]]}
+        selected=manifest if a.index is None else {'tasks':[manifest_task(manifest,a.index)]}
         print(json.dumps(assets(selected,a.data_root))); return
     if a.mode == 'preflight':
         print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
                                   reserved_host_memory_gib=a.reserved_host_memory_gib))); return
-    row=manifest['tasks'][a.index]
+    row=manifest_task(manifest,a.index)
     if a.run_id:
         import re
         if not re.fullmatch(re.escape(row['run_id'].rsplit('_r',1)[0])+r'_r[1-9][0-9]*',a.run_id):

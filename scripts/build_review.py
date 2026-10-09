@@ -39,8 +39,10 @@ def review_metadata(data, run_record, controller_record=None):
                 except json.JSONDecodeError:
                     effort = value.strip().strip('"')
                 break
+    startup_failed = controller_record.get('failure_stage') in {'prepare_project', 'mcp_handshake', 'before_model_start'}
     return {'task': task, 'instance': instance, 'seed': seed,
-            'execution': '模型驱动' if model != '未记录' else '执行方式未记录',
+            'execution': ('模型未启动' if startup_failed else
+                          '模型驱动' if model != '未记录' else '执行方式未记录'),
             'model': model, 'reasoning_effort': effort if effort is not None else '未记录'}
 
 
@@ -64,6 +66,10 @@ def main():
     config = run_record.get('config') or {}
     controller_path = args.controller_dir / 'controller.json' if args.controller_dir else None
     controller_record = json.loads(controller_path.read_text()) if controller_path and controller_path.exists() else None
+    summary_path = run.parent / 'summary.json'
+    if controller_record is not None and summary_path.exists():
+        summary = json.loads(summary_path.read_text())
+        controller_record.setdefault('model_reasoning_effort', summary.get('reasoning_effort'))
     metadata = review_metadata(data, run_record, controller_record)
     transcript = data.get("model_transcript") or []
     trace_by_step = {}
@@ -88,6 +94,13 @@ def main():
     video = data.get("video") or {}
     if video.get("status") != "passed":
         raise SystemExit("A completed, validated video is required")
+    motion_log = run / 'demo_motion.jsonl'
+    motion_count = (sum(json.loads(line).get('status') in {'shown', 'partial_reach'}
+                        for line in motion_log.read_text().splitlines()) if motion_log.exists() else 0)
+    demo_mode = ((f'启用 · {motion_count} 段关节动作按模拟控制步录制；接触与最终状态仍由理想化执行器完成'
+                  if motion_count else '已启用；本次没有机械臂动作')
+                 if video.get('demo_motion') is True else
+                 '关闭 · 使用原有执行器' if video.get('demo_motion') is False else '未记录')
     ffmpeg = shutil.which("ffmpeg") or (video.get("encoder_command") or [None])[0]
     if not ffmpeg:
         raise SystemExit("ffmpeg is required")
@@ -192,7 +205,7 @@ def main():
     a{{color:var(--accent)}}@media(max-width:1100px){{.views{{grid-template-columns:repeat(3,1fr)}}}}@media(max-width:650px){{.views{{grid-template-columns:repeat(2,1fr)}}.detailsgrid{{grid-template-columns:1fr}}}}
     </style></head><body><header><a href="#video">① 连续视频</a><a href="#steps">② 逐次工具调用</a></header><main>
     <h1>机器人实验审阅</h1><p class="meta">{h(args.label)} · {len(cards)} 次工具调用 · {h(data.get('status'))} · 独立任务成功 {h(success)} · 本地官方指标 Q {h(score)}</p>
-    <div class="run-meta"><div><small>任务</small>{h(metadata['task'])}</div><div><small>实例 / 种子</small>{h(metadata['instance'])} / {h(metadata['seed'])}</div><div><small>执行方式</small>{h(metadata['execution'])}</div><div><small>模型</small>{h(metadata['model'])}</div><div><small>推理强度</small>{h(metadata['reasoning_effort'])}</div></div>
+    <div class="run-meta"><div><small>任务</small>{h(metadata['task'])}</div><div><small>实例 / 种子</small>{h(metadata['instance'])} / {h(metadata['seed'])}</div><div><small>执行方式</small>{h(metadata['execution'])}</div><div><small>模型</small>{h(metadata['model'])}</div><div><small>推理强度</small>{h(metadata['reasoning_effort'])}</div><div><small>动作呈现</small>{h(demo_mode)}</div></div>
     <p class="meta">任务指令：{h(data.get('instruction') or '未记录')}</p>
     <p class="meta">四路 RGB 是执行器录制的机器人观测；第三视角仅供审阅。视频按模拟控制步连续记录，等待时间不计入片长。{h(reasoning_note)}</p>
     <section id="video"><h2>① 连续视频</h2><div class="video-wrap"><video controls preload="metadata" poster="video_poster.jpg" src="episode_browser.mp4"></video>

@@ -39,6 +39,14 @@ class ReviewMetadataTests(unittest.TestCase):
             {'model': 'gpt-6-astra', 'command': ['-c', 'model_reasoning_summary="auto"']})
         self.assertEqual(metadata['reasoning_effort'], '未记录')
 
+    def test_preflight_failure_is_not_labeled_model_driven(self):
+        metadata = build_review.review_metadata(
+            {}, {'config': {'task': 'clean_a_keyboard'}},
+            {'model': 'gpt-6-astra', 'model_reasoning_effort': 'low',
+             'failure_stage': 'prepare_project', 'status': 'unsupported'})
+        self.assertEqual(metadata['execution'], '模型未启动')
+        self.assertEqual(metadata['reasoning_effort'], 'low')
+
 
 if __name__ == '__main__':
     unittest.main()

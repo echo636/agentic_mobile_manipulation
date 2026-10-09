@@ -151,7 +151,10 @@ class ControlledCarry:
     def _carry_follow(self):
         if not self.ideal_carry or self._ideal_held is None:return
         from omnigibson.utils import transform_utils as T
-        pose=T.pose_transform(*self.robot.get_position_orientation(),*self._carry_relative)
+        origin=(self.robot.eef_links[self._demo_arm].get_position_orientation()
+                if getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None)
+                else self.robot.get_position_orientation())
+        pose=T.pose_transform(*origin,*self._carry_relative)
         self._ideal_held.set_position_orientation(*pose);self._ideal_held.keep_still()
         for obj,relative in self._carry_contents:
             obj.set_position_orientation(*T.pose_transform(*pose,*relative));obj.keep_still()
@@ -200,11 +203,27 @@ class ControlledCarry:
             return None
         dependencies=support_closure(obj,candidates,relation)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
+        # The entire selected assembly is leaving its old support. An outer
+        # container can have recorded nested children as well as this root;
+        # retaining those records would pull the children back after release.
+        moving={id(obj),*(id(child) for child,_,_ in dependencies)}
+        stabilized=getattr(self,'_stabilized_containers',{})
+        for container in list(stabilized):
+            if id(container) in moving:stabilized.pop(container)
+        payloads=getattr(self,'_stabilized_container_payloads',{})
+        for container,records in list(payloads.items()):
+            if id(container) in moving:payloads.pop(container)
+            else:payloads[container]=[record for record in records if id(record[0]) not in moving]
         base_pos,base_quat=self.robot.get_position_orientation()
-        # Lift at the selected object's XY first. Do not teleport its origin
-        # into the robot's palm/collision geometry, as the symbolic grasp does.
-        lifted=original[0].clone();lifted[2]+=.18
-        relative=T.relative_pose_transform(lifted,original[1],base_pos,base_quat)
+        # In demo mode the carried pose follows the visible hand. The object is
+        # lifted over recorded control steps after the carry relation is made.
+        if getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None):
+            relative=T.relative_pose_transform(*original,
+                *self.robot.eef_links[self._demo_arm].get_position_orientation())
+        else:
+            # Legacy ideal carry starts at a safe elevated pose.
+            lifted=original[0].clone();lifted[2]+=.18
+            relative=T.relative_pose_transform(lifted,original[1],base_pos,base_quat)
         self._ideal_held=obj;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
         self._carry_record(status='attached',object=obj.name,contained_objects=[c.name for c,_ in contents],
                            payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
@@ -230,6 +249,7 @@ class ControlledCarry:
         if self._ideal_held is None:raise SkillError('empty_hand','No carried object')
         self._carry_record(status='released',object=self._ideal_held.name)
         self._carry_detach()
+        if getattr(self,'demo_motion',False):self._demo_arm=None
         with self._anchored_operation():
             for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
         return {'primitive':'release','implementation':'controlled_carry_detach_and_settle','physical_grasp':False}
