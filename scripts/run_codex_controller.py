@@ -46,6 +46,8 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
+    p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh'])
+    p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
     adapter = get_adapter(client)
@@ -61,13 +63,15 @@ def main(argv=None, *, allow_client=False):
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     config = ClientConfig(client, args.model, args.instruction, args.mcp_command,
                           json.loads(args.mcp_args_json), args.output, args.timeout,
-                          args.agent_profile, args.isolate_client_storage)
+                          args.agent_profile, args.isolate_client_storage,
+                          args.reasoning_effort, args.model_provider_profile)
     capability = adapter.probe()
     if capability.status != 'available':
         write_json(args.output / 'controller.json', {
             'started_at': now(), 'finished_at': now(), 'status': capability.status,
             'controller': client + '_cli', 'client_capability': asdict(capability),
-            'model': args.model, 'agent_profile': args.agent_profile, 'exit_code': 3,
+            'model': args.model, 'model_reasoning_effort': args.reasoning_effort,
+            'agent_profile': args.agent_profile, 'exit_code': 3,
             'formal_finish_observed': False, 'tools_called': [], 'task_success': None})
         print(json.dumps(asdict(capability)))
         return 3
@@ -78,13 +82,15 @@ def main(argv=None, *, allow_client=False):
         write_json(args.output / 'controller.json', {
             'started_at': now(), 'finished_at': now(), 'status': 'unsupported',
             'controller': client + '_cli', 'client_capability': asdict(capability),
-            'model': args.model, 'agent_profile': args.agent_profile, 'exit_code': 3,
+            'model': args.model, 'model_reasoning_effort': args.reasoning_effort,
+            'agent_profile': args.agent_profile, 'exit_code': 3,
             'failure_stage': 'prepare_project', 'failure_type': type(exc).__name__, 'reason': str(exc),
             'formal_finish_observed': False, 'tools_called': [], 'task_success': None})
         return 3
     command = project.argv
     native_sessions = project.native_sessions
-    metadata = {"started_at": now(), "status": "running", "model": args.model, "observation_mode": "rgb_only",
+    metadata = {"started_at": now(), "status": "running", "model": args.model,
+                "model_reasoning_effort": args.reasoning_effort, "observation_mode": "rgb_only",
                 "episode_deadline_unix":deadline.unix,"requested_timeout_seconds":args.timeout,
                 "agent_profile": args.agent_profile,
                 "host": os.uname().nodename, "controller": client + "_cli", "command": command,

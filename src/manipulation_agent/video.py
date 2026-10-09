@@ -35,12 +35,13 @@ def ffmpeg_executable():
 class EpisodeVideo:
     VIEWS = ('head', 'spectator', 'left_wrist', 'right_wrist')
 
-    def __init__(self, output: Path, fps: float, size=512, views=None):
+    def __init__(self, output: Path, fps: float, size=512, views=None, demo_motion=False):
         self.output = output
         self.views = tuple(views or self.VIEWS)
         if self.views not in {self.VIEWS, ('front','back','left','right','spectator')}:
             raise ValueError('Unsupported recording layout')
         self.size = size; self.fps = float(fps)
+        self.demo_motion = bool(demo_motion)
         self.rows = (len(self.views)+1)//2
         self.width = 2 * size; self.height = self.rows * size + 80
         self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
@@ -58,6 +59,7 @@ class EpisodeVideo:
                          'fps':self.fps,'width':self.width,'height':self.height,
                          'started_at':now(),'frame_count':0,'scope':'every_env_step_plus_observation_boundaries',
                          'spectator_model_visible':False, 'synthesized_motion':False,
+                         'demo_motion':self.demo_motion,
                          'time_basis':'simulation control steps; model wait time omitted; boundary captures add one frame',
                          'excluded':'physics substeps and private volume-sampler candidate-search ticks',
                          'views':list(self.views),'markers':self.markers}
@@ -149,7 +151,10 @@ class EpisodeVideo:
         draw = ImageDraw.Draw(canvas)
         title = f"env.step {env_step} | capture {env_step if capture_env_step is None else capture_env_step} | {self.context.get('primitive','initial RGB')} | {kind}"
         draw.text((12,self.rows*self.size+7),title,fill='white',font=font)
-        draw.text((12,self.rows*self.size+32),'Ideal executor: instantaneous pose/state changes are recorded as executed.',fill='#b6d6df',font=font)
+        caption = ('Demo motor: recorded arm motion; contact and final state remain idealized.'
+                   if self.demo_motion else
+                   'Ideal executor: instantaneous pose/state changes are recorded as executed.')
+        draw.text((12,self.rows*self.size+32),caption,fill='#b6d6df',font=font)
         draw.text((12,self.rows*self.size+55),'Control-step timeline; labeled frame holds between captures. No motion interpolation.',fill='#b6d6df',font=font)
         if self.process is None:
             ffmpeg = ffmpeg_executable()

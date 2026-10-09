@@ -3,6 +3,10 @@ import json
 import os
 from pathlib import Path
 import shutil
+import re
+import tomllib
+from ipaddress import ip_address, AddressValueError
+from urllib.parse import urlsplit
 
 from .base import ClientAdapter
 from .types import PreparedProject
@@ -21,6 +25,28 @@ class CodexAdapter(ClientAdapter):
                    "-c", "project_doc_max_bytes=0", "-c", 'model_reasoning_summary="auto"',
                    "-c", "mcp_optional_startup_grace_ms=0",
                    "-c", "developer_instructions=" + json.dumps(instructions)]
+        if config.reasoning_effort is not None:
+            command += ['-c', 'model_reasoning_effort=' + json.dumps(config.reasoning_effort)]
+        if config.model_provider_profile is not None:
+            profile = config.model_provider_profile
+            if not re.fullmatch(r'[A-Za-z0-9_-]+', profile):
+                raise ValueError('Invalid model provider profile')
+            root = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex')))
+            data = tomllib.loads((root / 'config.toml').read_text())
+            provider = data.get('model_providers', {}).get(profile)
+            if not isinstance(provider, dict) or not all(key in provider for key in
+                ('name', 'base_url', 'requires_openai_auth', 'wire_api')):
+                raise ValueError('Codex model provider profile is incomplete')
+            endpoint = urlsplit(provider['base_url'])
+            try:
+                private_http = endpoint.scheme == 'http' and ip_address(endpoint.hostname).is_private
+            except (AddressValueError, TypeError):
+                private_http = False
+            if not (endpoint.scheme == 'https' or private_http) or not endpoint.netloc or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
+                raise ValueError('Provider endpoint must be HTTPS or private-network HTTP without embedded credentials')
+            command += ['-c', 'model_provider=' + json.dumps(profile)]
+            for key in ('name', 'base_url', 'requires_openai_auth', 'wire_api'):
+                command += ['-c', f'model_providers.{profile}.{key}=' + json.dumps(provider[key])]
         native_sessions = None
         storage = None
         prefix = []
