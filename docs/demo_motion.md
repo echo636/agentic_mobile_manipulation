@@ -145,6 +145,26 @@ ordered call alignment and formal-finish validation. A continuation is part
 of the same attempt, not a fresh policy trial. If the rate limit persists or
 the episode budget expires, the attempt still fails and is preserved.
 
+The initial first-ten attempts mistakenly used the desktop `ccswitch` provider
+and its existing Codex login. That provider returned 429; those attempts do
+not establish any limit on the user-provided experiment key. The experiment
+key has since been recovered from the user's message into a permission-600
+Codex home outside Git, paired with the user-provided `api.gpt.ge` endpoint
+(`https://api.gpt.ge/v1` for the Responses route). A small `gpt-6-astra`/`low`
+connectivity request completed through that isolated login. New first-ten
+runs require `--codex-home` and reject a provider whose host is not
+`api.gpt.ge` before the simulator starts. Never copy the key into trial output.
+
+Navigation candidate visibility previously ignored robot links and carried
+objects in its scene raytest. A target could be geometrically within the RGB
+frustum but hidden by the robot's own arm at the selected endpoint. Candidate
+validation now checks current visible robot/carry hulls transformed to each
+candidate base pose before accepting a scene ray. This is an executor-private
+visibility check on the model's selected point; it does not choose a different
+object or modify the public RGB. A synthetic arm-occlusion regression covers
+the rejected endpoint. The subsequent public-task model run and video review
+must still validate the change in the simulator.
+
 The fourth trash attempt exposed a separate placement boundary: the official
 `Inside.set_value` accepted the first can, but the can left the bin during the
 action's subsequent physics settling ticks, so the postcondition rejected the

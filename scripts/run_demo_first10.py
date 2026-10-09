@@ -24,6 +24,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--omnigibson-source', type=Path, required=True)
     parser.add_argument('--provider-profile', required=True)
+    parser.add_argument('--codex-home', type=Path, required=True,
+                        help='Isolated experiment Codex login; never use the desktop login')
     parser.add_argument('--timeout', type=int, default=1500)
     parser.add_argument('--attempt', type=int, default=1)
     parser.add_argument('--retry-failures', action='store_true',
@@ -64,6 +66,8 @@ def main():
                            '--task', item['task'], '--instruction', item['instruction'],
                            '--output', str(trial), '--omnigibson-source', str(args.omnigibson_source),
                            '--provider-profile', args.provider_profile, '--gpu', str(item['gpu']),
+                           '--codex-home', str(args.codex_home),
+                           '--expected-provider-host', 'api.gpt.ge',
                            '--appdata', str(args.output / f'appdata_gpu{item["gpu"]}'),
                            '--timeout', str(args.timeout)]
                 log = (args.output / f'{index:02d}_{item["task"]}_r{args.attempt}_launcher.log').open('w')

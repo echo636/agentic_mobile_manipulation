@@ -435,10 +435,36 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
 
-    def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=1.4):
-        """Check the selected point in actual candidate camera frusta and rays."""
+    def _navigation_self_hulls(self):
+        """Current visible robot and carried geometry in yaw-local base coordinates."""
+        import numpy as np
+        import omnigibson.utils.transform_utils as T
+        from .self_depth_filter import prepare_self_hulls
+        position,orientation=self.robot.get_position_orientation()
+        rotation=T.quat2mat(orientation)
+        yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        c,s=math.cos(yaw),math.sin(yaw)
+        inverse=np.array([[c,s,0.],[-s,c,0.],[0.,0.,1.]])
+        base=position.detach().cpu().numpy()
+        objects=[self.robot]
+        held=self._get_held()
+        if held is not None:objects.append(held)
+        objects.extend(obj for obj,_ in self._carry_contents)
+        vertices={}
+        for obj in objects:
+            for link in obj.links.values():
+                points=link.visual_boundary_points_world
+                if points is not None:
+                    vertices[link.prim_path]=(points.detach().cpu().numpy()-base)@inverse.T
+        hulls,report=prepare_self_hulls(vertices)
+        return hulls,report
+
+    def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=1.4,
+                          self_hulls=()):
+        """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
+        from .self_depth_filter import segment_hits_self_hull
         torch=self.torch
         if math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
         ignore=[l.prim_path for l in self.robot.links.values()]
@@ -448,7 +474,14 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         yaw=math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
         rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,
                               point.cpu().tolist(),margin=margin,radius=self.rig_radius)
+        c,s=math.cos(yaw),math.sin(yaw)
+        base_z=float(self.robot.get_position_orientation()[0][2])
+        def local(world):
+            dx,dy,dz=world[0]-xy[0],world[1]-xy[1],world[2]-base_z
+            return (c*dx+s*dy,-s*dx+c*dy,dz)
         for _,origin,_ in rays:
+            if segment_hits_self_hull(local(origin),local(point.cpu().tolist()),self_hulls):
+                continue
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
         return False
@@ -468,18 +501,21 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         grid=GridMap(width,height,float(trav.map_resolution),
                      (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
                      (occupancy!=0).astype('uint8').tobytes())
+        self_hulls,self_report=self._navigation_self_hulls()
         try:
             with component(self,'navigation_planning'):
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
                                      standoff=standoff,
                                      candidate_filter=lambda xy:self._approach_visible(
                                          xy,point,getattr(target,'selected_object',None),
-                                         margin=margin,max_distance=max(1.4,standoff+.35)))
+                                         margin=margin,max_distance=max(1.4,standoff+.35),
+                                         self_hulls=self_hulls))
         except NavigationError as exc:
             raise SkillError(exc.code,str(exc)) from exc
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'plan':asdict(plan),'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
+                 'self_occlusion_geometry':self_report,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  'dynamic_collision_check':False,'collision_substrate':'static_eroded_grid',
                  'precomputed_walkability':True,'online_mapping':False}

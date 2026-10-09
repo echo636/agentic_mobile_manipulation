@@ -68,6 +68,40 @@ def prepare_self_hulls(link_visual_points, *, tolerance_m=.005):
                          'geometry_source': 'own_robot_visual_convex_hulls_only'}
 
 
+def segment_hits_self_hull(origin, target, hulls, *, endpoint_clearance_m=.01):
+    """Whether an own-link visual hull blocks a candidate camera-to-target ray.
+
+    Inputs share one frame, normally the candidate robot base frame. The small
+    endpoint clearance prevents a hull touching the selected surface from
+    counting as an occluder behind it; every earlier self hit is rejected.
+    """
+    origin = np.asarray(origin, dtype=np.float64)
+    target = np.asarray(target, dtype=np.float64)
+    if origin.shape != (3,) or target.shape != (3,) or not np.isfinite(origin).all() or not np.isfinite(target).all():
+        raise ValueError('Finite 3D camera ray required')
+    delta = target - origin
+    length = float(np.linalg.norm(delta))
+    if length <= endpoint_clearance_m:
+        return False
+    for hull in hulls:
+        lower, upper = 0., 1. - endpoint_clearance_m / length
+        for plane in hull.planes:
+            offset = float(plane[:3] @ origin + plane[3] - hull.tolerance_m)
+            slope = float(plane[:3] @ delta)
+            if abs(slope) < 1e-12:
+                if offset > 0:
+                    break
+            elif slope > 0:
+                upper = min(upper, -offset / slope)
+            else:
+                lower = max(lower, -offset / slope)
+            if lower > upper:
+                break
+        else:
+            return True
+    return False
+
+
 def mask_self_depth(frame: DepthFrame, hulls, *, pixel_stride=4):
     """Return a new immutable frame and private masking counts.
 

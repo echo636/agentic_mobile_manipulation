@@ -11,6 +11,8 @@ import socket
 import subprocess
 import sys
 import time
+import tomllib
+from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, build_opener
 
 
@@ -22,6 +24,18 @@ def health(url):
         return None
 
 
+def verify_experiment_provider(codex_home, profile, expected_host):
+    """Fail before simulator startup if the run would use another credential."""
+    home=Path(codex_home)
+    config=tomllib.loads((home/'config.toml').read_text())
+    provider=config.get('model_providers',{}).get(profile,{})
+    host=urlsplit(provider.get('base_url','')).hostname
+    auth=json.loads((home/'auth.json').read_text())
+    if host != expected_host or auth.get('auth_mode')!='apikey' or not auth.get('OPENAI_API_KEY'):
+        raise ValueError('The requested experiment provider and isolated API-key login are not configured')
+    return host
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--task', required=True)
@@ -30,12 +44,20 @@ def main():
     parser.add_argument('--omnigibson-source', type=Path, required=True)
     parser.add_argument('--provider-profile', required=True,
                         help='Name of an existing Codex model provider; no credentials are copied')
+    parser.add_argument('--codex-home', type=Path,
+                        help='Isolated Codex home containing the experiment provider and login')
+    parser.add_argument('--expected-provider-host',
+                        help='Reject another provider before loading the simulator')
     parser.add_argument('--instance', type=int, default=301)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--gpu', type=int, default=3)
     parser.add_argument('--appdata', type=Path, help='Existing OmniGibson cache for this GPU')
     parser.add_argument('--timeout', type=int, default=1500)
     args = parser.parse_args()
+    if args.expected_provider_host and args.codex_home is None:
+        parser.error('--expected-provider-host requires --codex-home')
+    provider_host=(verify_experiment_provider(args.codex_home,args.provider_profile,args.expected_provider_host)
+                   if args.expected_provider_host else None)
     source = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(source / 'src'))
     og = args.omnigibson_source.resolve()
@@ -47,6 +69,8 @@ def main():
         port = probe.getsockname()[1]
     url = f'http://127.0.0.1:{port}'
     environment = os.environ.copy()
+    if args.codex_home is not None:
+        environment['CODEX_HOME']=str(args.codex_home.resolve())
     environment['PYTHONPATH'] = os.pathsep.join((str(source / 'src'), str(og),
         str(og.parent / 'bddl3'), str(og.parent / 'joylo'), environment.get('PYTHONPATH', '')))
     environment.update(CUDA_VISIBLE_DEVICES=str(args.gpu), GAP_BEHAVIOR_GPU_ID=str(args.gpu),
@@ -102,6 +126,7 @@ def main():
         control = json.loads((controller / 'controller.json').read_text()) if (controller / 'controller.json').exists() else {}
         summary = {'task': args.task, 'instance': args.instance, 'seed': args.seed,
                    'model': 'gpt-6-astra', 'reasoning_effort': 'low',
+                   'provider_profile':args.provider_profile,'provider_host':provider_host,
                    'demo_motion': True, 'controller_exit_code': model_code,
                    'supervisor_failure_type': failure_type,
                    'formal_finish_observed': control.get('formal_finish_observed'),

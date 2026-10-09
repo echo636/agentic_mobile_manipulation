@@ -65,6 +65,7 @@ class GTBackendTests(unittest.TestCase):
         trav = SimpleNamespace(floor_heights=[0.], map_resolution=.1,
                                floor_map=[Tensor(occupancy)], _erode_trav_map=lambda x: x)
         b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav))
+        b._navigation_self_hulls = lambda: ((), {'hulls_prepared': 0})
         b._approach_visible = lambda xy, point, selected, **kwargs: xy[0] >= .5
         b._ground = Mock(return_value=(None, Tensor([1., 0., 0.]),
                                        {'object': 'PRIVATE_OBJECT', 'world_point': [1., 0., 0.]}))
