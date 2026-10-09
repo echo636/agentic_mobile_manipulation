@@ -108,7 +108,7 @@ class CheckedPlacement:
     def _checked_place_next_to(self, target, max_steps, point):
         """Search floor poses near the selected parent pixel; accept only official NextTo."""
         import math
-        from omnigibson.object_states import NextTo
+        from omnigibson.object_states import NextTo, OnTop
         from omnigibson.utils.sampling_utils import raytest
         held = self._get_held()
         if held is None:
@@ -118,10 +118,14 @@ class CheckedPlacement:
         if str(getattr(target,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
             raise SkillError('unsupported_relation', 'Select the visible tree or fixture itself for place_next_to')
         pose = held.get_position_orientation()
-        lo, _ = held.aabb
+        lo, hi = held.aabb
         bottom_offset = float(pose[0][2] - lo[2])
         ignored = [link.prim_path for obj in (held, target, self.robot)
                    for link in obj.links.values()]
+        supports = [obj for obj in self.env.scene.objects if any(
+            name in str(getattr(obj,'category','')).lower() for name in ('floor','lawn','ground'))]
+        support_by_link = {link.prim_path:obj for obj in supports
+                           for link in obj.links.values()}
         candidates = [(radius, angle) for radius in (.12, .22, .34, .48)
                       for angle in (0, 45, 90, 135, 180, 225, 270, 315)]
         with self._placement_context(target):
@@ -136,14 +140,24 @@ class CheckedPlacement:
                 start = self.torch.tensor([float(xy[0]), float(xy[1]), float(point[2]) + .6], device=point.device)
                 end = start.clone(); end[2] = min(float(point[2]) - 1.5, -.5)
                 hit = raytest(start, end, ignore_bodies=ignored)
-                if not hit['hit'] or float(hit['normal'][2]) < .9:
+                if (not hit['hit'] or float(hit['normal'][2]) < .9
+                        or hit.get('rigidBody') not in support_by_link):
                     continue
                 place = pose[0].clone(); place[:2] = xy
                 place[2] = hit['position'][2] + bottom_offset + .003
+                candidate_lo=lo+(place-pose[0]);candidate_hi=hi+(place-pose[0])
+                blocked=False
+                for other in self.env.scene.objects:
+                    if other in (held,target,self.robot) or other in supports or getattr(other,'fixed_base',True):
+                        continue
+                    other_lo,other_hi=other.aabb
+                    if bool(((candidate_hi>other_lo+.005)&(candidate_lo<other_hi-.005)).all()):
+                        blocked=True;break
+                if blocked:continue
                 held.set_position_orientation(place, pose[1]); held.keep_still()
                 self._relocate_contents(held, contents)
                 if held.states[NextTo].get_value(target):
-                    accepted = (radius, angle, place.clone())
+                    accepted = (radius, angle, place.clone(), support_by_link[hit['rigidBody']])
                     break
             if accepted is None:
                 raise SkillError('sampling_error', 'No supported floor pose satisfied NextTo near the selected parent point', changed=True)
@@ -155,6 +169,8 @@ class CheckedPlacement:
             self._relocate_contents(held, contents)
             if not held.states[NextTo].get_value(target):
                 raise SkillError('postcondition_error', 'Object is no longer next to the selected target', changed=True)
+            if OnTop not in held.states or not held.states[OnTop].get_value(accepted[3]):
+                raise SkillError('postcondition_error','NextTo placement is not supported by the sampled floor or lawn',changed=True)
             self._verify_payload(dependencies)
             self._placement_record({'status': 'next_to_verified', 'target': target.name,
                                     'held': held.name, 'radius_m': accepted[0], 'angle_deg': accepted[1]})

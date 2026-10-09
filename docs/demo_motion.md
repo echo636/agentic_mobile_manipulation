@@ -304,3 +304,15 @@ movable item, and verifies official `OnTop` for the sampled floor after
 settling. A separate diagnostic placed two traps at distinct points under the
 same sink, with both `Under=true` and `OnTop` the same floor. This diagnostic
 does not count as a model task success; a new Astra low trial must be audited.
+
+The first Easter-egg retry r8 showed that a model can select `place_next_to`
+but accidentally mark lawn rather than the tree. Its sampler spent time
+searching around the wrong parent and failed; a later tree pixel was beyond
+the current navigable approach. The action now rejects lawn/floor as the
+selected parent immediately, and the skill tells the model to navigate toward
+visible ground near a tree before reselecting its body. The NextTo placement
+sampler also requires an actual floor/lawn support ray, avoids overlap with
+other movable items, and verifies official `OnTop` for that support after
+settling. A privileged single-egg probe at the tree pixel from r8 produced
+both `NextTo(tree)=true` and `OnTop(lawn)=true`. This is a geometric check,
+not an autonomous model task pass.
