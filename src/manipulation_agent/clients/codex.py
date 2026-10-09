@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import re
 import tomllib
+from uuid import UUID
 from ipaddress import ip_address, AddressValueError
 from urllib.parse import urlsplit
 
@@ -15,6 +16,31 @@ from ..deadline import tool_wait_seconds
 
 class CodexAdapter(ClientAdapter):
     name = "codex"
+
+    def prepare_resume(self, project, thread_id, prompt):
+        """Resume one recorded Codex thread against the same MCP episode."""
+        UUID(thread_id)
+        if project.mcp_prefix or project.argv[:2] != ['codex', 'exec']:
+            raise ValueError('This Codex resume path requires an unwrapped exec project')
+        command = ['codex', 'exec', 'resume']
+        workspace = project.cwd
+        args = project.argv[2:]
+        index = 0
+        while index < len(args):
+            flag = args[index]
+            if flag == '--cd':
+                workspace = Path(args[index + 1])
+                index += 2
+            elif flag == '--sandbox':
+                command += ['-c', 'sandbox_mode=' + json.dumps(args[index + 1])]
+                index += 2
+            elif flag == '-':
+                index += 1
+            else:
+                command.append(flag)
+                index += 1
+        command += [thread_id, '-']
+        return PreparedProject(command, workspace, prompt, env_overlay=project.env_overlay)
 
     def prepare_project(self, config, instructions, tool_names):
         workspace = config.output / "empty_workspace"

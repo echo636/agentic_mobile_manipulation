@@ -76,6 +76,27 @@ command = "ignored"
             self.assertIn('model_providers.example.base_url="https://example.invalid/v1"', configs)
             self.assertFalse(any('unrelated' in value for value in configs))
 
+    def test_codex_resume_keeps_model_tool_boundary_and_workspace(self):
+        with tempfile.TemporaryDirectory() as folder:
+            adapter = get_adapter('codex')
+            original = adapter.prepare_project(
+                self.config(Path(folder), reasoning_effort='low'),
+                'Task-only policy', ['initialize', 'look', 'act', 'finish'])
+            thread_id = '01a12027-d1b5-7c40-a929-4936344a9ad5'
+            resumed = adapter.prepare_resume(original, thread_id, 'Continue from RGB.')
+            self.assertEqual(resumed.argv[:3], ['codex', 'exec', 'resume'])
+            self.assertEqual(resumed.argv[-2:], [thread_id, '-'])
+            self.assertEqual(resumed.cwd, Path(folder, 'empty_workspace'))
+            self.assertEqual(resumed.stdin, 'Continue from RGB.')
+            self.assertNotIn('--cd', resumed.argv)
+            self.assertNotIn('--sandbox', resumed.argv)
+            self.assertIn('sandbox_mode="read-only"', resumed.argv)
+            self.assertIn('model_reasoning_effort="low"', resumed.argv)
+            self.assertIn('mcp_servers.manipulation.enabled_tools=["initialize", "look", "act", "finish"]',
+                          resumed.argv)
+            for feature in ('shell_tool', 'plugins', 'multi_agent'):
+                self.assertIn(feature, resumed.argv)
+
     def test_codex_accepts_private_http_provider_without_url_credentials(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'CODEX_HOME': folder}):
             config_file = Path(folder, 'config.toml')

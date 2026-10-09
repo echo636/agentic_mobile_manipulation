@@ -25,6 +25,17 @@ from manipulation_agent.mcp_preflight import check_server
 from manipulation_agent.deadline import EpisodeDeadline, validate_execution_clock
 
 
+def rate_limit_error(events):
+    return any(event.get('type') in {'error', 'turn.failed'} and
+               '429 Too Many Requests' in str(event.get('message') or event.get('error') or '')
+               for event in events)
+
+
+def codex_thread_id(events):
+    return next((event.get('thread_id') for event in events
+                 if event.get('type') == 'thread.started' and event.get('thread_id')), None)
+
+
 def main(argv=None, *, allow_client=False):
     argv = list(sys.argv[1:] if argv is None else argv)
     probing = allow_client and '--probe' in argv
@@ -48,6 +59,9 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
+    p.add_argument('--rate-limit-resumes', type=int, default=0,
+                   help='Resume the same Codex session after a provider 429, retaining its MCP episode')
+    p.add_argument('--resume-backoff-seconds', type=int, default=90)
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
     adapter = get_adapter(client)
@@ -58,6 +72,10 @@ def main(argv=None, *, allow_client=False):
     deadline=(EpisodeDeadline() if args.execution_clock_command_json is not None else
               EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env())
     if args.timeout<=0:p.error('--timeout must be positive')
+    if args.rate_limit_resumes < 0 or args.resume_backoff_seconds < 1:
+        p.error('Rate-limit resume count must be nonnegative and backoff positive')
+    if args.rate_limit_resumes and client != 'codex':
+        p.error('Rate-limit resume is supported only for Codex')
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
@@ -145,7 +163,45 @@ def main(argv=None, *, allow_client=False):
     def on_start(pid):
         metadata['pid'] = pid
         write_json(args.output / 'controller.json', metadata)
+    policy_started_monotonic=time.monotonic()
     process = adapter.run(project, args.output, deadline.remaining(args.timeout), on_start)
+    raw_events=args.output/'model_events.jsonl'
+    first_events=adapter.parse(raw_events).raw_events
+    thread_id=codex_thread_id(first_events) if client == 'codex' else None
+    segment_events=first_events
+    continuations=[]
+    for attempt in range(1,args.rate_limit_resumes+1):
+        remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
+        if (process.returncode == 0 or process.timed_out or not thread_id or
+                not rate_limit_error(segment_events) or
+                remaining <= args.resume_backoff_seconds+30):
+            break
+        time.sleep(args.resume_backoff_seconds)
+        remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
+        if remaining <= 30:
+            break
+        segment_dir=args.output/'continuations'/str(attempt)
+        segment_dir.mkdir(parents=True,exist_ok=False)
+        resume_prompt=('Continue the same robot task in the same simulator episode. '
+                       'A temporary model service rate limit interrupted the previous turn. '
+                       'Use the prior conversation and current RGB tool feedback; continue choosing '
+                       'actions yourself, then call finish. Do not restart the task or claim success '
+                       'without visual evidence.')
+        resume_project=adapter.prepare_resume(project,thread_id,resume_prompt)
+        resumed=adapter.run(resume_project,segment_dir,remaining,on_start)
+        segment_path=segment_dir/'model_events.jsonl'
+        segment_events=adapter.parse(segment_path).raw_events
+        with raw_events.open('ab') as combined,segment_path.open('rb') as segment:
+            combined.write(segment.read())
+        continuations.append({'attempt':attempt,'thread_id':thread_id,
+                              'returncode':resumed.returncode,'timed_out':resumed.timed_out,
+                              'raw_events':str(segment_path.relative_to(args.output))})
+        process.returncode=resumed.returncode
+        process.timed_out=process.timed_out or resumed.timed_out
+        process.policy_finished_at_unix=resumed.policy_finished_at_unix
+        process.duration_seconds=time.monotonic()-policy_started_monotonic
+    if continuations:
+        metadata['rate_limit_continuations']=continuations
     policy_finished_at = process.policy_finished_at_unix
     if process.timed_out:
         metadata['timeout'] = True

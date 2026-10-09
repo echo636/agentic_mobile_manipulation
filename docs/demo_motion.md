@@ -134,3 +134,13 @@ publisher reuses unchanged media exports so periodic updates do not copy the
 same video and frame directory repeatedly. The public index includes both
 reviewed attempts and pre-model infrastructure failures, with attempt numbers
 and separate evidence links.
+
+Long model turns can hit provider HTTP 429 even with one task at a time. New
+demo trials may use `--rate-limit-resumes 3` in the controller. After a 120 s
+backoff, the installed Codex CLI resumes the **same recorded thread** against
+the **same live MCP bridge and simulator episode**, preserving the original
+model, `low` effort, tool allowlist, sandbox and login. Each continuation has
+its own raw event and stderr files; the combined model stream is used for
+ordered call alignment and formal-finish validation. A continuation is part
+of the same attempt, not a fresh policy trial. If the rate limit persists or
+the episode budget expires, the attempt still fails and is preserved.
