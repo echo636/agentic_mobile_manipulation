@@ -27,7 +27,7 @@ class CheckedPlacement:
 
     def _checked_place_under(self, target, max_steps):
         """Place the carried item under the model-selected parent using OG's Under sampler."""
-        from omnigibson.object_states import Under
+        from omnigibson.object_states import OnTop, Under
         from omnigibson.utils.sampling_utils import raytest
         held = self._get_held()
         if held is None:
@@ -38,11 +38,12 @@ class CheckedPlacement:
             contents = list(self._carry_contents) if self.ideal_carry else []
             dependencies = list(getattr(self, '_carry_dependencies', []))
             pose = held.get_position_orientation()
-            lo, _ = held.aabb
+            lo, hi = held.aabb
             bottom_offset = float(pose[0][2] - lo[2])
             self._carry_detach()
             sampled = held.states[Under].set_value(target, True, use_trav_map=False)
             method = 'official_Under_sampler'
+            support_floor = None
             if not sampled:
                 # The upstream sampler can reject a reachable floor patch
                 # under low furniture. Search only within the selected
@@ -50,19 +51,37 @@ class CheckedPlacement:
                 target_lo, target_hi = target.aabb
                 ignored = [link.prim_path for obj in (held, target, self.robot)
                            for link in obj.links.values()]
+                floors = [obj for obj in self.env.scene.objects
+                          if 'floor' in str(getattr(obj,'category','')).lower()]
+                floor_by_link = {link.prim_path:floor for floor in floors
+                                 for link in floor.links.values()}
                 for fx, fy in ((.5,.5),(.25,.5),(.75,.5),(.5,.25),(.5,.75),
                                (.25,.25),(.75,.25),(.25,.75),(.75,.75)):
                     xy = target_lo[:2] + (target_hi[:2]-target_lo[:2]) * self.torch.tensor([fx,fy], device=target_lo.device)
                     start = self.torch.tensor([float(xy[0]),float(xy[1]),float(target_hi[2])+.3],device=xy.device)
                     end = start.clone();end[2] = min(float(target_lo[2])-1.5,-.5)
                     hit = raytest(start,end,ignore_bodies=ignored)
-                    if not hit['hit'] or float(hit['normal'][2]) < .9:
+                    if (not hit['hit'] or float(hit['normal'][2]) < .9
+                            or hit.get('rigidBody') not in floor_by_link):
                         continue
                     place=pose[0].clone();place[:2]=xy;place[2]=hit['position'][2]+bottom_offset+.003
+                    # Reject a second item occupying the first item's space,
+                    # even if the center ray happened to reach the floor.
+                    candidate_lo=lo+(place-pose[0])
+                    candidate_hi=hi+(place-pose[0])
+                    blocked=False
+                    for other in self.env.scene.objects:
+                        if other in (held,target,self.robot) or other in floors or getattr(other,'fixed_base',True):
+                            continue
+                        other_lo,other_hi=other.aabb
+                        if bool(((candidate_hi>other_lo+.005)&(candidate_lo<other_hi-.005)).all()):
+                            blocked=True;break
+                    if blocked:continue
                     held.set_position_orientation(place,pose[1]);held.keep_still()
                     self._relocate_contents(held,contents)
                     if held.states[Under].get_value(target):
                         sampled=True;method='verified_floor_pose_under_selected_parent'
+                        support_floor=floor_by_link[hit['rigidBody']]
                         break
             if not sampled:
                 raise SkillError('sampling_error', 'No supported pose satisfied Under for the selected parent', changed=True)
@@ -78,6 +97,9 @@ class CheckedPlacement:
                 self._relocate_contents(held,contents)
             if not held.states[Under].get_value(target):
                 raise SkillError('postcondition_error', 'Object is no longer under the selected target', changed=True)
+            if support_floor is not None and (OnTop not in held.states or
+                    not held.states[OnTop].get_value(support_floor)):
+                raise SkillError('postcondition_error','Under placement is not supported by the sampled floor',changed=True)
             self._verify_payload(dependencies)
         self.frames_revision = -1
         return {'primitive': 'place_under', 'implementation': method,

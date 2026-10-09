@@ -271,6 +271,7 @@ had tipped during later navigation; subsequent placement returned
 video and visible-motion checks passed, while the official task check failed.
 This is a new scene-stability problem rather than a pass for the three-can
 task.
+
 The later selected RGB ray hit the can being carried instead of the bin, and
 the next successful bin ray was about 27 cm away from its first placement ray.
 This supports the model's report that the movable bin shifted. The ideal
@@ -291,3 +292,15 @@ floor, but fewer than two met `Under` or `NextTo` for the same sink. Both new
 actions preserve the model's choice of target and require independent
 whole-task evaluation. Their later model trials are separate from these r7
 diagnoses; no success is inferred from adding the actions.
+
+In the full mousetrap r10 model trial, the model selected the same bathroom
+sink twice and both `place_under` calls passed official `Under` checks. The
+formal task evaluation still failed one of the four `OnTop` floor literals.
+A privileged two-trap diagnostic reproduced the cause: the fallback sampler
+placed both traps at the same XY point, stacking the second about 17 mm higher.
+The first was `OnTop` the bathroom floor; the second was not. The fallback now
+requires its ray to hit an actual floor link, skips poses overlapping another
+movable item, and verifies official `OnTop` for the sampled floor after
+settling. A separate diagnostic placed two traps at distinct points under the
+same sink, with both `Under=true` and `OnTop` the same floor. This diagnostic
+does not count as a model task success; a new Astra low trial must be audited.
