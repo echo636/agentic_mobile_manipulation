@@ -52,7 +52,7 @@ def main():
     environment.update(CUDA_VISIBLE_DEVICES=str(args.gpu), GAP_BEHAVIOR_GPU_ID=str(args.gpu),
         OMNIGIBSON_DATA_PATH=str(og.parent / 'datasets'),
         OMNIGIBSON_APPDATA_PATH=str((args.appdata or root.parent / f'appdata_gpu{args.gpu}').resolve()),
-        MAS_DEMO_MOTION='1', MAS_VIDEO_RENDER_STRIDE='2')
+        MAS_DEMO_MOTION='1', MAS_VIDEO_RENDER_STRIDE='3')
     Path(environment['OMNIGIBSON_APPDATA_PATH']).mkdir(parents=True, exist_ok=True)
     simulator_command = [sys.executable, '-m', 'manipulation_agent.vision_cli',
         '--backend', 'omnigibson', '--policy', 'serve', '--agent-profile', 'skills',

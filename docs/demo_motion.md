@@ -65,3 +65,50 @@ reduced the error to about 0.00001 m before the stroke. The independent task
 evaluator and continuous five-view video both passed. The review pages are
 linked from the internal index above. The visible chair interaction and
 idealized contact are still qualitative limitations of this demo mode.
+
+## First-ten public-task cohort
+
+The next demo cohort uses the first ten entries, in insertion order, of the
+pinned `src/manipulation_agent/tasks.json` catalog: `turning_on_radio`,
+`picking_up_trash`, `putting_away_Halloween_decorations`,
+`cleaning_up_plates_and_food`, `can_meat`, `setting_mousetraps`,
+`hiding_Easter_eggs`, `picking_up_toys`, `rearranging_kitchen_furniture`, and
+`putting_up_Christmas_decorations_inside`. Each uses public instance 301,
+seed 0, the catalog's public instruction, the skills MCP profile, and
+`gpt-6-astra` at `low` effort. The model selects every `act` action and RGB
+pixel. The private executor may use depth, selected-surface geometry, joint
+state/Jacobians, traversability and checked object-state setters; none of those
+are supplied to the model. No scripted object handles or BDDL goal assignments
+are used as action targets. Attempt directories are immutable; failures stay
+visible in the cohort denominator.
+
+`scripts/run_demo_first10.py` schedules these tasks across the declared GPU
+slots but serializes model trials because the configured provider returned
+HTTP 429 under concurrent requests. It calls `scripts/audit_demo_trial.py` and `scripts/build_review.py` for
+each completed attempt. The generic audit requires at least one model-selected
+and successfully executed manipulation action, in addition to formal finish,
+ordered model/simulator call alignment, official whole-task success, passed
+video, and recorded visible joint motion. Multi-object tasks must pass their
+whole official goal; a partial sequence does not count. The recorded motion is
+genuine simulator stepping, while object contact and goal-state changes remain
+idealized and are labeled as such in the replay.
+
+The first launch used the 1500-second controller limit and two-step video
+render stride. The radio passed. The trash task reached the controller limit
+with partial progress; Halloween, plates/food and mousetraps were interrupted
+by provider HTTP 429 after recording partial model actions. A proposed
+four-step stride failed the adapter's explicit 1–3 contract before model
+startup for the remaining five tasks; those empty attempts are retained as
+infrastructure failures. Subsequent attempts use valid stride 3, a 3600-second
+controller limit, and serialized provider calls. `--attempt 2 --retry-failures`
+selects only tasks without an earlier passing audit. Audit pages and raw runs
+must retain their distinct attempt numbers; a later pass does not erase a
+prior failure.
+
+The first serialized retry exposed a scheduler race: `Popen` returned before
+the new trial directory existed, so the initial directory-only busy check
+briefly launched the other retries. They were stopped before model startup,
+with their attempt directories retained. The scheduler now regards a live
+child process as busy immediately; a CPU regression test covers this exact
+race and restart from an incomplete directory. Later retries use another
+attempt number after the continuing trash trial finishes.

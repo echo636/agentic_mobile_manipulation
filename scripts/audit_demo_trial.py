@@ -33,7 +33,8 @@ def calls_align(model, simulator):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('trial', type=Path)
-    parser.add_argument('--primitive', required=True)
+    parser.add_argument('--primitive', help='Require this specific model-selected and executed action; '
+                        'otherwise require at least one successful manipulation action')
     args = parser.parse_args()
     root = args.trial.resolve()
     run_dir, controller_dir = root / 'run', root / 'controller'
@@ -41,21 +42,24 @@ def main():
     controller = json.loads((controller_dir / 'controller.json').read_text())
     summary = json.loads((root / 'summary.json').read_text())
     events = jsonl(run_dir / 'events.jsonl')
-    model = model_calls(jsonl(controller_dir / 'model_events.jsonl'))
+    model_events = jsonl(controller_dir / 'model_events.jsonl')
+    model = model_calls(model_events)
     simulator = [(event['name'], event.get('arguments') or {}) for event in events
                  if event.get('kind') == 'tool_call']
     acts = [arguments.get('primitive') for name, arguments in model if name == 'act']
     effects = [event.get('result') or {} for event in events
                if event.get('kind') == 'tool_result' and event.get('name') == 'act']
     motion = jsonl(run_dir / 'demo_motion.jsonl')
+    non_manipulation = {'navigate_to', 'look', 'wait', 'release'}
+    selected = [primitive for primitive in acts if primitive not in non_manipulation]
+    executed = [(effect.get('effect') or {}).get('primitive') for effect in effects if effect.get('ok')]
     checks = {
         'model_controller_passed': controller.get('status') == 'passed'
                                    and controller.get('formal_finish_observed') is True,
         'model_simulator_calls_align': calls_align(model, simulator),
-        'target_action_selected_by_model': args.primitive in acts,
-        'target_action_executed': any(effect.get('ok') and
-                                      (effect.get('effect') or {}).get('primitive') == args.primitive
-                                      for effect in effects),
+        'target_action_selected_by_model': (args.primitive in acts if args.primitive else bool(selected)),
+        'target_action_executed': (args.primitive in executed if args.primitive else
+                                   any(primitive in executed for primitive in selected)),
         'official_task_success': (run.get('evaluation') or {}).get('official_task_success') is True,
         'video_passed': (run.get('video') or {}).get('status') == 'passed',
         'visible_motion_recorded': any(row.get('status') == 'shown' for row in motion),
@@ -68,7 +72,7 @@ def main():
         subprocess.run(replay, cwd=source, check=True)
         subprocess.run([sys.executable, str(source / 'scripts/build_review.py'), str(run_dir),
                         '--controller-dir', str(controller_dir),
-                        '--label', f'Visible demo · {args.primitive} · {run["config"]["task"]}'],
+                        '--label', f'Visible demo · {args.primitive or "autonomous actions"} · {run["config"]["task"]}'],
                        cwd=source, check=True)
     report = {'task': run['config']['task'], 'instance': run['config'].get('instance'),
               'seed': run['config'].get('seed'), 'primitive': args.primitive,
@@ -77,6 +81,9 @@ def main():
               'demo_motion': (run.get('evaluation') or {}).get('demo_motion'),
               'checks': checks, 'passed': all(checks.values()),
               'model_act_sequence': acts,
+              'failure_category': ('provider_rate_limit_429' if any(
+                  '429 Too Many Requests' in str(event.get('message') or event.get('error') or '')
+                  for event in model_events) else None),
               'motion_segments': sum(row.get('status') in {'shown', 'partial_reach'} for row in motion),
               'review_page': str(run_dir / 'review_5view.html') if checks['video_passed'] else None}
     (root / 'demo_audit.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
