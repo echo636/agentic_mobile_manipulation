@@ -42,7 +42,8 @@ def camera_mount(direction, height, radius=0.35, pitch_degrees=20):
     return [radius*c, radius*s, height], rotation
 
 
-def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04, radius=.35):
+def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04, radius=.35,
+                     pitch_degrees=20):
     """Candidate camera rays inside the real square 90-degree RGB frusta.
 
     Uses the same four mount transforms as capture. Does not read scene truth,
@@ -52,7 +53,8 @@ def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04, radius=.35):
     rotation=((c,-s,0.),(s,c,0.),(0.,0.,1.))
     rays=[]
     for direction in DIRECTIONS:
-        offset,basis=camera_mount(direction,height,radius=radius)
+        offset,basis=camera_mount(direction,height,radius=radius,
+                                  pitch_degrees=pitch_degrees)
         origin=[sum(rotation[i][j]*offset[j] for j in range(3))+(*xy,base_z)[i] for i in range(3)]
         world_basis=[[sum(rotation[i][k]*basis[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
         delta=[p-o for p,o in zip(point,origin)]
