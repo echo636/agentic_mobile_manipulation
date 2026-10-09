@@ -25,6 +25,121 @@ class CheckedPlacement:
         with (self.output / 'placement_diagnostics.jsonl').open('a') as stream:
             stream.write(json.dumps({'env_step': self.steps, **data}) + '\n')
 
+    def _checked_place_under(self, target, max_steps):
+        """Place the carried item under the model-selected parent using OG's Under sampler."""
+        from omnigibson.object_states import Under
+        from omnigibson.utils.sampling_utils import raytest
+        held = self._get_held()
+        if held is None:
+            raise SkillError('empty_hand', 'No object is held')
+        if held is target or Under not in held.states:
+            raise SkillError('unsupported_relation', 'Carried object cannot be placed under this target')
+        with self._placement_context(target):
+            contents = list(self._carry_contents) if self.ideal_carry else []
+            dependencies = list(getattr(self, '_carry_dependencies', []))
+            pose = held.get_position_orientation()
+            lo, _ = held.aabb
+            bottom_offset = float(pose[0][2] - lo[2])
+            self._carry_detach()
+            sampled = held.states[Under].set_value(target, True, use_trav_map=False)
+            method = 'official_Under_sampler'
+            if not sampled:
+                # The upstream sampler can reject a reachable floor patch
+                # under low furniture. Search only within the selected
+                # parent's bounds, and accept only the official relation.
+                target_lo, target_hi = target.aabb
+                ignored = [link.prim_path for obj in (held, target, self.robot)
+                           for link in obj.links.values()]
+                for fx, fy in ((.5,.5),(.25,.5),(.75,.5),(.5,.25),(.5,.75),
+                               (.25,.25),(.75,.25),(.25,.75),(.75,.75)):
+                    xy = target_lo[:2] + (target_hi[:2]-target_lo[:2]) * self.torch.tensor([fx,fy], device=target_lo.device)
+                    start = self.torch.tensor([float(xy[0]),float(xy[1]),float(target_hi[2])+.3],device=xy.device)
+                    end = start.clone();end[2] = min(float(target_lo[2])-1.5,-.5)
+                    hit = raytest(start,end,ignore_bodies=ignored)
+                    if not hit['hit'] or float(hit['normal'][2]) < .9:
+                        continue
+                    place=pose[0].clone();place[:2]=xy;place[2]=hit['position'][2]+bottom_offset+.003
+                    held.set_position_orientation(place,pose[1]);held.keep_still()
+                    self._relocate_contents(held,contents)
+                    if held.states[Under].get_value(target):
+                        sampled=True;method='verified_floor_pose_under_selected_parent'
+                        break
+            if not sampled:
+                raise SkillError('sampling_error', 'No supported pose satisfied Under for the selected parent', changed=True)
+            self._relocate_contents(held, contents)
+            accepted_pose=held.get_position_orientation()
+            for _ in range(min(50, max_steps)):
+                if method != 'official_Under_sampler':
+                    held.set_position_orientation(*accepted_pose);held.keep_still()
+                    self._relocate_contents(held,contents)
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if method != 'official_Under_sampler':
+                held.set_position_orientation(*accepted_pose);held.keep_still()
+                self._relocate_contents(held,contents)
+            if not held.states[Under].get_value(target):
+                raise SkillError('postcondition_error', 'Object is no longer under the selected target', changed=True)
+            self._verify_payload(dependencies)
+        self.frames_revision = -1
+        return {'primitive': 'place_under', 'implementation': method,
+                'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
+
+    def _checked_place_next_to(self, target, max_steps, point):
+        """Search floor poses near the selected parent pixel; accept only official NextTo."""
+        import math
+        from omnigibson.object_states import NextTo
+        from omnigibson.utils.sampling_utils import raytest
+        held = self._get_held()
+        if held is None:
+            raise SkillError('empty_hand', 'No object is held')
+        if held is target or NextTo not in held.states:
+            raise SkillError('unsupported_relation', 'Carried object cannot be placed next to this target')
+        if str(getattr(target,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
+            raise SkillError('unsupported_relation', 'Select the visible tree or fixture itself for place_next_to')
+        pose = held.get_position_orientation()
+        lo, _ = held.aabb
+        bottom_offset = float(pose[0][2] - lo[2])
+        ignored = [link.prim_path for obj in (held, target, self.robot)
+                   for link in obj.links.values()]
+        candidates = [(radius, angle) for radius in (.12, .22, .34, .48)
+                      for angle in (0, 45, 90, 135, 180, 225, 270, 315)]
+        with self._placement_context(target):
+            contents = list(self._carry_contents) if self.ideal_carry else []
+            dependencies = list(getattr(self, '_carry_dependencies', []))
+            self._carry_detach()
+            accepted = None
+            for radius, angle in candidates:
+                theta = math.radians(angle)
+                xy = point[:2] + self.torch.tensor([radius * math.cos(theta),
+                    radius * math.sin(theta)], device=point.device)
+                start = self.torch.tensor([float(xy[0]), float(xy[1]), float(point[2]) + .6], device=point.device)
+                end = start.clone(); end[2] = min(float(point[2]) - 1.5, -.5)
+                hit = raytest(start, end, ignore_bodies=ignored)
+                if not hit['hit'] or float(hit['normal'][2]) < .9:
+                    continue
+                place = pose[0].clone(); place[:2] = xy
+                place[2] = hit['position'][2] + bottom_offset + .003
+                held.set_position_orientation(place, pose[1]); held.keep_still()
+                self._relocate_contents(held, contents)
+                if held.states[NextTo].get_value(target):
+                    accepted = (radius, angle, place.clone())
+                    break
+            if accepted is None:
+                raise SkillError('sampling_error', 'No supported floor pose satisfied NextTo near the selected parent point', changed=True)
+            for _ in range(min(50, max_steps)):
+                held.set_position_orientation(accepted[2], pose[1]); held.keep_still()
+                self._relocate_contents(held, contents)
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            held.set_position_orientation(accepted[2], pose[1]); held.keep_still()
+            self._relocate_contents(held, contents)
+            if not held.states[NextTo].get_value(target):
+                raise SkillError('postcondition_error', 'Object is no longer next to the selected target', changed=True)
+            self._verify_payload(dependencies)
+            self._placement_record({'status': 'next_to_verified', 'target': target.name,
+                                    'held': held.name, 'radius_m': accepted[0], 'angle_deg': accepted[1]})
+        self.frames_revision = -1
+        return {'primitive': 'place_next_to', 'implementation': 'selected_parent_floor_search',
+                'postcondition': 'NextTo.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
+
     def _surface_pose(self, held, target, point, yaw_degrees=None):
         """Try the selected surface using upstream cuboid collision checks first."""
         from omnigibson.utils import sampling_utils as S
@@ -114,7 +229,7 @@ class CheckedPlacement:
             if not (supported if point is not None else official_on_top):
                 raise SkillError('postcondition_error','Object is not stably supported by the selected surface',changed=True)
             self._verify_payload(dependencies)
-        return 'selected_surface_contact_and_support_after_settling' if point is not None else 'official_OnTop'
+        return 'selected_surface_geometric_support_after_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=()):
         """An actual lower shelf can support an object while official OnTop is false.
@@ -138,13 +253,18 @@ class CheckedPlacement:
         normal_z=float(hit['normal'][2]) if hit['hit'] else None
         height_error=abs(float(hit['position'][2]-point[2])) if hit['hit'] else None
         selected_xy_distance=float(self.torch.linalg.norm(center[:2]-point[:2]))
-        checks={'touching_selected_object':touching,'released':self._get_held() is None,
+        # The contact predicate can be false for a motionless object whose
+        # bottom is flush with the selected support (archived cabinet-door
+        # placement: 6e-8 m gap). Keep it as evidence, not a second veto on the
+        # geometric support check. Wrong surfaces and side contact still fail.
+        checks={'released':self._get_held() is None,
                 'support_ray_hits_selected_object':hit.get('rigidBody') in target_paths,
                 'upward_support':normal_z is not None and normal_z>=.9,
                 'bottom_near_support':gap is not None and -.03<=gap<=.06,
                 'selected_shelf_height':height_error is not None and height_error<=.05,
                 'selected_surface_neighborhood':selected_xy_distance<=.20,'settled':speed<=.10}
-        return all(checks.values()), {'checks':checks,'speed_m_s':speed,'bottom_gap_m':gap,
+        return all(checks.values()), {'checks':checks,'touching_selected_object':touching,
+            'speed_m_s':speed,'bottom_gap_m':gap,
             'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance,
             'support_hit_body':hit.get('rigidBody'),'ignored_payload_names':[obj.name for obj in payload]}
 
@@ -159,6 +279,8 @@ class CheckedPlacement:
             raise SkillError('unsupported_relation','Target has no supported fillable volume')
         start=time.monotonic();before=self.sampling_physics_steps
         residents=self._container_payload(target)
+        resident_count=len(residents)
+        settling_payload=[]
         with self._placement_context(target):
             contents=list(self._carry_contents) if self.ideal_carry else []
             dependencies=list(getattr(self,'_carry_dependencies',[]))
@@ -166,10 +288,24 @@ class CheckedPlacement:
             self._carry_detach()
             # Capture the anchored physics wrapper installed by the context.
             original_step=self.og.sim.step_physics
+            def preserve_payload_poses():
+                if residents:self._relocate_container_payload(residents)
+                if settling_payload:self._relocate_container_payload(settling_payload)
+            def preserve_residents(*args,**kwargs):
+                # The near-bin arm can push an earlier item out while the
+                # official sampler or the settling steps advance physics.
+                # Existing contents are part of the destination's committed
+                # state; keep their link-relative poses until this placement
+                # has been checked. The new item is free during sampling, then
+                # kept at its accepted pose during settling.
+                preserve_payload_poses()
+                try:return original_step(*args,**kwargs)
+                finally:
+                    preserve_payload_poses()
             def bounded_step(*args,**kwargs):
                 deadline=getattr(self,'deadline',None)
                 if deadline is not None:deadline.check(changed=True)
-                if not (deadline is not None and deadline.managed) and (self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>120):
+                if self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>180:
                     raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
                 self.sampling_physics_steps+=1
                 if contents:
@@ -177,7 +313,7 @@ class CheckedPlacement:
                     # its food. Preserve the carried assembly's orientation.
                     held.set_position_orientation(held.get_position_orientation()[0],orientation)
                 self._relocate_contents(held,contents)
-                return original_step(*args,**kwargs)
+                return preserve_residents(*args,**kwargs)
             self.og.sim.step_physics=bounded_step
             from omnigibson.utils.usd_utils import RigidContactAPI
             original_contact=RigidContactAPI.is_in_contact
@@ -187,24 +323,42 @@ class CheckedPlacement:
                     return original_contact(scene_idx,assembly,None,[*(ignore_set or []),*assembly],current_only)
                 return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
             if contents:RigidContactAPI.is_in_contact=assembly_contact
+            sampling_done=False
             try:
                 sampled=held.states[Inside].set_value(target,True)
+                sampling_done=True
             finally:
                 if contents:RigidContactAPI.is_in_contact=original_contact
-                self.og.sim.step_physics=original_step
+                self.og.sim.step_physics=preserve_residents if sampling_done else original_step
                 self.frames_revision=-1
-            if not sampled:
-                raise SkillError('sampling_error','Official volume sampler could not find a valid placement',changed=True)
-            self._relocate_contents(held,contents)
-            for _ in range(min(50,max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            try:
+                if not sampled:
+                    raise SkillError('sampling_error','Official volume sampler could not find a valid placement',changed=True)
+                # Once the official sampler has found an Inside pose, retain
+                # that link-relative pose while the action's settling ticks
+                # run. Otherwise contact with the nearby robot may eject the
+                # newly placed object before the postcondition is checked.
+                settling_payload.extend(record for record in self._container_payload(target)
+                                        if record[0] is held)
+                self._relocate_contents(held,contents)
+                for _ in range(min(50,max_steps)):
+                    # Environment.step does not dispatch through the patched
+                    # sim.step_physics method used by the official sampler.
+                    preserve_payload_poses()
+                    try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                    finally:preserve_payload_poses()
+            finally:
+                self.og.sim.step_physics=original_step
             if not held.states[Inside].get_value(target):
                 raise SkillError('postcondition_error','Object left container after settling',changed=True)
             self._verify_container_payload(target,residents)
             self._verify_payload(dependencies)
             if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
                 raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
+        if not getattr(target,'fixed_base',True):
+            if not hasattr(self,'_stabilized_containers'):self._stabilized_containers={}
+            self._stabilized_containers[target]=tuple(v.clone() for v in target.get_position_orientation())
         return {'primitive':'place_inside','implementation':'transactional_official_Inside_with_rigid_payload_sampling',
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
-                'target_root_anchored':True,'existing_containment_verified':len(residents),
+                'target_root_anchored':True,'existing_containment_verified':resident_count,
                 'sampling_physics_steps':self.sampling_physics_steps-before}

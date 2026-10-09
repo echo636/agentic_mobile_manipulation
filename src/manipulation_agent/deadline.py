@@ -11,10 +11,14 @@ from pathlib import Path
 import tempfile
 import threading
 import time
+import sys
 
 from .contracts import SkillError
 
 FINISH_GRACE_SECONDS = 120
+# OmniGibson and executor APIs require an integer step limit. Managed episodes
+# use their wall-clock deadline; this sentinel disables a second episode cutoff.
+DEADLINE_STEP_SENTINEL = sys.maxsize
 
 
 def tool_wait_seconds(execution_seconds):

@@ -26,10 +26,12 @@ def query_visual_surface(backend, start, direction):
     point for actuation; this query supplies only the simulator object handle.
     Local rigid meshes are cached, with live transforms for moving links. Cloth
     uses its current vertices. Bounds come from visual geometry, not collision
-    AABBs. Robot geometry participates
+    AABBs. USD guide geometry (including container fill volumes) is excluded
+    even when its visibility is inherited. Robot geometry participates
     so selecting the robot cannot silently select an occluded object behind it.
     """
     import numpy as np
+    import omnigibson.lazy as lazy
     from omnigibson.utils.usd_utils import mesh_prim_to_trimesh_mesh
 
     origin = start.cpu().numpy()
@@ -43,6 +45,7 @@ def query_visual_surface(backend, start, direction):
         bounds_cache = backend._visual_mesh_bounds_cache = {}
     best = None
     checked = 0
+    guides_skipped = 0
     objects = list(backend.env.scene.objects)
     if not any(obj is backend.robot for obj in objects):
         objects.append(backend.robot)
@@ -54,6 +57,14 @@ def query_visual_surface(backend, start, direction):
             meshes = link.visual_meshes.values() if rigid else (link,)
             for mesh in meshes:
                 if not mesh.visible:
+                    continue
+                # OG retains helper volumes in visual_meshes and hides them
+                # from RGB via purpose="guide", not USD visibility. Resolve
+                # inherited purpose too; do not drop entire meta links, since
+                # their default-purpose toggle buttons are visible targets.
+                purpose = lazy.pxr.UsdGeom.Imageable(mesh.prim).ComputePurpose()
+                if purpose == 'guide':
+                    guides_skipped += 1
                     continue
                 path = mesh.prim_path
                 transform = mesh.scaled_transform.cpu().numpy()
@@ -97,15 +108,16 @@ def query_visual_surface(backend, start, direction):
                 index = int(positive[distances[positive].argmin()])
                 distance = float(distances[index])
                 if best is None or distance < best[0]:
-                    best = distance, obj, path, world[index].tolist()
+                    best = distance, obj, path, world[index].tolist(), str(purpose)
     if best is None or best[1] is backend.robot:
         exc = SkillError('invalid_visual_target',
                          'Selected ray hits the robot' if best else 'No visual object on selected ray')
         exc.diagnostics = {'reason': 'robot_surface' if best else 'no_visual_surface',
-                           'meshes_tested': checked}
+                           'meshes_tested': checked, 'guide_meshes_skipped': guides_skipped}
         raise exc
-    distance, obj, path, hit = best
+    distance, obj, path, hit, purpose = best
     return obj, {'visual_mesh': path, 'visual_triangle_position': hit,
+                 'visual_mesh_purpose': purpose, 'guide_meshes_skipped': guides_skipped,
                  'visual_ray_distance_m': distance, 'visual_meshes_tested': checked,
                  'method': 'first_visual_surface_on_selected_ray',
                  'depth_consistency_check': False}

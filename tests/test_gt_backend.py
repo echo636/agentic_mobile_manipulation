@@ -66,6 +66,7 @@ class GTBackendTests(unittest.TestCase):
         trav = SimpleNamespace(floor_heights=[0.], map_resolution=.1,
                                floor_map=[Tensor(occupancy)], _erode_trav_map=lambda x: x)
         b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav))
+        b._navigation_self_hulls = lambda: ((), {'hulls_prepared': 0})
         b._approach_visible = lambda xy, point, selected, **kwargs: xy[0] >= .5
         b._ground = Mock(return_value=(None, Tensor([1., 0., 0.]),
                                        {'object': 'PRIVATE_OBJECT', 'world_point': [1., 0., 0.]}))
@@ -120,6 +121,19 @@ class GTBackendTests(unittest.TestCase):
         self.assertTrue(record['precomputed_walkability'])
         self.assertFalse(record['online_mapping'])
         b._update_online_map.assert_not_called()
+
+    def test_public_navigation_checks_own_silhouette_but_selected_pixel_reach_may_cross_it(self):
+        b=self.backend()
+        target=SimpleNamespace(get_position_orientation=lambda:(Tensor([1.,0.,1.]),None))
+        seen=[]
+        b._navigation_self_hulls=lambda:(('arm_hull',),{'hulls_prepared':1})
+        b._approach_visible=lambda xy,point,selected,**kw:(seen.append(kw['self_hulls']) or xy[0]>=.5)
+        b._navigate(target,700)
+        self.assertIn(('arm_hull',),seen)
+        seen.clear()
+        b._navigate(target,700,for_manipulation=True)
+        self.assertTrue(seen)
+        self.assertTrue(all(hulls==() for hulls in seen))
 
     def test_disconnected_static_grid_fails_before_any_actuator_or_mapper(self):
         b = self.backend(blocked=True)

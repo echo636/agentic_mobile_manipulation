@@ -7,7 +7,7 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.deadline import EpisodeDeadline, write_execution_clock
+from manipulation_agent.deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline, write_execution_clock
 from manipulation_agent import bridge
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
@@ -70,6 +70,41 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.assertEqual(self.recorder.run['episode_outcome'],'timeout')
         self.assertEqual(self.recorder.run['termination_reason'],'episode_deadline_exceeded')
         self.assertEqual(self.recorder.run['status'],'failed')
+
+    def test_managed_execution_continues_past_all_legacy_episode_counters(self):
+        self.h.actions=self.h.budget.max_actions
+        self.h.calls=self.h.budget.max_calls
+        self.backend.steps=self.h.budget.max_sim_steps
+        before_steps=self.backend.steps
+        self.backend.execute_visual=Mock(wraps=self.backend.execute_visual)
+        reply=self.act('after-legacy-limits')
+        self.assertTrue(reply['ok'])
+        self.assertEqual(self.h.actions,81)
+        self.assertEqual(self.h.calls,241)
+        self.assertEqual(self.backend.steps,20001)
+        self.assertEqual(self.backend.execute_visual.call_args.args[2],DEADLINE_STEP_SENTINEL-before_steps)
+        self.assertFalse(self.recorder.run['execution_limit_policy']['legacy_limits_active'])
+        # The real deadline still wins, including after those counters overflow.
+        self.clock=200
+        self.assertEqual(self.act('after-real-deadline')['error']['code'],'episode_timeout')
+        self.backend.execute_visual.assert_called_once()
+
+    def test_unmanaged_and_locally_armed_episodes_retain_explicit_counter_limits(self):
+        for arm_local in (False,True):
+            with self.subTest(arm_local=arm_local):
+                self.backend.deadline=EpisodeDeadline()
+                self.backend.steps=0
+                self.h=VisionHarness(self.backend,self.recorder,profile='minimal')
+                if arm_local:self.h.start_standalone_clock()
+                self.h.actions=self.h.budget.max_actions
+                self.assertEqual(self.act('action-limit')['error']['code'],'budget_exhausted')
+                self.h.actions=0
+                self.backend.steps=self.h.budget.max_sim_steps
+                self.assertEqual(self.act('step-limit')['error']['code'],'budget_exhausted')
+                self.backend.steps=0
+                self.h.calls=self.h.budget.max_calls
+                self.assertEqual(self.h.call('initialize',{},'call-limit')['error']['code'],'budget_exhausted')
+                self.assertTrue(self.h.call('finish',{'outcome':'aborted','reason':'fixture'},'finish-limit')['closed'])
 
     def test_expiry_inside_action_stops_refresh_and_invalidates_old_revision(self):
         def execute(*args,**kwargs):

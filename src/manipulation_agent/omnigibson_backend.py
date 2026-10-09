@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 
 from .contracts import SkillError
+from .deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
 from .records import write_json
 from .startup_progress import startup_stage
 from .goal_grounding import efficient_grounding, evaluate_once_per_literal
@@ -125,6 +126,7 @@ class OmniGibsonBackend:
 
     def __init__(self, task: str, instance: int, output: Path, *, seed: int = 0, max_steps: int = 20000,
                  inside_placement: str = "symbolic_raycast"):
+        self.deadline = getattr(self, 'deadline', None) or EpisodeDeadline.from_env()
         # Fail explicitly on the vector-env API change until its adapter is validated.
         version = metadata.version("omnigibson")
         if version != "3.9.2":
@@ -324,7 +326,10 @@ class OmniGibsonBackend:
         if getattr(self,'private_viewer_grounding',False):
             # Set the initial product size; never resize it after rig creation.
             config.setdefault('render',{}).update(viewer_width=image_size,viewer_height=image_size)
-        config["task"]["termination_config"]["max_steps"] = max_steps
+        # The official Timeout condition requires an integer. An externally
+        # managed episode is stopped by its execution clock, not by 20k steps.
+        config["task"]["termination_config"]["max_steps"] = (
+            DEADLINE_STEP_SENTINEL if self.deadline.managed else max_steps)
         return config
 
     def _objects(self) -> dict:

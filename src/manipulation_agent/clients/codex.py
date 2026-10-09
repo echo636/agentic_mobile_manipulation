@@ -3,6 +3,11 @@ import json
 import os
 from pathlib import Path
 import shutil
+import re
+import tomllib
+from uuid import UUID
+from ipaddress import ip_address, AddressValueError
+from urllib.parse import urlsplit
 
 from .base import ClientAdapter
 from .types import PreparedProject
@@ -11,6 +16,31 @@ from ..deadline import tool_wait_seconds
 
 class CodexAdapter(ClientAdapter):
     name = "codex"
+
+    def prepare_resume(self, project, thread_id, prompt):
+        """Resume one recorded Codex thread against the same MCP episode."""
+        UUID(thread_id)
+        if project.mcp_prefix or project.argv[:2] != ['codex', 'exec']:
+            raise ValueError('This Codex resume path requires an unwrapped exec project')
+        command = ['codex', 'exec', 'resume']
+        workspace = project.cwd
+        args = project.argv[2:]
+        index = 0
+        while index < len(args):
+            flag = args[index]
+            if flag == '--cd':
+                workspace = Path(args[index + 1])
+                index += 2
+            elif flag == '--sandbox':
+                command += ['-c', 'sandbox_mode=' + json.dumps(args[index + 1])]
+                index += 2
+            elif flag == '-':
+                index += 1
+            else:
+                command.append(flag)
+                index += 1
+        command += [thread_id, '-']
+        return PreparedProject(command, workspace, prompt, env_overlay=project.env_overlay)
 
     def prepare_project(self, config, instructions, tool_names):
         workspace = config.output / "empty_workspace"
@@ -21,6 +51,28 @@ class CodexAdapter(ClientAdapter):
                    "-c", "project_doc_max_bytes=0", "-c", 'model_reasoning_summary="auto"',
                    "-c", "mcp_optional_startup_grace_ms=0",
                    "-c", "developer_instructions=" + json.dumps(instructions)]
+        if config.reasoning_effort is not None:
+            command += ['-c', 'model_reasoning_effort=' + json.dumps(config.reasoning_effort)]
+        if config.model_provider_profile is not None:
+            profile = config.model_provider_profile
+            if not re.fullmatch(r'[A-Za-z0-9_-]+', profile):
+                raise ValueError('Invalid model provider profile')
+            root = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex')))
+            data = tomllib.loads((root / 'config.toml').read_text())
+            provider = data.get('model_providers', {}).get(profile)
+            if not isinstance(provider, dict) or not all(key in provider for key in
+                ('name', 'base_url', 'requires_openai_auth', 'wire_api')):
+                raise ValueError('Codex model provider profile is incomplete')
+            endpoint = urlsplit(provider['base_url'])
+            try:
+                private_http = endpoint.scheme == 'http' and ip_address(endpoint.hostname).is_private
+            except (AddressValueError, TypeError):
+                private_http = False
+            if not (endpoint.scheme == 'https' or private_http) or not endpoint.netloc or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
+                raise ValueError('Provider endpoint must be HTTPS or private-network HTTP without embedded credentials')
+            command += ['-c', 'model_provider=' + json.dumps(profile)]
+            for key in ('name', 'base_url', 'requires_openai_auth', 'wire_api'):
+                command += ['-c', f'model_providers.{profile}.{key}=' + json.dumps(provider[key])]
         native_sessions = None
         storage = None
         prefix = []
