@@ -15,6 +15,11 @@ def grid(width=81, height=81, resolution=.05, blocked=()):
 
 
 class GTNavigationTests(unittest.TestCase):
+    def test_elevated_target_keeps_lower_robot_band_outside_selected_point(self):
+        standoff,margin=visual_approach_settings(1.83,0.,.7)
+        self.assertEqual(standoff,.7)
+        self.assertGreaterEqual(margin,.18)
+
     def test_low_handheld_target_remains_clear_of_lower_image_edge(self):
         # Measured spray episode: head RGB camera at 1.83 m, atomizer at 0.09 m.
         # A roughly 0.95 m navigation endpoint put its body at image y≈0.96.

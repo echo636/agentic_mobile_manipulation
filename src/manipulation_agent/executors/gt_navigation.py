@@ -130,7 +130,10 @@ def candidate_score(target_distance, snap_distance, geodesic, standoff=.7, goal_
 def visual_approach_settings(camera_height, base_z, target_z):
     """Navigation standoff and image margin for a selected target point."""
     if target_z-base_z >= .35:
-        return .7, .04
+        # The camera rig deliberately keeps the robot below the lower fifth
+        # of the image. A point admitted at y=.96 can still be visually tiny
+        # or clipped by the robot at the next observation.
+        return .7, .18
     # A ground-level handheld object almost vanishes below a 1.83 m head rig
     # at the usual 0.7 m navigation standoff. Keep it above image y=0.82 so
     # the model can select the *body* rather than its clipped tip or the floor.

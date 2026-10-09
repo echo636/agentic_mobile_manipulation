@@ -162,7 +162,9 @@ validation now checks current visible robot/carry hulls transformed to each
 candidate base pose before accepting a scene ray. This is an executor-private
 visibility check on the model's selected point; it does not choose a different
 object or modify the public RGB. A synthetic arm-occlusion regression covers
-the rejected endpoint. The subsequent public-task model run and video review
+the rejected endpoint. Public navigation also keeps selected points out of
+the lower 18% image border where the robot body is expected to appear; the
+existing camera pose and 90-degree field of view are unchanged. The subsequent public-task model run and video review
 must still validate the change in the simulator.
 
 The first dedicated-key trash attempt (r5) confirmed that public navigation
