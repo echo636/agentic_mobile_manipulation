@@ -201,10 +201,19 @@ The back, left and right RGB views were also inspected at that configuration.
 Comparison images are published on the first-ten internal review index. This
 is a camera diagnostic, not a model trial or task-success claim.
 
-Demo mode now uses four cameras at 0.35 m radius and 35° downward pitch. The
-non-demo rig stays at its old 0 m / 20° mount. Capture and candidate visibility
-share the same extrinsics; the selected RGB pixel remains the only action
-target. The fresh `turning_on_radio` public instance 301 / seed 0 trial used
+Both demo and normal mode use four cameras at 0.35 m radius and 35° downward
+pitch; each camera moves outward along its own front/back/left/right direction.
+Capture, candidate visibility, initial mount-height calculation and low-target
+approach distance now share that pitch and radius. Mount height uses the robot's
+initial visual vertices to keep its body below image row 0.8 with 5 cm of vertical
+clearance; later moving-arm poses can still enter the frame. The low-target
+distance accounts for the forward camera offset while retaining the existing
+distance policy and final visibility checks. The selected RGB pixel remains
+the only action target.
+
+The height/distance alignment has CPU projection and GT regression coverage;
+the following recorded trial predates that alignment and is not a new simulator
+validation of it. The fresh `turning_on_radio` public instance 301 / seed 0 trial used
 `gpt-6-astra` at `low` through the isolated experiment key. The model chose
 its `navigate_to` and `toggle_on` actions and RGB points, formally finished,
 and passed all seven demo audit checks including the independent whole-task

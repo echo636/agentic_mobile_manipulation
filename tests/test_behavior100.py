@@ -11,12 +11,26 @@ import subprocess
 import sys
 import uuid
 from subprocess import CompletedProcess
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_remote_assets_selects_benchmark_index_in_single_task_manifest(self):
+        spec=importlib.util.spec_from_file_location('remote_subset_check',
+            Path(__file__).resolve().parents[1]/'scripts/behavior100_remote.py')
+        remote=importlib.util.module_from_spec(spec);spec.loader.exec_module(remote)
+        row={'index':93,'task':'clean_a_keyboard','instance':301,'seed':0}
+        with tempfile.TemporaryDirectory() as folder:
+            manifest=Path(folder)/'manifest.json'
+            manifest.write_text(json.dumps({'tasks':[row]}))
+            argv=['behavior100_remote.py','assets','--manifest',str(manifest),
+                  '--index','93','--data-root',folder]
+            with patch.object(sys,'argv',argv), patch.object(remote,'assets',return_value={'status':'passed'}) as assets, patch('builtins.print'):
+                remote.main()
+            assets.assert_called_once_with({'tasks':[row]},Path(folder))
+
     def make_queue_runner(self, folder, workers=None, count=3):
         runner=batch.Batch.__new__(batch.Batch)
         runner.root=Path(folder);runner._worker_local=threading.local()

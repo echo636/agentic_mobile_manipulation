@@ -89,7 +89,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             points = link.visual_boundary_points_world
             if points is not None:
                 visual_points.extend(points.detach().cpu().tolist())
-        self.rig_height = centered_head_height(visual_points, base_pos.detach().cpu().tolist())
+        self.rig_height = centered_head_height(
+            visual_points, base_pos.detach().cpu().tolist(),
+            pitch_degrees=self.rig_pitch_degrees, radius=self.rig_radius)
         with self._startup_stage('surround_camera_setup_and_warmup'):
             for direction in DIRECTIONS:
                 sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
@@ -509,7 +511,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         position,_=self.robot.get_position_orientation()
         point=target.get_position_orientation()[0]
         standoff,margin=(.7,.04) if for_manipulation else visual_approach_settings(
-            self.rig_height,float(position[2]),float(point[2]))
+            self.rig_height,float(position[2]),float(point[2]),
+            pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
         height,width=occupancy.shape
@@ -825,7 +828,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':self.rig_pitch_degrees,
             'mount_radius_m':self.rig_radius,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
-            'height_policy':'own_visual_geometry_centered_reference_with_5cm_clearance',
+            'height_policy':'initial_visual_body_below_lower_20_percent_at_configured_pitch_and_radius_with_5cm_clearance',
             'stock_wrist_cameras_enabled':False}
         return result
 
