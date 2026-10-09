@@ -676,6 +676,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             stroke_steps=self._demo_reach(stroke,max_steps,anchor=obj,
                                           arm=self._demo_arm,action=primitive+'_stroke')
             shown+=stroke_steps;max_steps-=stroke_steps
+        before_effect_steps=self.steps if shown else 0
         if primitive=='grasp' and self.ideal_carry:
             before_grasp=self.steps
             result=self._ideal_grasp(obj,max_steps)
@@ -705,6 +706,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             result=self._checked_place_inside(obj,max_steps)
         else:
             result=self.execute(primitive,obj.name,max_steps)
+        if shown and primitive in {'place_inside','place_on_top','attach','hang','open','close',
+                                   'toggle_on','toggle_off'}:
+            # A stretched arm must not sweep the destination over when the
+            # model's next navigation action moves the base away.
+            shown+=self._demo_transport_pose(max_steps-(self.steps-before_effect_steps))
         if shown:
             result={**result,'demo_motion':{'real_env_steps':shown,'ideal_contact':True}}
         return {**result,'private_grounding':grounding}

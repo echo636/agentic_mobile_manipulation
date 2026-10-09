@@ -1,9 +1,12 @@
 """Regressions for drawer payload loss and unanchored internal physics ticks."""
 import importlib.util
+from contextlib import nullcontext
 import types
 import unittest
 from unittest.mock import patch
 from manipulation_agent.executors.carry import ControlledCarry
+from manipulation_agent.executors.placement import CheckedPlacement
+from manipulation_agent.contracts import SkillError
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
@@ -60,6 +63,46 @@ class ContainerStabilityTests(unittest.TestCase):
                 raise ValueError('sampler failed')
         self.assertIs(b.og.sim.step_physics,physics)
         self.assertIsNone(b._object_anchor);self.assertIsNone(b._base_target)
+
+    def test_second_placement_preserves_existing_content_during_sampling_and_settling(self):
+        import torch
+        class Inside:pass
+        resident=types.SimpleNamespace(position=0.)
+        resident.states={Inside:types.SimpleNamespace(get_value=lambda target:resident.position==0.)}
+        link=types.SimpleNamespace(is_meta_link=True,meta_link_type='fillable')
+        target=types.SimpleNamespace(links={'volume':link})
+        held_state=types.SimpleNamespace(get_value=lambda target:True)
+        held=types.SimpleNamespace(states={Inside:held_state},
+            get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
+        holder={'object':held}
+        def physics():resident.position=5.
+        sim=types.SimpleNamespace(step_physics=physics)
+        held_state.set_value=lambda target,wanted:(sim.step_physics() or True)
+        b=CheckedPlacement();b.og=types.SimpleNamespace(sim=sim);b.deadline=None
+        b.sampling_physics_steps=0;b.frames_revision=0;b.ideal_carry=True
+        b._carry_contents=[];b._carry_dependencies=[]
+        b.robot=types.SimpleNamespace(get_joint_positions=lambda:torch.zeros(1),
+                                       q_to_action=lambda q:q)
+        b._get_held=lambda:holder['object']
+        b._carry_detach=lambda:holder.update(object=None)
+        b._container_payload=lambda container:[resident]
+        b._relocate_container_payload=lambda residents:setattr(resident,'position',0.)
+        b._placement_context=lambda container:nullcontext()
+        b._relocate_contents=lambda held,contents:None
+        b._step=lambda action:sim.step_physics()
+        b._verify_container_payload=lambda container,residents:(
+            None if resident.states[Inside].get_value(container) else
+            (_ for _ in ()).throw(SkillError('postcondition_error','Existing item escaped')))
+        b._verify_payload=lambda dependencies:None
+        object_states=types.ModuleType('omnigibson.object_states');object_states.Inside=Inside
+        usd_utils=types.ModuleType('omnigibson.utils.usd_utils')
+        usd_utils.RigidContactAPI=types.SimpleNamespace(is_in_contact=lambda *args:False)
+        with patch.dict('sys.modules',{'omnigibson.object_states':object_states,
+                                       'omnigibson.utils.usd_utils':usd_utils}):
+            result=b._checked_place_inside(target,3)
+        self.assertEqual(result['existing_containment_verified'],1)
+        self.assertEqual(resident.position,0.)
+        self.assertIs(sim.step_physics,physics)
 
 
 if __name__=='__main__':unittest.main()

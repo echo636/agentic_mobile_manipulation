@@ -171,6 +171,16 @@ class CheckedPlacement:
             self._carry_detach()
             # Capture the anchored physics wrapper installed by the context.
             original_step=self.og.sim.step_physics
+            def preserve_residents(*args,**kwargs):
+                # The near-bin arm can push an earlier item out while the
+                # official sampler or the settling steps advance physics.
+                # Existing contents are part of the destination's committed
+                # state; keep their link-relative poses until this placement
+                # has been checked. The new item remains fully simulated.
+                if residents:self._relocate_container_payload(residents)
+                try:return original_step(*args,**kwargs)
+                finally:
+                    if residents:self._relocate_container_payload(residents)
             def bounded_step(*args,**kwargs):
                 deadline=getattr(self,'deadline',None)
                 if deadline is not None:deadline.check(changed=True)
@@ -182,7 +192,7 @@ class CheckedPlacement:
                     # its food. Preserve the carried assembly's orientation.
                     held.set_position_orientation(held.get_position_orientation()[0],orientation)
                 self._relocate_contents(held,contents)
-                return original_step(*args,**kwargs)
+                return preserve_residents(*args,**kwargs)
             self.og.sim.step_physics=bounded_step
             from omnigibson.utils.usd_utils import RigidContactAPI
             original_contact=RigidContactAPI.is_in_contact
@@ -192,17 +202,22 @@ class CheckedPlacement:
                     return original_contact(scene_idx,assembly,None,[*(ignore_set or []),*assembly],current_only)
                 return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
             if contents:RigidContactAPI.is_in_contact=assembly_contact
+            sampling_done=False
             try:
                 sampled=held.states[Inside].set_value(target,True)
+                sampling_done=True
             finally:
                 if contents:RigidContactAPI.is_in_contact=original_contact
-                self.og.sim.step_physics=original_step
+                self.og.sim.step_physics=preserve_residents if sampling_done else original_step
                 self.frames_revision=-1
-            if not sampled:
-                raise SkillError('sampling_error','Official volume sampler could not find a valid placement',changed=True)
-            self._relocate_contents(held,contents)
-            for _ in range(min(50,max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            try:
+                if not sampled:
+                    raise SkillError('sampling_error','Official volume sampler could not find a valid placement',changed=True)
+                self._relocate_contents(held,contents)
+                for _ in range(min(50,max_steps)):
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            finally:
+                self.og.sim.step_physics=original_step
             if not held.states[Inside].get_value(target):
                 raise SkillError('postcondition_error','Object left container after settling',changed=True)
             self._verify_container_payload(target,residents)

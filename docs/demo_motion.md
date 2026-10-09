@@ -112,3 +112,18 @@ with their attempt directories retained. The scheduler now regards a live
 child process as busy immediately; a CPU regression test covers this exact
 race and restart from an incomplete directory. Later retries use another
 attempt number after the continuing trash trial finishes.
+
+The trash r2 model trial formally finished but failed the official 3/3 goal.
+Replay inspection shows the bin upright during the first `place_inside` and
+tipped after the next base navigation began with the arm still extended.
+The second placement also failed because the near-bin arm displaced a resident
+can during sampler/settling physics. Scripted diagnostic probes, clearly
+excluded from autonomous scores, placed all three cans successfully with the
+robot away from the bin; the recorded near-bin arm pose reproduced the resident
+loss. The executor now preserves existing fillable-link-relative contents
+during the placement transaction and retracts the visible arm after a
+successful placement before another navigation action. The same near-bin
+simulator probe passed with the preservation fix: both cans remained officially
+`Inside`. A CPU regression test goes red against the pre-fix placement code
+and green with the fix. The revised model trial must still pass the independent
+whole-task evaluator; diagnostic success alone is not sufficient.
