@@ -658,6 +658,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
+        if primitive=='place_next_to' and str(getattr(obj,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
+            raise SkillError('unsupported_relation','Select the visible tree or fixture itself for place_next_to')
         held=self._get_held()
         if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
             self._demo_arm=None

@@ -93,6 +93,8 @@ class CheckedPlacement:
             raise SkillError('empty_hand', 'No object is held')
         if held is target or NextTo not in held.states:
             raise SkillError('unsupported_relation', 'Carried object cannot be placed next to this target')
+        if str(getattr(target,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
+            raise SkillError('unsupported_relation', 'Select the visible tree or fixture itself for place_next_to')
         pose = held.get_position_orientation()
         lo, _ = held.aabb
         bottom_offset = float(pose[0][2] - lo[2])
