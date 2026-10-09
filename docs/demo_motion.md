@@ -144,3 +144,15 @@ its own raw event and stderr files; the combined model stream is used for
 ordered call alignment and formal-finish validation. A continuation is part
 of the same attempt, not a fresh policy trial. If the rate limit persists or
 the episode budget expires, the attempt still fails and is preserved.
+
+The fourth trash attempt exposed a separate placement boundary: the official
+`Inside.set_value` accepted the first can, but the can left the bin during the
+action's subsequent physics settling ticks, so the postcondition rejected the
+action. The placement transaction now snapshots the newly accepted pose
+relative to the actual fillable link and holds that pose only during those
+settling ticks. This extends the existing idealized protection for earlier
+contents; it does not choose a placement before the official sampler accepts
+one. A CPU regression covers an accepted can being ejected by settling, and
+the full suite passes. The fourth model attempt was already running with the
+older loaded code, so only a later independent model attempt can validate this
+change in the public task.

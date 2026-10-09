@@ -164,6 +164,8 @@ class CheckedPlacement:
             raise SkillError('unsupported_relation','Target has no supported fillable volume')
         start=time.monotonic();before=self.sampling_physics_steps
         residents=self._container_payload(target)
+        resident_count=len(residents)
+        settling_payload=[]
         with self._placement_context(target):
             contents=list(self._carry_contents) if self.ideal_carry else []
             dependencies=list(getattr(self,'_carry_dependencies',[]))
@@ -176,11 +178,14 @@ class CheckedPlacement:
                 # official sampler or the settling steps advance physics.
                 # Existing contents are part of the destination's committed
                 # state; keep their link-relative poses until this placement
-                # has been checked. The new item remains fully simulated.
+                # has been checked. The new item is free during sampling, then
+                # kept at its accepted pose during settling.
                 if residents:self._relocate_container_payload(residents)
+                if settling_payload:self._relocate_container_payload(settling_payload)
                 try:return original_step(*args,**kwargs)
                 finally:
                     if residents:self._relocate_container_payload(residents)
+                    if settling_payload:self._relocate_container_payload(settling_payload)
             def bounded_step(*args,**kwargs):
                 deadline=getattr(self,'deadline',None)
                 if deadline is not None:deadline.check(changed=True)
@@ -213,6 +218,12 @@ class CheckedPlacement:
             try:
                 if not sampled:
                     raise SkillError('sampling_error','Official volume sampler could not find a valid placement',changed=True)
+                # Once the official sampler has found an Inside pose, retain
+                # that link-relative pose while the action's settling ticks
+                # run. Otherwise contact with the nearby robot may eject the
+                # newly placed object before the postcondition is checked.
+                settling_payload.extend(record for record in self._container_payload(target)
+                                        if record[0] is held)
                 self._relocate_contents(held,contents)
                 for _ in range(min(50,max_steps)):
                     self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
@@ -226,5 +237,5 @@ class CheckedPlacement:
                 raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
         return {'primitive':'place_inside','implementation':'transactional_official_Inside_with_rigid_payload_sampling',
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
-                'target_root_anchored':True,'existing_containment_verified':len(residents),
+                'target_root_anchored':True,'existing_containment_verified':resident_count,
                 'sampling_physics_steps':self.sampling_physics_steps-before}

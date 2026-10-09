@@ -71,13 +71,20 @@ class ContainerStabilityTests(unittest.TestCase):
         resident.states={Inside:types.SimpleNamespace(get_value=lambda target:resident.position==0.)}
         link=types.SimpleNamespace(is_meta_link=True,meta_link_type='fillable')
         target=types.SimpleNamespace(links={'volume':link})
-        held_state=types.SimpleNamespace(get_value=lambda target:True)
-        held=types.SimpleNamespace(states={Inside:held_state},
-            get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
+        held=types.SimpleNamespace(position=0.)
+        held_state=types.SimpleNamespace(get_value=lambda target:held.position==0.)
+        held.states={Inside:held_state}
+        held.get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.]))
         holder={'object':held}
-        def physics():resident.position=5.
+        sampled={'done':False}
+        def physics():
+            resident.position=5.
+            if sampled['done']:held.position=5.
         sim=types.SimpleNamespace(step_physics=physics)
-        held_state.set_value=lambda target,wanted:(sim.step_physics() or True)
+        def sample(target,wanted):
+            sim.step_physics();sampled['done']=True;held.position=0.
+            return True
+        held_state.set_value=sample
         b=CheckedPlacement();b.og=types.SimpleNamespace(sim=sim);b.deadline=None
         b.sampling_physics_steps=0;b.frames_revision=0;b.ideal_carry=True
         b._carry_contents=[];b._carry_dependencies=[]
@@ -85,8 +92,9 @@ class ContainerStabilityTests(unittest.TestCase):
                                        q_to_action=lambda q:q)
         b._get_held=lambda:holder['object']
         b._carry_detach=lambda:holder.update(object=None)
-        b._container_payload=lambda container:[resident]
-        b._relocate_container_payload=lambda residents:setattr(resident,'position',0.)
+        b._container_payload=lambda container:([(resident,None,None),(held,None,None)] if sampled['done']
+                                               else [(resident,None,None)])
+        b._relocate_container_payload=lambda payload:[setattr(obj,'position',0.) for obj,_,_ in payload]
         b._placement_context=lambda container:nullcontext()
         b._relocate_contents=lambda held,contents:None
         b._step=lambda action:sim.step_physics()
@@ -102,6 +110,7 @@ class ContainerStabilityTests(unittest.TestCase):
             result=b._checked_place_inside(target,3)
         self.assertEqual(result['existing_containment_verified'],1)
         self.assertEqual(resident.position,0.)
+        self.assertEqual(held.position,0.)
         self.assertIs(sim.step_physics,physics)
 
 
