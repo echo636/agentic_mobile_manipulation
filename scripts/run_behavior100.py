@@ -130,8 +130,19 @@ def controller_process_alive(pid, output):
 
 
 def prepolicy_failure(record, controller):
-    if record.get('status')!='failed' or record.get('actions')!=0: return False
+    if record.get('status')!='failed': return False
     stream=controller/'model_events.jsonl'
+    if 'actions' not in record:
+        # A pre-recorder startup failure has no action counter. Admit only the
+        # explicitly pre-policy stages, without inventing fields in its record.
+        if record.get('failure_stage') not in {'asset_preflight','simulator_starting'}:
+            return False
+        started=('controller_pid','controller_wrapper_pid','controller_status',
+                 'execution_started_at_unix','episode_deadline_unix','bridge_ready_at')
+        if any(record.get(key) is not None for key in started): return False
+        if (controller/'controller.json').exists(): return False
+        return not stream.exists() or stream.stat().st_size==0
+    if record.get('actions')!=0: return False
     if not stream.exists(): return record.get('controller_pid') is None
     events=[json.loads(s) for s in stream.read_text().splitlines()]
     # Client error items are not model decisions. Any generated policy item,

@@ -262,6 +262,37 @@ class BatchEvidenceTests(unittest.TestCase):
                 stream.write_text(json.dumps({'type':'item.started','item':{'type':kind}})+'\n')
                 self.assertFalse(batch.prepolicy_failure(record,path))
 
+    def test_missing_action_count_before_simulator_start_can_retry_without_record_changes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)
+            for stage in ('asset_preflight','simulator_starting'):
+                record={'status':'failed','stage':'complete','failure_stage':stage,
+                        'simulator_pid':1678698,'failure':'quota subprocess timed out',
+                        'execution_clock_path':'/remote/not-yet-created/execution_clock.json'}
+                original=dict(record)
+                self.assertTrue(batch.prepolicy_failure(record,path))
+                self.assertEqual(record,original)
+                self.assertNotIn('actions',record)
+
+    def test_missing_action_count_never_allows_retry_after_controller_or_policy_start(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder);record={'status':'failed','failure_stage':'simulator_starting'}
+            for changed in ({'failure_stage':None},{'failure_stage':'controller_starting'},
+                            {'controller_pid':123},{'controller_wrapper_pid':123},
+                            {'controller_status':'failed'},{'execution_started_at_unix':0},
+                            {'episode_deadline_unix':123},{'bridge_ready_at':'timestamp'},
+                            {'actions':None}):
+                with self.subTest(changed=changed):
+                    self.assertFalse(batch.prepolicy_failure({**record,**changed},path))
+            stream=path/'model_events.jsonl'
+            for kind in ('agent_message','reasoning','mcp_tool_call','error'):
+                with self.subTest(kind=kind):
+                    stream.write_text(json.dumps({'type':'item.started','item':{'type':kind}})+'\n')
+                    self.assertFalse(batch.prepolicy_failure(record,path))
+            stream.unlink()
+            (path/'controller.json').write_text('{}')
+            self.assertFalse(batch.prepolicy_failure(record,path))
+
     def test_infrastructure_retry_retains_first_attempt_failure(self):
         row={'status':'passed','task_success':True,'previous_attempts':[{'status':'failed','task_success':False}]}
         result=batch.summarize([row])
