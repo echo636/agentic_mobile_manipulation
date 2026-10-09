@@ -189,13 +189,6 @@ class ControlledCarry:
         if self._ideal_held is obj:return {'primitive':'grasp','postcondition':'selected_object_already_held'}
         if self._ideal_held is not None:raise SkillError('hand_occupied','A carry relationship already exists')
         if obj.fixed_base:raise SkillError('fixed_object','The selected object has a fixed base')
-        # A container stabilized after an earlier placement becomes movable
-        # again when the model explicitly chooses to carry that container.
-        getattr(self,'_stabilized_containers',{}).pop(obj,None)
-        payloads=getattr(self,'_stabilized_container_payloads',{})
-        payloads.pop(obj,None)
-        for container,records in list(payloads.items()):
-            payloads[container]=[record for record in records if record[0] is not obj]
         # Preserve both contained objects and supported objects (e.g. food on a
         # plate), including nested payloads. Fixed scene objects never follow.
         original=obj.get_position_orientation()
@@ -210,6 +203,17 @@ class ControlledCarry:
             return None
         dependencies=support_closure(obj,candidates,relation)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
+        # The entire selected assembly is leaving its old support. An outer
+        # container can have recorded nested children as well as this root;
+        # retaining those records would pull the children back after release.
+        moving={id(obj),*(id(child) for child,_,_ in dependencies)}
+        stabilized=getattr(self,'_stabilized_containers',{})
+        for container in list(stabilized):
+            if id(container) in moving:stabilized.pop(container)
+        payloads=getattr(self,'_stabilized_container_payloads',{})
+        for container,records in list(payloads.items()):
+            if id(container) in moving:payloads.pop(container)
+            else:payloads[container]=[record for record in records if id(record[0]) not in moving]
         base_pos,base_quat=self.robot.get_position_orientation()
         # In demo mode the carried pose follows the visible hand. The object is
         # lifted over recorded control steps after the carry relation is made.

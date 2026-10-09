@@ -10,8 +10,20 @@ to the same model-selected point. It lifts a newly carried object and returns
 the arm to a transport posture over recorded control steps, keeps carried
 objects relative to the visible end effector, and
 shows a short tool stroke for material and cutting actions. The spectator view
-frames the interaction during those steps. `MAS_DEMO_MOTION=0` preserves the
-existing executor and its experiment cohort.
+frames the interaction during those steps. `MAS_DEMO_MOTION=0` is the default
+and disables these extra reach, lift and stroke steps. It does not restore a
+historical evaluation cohort: the updated camera rig, `place_under` and
+`place_next_to` actions, and movable-container/payload stabilization also
+apply to the standard execution path. After a successful inside placement,
+the executor restores a movable container and its recorded contents during
+later steps; explicitly grasping a container or item clears stabilization
+references to its entire carried assembly, including nested contents. These are changes to ideal execution,
+not only video presentation, and comparisons must record their source version.
+
+Managed evaluations retain their single episode execution deadline during
+volume sampling. The legacy 180-second/6000-physics-step sampler caps apply
+only to unmanaged calls; deadline and closure requests still interrupt the
+sampler at its physics-step boundary.
 
 These are actual simulator control steps and camera frames, not interpolated
 video. The arm posture is kinematically projected and contact is idealized;

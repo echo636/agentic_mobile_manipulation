@@ -116,4 +116,72 @@ class ContainerStabilityTests(unittest.TestCase):
         self.assertIs(sim.step_physics,physics)
 
 
+class NestedStabilizationTests(unittest.TestCase):
+    def test_grasp_and_release_nested_container_does_not_restore_old_contents(self):
+        import numpy as np
+        from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+        class Vector(np.ndarray):
+            def __new__(cls, values):return np.asarray(values,dtype=float).view(cls)
+            def clone(self):return self.copy()
+        class Inside:pass
+        class OnTop:pass
+        class Touching:pass
+        class Body:
+            fixed_base=False
+            def __init__(self,name,position,extent):
+                self.name,self.position,self.extent=name,Vector(position),extent
+                self.states={Inside:types.SimpleNamespace(get_value=self.inside)}
+            @property
+            def aabb(self):return self.position-self.extent,self.position+self.extent
+            def inside(self,parent):
+                lo,hi=self.aabb;other_lo,other_hi=parent.aabb
+                return bool(((lo>=other_lo)&(hi<=other_hi)).all())
+            def get_position_orientation(self):return self.position.clone(),Vector([0,0,0,1])
+            def set_position_orientation(self,position,orientation):self.position=Vector(position)
+            def keep_still(self):pass
+        outer=Body('outer B',[0,0,0],2.)
+        inner=Body('inner A',[0,0,0],.4)
+        child=Body('nested C',[.1,0,0],.05)
+        unrelated=Body('other B content',[1.5,0,0],.05)
+        robot=Body('robot',[-4,0,0],.1)
+        robot.get_joint_positions=lambda:Vector([0])
+        robot.q_to_action=lambda q:q
+        transforms=types.SimpleNamespace(
+            relative_pose_transform=lambda p,q,base,bq:(p-base,q),
+            pose_transform=lambda base,bq,p,q:(base+p,q))
+        b=RGBBackend.__new__(RGBBackend)
+        b.robot,b.torch,b.ideal_carry=robot,types.SimpleNamespace(isfinite=np.isfinite),True
+        b._ideal_held=None;b._carry_contents=[];b._carry_dependencies=[]
+        b._carry_record=lambda **kwargs:None
+        b._anchored_operation=lambda:nullcontext()
+        b.env=types.SimpleNamespace(scene=types.SimpleNamespace(objects=[outer,inner,child,unrelated,robot]))
+        b._stabilized_containers={outer:outer.get_position_orientation(),inner:inner.get_position_orientation()}
+        b._stabilized_container_payloads={
+            outer:[(obj,outer,transforms.relative_pose_transform(
+                *obj.get_position_orientation(),*outer.get_position_orientation())) for obj in (inner,child,unrelated)],
+            inner:[(child,inner,transforms.relative_pose_transform(
+                *child.get_position_orientation(),*inner.get_position_orientation()))]}
+        b._step=lambda action:(b._restore_stabilized_containers(),b._carry_follow())
+        states=types.ModuleType('omnigibson.object_states')
+        states.Inside,states.OnTop,states.Touching=Inside,OnTop,Touching
+        utils=types.ModuleType('omnigibson.utils');utils.transform_utils=transforms
+        with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.utils':utils}):
+            b._ideal_grasp(inner,1)
+            self.assertEqual([obj for obj,_ in b._carry_contents],[child])
+            self.assertNotIn(inner,b._stabilized_containers)
+            self.assertNotIn(inner,b._stabilized_container_payloads)
+            self.assertEqual([record[0] for record in b._stabilized_container_payloads[outer]],[unrelated])
+            # Place the carried assembly outside B, then exercise the real
+            # later-step stabilization that formerly pulled C back into B.
+            contents=list(b._carry_contents)
+            b._carry_detach()
+            inner.set_position_orientation(Vector([3,0,0]),Vector([0,0,0,1]))
+            b._relocate_contents(inner,contents)
+            b._restore_stabilized_containers()
+        np.testing.assert_allclose(inner.position,[3,0,0])
+        np.testing.assert_allclose(child.position,[3.1,0,0])
+        np.testing.assert_allclose(outer.position,[0,0,0])
+        np.testing.assert_allclose(unrelated.position,[1.5,0,0])
+
+
 if __name__=='__main__':unittest.main()
