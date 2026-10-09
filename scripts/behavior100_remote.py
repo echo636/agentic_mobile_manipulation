@@ -18,6 +18,22 @@ def command(args):
     return {'exit_code': p.returncode, 'stdout': p.stdout, 'stderr': p.stderr}
 
 
+def local_quota():
+    """Avoid unrelated NFS quota RPCs; unavailable diagnostics do not stop a run."""
+    try:
+        result = command(['quota', '-w', '-v', '-l'])
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        def text(value):
+            return value.decode(errors='replace') if isinstance(value, bytes) else value or ''
+        # Keep partial numeric output: an already reported exhausted quota must
+        # still block admission even if another local filesystem timed out.
+        return {'status': 'unavailable', 'scope': 'local_filesystems',
+                'exit_code': None, 'error_type': type(exc).__name__,
+                'stdout': text(getattr(exc, 'stdout', None)),
+                'stderr': text(getattr(exc, 'stderr', None))}
+    return {**result, 'status': 'completed', 'scope': 'local_filesystems'}
+
+
 def manifest_task(manifest, index):
     """Resolve the benchmark identity, including in a selected-task manifest."""
     for row in manifest['tasks']:
@@ -81,7 +97,7 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
     queries = {
         'gpus': command(['nvidia-smi', '--query-gpu=index,uuid,memory.used,memory.total,driver_version', '--format=csv,noheader,nounits']),
         'disk': command(['df', '-B1', str(data_root), os.getcwd()]),
-        'quota': command(['quota', '-w', '-v']),
+        'quota': local_quota(),
     }
     if not light:
         queries['gpu_processes'] = command(['nvidia-smi', '--query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory', '--format=csv,noheader'])
