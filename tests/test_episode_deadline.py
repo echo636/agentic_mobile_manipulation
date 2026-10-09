@@ -12,6 +12,7 @@ from manipulation_agent import bridge
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
 from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.clients.types import ClientCapability
 
 
 class EpisodeDeadlineTests(unittest.TestCase):
@@ -194,6 +195,15 @@ class ExecutionClockFileTests(unittest.TestCase):
 
 
 class ControllerDeadlineTests(unittest.TestCase):
+    def setUp(self):
+        # These tests mock model execution; local CLI installation is unrelated
+        # to the deadline, handshake and controller-closure contracts below.
+        capability = ClientCapability('codex', 'available', 'fixture', '/fixture/codex')
+        probe = patch('manipulation_agent.clients.codex.CodexAdapter.probe',
+                      return_value=capability)
+        probe.start()
+        self.addCleanup(probe.stop)
+
     def test_handshake_consumes_remaining_task_time_before_model_wait(self):
         path=Path(__file__).resolve().parents[1]/'scripts'/'run_codex_controller.py'
         spec=importlib.util.spec_from_file_location('deadline_controller',path)
