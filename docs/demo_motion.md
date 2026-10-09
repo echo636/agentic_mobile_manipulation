@@ -127,3 +127,10 @@ simulator probe passed with the preservation fix: both cans remained officially
 `Inside`. A CPU regression test goes red against the pre-fix placement code
 and green with the fix. The revised model trial must still pass the independent
 whole-task evaluator; diagnostic success alone is not sufficient.
+
+`scripts/watch_demo_site.py` publishes each new summary or audit to the
+internal first-ten review index while the batch scheduler is alive. The
+publisher reuses unchanged media exports so periodic updates do not copy the
+same video and frame directory repeatedly. The public index includes both
+reviewed attempts and pre-model infrastructure failures, with attempt numbers
+and separate evidence links.

@@ -12,6 +12,14 @@ PUBLIC_FILES = ('review_5view.html', 'episode.mp4', 'episode_browser.mp4',
 PUBLIC_DIRS = ('frames', 'review_stills')
 
 
+def copy_if_changed(source, destination):
+    if destination.exists():
+        before, after = source.stat(), destination.stat()
+        if before.st_size == after.st_size and before.st_mtime_ns == after.st_mtime_ns:
+            return
+    shutil.copy2(source, destination)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--trials', type=Path, required=True)
@@ -36,14 +44,14 @@ def main():
         for filename in PUBLIC_FILES:
             source = run / filename
             if source.exists():
-                shutil.copy2(source, destination / filename)
+                copy_if_changed(source, destination / filename)
         for dirname in PUBLIC_DIRS:
             source = run / dirname
-            if source.exists():
+            if source.exists() and not (destination / dirname).exists():
                 shutil.copytree(source, destination / dirname, dirs_exist_ok=True)
-        shutil.copy2(trial / 'summary.json', destination / 'summary.json')
+        copy_if_changed(trial / 'summary.json', destination / 'summary.json')
         if audit:
-            shutil.copy2(audit_path, destination / 'demo_audit.json')
+            copy_if_changed(audit_path, destination / 'demo_audit.json')
         status = ('通过' if audit and audit['passed'] else
                   '未通过 · 服务限流 429' if audit and audit.get('failure_category') == 'provider_rate_limit_429'
                   else '预检或运行中断' if not audit else '未通过')
