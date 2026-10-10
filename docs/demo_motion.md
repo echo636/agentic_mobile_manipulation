@@ -812,3 +812,12 @@ same three recorded RGB actions carried `pizza_89` with `plate_93`; both
 official `OnTop` and physical `Touching` remained true after grasp. This
 validates the motor fix only; an autonomous model episode and full BDDL audit
 are still required.
+
+Can-meat r18 formally finished blocked and failed its independent whole-task
+audit. The model opened upper cabinet sections but could not keep the jar
+shelf in a usable camera view. It then searched lower cabinets, selected a
+fixed object for grasp, and stopped without filling either jar. During that
+search the chopping board was disturbed and some bratwursts fell to the
+floor. The pick-and-place skill now describes backing into the clear aisle
+to reframe the full high shelf before switching to lower cabinets or crossing
+the preparation island. This model-facing guidance needs a new episode.
