@@ -508,5 +508,30 @@ placed the toaster, food processor and French press inside it, then closed it.
 All four operations succeeded, `Open` became false, and all three `Inside`
 predicates remained true. This narrows the r12 failure to the particular
 model-run scene/placements or its intervening actions; it does not establish
-that closing a loaded cabinet is generally broken. A fresh model trial is
-needed before changing that executor path.
+that closing a loaded cabinet is generally broken.
+
+Halloween r13 put all five required pumpkins/candles inside the selected
+living-room cabinet, but two `close` attempts failed after the drawer joints
+reopened during settling. Its cauldron `place_next_to` also failed: a near-table
+candidate remained 4 cm above the floor after settling, so official
+`OnTop(floor)` was false. The episode finished blocked, and the independent
+audit failed. The motor now holds a fully closed articulated joint target
+across later control steps and excludes target-overlapping floor candidates
+while searching farther around large furniture. In the privileged
+`drawer_close_probe_r1`, five public-instance items stayed `Inside` after a
+successful `close` and another 120 physics steps with `Open=false`. The
+`cauldron_table_probe_r4` used the same r13 model-selected table point and
+verified official `NextTo(table)` and `OnTop(floor)` after placement. These
+are motor-only results; a fresh autonomous trial is still required before
+counting task success.
+
+Plates-and-food r13 selected `plate_93` with `pizza_89` as a carried payload,
+but the plate rotated nearly vertical during navigation. The resulting
+`place_inside` attempts rolled back, and the model finished blocked. The
+motor now preserves the grasp-time world orientation for a carried assembly
+with contents while the visible hand translates it. In privileged
+`plate_fridge_navigation_probe_r2` with `MAS_DEMO_MOTION=1`, the plate stayed
+approximately 2.4 cm high through a 2.9 m navigation path; the final pizza
+remained `OnTop(plate)`
+and both objects were `Inside(fridge)`. This is motor validation, not an r13
+model pass; a new Astra-low trial is required.

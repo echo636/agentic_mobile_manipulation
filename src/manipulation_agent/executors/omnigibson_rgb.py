@@ -30,7 +30,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             raise ValueError('Demo motion requires controlled carry')
         self._demo_arm = None
         self._demo_focus = None
-        self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
+        self._ideal_held=None;self._carry_relative=None;self._carry_orientation=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False
         self.record_video = record_video
@@ -315,6 +315,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
     def _restore_stabilized_containers(self):
         # Ideal support keeps a filled movable container upright when a later
         # navigation path brushes its body. This does not inspect task goals.
+        for obj, joints in getattr(self,'_stabilized_open_joints',{}).items():
+            for joint, position in joints:
+                joint.set_pos(position)
         for obj,pose in getattr(self,'_stabilized_containers',{}).items():
             if obj is not self._get_held():
                 obj.set_position_orientation(*pose);obj.keep_still()
@@ -329,8 +332,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self.robot.set_position_orientation(target['position'],target['orientation'])
         self.robot.keep_still()
         if target['held'] is not None:
-            target['held'].set_position_orientation(*T.pose_transform(
-                target['position'],target['orientation'],*target['relative']))
+            held_pose=T.pose_transform(target['position'],target['orientation'],*target['relative'])
+            if target['held'] is self._ideal_held and self._carry_orientation is not None:
+                held_pose=(held_pose[0],self._carry_orientation)
+            target['held'].set_position_orientation(*held_pose)
             target['held'].keep_still()
 
     def mark_video_tool(self, name, arguments, request_id):

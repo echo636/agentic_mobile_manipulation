@@ -126,41 +126,72 @@ class CheckedPlacement:
             name in str(getattr(obj,'category','')).lower() for name in ('floor','lawn','ground'))]
         support_by_link = {link.prim_path:obj for obj in supports
                            for link in obj.links.values()}
-        candidates = [(radius, angle) for radius in (.12, .22, .34, .48)
-                      for angle in (0, 45, 90, 135, 180, 225, 270, 315)]
+        # A selected pixel can lie well inside a broad table footprint. Search
+        # beyond its edge as well as near the pixel; official NextTo remains
+        # the acceptance criterion for every floor-supported candidate.
+        candidates = []
+        for radius in (.12, .22, .34, .48, .65, .85, 1.05, 1.25):
+            for angle in (0, 45, 90, 135, 180, 225, 270, 315):
+                theta = math.radians(angle)
+                xy = point[:2] + self.torch.tensor([radius * math.cos(theta),
+                    radius * math.sin(theta)], device=point.device)
+                candidates.append((radius,angle,xy))
+        target_lo,target_hi=target.aabb
+        half=(hi-lo)[:2]/2
+        # A model may click a table leg or a corner well away from its center.
+        # Use the selected target's actual current bounds to find adjacent
+        # floor, rather than assuming a short ring around that pixel suffices.
+        for gap in (.03,.08,.15):
+            for fraction in (.25,.5,.75):
+                x=target_lo[0]+fraction*(target_hi[0]-target_lo[0])
+                y=target_lo[1]+fraction*(target_hi[1]-target_lo[1])
+                for cx,cy in ((target_lo[0]-half[0]-gap,y),
+                              (target_hi[0]+half[0]+gap,y),
+                              (x,target_lo[1]-half[1]-gap),
+                              (x,target_hi[1]+half[1]+gap)):
+                    xy=self.torch.stack((cx,cy))
+                    delta=xy-point[:2]
+                    candidates.append((float(self.torch.linalg.norm(delta)),
+                        math.degrees(math.atan2(float(delta[1]),float(delta[0]))),xy))
         with self._placement_context(target):
             contents = list(self._carry_contents) if self.ideal_carry else []
             dependencies = list(getattr(self, '_carry_dependencies', []))
             self._carry_detach()
             accepted = None
-            for radius, angle in candidates:
-                theta = math.radians(angle)
-                xy = point[:2] + self.torch.tensor([radius * math.cos(theta),
-                    radius * math.sin(theta)], device=point.device)
+            rejected={'no_floor_hit':0,'overlap':0,'not_next_to':0}
+            for radius, angle, xy in candidates:
                 start = self.torch.tensor([float(xy[0]), float(xy[1]), float(point[2]) + .6], device=point.device)
                 end = start.clone(); end[2] = min(float(point[2]) - 1.5, -.5)
                 hit = raytest(start, end, ignore_bodies=ignored)
                 if (not hit['hit'] or float(hit['normal'][2]) < .9
                         or hit.get('rigidBody') not in support_by_link):
+                    rejected['no_floor_hit']+=1
                     continue
                 place = pose[0].clone(); place[:2] = xy
                 place[2] = hit['position'][2] + bottom_offset + .003
                 candidate_lo=lo+(place-pose[0]);candidate_hi=hi+(place-pose[0])
-                blocked=False
+                blocked=bool(((candidate_hi>target_lo+.005)&
+                              (candidate_lo<target_hi-.005)).all())
                 for other in self.env.scene.objects:
                     if other in (held,target,self.robot) or other in supports or getattr(other,'fixed_base',True):
                         continue
                     other_lo,other_hi=other.aabb
                     if bool(((candidate_hi>other_lo+.005)&(candidate_lo<other_hi-.005)).all()):
                         blocked=True;break
-                if blocked:continue
+                if blocked:
+                    rejected['overlap']+=1
+                    continue
                 held.set_position_orientation(place, pose[1]); held.keep_still()
                 self._relocate_contents(held, contents)
                 if held.states[NextTo].get_value(target):
                     accepted = (radius, angle, place.clone(), support_by_link[hit['rigidBody']],
                                 hit['position'].clone())
                     break
+                rejected['not_next_to']+=1
             if accepted is None:
+                self._placement_record({'status':'next_to_candidates_exhausted',
+                    'target':target.name,'held':held.name,
+                    'selected_point':point.tolist(),'rejected':rejected})
                 raise SkillError('sampling_error', 'No supported floor pose satisfied NextTo near the selected parent point', changed=True)
             for _ in range(min(50, max_steps)):
                 # Let gravity close the initial 3 mm clearance and create an

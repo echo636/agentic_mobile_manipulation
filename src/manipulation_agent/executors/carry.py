@@ -76,16 +76,31 @@ class ControlledCarry:
         # Open.set_value teleports articulated joints. Drawer contents must move
         # with their supporting volume, not be left at the previous world pose.
         payload=self._container_payload(obj) if state is Open else []
-        with self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
-            # Upstream symbolic OPEN samples a random opening and returns early
-            # when already ajar. Fully open/close all annotated joints instead.
-            accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
-            if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
-            self._relocate_container_payload(payload)
-            for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-            if bool(obj.states[state].get_value())!=wanted:
-                raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
-            self._verify_container_payload(obj,payload)
+        stabilized=getattr(self,'_stabilized_open_joints',{})
+        prior=stabilized.get(obj) if state is Open else None
+        try:
+            with self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
+                # Upstream symbolic OPEN samples a random opening and returns early
+                # when already ajar. Fully open/close all annotated joints instead.
+                accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
+                if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
+                if state is Open:
+                    if wanted:
+                        stabilized.pop(obj,None)
+                    else:
+                        joints=obj.states[Open].relevant_joints_info[1]
+                        stabilized[obj]=[(joint,float(joint.get_state()[0])) for joint in joints]
+                    self._stabilized_open_joints=stabilized
+                self._relocate_container_payload(payload)
+                for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                if bool(obj.states[state].get_value())!=wanted:
+                    raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
+                self._verify_container_payload(obj,payload)
+        except Exception:
+            if state is Open:
+                if prior is None:stabilized.pop(obj,None)
+                else:stabilized[obj]=prior
+            raise
         return {'primitive':primitive,'implementation':'transactional_official_state_setter_with_link_payload',
                 'fully_open_or_closed':state is Open,'postcondition':'official_state_and_containment_after_settling',
                 'preserved_contained_objects':len(payload),'failure_policy':'restore_pre_action_state'}
@@ -175,6 +190,8 @@ class ControlledCarry:
                 if getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None)
                 else self.robot.get_position_orientation())
         pose=T.pose_transform(*origin,*self._carry_relative)
+        if getattr(self,'_carry_orientation',None) is not None:
+            pose=(pose[0],self._carry_orientation)
         self._ideal_held.set_position_orientation(*pose);self._ideal_held.keep_still()
         for obj,relative in self._carry_contents:
             obj.set_position_orientation(*T.pose_transform(*pose,*relative));obj.keep_still()
@@ -188,17 +205,19 @@ class ControlledCarry:
         if not self.ideal_carry:
             for arm in self.robot.arm_names:self.robot.release_grasp_immediately(arm=arm)
         else:
-            self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[]
+            self._ideal_held=None;self._carry_relative=None;self._carry_orientation=None;self._carry_contents=[];self._carry_dependencies=[]
 
     @contextmanager
     def _placement_context(self,target=None):
         from .placement import placement_transaction
-        held=getattr(self,'_ideal_held',None);relative=getattr(self,'_carry_relative',None);contents=list(getattr(self,'_carry_contents',[]))
+        held=getattr(self,'_ideal_held',None);relative=getattr(self,'_carry_relative',None)
+        orientation=getattr(self,'_carry_orientation',None);contents=list(getattr(self,'_carry_contents',[]))
         dependencies=list(getattr(self,'_carry_dependencies',[]))
         try:
             with self._anchored_operation(target),placement_transaction(self.og.sim,self._placement_record):yield
         except Exception:
-            self._ideal_held=held;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
+            self._ideal_held=held;self._carry_relative=relative;self._carry_orientation=orientation
+            self._carry_contents=contents;self._carry_dependencies=dependencies
             if held is not None:self._carry_follow()
             raise
 
@@ -242,7 +261,12 @@ class ControlledCarry:
             # Legacy ideal carry starts at a safe elevated pose.
             lifted=original[0].clone();lifted[2]+=.18
             relative=T.relative_pose_transform(lifted,original[1],base_pos,base_quat)
-        self._ideal_held=obj;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
+        self._ideal_held=obj;self._carry_relative=relative
+        # Keep an assembly level while the visible hand moves and rotates.
+        # Otherwise a plate carrying food can turn vertical during navigation,
+        # invalidating its support relation before the destination is reached.
+        self._carry_orientation=original[1].clone() if contents and getattr(self,'demo_motion',False) else None
+        self._carry_contents=contents;self._carry_dependencies=dependencies
         self._carry_record(status='attached',object=obj.name,contained_objects=[c.name for c,_ in contents],
                            payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
                            implementation='pose_projection_no_fixed_joint',original_position=original[0].tolist())
