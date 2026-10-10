@@ -8,7 +8,7 @@ from contextlib import nullcontext
 from unittest.mock import patch
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.executors.carry import ControlledCarry, support_closure
+from manipulation_agent.executors.carry import ControlledCarry, support_closure, supported_child_on_top
 from manipulation_agent.executors.gt_navigation import GridMap
 from manipulation_agent.executors.placement import CheckedPlacement
 from manipulation_agent.observations.rig import visible_rig_rays
@@ -129,6 +129,21 @@ class MotorContractRegression(unittest.TestCase):
         edges=support_closure(plate,[contents,unrelated,cup,pizza,plate],lambda c,p:relationships.get((c,p)))
         self.assertEqual({c for c,_,_ in edges},{pizza,cup,contents})
         self.assertEqual(len(edges),3)
+
+    @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
+    def test_plate_beneath_pizza_does_not_follow_a_pizza_grasp(self):
+        import torch
+        class OnTop:pass
+        class Touching:pass
+        plate=types.SimpleNamespace(aabb=(torch.tensor([0.,0.,.68]),torch.tensor([.20,.20,.70])))
+        pizza=types.SimpleNamespace(aabb=(torch.tensor([0.,0.,.695]),torch.tensor([.20,.20,.75])))
+        plate.states={OnTop:types.SimpleNamespace(get_value=lambda other: True),
+                      Touching:types.SimpleNamespace(get_value=lambda other: True)}
+        pizza.states={OnTop:types.SimpleNamespace(get_value=lambda other: True),
+                      Touching:types.SimpleNamespace(get_value=lambda other: True)}
+        self.assertFalse(supported_child_on_top(plate,pizza,OnTop,Touching))
+        plate.states[OnTop].get_value=lambda other: False
+        self.assertTrue(supported_child_on_top(pizza,plate,OnTop,Touching))
 
     def test_selected_surface_failure_never_retries_without_the_point(self):
         b=CheckedPlacement();b._get_held=lambda:object();calls=[]

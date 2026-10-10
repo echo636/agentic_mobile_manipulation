@@ -393,3 +393,39 @@ predicate and task evaluator are unchanged. A privileged simulator probe
 forced the stochastic setter to return false and verified that the grid
 fallback placed a can `Inside` the real bin. That probe used object handles
 and is not a model task pass. The next full trash attempt remains necessary.
+
+A second privileged grid probe on the public Halloween instance forced the
+random setter to fail, then put `pillar_candle_89` and `pillar_candle_90`
+inside the same bottom cabinet. Both were officially `Inside` after the
+second action, including preservation of the first resident. The r12 model
+episode had started before the grid fallback was written, so its placement
+errors do not validate this new path. A fresh autonomous run is required.
+
+The Halloween r12 model episode later placed two candles inside the cabinet,
+verified the cauldron next to the coffee table, closed the cabinet, and
+formally finished with a valid video. It left both pumpkins and one candle
+outside, so the final official goal failed. This process had loaded the old
+executor before the grid fallback was written. The full task remains pending
+on a new model run with the committed motor revision.
+
+The same privileged cabinet probe was expanded to all five target items:
+three candles and two pumpkins. With the stochastic sampler forced to fail,
+the verified grid placed all five inside the same selected bottom cabinet;
+all five remained `Inside=true` after the last placement. This establishes
+motor capacity for one cabinet in this instance, while the autonomous model
+still has to identify and move every item through RGB.
+
+The plates/food r12 model trial selected `pizza_89` itself for the first
+grasp, then a refrigerator placement rolled back because the carried
+assembly lost its original support relation. The carry log showed the
+underlying plate was incorrectly classified as an `OnTop` child of the pizza;
+the model later hit the provider's missing-reasoning-item protocol error, so
+its formal finish was not recorded. The carry dependency check now requires
+a child to lie above its parent and rejects an inverted support relation.
+The pick-and-place skill explicitly says to grasp a visible plate rim when
+food must remain on a plate. A privileged real-simulator diagnostic then
+grasped `plate_93` with `pizza_89` as its payload and placed the assembly in
+the fridge: `OnTop(pizza, plate)`, `Inside(pizza, fridge)` and
+`Inside(plate, fridge)` were all true after settling. This proves the motor
+path, not autonomous task success; two plate assemblies, two bowls and the
+final closed fridge still need a fresh model trial.

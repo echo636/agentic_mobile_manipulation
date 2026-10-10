@@ -22,6 +22,26 @@ def support_closure(root, objects, relation):
     return edges
 
 
+def supported_child_on_top(child, parent, on_top, touching):
+    """Reject inverted contacts: a support beneath food is not its payload."""
+    if on_top not in child.states or touching not in child.states:
+        return False
+    lo, hi = parent.aabb
+    child_lo, child_hi = child.aabb
+    if not bool(((child_hi[:2] >= lo[:2]) & (child_lo[:2] <= hi[:2])).all()):
+        return False
+    # A shallow plate can geometrically overlap a pizza resting on it. Its
+    # lower face still lies below the pizza midpoint, so it must not follow a
+    # grasp of the pizza even if a noisy bidirectional OnTop predicate is true.
+    if (float(child_lo[2]) < float((lo[2] + hi[2]) / 2) - .01 or
+            float(child_lo[2]) > float(hi[2]) + .08):
+        return False
+    if on_top in parent.states and parent.states[on_top].get_value(child):
+        return False
+    return bool(child.states[on_top].get_value(parent) and
+                child.states[touching].get_value(parent))
+
+
 class ControlledCarry:
     @contextmanager
     def _anchored_operation(self, obj=None):
@@ -197,9 +217,7 @@ class ControlledCarry:
         def relation(child,parent):
             lo,hi=parent.aabb;clo,chi=child.aabb;center=(clo+chi)/2
             if Inside in child.states and bool(((center>=lo-.02)&(center<=hi+.02)).all()) and child.states[Inside].get_value(parent):return 'Inside'
-            overlap=bool(((chi[:2]>=lo[:2])&(clo[:2]<=hi[:2])).all())
-            if overlap and float(clo[2])>=float(lo[2])-.02 and float(clo[2])<=float(hi[2])+.08:
-                if OnTop in child.states and Touching in child.states and child.states[OnTop].get_value(parent) and child.states[Touching].get_value(parent):return 'OnTop'
+            if supported_child_on_top(child,parent,OnTop,Touching):return 'OnTop'
             return None
         dependencies=support_closure(obj,candidates,relation)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
