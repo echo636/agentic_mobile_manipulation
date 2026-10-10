@@ -867,3 +867,14 @@ Private grounding selected `bar_udatjt_0`, and the executor correctly returned
 The pick-and-place and failure-recovery skills now give that exact visual
 selection and recovery rule. This changes model guidance only; a new
 autonomous trial is required to establish whole-task success.
+
+Christmas r19 also failed the independent whole-task audit. The model first
+grasped the wicker basket instead of its wreath and released it, scattering
+the contents. Two later model-selected `grasp` points hit fixed floor rather
+than movable decorations. The last saved left RGB shows the circular wreath
+and a point near its empty center; magnification makes the hole visible.
+The model finished blocked with no requested placement completed, and its
+official goal fraction was zero. The visual selection rule now names wreaths
+as well as curved food: click a solid colored segment rather than the center
+of the enclosing rectangle or ring. This is guidance for the next model
+episode, not a passed Christmas demonstration.
