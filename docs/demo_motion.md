@@ -763,3 +763,13 @@ still holding that jar. The pick-and-place skill now explains that two bulky
 jars need separate broad clear patches and that `placement_yaw_degrees` can
 align a long jar with available surface length. No sausage was packed in
 this trial, so the complete task still needs a fresh autonomous episode.
+
+Toys r17 did not exercise the corrected packing motor: after grasping
+`jigsaw_puzzle_226`, the model lost the toy box from its camera view and
+selected the desk, wall, then floor for `place_inside`. All three were
+correctly rejected as `unsupported_relation`; it finished blocked with the
+puzzle in hand and failed the official audit. The saved r16 RGB shows the
+open gray rectangular toy tub centered on the desk below athlete posters.
+The pick-and-place skill now tells the model to turn or step back to recover
+that visible tub rather than infer that the box moved when the camera turned.
+No hidden object ID or scripted action was supplied to the controller.
