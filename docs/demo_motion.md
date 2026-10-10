@@ -1020,3 +1020,12 @@ one of its tiny visible contents, placed it on a sofa, and regrasped it. The
 run was stopped after this repeated carrier trajectory so r25 could test the
 higher-resolution observation. Its independent audit failed whole-task
 success and formal finish; nine visible motion segments and video passed.
+
+Can-meat r25 at 1024×1024 reached `hinged_jar_236` and staged it, but its
+subsequent grasp selected the whole cutting board with all four bratwursts.
+Two attempts to stage that board failed (`sampling_error`, then
+`postcondition_error`), and the model called `finish(blocked)` without trying
+the still-available clear-floor `release` recovery. The skill now directs
+that recovery explicitly. The independent audit passed model/simulator call
+alignment and video with 17 visible motion segments, but failed official task
+success and the empty-hand finish check.
