@@ -38,6 +38,24 @@ class GTNavigationTests(unittest.TestCase):
         else:self.fail('Follower did not terminate')
         self.assertLess(math.dist(pose[:2],plan.goal),.002)
 
+    def test_holonomic_follower_preserves_orientation_while_translating_sideways(self):
+        from dataclasses import replace
+        g=grid();plan=replace(plan_navigation(g,(.5,.5),(2.,2.),goal_mode='point'),
+                             travel_yaw=1.2,final_yaw=1.2)
+        follower=GreedyGridFollower(g,plan,1/30);pose=(.5,.5,1.2)
+        for i in range(1000):
+            cmd=follower.next_pose(pose)
+            if cmd is None:break
+            self.assertAlmostEqual(cmd[2],1.2)
+            pose=cmd
+        else:self.fail('Holonomic follower did not terminate')
+        self.assertLess(math.dist(pose[:2],plan.goal),.002)
+
+    def test_path_search_honors_episode_cancellation(self):
+        def stop():raise TimeoutError('episode expired')
+        with self.assertRaisesRegex(TimeoutError,'episode expired'):
+            plan_navigation(grid(),(.5,.5),(3.,3.),check_cancelled=stop)
+
     def test_elevated_target_keeps_lower_robot_band_outside_selected_point(self):
         standoff,margin=visual_approach_settings(1.83,0.,.7)
         self.assertEqual(standoff,.7)

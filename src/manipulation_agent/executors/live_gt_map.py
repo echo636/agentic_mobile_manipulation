@@ -64,7 +64,7 @@ def build_navigation_grid(backend, floor):
         lo,hi=lo.cpu().numpy(),hi.cpu().numpy()
         if hi[2]<floor_z+.03 or lo[2]>floor_z+height:continue
         position,quat=obj.get_position_orientation()
-        joints=obj.get_joint_positions()
+        joints=obj.get_joint_positions() if obj.n_joints else ()
         signature=tuple(round(float(v),3) for tensor in (position,quat,joints) for v in tensor)
         current[obj.name]={'signature':signature,'lo':lo[:2],'hi':hi[:2]}
     dirty=support.astype(bool) if cached['height'] is None or abs(cached['height']-height)>.01 else np.zeros_like(support,dtype=bool)
