@@ -475,7 +475,23 @@ class CheckedPlacement:
         sizes = {obj: obj.aabb[1] - obj.aabb[0] for obj in objects}
         offsets = {obj: (obj.aabb[0] + obj.aabb[1]) / 2 - snapshots[obj][0]
                    for obj in objects}
-        order = sorted(objects, key=lambda obj: -float(sizes[obj].prod()))
+        # The final item may be a broad, thin puzzle rather than the small
+        # ball used by earlier successful episodes. A single volume-sorted
+        # order can miss a feasible arrangement in this bounded bin search.
+        orders = [sorted(objects, key=key) for key in (
+            lambda obj: -float(sizes[obj].prod()),
+            lambda obj: -float(sizes[obj][0] * sizes[obj][1]),
+            lambda obj: -float(sizes[obj].max()),
+            lambda obj: -float(sizes[obj][2]),
+            lambda obj: float(sizes[obj].prod()),
+        )]
+        unique_orders = []
+        seen_orders = set()
+        for order in orders:
+            signature = tuple(obj.name for obj in order)
+            if signature not in seen_orders:
+                seen_orders.add(signature)
+                unique_orders.append(order)
         gap = .002
         for link in fillable:
             low, high = link.visual_aabb
@@ -483,50 +499,62 @@ class CheckedPlacement:
             span = high - low - .008
             if bool((span <= 0).any()):
                 continue
-            packed = []
-            def search(index):
-                if index == len(order):
-                    return True
-                obj = order[index]
-                size = sizes[obj]
-                if bool((size > span).any()):
+            for order in unique_orders:
+                packed = []
+                nodes = 0
+                def search(index):
+                    nonlocal nodes
+                    nodes += 1
+                    if nodes > 20000:
+                        return False
+                    if index == len(order):
+                        return True
+                    obj = order[index]
+                    size = sizes[obj]
+                    if bool((size > span).any()):
+                        return False
+                    axes = [sorted({0., *(float(pos[axis] + extent[axis]) + gap
+                                          for pos, extent, _ in packed)})
+                            for axis in range(3)]
+                    for z in axes[2]:
+                        for y in axes[1]:
+                            for x in axes[0]:
+                                pos = self.torch.tensor([x, y, z], device=low.device)
+                                if bool((pos + size > span + 1e-6).any()):
+                                    continue
+                                if any(bool(((pos < prior + extent + gap) &
+                                             (pos + size + gap > prior)).all())
+                                       for prior, extent, _ in packed):
+                                    continue
+                                packed.append((pos, size, obj))
+                                if search(index + 1):
+                                    return True
+                                packed.pop()
                     return False
-                axes = [sorted({0., *(float(pos[axis] + extent[axis]) + gap
-                                      for pos, extent, _ in packed)})
-                        for axis in range(3)]
-                for z in axes[2]:
-                    for y in axes[1]:
-                        for x in axes[0]:
-                            pos = self.torch.tensor([x, y, z], device=low.device)
-                            if bool((pos + size > span + 1e-6).any()):
-                                continue
-                            if any(bool(((pos < prior + extent + gap) &
-                                         (pos + size + gap > prior)).all())
-                                   for prior, extent, _ in packed):
-                                continue
-                            packed.append((pos, size, obj))
-                            if search(index + 1):
-                                return True
-                            packed.pop()
-                return False
-            if not search(0):
-                continue
-            for pos, size, obj in packed:
-                center = origin + pos + size / 2
-                obj.set_position_orientation(center - offsets[obj], snapshots[obj][1])
-                obj.keep_still()
-            if all(obj.states[Inside].get_value(target) for obj in objects):
-                residents[:] = [(obj, link, T.relative_pose_transform(
-                    *obj.get_position_orientation(), *link.get_position_orientation()))
-                    for obj in objects if obj is not held]
-                self._placement_record({'status':'sampled',
-                    'method':'verified_fillable_repack_fallback',
-                    'target':target.name,'held':held.name,
-                    'repacked_residents':len(residents)})
-                return True
-            for obj, pose in snapshots.items():
-                obj.set_position_orientation(*pose)
-                obj.keep_still()
+                if not search(0):
+                    continue
+                for pos, size, obj in packed:
+                    center = origin + pos + size / 2
+                    obj.set_position_orientation(center - offsets[obj], snapshots[obj][1])
+                    obj.keep_still()
+                if all(obj.states[Inside].get_value(target) for obj in objects):
+                    residents[:] = [(obj, link, T.relative_pose_transform(
+                        *obj.get_position_orientation(), *link.get_position_orientation()))
+                        for obj in objects if obj is not held]
+                    self._placement_record({'status':'sampled',
+                        'method':'verified_fillable_repack_fallback',
+                        'target':target.name,'held':held.name,
+                        'repacked_residents':len(residents),
+                        'packing_order':[obj.name for obj in order]})
+                    return True
+                for obj, pose in snapshots.items():
+                    obj.set_position_orientation(*pose)
+                    obj.keep_still()
+        self._placement_record({'status':'fillable_repack_exhausted',
+            'target':target.name,'held':held.name,
+            'residents':[obj.name for obj, _, _ in residents],
+            'object_extents':{obj.name:sizes[obj].tolist() for obj in objects},
+            'orders_tried':len(unique_orders)})
         return False
 
     def _checked_place_inside(self, target, max_steps):
@@ -606,7 +634,19 @@ class CheckedPlacement:
             placement_method='official_Inside_volume_sampler'
             try:
                 try:
-                    sampled=held.states[Inside].set_value(target,True)
+                    sampled=False
+                    if getattr(self,'demo_motion',False) and not contents and hasattr(held,'aabb'):
+                        extent=held.aabb[1]-held.aabb[0]
+                        # The stochastic setter may stand a thin board game
+                        # upright after carrying it flat, consuming most of
+                        # a toy box's height. Prefer a verified pose that
+                        # preserves its visible grasp-time orientation.
+                        if float(extent[2]) < .45 * min(float(extent[0]),float(extent[1])):
+                            sampled=self._fillable_grid_pose(held,target,fillable,contents)
+                            if sampled:
+                                placement_method='verified_fillable_grid_flat_item'
+                    if not sampled:
+                        sampled=held.states[Inside].set_value(target,True)
                 except SkillError as exc:
                     if exc.code!='sampling_budget_exhausted' or not getattr(self,'demo_motion',False):
                         raise

@@ -690,3 +690,45 @@ an aisle-side base pose and did grasp a hinged jar; therefore this r16 failure
 does not establish an impossible motor task. The pick-and-place skill now
 explains the counter obstruction and asks for an aisle-side or end-around
 approach before retrying the cabinet. A new model trial must verify it.
+
+Toys r16 formally finished blocked and failed its independent BDDL audit.
+Astra low autonomously placed `board_game_230`, `tennis_ball_225`,
+`jigsaw_puzzle_227`, `board_game_229`, and `board_game_228` into the same toy
+box. The fifth thin board placed successfully with preserved carry orientation.
+The model then grasped the remaining `jigsaw_puzzle_226`, but all three
+`place_inside` attempts failed with `sampling_error`; the last item remained
+held at finish. The private grid log recorded 75 occupied-volume overlaps
+and 10 outside-volume candidates on the first attempt. The packing motor now
+tries several bounded resident orderings and records dimensions if they all
+fail. This code path has passed unit tests. The privileged
+`toybox_r16_order_probe_r4` then put all six same objects inside in the exact
+r16 order with the official `Inside` predicate true after each action; it
+forced the verified fallback for each placement and did not replay the
+model's intermediate travel or original stochastic placements. This proves
+capacity for that order but does not reproduce or fix the r16 crowding state.
+A fresh autonomous model run and audit are still required.
+
+The comparison `toybox_r16_official_probe_r5` reproduced the final-item
+failure with the same six-item order when the official stochastic volume
+sampler was allowed to place earlier items. The fifth thin `board_game_228`
+had a 10.1 cm final vertical extent, versus 3.5 cm in the earlier flat
+capacity probe, leaving no verified room for the final puzzle. The motor now
+tries a flat, official-`Inside`-verified grid pose before stochastic sampling
+for thin demo-carried items without payloads. This is a general
+container-packing rule based on observed object extent, not a task-specific
+pixel or object selection. In the matching `MAS_DEMO_MOTION=1` simulator
+probe `toybox_r16_official_probe_r7`, all six objects in the r16 order were
+officially `Inside` after each placement; flat items used the new verified
+grid path where applicable. This validates the motor fix under the public
+instance, while an autonomous model run and audit remain necessary.
+
+Christmas r16 independently failed the official BDDL goal. Astra low
+recovered from an initial whole-basket grasp, selected the wreath itself,
+and placed it on the living-room sofa. It later grasped a candle but first
+selected a distant window for `place_on_top`, then a table point without a
+collision-free placement; it released that candle. After grasping a gift box,
+it repeated two nearly identical `place_next_to` selections on a tree seen
+across furniture, both rejected as `navigation_unreachable`, and finished
+blocked with the gift still held. The pick-and-place skill now describes a
+clear tabletop viewpoint and a distinct free-floor approach to the tree.
+These prompt changes need a fresh model trial and independent audit.
