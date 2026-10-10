@@ -631,3 +631,10 @@ basket body/rim, inspect a larger fresh image from multiple sides, and select
 an exposed item rather than a floor point or the basket wicker. Both tasks
 require new autonomous trials; neither diagnostic nor prompt change counts
 as success.
+
+Trash r15 passed the independent audit. Astra low autonomously grasped all
+three distinct cans and completed three `place_inside` actions into the
+kitchen trash can, then reported achieved with an empty hand. Official BDDL
+whole-task success, model/simulator trace alignment, visible motion, and the
+five-view video review all passed. The first-ten audited successes are now
+tasks 1, 2, 6, 7, and 9.
