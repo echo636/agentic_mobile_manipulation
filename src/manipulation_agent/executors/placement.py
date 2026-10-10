@@ -108,7 +108,7 @@ class CheckedPlacement:
     def _checked_place_next_to(self, target, max_steps, point):
         """Search floor poses near the selected parent pixel; accept only official NextTo."""
         import math
-        from omnigibson.object_states import NextTo, OnTop
+        from omnigibson.object_states import NextTo, OnTop, Touching, VerticalAdjacency
         from omnigibson.utils.sampling_utils import raytest
         held = self._get_held()
         if held is None:
@@ -157,19 +157,33 @@ class CheckedPlacement:
                 held.set_position_orientation(place, pose[1]); held.keep_still()
                 self._relocate_contents(held, contents)
                 if held.states[NextTo].get_value(target):
-                    accepted = (radius, angle, place.clone(), support_by_link[hit['rigidBody']])
+                    accepted = (radius, angle, place.clone(), support_by_link[hit['rigidBody']],
+                                hit['position'].clone())
                     break
             if accepted is None:
                 raise SkillError('sampling_error', 'No supported floor pose satisfied NextTo near the selected parent point', changed=True)
             for _ in range(min(50, max_steps)):
-                held.set_position_orientation(accepted[2], pose[1]); held.keep_still()
+                # Let gravity close the initial 3 mm clearance and create an
+                # actual lawn contact. Reprojecting the egg at every env.step
+                # kept its pose visually stable but made Touching stay false.
                 self._relocate_contents(held, contents)
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-            held.set_position_orientation(accepted[2], pose[1]); held.keep_still()
             self._relocate_contents(held, contents)
             if not held.states[NextTo].get_value(target):
                 raise SkillError('postcondition_error', 'Object is no longer next to the selected target', changed=True)
             if OnTop not in held.states or not held.states[OnTop].get_value(accepted[3]):
+                adjacency=held.states[VerticalAdjacency].get_value()
+                self._placement_record({'status':'unsupported_next_to_candidate',
+                    'target':target.name,'held':held.name,'support':accepted[3].name,
+                    'candidate_position':accepted[2].tolist(),
+                    'held_aabb_bottom_m':float(held.aabb[0][2]),
+                    'ray_support_height_m':float(accepted[4][2]),
+                    'bottom_ray_gap_m':float(held.aabb[0][2]-accepted[4][2]),
+                    'support_aabb_top_m':float(accepted[3].aabb[1][2]),
+                    'touching_support':bool(held.states[Touching].get_value(accepted[3])),
+                    'support_below':accepted[3] in adjacency.negative_neighbors,
+                    'support_above':accepted[3] in adjacency.positive_neighbors,
+                    'support_on_top':False})
                 raise SkillError('postcondition_error','NextTo placement is not supported by the sampled floor or lawn',changed=True)
             self._verify_payload(dependencies)
             self._placement_record({'status': 'next_to_verified', 'target': target.name,

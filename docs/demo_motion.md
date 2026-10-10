@@ -448,3 +448,16 @@ placements. The final BEHAVIOR predicate check and independent whole-task
 evaluator both report success; `scripts/audit_demo_trial.py` passed all seven
 checks, including model/simulator call alignment, passed five-view video and
 visible joint motion. The preserved r11 failed audit remains separate.
+
+The Easter-egg r12 model episode selected a real tree after grasping an egg,
+but two `place_next_to` attempts rolled back because official
+`OnTop(lawn)` was false. A privileged replay at that **same selected tree
+point** reproduced the failure. Diagnostics showed the lawn was below the
+egg but `Touching(lawn)` was false: the old executor reset the egg to a pose
+3 mm above the lawn after every physics step. Changing the offset alone did
+not help. A contact-depth sweep at that point showed that free settling
+produced `Touching`, `OnTop` and `NextTo` together. The placement now lets
+the egg settle under physics before checking the original predicates. A
+second privileged replay placed all three public-instance eggs next to the
+same model-selected tree and on the same lawn. This is motor validation,
+not a model whole-task pass; a fresh Astra low run is still required.
