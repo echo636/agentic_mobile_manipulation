@@ -488,3 +488,21 @@ The privileged `toybox_capacity_probe_r7` placed all six public-instance toys
 in sequence, with all six still `Inside` at the end. This validates the motor
 fallback only; the pending r13 Astra-low model episode must independently
 select and complete the task, and pass `scripts/audit_demo_trial.py`.
+
+The trash r13 Astra-low trial placed two cans successfully. Its third
+`place_inside` returned `unsupported_relation` because the chosen RGB pixel
+did not resolve to a fillable container. The model then reported `achieved`
+with that can still carried; the official task check and the stricter demo
+audit both failed. The visual-manipulation skill now instructs the model to
+count only successful placement tool results and keep a failed item pending.
+This prompt change requires a new model trial; it does not retroactively
+change the r13 result.
+
+For the kitchen-furniture r12 close failure, a separate privileged motor
+replay (`cabinet_close_probe_r2`) opened the same public-instance cabinet,
+placed the toaster, food processor and French press inside it, then closed it.
+All four operations succeeded, `Open` became false, and all three `Inside`
+predicates remained true. This narrows the r12 failure to the particular
+model-run scene/placements or its intervening actions; it does not establish
+that closing a loaded cabinet is generally broken. A fresh model trial is
+needed before changing that executor path.
