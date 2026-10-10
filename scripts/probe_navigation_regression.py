@@ -66,6 +66,7 @@ def main():
                                clicked_xy_error_m=math.dist(actual[:2],case['world_target'][:2]))
             validation['checks'][case['name']+'_reached']=result['nav_status']=='reached'
             if case['goal_mode']=='point':validation['checks'][case['name']+'_near_click']=case_record['clicked_xy_error_m']<=.15
+            else:validation['checks'][case['name']+'_within_reach']=case_record['clicked_xy_error_m']<=1.4
             if doors:validation['checks'][case['name']+'_closed_door_blocks']=case_record['closed_door_plan']['status']=='blocked'
             recorder.event('diagnostic_navigation_result',case_record);save();print(json.dumps(case_record),flush=True)
     except Exception as exc:
