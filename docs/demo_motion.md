@@ -586,6 +586,16 @@ by the measured support gap, and verified official `OnTop(sofa)=true` with
 demo motion enabled. This motor diagnosis does not count as a model success;
 a fresh autonomous trial remains required.
 
+Halloween r14 improved the cauldron placement and completed all five item
+placements into the same cabinet at least once, but its final official BDDL
+goal option had two false `Inside` clauses; the whole-task audit failed and the
+model finished blocked. The fixed cabinet now retains each verified item's
+link-relative pose across later navigation and opening/closing, excluding an
+item when the model grasps it again. In the privileged
+`drawer_close_probe_r2`, five items remained officially `Inside` after close,
+120 steps, reopen, reclose, and another 300 steps. This is motor validation;
+the task still needs a fresh autonomous model run.
+
 Trash r14 exited after one grasp because the external model provider rejected
 a continuation with a missing linked reasoning item. Its controller and audit
 failed; this is an infrastructure failure, not a successful or failed task

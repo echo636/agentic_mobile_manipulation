@@ -99,6 +99,8 @@ class ControlledCarry:
                 if state is Open and not wanted:
                     repaired_contents=self._repair_closed_container_contents(obj,payload)
                 self._verify_container_payload(obj,payload)
+                if any(container is obj for container in getattr(self,'_stabilized_container_payloads',{})):
+                    self._stabilized_container_payloads[obj]=self._container_payload(obj)
         except Exception:
             if state is Open:
                 if prior is None:stabilized.pop(obj,None)

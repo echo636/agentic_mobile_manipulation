@@ -634,9 +634,11 @@ class CheckedPlacement:
             self._verify_payload(dependencies)
             if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
                 raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
-            if not getattr(target,'fixed_base',True):
-                stabilized_payload=self._container_payload(target)
-        if not getattr(target,'fixed_base',True):
+            stabilized_payload=self._container_payload(target)
+        # Robot navigation and later drawer operations can knock a previously
+        # deposited item out of even a fixed cabinet. Preserve its verified
+        # link-relative pose until it is deliberately grasped again.
+        if hasattr(target,'get_position_orientation'):
             if not hasattr(self,'_stabilized_containers'):self._stabilized_containers={}
             self._stabilized_containers[target]=tuple(v.clone() for v in target.get_position_orientation())
             if not hasattr(self,'_stabilized_container_payloads'):self._stabilized_container_payloads={}
