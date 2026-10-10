@@ -162,6 +162,16 @@ ordered call alignment and formal-finish validation. A continuation is part
 of the same attempt, not a fresh policy trial. If the rate limit persists or
 the episode budget expires, the attempt still fails and is preserved.
 
+The experiment controller also permits up to two fresh Codex threads when the
+provider rejects its own prior `custom_tool_call` history for a missing
+`reasoning` item. This is a provider protocol failure, not a task reset: the
+simulator and MCP bridge stay live, and the new thread must call `initialize`
+to inspect the latest RGB snapshot and choose remaining actions itself. The
+controller appends each thread's raw model events in order for the independent
+model-call audit, records `provider_history_restarts` in `controller.json`,
+and still requires formal `finish` and whole-task BDDL success. A 429 uses
+the existing same-thread resume path instead.
+
 The initial first-ten attempts mistakenly used the desktop `ccswitch` provider
 and its existing Codex login. That provider returned 429; those attempts do
 not establish any limit on the user-provided experiment key. The experiment

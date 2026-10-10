@@ -110,7 +110,8 @@ def main():
                 '--instruction', args.instruction, '--mcp-command', sys.executable,
                 '--mcp-args-json', json.dumps(['-m', 'manipulation_agent.mcp_server', '--bridge', url]),
                 '--agent-profile', 'skills', '--timeout', str(args.timeout), '--output', str(controller)]
-            command += ['--rate-limit-resumes', '3', '--resume-backoff-seconds', '120']
+            command += ['--rate-limit-resumes', '3', '--resume-backoff-seconds', '120',
+                        '--provider-history-restarts', '2']
             model_code = subprocess.run(command, cwd=source, env=environment,
                 stdout=model_log, stderr=subprocess.STDOUT, timeout=args.timeout + 180).returncode
             if health(url) and not health(url).get('closed'):

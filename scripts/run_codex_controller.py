@@ -12,7 +12,7 @@ import time
 import shutil
 import signal
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.events import write_derived_events
@@ -28,6 +28,15 @@ from manipulation_agent.deadline import EpisodeDeadline, validate_execution_cloc
 def rate_limit_error(events):
     return any(event.get('type') in {'error', 'turn.failed'} and
                '429 Too Many Requests' in str(event.get('message') or event.get('error') or '')
+               for event in events)
+
+
+def provider_history_error(events):
+    """Recognize the provider's malformed tool history, which cannot be resumed."""
+    return any(event.get('type') in {'error', 'turn.failed'} and
+               'custom_tool_call' in str(event.get('message') or event.get('error') or '') and
+               'required' in str(event.get('message') or event.get('error') or '') and
+               'reasoning' in str(event.get('message') or event.get('error') or '')
                for event in events)
 
 
@@ -62,6 +71,8 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--rate-limit-resumes', type=int, default=0,
                    help='Resume the same Codex session after a provider 429, retaining its MCP episode')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
+    p.add_argument('--provider-history-restarts', type=int, default=0,
+                   help='Start a fresh Codex thread in the same live episode after malformed provider tool history')
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
     adapter = get_adapter(client)
@@ -72,10 +83,10 @@ def main(argv=None, *, allow_client=False):
     deadline=(EpisodeDeadline() if args.execution_clock_command_json is not None else
               EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env())
     if args.timeout<=0:p.error('--timeout must be positive')
-    if args.rate_limit_resumes < 0 or args.resume_backoff_seconds < 1:
+    if args.rate_limit_resumes < 0 or args.resume_backoff_seconds < 1 or args.provider_history_restarts < 0:
         p.error('Rate-limit resume count must be nonnegative and backoff positive')
-    if args.rate_limit_resumes and client != 'codex':
-        p.error('Rate-limit resume is supported only for Codex')
+    if (args.rate_limit_resumes or args.provider_history_restarts) and client != 'codex':
+        p.error('Provider recovery is supported only for Codex')
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
@@ -202,6 +213,38 @@ def main(argv=None, *, allow_client=False):
         process.duration_seconds=time.monotonic()-policy_started_monotonic
     if continuations:
         metadata['rate_limit_continuations']=continuations
+    history_restarts=[]
+    for attempt in range(1,args.provider_history_restarts+1):
+        remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
+        if (process.returncode == 0 or process.timed_out or not provider_history_error(segment_events)
+                or remaining <= 60):
+            break
+        segment_dir=args.output/'history_restarts'/str(attempt)
+        segment_dir.mkdir(parents=True,exist_ok=False)
+        restart_instruction=(args.instruction + '\n\nThe model service interrupted a previous thread '
+                             'during this same live simulator episode. Call initialize to inspect the current '
+                             'RGB observation; it does not reset the episode. Infer which goals remain from '
+                             'visible evidence, choose all actions yourself, and call finish when done. '
+                             'Do not assume any earlier action succeeded without checking.')
+        restart_config=replace(config,output=segment_dir,instruction=restart_instruction,
+                               timeout=remaining)
+        restart_project=adapter.prepare_project(restart_config,system_prompt(args.agent_profile),
+                                                [t['name'] for t in tool_specs(args.agent_profile)])
+        restarted=adapter.run(restart_project,segment_dir,remaining,on_start)
+        segment_path=segment_dir/'model_events.jsonl'
+        segment_events=adapter.parse(segment_path).raw_events
+        with raw_events.open('ab') as combined,segment_path.open('rb') as segment:
+            combined.write(segment.read())
+        history_restarts.append({'attempt':attempt,'reason':'provider_tool_history_protocol_error',
+                                 'thread_id':codex_thread_id(segment_events),
+                                 'returncode':restarted.returncode,'timed_out':restarted.timed_out,
+                                 'raw_events':str(segment_path.relative_to(args.output))})
+        process.returncode=restarted.returncode
+        process.timed_out=process.timed_out or restarted.timed_out
+        process.policy_finished_at_unix=restarted.policy_finished_at_unix
+        process.duration_seconds=time.monotonic()-policy_started_monotonic
+    if history_restarts:
+        metadata['provider_history_restarts']=history_restarts
     policy_finished_at = process.policy_finished_at_unix
     if process.timed_out:
         metadata['timeout'] = True
