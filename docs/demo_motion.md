@@ -976,3 +976,7 @@ grasp while holding any object before reaching or payload handling, including
 regrasp of the held object. This converts that crash to a recoverable
 `hand_occupied` tool error. The attempt is retained as a failed audit, not an
 autonomous task success; the next can-meat retry must test the fix.
+The model-facing pick-and-place skill now asks the policy to compare the
+post-grasp RGB against the intended item when food sits on a board or
+decorations sit in a basket, and to stage an accidentally carried support
+before retrying. This remains RGB-only autonomous selection.
