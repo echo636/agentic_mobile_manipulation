@@ -1,6 +1,6 @@
 """Private current GT collision walkability on the simulator's floor support map.
 
-Vertical PhysX queries rasterize actual loaded collision geometry. Precomputed
+PhysX overlap columns rasterize actual loaded collision geometry. Precomputed
 furniture/closed-door silhouettes are not authoritative for a changed scene.
 Object bounds only restrict dirty query regions; they never define occupancy.
 """
@@ -83,15 +83,27 @@ def build_navigation_grid(backend, floor):
     started=time.monotonic();count=0
     for row,col in np.argwhere(dirty):
         if count%2048==0:backend.deadline.check()
-        blocked=False
+        blocked=False;query_error=None
         def hit_callback(hit):
-            nonlocal blocked
-            if str(hit['rigidBody']) not in ignored_links:
-                blocked=True
+            nonlocal blocked,query_error
+            try:
+                # PhysX all-hit callbacks receive OverlapHit objects; only
+                # raycast_closest returns a dictionary. Never treat a callback
+                # exception swallowed by the native boundary as empty space.
+                if str(hit.rigid_body) not in ignored_links:
+                    blocked=True
+                    return False
+                return True
+            except Exception as exc:
+                query_error=exc
                 return False
-            return True
         xy=origin+np.array([col,row])*resolution
-        query.raycast_all((float(xy[0]),float(xy[1]),floor_z+.03),(0.,0.,1.),max(.1,height-.03),hit_callback)
+        # A volume overlap also catches a thin closed leaf or a column whose
+        # origin is already inside a solid; a one-sided vertical ray can miss it.
+        query.overlap_box((resolution/2,resolution/2,max(.05,(height-.03)/2)),
+                          (float(xy[0]),float(xy[1]),floor_z+(height+.03)/2),
+                          (0.,0.,0.,1.),hit_callback,False)
+        if query_error is not None:raise RuntimeError('PhysX overlap callback failed') from query_error
         free[row,col]=0 if blocked else 1
         count+=1
     cached.update(objects=current,height=height)
@@ -102,6 +114,6 @@ def build_navigation_grid(backend, floor):
         'chassis_footprint_world_offsets':hull,'kernel_shape':list(kernel.shape),
         'footprint':'current_yaw_chassis_convex_hull_holonomic_translation',
         'query_height_m':height,'updated_cells':count,'query_seconds':time.monotonic()-started,
-        'dynamic_collision_check':'live_PhysX_vertical_queries_incrementally_updated',
+        'dynamic_collision_check':'live_PhysX_overlap_columns_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
         'held_object_footprint_included':False}

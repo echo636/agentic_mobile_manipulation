@@ -31,14 +31,14 @@ class LiveGridTests(unittest.TestCase):
             robot.links={'base':link}
             wall=Obj('wall',[-.04,-1.,0.],[.04,1.,1.8],[0.,0.,0.])
             door=Obj('door',[-.04,-.4,0.],[.04,.4,1.8],[0.,0.,0.],1)
-            def raycast(origin,direction,distance,callback):
+            def overlap(half_extent,origin,rotation,callback,any_hit):
                 # Robot geometry is always ignored, even when PhysX reports it
                 # before a real blocker. Walls remain and the door can open.
-                if callback({'rigidBody':'/robot/base'}):
+                if callback(SimpleNamespace(rigid_body='/robot/base')):
                     x,y,z=origin
-                    if abs(x)<.049 and (abs(y)>.4 or door.angle==0):callback({'rigidBody':'/door/leaf'})
+                    if abs(x)<.049 and (abs(y)>.4 or door.angle==0):callback(SimpleNamespace(rigid_body='/door/leaf'))
             fake=ModuleType('omnigibson');lazy=ModuleType('omnigibson.lazy');fake.lazy=lazy
-            lazy.omni=SimpleNamespace(physx=SimpleNamespace(get_physx_scene_query_interface=lambda:SimpleNamespace(raycast_all=raycast)))
+            lazy.omni=SimpleNamespace(physx=SimpleNamespace(get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap)))
             trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((40,40))])
             scene=SimpleNamespace(scene_dir=temp,trav_map=trav,objects=[wall,door,robot])
             backend=SimpleNamespace(robot=robot,env=SimpleNamespace(scene=scene),_get_held=lambda:None,_carry_contents=[],deadline=SimpleNamespace(check=lambda:None))
