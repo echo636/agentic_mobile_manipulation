@@ -980,3 +980,14 @@ The model-facing pick-and-place skill now asks the policy to compare the
 post-grasp RGB against the intended item when food sits on a board or
 decorations sit in a basket, and to stage an accidentally carried support
 before retrying. This remains RGB-only autonomous selection.
+
+Christmas r23 independently failed: Astra low grasped the entire wicker
+basket, placed it on a sofa, released it, then repeatedly tried to reach or
+grasp decorations from that poor approach. The simulator returned
+`out_of_reach` and later `fixed_object`; the controller was stopped after 19
+model-selected `act` calls without task progress. Its video and 22 visible
+motion segments passed, but formal finish and official whole-task success did
+not. This attempt also exercised one fresh-thread provider-history restart in
+the same live episode; its event segment is recorded under
+`controller/history_restarts/1`. R24 is the first attempt with the clarified
+post-grasp RGB verification guidance.
