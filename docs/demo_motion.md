@@ -503,6 +503,14 @@ The same six-object diagnostic passed again as `toybox_capacity_probe_r8`
 with `MAS_DEMO_MOTION=1`; every successive official `Inside` count rose from
 one to six. This checks the actual demo carry configuration, but is still
 excluded from the autonomous model score.
+The r13 Astra-low toy trial did not exercise the six-toy placement path:
+after an initial puzzle grasp/release, the model repeatedly selected the
+movable toy box as the carried object, failed to put it on a desk, and then
+tried `place_inside` with the held object and target both being that box.
+The official task and independent demo audit failed. The pick-and-place
+skill now tells the model to keep a movable collection container as its
+destination, and the motor immediately rejects self-containment. A new
+autonomous trial is required.
 
 The trash r13 Astra-low trial placed two cans successfully. Its third
 `place_inside` returned `unsupported_relation` because the chosen RGB pixel
