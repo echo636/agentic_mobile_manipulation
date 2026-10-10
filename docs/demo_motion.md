@@ -773,3 +773,25 @@ open gray rectangular toy tub centered on the desk below athlete posters.
 The pick-and-place skill now tells the model to turn or step back to recover
 that visible tub rather than infer that the box moved when the camera turned.
 No hidden object ID or scripted action was supplied to the controller.
+
+Christmas r17 failed the official audit while still holding the wreath.
+The model initially grasped `wreath_227` with `candy_cane_226` resting on it.
+Its first `place_on_top` selected the coffee table rather than the sofa; the
+wreath reached that table, but the cane lost its original support relation,
+so the motor rolled back. Later selections hit two sofa regions: a shallow
+seat placement again lost the cane relation, and a sloped sofa patch did not
+meet stable support despite being the correct object. The model then sampled
+other unsuitable surfaces and finished blocked. The motor now restores a
+carried payload after each settling physics step and allows a verified
+official `OnTop` result on the exact selected surface even where the local
+mesh normal is sloped. The skill now directs the model to a broad seat cushion.
+These changes require a fresh simulator probe and autonomous task audit.
+
+In privileged `wreath_payload_r17_probe_r2`, the r17 model-selected flat
+sofa point produced official `OnTop(wreath, sofa)=true` with the updated
+motor. That probe did not carry a candy cane: the initial scene's noisy
+`OnTop(cane, wreath)` report lacked physical `Touching`, so the carry closure
+excluded it. A second probe attempted the official state setter for the
+cane, but it returned false and still did not create contact. Thus the
+payload-preservation change remains unverified in a faithful real-simulator
+replay; neither probe counts as an autonomous Christmas success.

@@ -320,6 +320,11 @@ class CheckedPlacement:
                     held.keep_still()
                     self._relocate_contents(held,contents)
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                if point is not None and contents:
+                    # The final settling step can dislodge a light payload
+                    # from a shallow carrier even though the carrier itself
+                    # remained at the verified selected surface.
+                    self._relocate_contents(held,contents)
             if point is not None:
                 held.keep_still()
             adjacency = held.states[VerticalAdjacency].get_value()
@@ -334,7 +339,11 @@ class CheckedPlacement:
                 'target_above':target in adjacency.positive_neighbors,
                 'grasp_released':self._get_held() is None})
             # Official OnTop alone says nothing about which shelf was selected.
-            if not (supported if point is not None else official_on_top):
+            selected_checks = support.get('checks', {})
+            official_selected_surface = (official_on_top and point is not None and
+                selected_checks.get('selected_surface_neighborhood', False) and
+                selected_checks.get('selected_shelf_height', False))
+            if not ((supported or official_selected_surface) if point is not None else official_on_top):
                 raise SkillError('postcondition_error','Object is not stably supported by the selected surface',changed=True)
             self._verify_payload(dependencies)
             if point is not None:
