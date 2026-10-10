@@ -962,3 +962,7 @@ neighborhood limit. The ring's origin is offset from its supporting rim. The
 limit is now 0.22 m while the selected-support-ray, height, gap and stability
 checks remain required. This source fix applies from the next launched trial;
 the in-flight r22 trial retains its original snapshot.
+R22 was then stopped after five consecutive model-selected sofa placements
+were rejected by that known old threshold. Its independent review records
+14 steps, visible motion and a failed whole-task result. R23 is the first
+trial using both the corrected threshold and provider-history restart path.
