@@ -336,25 +336,37 @@ class CheckedPlacement:
         movable = [obj for obj in self.env.scene.objects
                    if obj not in (held, target, self.robot, *(item for item, _ in contents))
                    and not getattr(obj, 'fixed_base', True)]
+        rejected={'invalid_inset':0,'outside_volume':0,'overlap':0,'inside_false':0}
         for link in fillable:
             low, high = link.visual_aabb
             if bool((high <= low).any()):
+                rejected['invalid_inset']+=1
                 continue
             inset_lo, inset_hi = low + extent / 2 + .004, high - extent / 2 - .004
             if bool((inset_hi <= inset_lo).any()):
+                rejected['invalid_inset']+=1
                 continue
-            for fz in (.18, .36, .55):
-                for fx, fy in ((.5,.5),(.25,.25),(.75,.25),(.25,.75),(.75,.75),
-                               (.25,.5),(.75,.5),(.5,.25),(.5,.75)):
+            # Thin boxes can occupy separate vertical layers of a toy box;
+            # stopping at 55% of its fillable height missed the upper layer.
+            # Pack against an edge first and reuse its vertical column. A
+            # center-first search consumes the only contiguous area available
+            # to a large board game after smaller toys have been placed.
+            for fx, fy in ((.05,.05),(.95,.05),(.05,.95),(.95,.95),
+                           (.05,.5),(.95,.5),(.5,.05),(.5,.95),
+                           (.25,.25),(.75,.25),(.25,.75),(.75,.75),
+                           (.25,.5),(.75,.5),(.5,.25),(.5,.75),(.5,.5)):
+                for fz in (.18, .36, .55, .75, .90):
                     fraction = torch.tensor([fx, fy, fz], device=low.device)
                     center = inset_lo + fraction * (inset_hi - inset_lo)
                     if not bool(link.check_points_in_volume(center.unsqueeze(0))[0]):
+                        rejected['outside_volume']+=1
                         continue
                     place = center - center_offset
                     displacement = place - pose[0]
                     candidate_lo, candidate_hi = held_lo + displacement, held_hi + displacement
                     if any(bool(((candidate_hi > obj.aabb[0] + .005) &
                                  (candidate_lo < obj.aabb[1] - .005)).all()) for obj in movable):
+                        rejected['overlap']+=1
                         continue
                     held.set_position_orientation(place, pose[1])
                     held.keep_still()
@@ -365,9 +377,77 @@ class CheckedPlacement:
                             'target': target.name, 'held': held.name,
                             'fillable_link': link.name, 'position': place.tolist()})
                         return True
+                    rejected['inside_false']+=1
         held.set_position_orientation(*pose)
         held.keep_still()
         self._relocate_contents(held, contents)
+        self._placement_record({'status':'fillable_grid_exhausted','target':target.name,
+            'held':held.name,'held_extent':extent.tolist(),'rejected':rejected})
+        return False
+
+    def _repack_fillable_contents(self, held, target, fillable, residents, contents):
+        """Repack a crowded selected volume, preserving every official Inside state."""
+        from omnigibson.object_states import Inside
+        from omnigibson.utils import transform_utils as T
+        if contents or len(residents) > 8:
+            return False
+        objects = [child for child, _, _ in residents] + [held]
+        snapshots = {obj: obj.get_position_orientation() for obj in objects}
+        sizes = {obj: obj.aabb[1] - obj.aabb[0] for obj in objects}
+        offsets = {obj: (obj.aabb[0] + obj.aabb[1]) / 2 - snapshots[obj][0]
+                   for obj in objects}
+        order = sorted(objects, key=lambda obj: -float(sizes[obj].prod()))
+        gap = .002
+        for link in fillable:
+            low, high = link.visual_aabb
+            origin = low + .004
+            span = high - low - .008
+            if bool((span <= 0).any()):
+                continue
+            packed = []
+            def search(index):
+                if index == len(order):
+                    return True
+                obj = order[index]
+                size = sizes[obj]
+                if bool((size > span).any()):
+                    return False
+                axes = [sorted({0., *(float(pos[axis] + extent[axis]) + gap
+                                      for pos, extent, _ in packed)})
+                        for axis in range(3)]
+                for z in axes[2]:
+                    for y in axes[1]:
+                        for x in axes[0]:
+                            pos = self.torch.tensor([x, y, z], device=low.device)
+                            if bool((pos + size > span + 1e-6).any()):
+                                continue
+                            if any(bool(((pos < prior + extent + gap) &
+                                         (pos + size + gap > prior)).all())
+                                   for prior, extent, _ in packed):
+                                continue
+                            packed.append((pos, size, obj))
+                            if search(index + 1):
+                                return True
+                            packed.pop()
+                return False
+            if not search(0):
+                continue
+            for pos, size, obj in packed:
+                center = origin + pos + size / 2
+                obj.set_position_orientation(center - offsets[obj], snapshots[obj][1])
+                obj.keep_still()
+            if all(obj.states[Inside].get_value(target) for obj in objects):
+                residents[:] = [(obj, link, T.relative_pose_transform(
+                    *obj.get_position_orientation(), *link.get_position_orientation()))
+                    for obj in objects if obj is not held]
+                self._placement_record({'status':'sampled',
+                    'method':'verified_fillable_repack_fallback',
+                    'target':target.name,'held':held.name,
+                    'repacked_residents':len(residents)})
+                return True
+            for obj, pose in snapshots.items():
+                obj.set_position_orientation(*pose)
+                obj.keep_still()
         return False
 
     def _checked_place_inside(self, target, max_steps):
@@ -447,6 +527,9 @@ class CheckedPlacement:
                 if not sampled:
                     sampled=self._fillable_grid_pose(held,target,fillable,contents)
                     placement_method='verified_fillable_grid_fallback'
+                    if not sampled:
+                        sampled=self._repack_fillable_contents(held,target,fillable,residents,contents)
+                        placement_method='verified_fillable_repack_fallback'
                     if not sampled:
                         raise SkillError('sampling_error','No verified pose in the selected fillable volume',changed=True)
                 # Once the official sampler has found an Inside pose, retain

@@ -104,6 +104,11 @@ video, and recorded visible joint motion. Multi-object tasks must pass their
 whole official goal; a partial sequence does not count. The recorded motion is
 genuine simulator stepping, while object contact and goal-state changes remain
 idealized and are labeled as such in the replay.
+For these first ten placement demos, the audit also requires the model to
+finish with `achieved` and a committed empty hand. The latter is derived from
+the ordered successful grasp, placement and release effects; an object held
+over a container can temporarily satisfy an `Inside` predicate without
+completing a visible placement.
 
 The first launch used the 1500-second controller limit and two-step video
 render stride. The radio passed. The trash task reached the controller limit
@@ -445,8 +450,8 @@ The fresh mousetrap r12 autonomous trial **passed**. `gpt-6-astra` at `low`
 effort selected the four grasps and placements from RGB, including two
 successful `place_under` actions on the same bathroom sink and two floor
 placements. The final BEHAVIOR predicate check and independent whole-task
-evaluator both report success; `scripts/audit_demo_trial.py` passed all seven
-checks, including model/simulator call alignment, passed five-view video and
+evaluator both report success; `scripts/audit_demo_trial.py` passed its checks,
+including model/simulator call alignment, passed five-view video and
 visible joint motion. The preserved r11 failed audit remains separate.
 
 The Easter-egg r12 model episode selected a real tree after grasping an egg,
@@ -461,3 +466,25 @@ the egg settle under physics before checking the original predicates. A
 second privileged replay placed all three public-instance eggs next to the
 same model-selected tree and on the same lawn. This is motor validation,
 not a model whole-task pass; a fresh Astra low run is still required.
+
+The toys r12 model trial successfully put five of six toys in the box. It
+grasped the final board game but every `place_inside` attempt failed. The
+model correctly finished `blocked`; its final held pose happened to satisfy
+the container's geometric `Inside` predicate, so the official task flag and
+Q score both read 1.0 despite the unfinished visible action. The revised
+first-ten audit requires `agent_reported_achieved` and
+`hand_empty_at_finish`, so this attempt remains a failed demo and its
+original machine-audit file is preserved as historical evidence. A new
+motor/capacity diagnosis and fresh model trial are required.
+
+The capacity diagnosis is now verified in the real simulator. A greedy
+fillable-grid search put the first four toys inside but exhausted all 85
+collision-free candidates for the fifth, despite a feasible three-dimensional
+packing of all six toy AABBs. The executor now searches a volume-relative
+packing for the selected box's existing contents plus the carried object when
+ordinary placement fails. It moves only those contents and verifies the
+unmodified official `Inside` predicate for every object before committing.
+The privileged `toybox_capacity_probe_r7` placed all six public-instance toys
+in sequence, with all six still `Inside` at the end. This validates the motor
+fallback only; the pending r13 Astra-low model episode must independently
+select and complete the task, and pass `scripts/audit_demo_trial.py`.

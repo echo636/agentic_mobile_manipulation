@@ -30,6 +30,24 @@ def calls_align(model, simulator):
     return ordered(model) == ordered(simulator) and counted(model) == counted(simulator)
 
 
+def hand_empty_after_events(events):
+    """Track committed carry/release effects from the simulator's ordered act results."""
+    held = False
+    for event in events:
+        if event.get('kind') != 'tool_result' or event.get('name') != 'act':
+            continue
+        result = event.get('result') or {}
+        if not result.get('ok'):
+            continue
+        primitive = (result.get('effect') or {}).get('primitive')
+        if primitive == 'grasp':
+            held = True
+        elif primitive in {'place_inside', 'place_on_top', 'place_under',
+                           'place_next_to', 'attach', 'hang', 'release'}:
+            held = False
+    return not held
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('trial', type=Path)
@@ -50,6 +68,9 @@ def main():
     effects = [event.get('result') or {} for event in events
                if event.get('kind') == 'tool_result' and event.get('name') == 'act']
     motion = jsonl(run_dir / 'demo_motion.jsonl')
+    source = Path(__file__).resolve().parents[1]
+    catalog = json.loads((source / 'src/manipulation_agent/tasks.json').read_text())['tasks']
+    first_ten = run['config']['task'] in list(catalog)[:10]
     non_manipulation = {'navigate_to', 'look', 'wait', 'release'}
     selected = [primitive for primitive in acts if primitive not in non_manipulation]
     executed = [(effect.get('effect') or {}).get('primitive') for effect in effects if effect.get('ok')]
@@ -63,8 +84,9 @@ def main():
         'official_task_success': (run.get('evaluation') or {}).get('official_task_success') is True,
         'video_passed': (run.get('video') or {}).get('status') == 'passed',
         'visible_motion_recorded': any(row.get('status') == 'shown' for row in motion),
+        'agent_reported_achieved': run.get('agent_outcome') == 'achieved',
+        'hand_empty_at_finish': not first_ten or hand_empty_after_events(events),
     }
-    source = Path(__file__).resolve().parents[1]
     if checks['video_passed']:
         replay = [sys.executable, '-m', 'manipulation_agent.replay', '--run-dir', str(run_dir)]
         if (controller_dir / 'model_events.jsonl').exists():
@@ -79,6 +101,7 @@ def main():
               'model': controller.get('model'),
               'reasoning_effort': controller.get('model_reasoning_effort') or summary['reasoning_effort'],
               'demo_motion': (run.get('evaluation') or {}).get('demo_motion'),
+              'hand_empty_requirement_applied': first_ten,
               'checks': checks, 'passed': all(checks.values()),
               'model_act_sequence': acts,
               'failure_category': ('provider_rate_limit_429' if any(
