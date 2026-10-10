@@ -855,3 +855,15 @@ success, and all seven goal predicates true. The nine audit checks passed,
 including model/simulator alignment, empty hand, visible motion, and
 five-view video (`04_cleaning_up_plates_and_food_r19/demo_audit.json`).
 This is the eighth independently audited success among the first ten tasks.
+
+Can-meat r19 failed the whole-task audit. The model grasped `hinged_jar_235`
+and staged it on the kitchen counter, but no bratwursts were placed inside
+either jar; it finished blocked, with the official final goal fraction `2/9`.
+The decisive RGB `grasp` attempt at normalized `(0.54, 0.727)` looked close
+to a crescent-shaped cooked bratwurst. Magnifying the saved `rgb-00013-front`
+shows that raster pixel `(276, 371)` is in the empty inner curve, on the bar.
+Private grounding selected `bar_udatjt_0`, and the executor correctly returned
+`fixed_object`. The model did not retry on a solid orange part of the sausage.
+The pick-and-place and failure-recovery skills now give that exact visual
+selection and recovery rule. This changes model guidance only; a new
+autonomous trial is required to establish whole-task success.
