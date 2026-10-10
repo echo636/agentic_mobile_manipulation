@@ -732,3 +732,12 @@ across furniture, both rejected as `navigation_unreachable`, and finished
 blocked with the gift still held. The pick-and-place skill now describes a
 clear tabletop viewpoint and a distinct free-floor approach to the tree.
 These prompt changes need a fresh model trial and independent audit.
+
+Halloween r17 passed the independent audit in full. Astra low autonomously
+selected and placed three candles and two pumpkins inside the same living-room
+TV cabinet; the executor verified 0, 1, 2, 3, then 4 earlier residents before
+successive placements. The model closed the cabinet, grasped the cauldron,
+placed it next to the living-room table, and formally reported achieved with
+an empty hand. Official whole-task BDDL, controller/action alignment,
+five-view video, and visible-motion checks all passed. This is the sixth
+independently audited first-ten task success.
