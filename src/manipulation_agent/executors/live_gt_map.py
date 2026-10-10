@@ -27,20 +27,23 @@ def build_navigation_grid(backend, floor):
     from .gt_navigation import GridMap
     scene=backend.env.scene;trav=scene.trav_map;resolution=float(trav.map_resolution)
     floor_z=float(trav.floor_heights[floor]);base=backend.robot.get_position_orientation()[0].cpu().numpy()
-    chassis=[]
+    # The base is wider than the torso. A single base-width column falsely
+    # blocks motion beside desks/chair backs. Match occupancy by height band.
+    height=float(backend.robot.aabb[1][2])-floor_z
+    edges=[.03,.35,.8,1.25,max(1.26,height+.02)]
+    bodies=[]
     for link in backend.robot.links.values():
         if link.is_meta_link:continue
         points=link.collision_boundary_points_world
-        if points is None:continue
-        points=points.cpu().numpy()
-        if points[:,2].min()<floor_z+.20:
-            low=points[points[:,2]<=floor_z+.30]
-            if len(low):chassis.extend(low[:,:2]-base[:2])
-    if not chassis:raise ValueError('Robot chassis collision geometry unavailable')
-    kernel=footprint_kernel(chassis,resolution)
-    # Holonomic translation preserves the current chassis yaw all along the
-    # route, so the actual oriented footprint applies without a giant disk.
-    height=float(backend.robot.aabb[1][2])-floor_z
+        if points is not None:bodies.append(points.cpu().numpy())
+    layers=[]
+    for lo,hi in zip(edges,edges[1:]):
+        chunks=[p[:,:2]-base[:2] for p in bodies if p[:,2].max()>=floor_z+lo and p[:,2].min()<=floor_z+hi]
+        if not chunks:continue
+        hull=cv2.convexHull(np.concatenate(chunks).astype('float32')).reshape(-1,2)
+        layers.append((lo,hi,hull))
+    if not layers:raise ValueError('Robot collision geometry unavailable')
+    chassis=layers[0][2];kernel=footprint_kernel(chassis,resolution)
     source=Path(scene.scene_dir)/'layout'/f'floor_trav_no_obj_{floor}.png'
     cache=getattr(backend,'_live_gt_collision_cache',None)
     if cache is None:cache=backend._live_gt_collision_cache={}
@@ -48,9 +51,9 @@ def build_navigation_grid(backend, floor):
         if not source.is_file():raise ValueError('GT floor support map unavailable: '+str(source))
         raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE);h,w=trav.floor_map[floor].shape
         raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
-        cache[floor]={'support':raw,'free':raw.copy(),'objects':{},'height':None,
+        cache[floor]={'support':raw,'free':np.repeat(raw[None],len(layers),axis=0),'objects':{},'height':None,
                       'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
-    cached=cache[floor];support=cached['support'];free=cached['free'];h,w=free.shape
+    cached=cache[floor];support=cached['support'];free=cached['free'];h,w=support.shape
     origin=np.array([-w*resolution/2,-h*resolution/2])
     held=backend._get_held();ignored_objects={backend.robot,held,*[o for o,_ in backend._carry_contents]}
     ignored_links={link.prim_path for obj in ignored_objects if obj is not None for link in obj.links.values()}
@@ -62,7 +65,7 @@ def build_navigation_grid(backend, floor):
         if obj in ignored_objects:continue
         lo,hi=obj.aabb
         lo,hi=lo.cpu().numpy(),hi.cpu().numpy()
-        if hi[2]<floor_z+.03 or lo[2]>floor_z+height:continue
+        if hi[2]<floor_z+.03 or lo[2]>floor_z+edges[-1]:continue
         position,quat=obj.get_position_orientation()
         joints=obj.get_joint_positions() if obj.n_joints else ()
         signature=tuple(round(float(v),3) for tensor in (position,quat,joints) for v in tensor)
@@ -83,47 +86,46 @@ def build_navigation_grid(backend, floor):
     started=time.monotonic();count=0
     for row,col in np.argwhere(dirty):
         if count%2048==0:backend.deadline.check()
-        blocked=False;query_error=None
-        def hit_callback(hit):
-            nonlocal blocked,query_error
-            try:
-                # PhysX all-hit callbacks receive OverlapHit objects; only
-                # raycast_closest returns a dictionary. Never treat a callback
-                # exception swallowed by the native boundary as empty space.
-                if str(hit.rigid_body) not in ignored_links:
-                    blocked=True
-                    return False
-                return True
-            except Exception as exc:
-                query_error=exc
-                return False
         xy=origin+np.array([col,row])*resolution
-        # A volume overlap also catches a thin closed leaf or a column whose
-        # origin is already inside a solid; a one-sided vertical ray can miss it.
-        query.overlap_box((resolution/2,resolution/2,max(.05,(height-.03)/2)),
-                          (float(xy[0]),float(xy[1]),floor_z+(height+.03)/2),
-                          (0.,0.,0.,1.),hit_callback,False)
-        if query_error is not None:raise RuntimeError('PhysX overlap callback failed') from query_error
-        free[row,col]=0 if blocked else 1
+        for layer_index,(low,high,_) in enumerate(layers):
+            blocked=False;query_error=None
+            def hit_callback(hit):
+                nonlocal blocked,query_error
+                try:
+                    if str(hit.rigid_body) not in ignored_links:
+                        blocked=True
+                        return False
+                    return True
+                except Exception as exc:
+                    query_error=exc
+                    return False
+            query.overlap_box((resolution/2,resolution/2,(high-low)/2),
+                              (float(xy[0]),float(xy[1]),floor_z+(high+low)/2),
+                              (0.,0.,0.,1.),hit_callback,False)
+            if query_error is not None:raise RuntimeError('PhysX overlap callback failed') from query_error
+            free[layer_index,row,col]=0 if blocked else 1
         count+=1
     cached.update(objects=current,height=height)
-    navigable=cv2.erode(free,kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+    navigable=support.copy();overlap=np.zeros_like(support,dtype='float32')
+    for raw,(_,_,footprint) in zip(free,layers):
+        k=footprint_kernel(footprint,resolution)
+        navigable &= cv2.erode(raw,k,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+        overlap+=cv2.filter2D((1-raw).astype('float32'),-1,k.astype('float32'),borderType=cv2.BORDER_CONSTANT)
     grid=GridMap(w,h,resolution,tuple(origin),navigable.tobytes())
-    # Preserve overlap amount for a local retreat when an opened door intrudes
-    # into the existing footprint. The base centre must still be obstacle-free.
-    overlap=cv2.filter2D((1-free).astype('float32'),-1,kernel.astype('float32'),borderType=cv2.BORDER_CONSTANT)
-    backend._navigation_clearance=(free.tobytes(),overlap.ravel(),float(np.linalg.norm(chassis,axis=1).max())+resolution)
-    hull=cv2.convexHull(np.asarray(chassis,dtype='float32')).reshape(-1,2).tolist()
+    combined=np.all(free,axis=0).astype('uint8')
+    backend._navigation_clearance=(combined.tobytes(),overlap.ravel(),max(float(np.linalg.norm(p,axis=1).max()) for _,_,p in layers)+resolution)
+    backend._navigation_layers=[(raw.copy(),footprint.copy()) for raw,(_,_,footprint) in zip(free,layers)]
     return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
-        'chassis_footprint_world_offsets':hull,'kernel_shape':list(kernel.shape),
-        'footprint':'current_yaw_chassis_convex_hull_holonomic_translation',
+        'chassis_footprint_world_offsets':chassis.tolist(),'kernel_shape':list(kernel.shape),
+        'footprint':'current_yaw_height_matched_collision_hulls',
+        'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist()} for lo,hi,p in layers],
         'query_height_m':height,'updated_cells':count,'query_seconds':time.monotonic()-started,
-        'dynamic_collision_check':'live_PhysX_overlap_columns_incrementally_updated',
+        'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
         'held_object_footprint_included':False}
 
 
-def feasible_heading_grids(grid, raw_free, footprint, current, yaw, *, check_cancelled=None):
+def feasible_heading_grids(grid, raw_free, footprint, current, yaw, *, check_cancelled=None, collision_layers=None):
     """Alternative fixed headings with a collision-checked in-place turn.
 
     The R1 base is holonomic but not circular. A doorway may be feasible only
@@ -134,27 +136,28 @@ def feasible_heading_grids(grid, raw_free, footprint, current, yaw, *, check_can
     import numpy as np
     from .gt_navigation import GridMap
     raw=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width)
-    points=np.asarray(footprint,dtype=float)
+    layers=collision_layers or [(raw,np.asarray(footprint,dtype=float))]
+    layers=[(r,np.asarray(p,dtype=float)) for r,p in layers]
     cell=grid.cell(current)
-    def rotated(degrees):
+    def rotated(points,degrees):
         a=math.radians(degrees);c,s=math.cos(a),math.sin(a)
         return points@np.array([[c,-s],[s,c]]).T
-    def make(points):
-        kernel=footprint_kernel(points,grid.resolution)
-        free=cv2.erode(raw,kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+    def make(footprints):
+        free=np.ones_like(raw)
+        for (obstacles,_),points in zip(layers,footprints):
+            kernel=footprint_kernel(points,grid.resolution)
+            free &= cv2.erode(obstacles,kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
         return GridMap(grid.width,grid.height,grid.resolution,grid.origin,free.tobytes())
-    valid={1:True,-1:True};swept={1:[points],-1:[points]}
+    valid={1:True,-1:True};swept={sign:[[points] for _,points in layers] for sign in (1,-1)}
     for absolute in range(15,181,15):
         for sign in (1,-1):
             if not valid[sign]:continue
             if check_cancelled:check_cancelled()
             angles=np.linspace(sign*(absolute-15),sign*absolute,9)[1:]
-            swept[sign].extend(rotated(a) for a in angles)
-            # Convex hull of all intermediate footprints is conservative for
-            # a turn and cannot silently cross a wall between sampled yaws.
-            turn_grid=make(np.concatenate(swept[sign]))
+            for entries,(_,points) in zip(swept[sign],layers):entries.extend(rotated(points,a) for a in angles)
+            turn_grid=make([np.concatenate(entries) for entries in swept[sign]])
             if not turn_grid.navigable(cell):
                 valid[sign]=False
                 continue
-            points_at_heading=rotated(sign*absolute)
-            yield make(points_at_heading),yaw+math.radians(sign*absolute),turn_grid,points_at_heading.tolist()
+            footprints=[rotated(points,sign*absolute) for _,points in layers]
+            yield make(footprints),yaw+math.radians(sign*absolute),turn_grid,footprints[0].tolist()

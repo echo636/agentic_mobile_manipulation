@@ -545,7 +545,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
             overlap=overlap.reshape(grid.height,grid.width),origin=grid.origin,resolution=grid.resolution,
             footprint=map_details['chassis_footprint_world_offsets'],start=position.cpu().numpy(),
-            target=point.cpu().numpy(),travel_yaw=travel_yaw)
+            target=point.cpu().numpy(),travel_yaw=travel_yaw,
+            raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+            layer_footprints_json=json.dumps(map_details['collision_layers']))
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_result,
                  'grid_artifact':str(map_file.relative_to(self.output)),
@@ -576,7 +578,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     raw_free,_,_=self._navigation_clearance
                     for other_grid,other_yaw,turn_grid,footprint in feasible_heading_grids(
                             grid,raw_free,map_details['chassis_footprint_world_offsets'],
-                            position[:2].cpu().tolist(),travel_yaw,check_cancelled=self.deadline.check):
+                            position[:2].cpu().tolist(),travel_yaw,check_cancelled=self.deadline.check,collision_layers=self._navigation_layers):
                         try:other_plan=make_plan(other_grid,other_yaw)
                         except NavigationError:continue
                         xy=tuple(position[:2].cpu().tolist())
