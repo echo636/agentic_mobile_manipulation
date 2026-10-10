@@ -228,6 +228,7 @@ class Batch:
         expected_tasks={r['index']:r['task'] for r in self.rows}
         for directory in ('records','preflight','controllers','runs','launchers','logs'):
             (self.root/directory).mkdir(exist_ok=True)
+        (self.root/'journal.md').touch(exist_ok=True)
         selection_path=self.root/'infrastructure_retries.json'
         selections=json.loads(selection_path.read_text()) if selection_path.exists() else {}
         for r in self.rows:

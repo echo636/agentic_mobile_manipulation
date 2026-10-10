@@ -17,6 +17,35 @@ spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolv
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_fresh_batch_publish_only_creates_journal_and_preserves_existing_history(self):
+        for history in (None, '# Existing experiment\n\n- Original failure evidence.\n'):
+            with self.subTest(existing_journal=history is not None), tempfile.TemporaryDirectory() as folder:
+                root=Path(folder);reports=root/'report'
+                manifest={'comparison_arm':'original','standalone_batch':True,'tasks':[
+                    {'index':0,'task':'fixture_task','name':'Fixture task','run_id':'fixture',
+                     'status':'planned','stage':'queued'}]}
+                (root/'manifest.json').write_text(json.dumps(manifest))
+                config={'batch':str(root),'reports':str(reports),'expected_task_count':1,
+                        'workers':[{'id':'fixture-worker','gpu':0,'ssh':['ssh','fixture-host'],
+                                    'base_port':36000,'sim_python':sys.executable}]}
+                path=root/'config.json';path.write_text(json.dumps(config))
+                if history is not None:(root/'journal.md').write_text(history)
+                # Exercise the real CLI initialization and publication. Only
+                # checkout identity and the CLI --version probe are fixtures.
+                with patch.object(sys,'argv',['run_behavior100.py','--config',str(path),'--publish-only']), \
+                        patch.object(batch,'source_version',return_value={'commit':'fixture','dirty':False}), \
+                        patch.object(batch.shutil,'which',return_value='/fixture/codex'), \
+                        patch.object(batch.subprocess,'run',return_value=CompletedProcess([],0)) as command:
+                    batch.main()
+                command.assert_called_once_with(['/fixture/codex','--version'],check=True,
+                                                capture_output=True,text=True,timeout=20)
+                self.assertEqual((reports/'behavior100/journal.md').read_text(),history or '')
+                self.assertEqual((root/'journal.md').read_text(),history or '')
+                progress=json.loads((reports/'behavior100/progress.json').read_text())
+                self.assertEqual(progress['summary']['completed'],0)
+                self.assertEqual(progress['summary']['counts'],{'planned':1})
+                self.assertIn('Fixture task',(reports/'behavior100.html').read_text())
+
     def test_remote_assets_selects_benchmark_index_in_single_task_manifest(self):
         spec=importlib.util.spec_from_file_location('remote_subset_check',
             Path(__file__).resolve().parents[1]/'scripts/behavior100_remote.py')
