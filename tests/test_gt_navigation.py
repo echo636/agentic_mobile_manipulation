@@ -56,6 +56,22 @@ class GTNavigationTests(unittest.TestCase):
         with self.assertRaisesRegex(TimeoutError,'episode expired'):
             plan_navigation(grid(),(.5,.5),(3.,3.),check_cancelled=stop)
 
+    def test_clearance_exit_retreats_from_wall_without_crossing_it(self):
+        from manipulation_agent.executors.gt_navigation import plan_start_clearance_exit
+        raw=bytearray([1])*15*11;cost=[0.]*(15*11);free=bytearray([1])*15*11
+        for r in range(11):
+            raw[r*15+8]=0
+            for c in range(6,11):cost[r*15+c]=1.;free[r*15+c]=0
+        g=GridMap(15,11,.1,(0.,0.),bytes(free))
+        corridor,p,report=plan_start_clearance_exit(g,raw,cost,(.6,.5),radius=.35)
+        self.assertAlmostEqual(p.goal[0],.5)
+        self.assertEqual(report['overlap_cells_after'],0)
+        self.assertTrue(all(a>=b for a,b in zip(report['overlap_sequence'],report['overlap_sequence'][1:])))
+        self.assertTrue(all(x<.8 for x,y in p.points))
+        self.assertTrue(all(corridor.segment_free(a,b) for a,b in zip(p.points,p.points[1:])))
+        with self.assertRaisesRegex(NavigationError,'centre is inside'):
+            plan_start_clearance_exit(g,raw,cost,(.8,.5),radius=.35)
+
     def test_elevated_target_keeps_lower_robot_band_outside_selected_point(self):
         standoff,margin=visual_approach_settings(1.83,0.,.7)
         self.assertEqual(standoff,.7)

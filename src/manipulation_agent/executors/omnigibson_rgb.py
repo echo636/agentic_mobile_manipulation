@@ -519,8 +519,25 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         mode='point' if ground_click else 'approach'
         standoff,margin=(0.,0.) if ground_click else (.7,0.)
         grid,map_details=build_navigation_grid(self,floor)
+        recovery_result=None
+        if not grid.navigable(grid.cell(position[:2].cpu().tolist())):
+            from .gt_navigation import plan_start_clearance_exit
+            raw_free,overlap,radius=self._navigation_clearance
+            try:
+                escape_grid,escape,escape_details=plan_start_clearance_exit(
+                    grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius)
+                escape=replace(escape,travel_yaw=travel_yaw,final_yaw=travel_yaw)
+                with (self.output/'navigation_recovery.jsonl').open('a') as stream:
+                    stream.write(json.dumps({'at':now(),'plan':asdict(escape),**escape_details})+'\n')
+                recovery_result=self._execute_gt_plan(escape_grid,escape,max_steps)
+                max_steps-=recovery_result['steps']
+                self.navigation_distance+=recovery_result['actual_path_distance_m']
+                position,_=self.robot.get_position_orientation()
+                grid,map_details=build_navigation_grid(self,floor)
+            except NavigationError as exc:
+                raise SkillError(exc.code,str(exc)) from exc
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
-                 'goal_mode':mode,'for_manipulation':for_manipulation,
+                 'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_result,
                  'selected_world_point':point.cpu().tolist(),
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,

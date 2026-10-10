@@ -357,3 +357,45 @@ class GreedyGridFollower:
         self.last_phase=phase;self.last_index=self.index
         self.last_actual=(x,y,yaw);self.last_command=command
         return command
+
+
+def plan_start_clearance_exit(grid, raw_free, overlap, current, *, radius):
+    """Leave an existing footprint overlap without crossing an occupied centre.
+
+    Door opening can put a leaf into the already occupied robot footprint. This
+    is a short physical retreat, not a start teleport or a clearance-free route.
+    Every grid step must decrease (or preserve) overlap area, the base centre
+    must remain free, and the endpoint must have zero footprint overlap.
+    """
+    start=grid.cell(current)
+    if not grid.contains(start) or not raw_free[start[0]*grid.width+start[1]]:
+        raise NavigationError('Base centre is inside an obstacle; no clearance exit','navigation_invalid_start')
+    cost=lambda cell:float(overlap[cell[0]*grid.width+cell[1]])
+    queue=[(0.,start)];distance={start:0.};parents={};closed=set();goal=None
+    while queue:
+        length,cell=heapq.heappop(queue)
+        if cell in closed:continue
+        closed.add(cell)
+        if grid.navigable(cell):goal=cell;break
+        r,c=cell
+        for nxt in ((r-1,c),(r+1,c),(r,c-1),(r,c+1)):
+            if not grid.contains(nxt) or not raw_free[nxt[0]*grid.width+nxt[1]]:continue
+            if cost(nxt)>cost(cell)+1e-4 or math.dist(grid.world(nxt),current)>radius:continue
+            updated=length+grid.resolution
+            if updated<distance.get(nxt,math.inf):
+                distance[nxt]=updated;parents[nxt]=cell;heapq.heappush(queue,(updated,nxt))
+    if goal is None:raise NavigationError('No local retreat reduces the existing footprint overlap to zero','navigation_invalid_start')
+    cells=[goal]
+    while cells[-1]!=start:cells.append(parents[cells[-1]])
+    cells.reverse()
+    free=bytearray(grid.free)
+    for r,c in cells:free[r*grid.width+c]=1
+    recovery=GridMap(grid.width,grid.height,grid.resolution,grid.origin,bytes(free))
+    points=[tuple(current),*[grid.world(c) for c in cells]]
+    points=[p for i,p in enumerate(points) if i==0 or math.dist(p,points[i-1])>1e-8]
+    if not all(recovery.segment_free(a,b) for a,b in zip(points,points[1:])):
+        raise NavigationError('Clearance exit lacks a continuous local corridor','navigation_invalid_start')
+    plan=NavigationPlan(tuple(points),grid.world(goal),grid.world(goal),0.,distance[goal],0.,1,1,
+                        math.dist(current,grid.world(start)),len(closed))
+    return recovery,plan,{'overlap_cells_before':cost(start),'overlap_cells_after':cost(goal),
+                          'overlap_sequence':[cost(c) for c in cells], 'radius_m':radius}

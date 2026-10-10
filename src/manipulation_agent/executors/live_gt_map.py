@@ -109,6 +109,10 @@ def build_navigation_grid(backend, floor):
     cached.update(objects=current,height=height)
     navigable=cv2.erode(free,kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
     grid=GridMap(w,h,resolution,tuple(origin),navigable.tobytes())
+    # Preserve overlap amount for a local retreat when an opened door intrudes
+    # into the existing footprint. The base centre must still be obstacle-free.
+    overlap=cv2.filter2D((1-free).astype('float32'),-1,kernel.astype('float32'),borderType=cv2.BORDER_CONSTANT)
+    backend._navigation_clearance=(free.tobytes(),overlap.ravel(),float(np.linalg.norm(chassis,axis=1).max())+resolution)
     hull=cv2.convexHull(np.asarray(chassis,dtype='float32')).reshape(-1,2).tolist()
     return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
         'chassis_footprint_world_offsets':hull,'kernel_shape':list(kernel.shape),

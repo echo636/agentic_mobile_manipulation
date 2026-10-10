@@ -48,8 +48,11 @@ def main():
             closed_grid,closed_meta=build_navigation_grid(backend,floor)
             np.savez_compressed(a.output/(case['name']+'_closed_map.npz'),free=np.frombuffer(closed_grid.free,dtype='uint8').reshape(closed_grid.height,closed_grid.width),origin=closed_grid.origin,resolution=closed_grid.resolution)
             try:
-                plan=plan_navigation(closed_grid,case['start'],case['world_target'][:2],goal_mode=case['goal_mode'])
-                case_record['closed_door_plan']={'status':'planned','goal':plan.goal}
+                closed_start=closed_grid.snap(case['start'],.6)
+                if closed_start is None:raise NavigationError('No free closed-door diagnostic start')
+                plan=plan_navigation(closed_grid,closed_grid.world(closed_start),case['world_target'][:2],goal_mode=case['goal_mode'])
+                case_record['closed_door_plan']={'status':'planned','goal':plan.goal,'geodesic_m':plan.geodesic_m,'points':plan.points}
+
             except NavigationError as exc:case_record['closed_door_plan']={'status':'blocked','error':str(exc)}
             for door in doors.values():
                 if not door.states[Open].set_value(True,fully=True):raise ValueError('Diagnostic door failed to open')
