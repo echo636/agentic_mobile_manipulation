@@ -402,7 +402,9 @@ class CheckedPlacement:
                 'upward_support':normal_z is not None and normal_z>=.9,
                 'bottom_near_support':gap is not None and -.03<=gap<=.06,
                 'selected_shelf_height':height_error is not None and height_error<=.05,
-                'selected_surface_neighborhood':selected_xy_distance<=.20,'settled':speed<=.10}
+                # The selected support ray may land on the rim of a wide ring
+                # while its object origin remains just over 20 cm away.
+                'selected_surface_neighborhood':selected_xy_distance<=.22,'settled':speed<=.10}
         return all(checks.values()), {'checks':checks,'touching_selected_object':touching,
             'speed_m_s':speed,'bottom_gap_m':gap,
             'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance,

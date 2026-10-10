@@ -953,3 +953,12 @@ At that point the provider rejected a continued request because a
 ended without a formal finish. The audit failed, including whole-task success
 and empty hand. This is an upstream continuation error, not a 429 rate limit
 or evidence that the simulator placement chain failed.
+
+Christmas r22 diagnosed a surface-verification edge case while the model was
+placing `wreath_227` on a sofa. Three placements had a valid upward ray into
+the selected sofa, a near-zero bottom gap and a settled object; the measured
+object-origin offset was 0.2004–0.2016 m, just outside the old 0.20 m
+neighborhood limit. The ring's origin is offset from its supporting rim. The
+limit is now 0.22 m while the selected-support-ray, height, gap and stability
+checks remain required. This source fix applies from the next launched trial;
+the in-flight r22 trial retains its original snapshot.
