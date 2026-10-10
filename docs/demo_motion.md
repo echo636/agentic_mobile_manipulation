@@ -795,3 +795,20 @@ excluded it. A second probe attempted the official state setter for the
 cane, but it returned false and still did not create contact. Thus the
 payload-preservation change remains unverified in a faithful real-simulator
 replay; neither probe counts as an autonomous Christmas success.
+
+Plates-and-food r18 again failed its independent whole-task audit, but the
+first RGB grasp selected the white rim of `plate_93` correctly. Its private
+carry log had no payload, and the subsequent RGB showed `pizza_89` on the
+floor. A real-simulator replay of the exact preceding model-selected `open`
+and `navigate_to` actions (`plate_r18_prefix_probe_r1`) found official
+`OnTop(pizza_89, plate_93)=true`, `Touching=true`, and a valid payload
+candidate at initialization, after opening, and after navigation (826
+environment steps). Thus the support was lost during the visible arm reach
+that follows pixel grounding, before the ideal grasp captured dependencies.
+The executor now snapshots supported children before that reach, restores
+their relative poses after each visible arm step, and uses the snapshot for
+the ensuing carry. In `plate_r18_grasp_probe_r2`, a privileged replay of the
+same three recorded RGB actions carried `pizza_89` with `plate_93`; both
+official `OnTop` and physical `Touching` remained true after grasp. This
+validates the motor fix only; an autonomous model episode and full BDDL audit
+are still required.

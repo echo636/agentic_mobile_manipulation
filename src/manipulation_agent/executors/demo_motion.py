@@ -47,7 +47,8 @@ class DemoMotion:
         columns = (self._demo_joint_indices(arm) + offset).to(device=jacobian.device)
         return jacobian[link, :3, columns]
 
-    def _demo_reach(self, point, max_steps, *, anchor=None, arm=None, action='reach'):
+    def _demo_reach(self, point, max_steps, *, anchor=None, arm=None, action='reach',
+                    support_payload=None):
         """Move a visible arm over real env steps; return the consumed step count."""
         if not self.demo_motion:
             return 0
@@ -94,6 +95,8 @@ class DemoMotion:
                     joints[arm_indices] = values
                     self._base_target['posture'] = joints[self._base_target['indices']].clone()
                     self._step(self.robot.q_to_action(joints))
+                    if support_payload:
+                        self._relocate_contents(anchor,support_payload)
             first_hand = self.robot.eef_links[chosen].get_position_orientation()[0].clone()
             for fraction in eased_positions(0., 1., steps-prepose_steps):
                 hand = self.robot.eef_links[chosen].get_position_orientation()[0]
@@ -117,6 +120,8 @@ class DemoMotion:
                     self.robot.joint_lower_limits[indices])
                 self._base_target['posture'] = joints[self._base_target['indices']].clone()
                 self._step(self.robot.q_to_action(joints))
+                if support_payload:
+                    self._relocate_contents(anchor,support_payload)
         finish = self.robot.get_joint_positions()[indices]
         final_hand = self.robot.eef_links[chosen].get_position_orientation()[0]
         residual=float(self.torch.linalg.norm(final_hand-point))

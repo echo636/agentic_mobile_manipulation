@@ -696,6 +696,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             for parent in self.env.scene.objects:
                 if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
                     raise SkillError('container_closed','Grasp through closed container rejected')
+        pregrasp_payload=(self._grasp_payload_snapshot(obj)
+                          if primitive=='grasp' and self.ideal_carry and getattr(self,'demo_motion',False)
+                          else None)
         base=self.robot.get_position_orientation()[0]
         # A long cabinet/floor AABB can contain the base while the selected
         # visible surface is far away. Reach belongs to that selected point.
@@ -714,7 +717,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
         shown = (self._demo_reach(point,max_steps,anchor=None if obj is held else obj,
                                   arm=self._demo_arm if held is not None else None,
-                                  action=primitive)
+                                  action=primitive,
+                                  support_payload=pregrasp_payload[1] if pregrasp_payload else None)
                  if getattr(self,'demo_motion',False) else 0)
         max_steps -= shown
         contact_limit=(.45 if primitive=='spray' else .30 if primitive=='vacuum' else .18)
@@ -733,7 +737,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                               target_point=point.tolist())
             retry=self._demo_reach(point,max_steps,anchor=obj,
                                    arm=self._demo_arm if held is not None else None,
-                                   action=primitive+'_after_approach')
+                                   action=primitive+'_after_approach',
+                                   support_payload=pregrasp_payload[1] if pregrasp_payload else None)
             shown+=retry;max_steps-=retry
         if shown and self._demo_last_reach_error>contact_limit:
             raise SkillError('out_of_reach',
@@ -751,7 +756,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         before_effect_steps=self.steps if shown else 0
         if primitive=='grasp' and self.ideal_carry:
             before_grasp=self.steps
-            result=self._ideal_grasp(obj,max_steps)
+            result=self._ideal_grasp(obj,max_steps,payload_snapshot=pregrasp_payload)
             if shown and self._demo_arm is not None:
                 hand=self.robot.eef_links[self._demo_arm].get_position_orientation()[0]
                 lifted=hand.clone();lifted[2]+=.16

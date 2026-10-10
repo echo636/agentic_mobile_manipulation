@@ -248,15 +248,10 @@ class ControlledCarry:
             if held is not None:self._carry_follow()
             raise
 
-    def _ideal_grasp(self,obj,max_steps):
+    def _grasp_payload_snapshot(self,obj):
+        """Capture current rigid support before the visible hand can disturb it."""
         from omnigibson.utils import transform_utils as T
         from omnigibson.object_states import Inside,OnTop,Touching
-        torch=self.torch
-        if self._ideal_held is obj:return {'primitive':'grasp','postcondition':'selected_object_already_held'}
-        if self._ideal_held is not None:raise SkillError('hand_occupied','A carry relationship already exists')
-        if obj.fixed_base:raise SkillError('fixed_object','The selected object has a fixed base')
-        # Preserve both contained objects and supported objects (e.g. food on a
-        # plate), including nested payloads. Fixed scene objects never follow.
         original=obj.get_position_orientation()
         candidates=[child for child in self.env.scene.objects if child not in (obj,self.robot)
                     and not getattr(child,'fixed_base',True) and hasattr(child,'states')]
@@ -267,6 +262,21 @@ class ControlledCarry:
             return None
         dependencies=support_closure(obj,candidates,relation)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
+        return dependencies,contents
+
+    def _ideal_grasp(self,obj,max_steps,payload_snapshot=None):
+        from omnigibson.utils import transform_utils as T
+        torch=self.torch
+        if self._ideal_held is obj:return {'primitive':'grasp','postcondition':'selected_object_already_held'}
+        if self._ideal_held is not None:raise SkillError('hand_occupied','A carry relationship already exists')
+        if obj.fixed_base:raise SkillError('fixed_object','The selected object has a fixed base')
+        # Preserve both contained objects and supported objects (e.g. food on a
+        # plate), including nested payloads. Fixed scene objects never follow.
+        original=obj.get_position_orientation()
+        dependencies,contents=(payload_snapshot if payload_snapshot is not None else
+                               self._grasp_payload_snapshot(obj))
+        if payload_snapshot is not None:
+            self._relocate_contents(obj,contents)
         # The entire selected assembly is leaving its old support. An outer
         # container can have recorded nested children as well as this root;
         # retaining those records would pull the children back after release.
