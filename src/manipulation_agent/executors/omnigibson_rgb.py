@@ -683,6 +683,19 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             for parent in self.env.scene.objects:
                 if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
                     raise SkillError('container_closed','Grasp through closed container rejected')
+        # A carried slicer may trigger the official rule during an approach or
+        # demonstration step. Save identity/output metadata while the selected
+        # object is alive, and resolve replacement before touching it again.
+        cut_target = self._capture_cut_target(obj) if primitive == 'cut' else None
+        def completed_cut(stage, demo_steps=0):
+            if cut_target is None:
+                return None
+            result = self._cut_replacement_result(cut_target, stage)
+            if result is None:
+                return None
+            if demo_steps:
+                result = {**result, 'demo_motion': {'real_env_steps': demo_steps, 'ideal_contact': True}}
+            return {**result, 'private_grounding': grounding}
         base=self.robot.get_position_orientation()[0]
         # A long cabinet/floor AABB can contain the base while the selected
         # visible surface is far away. Reach belongs to that selected point.
@@ -696,14 +709,22 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             self._navigate(anchor,max(1,max_steps-60),for_manipulation=True)
             max_steps-=self.steps-before_approach
+            completed = completed_cut('implicit_approach')
+            if completed is not None:
+                return completed
             base=self.robot.get_position_orientation()[0]
             if float(self.torch.linalg.norm(base[:2]-point[:2]))>reach_limit or max_steps<30:
                 raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
-        shown = (self._demo_reach(point,max_steps,anchor=None if obj is held else obj,
+        # A cut target must be free to be destroyed by its legitimate transition;
+        # holding its root pose after env.step would dereference a deleted prim.
+        shown = (self._demo_reach(point,max_steps,anchor=None if obj is held or primitive == 'cut' else obj,
                                   arm=self._demo_arm if held is not None else None,
                                   action=primitive)
                  if getattr(self,'demo_motion',False) else 0)
         max_steps -= shown
+        completed = completed_cut('demo_reach', shown)
+        if completed is not None:
+            return completed
         contact_limit=(.45 if primitive=='spray' else .30 if primitive=='vacuum' else .18)
         if (shown and self._demo_last_reach_error>contact_limit and obj is not held
                 and max_steps>170):
@@ -716,12 +737,18 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             before_retry=self.steps
             self._navigate(anchor,max_steps-120,for_manipulation=True)
             max_steps-=self.steps-before_retry
+            completed = completed_cut('demo_approach_retry', shown)
+            if completed is not None:
+                return completed
             self._demo_record(action=primitive,status='approach_retry',first_error_m=first_error,
                               target_point=point.tolist())
-            retry=self._demo_reach(point,max_steps,anchor=obj,
+            retry=self._demo_reach(point,max_steps,anchor=None if primitive == 'cut' else obj,
                                    arm=self._demo_arm if held is not None else None,
                                    action=primitive+'_after_approach')
             shown+=retry;max_steps-=retry
+            completed = completed_cut('demo_reach_retry', shown)
+            if completed is not None:
+                return completed
         if shown and self._demo_last_reach_error>contact_limit:
             raise SkillError('out_of_reach',
                              'Robot hand could not approach the selected surface; choose a closer visible approach',
@@ -732,9 +759,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 stroke[2]-=.06
             else:
                 stroke[0]+=.08
-            stroke_steps=self._demo_reach(stroke,max_steps,anchor=obj,
+            stroke_steps=self._demo_reach(stroke,max_steps,anchor=None if primitive == 'cut' else obj,
                                           arm=self._demo_arm,action=primitive+'_stroke')
             shown+=stroke_steps;max_steps-=stroke_steps
+            completed = completed_cut('demo_stroke', shown)
+            if completed is not None:
+                return completed
         before_effect_steps=self.steps if shown else 0
         if primitive=='grasp' and self.ideal_carry:
             before_grasp=self.steps

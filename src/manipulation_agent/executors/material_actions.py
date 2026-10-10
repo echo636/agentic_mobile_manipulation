@@ -26,6 +26,58 @@ def eligible_systems(systems, modifier, *, covered=None, ideal_projection=False)
 
 
 class CheckedMaterialActions:
+    def _capture_cut_target(self, target):
+        """Remember the official named replacements before any approach steps.
+
+        Slicing can run automatically in env.step when the carried blade
+        touches this object. Do not query the removed object's prim afterward.
+        Keep every ordered part: identical halves share a model but have
+        distinct names in SlicingRule.
+        """
+        scene, name = target.scene, target.name
+        expected = []
+        if 'sliceable' in target._abilities:
+            parts = target.metadata.get('object_parts', {})
+            if isinstance(parts, dict):
+                for index, part in enumerate(parts.values()):
+                    if not isinstance(part, dict) or not part.get('category') or not part.get('model'):
+                        expected = []
+                        break
+                    part_name = f'half_{name}_{index}'
+                    expected.append({'name': part_name, 'category': part['category'], 'model': part['model'],
+                                     'existed_before': scene.object_registry('name', part_name, None) is not None})
+        return {'scene': scene, 'original': target, 'name': name, 'expected_parts': expected}
+
+    def _cut_replacement_result(self, captured, stage):
+        """Recognize a completed automatic slice, or report a changed target.
+
+        Disappearance alone proves nothing. Dicing produces unnamed particles,
+        so it cannot be attributed to this selected target by this check.
+        """
+        scene = captured['scene']
+        if scene.object_registry('name', captured['name'], None) is captured['original']:
+            return None
+        self.frames_revision = -1
+        expected = captured['expected_parts']
+        matched = []
+        for part in expected:
+            child = scene.object_registry('name', part['name'], None)
+            if (not part['existed_before'] and child is not None
+                    and child.category == part['category'] and child.model == part['model']):
+                matched.append(part['name'])
+        verified = bool(expected) and len(matched) == len(expected)
+        self._placement_record({'status': 'automatic_cut_verified' if verified else 'cut_target_changed',
+                                'target': captured['name'], 'stage': stage,
+                                'expected_parts': expected, 'matched_parts': matched})
+        if not verified:
+            raise SkillError('target_changed',
+                'The selected object changed during this action, but its cutting result could not be verified. '
+                'Inspect the updated RGB before choosing the next target.', changed=True)
+        return {'primitive': 'cut', 'implementation': 'official_slicing_or_dicing_transition',
+                'transition': 'SlicingRule', 'created_objects': len(expected),
+                'postcondition': 'original_object_replaced', 'completed_during': stage,
+                'replacement_verified': True}
+
     def _checked_surface_action(self, primitive, target, max_steps):
         from omnigibson.object_states import Covered, ParticleApplier, ParticleRemover, Saturated
         from omnigibson.utils.constants import ParticleModifyMethod
@@ -133,8 +185,9 @@ class CheckedMaterialActions:
         ability = 'sliceable' if 'sliceable' in target._abilities else 'diceable'
         if ability not in target._abilities:
             raise SkillError('pre_condition_error', 'Selected object cannot be cut')
+        scene = target.scene
         rule_type = SlicingRule if ability == 'sliceable' else DicingRule
-        rule = next((item for item in target.scene.transition_rule_api.active_rules
+        rule = next((item for item in scene.transition_rule_api.active_rules
                      if isinstance(item, rule_type)), None)
         if rule is None:
             raise SkillError('pre_condition_error', 'Simulator has no active cutting transition')
@@ -169,12 +222,12 @@ class CheckedMaterialActions:
         output = rule.transition({ability: [target]})
         if target not in output.remove or not (output.add or ability == 'diceable'):
             raise SkillError('execution_error', 'Cutting transition produced no valid result')
-        target.scene.transition_rule_api.execute_transition(added_obj_attrs=output.add,
-                                                            removed_objs=output.remove)
+        scene.transition_rule_api.execute_transition(added_obj_attrs=output.add,
+                                                    removed_objs=output.remove)
         self.frames_revision = -1
         for _ in range(min(6, max_steps)):
             self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-        if target in target.scene.objects:
+        if any(obj is target for obj in scene.objects):
             raise SkillError('postcondition_error', 'Original object remained after cutting', changed=True)
         return {'primitive': 'cut', 'implementation': 'official_slicing_or_dicing_transition',
                 'transition': rule_type.__name__, 'created_objects': len(output.add),
