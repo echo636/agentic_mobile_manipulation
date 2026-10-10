@@ -741,3 +741,14 @@ placed it next to the living-room table, and formally reported achieved with
 an empty hand. Official whole-task BDDL, controller/action alignment,
 five-view video, and visible-motion checks all passed. This is the sixth
 independently audited first-ten task success.
+
+Plates-and-food r17 failed the official whole-task audit. The model opened
+the refrigerator, then selected normalized pixel `(0.17, 0.55)` in the back
+RGB to `grasp` what it called a plate. The saved image shows that point in
+the orange pizza center, inside the surrounding white ceramic rim; the
+private carry record confirms `pizza_89` was grasped without `plate_93`.
+A subsequent `place_on_top` attempt failed, the model released the pizza,
+and a recovery navigation target was unreachable before it finished blocked.
+The pick-and-place skill now explicitly distinguishes the white plate band
+from the colored pizza and asks the model to check the marked pixel itself.
+The resulting change needs a fresh autonomous episode and audit.
