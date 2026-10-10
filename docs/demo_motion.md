@@ -878,3 +878,13 @@ official goal fraction was zero. The visual selection rule now names wreaths
 as well as curved food: click a solid colored segment rather than the center
 of the enclosing rectangle or ring. This is guidance for the next model
 episode, not a passed Christmas demonstration.
+
+Can-meat r20 failed the independent whole-task audit despite a better start.
+The model opened `top_cabinet_lkxmne_2` and `_0`, then recovered from one
+`out_of_reach` grasp to pick up `hinged_jar_236`. It next called `open` while
+still holding that jar; the executor returned `hand_occupied`. The model
+finished blocked without staging the jar, leaving the hand occupied. Official
+goal satisfaction was `2/9`, and the empty-hand audit check also failed.
+The pick-and-place skill now states the staged-jar sequence explicitly and
+the recovery skill treats `hand_occupied` on lid actions as a cue to place the
+held item safely before retrying. A fresh model episode is needed.
