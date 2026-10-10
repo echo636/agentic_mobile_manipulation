@@ -668,3 +668,14 @@ successful navigation actions, so the motor rejected each placement as
 whole-task and independent audit failed. The pick-and-place skill now directs
 the model to select the near-side drawer face or opening lip and change
 viewpoint after this error. This needs a fresh model trial.
+
+Plates-and-food r16 formally finished but failed the independent audit's
+official BDDL and agent-achieved checks. Its first grasp selected the
+breakfast table instead of a thin plate at the edge of the right RGB frame;
+the executor carried the table with both plated pizzas and both bowls.
+After release the table tipped and the pizzas separated from their plates.
+The model recovered one bowl into a sink and closed the refrigerator, then
+honestly finished blocked. The pick-and-place skill now asks the model to
+center a thin plate in view and select an exposed rim pixel before grasping.
+This is a model-facing instruction only; a fresh independent model trial is
+still needed to validate task success.
