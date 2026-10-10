@@ -63,7 +63,20 @@ def main():
             target=SimpleNamespace(get_position_orientation=lambda:(point,None),selected_object=None)
             recorder.event('diagnostic_navigation_begin',case)
             motion_before=len((a.output/'base_motion.jsonl').read_text().splitlines()) if (a.output/'base_motion.jsonl').exists() else 0
-            result=backend._navigate(target,20000,for_manipulation=case.get('for_manipulation',False))
+            try:
+                result=backend._navigate(target,20000,for_manipulation=case.get('for_manipulation',False))
+            except Exception as exc:
+                expected=case.get('expect_error')
+                if not expected or getattr(exc,'code',None)!=expected:raise
+                obs=harness.refresh()
+                case_record.update(status='passed',expected_rejection=expected,
+                                   message=str(exc),views=[i['view'] for i in obs['images']])
+                validation['checks'][case['name']+'_expected_rejection']=True
+                validation['checks'][case['name']+'_four_views']=len(obs['images'])==4
+                recorder.event('diagnostic_expected_navigation_rejection',case_record)
+                save();print(json.dumps(case_record),flush=True)
+                continue
+            if case.get('expect_error'):raise AssertionError('Expected blocked target was reported reached')
             obs=harness.refresh()
             actual=backend.robot.get_position_orientation()[0].cpu().tolist()
             case_record.update(status='passed',result=result,actual_position=actual,views=[i['view'] for i in obs['images']],
