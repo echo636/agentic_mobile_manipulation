@@ -922,3 +922,12 @@ repair, not a scripted gift target or a completed autonomous episode. CPU
 regression tests cover the base-point mapping and unchanged non-tree actions;
 the full test suite passed (380 passed, 28 skipped, 90 subtests). It awaits
 a real-simulator episode and independent audit.
+
+Christmas r21 selected and grasped `gift_box_221`, but several model-selected
+tree branch pixels for `place_under` and `place_next_to` returned
+`navigation_unreachable` before any gift was released. The provider then
+rejected a continued request with the same missing-reasoning-item error seen
+in r20; the active navigation was cancelled and no formal successful finish
+occurred. The independent audit failed, including its empty-hand check. The
+new tree-base motor point was committed after this episode's source snapshot;
+its first real-simulator test is the next Christmas retry.
