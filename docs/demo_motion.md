@@ -931,3 +931,15 @@ in r20; the active navigation was cancelled and no formal successful finish
 occurred. The independent audit failed, including its empty-hand check. The
 new tree-base motor point was committed after this episode's source snapshot;
 its first real-simulator test is the next Christmas retry.
+
+Can-meat r22 reached a new partial milestone but failed the independent
+whole-task audit. Astra low opened the correct upper cabinet, grasped
+`hinged_jar_235`, staged it on the bar, independently grasped two cooked
+bratwursts (`bratwurst_233` and `bratwurst_231`), and placed both inside that
+same jar. After a rejected `close` pixel on exposed meat, it selected the jar
+body and closed its lid. It then grasped `hinged_jar_236` for the second half.
+At that point the provider rejected a continued request because a
+`custom_tool_call` lacked its required `reasoning` item; the model controller
+ended without a formal finish. The audit failed, including whole-task success
+and empty hand. This is an upstream continuation error, not a 429 rate limit
+or evidence that the simulator placement chain failed.
