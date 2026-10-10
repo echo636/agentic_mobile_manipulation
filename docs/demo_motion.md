@@ -429,3 +429,14 @@ the fridge: `OnTop(pizza, plate)`, `Inside(pizza, fridge)` and
 `Inside(plate, fridge)` were all true after settling. This proves the motor
 path, not autonomous task success; two plate assemblies, two bowls and the
 final closed fridge still need a fresh model trial.
+
+The can-meat r12 model trial opened the cabinet but then tried to grasp a jar
+on the upper shelf from an unreachable projected navigation target. Two
+high-shelf approach attempts returned `navigation_unreachable`. The model
+moved to a floor point in front of the cabinet but formally finished without
+reselecting the jar from that new view, so the official goal failed. The
+visual-manipulation and pick-and-place skills now explain that a shelf pixel
+is not traversable ground: approach the visible floor outside its opening,
+then retry the grasp on the item's own fresh RGB face. This guidance still
+leaves the model to choose every point and action; a new whole-task run is
+needed to assess it.
