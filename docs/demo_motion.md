@@ -649,3 +649,13 @@ deadline. A unit test covers that fallback, and the privileged
 `drawer_close_probe_r3` still placed all five items, closed, reopened,
 reclosed, and retained official `Inside` after 300 more steps. A fresh model
 episode is required to validate the task.
+
+The remaining r15 attempts (tasks 4, 5, 8, 10) failed during simulator
+startup when USD could not write under `/tmp`: this user's root-filesystem
+quota was at its 20 GB limit, although the experiment data volume had ample
+space. Three unreferenced September OmniGibson temporary directories (1.7 GB)
+were moved, without deleting them, to
+`experiments/stale_tmp_archive_20261010`; no active process held them open.
+The demo runner now sets `TMPDIR` to a per-GPU directory on the experiment
+volume before starting the simulator and model. These r15 startup failures
+are infrastructure outcomes and need new autonomous trials.

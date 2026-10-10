@@ -78,6 +78,11 @@ def main():
         OMNIGIBSON_APPDATA_PATH=str((args.appdata or root.parent / f'appdata_gpu{args.gpu}').resolve()),
         MAS_DEMO_MOTION='1', MAS_VIDEO_RENDER_STRIDE='3')
     Path(environment['OMNIGIBSON_APPDATA_PATH']).mkdir(parents=True, exist_ok=True)
+    # USD and Python tempfile create large per-scene scratch assets. Keep them
+    # on the experiment data volume rather than the small /tmp user quota.
+    scratch=(root.parent / f'tmp_gpu{args.gpu}').resolve()
+    scratch.mkdir(parents=True, exist_ok=True)
+    environment['TMPDIR']=str(scratch)
     simulator_command = [sys.executable, '-m', 'manipulation_agent.vision_cli',
         '--backend', 'omnigibson', '--policy', 'serve', '--agent-profile', 'skills',
         '--task', args.task, '--instance', str(args.instance), '--seed', str(args.seed),
