@@ -61,6 +61,14 @@ def object_record(obj):
             'pose': [v.detach().cpu().tolist() for v in obj.get_position_orientation()]}
 
 
+def cut_output_descriptors(metadata):
+    """Keep only asset identifiers; USD customData geometry contains Vt arrays."""
+    parts = metadata.get('object_parts', [])
+    if isinstance(parts, dict):
+        parts = parts.values()
+    return [{'category': str(part['category']), 'model': str(part['model'])} for part in parts]
+
+
 def find_q(evaluation):
     metrics = evaluation.get('official_metrics', {})
     q_record = metrics.get('q_score', {})
@@ -142,7 +150,7 @@ def main():
             if primitive == 'cut':
                 validation['cut_before'] = {'target': object_record(target_obj),
                     'held_tool': object_record(backend._get_held()) if backend._get_held() else None,
-                    'target_part_metadata': target_obj.metadata.get('object_parts'),
+                    'expected_output_assets': cut_output_descriptors(target_obj.metadata),
                     'half_logs': [object_record(obj) for obj in backend.env.scene.objects if obj.category == 'half_log']}
                 before_names = {obj.name for obj in backend.env.scene.objects}
                 cut_target_name = target_obj.name
