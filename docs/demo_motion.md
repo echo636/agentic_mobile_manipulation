@@ -752,3 +752,14 @@ and a recovery navigation target was unreachable before it finished blocked.
 The pick-and-place skill now explicitly distinguishes the white plate band
 from the colored pizza and asks the model to check the marked pixel itself.
 The resulting change needs a fresh autonomous episode and audit.
+
+Can-meat r17 also failed its independent official BDDL audit, but the model
+advanced beyond the r16 cabinet obstacle: it opened the intended upper
+cabinet, grasped `hinged_jar_236`, and placed that jar on a bar. It then
+grasped `hinged_jar_235`. Three model-selected staging surfaces for the
+second jar (a stool, a countertop, and floor) all returned `sampling_error`
+for insufficient collision-free support; the model finished blocked while
+still holding that jar. The pick-and-place skill now explains that two bulky
+jars need separate broad clear patches and that `placement_yaw_degrees` can
+align a long jar with available surface length. No sausage was packed in
+this trial, so the complete task still needs a fresh autonomous episode.
