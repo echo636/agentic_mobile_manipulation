@@ -609,3 +609,14 @@ static grid but the executor returned `navigation_unreachable` during path
 execution. Future trials now record the private follower failure reason and
 actual final XY in `navigation_failures.jsonl`, so a targeted motor repair can
 be based on the precise failure rather than the sanitized model-facing error.
+
+Toys r14 correctly selected four distinct toys and put them in the box, then
+failed on `board_game_228`: the visible hand carry had rotated the thin board
+upright, producing a 20 cm high bounding box that could not fit in the
+fillable volume. Demo carry now preserves the grasped object's original world
+orientation through hand motion. In the privileged
+`toybox_model_order_probe_r1`, the exact same first-five item order plus the
+remaining tennis ball all placed successfully; the fifth used verified
+repacking and all six final official `Inside` checks were true. This validates
+capacity at the preserved orientation only. The model trial still needs its own
+successful final audit.

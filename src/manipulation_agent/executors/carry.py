@@ -289,10 +289,10 @@ class ControlledCarry:
             lifted=original[0].clone();lifted[2]+=.18
             relative=T.relative_pose_transform(lifted,original[1],base_pos,base_quat)
         self._ideal_held=obj;self._carry_relative=relative
-        # Keep an assembly level while the visible hand moves and rotates.
-        # Otherwise a plate carrying food can turn vertical during navigation,
-        # invalidating its support relation before the destination is reached.
-        self._carry_orientation=original[1].clone() if contents and getattr(self,'demo_motion',False) else None
+        # Keep the grasped object's world orientation through visible hand
+        # motion. Thin boards and plates otherwise turn vertical with the
+        # wrist, making a later selected volume physically too small for them.
+        self._carry_orientation=original[1].clone() if getattr(self,'demo_motion',False) else None
         self._carry_contents=contents;self._carry_dependencies=dependencies
         self._carry_record(status='attached',object=obj.name,contained_objects=[c.name for c,_ in contents],
                            payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
