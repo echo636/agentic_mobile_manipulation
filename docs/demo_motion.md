@@ -845,3 +845,13 @@ These successful local executor effects are not a task pass. The saved RGB
 also showed that close tree branches obscured its trunk when a second gift
 placement returned `navigation_unreachable`; the pick-and-place skill now
 directs a side view and lower trunk selection. A fresh model episode is needed.
+
+Plates-and-food r19 passed the independent demo audit. Astra low selected
+`plate_93` and `plate_94` from RGB; each visible grasp carried one supported
+pizza. The model placed both plate assemblies in the same refrigerator,
+grasped `bowl_92` and `bowl_91`, placed both in the same sink, and closed the
+refrigerator. The formal `finish` reported achieved, official whole-task
+success, and all seven goal predicates true. The nine audit checks passed,
+including model/simulator alignment, empty hand, visible motion, and
+five-view video (`04_cleaning_up_plates_and_food_r19/demo_audit.json`).
+This is the eighth independently audited success among the first ten tasks.
