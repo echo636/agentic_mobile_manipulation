@@ -901,3 +901,13 @@ retry returned a `custom_tool_call`/missing `reasoning` item error. This was
 not a 429 rate limit. The controller failed without a formal `finish`; the
 whole-task and controller checks were false even though the recorded motion
 and five-view video passed. A new autonomous episode is required.
+
+Can-meat r21 opened `top_cabinet_lkxmne_0` but finished blocked before
+grasping either jar. Its final front RGB was close to the stovetop: the red
+backsplash and cabinet lower edge filled the upper view while the high shelf
+was cropped. Back, left, and right RGB also lacked a complete jar view. The
+model reported that it could not reliably identify or reach the jars and
+finished blocked; official whole-task success was false (goal fraction
+`5/9`). The pick-and-place skill now requires a free-floor aisle viewpoint
+and turn that bring the full upper shelf and jar bodies into RGB before
+attempting a grasp or abandoning that search.
