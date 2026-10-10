@@ -679,3 +679,14 @@ honestly finished blocked. The pick-and-place skill now asks the model to
 center a thin plate in view and select an exposed rim pixel before grasping.
 This is a model-facing instruction only; a fresh independent model trial is
 still needed to validate task success.
+
+Can-meat r16 also finished blocked and failed the official BDDL audit. The
+model first opened an oven, recognized the mistake, and closed it. It then
+selected a wall cabinet over the counter, but the visible hand stopped about
+0.55 m short after the automatic approach. Its next selected floor point
+beside the counter had no navigable bounded projection, so the model ended
+without removing a jar. The earlier r13 trial reached a cabinet door from
+an aisle-side base pose and did grasp a hinged jar; therefore this r16 failure
+does not establish an impossible motor task. The pick-and-place skill now
+explains the counter obstruction and asks for an aisle-side or end-around
+approach before retrying the cabinet. A new model trial must verify it.
