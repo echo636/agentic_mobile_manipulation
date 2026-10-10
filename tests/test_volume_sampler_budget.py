@@ -72,6 +72,22 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
         self.assertEqual(backend.sampling_physics_steps, 6001)
         self.assertIs(sim.step_physics, physics)
 
+    def test_demo_sampler_budget_uses_verified_grid_fallback(self):
+        fixture = self.fixture(EpisodeDeadline(2800.), 1205)
+        backend, target, sim, physics, clock, _ = fixture
+        held = backend._get_held()
+        held.name = 'item'
+        held.set_position_orientation = lambda *pose: None
+        held.keep_still = lambda: None
+        target.name = 'container'
+        backend.demo_motion = True
+        backend._placement_record = lambda data: None
+        backend._fillable_grid_pose = lambda *args: True
+        result = self.run_sampler(fixture, max_steps=2000)
+        self.assertEqual(result['implementation'], 'verified_fillable_grid_fallback')
+        self.assertEqual(clock['physics'], 1200)
+        self.assertIs(sim.step_physics, physics)
+
     def test_managed_sampler_stops_at_actual_episode_deadline_and_restores_physics(self):
         fixture = self.fixture(EpisodeDeadline(2800.), 6001, elapsed=181., expire_at=10)
         with self.assertRaises(SkillError) as error:

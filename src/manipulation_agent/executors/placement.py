@@ -549,6 +549,7 @@ class CheckedPlacement:
             contents=list(self._carry_contents) if self.ideal_carry else []
             dependencies=list(getattr(self,'_carry_dependencies',[]))
             orientation=held.get_position_orientation()[1].clone()
+            initial_pose=tuple(v.clone() for v in held.get_position_orientation())
             self._carry_detach()
             # Capture the anchored physics wrapper installed by the context.
             original_step=self.og.sim.step_physics
@@ -569,6 +570,12 @@ class CheckedPlacement:
             def bounded_step(*args,**kwargs):
                 deadline=getattr(self,'deadline',None)
                 if deadline is not None:deadline.check(changed=True)
+                # Demo motion has a verified grid/repack motor fallback. Do
+                # not let the stochastic official setter monopolize the
+                # episode while a model tool call waits for its response.
+                if getattr(self,'demo_motion',False) and (
+                        self.sampling_physics_steps-before>=1200 or time.monotonic()-start>90):
+                    raise SkillError('sampling_budget_exhausted','Trying deterministic fillable placement',changed=True)
                 # Managed benchmark episodes have one execution deadline;
                 # the legacy sampler caps apply only to standalone calls.
                 if not getattr(deadline,'managed',False) and (
@@ -598,7 +605,18 @@ class CheckedPlacement:
             sampling_done=False
             placement_method='official_Inside_volume_sampler'
             try:
-                sampled=held.states[Inside].set_value(target,True)
+                try:
+                    sampled=held.states[Inside].set_value(target,True)
+                except SkillError as exc:
+                    if exc.code!='sampling_budget_exhausted' or not getattr(self,'demo_motion',False):
+                        raise
+                    sampled=False
+                    held.set_position_orientation(*initial_pose)
+                    held.keep_still()
+                    self._relocate_contents(held,contents)
+                    self._placement_record({'status':'official_sampler_budget_to_verified_fallback',
+                        'target':target.name,'held':held.name,
+                        'sampling_physics_steps':self.sampling_physics_steps-before})
                 sampling_done=True
             finally:
                 RigidContactAPI.is_in_contact=original_contact

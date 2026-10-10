@@ -638,3 +638,14 @@ kitchen trash can, then reported achieved with an empty hand. Official BDDL
 whole-task success, model/simulator trace alignment, visible motion, and the
 five-view video review all passed. The first-ten audited successes are now
 tasks 1, 2, 6, 7, and 9.
+
+Halloween r15 became unusable during its second `place_inside`: the model tool
+call timed out while the simulator continued a high-load official randomized
+volume sample. The old trial was terminated and recorded as a scheduler
+failure, not as an autonomous task result. Demo-mode volume sampling now stops
+after 1200 physics ticks or 90 seconds and tries the already verified
+fillable-grid/repack placement instead, under the same overall episode
+deadline. A unit test covers that fallback, and the privileged
+`drawer_close_probe_r3` still placed all five items, closed, reopened,
+reclosed, and retained official `Inside` after 300 more steps. A fresh model
+episode is required to validate the task.
