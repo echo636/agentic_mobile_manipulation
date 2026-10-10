@@ -21,6 +21,17 @@ from .demo_motion import DemoMotion
 class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
+    @staticmethod
+    def _floor_relation_motor_point(primitive, obj, selected_point):
+        """Approach a selected tree at its base for floor-relative placement."""
+        if primitive not in {'place_next_to', 'place_under'} or 'tree' not in str(getattr(obj, 'category', '')).lower():
+            return selected_point
+        lower, upper = obj.aabb
+        point = selected_point.clone()
+        point[:2] = (lower[:2] + upper[:2]) / 2
+        point[2] = lower[2] + .2
+        return point
+
     def __init__(self,*args,record_video=False,**kwargs):
         self.deadline=EpisodeDeadline.from_env()
         self.deadline.check()
@@ -689,6 +700,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             # object, or change articulated-container handling while carrying.
             held_self_toggle=self.ideal_carry and held is obj and primitive in {'toggle_on','toggle_off'}
             if not held_self_toggle:raise SkillError('hand_occupied','Hand occupied')
+        selected_point = point
+        point = RGBBackend._floor_relation_motor_point(primitive, obj, point)
+        if point is not selected_point and self.demo_motion:
+            self._demo_record(action=primitive,status='tree_base_approach',
+                              selected_surface_point=selected_point.tolist(),
+                              motor_point=point.tolist())
         from omnigibson.object_states import Open,Inside
         if primitive=='place_inside' and Open in obj.states and not obj.states[Open].get_value():
             raise SkillError('container_closed','Placement into closed container rejected')

@@ -911,3 +911,14 @@ finished blocked; official whole-task success was false (goal fraction
 `5/9`). The pick-and-place skill now requires a free-floor aisle viewpoint
 and turn that bring the full upper shelf and jar bodies into RGB before
 attempting a grasp or abandoning that search.
+
+After r20 repeatedly failed to approach model-selected Christmas-tree branch
+pixels for gift `place_next_to` and `place_under`, the private executor now
+uses the selected tree's lower AABB center as the motor approach point for
+those two floor-relative relations. The model still selects the tree from RGB
+and calls the action; the executor's official `NextTo` or `Under` check still
+decides whether the placement succeeded. This is a visible-motion approach
+repair, not a scripted gift target or a completed autonomous episode. CPU
+regression tests cover the base-point mapping and unchanged non-tree actions;
+the full test suite passed (380 passed, 28 skipped, 90 subtests). It awaits
+a real-simulator episode and independent audit.

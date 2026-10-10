@@ -15,6 +15,20 @@ from manipulation_agent.omnigibson_backend import OmniGibsonBackend
 
 @unittest.skipUnless(importlib.util.find_spec('torch'), 'Requires CPU geometry environment')
 class GuardRelaxationTests(unittest.TestCase):
+    def test_tree_floor_placement_approaches_base_without_changing_selected_pixel(self):
+        import torch
+        selected = torch.tensor([2.0, 3.0, 1.8])
+        tree = SimpleNamespace(category='christmas_tree', aabb=(
+            torch.tensor([1.0, 1.5, 0.0]), torch.tensor([3.0, 3.5, 2.4])))
+        for primitive in ('place_next_to', 'place_under'):
+            with self.subTest(primitive=primitive):
+                motor = RGBBackend._floor_relation_motor_point(primitive, tree, selected)
+                self.assertTrue(torch.allclose(motor, torch.tensor([2.0, 2.5, 0.2])))
+                self.assertTrue(torch.allclose(selected, torch.tensor([2.0, 3.0, 1.8])))
+        self.assertIs(RGBBackend._floor_relation_motor_point('place_on_top', tree, selected), selected)
+        table = SimpleNamespace(category='table')
+        self.assertIs(RGBBackend._floor_relation_motor_point('place_next_to', table, selected), selected)
+
     def support_fixture(self):
         import torch
         def body(name):
