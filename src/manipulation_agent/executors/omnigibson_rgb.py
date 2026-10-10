@@ -536,8 +536,19 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 grid,map_details=build_navigation_grid(self,floor)
             except NavigationError as exc:
                 raise SkillError(exc.code,str(exc)) from exc
+        import numpy as np
+        self._navigation_plan_index=getattr(self,'_navigation_plan_index',0)+1
+        map_dir=self.output/'navigation_grids';map_dir.mkdir(exist_ok=True)
+        map_file=map_dir/f'{self._navigation_plan_index:04d}.npz'
+        raw_free,overlap,_=self._navigation_clearance
+        np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+            raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
+            overlap=overlap.reshape(grid.height,grid.width),origin=grid.origin,resolution=grid.resolution,
+            footprint=map_details['chassis_footprint_world_offsets'],start=position.cpu().numpy(),
+            target=point.cpu().numpy(),travel_yaw=travel_yaw)
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_result,
+                 'grid_artifact':str(map_file.relative_to(self.output)),
                  'selected_world_point':point.cpu().tolist(),
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
