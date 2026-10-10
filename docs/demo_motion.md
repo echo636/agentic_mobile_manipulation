@@ -1011,3 +1011,9 @@ resolution preserves the same camera pose and four-view contract while giving
 the policy more pixels to distinguish a colored item from its carrier. This
 change starts with the next launched attempt and must be judged by the same
 independent task audit, not by image quality alone.
+
+Christmas r24, still at 512×512, again selected the wicker basket rather than
+one of its tiny visible contents, placed it on a sofa, and regrasped it. The
+run was stopped after this repeated carrier trajectory so r25 could test the
+higher-resolution observation. Its independent audit failed whole-task
+success and formal finish; nine visible motion segments and video passed.
