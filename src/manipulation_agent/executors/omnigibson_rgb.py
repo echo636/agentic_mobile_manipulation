@@ -476,7 +476,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         return hulls,report
 
     def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=1.4,
-                          self_hulls=()):
+                          self_hulls=(), base_yaw=None):
         """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
@@ -487,7 +487,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         held=self._get_held()
         if held is not None:ignore.extend(l.prim_path for l in held.links.values())
         ignore.extend(l.prim_path for obj,_ in self._carry_contents for l in obj.links.values())
-        yaw=math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
+        yaw=base_yaw if base_yaw is not None else math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
         rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,
                               point.cpu().tolist(),margin=margin,radius=self.rig_radius,
                               pitch_degrees=self.rig_pitch_degrees)
@@ -505,10 +505,13 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
 
     def _navigate(self, target, max_steps, *, for_manipulation=False):
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
-        from dataclasses import asdict
+        from dataclasses import asdict, replace
+        import omnigibson.utils.transform_utils as T
         from .gt_navigation import GridMap, NavigationError, plan_navigation, visual_approach_settings, STRATEGY
         trav=self.env.scene.trav_map
-        position,_=self.robot.get_position_orientation()
+        position,orientation=self.robot.get_position_orientation()
+        rotation=T.quat2mat(orientation)
+        travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         point=target.get_position_orientation()[0]
         from .live_gt_map import build_navigation_grid
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
@@ -529,10 +532,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 # camera after arrival. Elevated clicks approach the point;
                 # only actual manipulation needs an unobstructed reach ray.
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
-                                     standoff=standoff,goal_mode=mode,
+                                     standoff=standoff,goal_mode=mode,check_cancelled=self.deadline.check,
                                      candidate_filter=(lambda xy:self._approach_visible(
                                          xy,point,getattr(target,'selected_object',None),
-                                         margin=0.,max_distance=1.4)) if for_manipulation else None)
+                                         margin=0.,max_distance=1.4,base_yaw=travel_yaw)) if for_manipulation else None)
+                plan=replace(plan,travel_yaw=travel_yaw,final_yaw=travel_yaw)
             details.update(status='planned',plan=asdict(plan))
         except NavigationError as exc:
             details.update(status='failed',error_code=exc.code,error=str(exc))

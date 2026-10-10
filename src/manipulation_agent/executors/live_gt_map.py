@@ -1,103 +1,107 @@
-"""Private GT walkability with live door links and measured base clearance.
+"""Private current GT collision walkability on the simulator's floor support map.
 
-The GT floor image retains static furniture/walls. Only door geometry is removed
-from the source image and reinserted at its current articulated pose. This is
-not online SLAM and no map, depth, or simulator object identity goes to the model.
+Vertical PhysX queries rasterize actual loaded collision geometry. Precomputed
+furniture/closed-door silhouettes are not authoritative for a changed scene.
+Object bounds only restrict dirty query regions; they never define occupancy.
 """
 from pathlib import Path
 import hashlib
 import math
+import time
 
 
-def disk_footprint(radius, resolution):
+def footprint_kernel(points, resolution):
+    import cv2
     import numpy as np
-    n = math.ceil(radius / resolution)
-    yy, xx = np.mgrid[-n:n+1, -n:n+1]
-    return ((xx * resolution)**2 + (yy * resolution)**2 <= radius**2 + 1e-12).astype('uint8')
+    points=np.asarray(points,dtype=float)
+    n=math.ceil(float(np.abs(points).max())/resolution)+1
+    kernel=np.zeros((2*n+1,2*n+1),dtype='uint8')
+    cv2.fillConvexPoly(kernel,cv2.convexHull(np.round((points/resolution+n)*256).astype('int32')),1,shift=8)
+    return kernel
 
 
 def build_navigation_grid(backend, floor):
     import cv2
     import numpy as np
+    import omnigibson.lazy as lazy
     from .gt_navigation import GridMap
-    scene = backend.env.scene
-    trav = scene.trav_map
-    resolution = float(trav.map_resolution)
-    source = Path(scene.scene_dir) / 'layout' / f'floor_trav_no_door_{floor}.png'
-    cache = getattr(backend, '_gt_floor_cache', None)
-    if cache is None:
-        cache = backend._gt_floor_cache = {}
-    if floor not in cache:
-        if source.is_file():
-            raw = cv2.imread(str(source), cv2.IMREAD_GRAYSCALE)
-            h, w = trav.floor_map[floor].shape
-            raw = cv2.resize(raw, (w, h))
-            raw = (raw == 255).astype('uint8')
-            source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
-        else:
-            # Missing variant cannot authorize removing closed doors. Keep the
-            # original conservative map and make the limitation explicit.
-            raw = (trav.floor_map[floor].cpu().numpy() != 0).astype('uint8')
-            source = Path(scene.scene_dir) / 'layout' / f'floor_trav_{floor}.png'
-            source_hash = hashlib.sha256(raw.tobytes()).hexdigest()
-        cache[floor] = raw, str(source), source_hash
-    raw, source_path, source_hash = cache[floor]
-    occupied = raw.copy()
-    h, w = occupied.shape
-    origin = np.array([-w*resolution/2, -h*resolution/2])
-    floor_z = float(trav.floor_heights[floor])
-    base = backend.robot.get_position_orientation()[0].cpu().numpy()
-    # Measure the chassis, not the whole reset-pose arm AABB. The circumscribed
-    # disk admits arbitrary base yaw and cannot be smaller than the chassis.
-    chassis = []
+    scene=backend.env.scene;trav=scene.trav_map;resolution=float(trav.map_resolution)
+    floor_z=float(trav.floor_heights[floor]);base=backend.robot.get_position_orientation()[0].cpu().numpy()
+    chassis=[]
     for link in backend.robot.links.values():
-        if link.is_meta_link:
-            continue
-        points = link.collision_boundary_points_world
-        if points is None:
-            continue
-        points = points.cpu().numpy()
-        if points[:, 2].min() < floor_z + .20:
-            low = points[points[:, 2] <= floor_z + .30]
-            if len(low):
-                chassis.extend(low[:, :2] - base[:2])
-    if not chassis:
-        raise ValueError('Robot chassis collision geometry unavailable for GT footprint')
-    chassis_radius = float(np.linalg.norm(np.asarray(chassis), axis=1).max())
-    radius = chassis_radius + .01
-    doors = []
+        if link.is_meta_link:continue
+        points=link.collision_boundary_points_world
+        if points is None:continue
+        points=points.cpu().numpy()
+        if points[:,2].min()<floor_z+.20:
+            low=points[points[:,2]<=floor_z+.30]
+            if len(low):chassis.extend(low[:,:2]-base[:2])
+    if not chassis:raise ValueError('Robot chassis collision geometry unavailable')
+    kernel=footprint_kernel(chassis,resolution)
+    # Holonomic translation preserves the current chassis yaw all along the
+    # route, so the actual oriented footprint applies without a giant disk.
+    height=float(backend.robot.aabb[1][2])-floor_z
+    source=Path(scene.scene_dir)/'layout'/f'floor_trav_no_obj_{floor}.png'
+    cache=getattr(backend,'_live_gt_collision_cache',None)
+    if cache is None:cache=backend._live_gt_collision_cache={}
+    if floor not in cache:
+        if not source.is_file():raise ValueError('GT floor support map unavailable: '+str(source))
+        raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE);h,w=trav.floor_map[floor].shape
+        raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
+        cache[floor]={'support':raw,'free':raw.copy(),'objects':{},'height':None,
+                      'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
+    cached=cache[floor];support=cached['support'];free=cached['free'];h,w=free.shape
+    origin=np.array([-w*resolution/2,-h*resolution/2])
+    held=backend._get_held();ignored_objects={backend.robot,held,*[o for o,_ in backend._carry_contents]}
+    ignored_links={link.prim_path for obj in ignored_objects if obj is not None for link in obj.links.values()}
+    # Navigation must not collide with semantic helper/fill volumes which have
+    # no physical surface. Actual ordinary collision shapes remain included.
+    ignored_links.update(link.prim_path for obj in scene.objects for link in obj.links.values() if link.is_meta_link)
+    current={}
     for obj in scene.objects:
-        if obj.category not in {'door', 'sliding_door'}:
-            continue
-        link_count = 0
-        for link in obj.links.values():
-            if link.is_meta_link:
-                continue
-            # Keep links separate: the convex hull of an entire open door and
-            # its frame would erroneously fill the open doorway again.
-            for mesh in link.collision_meshes.values():
-                if mesh.get_attribute('physics:collisionEnabled') is False:
-                    continue
-                points = mesh.points_in_parent_frame
-                if points is None or not len(points):
-                    continue
-                points = link.transform_local_points_to_world(points).cpu().numpy()
-                if points[:, 2].max() < floor_z + .05 or points[:, 2].min() > floor_z + 1.8:
-                    continue
-                # Project each actual collision mesh. This also preserves door
-                # frames and the leaf's current angle, not just an Open flag.
-                pixel = (points[:, :2] - origin) / resolution
-                hull = cv2.convexHull(np.round(pixel * 256).astype('int32'))
-                cv2.fillConvexPoly(occupied, hull, 0, shift=8)
-                link_count += 1
-        doors.append({'name':obj.name, 'meshes':link_count,
-                      'joint_positions':obj.get_joint_positions().cpu().tolist()})
-    kernel = disk_footprint(radius, resolution)
-    free = cv2.erode(occupied, kernel, borderType=cv2.BORDER_CONSTANT, borderValue=0)
-    grid = GridMap(w, h, resolution, tuple(origin), free.tobytes())
-    return grid, {'source':source_path, 'source_sha256':source_hash,
-        'live_doors':doors, 'chassis_radius_m':chassis_radius, 'clearance_radius_m':radius,
-        'footprint':'measured_chassis_circumscribed_disk', 'kernel_shape':list(kernel.shape),
-        'dynamic_collision_check':'door_mesh_occupancy_at_plan_time',
-        'collision_substrate':'GT_static_furniture_and_live_door_meshes',
+        if obj in ignored_objects:continue
+        lo,hi=obj.aabb
+        lo,hi=lo.cpu().numpy(),hi.cpu().numpy()
+        if hi[2]<floor_z+.03 or lo[2]>floor_z+height:continue
+        position,quat=obj.get_position_orientation()
+        joints=obj.get_joint_positions()
+        signature=tuple(round(float(v),3) for tensor in (position,quat,joints) for v in tensor)
+        current[obj.name]={'signature':signature,'lo':lo[:2],'hi':hi[:2]}
+    dirty=support.astype(bool) if cached['height'] is None or abs(cached['height']-height)>.01 else np.zeros_like(support,dtype=bool)
+    previous=cached['objects']
+    if not dirty.any():
+        for name in set(current)|set(previous):
+            old,new=previous.get(name),current.get(name)
+            if old is not None and new is not None and old['signature']==new['signature']:continue
+            for record in (old,new):
+                if record is None:continue
+                lo=np.floor((record['lo']-origin)/resolution).astype(int)-1
+                hi=np.ceil((record['hi']-origin)/resolution).astype(int)+2
+                dirty[max(0,lo[1]):min(h,hi[1]),max(0,lo[0]):min(w,hi[0])]=True
+        dirty &= support.astype(bool)
+    query=lazy.omni.physx.get_physx_scene_query_interface()
+    started=time.monotonic();count=0
+    for row,col in np.argwhere(dirty):
+        if count%2048==0:backend.deadline.check()
+        blocked=False
+        def hit_callback(hit):
+            nonlocal blocked
+            if str(hit['rigidBody']) not in ignored_links:
+                blocked=True
+                return False
+            return True
+        xy=origin+np.array([col,row])*resolution
+        query.raycast_all((float(xy[0]),float(xy[1]),floor_z+.03),(0.,0.,1.),max(.1,height-.03),hit_callback)
+        free[row,col]=0 if blocked else 1
+        count+=1
+    cached.update(objects=current,height=height)
+    navigable=cv2.erode(free,kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+    grid=GridMap(w,h,resolution,tuple(origin),navigable.tobytes())
+    hull=cv2.convexHull(np.asarray(chassis,dtype='float32')).reshape(-1,2).tolist()
+    return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
+        'chassis_footprint_world_offsets':hull,'kernel_shape':list(kernel.shape),
+        'footprint':'current_yaw_chassis_convex_hull_holonomic_translation',
+        'query_height_m':height,'updated_cells':count,'query_seconds':time.monotonic()-started,
+        'dynamic_collision_check':'live_PhysX_vertical_queries_incrementally_updated',
+        'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
         'held_object_footprint_included':False}

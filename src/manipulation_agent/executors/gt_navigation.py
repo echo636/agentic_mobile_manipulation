@@ -12,7 +12,7 @@ import heapq
 import math
 
 SOURCE_COMMIT = '0815cf234ee591bacd8017e9b1def4fac13e649b'
-STRATEGY = 'visual_point_dynamic_door_gt_grid_v2'
+STRATEGY = 'visual_point_live_collision_gt_grid_v2'
 
 
 class NavigationError(Exception):
@@ -167,10 +167,12 @@ class NavigationPlan:
     candidates_reachable: int
     start_grid_offset_m: float
     expanded_cells: int
+    travel_yaw: float | None = None
 
 
 def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
-                    horizon=10000., max_expansions=None, candidate_filter=None, goal_mode='approach'):
+                    horizon=10000., max_expansions=None, candidate_filter=None, goal_mode='approach',
+                    check_cancelled=None):
     """Project candidate goals, validate reachability, rank and plan one GT hop.
 
     One multi-goal Dijkstra search supplies exact grid geodesics for all
@@ -209,6 +211,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     while queue and pending:
         distance,cell=heapq.heappop(queue)
         if cell in closed:continue
+        if check_cancelled is not None and len(closed)%2048==0:check_cancelled()
         if distance>horizon:break
         if len(closed)>=max_expansions:raise NavigationError('GT path search exhausted its expansion budget')
         closed.add(cell);pending.discard(cell)
@@ -332,7 +335,7 @@ class GreedyGridFollower:
             command=(*xy,yaw+max(-self.angle_step,min(self.angle_step,delta)))
         else:
             goal=self.plan.points[self.index];distance=math.dist((x,y),goal)
-            heading=math.atan2(goal[1]-y,goal[0]-x);delta=self.angle(heading-yaw)
+            heading=(self.plan.travel_yaw if self.plan.travel_yaw is not None else math.atan2(goal[1]-y,goal[0]-x));delta=self.angle(heading-yaw)
             if abs(delta)>self.heading_tolerance and distance>self.distance_step:
                 phase='turn'
                 command=(x,y,yaw+max(-self.angle_step,min(self.angle_step,delta)))
