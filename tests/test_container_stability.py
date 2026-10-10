@@ -82,6 +82,7 @@ class ContainerStabilityTests(unittest.TestCase):
             if sampled['done']:held.position=5.
         sim=types.SimpleNamespace(step_physics=physics)
         def sample(target,wanted):
+            usd_utils.RigidContactAPI.is_in_contact(0,[held],None,None,True)
             sim.step_physics();sampled['done']=True;held.position=0.
             return True
         held_state.set_value=sample
@@ -106,7 +107,11 @@ class ContainerStabilityTests(unittest.TestCase):
         b._verify_payload=lambda dependencies:None
         object_states=types.ModuleType('omnigibson.object_states');object_states.Inside=Inside
         usd_utils=types.ModuleType('omnigibson.utils.usd_utils')
-        usd_utils.RigidContactAPI=types.SimpleNamespace(is_in_contact=lambda *args:False)
+        ignored=[]
+        def contact(scene_idx,query_set,with_set,ignore_set,current_only):
+            ignored.append(ignore_set)
+            return False
+        usd_utils.RigidContactAPI=types.SimpleNamespace(is_in_contact=contact)
         with patch.dict('sys.modules',{'omnigibson.object_states':object_states,
                                        'omnigibson.utils.usd_utils':usd_utils}):
             result=b._checked_place_inside(target,3)
@@ -114,6 +119,7 @@ class ContainerStabilityTests(unittest.TestCase):
         self.assertEqual(resident.position,0.)
         self.assertEqual(held.position,0.)
         self.assertIs(sim.step_physics,physics)
+        self.assertTrue(any(b.robot in entry for entry in ignored if entry is not None))
 
 
 if __name__=='__main__':unittest.main()

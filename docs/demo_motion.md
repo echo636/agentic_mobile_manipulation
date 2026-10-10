@@ -332,3 +332,19 @@ preservation list if the model explicitly grasps it. The skill now describes
 where to select a small bin and how to recover from `unsupported_relation`.
 These changes require another autonomous whole-task audit; the r9 video is
 not a pass.
+
+The Halloween r8 trial formally finished with visible motion and a valid
+review video. The model verified the cauldron next to the living-room table
+and closed the TV cabinet, but two `place_inside` calls to a selected cabinet
+failed the official volume sampler, so the evaluator rejected the five item
+goals. During an idealized placement the robot hand remains at the opening;
+the upstream sampler treats contact between that hand and the deposited item
+as a collision. The next executor revision excludes only the robot itself
+from the new item's initial collision veto, while retaining container and
+other-object contacts. This is a bounded motor-level accommodation and still
+requires official `Inside` verification. Its model trial has not yet passed.
+
+A diagnostic replay of the r7 `can_meat` model pixels tested a wider search
+around the selected countertop point. The first `place_on_top` still failed,
+so that widening was reverted. The replay was scripted, and the task remains
+unverified; any future claim needs a fresh model trial and official score.

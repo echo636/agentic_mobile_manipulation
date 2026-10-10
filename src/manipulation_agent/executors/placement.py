@@ -357,17 +357,22 @@ class CheckedPlacement:
             from omnigibson.utils.usd_utils import RigidContactAPI
             original_contact=RigidContactAPI.is_in_contact
             def assembly_contact(scene_idx,query_set,with_set,ignore_set,current_only):
-                if contents and len(query_set)==1 and next(iter(query_set)) is held and with_set is None:
+                if len(query_set)==1 and next(iter(query_set)) is held and with_set is None:
                     assembly=[held,*[obj for obj,_ in contents]]
-                    return original_contact(scene_idx,assembly,None,[*(ignore_set or []),*assembly],current_only)
+                    # The ideal visible hand is still at the selected opening
+                    # while the volume sampler runs. Ignore only this robot's
+                    # own collision with the item being deposited; retain
+                    # furniture and other scene contacts as sampler vetoes.
+                    return original_contact(scene_idx,assembly,None,
+                                            [*(ignore_set or []),*assembly,self.robot],current_only)
                 return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
-            if contents:RigidContactAPI.is_in_contact=assembly_contact
+            RigidContactAPI.is_in_contact=assembly_contact
             sampling_done=False
             try:
                 sampled=held.states[Inside].set_value(target,True)
                 sampling_done=True
             finally:
-                if contents:RigidContactAPI.is_in_contact=original_contact
+                RigidContactAPI.is_in_contact=original_contact
                 self.og.sim.step_physics=preserve_residents if sampling_done else original_step
                 self.frames_revision=-1
             try:
