@@ -620,3 +620,14 @@ remaining tennis ball all placed successfully; the fifth used verified
 repacking and all six final official `Inside` checks were true. This validates
 capacity at the preserved orientation only. The model trial still needs its own
 successful final audit.
+
+Toys r14 later grasped the final tennis ball, but the provider rejected the
+continuation with a missing linked reasoning item. Its model controller,
+official whole-task result, and independent audit failed. Christmas r14
+finished blocked after an attempted grasp hit the fixed basket; no decoration
+was removed. Its RGB sequence showed a small floor basket from a distant
+viewpoint. The pick-and-place skill now tells the model to navigate to the
+basket body/rim, inspect a larger fresh image from multiple sides, and select
+an exposed item rather than a floor point or the basket wicker. Both tasks
+require new autonomous trials; neither diagnostic nor prompt change counts
+as success.
