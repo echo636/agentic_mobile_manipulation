@@ -62,11 +62,16 @@ def main():
             point=backend.torch.tensor(case['world_target'],dtype=backend.torch.float32)
             target=SimpleNamespace(get_position_orientation=lambda:(point,None),selected_object=None)
             recorder.event('diagnostic_navigation_begin',case)
+            motion_before=len((a.output/'base_motion.jsonl').read_text().splitlines()) if (a.output/'base_motion.jsonl').exists() else 0
             result=backend._navigate(target,20000,for_manipulation=case.get('for_manipulation',False))
             obs=harness.refresh()
             actual=backend.robot.get_position_orientation()[0].cpu().tolist()
             case_record.update(status='passed',result=result,actual_position=actual,views=[i['view'] for i in obs['images']],
                                clicked_xy_error_m=math.dist(actual[:2],case['world_target'][:2]))
+            motion=[json.loads(line) for line in (a.output/'base_motion.jsonl').read_text().splitlines()[motion_before:]]
+            dz=max((abs(m['actual_position'][2]-m['commanded_position'][2]) for m in motion),default=0.)
+            case_record['max_vertical_feedback_error_m']=dz
+            validation['checks'][case['name']+'_no_collision_lift']=dz<=.03
             validation['checks'][case['name']+'_reached']=result['nav_status']=='reached'
             if case['goal_mode']=='point':validation['checks'][case['name']+'_near_click']=case_record['clicked_xy_error_m']<=.15
             else:validation['checks'][case['name']+'_within_reach']=case_record['clicked_xy_error_m']<=1.4

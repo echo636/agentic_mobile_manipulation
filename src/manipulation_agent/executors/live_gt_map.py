@@ -121,3 +121,40 @@ def build_navigation_grid(backend, floor):
         'dynamic_collision_check':'live_PhysX_overlap_columns_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
         'held_object_footprint_included':False}
+
+
+def feasible_heading_grids(grid, raw_free, footprint, current, yaw, *, check_cancelled=None):
+    """Alternative fixed headings with a collision-checked in-place turn.
+
+    The R1 base is holonomic but not circular. A doorway may be feasible only
+    at a different heading. Validate the complete swept footprint (2-degree
+    samples with a half-cell raster margin), not just its end orientation.
+    """
+    import cv2
+    import numpy as np
+    from .gt_navigation import GridMap
+    raw=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width)
+    points=np.asarray(footprint,dtype=float)
+    cell=grid.cell(current)
+    def rotated(degrees):
+        a=math.radians(degrees);c,s=math.cos(a),math.sin(a)
+        return points@np.array([[c,-s],[s,c]]).T
+    def make(points):
+        kernel=footprint_kernel(points,grid.resolution)
+        free=cv2.erode(raw,kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+        return GridMap(grid.width,grid.height,grid.resolution,grid.origin,free.tobytes())
+    valid={1:True,-1:True};swept={1:[points],-1:[points]}
+    for absolute in range(15,181,15):
+        for sign in (1,-1):
+            if not valid[sign]:continue
+            if check_cancelled:check_cancelled()
+            angles=np.linspace(sign*(absolute-15),sign*absolute,9)[1:]
+            swept[sign].extend(rotated(a) for a in angles)
+            # Convex hull of all intermediate footprints is conservative for
+            # a turn and cannot silently cross a wall between sampled yaws.
+            turn_grid=make(np.concatenate(swept[sign]))
+            if not turn_grid.navigable(cell):
+                valid[sign]=False
+                continue
+            points_at_heading=rotated(sign*absolute)
+            yield make(points_at_heading),yaw+math.radians(sign*absolute),turn_grid,points_at_heading.tolist()

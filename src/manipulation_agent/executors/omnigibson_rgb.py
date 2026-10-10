@@ -559,12 +559,33 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 # Ground goals do not need to remain visible under the head
                 # camera after arrival. Elevated clicks approach the point;
                 # only actual manipulation needs an unobstructed reach ray.
-                plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
-                                     standoff=standoff,goal_mode=mode,check_cancelled=self.deadline.check,
-                                     candidate_filter=(lambda xy:self._approach_visible(
-                                         xy,point,getattr(target,'selected_object',None),
-                                         margin=0.,max_distance=1.4,base_yaw=travel_yaw)) if for_manipulation else None)
-                plan=replace(plan,travel_yaw=travel_yaw,final_yaw=travel_yaw)
+                def make_plan(candidate_grid,yaw):
+                    return replace(plan_navigation(candidate_grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
+                        standoff=standoff,goal_mode=mode,check_cancelled=self.deadline.check,
+                        candidate_filter=(lambda xy:self._approach_visible(
+                            xy,point,getattr(target,'selected_object',None),
+                            margin=0.,max_distance=1.4,base_yaw=yaw)) if for_manipulation else None),
+                        travel_yaw=yaw,final_yaw=yaw)
+                turn=None
+                try:
+                    plan=make_plan(grid,travel_yaw)
+                except NavigationError as original_error:
+                    from .live_gt_map import feasible_heading_grids
+                    from .gt_navigation import NavigationPlan
+                    raw_free,_,_=self._navigation_clearance
+                    for other_grid,other_yaw,turn_grid,footprint in feasible_heading_grids(
+                            grid,raw_free,map_details['chassis_footprint_world_offsets'],
+                            position[:2].cpu().tolist(),travel_yaw,check_cancelled=self.deadline.check):
+                        try:other_plan=make_plan(other_grid,other_yaw)
+                        except NavigationError:continue
+                        xy=tuple(position[:2].cpu().tolist())
+                        turn_plan=NavigationPlan((xy,),xy,xy,other_yaw,0.,0.,1,1,0.,0,other_yaw)
+                        turn=(turn_grid,turn_plan)
+                        details['heading_change']={'from':travel_yaw,'to':other_yaw,
+                            'check':'full_swept_chassis_convex_hull','footprint':footprint}
+                        grid,plan=other_grid,other_plan
+                        break
+                    else:raise original_error
             details.update(status='planned',plan=asdict(plan))
         except NavigationError as exc:
             details.update(status='failed',error_code=exc.code,error=str(exc))
@@ -572,6 +593,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
                 stream.write(json.dumps(details)+'\n')
+        if turn is not None:
+            turn_result=self._execute_gt_plan(*turn,max_steps)
+            max_steps-=turn_result['steps']
+            details['heading_change']['execution']=turn_result
         result=self._execute_gt_plan(grid,plan,max_steps)
         self.navigation_distance+=result['actual_path_distance_m']
         return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,

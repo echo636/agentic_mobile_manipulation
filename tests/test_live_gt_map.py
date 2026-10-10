@@ -54,3 +54,19 @@ class LiveGridTests(unittest.TestCase):
                 self.assertLess(updated['updated_cells'],meta['updated_cells'])
                 _,unchanged=build_navigation_grid(backend,0)
                 self.assertEqual(unchanged['updated_cells'],0)
+
+    def test_heading_fallback_checks_rotation_sweep(self):
+        import numpy as np
+        from manipulation_agent.executors.gt_navigation import GridMap
+        from manipulation_agent.executors.live_gt_map import feasible_heading_grids
+        raw=np.ones((41,41),dtype='uint8')
+        grid=GridMap(41,41,.05,(-1.,-1.),raw.tobytes())
+        footprint=[[-.4,-.06],[.4,-.06],[.4,.06],[-.4,.06]]
+        clear=list(feasible_heading_grids(grid,raw.tobytes(),footprint,(0.,0.),0.))
+        self.assertEqual(len(clear),24)
+        # End orientations at 0 and 90 degrees miss this obstacle, but the
+        # body crosses it during the turn. Endpoint-only checking is unsafe.
+        raw[25,25]=0
+        blocked=list(feasible_heading_grids(grid,raw.tobytes(),footprint,(0.,0.),0.))
+        positive=[yaw for _,yaw,_,_ in blocked if yaw>0]
+        self.assertTrue(all(yaw<np.pi/4 for yaw in positive))
