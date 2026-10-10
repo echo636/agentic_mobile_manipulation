@@ -888,3 +888,16 @@ goal satisfaction was `2/9`, and the empty-hand audit check also failed.
 The pick-and-place skill now states the staged-jar sequence explicitly and
 the recovery skill treats `hand_occupied` on lid actions as a cue to place the
 held item safely before retrying. A fresh model episode is needed.
+
+Christmas r20 made substantial autonomous partial progress but failed its
+independent audit. Astra low grasped `candy_cane_226` and placed it on
+`sofa_lugrhk_1`, grasped `wreath_227` and placed it on `sofa_lugrhk_0`, then
+placed all three distinct gift boxes next to the Christmas tree. The two
+sofa supports are different simulator objects, so those two placements alone
+cannot satisfy the shared-sofa requirement; the model-facing skill now asks
+it to retain the exact first couch as a visual landmark. While returning for
+the remaining canes and candles, the provider stream disconnected and its
+retry returned a `custom_tool_call`/missing `reasoning` item error. This was
+not a 429 rate limit. The controller failed without a formal `finish`; the
+whole-task and controller checks were false even though the recorded motion
+and five-view video passed. A new autonomous episode is required.
