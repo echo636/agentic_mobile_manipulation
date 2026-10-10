@@ -76,7 +76,7 @@ def main():
     environment.update(CUDA_VISIBLE_DEVICES=str(args.gpu), GAP_BEHAVIOR_GPU_ID=str(args.gpu),
         OMNIGIBSON_DATA_PATH=str(og.parent / 'datasets'),
         OMNIGIBSON_APPDATA_PATH=str((args.appdata or root.parent / f'appdata_gpu{args.gpu}').resolve()),
-        MAS_DEMO_MOTION='1', MAS_VIDEO_RENDER_STRIDE='3')
+        MAS_DEMO_MOTION='1', MAS_VIDEO_RENDER_STRIDE='3', MAS_RGB_IMAGE_SIZE='1024')
     Path(environment['OMNIGIBSON_APPDATA_PATH']).mkdir(parents=True, exist_ok=True)
     # USD and Python tempfile create large per-scene scratch assets. Keep them
     # on the experiment data volume rather than the small /tmp user quota.

@@ -1002,3 +1002,12 @@ The model-facing policy now requires an explicit budget/deadline error or
 exhausted distinct recovery approaches before concluding it is blocked; it
 must continue a feasible remaining sequence instead of inferring a limit from
 conversation length. The next can-meat attempt must validate this guidance.
+
+The remaining-task demo trials now capture 1024×1024 RGB per camera instead
+of 512×512. In Christmas r24's 512-pixel front view, the floor basket was
+only about 50 pixels wide and individual decorations occupied a few pixels;
+the model selected its wicker rim while trying to grasp an item. The higher
+resolution preserves the same camera pose and four-view contract while giving
+the policy more pixels to distinguish a colored item from its carrier. This
+change starts with the next launched attempt and must be judged by the same
+independent task audit, not by image quality alone.
