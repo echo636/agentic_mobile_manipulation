@@ -382,3 +382,14 @@ queries BEHAVIOR's own current `predicate` termination condition at final
 scoring and separately records `last_env_step_task_success` so this mismatch
 is visible. The r11 audit remains failed and immutable. A fresh model trial
 must demonstrate that the corrected final official flag and audit pass.
+
+The trash r12 model trial selected the real small bin after grasping a can,
+but the upstream stochastic `Inside.set_value` exhausted its candidates and
+the model eventually finished blocked. The motor now tries a bounded grid
+inside the **model-selected bin's own fillable link** only after that setter
+fails. It excludes overlapping movable objects and requires the original
+`Inside.get_value` relation after the action's settling steps; the state
+predicate and task evaluator are unchanged. A privileged simulator probe
+forced the stochastic setter to return false and verified that the grid
+fallback placed a can `Inside` the real bin. That probe used object handles
+and is not a model task pass. The next full trash attempt remains necessary.

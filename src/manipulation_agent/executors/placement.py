@@ -306,6 +306,56 @@ class CheckedPlacement:
             'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance,
             'support_hit_body':hit.get('rigidBody'),'ignored_payload_names':[obj.name for obj in payload]}
 
+    def _fillable_grid_pose(self, held, target, fillable, contents):
+        """Find a visible-volume pose when the official stochastic setter exhausts itself.
+
+        This stays in the motor: candidates come only from the selected
+        container's fillable links and must satisfy the unmodified Inside
+        predicate. Avoid already placed objects before accepting a pose.
+        """
+        from omnigibson.object_states import Inside
+        torch = self.torch
+        pose = held.get_position_orientation()
+        held_lo, held_hi = held.aabb
+        extent = held_hi - held_lo
+        center_offset = (held_lo + held_hi) / 2 - pose[0]
+        movable = [obj for obj in self.env.scene.objects
+                   if obj not in (held, target, self.robot, *(item for item, _ in contents))
+                   and not getattr(obj, 'fixed_base', True)]
+        for link in fillable:
+            low, high = link.visual_aabb
+            if bool((high <= low).any()):
+                continue
+            inset_lo, inset_hi = low + extent / 2 + .004, high - extent / 2 - .004
+            if bool((inset_hi <= inset_lo).any()):
+                continue
+            for fz in (.18, .36, .55):
+                for fx, fy in ((.5,.5),(.25,.25),(.75,.25),(.25,.75),(.75,.75),
+                               (.25,.5),(.75,.5),(.5,.25),(.5,.75)):
+                    fraction = torch.tensor([fx, fy, fz], device=low.device)
+                    center = inset_lo + fraction * (inset_hi - inset_lo)
+                    if not bool(link.check_points_in_volume(center.unsqueeze(0))[0]):
+                        continue
+                    place = center - center_offset
+                    displacement = place - pose[0]
+                    candidate_lo, candidate_hi = held_lo + displacement, held_hi + displacement
+                    if any(bool(((candidate_hi > obj.aabb[0] + .005) &
+                                 (candidate_lo < obj.aabb[1] - .005)).all()) for obj in movable):
+                        continue
+                    held.set_position_orientation(place, pose[1])
+                    held.keep_still()
+                    self._relocate_contents(held, contents)
+                    if held.states[Inside].get_value(target):
+                        self._placement_record({'status': 'sampled',
+                            'method': 'verified_fillable_grid_fallback',
+                            'target': target.name, 'held': held.name,
+                            'fillable_link': link.name, 'position': place.tolist()})
+                        return True
+        held.set_position_orientation(*pose)
+        held.keep_still()
+        self._relocate_contents(held, contents)
+        return False
+
     def _checked_place_inside(self, target, max_steps):
         from omnigibson.object_states import Inside
         held = self._get_held()
@@ -371,6 +421,7 @@ class CheckedPlacement:
                 return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
             RigidContactAPI.is_in_contact=assembly_contact
             sampling_done=False
+            placement_method='official_Inside_volume_sampler'
             try:
                 sampled=held.states[Inside].set_value(target,True)
                 sampling_done=True
@@ -380,7 +431,10 @@ class CheckedPlacement:
                 self.frames_revision=-1
             try:
                 if not sampled:
-                    raise SkillError('sampling_error','Official volume sampler could not find a valid placement',changed=True)
+                    sampled=self._fillable_grid_pose(held,target,fillable,contents)
+                    placement_method='verified_fillable_grid_fallback'
+                    if not sampled:
+                        raise SkillError('sampling_error','No verified pose in the selected fillable volume',changed=True)
                 # Once the official sampler has found an Inside pose, retain
                 # that link-relative pose while the action's settling ticks
                 # run. Otherwise contact with the nearby robot may eject the
@@ -409,7 +463,7 @@ class CheckedPlacement:
             self._stabilized_containers[target]=tuple(v.clone() for v in target.get_position_orientation())
             if not hasattr(self,'_stabilized_container_payloads'):self._stabilized_container_payloads={}
             self._stabilized_container_payloads[target]=stabilized_payload
-        return {'primitive':'place_inside','implementation':'transactional_official_Inside_with_rigid_payload_sampling',
+        return {'primitive':'place_inside','implementation':placement_method,
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
                 'target_root_anchored':True,'existing_containment_verified':resident_count,
                 'sampling_physics_steps':self.sampling_physics_steps-before}

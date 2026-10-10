@@ -3,6 +3,8 @@ import importlib.util
 from contextlib import nullcontext
 import types
 import unittest
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 from manipulation_agent.executors.carry import ControlledCarry
 from manipulation_agent.executors.placement import CheckedPlacement
@@ -11,6 +13,40 @@ from manipulation_agent.contracts import SkillError
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
 class ContainerStabilityTests(unittest.TestCase):
+    def test_fillable_grid_fallback_uses_free_volume_and_official_inside(self):
+        import torch
+        class Inside:pass
+        class Item:
+            def __init__(self, name, center, size):
+                self.name=name;self.position=torch.tensor(center);self.size=torch.tensor(size)
+                self.fixed_base=False
+            @property
+            def aabb(self):return self.position-self.size/2,self.position+self.size/2
+            def get_position_orientation(self):
+                return self.position.clone(),torch.tensor([0.,0.,0.,1.])
+            def set_position_orientation(self,position,orientation):self.position=position.clone()
+            def keep_still(self):pass
+        held=Item('can',[2.,2.,2.],[.1,.1,.1])
+        resident=Item('resident',[.5,.5,.21],[.15,.15,.15])
+        link=types.SimpleNamespace(name='bin_volume',
+            visual_aabb=(torch.zeros(3),torch.ones(3)),
+            check_points_in_volume=lambda points:((points>=0)&(points<=1)).all(dim=1))
+        target=types.SimpleNamespace(name='bin')
+        held.states={Inside:types.SimpleNamespace(get_value=lambda parent:
+            parent is target and bool(((held.position>=0)&(held.position<=1)).all()))}
+        robot=object()
+        with tempfile.TemporaryDirectory() as directory:
+            backend=CheckedPlacement();backend.torch=torch;backend.output=Path(directory)
+            backend.steps=0;backend.robot=robot
+            backend.env=types.SimpleNamespace(scene=types.SimpleNamespace(objects=[held,resident,target,robot]))
+            backend._relocate_contents=lambda held,contents:None
+            states=types.ModuleType('omnigibson.object_states');states.Inside=Inside
+            with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+                self.assertTrue(backend._fillable_grid_pose(held,target,[link],[]))
+            lo,hi=held.aabb;other_lo,other_hi=resident.aabb
+            self.assertFalse(bool(((hi>other_lo+.005)&(lo<other_hi-.005)).all()))
+            self.assertTrue(held.states[Inside].get_value(target))
+
     def test_contents_follow_their_own_fillable_link_only(self):
         import torch
         class Obj:pass
