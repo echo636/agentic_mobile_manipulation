@@ -659,3 +659,12 @@ were moved, without deleting them, to
 The demo runner now sets `TMPDIR` to a per-GPU directory on the experiment
 volume before starting the simulator and model. These r15 startup failures
 are infrastructure outcomes and need new autonomous trials.
+
+Halloween r16 initialized correctly on the data-volume scratch path, but the
+model selected deep/far points on the same bottom cabinet for
+`place_inside`. The arm remained 0.5–1 m from those pixels after multiple
+successful navigation actions, so the motor rejected each placement as
+`out_of_reach`; the model released its item and finished blocked. Its official
+whole-task and independent audit failed. The pick-and-place skill now directs
+the model to select the near-side drawer face or opening lip and change
+viewpoint after this error. This needs a fresh model trial.
