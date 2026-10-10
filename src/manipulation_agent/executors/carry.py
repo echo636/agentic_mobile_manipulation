@@ -76,6 +76,7 @@ class ControlledCarry:
         # Open.set_value teleports articulated joints. Drawer contents must move
         # with their supporting volume, not be left at the previous world pose.
         payload=self._container_payload(obj) if state is Open else []
+        repaired_contents=0
         stabilized=getattr(self,'_stabilized_open_joints',{})
         prior=stabilized.get(obj) if state is Open else None
         try:
@@ -95,6 +96,8 @@ class ControlledCarry:
                 for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
                 if bool(obj.states[state].get_value())!=wanted:
                     raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
+                if state is Open and not wanted:
+                    repaired_contents=self._repair_closed_container_contents(obj,payload)
                 self._verify_container_payload(obj,payload)
         except Exception:
             if state is Open:
@@ -103,7 +106,29 @@ class ControlledCarry:
             raise
         return {'primitive':primitive,'implementation':'transactional_official_state_setter_with_link_payload',
                 'fully_open_or_closed':state is Open,'postcondition':'official_state_and_containment_after_settling',
-                'preserved_contained_objects':len(payload),'failure_policy':'restore_pre_action_state'}
+                'preserved_contained_objects':len(payload),
+                'repaired_contained_objects':repaired_contents,
+                'failure_policy':'restore_pre_action_state'}
+
+    def _repair_closed_container_contents(self, container, payload):
+        """Reseat only contents that left the selected fillable volume on closing."""
+        from omnigibson.object_states import Inside
+        displaced=[child for child,_,_ in payload if not child.states[Inside].get_value(container)]
+        if not displaced:
+            return 0
+        fillable=[link for link in container.links.values() if link.is_meta_link and
+                  link.meta_link_type in {'fillable','openfillable'}]
+        if not fillable:
+            raise SkillError('postcondition_error','Closed container has no fillable volume',changed=True)
+        for child in displaced:
+            if self._fillable_grid_pose(child,container,fillable,[]):
+                continue
+            others=[record for record in payload if record[0] is not child]
+            if not self._repack_fillable_contents(child,container,fillable,others,[]):
+                raise SkillError('postcondition_error','Closed container could not retain its contents',changed=True)
+        self._placement_record({'status':'closed_container_contents_reseated',
+            'target':container.name,'objects':[child.name for child in displaced]})
+        return len(displaced)
 
     def _checked_attach(self, parent, max_steps):
         """Attach the carried child to the visually selected compatible parent."""

@@ -566,3 +566,13 @@ deliberately made to reject its candidates. The new local surface fallback
 placed the jar at the model's first selected bar point, and the official
 `OnTop(bar)` predicate was true after settling. This validates the fallback
 branch, not the complete can-meat task; a new model run is required.
+
+Kitchen-furniture r13 passed the independent audit: Astra low autonomously
+put the toaster, food processor, and French press in one upper cabinet,
+closed it, reported achieved with an empty hand, and the official BDDL
+whole-task and five-view video checks passed. This brings the independently
+audited first-ten successes to tasks 1, 6, 7, and 9. In a separate motor-only
+diagnostic, `cabinet_close_repair_probe_r1` deliberately displaced one of
+three contained objects after closing; the closed-volume reseating fallback
+restored official `Inside` for all three. The fallback has not been needed to
+claim the r13 model success.
