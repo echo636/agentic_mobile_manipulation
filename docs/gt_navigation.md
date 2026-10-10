@@ -5,57 +5,67 @@ The default RGB executor now uses the visual-point GT planning strategy from
 `0815cf234ee591bacd8017e9b1def4fac13e649b`. Attribution and the source license
 are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
-The current harness restores this static-grid navigator as the default. It does
-not construct or update the online Cartographer mapper. The latest observation
-protocol is retained: `initialize` returns the prepared first four RGB images;
-each subsequent `act` or `look` returns the resulting four-camera capture. The
-centered camera rig, calibrated render barrier, and current-image targeting rules
-remain unchanged. Frozen online-navigation evaluations retain their original
-source and results; restoring the default does not rewrite those runs.
+The current harness uses a private GT grid and does not run Cartographer. The
+model supplies `act(primitive="navigate_to", target={image_ref, point}, revision)`.
+It receives four RGB images and tool feedback, never maps, depth, object IDs,
+world coordinates or evaluator state. `initialize` supplies the first snapshot;
+each `act` / `look` supplies the next one.
 
-The model still supplies exactly `act(primitive="navigate_to", target={image_ref,
-point}, revision)`. It does not receive maps, depth, real object names, world
-coordinates, path lengths, or task evaluator state. Manipulation primitives
-remain symbolic/volume operations and are not changed by this navigation port.
+## Current navigation pipeline
 
-## Transferred strategy and simulator adaptation
+1. Backproject the exact selected pixel using the capture's calibrated depth.
+   There is no navigation object lookup or depth-to-mesh agreement gate.
+2. For a floor click, find the closest reachable grid position within 0.75 m of
+   the point. Do not add a camera standoff or require the floor pixel to remain
+   visible at arrival. For an elevated object/surface, sample approach positions
+   using the reference's 0.3 / 0.6 / 0.9 / 1.2 m rings and 0.7 m preference.
+   An implicit manipulation approach still checks actual reach and visibility.
+3. Load the GT floor support raster, query current PhysX collision geometry,
+   and update dirty regions when object poses or joints change. AABBs bound the
+   query region; the actual collision query determines occupied cells. Closed
+   doors block travel, and opening a door changes the next navigation grid.
+4. Erode occupancy with the measured oriented chassis footprint. Plan a
+   collision-free grid route without cutting corners. If the current heading
+   cannot fit, test alternative headings and the whole in-place turn's swept
+   footprint. Use a feasible turn followed by holonomic fixed-heading travel.
+5. If the existing chassis footprint partly overlaps a newly opened leaf, allow
+   only a short continuous exit with non-increasing overlap and a free base
+   centre, ending at zero overlap. This is not a start teleport or a general
+   permission to cross obstacles.
+6. Execute bounded pose increments (at most 0.5 m/s and 60 degrees/s), read back
+   the actual pose after each simulator step, and verify arrival. Pruned paths
+   reserve a 5 mm corridor against tiny feedback deviations at grid corners.
 
-| Reference behavior | OmniGibson implementation |
-|---|---|
-| Visual-point candidate positions: direct floor projection, camera-side 0.7 m standoff, 12 directions at 0.3/0.6/0.9/1.2 m radii | Same candidate geometry, Habitat XZ converted to OmniGibson XY |
-| `PathFinder.snap_point`, bounded at 0.75 m | Nearest free sample on the private eroded traversability grid, same projection bound |
-| Verify candidate reachability and geodesic path length | One multi-goal Dijkstra search; diagonal corner cutting is forbidden |
-| Score standoff error, snap distance and near-zero progress; use geodesic distance as tie-break | Same point-mode scoring coefficients and thresholds |
-| Native greedy follower with actual step feedback and explicit reached/blocked status | Bounded turn/advance follower reading the actual robot pose after every control step; stalls, divergence, invalid cells and budget exhaustion fail explicitly |
-| Per-step movement recording | Existing RGB recorder plus timestamped private base-motion and navigation-plan logs |
+Candidate geometry and elevated-target scoring originate from Jinkai's visual
+point strategy. OmniGibson supplies its own floor support, current collisions
+and ideal pose follower; Habitat's native C++ navmesh/follower is not running
+inside this system. Floor-point goals intentionally use direct-point semantics.
 
-Habitat's native C++ navmesh and `GreedyGeodesicFollower` cannot operate on an
-OmniGibson scene directly; they are not imported or claimed to be running here.
-This is a strategy port with an explicit grid/kinematic adapter. Navigation
-checks static grid occupancy. It does **not** provide full dynamic body/held-object
-collision checking. Native navmesh geometry may be more permissive or accurate.
+## Limits and evidence
 
-Base execution uses bounded incremental ideal pose updates, at most 0.5 m/s and
-60 degrees/s, with simulation steps and actual pose feedback between updates.
-It does not jump directly to the final destination. It is still kinematic
-actuation, not a physical wheel controller; grasp and placement retain their
-separate idealized state/pose operations.
+This remains ideal kinematic base actuation, not a wheel controller or a complete
+SE(2) / articulated-body motion planner. One fixed heading is used for each
+translation route, with a checked turn at its start. The height-column obstacle
+representation is conservative; carried-object and upper-body articulated
+clearance are not fully planned. A genuinely blocked or disconnected point must
+return a navigation failure rather than cross a closed door. Floor raster and
+cell resolution also limit how closely a selected point can be reached.
 
-The navigation target is the direct backprojection of the exact selected pixel
-and its captured linear depth. Navigation performs no object lookup or mesh/depth
-consistency check. The reference's neighboring-pixel search and GT scene-graph
-object selection are not enabled. No task object is silently substituted for
-the model's selected target. Public tool schemas and RGB-only response filtering
-are unchanged. Manipulation's separate object-handle query is described in the
-[RGB protocol](rgb_protocol.md).
+`navigation_plans.jsonl`, `navigation_grids/*.npz`, `navigation_recovery.jsonl`
+and `base_motion.jsonl` retain private geometry and actual motion evidence.
+`scripts/probe_navigation_regression.py` reproduces archived failed geometries
+in the real simulator and checks closed-door negatives, arrival, four-camera
+capture, scoring and video closure. These are scripted component diagnostics,
+not autonomous challenge success. The new 100-task run records yyf API routing
+and its own immutable outcomes separately from all historical attempts.
 
 ## Grid-boundary regression
 
 The original executor selected grid sample positions, then used a truncating
 world-to-grid conversion. Sub-millimetre settling changes mapped 25 archived
 navigation calls into neighboring obstacle cells. The new grid consistently
-uses nearest-sample coordinates. Occupied or disconnected starts are rejected;
-there is no unlimited start snap or cross-wall recovery teleport.
+uses nearest-sample coordinates. Disconnected starts are rejected except for the bounded continuous clearance
+exit above; there is no unlimited start snap or cross-wall recovery teleport.
 
 Grid paths are pruned only where the whole segment is traversable, rather than
 discarding waypoints at a fixed stride. The follower reads actual position and

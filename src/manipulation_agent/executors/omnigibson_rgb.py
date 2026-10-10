@@ -507,7 +507,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
         from dataclasses import asdict, replace
         import omnigibson.utils.transform_utils as T
-        from .gt_navigation import GridMap, NavigationError, plan_navigation, visual_approach_settings, STRATEGY
+        from .gt_navigation import NavigationError, plan_navigation, STRATEGY
         trav=self.env.scene.trav_map
         position,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
@@ -562,9 +562,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 def make_plan(candidate_grid,yaw):
                     return replace(plan_navigation(candidate_grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
                         standoff=standoff,goal_mode=mode,check_cancelled=self.deadline.check,
-                        candidate_filter=(lambda xy:self._approach_visible(
-                            xy,point,getattr(target,'selected_object',None),
-                            margin=0.,max_distance=1.4,base_yaw=yaw)) if for_manipulation else None),
+                        candidate_filter=(lambda xy:math.dist(xy,point[:2].cpu().tolist())<=1.4 and (
+                            not for_manipulation or self._approach_visible(
+                                xy,point,getattr(target,'selected_object',None),
+                                margin=0.,max_distance=1.4,base_yaw=yaw))) if mode=='approach' else None),
                         travel_yaw=yaw,final_yaw=yaw)
                 turn=None
                 try:
@@ -586,7 +587,13 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                         grid,plan=other_grid,other_plan
                         break
                     else:raise original_error
-            details.update(status='planned',plan=asdict(plan))
+            details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
+            if turn is not None:
+                np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+                    raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
+                    origin=grid.origin,resolution=grid.resolution,
+                    footprint=details['heading_change']['footprint'],start=position.cpu().numpy(),
+                    target=point.cpu().numpy(),travel_yaw=plan.travel_yaw)
         except NavigationError as exc:
             details.update(status='failed',error_code=exc.code,error=str(exc))
             raise SkillError(exc.code,str(exc)) from exc
