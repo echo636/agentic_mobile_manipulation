@@ -991,3 +991,14 @@ not. This attempt also exercised one fresh-thread provider-history restart in
 the same live episode; its event segment is recorded under
 `controller/history_restarts/1`. R24 is the first attempt with the clarified
 post-grasp RGB verification guidance.
+
+Can-meat r24 successfully opened the cabinet, selected `hinged_jar_235`,
+staged it, and autonomously put two cooked bratwursts in that jar. The model
+then called `finish(blocked)` and claimed the episode limit prevented finishing
+the second jar, despite using 20/80 actions, 2,899/20,000 simulator steps,
+and about 867/7,200 controller seconds. The independent audit therefore
+passed call alignment and formal finish but failed official task success.
+The model-facing policy now requires an explicit budget/deadline error or
+exhausted distinct recovery approaches before concluding it is blocked; it
+must continue a feasible remaining sequence instead of inferring a limit from
+conversation length. The next can-meat attempt must validate this guidance.

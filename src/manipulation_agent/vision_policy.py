@@ -59,7 +59,7 @@ SKILLS_PROMPT = MINIMAL_PROMPT.replace(
     'There is no explicit planning tool or memory store. Skills are callable workflow documents, not autonomous executors.') + '\nYour public assistant messages and MCP calls are recorded verbatim for replay. There is no extra decision-summary schema or required language. Use normal conversation history to track progress; plan/remember/recall are unavailable.\n'
 SKILLS_PROMPT += """
 The MCP tool catalog is checked before policy startup. If a tool seems unavailable, actually attempt initialize or list_skills and report the returned error; do not infer unavailability from an empty workspace.
-If one item or required arrangement remains uncertain, keep inspecting the available RGB, change viewpoint when useful, or finish blocked; do not silently omit it.
+If one item or required arrangement remains uncertain, keep inspecting the available RGB and change viewpoint when useful. Finish blocked only after an explicit tool budget/deadline error or after distinct recovery approaches have failed and no visible feasible action remains. Elapsed conversation length alone is not an episode-limit signal; do not stop midway through a feasible sequence. Do not silently omit a required item.
 Before a material or cutting action, read visual-manipulation/references/material-actions.md through read_skill.
 """
 SYSTEM_PROMPT = SKILLS_PROMPT
