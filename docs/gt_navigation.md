@@ -45,7 +45,8 @@ inside this system. Floor-point goals intentionally use direct-point semantics.
 
 This remains ideal kinematic base actuation, not a wheel controller or a complete
 SE(2) / articulated-body motion planner. One fixed heading is used for each
-translation route, with a checked turn at its start. Scene obstacles and robot collision hulls are matched in four height bands,
+translation leg, with a checked turn at its start. When the start lacks room
+to turn, first follow a continuous route to a reachable clear turning position. Scene obstacles and robot collision hulls are matched in four height bands,
 avoiding a base-width column through the head. Convex hulls within each band
 remain conservative; carried-object and articulated motion planning remain
 incomplete. A genuinely blocked or disconnected point must
