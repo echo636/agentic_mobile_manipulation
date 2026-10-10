@@ -496,10 +496,12 @@ class CheckedPlacement:
         return False
 
     def _checked_place_inside(self, target, max_steps):
-        from omnigibson.object_states import Inside
         held = self._get_held()
         if held is None:
             raise SkillError('empty_hand','No object is held')
+        if held is target:
+            raise SkillError('unsupported_relation','An object cannot be placed inside itself')
+        from omnigibson.object_states import Inside
         fillable = [link for link in target.links.values() if link.is_meta_link and
                     link.meta_link_type in {'fillable','openfillable'}]
         if not fillable or Inside not in held.states:

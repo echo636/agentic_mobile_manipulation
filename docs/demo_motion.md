@@ -471,6 +471,13 @@ the three-egg replay with `MAS_DEMO_MOTION=1`; all three remained `NextTo`
 the selected tree and `OnTop` the same lawn. The shared primitive's new search
 has therefore passed this regression diagnostic, but not a new model episode.
 
+The subsequent **Astra-low r13 model episode passed** the independent demo
+audit for `hiding_Easter_eggs`: all three distinct eggs ended next to the
+same tree on the lawn, official whole-task success was true, the model
+reported achieved with an empty hand, and the five-view motion video passed.
+The model moved one egg twice before correcting and placing the remaining
+egg; the counted result is the final audited whole episode.
+
 The toys r12 model trial successfully put five of six toys in the box. It
 grasped the final board game but every `place_inside` attempt failed. The
 model correctly finished `blocked`; its final held pose happened to satisfy
@@ -492,6 +499,10 @@ The privileged `toybox_capacity_probe_r7` placed all six public-instance toys
 in sequence, with all six still `Inside` at the end. This validates the motor
 fallback only; the pending r13 Astra-low model episode must independently
 select and complete the task, and pass `scripts/audit_demo_trial.py`.
+The same six-object diagnostic passed again as `toybox_capacity_probe_r8`
+with `MAS_DEMO_MOTION=1`; every successive official `Inside` count rose from
+one to six. This checks the actual demo carry configuration, but is still
+excluded from the autonomous model score.
 
 The trash r13 Astra-low trial placed two cans successfully. Its third
 `place_inside` returned `unsupported_relation` because the chosen RGB pixel
