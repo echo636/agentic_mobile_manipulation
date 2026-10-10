@@ -440,3 +440,11 @@ is not traversable ground: approach the visible floor outside its opening,
 then retry the grasp on the item's own fresh RGB face. This guidance still
 leaves the model to choose every point and action; a new whole-task run is
 needed to assess it.
+
+The fresh mousetrap r12 autonomous trial **passed**. `gpt-6-astra` at `low`
+effort selected the four grasps and placements from RGB, including two
+successful `place_under` actions on the same bathroom sink and two floor
+placements. The final BEHAVIOR predicate check and independent whole-task
+evaluator both report success; `scripts/audit_demo_trial.py` passed all seven
+checks, including model/simulator call alignment, passed five-view video and
+visible joint motion. The preserved r11 failed audit remains separate.
