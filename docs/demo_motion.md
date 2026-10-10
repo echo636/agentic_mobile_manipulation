@@ -369,3 +369,16 @@ A diagnostic replay of the r7 `can_meat` model pixels tested a wider search
 around the selected countertop point. The first `place_on_top` still failed,
 so that widening was reverted. The replay was scripted, and the task remains
 unverified; any future claim needs a fresh model trial and official score.
+
+In the mousetrap r11 autonomous trial, the model selected four successful
+`place_under` calls and formally finished. The direct goal evaluation at
+`finish` reported every literal true, and the final `run.json` records
+`task_success=true`, all current goal literals true for some alternatives,
+and the pinned official TaskMetric `q_score.final=1.0`. The old
+`official_task_success` field still read `false` because it copied
+`env.task.success`, a flag cached by the last `env.step`; ideal motor actions
+also advance lower-level simulator physics after that step. The evaluator now
+queries BEHAVIOR's own current `predicate` termination condition at final
+scoring and separately records `last_env_step_task_success` so this mismatch
+is visible. The r11 audit remains failed and immutable. A fresh model trial
+must demonstrate that the corrected final official flag and audit pass.

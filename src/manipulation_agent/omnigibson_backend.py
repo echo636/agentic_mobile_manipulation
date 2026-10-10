@@ -534,11 +534,19 @@ class OmniGibsonBackend:
     def evaluate(self) -> dict:
         goals = self._goal_options()
         task_success = any(bool(option) and all(option) for option in goals)
+        # Ideal checked actions can finish with simulator-internal physics ticks
+        # after the last env.step. Task.success is cached by that last step, so
+        # ask the pinned BEHAVIOR predicate termination condition for the
+        # current official result without changing any object or goal state.
+        cached_step_success = bool(self.env.task.success)
+        official_task_success = bool(
+            self.env.task._termination_conditions['predicate']._check_goal_fn()[0])
         # This calls the pinned official TaskMetric, including its initial-state partial-credit convention.
         official = self.task_metric._compute_episode_metrics(self.env, self.task_metric.state[self.env.scene])
         if self.steps == 0:
             official["time"]["normalized_time"] = None
-        return {"task_success": task_success, "official_task_success": bool(self.env.task.success),
+        return {"task_success": task_success, "official_task_success": official_task_success,
+                "last_env_step_task_success": cached_step_success,
                 "goal_options": goals, "initial_goal_options": self.initial_goals,
                 "goal_satisfaction_fraction": max((sum(o) / len(o) for o in goals if o), default=0),
                 "official_metrics": official, "ideal_navigation_distance_m": self.navigation_distance,
