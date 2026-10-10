@@ -80,6 +80,12 @@ class VisionHarness:
         cached=self.cache.get(request_id)
         if cached is not None and cached[0]!=fingerprint:
             return
+        # An achieved claim with a carried object is recoverable. Do not
+        # cancel the episode before the owner thread can reject the claim.
+        if (arguments['outcome']=='achieved' and
+                getattr(self.backend,'ideal_carry',False) and
+                getattr(self.backend,'_ideal_held',None) is not None):
+            return
         self.deadline.request_stop()
 
     def tick_background(self):
@@ -163,6 +169,9 @@ class VisionHarness:
     def remember(self,key,text,revision): return LegacyPlanHelpers._tool_remember(self,key,text,revision)
     def recall(self): return LegacyPlanHelpers._tool_recall(self)
     def finish(self,outcome,reason):
+        if (outcome=='achieved' and getattr(self.backend,'ideal_carry',False) and
+                getattr(self.backend,'_ideal_held',None) is not None):
+            raise SkillError('hand_occupied','Place or release the carried object before reporting achieved')
         self.surround.stop_for_finish()
         return LegacyPlanHelpers._tool_finish(self,outcome,reason,render=False)
 

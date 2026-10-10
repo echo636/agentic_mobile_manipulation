@@ -497,6 +497,10 @@ audit both failed. The visual-manipulation skill now instructs the model to
 count only successful placement tool results and keep a failed item pending.
 This prompt change requires a new model trial; it does not retroactively
 change the r13 result.
+The tool session also rejects `finish(achieved)` while controlled carry still
+holds an object, leaving the episode open for a corrective action. This is a
+generic completion protocol check, not task-goal oracle feedback; official
+BDDL evaluation remains independent. It likewise requires a fresh trial.
 
 For the kitchen-furniture r12 close failure, a separate privileged motor
 replay (`cabinet_close_probe_r2`) opened the same public-instance cabinet,

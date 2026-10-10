@@ -17,6 +17,22 @@ from manipulation_agent.vision_harness import VisionHarness
 
 
 class ClosureInterruptTests(unittest.TestCase):
+    def test_achieved_claim_with_carried_object_remains_recoverable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)/'episode'
+            backend=MockRGBBackend(output)
+            backend.deadline=EpisodeDeadline(time.time()+1000)
+            backend.ideal_carry=True
+            backend._ideal_held=object()
+            harness=VisionHarness(backend,Recorder(output,{}),profile='minimal')
+            arguments={'outcome':'achieved','reason':'All items placed'}
+            harness.request_finish(arguments,'premature-finish')
+            self.assertFalse(harness.deadline.stop_requested)
+            result=harness.call('finish',arguments,'premature-finish')
+            self.assertFalse(result['ok'])
+            self.assertEqual(result['error']['code'],'hand_occupied')
+            self.assertFalse(harness.closed)
+
     def test_observation_queue_wait_uses_the_episode_clock(self):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'episode'
