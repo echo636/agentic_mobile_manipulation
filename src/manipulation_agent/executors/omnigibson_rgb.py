@@ -691,7 +691,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
             self._demo_arm=None
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
-        if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
+        if primitive=='grasp' and held is not None: raise SkillError('hand_occupied','Hand occupied')
         if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','wipe','sweep','vacuum',
                          'spray','spread','soak','cut'} and held is None: raise SkillError('empty_hand','Empty hand')
         if held is not None and primitive in {'open','close','toggle_on','toggle_off'}:

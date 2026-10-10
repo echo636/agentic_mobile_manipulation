@@ -966,3 +966,13 @@ R22 was then stopped after five consecutive model-selected sofa placements
 were rejected by that known old threshold. Its independent review records
 14 steps, visible motion and a failed whole-task result. R23 is the first
 trial using both the corrected threshold and provider-history restart path.
+
+Can-meat r23 did not reach a valid task evaluation. Astra low selected and
+carried `cutting_board_234` with four bratwursts instead of a jar. A subsequent
+grasp ray hit the robot and was rejected; retrying a pixel on the already-held
+board reached visible-motion code with a null anchor and crashed the simulator
+(`AttributeError` in `_relocate_contents`). The executor now rejects every
+grasp while holding any object before reaching or payload handling, including
+regrasp of the held object. This converts that crash to a recoverable
+`hand_occupied` tool error. The attempt is retained as a failed audit, not an
+autonomous task success; the next can-meat retry must test the fix.
