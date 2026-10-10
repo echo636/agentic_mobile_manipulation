@@ -831,3 +831,17 @@ model/simulator call alignment, empty hand, visible motion, and five-view video.
 The sixth placement used the verified fillable-volume repack fallback after
 the first grid and official sampler could not find a stable arrangement.
 This is the seventh independently audited success among the first ten tasks.
+
+Christmas r18 failed the independent audit after the model finished
+`aborted`. It initially grasped the wicker basket with its contents, released
+it, then selected `wreath_227` and successfully placed the wreath on a sofa.
+It placed `gift_box_221` next to the Christmas tree and `gift_box_219` under
+the tree after model-selected navigation recovery. The remaining gifts,
+candy canes, and candles were not completed; a later grasp selected the floor
+and returned `fixed_object`. The official final evaluation had at most one
+of nine predicates true in any goal option (Q score `1/9`), and the nine-check
+demo audit failed on whole-task success and formal controller completion.
+These successful local executor effects are not a task pass. The saved RGB
+also showed that close tree branches obscured its trunk when a second gift
+placement returned `navigation_unreachable`; the pick-and-place skill now
+directs a side view and lower trunk selection. A fresh model episode is needed.
