@@ -821,3 +821,13 @@ search the chopping board was disturbed and some bratwursts fell to the
 floor. The pick-and-place skill now describes backing into the clear aisle
 to reframe the full high shelf before switching to lower cabinets or crossing
 the preparation island. This model-facing guidance needs a new episode.
+
+Toys r18 passed the independent demo audit. Astra low independently selected
+RGB-grounded grasps and placements for three board games, two jigsaw puzzles,
+and a tennis ball, placing all six in the same toy box. Its `finish` evaluation
+reported official whole-task success with all six BDDL goal predicates true.
+`08_picking_up_toys_r18/demo_audit.json` passed all nine checks, including
+model/simulator call alignment, empty hand, visible motion, and five-view video.
+The sixth placement used the verified fillable-volume repack fallback after
+the first grid and official sampler could not find a stable arrangement.
+This is the seventh independently audited success among the first ten tasks.
