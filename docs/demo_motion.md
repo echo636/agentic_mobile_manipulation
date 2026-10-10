@@ -466,6 +466,10 @@ the egg settle under physics before checking the original predicates. A
 second privileged replay placed all three public-instance eggs next to the
 same model-selected tree and on the same lawn. This is motor validation,
 not a model whole-task pass; a fresh Astra low run is still required.
+After expanding table-side search, `nextto_selected_tree_probe_r7` repeated
+the three-egg replay with `MAS_DEMO_MOTION=1`; all three remained `NextTo`
+the selected tree and `OnTop` the same lawn. The shared primitive's new search
+has therefore passed this regression diagnostic, but not a new model episode.
 
 The toys r12 model trial successfully put five of six toys in the box. It
 grasped the final board game but every `place_inside` attempt failed. The
@@ -532,6 +536,14 @@ motor now preserves the grasp-time world orientation for a carried assembly
 with contents while the visible hand translates it. In privileged
 `plate_fridge_navigation_probe_r2` with `MAS_DEMO_MOTION=1`, the plate stayed
 approximately 2.4 cm high through a 2.9 m navigation path; the final pizza
-remained `OnTop(plate)`
-and both objects were `Inside(fridge)`. This is motor validation, not an r13
-model pass; a new Astra-low trial is required.
+remained `OnTop(plate)` and both objects were `Inside(fridge)`. This is motor
+validation, not an r13 model pass; a new Astra-low trial is required.
+
+Can-meat r13 grasped the high-shelf `hinged_jar_236`, but three model-selected
+`place_on_top` attempts on visible counters failed with `sampling_error`; the
+model finished blocked while still carrying the jar. In the public-instance
+`jar_counter_probe_r3` with demo motion enabled, the strict cuboid sampler was
+deliberately made to reject its candidates. The new local surface fallback
+placed the jar at the model's first selected bar point, and the official
+`OnTop(bar)` predicate was true after settling. This validates the fallback
+branch, not the complete can-meat task; a new model run is required.

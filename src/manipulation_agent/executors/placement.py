@@ -236,27 +236,41 @@ class CheckedPlacement:
         if point is not None:
             # A short ray can reach a lower shelf; the upstream object-wide ray
             # always approaches from above the entire object's bounding box.
-            offsets = [(0., 0.)] + [(x,y) for r in (.04,.08,.12)
+            offsets = [(0., 0.)] + [(x,y) for r in (.04,.08,.12,.16,.20)
                         for x,y in ((r,0),(-r,0),(0,r),(0,-r))]
             centers = torch.stack([point + torch.tensor([x,y,0.], device=point.device)
                                    for x,y in offsets])
-            for height in (.03, .10, .20):
-                starts = (centers + torch.tensor([0.,0.,height],device=point.device)).unsqueeze(0)
-                ends = (centers - torch.tensor([0.,0.,.08],device=point.device)).unsqueeze(0)
-                samples = S.sample_cuboid_on_object(target, starts, ends, extents,
-                    refuse_downwards=True, undo_cuboid_bottom_padding=True,
-                    max_angle_with_z_axis=.17)
-                if samples[0][0] is not None:
+            for verify_empty in (True,False):
+                for height in (.03, .10, .20):
+                    starts = (centers + torch.tensor([0.,0.,height],device=point.device)).unsqueeze(0)
+                    ends = (centers - torch.tensor([0.,0.,.08],device=point.device)).unsqueeze(0)
+                    samples = S.sample_cuboid_on_object(target, starts, ends, extents,
+                        ignore_objs=[held,self.robot],verify_cuboid_empty=verify_empty,
+                        refuse_downwards=True, undo_cuboid_bottom_padding=True,
+                        max_angle_with_z_axis=.17)
+                    if samples[0][0] is None:
+                        continue
                     center, _, orientation = samples[0][:3]
                     if yaw_degrees is not None:
                         import math
                         orientation=T.quat_multiply(T.euler2quat(torch.tensor([0.,0.,math.radians(yaw_degrees)])),held.get_position_orientation()[1])
                     matrix = T.pose2mat((center + torch.tensor([0.,0.,.02]), orientation)) @ T.pose_inv(
                         T.pose2mat((bb_pos, torch.tensor([0.,0.,0.,1.]))))
-                    self._placement_record({'status':'sampled','method':'selected_surface_cuboid',
+                    pose=T.mat2pose(matrix)
+                    if not verify_empty:
+                        original=held.get_position_orientation()
+                        held.set_position_orientation(*pose)
+                        proposed_lo,proposed_hi=held.aabb
+                        held.set_position_orientation(*original)
+                        if any(bool(((proposed_hi>obj.aabb[0]+.005)&
+                                     (proposed_lo<obj.aabb[1]-.005)).all())
+                               for obj in self.env.scene.objects if obj not in (held,target,self.robot)):
+                            continue
+                    self._placement_record({'status':'sampled',
+                        'method':'selected_surface_cuboid' if verify_empty else 'verified_selected_surface_fallback',
                         'target':target.name,'held':held.name,'selected_point':point.tolist(),
                         'ray_height_m':height,'held_bbox_extent':extents.tolist()})
-                    return T.mat2pose(matrix)
+                    return pose
             # A model-selected surface is an actuator constraint. Never widen
             # it to the whole object (e.g. another shelf or a fridge roof).
             raise SkillError('sampling_error','No collision-free pose near the selected surface; choose another point on that surface')
