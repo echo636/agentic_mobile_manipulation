@@ -169,7 +169,10 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         plate,pizza,robot,table=[obj(name) for name in ('plate','pizza','robot','table')]
         plate.aabb=(torch.tensor([-.2,-.2,0.]),torch.tensor([.2,.2,.02]))
         plate.get_linear_velocity=lambda:torch.zeros(3)
+        plate.get_angular_velocity=lambda:torch.zeros(3)
         b=CheckedPlacement();b.robot=robot;b.torch=torch;b._get_held=lambda:None
+        b._collision_vertices=lambda obj:torch.tensor([[-.2,-.2,0.],[.2,.2,0.],[-.2,-.2,.02],[.2,.2,.02]]).numpy()
+        b._placement_contacts=lambda *args:[]
         sampling=types.ModuleType('omnigibson.utils.sampling_utils');seen=[];support=['/table']
         def raytest(start,end,ignore_bodies):
             seen.append(ignore_bodies)
@@ -209,12 +212,17 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             states.OnTop:types.SimpleNamespace(get_value=lambda t:True),
             states.Touching:types.SimpleNamespace(get_value=lambda t:True),
             states.VerticalAdjacency:types.SimpleNamespace(get_value=lambda:types.SimpleNamespace(negative_neighbors=[target],positive_neighbors=[]))},
-            set_position_orientation=lambda *a:None,keep_still=lambda:None,get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
-        target=types.SimpleNamespace(name='fridge');b=CheckedPlacement();b.ideal_carry=True;b._carry_contents=[]
-        b._placement_context=nullcontext;b._surface_pose=lambda *a:(torch.zeros(3),torch.tensor([0.,0.,0.,1.]))
+            set_position_orientation=lambda *a:None,keep_still=lambda:None,wake=lambda:None,get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
+        target=types.SimpleNamespace(name='fridge',links={'root':types.SimpleNamespace(prim_path='/fridge')});b=CheckedPlacement();b.ideal_carry=True;b._carry_contents=[]
+        b._placement_context=nullcontext
+        b._surface_candidates=lambda *a:[{'index':0,'pose':(torch.zeros(3),torch.tensor([0.,0.,0.,1.])),
+            'clearance_m':.025,'support_position':[0.,0.,0.]}]
+        b.og=types.SimpleNamespace(sim=types.SimpleNamespace(dump_state=lambda **kw:{},get_physics_dt=lambda:1.))
+        b._placement_physics_step=lambda:None;b._placement_contacts=lambda *args:[]
         b._carry_detach=lambda:None;b._relocate_contents=lambda *a:None;b._step=lambda action:None
         b.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
-        b._selected_surface_support=lambda *a:(False,{'selected_height_error_m':.692})
+        checks=iter([(True,{}),(False,{'selected_height_error_m':.692})])
+        b._selected_surface_support=lambda *a:next(checks)
         b._placement_record=lambda data:None;b._get_held=lambda:None;b._verify_payload=lambda x:None
         with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.action_primitives.action_primitive_set_base':errors}):
             with self.assertRaisesRegex(SkillError,'selected surface'):

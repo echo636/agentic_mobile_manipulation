@@ -23,9 +23,12 @@ class GuardRelaxationTests(unittest.TestCase):
         # Archived task078: no contact predicate, but stationary and flush.
         held.aabb = (torch.tensor([-.01, -.13, 5.96e-8]), torch.tensor([.01, .13, .4565]))
         held.get_linear_velocity = lambda: torch.zeros(3)
+        held.get_angular_velocity = lambda: torch.zeros(3)
         backend = CheckedPlacement()
         backend.torch, backend.robot = torch, robot
         backend._get_held = lambda: None
+        backend._collision_vertices = lambda obj: torch.tensor([[-.01, -.13, 5.96e-8], [.01, .13, 5.96e-8], [-.01, -.13, .4565], [.01, .13, .4565]]).numpy()
+        backend._placement_contacts = lambda *args: []
         hit = {'hit': True, 'rigidBody': '/cabinet', 'position': torch.zeros(3),
                'normal': torch.tensor([0., 0., 1.])}
         sampling = ModuleType('omnigibson.utils.sampling_utils')
@@ -43,7 +46,7 @@ class GuardRelaxationTests(unittest.TestCase):
 
     def test_relaxed_contact_does_not_accept_wrong_surface_side_or_unsettled_object(self):
         import torch
-        for fault in ('wrong_object', 'side_contact', 'wrong_shelf', 'moving', 'still_held'):
+        for fault in ('wrong_object', 'side_contact', 'wrong_shelf', 'moving', 'rotating', 'robot_support', 'still_held'):
             with self.subTest(fault=fault):
                 backend, held, target, hit, sampling = self.support_fixture()
                 point = torch.zeros(3)
@@ -51,6 +54,8 @@ class GuardRelaxationTests(unittest.TestCase):
                 if fault == 'side_contact': hit['normal'] = torch.tensor([1., 0., 0.])
                 if fault == 'wrong_shelf': point[2] = .5
                 if fault == 'moving': held.get_linear_velocity = lambda: torch.tensor([.2, 0., 0.])
+                if fault == 'rotating': held.get_angular_velocity = lambda: torch.tensor([0., 0., 1.])
+                if fault == 'robot_support': backend._placement_contacts = lambda *args: ['/robot']
                 if fault == 'still_held': backend._get_held = lambda: held
                 with patch.dict('sys.modules', {'omnigibson.utils.sampling_utils': sampling}):
                     valid, _ = backend._selected_surface_support(held, target, point, True)

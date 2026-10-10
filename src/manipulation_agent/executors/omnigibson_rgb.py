@@ -802,8 +802,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,
             'observation_pixels_reused_for_video':True, 'fresh_observation_boundaries':True,
             'intermediate_frames':'explicit_previous_frame_hold','no_motion_interpolation':True}
-        result['placement'] = {'on_top':'strict_selected_surface_cuboid_no_object_wide_fallback',
-            'inside':'official_volume','verification':'selected_surface_geometric_support_required; contact_predicate_diagnostic_only; official_Inside_and_payload_relations',
+        result['placement'] = {'on_top':'selected_surface_collision_geometry_and_physics_settling',
+            'inside':'official_volume','verification':'selected_surface_support_and_physical_settlement; official_Inside_and_payload_relations',
+            'surface_target':'RGB selected point and shelf retained; local candidate search',
+            'surface_geometry':'object collision mesh; no diagonal-square yaw envelope',
             'base_anchor':'control_and_sampler_physics_steps',
             'failure_policy':'restore_pre_action_state','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'

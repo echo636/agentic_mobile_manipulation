@@ -178,133 +178,247 @@ class CheckedPlacement:
         return {'primitive': 'place_next_to', 'implementation': 'selected_parent_floor_search',
                 'postcondition': 'NextTo.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
 
-    def _surface_pose(self, held, target, point, yaw_degrees=None):
-        """Try the selected surface using upstream cuboid collision checks first."""
-        from omnigibson.utils import sampling_utils as S
+    def _collision_vertices(self, held):
+        """Read active physical geometry, including world scale, without a box proxy."""
+        import numpy as np
+        vertices = []
+        for link in held.links.values():
+            if getattr(link, 'is_meta_link', False) or getattr(link, 'visual_only', False):
+                continue
+            apis = getattr(link, '_collision_apis', ())
+            if apis and not any(api.GetCollisionEnabledAttr().Get() for api in apis):
+                continue
+            for mesh in getattr(link, 'collision_meshes', {}).values():
+                points = mesh.points.detach().cpu().numpy()
+                if not len(points):
+                    continue
+                transform = mesh.scaled_transform.detach().cpu().numpy()
+                vertices.append(points @ transform[:3, :3].T + transform[:3, 3])
+        if not vertices:
+            raise SkillError('unsupported_geometry', 'Carried object has no active rigid collision geometry')
+        result = np.concatenate(vertices)
+        if not np.isfinite(result).all():
+            raise SkillError('invalid_geometry', 'Carried object collision geometry is not finite')
+        return result
+
+    def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=()):
+        """Propose root poses at the selected collision surface, with the actual shape.
+
+        Surface rays ignore the moving assembly at its OLD pose. Space at the
+        NEW pose is checked by PhysX after moving it there, not by a cuboid.
+        """
+        import math
+        from .surface_geometry import rotated_surface_geometry
+        from omnigibson.utils.sampling_utils import raytest
         from omnigibson.utils import transform_utils as T
-        from omnigibson.object_states import OnTop
-        torch = self.torch
-        _, _, extents, bb_pos = held.get_base_aligned_bbox()
+        position, orientation = held.get_position_orientation()
+        vertices, anchor = rotated_surface_geometry(self._collision_vertices(held),
+                                                    position.detach().cpu().numpy(), yaw_degrees)
         if yaw_degrees is not None:
-            # Conservative horizontal envelope contains every requested yaw.
-            extents=extents.clone();radius=torch.linalg.norm(extents[:2]);extents[:2]=radius
-        if point is not None:
-            # A short ray can reach a lower shelf; the upstream object-wide ray
-            # always approaches from above the entire object's bounding box.
-            offsets = [(0., 0.)] + [(x,y) for r in (.04,.08,.12)
-                        for x,y in ((r,0),(-r,0),(0,r),(0,-r))]
-            centers = torch.stack([point + torch.tensor([x,y,0.], device=point.device)
-                                   for x,y in offsets])
+            rotation = T.euler2quat(self.torch.tensor([0., 0., math.radians(yaw_degrees)],
+                                                      device=orientation.device))
+            orientation = T.quat_multiply(rotation, orientation)
+        ignored = [link.prim_path for obj in (held, self.robot, *payload) for link in obj.links.values()]
+        target_paths = {link.prim_path for link in target.links.values()}
+        offsets = [(0., 0.)] + [(x, y) for radius in (.04, .08, .12)
+                               for x, y in ((radius, 0), (-radius, 0), (0, radius), (0, -radius))]
+        candidates = []
+        # Stay above contact offsets even after the first physics step, as in
+        # OG's standard kinematic sampler. This is clearance, not support area.
+        clearance = .025 + .5 * 9.81 * self.og.sim.get_physics_dt() ** 2
+        for index, (x, y) in enumerate(offsets):
+            center = point + self.torch.tensor([x, y, 0.], device=point.device)
+            end = center - self.torch.tensor([0., 0., .08], device=point.device)
+            attempts = []
+            # Start close to the click: a ray from above the whole object can
+            # hit the shelf ABOVE the selected lower shelf. Taller starts only
+            # recover small visual/collision-surface offsets on this shelf.
             for height in (.03, .10, .20):
-                starts = (centers + torch.tensor([0.,0.,height],device=point.device)).unsqueeze(0)
-                ends = (centers - torch.tensor([0.,0.,.08],device=point.device)).unsqueeze(0)
-                samples = S.sample_cuboid_on_object(target, starts, ends, extents,
-                    refuse_downwards=True, undo_cuboid_bottom_padding=True,
-                    max_angle_with_z_axis=.17)
-                if samples[0][0] is not None:
-                    center, _, orientation = samples[0][:3]
-                    if yaw_degrees is not None:
-                        import math
-                        orientation=T.quat_multiply(T.euler2quat(torch.tensor([0.,0.,math.radians(yaw_degrees)])),held.get_position_orientation()[1])
-                    matrix = T.pose2mat((center + torch.tensor([0.,0.,.02]), orientation)) @ T.pose_inv(
-                        T.pose2mat((bb_pos, torch.tensor([0.,0.,0.,1.]))))
-                    self._placement_record({'status':'sampled','method':'selected_surface_cuboid',
-                        'target':target.name,'held':held.name,'selected_point':point.tolist(),
-                        'ray_height_m':height,'held_bbox_extent':extents.tolist()})
-                    return T.mat2pose(matrix)
-            # A model-selected surface is an actuator constraint. Never widen
-            # it to the whole object (e.g. another shelf or a fridge roof).
-            raise SkillError('sampling_error','No collision-free pose near the selected surface; choose another point on that surface')
-        # Legacy callers without a selected surface may request object-wide placement.
-        if yaw_degrees is not None:
-            raise SkillError('sampling_error','No selected-surface pose satisfying the requested orientation')
-        pose = self.primitives._sample_pose_with_object_and_predicate(OnTop, held, target)
-        self._placement_record({'status':'sampled','method':'official_object_surface_sampler',
-                                'target':target.name,'held':held.name,'held_bbox_extent':extents.tolist()})
-        return pose
+                start = center + self.torch.tensor([0., 0., height], device=point.device)
+                hit = raytest(start, end, ignore_bodies=ignored)
+                reason = ('no_support_surface' if not hit['hit'] else
+                          'different_support_object' if hit.get('rigidBody') not in target_paths else
+                          'support_not_upward' if float(hit['normal'][2]) < .9 else
+                          'different_shelf_height' if abs(float(hit['position'][2]) - float(point[2])) > .05 else None)
+                attempts.append({'ray_height_m': height, 'reason': reason,
+                                 'support_hit_body': hit.get('rigidBody')})
+                if reason is None:
+                    break
+            if reason:
+                self._placement_record({'status': 'candidate_rejected', 'stage': 'surface_ray',
+                    'candidate': index, 'reason': reason, 'target': target.name, 'held': held.name,
+                    'ray_attempts': attempts})
+                continue
+            support = self.torch.as_tensor(hit['position'], dtype=point.dtype, device=point.device)
+            anchor_tensor = self.torch.as_tensor(anchor, dtype=point.dtype, device=point.device)
+            root = support - anchor_tensor
+            root[2] += clearance
+            candidates.append({'index': index, 'pose': (root, orientation.clone()),
+                               'support_position': support.tolist(), 'offset_xy_m': [x, y],
+                               'bottom_anchor_offset': anchor.tolist(), 'clearance_m': clearance})
+        self._placement_record({'status': 'candidates_constructed', 'method': 'selected_surface_collision_geometry',
+            'target': target.name, 'held': held.name, 'selected_point': point.tolist(),
+            'yaw_degrees': yaw_degrees, 'collision_vertex_count': len(vertices),
+            'rotated_geometry_extent': (vertices.max(axis=0)-vertices.min(axis=0)).tolist(),
+            'bottom_anchor_offset': anchor.tolist(), 'candidate_count': len(candidates)})
+        return candidates
+
+    def _surface_pose(self, held, target, point, yaw_degrees=None):
+        """Compatibility pose proposal; the caller must still check physical settling."""
+        from omnigibson.object_states import OnTop
+        if point is None:
+            if yaw_degrees is not None:
+                raise SkillError('sampling_error', 'A selected surface is required for oriented placement')
+            return self.primitives._sample_pose_with_object_and_predicate(OnTop, held, target)
+        payload = [obj for obj, _ in self._carry_contents] if self.ideal_carry else []
+        candidates = self._surface_candidates(held, target, point, yaw_degrees, payload)
+        if not candidates:
+            raise SkillError('sampling_error', 'No upward surface of the selected object near the selected point')
+        return candidates[0]['pose']
 
     def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None):
-        from omnigibson.object_states import OnTop
-        from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
         held = self._get_held()
         if held is None:
-            raise SkillError('empty_hand','No object is held')
-        check = self._try_place_on_top(held, target, max_steps, point, yaw_degrees)
-        self.frames_revision = -1
-        return {'primitive':'place_on_top','implementation':'strict_selected_surface_placement',
-                'postcondition':check,'failure_policy':'restore_pre_action_state'}
+            raise SkillError('empty_hand', 'No object is held')
+        try:
+            check = self._try_place_on_top(held, target, max_steps, point, yaw_degrees)
+        finally:
+            self.frames_revision = -1
+        return {'primitive': 'place_on_top', 'implementation': 'selected_surface_collision_geometry_and_settling',
+                'postcondition': check, 'failure_policy': 'restore_pre_action_state'}
+
+    def _placement_contacts(self, held, payload=()):
+        from omnigibson.utils.usd_utils import RigidContactAPI
+        assembly = (held, *payload)
+        paths = {link.prim_path for obj in assembly for link in obj.links.values()}
+        pairs = RigidContactAPI.get_contact_pairs(held.scene.idx, query_set=assembly,
+                                                  with_set=None, current_only=True)
+        return sorted({other for _, other in pairs if other not in paths})
+
+    def _placement_physics_step(self):
+        """A hypothetical candidate must not update task metrics or record video."""
+        deadline = getattr(self, 'deadline', None)
+        if deadline is not None:
+            deadline.check(changed=True)
+        self.sampling_physics_steps += 1
+        self.og.sim.step_physics()
 
     def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
         with self._placement_context():
-            try:
-                pose = self._surface_pose(held, target, point, yaw_degrees)
-            except ActionPrimitiveError as exc:
-                raise SkillError('sampling_error',str(exc)) from exc
-            # Do not call upstream _release(): it runs physics while the object
-            # is still next to the hand, BEFORE teleporting to the destination.
-            contents=list(self._carry_contents) if self.ideal_carry else []
-            dependencies=list(getattr(self,'_carry_dependencies',[]))
-            self._carry_detach()
-            held.set_position_orientation(*pose)
-            self._relocate_contents(held,contents)
-            held.keep_still()
-            for _ in range(min(50,max_steps)):
+            contents = list(self._carry_contents) if self.ideal_carry else []
+            payload = [obj for obj, _ in contents]
+            dependencies = list(getattr(self, '_carry_dependencies', []))
+            if point is None:
+                try:
+                    pose = self._surface_pose(held, target, point, yaw_degrees)
+                except ActionPrimitiveError as exc:
+                    raise SkillError('sampling_error', str(exc)) from exc
+                self._carry_detach()
+                held.set_position_orientation(*pose)
+                self._relocate_contents(held, contents)
+                held.keep_still()
+            else:
+                candidates = self._surface_candidates(held, target, point, yaw_degrees, payload)
+                self._carry_detach()
+                trial_state = self.og.sim.dump_state(serialized=False)
+                accepted = None
+                # One second of free physics tests actual stability, not whether
+                # a rectangular footprint is 80% covered by the target.
+                settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
+                for number, candidate in enumerate(candidates):
+                    if number:
+                        self.og.sim.load_state(trial_state, serialized=False)
+                    held.set_position_orientation(*candidate['pose'])
+                    self._relocate_contents(held, contents)
+                    held.keep_still()
+                    held.wake()
+                    self._placement_physics_step()
+                    contacts = self._placement_contacts(held, payload)
+                    if contacts:
+                        self._placement_record({'status': 'candidate_rejected', 'stage': 'raised_pose_collision',
+                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
+                            'contact_bodies': contacts, 'clearance_m': candidate['clearance_m']})
+                        continue
+                    for _ in range(settle_steps):
+                        self._placement_physics_step()
+                    contacts = self._placement_contacts(held, payload)
+                    touching = any(path in contacts for path in (link.prim_path for link in target.links.values()))
+                    supported, support = self._selected_surface_support(held, target, point, touching, payload)
+                    if not supported:
+                        self._placement_record({'status': 'candidate_rejected', 'stage': 'free_settling',
+                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
+                            'support': support, 'contact_bodies': contacts})
+                        continue
+                    accepted = candidate
+                    self._placement_record({'status': 'sampled', 'method': 'selected_surface_collision_geometry',
+                        'candidate': candidate['index'], 'target': target.name, 'held': held.name,
+                        'selected_point': point.tolist(), 'requested_yaw_degrees': yaw_degrees,
+                        'support_position': candidate['support_position'],
+                        'settled_position': held.get_position_orientation()[0].tolist(),
+                        'support': support, 'contact_bodies': contacts})
+                    break
+                if accepted is None:
+                    raise SkillError('sampling_error', 'No collision-free, stable pose on the selected surface', changed=True)
+            # Only the accepted physical result advances environment metrics,
+            # object-state transition rules and the recorded replay.
+            for _ in range(min(50, max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             adjacency = held.states[VerticalAdjacency].get_value()
             touching = bool(held.states[Touching].get_value(target))
             official_on_top = bool(held.states[OnTop].get_value(target))
-            supported, support = self._selected_surface_support(held, target, point, touching,
-                                                               [obj for obj, _ in contents])
-            self._placement_record({'status':'postcondition_check','target':target.name,'held':held.name,
-                'position':held.get_position_orientation()[0].tolist(),
-                'touching':touching,'official_on_top':official_on_top,'selected_surface_support':support,
-                'target_below':target in adjacency.negative_neighbors,
-                'target_above':target in adjacency.positive_neighbors,
-                'grasp_released':self._get_held() is None})
-            # Official OnTop alone says nothing about which shelf was selected.
+            supported, support = self._selected_surface_support(held, target, point, touching, payload)
+            self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
+                'position': held.get_position_orientation()[0].tolist(),
+                'touching': touching, 'official_on_top': official_on_top, 'selected_surface_support': support,
+                'target_below': target in adjacency.negative_neighbors,
+                'target_above': target in adjacency.positive_neighbors,
+                'grasp_released': self._get_held() is None})
             if not (supported if point is not None else official_on_top):
-                raise SkillError('postcondition_error','Object is not stably supported by the selected surface',changed=True)
+                raise SkillError('postcondition_error', 'Object is not stably supported by the selected surface', changed=True)
             self._verify_payload(dependencies)
-        return 'selected_surface_geometric_support_after_settling' if point is not None else 'official_OnTop'
+        return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=()):
-        """An actual lower shelf can support an object while official OnTop is false.
+        """Check the actual lower collider patch after gravity, including lower shelves.
 
-        This motor check is independent of task goals. It never writes predicates
-        or changes evaluator semantics, and does not accept mere side contact.
+        No whole-box footprint, goal predicate mutation, or held-pose projection
+        is used. The root/box center may lie outside a supported pan body.
         """
+        from .surface_geometry import bottom_anchor
         from omnigibson.utils.sampling_utils import raytest
         if point is None:
-            return False, {'available':False,'reason':'No selected surface point'}
-        lo,hi=held.aabb;center=(lo+hi)/2
-        end=center.clone();end[2]=lo[2]-.08
-        # A shallow plate's AABB center can lie inside its food's collision
-        # proxy. The ray checks the support UNDER the entire carried assembly;
-        # internal payload contact must not hide the actual supporting surface.
-        ignored=[link.prim_path for obj in (held,self.robot,*payload) for link in obj.links.values()]
-        hit=raytest(center,end,ignore_bodies=ignored)
-        target_paths={link.prim_path for link in target.links.values()}
-        speed=float(self.torch.linalg.norm(held.get_linear_velocity()))
-        gap=float(lo[2]-hit['position'][2]) if hit['hit'] else None
-        normal_z=float(hit['normal'][2]) if hit['hit'] else None
-        height_error=abs(float(hit['position'][2]-point[2])) if hit['hit'] else None
-        selected_xy_distance=float(self.torch.linalg.norm(center[:2]-point[:2]))
-        # The contact predicate can be false for a motionless object whose
-        # bottom is flush with the selected support (archived cabinet-door
-        # placement: 6e-8 m gap). Keep it as evidence, not a second veto on the
-        # geometric support check. Wrong surfaces and side contact still fail.
-        checks={'released':self._get_held() is None,
-                'support_ray_hits_selected_object':hit.get('rigidBody') in target_paths,
-                'upward_support':normal_z is not None and normal_z>=.9,
-                'bottom_near_support':gap is not None and -.03<=gap<=.06,
-                'selected_shelf_height':height_error is not None and height_error<=.05,
-                'selected_surface_neighborhood':selected_xy_distance<=.20,'settled':speed<=.10}
-        return all(checks.values()), {'checks':checks,'touching_selected_object':touching,
-            'speed_m_s':speed,'bottom_gap_m':gap,
-            'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance,
-            'support_hit_body':hit.get('rigidBody'),'ignored_payload_names':[obj.name for obj in payload]}
+            return False, {'available': False, 'reason': 'No selected surface point'}
+        anchor = self.torch.as_tensor(bottom_anchor(self._collision_vertices(held)),
+                                     dtype=point.dtype, device=point.device)
+        start = anchor + self.torch.tensor([0., 0., .03], device=point.device)
+        end = anchor - self.torch.tensor([0., 0., .04], device=point.device)
+        ignored = [link.prim_path for obj in (held, self.robot, *payload) for link in obj.links.values()]
+        hit = raytest(start, end, ignore_bodies=ignored)
+        target_paths = {link.prim_path for link in target.links.values()}
+        contacts = self._placement_contacts(held, payload)
+        robot_paths = {link.prim_path for link in self.robot.links.values()}
+        speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
+        angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
+        gap = float(anchor[2] - hit['position'][2]) if hit['hit'] else None
+        normal_z = float(hit['normal'][2]) if hit['hit'] else None
+        height_error = abs(float(hit['position'][2] - point[2])) if hit['hit'] else None
+        selected_xy_distance = float(self.torch.linalg.norm(anchor[:2] - point[:2]))
+        checks = {'released': self._get_held() is None,
+                  'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
+                  'upward_support': normal_z is not None and normal_z >= .9,
+                  'bottom_near_support': gap is not None and -.01 <= gap <= .015,
+                  'selected_shelf_height': height_error is not None and height_error <= .05,
+                  'selected_surface_neighborhood': selected_xy_distance <= .20,
+                  'settled': speed <= .10 and angular_speed <= .5,
+                  'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
+        return all(checks.values()), {'checks': checks, 'touching_selected_object': touching,
+            'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
+            'normal_z': normal_z, 'selected_height_error_m': height_error,
+            'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
+            'support_hit_body': hit.get('rigidBody'), 'contact_bodies': contacts,
+            'ignored_payload_names': [obj.name for obj in payload]}
 
     def _checked_place_inside(self, target, max_steps):
         from omnigibson.object_states import Inside
