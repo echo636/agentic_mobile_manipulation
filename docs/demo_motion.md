@@ -576,3 +576,17 @@ diagnostic, `cabinet_close_repair_probe_r1` deliberately displaced one of
 three contained objects after closing; the closed-volume reseating fallback
 restored official `Inside` for all three. The fallback has not been needed to
 claim the r13 model success.
+
+Christmas-decorations r13 correctly grasped the wreath and selected a sofa,
+but three `place_on_top` attempts rolled back after the wreath slid 1–3 m
+away during settling. The episode finished blocked, with official whole-task
+failure. In the privileged public-instance `wreath_sofa_probe_r5`, the motor
+held the model's first selected sofa point through settling, lowered the wreath
+by the measured support gap, and verified official `OnTop(sofa)=true` with
+demo motion enabled. This motor diagnosis does not count as a model success;
+a fresh autonomous trial remains required.
+
+Trash r14 exited after one grasp because the external model provider rejected
+a continuation with a missing linked reasoning item. Its controller and audit
+failed; this is an infrastructure failure, not a successful or failed task
+execution. A new Astra-low episode must be run.

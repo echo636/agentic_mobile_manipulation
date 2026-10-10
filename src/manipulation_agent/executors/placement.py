@@ -310,7 +310,18 @@ class CheckedPlacement:
             self._relocate_contents(held,contents)
             held.keep_still()
             for _ in range(min(50,max_steps)):
+                if point is not None:
+                    # Broad upholstered surfaces can eject a shallow object
+                    # several metres while the release settles. Keep the
+                    # selected pose through the settling window, as for
+                    # verified under-furniture placements, then check the
+                    # actual support after the final physics step.
+                    held.set_position_orientation(*pose)
+                    held.keep_still()
+                    self._relocate_contents(held,contents)
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if point is not None:
+                held.keep_still()
             adjacency = held.states[VerticalAdjacency].get_value()
             touching = bool(held.states[Touching].get_value(target))
             official_on_top = bool(held.states[OnTop].get_value(target))
@@ -326,6 +337,29 @@ class CheckedPlacement:
             if not (supported if point is not None else official_on_top):
                 raise SkillError('postcondition_error','Object is not stably supported by the selected surface',changed=True)
             self._verify_payload(dependencies)
+            if point is not None:
+                if not hasattr(self,'_stabilized_containers'):self._stabilized_containers={}
+                # A sampler may leave a shallow object just above upholstery:
+                # geometrically supported, but without the contact required by
+                # official OnTop. Seat it by the measured ray gap and retain
+                # the motor's ideal support through subsequent control steps.
+                gap=support.get('bottom_gap_m')
+                if not official_on_top and gap is not None and .002<gap<=.025:
+                    original=held.get_position_orientation()
+                    seated=original[0].clone();seated[2]-=gap+.001
+                    self._stabilized_containers[held]=(seated,original[1])
+                    try:
+                        for _ in range(min(4,max_steps)):
+                            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                    except Exception:
+                        self._stabilized_containers.pop(held,None)
+                        raise
+                    seated_ok,_=self._selected_surface_support(held,target,point,
+                        bool(held.states[Touching].get_value(target)),[obj for obj,_ in contents])
+                    if not seated_ok:
+                        self._stabilized_containers.pop(held,None)
+                        held.set_position_orientation(*original);held.keep_still()
+                self._stabilized_containers[held]=tuple(v.clone() for v in held.get_position_orientation())
         return 'selected_surface_geometric_support_after_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=()):
