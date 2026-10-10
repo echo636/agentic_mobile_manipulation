@@ -187,35 +187,39 @@ def main():
         (args.output / 'traceback.txt').write_text(traceback.format_exc())
         recorder.event('diagnostic_failure', {'error_type': type(exc).__name__, 'error': str(exc)})
     finally:
-        if harness is not None:
-            try:
-                result = harness.call('finish', {'outcome': 'aborted',
-                    'reason': 'Private fixed recorded RGB sequence diagnostic ended after one cut. '
-                              'No autonomous model or full-task success claim.'}, 'recorded-cut-finish')
-                evaluation = recorder.run.get('evaluation', {})
-                validation['q_score'] = find_q(evaluation)
-                validation['official_partial_task_success'] = recorder.run.get('task_success')
-                validation['checks'].update(finish_closed=result.get('closed') is True,
-                    official_scoring_completed=recorder.run.get('scoring', {}).get('status') == 'passed',
-                    final_q_numeric=validation['q_score'] is not None)
-                harness.finalize_recording()
-                validation['checks']['video_finalized'] = recorder.run.get('video', {}).get('status') == 'passed'
-            except Exception as exc:
-                validation['finish_error'] = {'type': type(exc).__name__, 'error': str(exc),
-                                              'traceback': traceback.format_exc()}
-        validation['status'] = 'passed' if not validation.get('error') and not validation.get('finish_error') \
-            and validation['checks'] and all(validation['checks'].values()) else 'failed'
-        write_json(args.output / 'validation.json', validation)
-        recorder.run['component_validation'] = validation
-        if recorder.run['status'] == 'running':
-            recorder.finish({'status': 'failed', 'task_success': None, 'failure': validation.get('error')}, render=False)
-        else:
-            write_json(args.output / 'run.json', recorder.run)
-        if backend is not None:
-            backend.close()
-        else:
-            from manipulation_agent.startup_cleanup import shutdown_partial_simulator
-            recorder.event('startup_cleanup', shutdown_partial_simulator())
+        try:
+            if harness is not None:
+                try:
+                    result = harness.call('finish', {'outcome': 'aborted',
+                        'reason': 'Private fixed recorded RGB sequence diagnostic ended after one cut. '
+                                  'No autonomous model or full-task success claim.'}, 'recorded-cut-finish')
+                    evaluation = recorder.run.get('evaluation', {})
+                    validation['q_score'] = find_q(evaluation)
+                    validation['official_partial_task_success'] = recorder.run.get('task_success')
+                    validation['checks'].update(finish_closed=result.get('closed') is True,
+                        official_scoring_completed=recorder.run.get('scoring', {}).get('status') == 'passed',
+                        final_q_numeric=validation['q_score'] is not None)
+                    harness.finalize_recording()
+                    validation['checks']['video_finalized'] = recorder.run.get('video', {}).get('status') == 'passed'
+                except Exception as exc:
+                    validation['finish_error'] = {'type': type(exc).__name__, 'error': str(exc),
+                                                  'traceback': traceback.format_exc()}
+            validation['status'] = 'passed' if not validation.get('error') and not validation.get('finish_error') \
+                and validation['checks'] and all(validation['checks'].values()) else 'failed'
+            write_json(args.output / 'validation.json', validation)
+            recorder.run['component_validation'] = validation
+            if recorder.run['status'] == 'running':
+                recorder.finish({'status': 'failed', 'task_success': None, 'failure': validation.get('error')}, render=False)
+            else:
+                write_json(args.output / 'run.json', recorder.run)
+        finally:
+            # A diagnostic recording failure must not skip the simulator's
+            # orderly close and leave native plugins to Python's exit teardown.
+            if backend is not None:
+                backend.close()
+            else:
+                from manipulation_agent.startup_cleanup import shutdown_partial_simulator
+                recorder.event('startup_cleanup', shutdown_partial_simulator())
     print(json.dumps(validation), flush=True)
     return 0 if validation['status'] == 'passed' else 2
 
