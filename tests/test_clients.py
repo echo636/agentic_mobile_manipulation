@@ -76,6 +76,22 @@ command = "ignored"
             self.assertIn('model_providers.example.base_url="https://example.invalid/v1"', configs)
             self.assertFalse(any('unrelated' in value for value in configs))
 
+    def test_api_provider_uses_env_key_without_subscription_fallback(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ,
+                {'CODEX_HOME':folder,'TEST_RELAY_KEY':'credential-not-for-argv'}):
+            Path(folder,'config.toml').write_text('[model_providers.relay]\nname="Relay"\n'
+                'base_url="https://example.invalid/v1"\nwire_api="responses"\nenv_key="TEST_RELAY_KEY"\n')
+            prepared=get_adapter('codex').prepare_project(
+                self.config(Path(folder),model_provider_profile='relay'),'Policy',['finish'])
+            self.assertIn('model_providers.relay.env_key="TEST_RELAY_KEY"',prepared.argv)
+            self.assertIn('model_providers.relay.requires_openai_auth=false',prepared.argv)
+            self.assertNotIn('credential-not-for-argv',str(prepared))
+            del os.environ['TEST_RELAY_KEY']
+            second=Path(folder,'second');second.mkdir()
+            with self.assertRaisesRegex(ValueError,'credential environment absent'):
+                get_adapter('codex').prepare_project(
+                    self.config(second,model_provider_profile='relay'),'Policy',['finish'])
+
     def test_codex_resume_keeps_model_tool_boundary_and_workspace(self):
         with tempfile.TemporaryDirectory() as folder:
             adapter = get_adapter('codex')

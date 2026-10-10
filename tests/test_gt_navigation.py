@@ -15,6 +15,29 @@ def grid(width=81, height=81, resolution=.05, blocked=()):
 
 
 class GTNavigationTests(unittest.TestCase):
+    def test_point_navigation_goes_to_click_without_visual_standoff(self):
+        g=grid()
+        plan=plan_navigation(g,(.5,.5),(2.12,2.33),goal_mode='point')
+        self.assertLess(math.dist(plan.goal,(2.12,2.33)),g.resolution/math.sqrt(2))
+        self.assertGreater(plan.geodesic_m,2.)
+
+    def test_point_projection_cannot_report_reached_from_distant_side_of_wall(self):
+        g=grid(101,101,blocked=[(r,40) for r in range(101)])
+        with self.assertRaises(NavigationError):
+            plan_navigation(g,(.5,.5),(3.5,.5),goal_mode='point')
+
+    def test_pruned_route_tolerates_micrometre_feedback_at_corners(self):
+        g=grid(61,61,blocked=[(r,c) for r in range(20,41) for c in range(20,41)])
+        plan=plan_navigation(g,(.5,1.5),(2.5,1.5),goal_mode='point')
+        self.assertTrue(all(g.segment_free(a,b,clearance=.004) for a,b in zip(plan.points,plan.points[1:])))
+        follower=GreedyGridFollower(g,plan,1/30);pose=(.5,1.5,0.)
+        for i in range(2000):
+            cmd=follower.next_pose(pose)
+            if cmd is None:break
+            pose=(cmd[0]+2.8e-6,cmd[1]-2.8e-6,cmd[2]+1e-5)
+        else:self.fail('Follower did not terminate')
+        self.assertLess(math.dist(pose[:2],plan.goal),.002)
+
     def test_elevated_target_keeps_lower_robot_band_outside_selected_point(self):
         standoff,margin=visual_approach_settings(1.83,0.,.7)
         self.assertEqual(standoff,.7)

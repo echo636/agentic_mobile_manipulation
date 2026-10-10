@@ -719,6 +719,8 @@ class Batch:
                  '--agent-profile',self.manifest['agent_profile']]
             if self.manifest.get('model_reasoning_effort'):
                 cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
+            if self.c.get('model_provider_profile'):
+                cmd += ['--model-provider-profile',self.c['model_provider_profile']]
             if self.c.get('isolate_client_storage'):cmd.append('--isolate-client-storage')
             with (self.root/'logs'/f'{runid}_controller.log').open('w') as log:
                 process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,env=self.environment)
@@ -932,6 +934,8 @@ class Batch:
              '--timeout',str(self.manifest['model_timeout_seconds']),'--agent-profile',self.manifest['agent_profile']]
         if self.manifest.get('model_reasoning_effort'):
             cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
+        if self.c.get('model_provider_profile'):
+            cmd += ['--model-provider-profile',self.c['model_provider_profile']]
         if row.get('execution_clock_path'):
             cmd+=['--execution-clock-command-json',json.dumps(self.execution_clock_command(
                 row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime))]

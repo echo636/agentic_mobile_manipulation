@@ -61,8 +61,19 @@ class CodexAdapter(ClientAdapter):
             data = tomllib.loads((root / 'config.toml').read_text())
             provider = data.get('model_providers', {}).get(profile)
             if not isinstance(provider, dict) or not all(key in provider for key in
-                ('name', 'base_url', 'requires_openai_auth', 'wire_api')):
+                ('name', 'base_url', 'wire_api')):
                 raise ValueError('Codex model provider profile is incomplete')
+            provider = dict(provider)
+            provider.setdefault('requires_openai_auth', False)
+            env_key = provider.get('env_key')
+            if env_key is not None:
+                if not isinstance(env_key, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', env_key):
+                    raise ValueError('Invalid provider credential environment name')
+                if not os.environ.get(env_key):
+                    raise ValueError('Provider credential environment absent: ' + env_key)
+                # An explicitly selected API-key provider must never fall back
+                # to the user's ChatGPT subscription login.
+                provider['requires_openai_auth'] = False
             endpoint = urlsplit(provider['base_url'])
             try:
                 private_http = endpoint.scheme == 'http' and ip_address(endpoint.hostname).is_private
@@ -73,6 +84,8 @@ class CodexAdapter(ClientAdapter):
             command += ['-c', 'model_provider=' + json.dumps(profile)]
             for key in ('name', 'base_url', 'requires_openai_auth', 'wire_api'):
                 command += ['-c', f'model_providers.{profile}.{key}=' + json.dumps(provider[key])]
+            if env_key is not None:
+                command += ['-c', f'model_providers.{profile}.env_key=' + json.dumps(env_key)]
         native_sessions = None
         storage = None
         prefix = []

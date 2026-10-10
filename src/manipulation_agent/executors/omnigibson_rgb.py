@@ -510,43 +510,43 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         trav=self.env.scene.trav_map
         position,_=self.robot.get_position_orientation()
         point=target.get_position_orientation()[0]
-        standoff,margin=(.7,.04) if for_manipulation else visual_approach_settings(
-            self.rig_height,float(position[2]),float(point[2]),
-            pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
+        from .live_gt_map import build_navigation_grid
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
-        occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
-        height,width=occupancy.shape
-        grid=GridMap(width,height,float(trav.map_resolution),
-                     (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
-                     (occupancy!=0).astype('uint8').tobytes())
-        # Public navigation must leave the selected surface observable in the
-        # resulting RGB. An in-action reach may move closer after the model has
-        # already selected its pixel; its hand is expected to enter that ray.
-        self_hulls,self_report=((),{'policy':'selected_pixel_reach_may_occlude'}) if for_manipulation else self._navigation_self_hulls()
+        ground_click=not for_manipulation and float(point[2])-float(trav.floor_heights[floor]) <= .15
+        mode='point' if ground_click else 'approach'
+        standoff,margin=(0.,0.) if ground_click else (.7,0.)
+        grid,map_details=build_navigation_grid(self,floor)
+        details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
+                 'goal_mode':mode,'for_manipulation':for_manipulation,
+                 'selected_world_point':point.cpu().tolist(),
+                 'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
+                 'visual_standoff_m':standoff,'visual_margin':margin,
+                 'map_sha256':hashlib.sha256(grid.free).hexdigest(),
+                 **map_details,'precomputed_walkability':True,'online_mapping':False}
         try:
             with component(self,'navigation_planning'):
+                # Ground goals do not need to remain visible under the head
+                # camera after arrival. Elevated clicks approach the point;
+                # only actual manipulation needs an unobstructed reach ray.
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
-                                     standoff=standoff,
-                                     candidate_filter=lambda xy:self._approach_visible(
+                                     standoff=standoff,goal_mode=mode,
+                                     candidate_filter=(lambda xy:self._approach_visible(
                                          xy,point,getattr(target,'selected_object',None),
-                                         margin=margin,max_distance=max(1.4,standoff+.35),
-                                         self_hulls=self_hulls))
+                                         margin=0.,max_distance=1.4)) if for_manipulation else None)
+            details.update(status='planned',plan=asdict(plan))
         except NavigationError as exc:
+            details.update(status='failed',error_code=exc.code,error=str(exc))
             raise SkillError(exc.code,str(exc)) from exc
-        details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
-                 'plan':asdict(plan),'map_resolution_m':grid.resolution,
-                 'visual_standoff_m':standoff,'visual_margin':margin,
-                 'self_occlusion_geometry':self_report,
-                 'map_sha256':hashlib.sha256(grid.free).hexdigest(),
-                 'dynamic_collision_check':False,'collision_substrate':'static_eroded_grid',
-                 'precomputed_walkability':True,'online_mapping':False}
-        with (self.output/'navigation_plans.jsonl').open('a') as stream:
-            stream.write(json.dumps(details)+'\n')
+        finally:
+            with (self.output/'navigation_plans.jsonl').open('a') as stream:
+                stream.write(json.dumps(details)+'\n')
         result=self._execute_gt_plan(grid,plan,max_steps)
         self.navigation_distance+=result['actual_path_distance_m']
         return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
-                'start_grid_offset_m':plan.start_grid_offset_m,'dynamic_collision_check':False}
+                'start_grid_offset_m':plan.start_grid_offset_m,
+                'goal_mode':mode,'target_projection_distance_m':math.dist(plan.goal,plan.target),
+                'dynamic_collision_check':map_details['dynamic_collision_check']}
 
     def _execute_gt_plan(self, grid, plan, max_steps):
         """Follow the GT path using actual pose feedback and bounded commands."""

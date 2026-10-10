@@ -12,7 +12,7 @@ import heapq
 import math
 
 SOURCE_COMMIT = '0815cf234ee591bacd8017e9b1def4fac13e649b'
-STRATEGY = 'jinkai_visual_point_gt_grid_v1'
+STRATEGY = 'visual_point_dynamic_door_gt_grid_v2'
 
 
 class NavigationError(Exception):
@@ -75,13 +75,19 @@ class GridMap:
             if cell_filter is None or cell_filter((r,c)):return r,c
         return None
 
-    def segment_free(self, a, b):
+    def segment_free(self, a, b, clearance=0.):
         """Exact grid supercover, including both sides of edges and corners.
 
         Check every crossed cell interval rather than distance-spaced samples.
         Planning, pruning and follower subsegments therefore use the same
         collision definition, independent of how a segment is subdivided.
         """
+        if clearance:
+            # Reserve a small corridor when pruning a path. A mathematically
+            # tangent shortcut otherwise becomes blocked after micrometre pose
+            # feedback error. Collision tests themselves remain unchanged.
+            return all(self.segment_free((a[0]+dx,a[1]+dy),(b[0]+dx,b[1]+dy))
+                       for dx in (-clearance,0.,clearance) for dy in (-clearance,0.,clearance))
         self.cell(a);self.cell(b)  # Reject non-finite positions before traversal.
         start=tuple((v-o)/self.resolution+.5 for v,o in zip(a,self.origin))
         end=tuple((v-o)/self.resolution+.5 for v,o in zip(b,self.origin))
@@ -164,7 +170,7 @@ class NavigationPlan:
 
 
 def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
-                    horizon=10000., max_expansions=250000, candidate_filter=None):
+                    horizon=10000., max_expansions=None, candidate_filter=None, goal_mode='approach'):
     """Project candidate goals, validate reachability, rank and plan one GT hop.
 
     One multi-goal Dijkstra search supplies exact grid geodesics for all
@@ -173,6 +179,8 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     """
     current=tuple(map(float,current));hint=tuple(map(float,hint))
     start=grid.cell(current);grid.cell(hint)
+    if goal_mode not in {'point','approach'}:raise ValueError('Unknown navigation goal mode')
+    if max_expansions is None:max_expansions=grid.width*grid.height
     if not grid.navigable(start):raise NavigationError('Start is outside the traversable grid; no unvalidated recovery teleport','navigation_invalid_start')
     visibility={}
     def acceptable(cell):
@@ -181,6 +189,14 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
         return visibility[cell]
     def project(reachable=None):
         projected=[]
+        if goal_mode=='point':
+            # One clicked XY destination, with only bounded projection to a
+            # reachable free cell. No viewing standoff or no-progress penalty.
+            cell=grid.snap(hint,max_snap,lambda c:(reachable is None or c in reachable) and acceptable(c))
+            if cell is not None:
+                distance=math.dist(grid.world(cell),hint)
+                projected.append((cell,distance,distance))
+            return projected
         for raw in candidate_points(hint,current,standoff):
             cell=grid.snap(raw,max_snap,lambda c:(reachable is None or c in reachable) and acceptable(c))
             if cell is not None:
@@ -203,7 +219,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     viable=[]
     for cell,snap_distance,target_distance in candidates:
         if cell not in closed or distances[cell]>horizon:continue
-        score=candidate_score(target_distance,snap_distance,distances[cell],standoff)
+        score=target_distance if goal_mode=='point' else candidate_score(target_distance,snap_distance,distances[cell],standoff)
         viable.append((score,distances[cell],cell))
     if not viable:
         # If the nearest projections fell on another connected region, the
@@ -212,7 +228,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
         # the start pose to a different component.
         candidates=project(closed)
         for cell,snap_distance,target_distance in candidates:
-            viable.append((candidate_score(target_distance,snap_distance,distances[cell],standoff),distances[cell],cell))
+            viable.append((target_distance if goal_mode=='point' else candidate_score(target_distance,snap_distance,distances[cell],standoff),distances[cell],cell))
     if not viable:raise NavigationError('No candidate near the visual target is reachable from this start')
     score,distance,goal_cell=min(viable)
     cells=[goal_cell]
@@ -225,7 +241,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     while index<len(points)-1:
         far=index+1
         for end in range(index+2,len(points)):
-            if not grid.segment_free(points[index],points[end]):break
+            if not grid.segment_free(points[index],points[end],clearance=.005):break
             far=end
         if math.dist(simplified[-1],points[far])>1e-9:simplified.append(points[far])
         index=far
