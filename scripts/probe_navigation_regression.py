@@ -34,14 +34,19 @@ def main():
         validation['doors']={name:{'category':obj.category,'initial_open':obj.states[Open].get_value()} for name,obj in doors.items()}
         floor=min(range(len(backend.env.scene.trav_map.floor_heights)),key=lambda i:abs(float(backend.robot.get_position_orientation()[0][2])-backend.env.scene.trav_map.floor_heights[i]))
         grid,meta=build_navigation_grid(backend,floor)
+        import numpy as np
+        np.savez_compressed(a.output/'initial_navigation_map.npz',free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),origin=grid.origin,resolution=grid.resolution)
         validation['initial_map']=meta;save();print(json.dumps({'stage':'initialized','map':meta}),flush=True)
         for case in fixture['cases']:
             case_record={'input':case};validation['cases'].append(case_record)
             for door in doors.values():door.states[Open].set_value(False,fully=True)
             for _ in range(10):backend._step(backend.robot.q_to_action(backend.robot.get_joint_positions()))
             pos,quat=backend.robot.get_position_orientation();pos[:2]=backend.torch.tensor(case['start'],device=pos.device)
+            if case.get('start_orientation') is not None:
+                quat=backend.torch.tensor(case['start_orientation'],device=quat.device)
             backend.robot.set_position_orientation(pos,quat)
             closed_grid,closed_meta=build_navigation_grid(backend,floor)
+            np.savez_compressed(a.output/(case['name']+'_closed_map.npz'),free=np.frombuffer(closed_grid.free,dtype='uint8').reshape(closed_grid.height,closed_grid.width),origin=closed_grid.origin,resolution=closed_grid.resolution)
             try:
                 plan=plan_navigation(closed_grid,case['start'],case['world_target'][:2],goal_mode=case['goal_mode'])
                 case_record['closed_door_plan']={'status':'planned','goal':plan.goal}
