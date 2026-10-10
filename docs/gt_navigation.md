@@ -24,7 +24,7 @@ each `act` / `look` supplies the next one.
    and update dirty regions when object poses or joints change. AABBs bound the
    query region; the actual collision query determines occupied cells. Closed
    doors block travel, and opening a door changes the next navigation grid.
-4. Erode occupancy with the measured oriented chassis footprint. Plan a
+4. Combine occupancy eroded by the measured oriented robot footprint in each height band. Plan a
    collision-free grid route without cutting corners. If the current heading
    cannot fit, test alternative headings and the whole in-place turn's swept
    footprint. Use a feasible turn followed by holonomic fixed-heading travel.
@@ -45,9 +45,10 @@ inside this system. Floor-point goals intentionally use direct-point semantics.
 
 This remains ideal kinematic base actuation, not a wheel controller or a complete
 SE(2) / articulated-body motion planner. One fixed heading is used for each
-translation route, with a checked turn at its start. The height-column obstacle
-representation is conservative; carried-object and upper-body articulated
-clearance are not fully planned. A genuinely blocked or disconnected point must
+translation route, with a checked turn at its start. Scene obstacles and robot collision hulls are matched in four height bands,
+avoiding a base-width column through the head. Convex hulls within each band
+remain conservative; carried-object and articulated motion planning remain
+incomplete. A genuinely blocked or disconnected point must
 return a navigation failure rather than cross a closed door. Floor raster and
 cell resolution also limit how closely a selected point can be reached.
 

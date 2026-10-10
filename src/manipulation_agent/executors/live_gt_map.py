@@ -20,6 +20,28 @@ def footprint_kernel(points, resolution):
     return kernel
 
 
+def clipped_body_projection(points, low, high):
+    """XY projection of a link's convex collision hull inside a Z slab."""
+    import numpy as np
+    from scipy.spatial import ConvexHull, QhullError
+    if points[:,2].max()<low or points[:,2].min()>high:return None
+    clipped=list(points[(points[:,2]>=low)&(points[:,2]<=high),:2])
+    try:
+        hull=ConvexHull(points)
+        edges={tuple(sorted((int(a),int(b)))) for face in hull.simplices
+               for a,b in zip(face,np.roll(face,1))}
+    except QhullError:
+        # Degenerate planar geometry: all pairs cover every projected edge.
+        edges={(i,j) for i in range(len(points)) for j in range(i)}
+    for i,j in edges:
+        a,b=points[i],points[j]
+        if abs(float(b[2]-a[2]))<1e-12:continue
+        for z in (low,high):
+            t=(z-a[2])/(b[2]-a[2])
+            if 0<=t<=1:clipped.append((a+t*(b-a))[:2])
+    return np.asarray(clipped) if clipped else None
+
+
 def build_navigation_grid(backend, floor):
     import cv2
     import numpy as np
@@ -38,7 +60,7 @@ def build_navigation_grid(backend, floor):
         if points is not None:bodies.append(points.cpu().numpy())
     layers=[]
     for lo,hi in zip(edges,edges[1:]):
-        chunks=[p[:,:2]-base[:2] for p in bodies if p[:,2].max()>=floor_z+lo and p[:,2].min()<=floor_z+hi]
+        chunks=[xy-base[:2] for p in bodies if (xy:=clipped_body_projection(p,floor_z+lo,floor_z+hi)) is not None]
         if not chunks:continue
         hull=cv2.convexHull(np.concatenate(chunks).astype('float32')).reshape(-1,2)
         layers.append((lo,hi,hull))
@@ -161,3 +183,27 @@ def feasible_heading_grids(grid, raw_free, footprint, current, yaw, *, check_can
                 continue
             footprints=[rotated(points,sign*absolute) for _,points in layers]
             yield make(footprints),yaw+math.radians(sign*absolute),turn_grid,footprints[0].tolist()
+
+
+def rotation_staging_plan(grid, collision_layers, current, yaw, *, check_cancelled=None):
+    """Reach the nearest place where the body can turn before a narrow route."""
+    import cv2
+    import numpy as np
+    from dataclasses import replace
+    from .gt_navigation import plan_navigation, NavigationError
+    free=np.ones((grid.height,grid.width),dtype='uint8')
+    for obstacles,footprint in collision_layers:
+        radius=float(np.linalg.norm(footprint,axis=1).max())
+        angles=np.linspace(0,2*math.pi,181)
+        circle=np.column_stack((np.cos(angles),np.sin(angles)))*(radius+grid.resolution)
+        free &= cv2.erode(obstacles,footprint_kernel(circle,grid.resolution),borderType=cv2.BORDER_CONSTANT,borderValue=0)
+    available=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width)
+    labels=cv2.connectedComponents(available,connectivity=4)[1];label=labels[grid.cell(current)]
+    if not label:raise NavigationError('No reachable turning location')
+    rows,cols=np.where(free & (labels==label))
+    if not len(rows):raise NavigationError('No reachable turning location')
+    xy=np.column_stack((cols,rows))*grid.resolution+np.array(grid.origin)
+    goal=xy[np.argmin(np.linalg.norm(xy-np.array(current),axis=1))]
+    if np.linalg.norm(goal-current)<grid.resolution:raise NavigationError('No additional turning clearance available')
+    plan=plan_navigation(grid,current,goal,goal_mode='point',max_snap=0.,check_cancelled=check_cancelled)
+    return replace(plan,travel_yaw=yaw,final_yaw=yaw)

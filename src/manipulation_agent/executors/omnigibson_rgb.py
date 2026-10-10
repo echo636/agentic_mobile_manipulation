@@ -561,53 +561,75 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 # Ground goals do not need to remain visible under the head
                 # camera after arrival. Elevated clicks approach the point;
                 # only actual manipulation needs an unobstructed reach ray.
+                planning_xy=position[:2].cpu().tolist()
                 def make_plan(candidate_grid,yaw):
-                    return replace(plan_navigation(candidate_grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
+                    return replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
                         standoff=standoff,goal_mode=mode,check_cancelled=self.deadline.check,
                         candidate_filter=(lambda xy:math.dist(xy,point[:2].cpu().tolist())<=1.4 and (
                             not for_manipulation or self._approach_visible(
                                 xy,point,getattr(target,'selected_object',None),
                                 margin=0.,max_distance=1.4,base_yaw=yaw))) if mode=='approach' else None),
                         travel_yaw=yaw,final_yaw=yaw)
-                turn=None
+                turn=None;stage=None
                 try:
                     plan=make_plan(grid,travel_yaw)
                 except NavigationError as original_error:
                     from .live_gt_map import feasible_heading_grids
                     from .gt_navigation import NavigationPlan
                     raw_free,_,_=self._navigation_clearance
-                    for other_grid,other_yaw,turn_grid,footprint in feasible_heading_grids(
-                            grid,raw_free,map_details['chassis_footprint_world_offsets'],
-                            position[:2].cpu().tolist(),travel_yaw,check_cancelled=self.deadline.check,collision_layers=self._navigation_layers):
-                        try:other_plan=make_plan(other_grid,other_yaw)
-                        except NavigationError:continue
-                        xy=tuple(position[:2].cpu().tolist())
-                        turn_plan=NavigationPlan((xy,),xy,xy,other_yaw,0.,0.,1,1,0.,0,other_yaw)
-                        turn=(turn_grid,turn_plan)
-                        details['heading_change']={'from':travel_yaw,'to':other_yaw,
-                            'check':'full_swept_chassis_convex_hull','footprint':footprint}
-                        grid,plan=other_grid,other_plan
-                        break
-                    else:raise original_error
+                    for staged in (False,True):
+                        if staged:
+                            from .live_gt_map import rotation_staging_plan
+                            try:
+                                stage_plan=rotation_staging_plan(grid,self._navigation_layers,planning_xy,travel_yaw,
+                                                                 check_cancelled=self.deadline.check)
+                            except NavigationError:break
+                            planning_xy=stage_plan.goal
+                            stage=(grid,stage_plan)
+                        for other_grid,other_yaw,turn_grid,footprint in feasible_heading_grids(
+                                grid,raw_free,map_details['chassis_footprint_world_offsets'],planning_xy,
+                                travel_yaw,check_cancelled=self.deadline.check,collision_layers=self._navigation_layers):
+                            try:other_plan=make_plan(other_grid,other_yaw)
+                            except NavigationError:continue
+                            xy=tuple(planning_xy)
+                            turn_plan=NavigationPlan((xy,),xy,xy,other_yaw,0.,0.,1,1,0.,0,other_yaw)
+                            turn=(turn_grid,turn_plan)
+                            details['heading_change']={'from':travel_yaw,'to':other_yaw,
+                                'check':'full_swept_collision_hulls','footprint':footprint,
+                                'staging_plan':asdict(stage[1]) if stage else None}
+                            grid,plan=other_grid,other_plan
+                            break
+                        if turn is not None:break
+                    if turn is None:raise original_error
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
             if turn is not None:
                 np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
                     raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
                     origin=grid.origin,resolution=grid.resolution,
                     footprint=details['heading_change']['footprint'],start=position.cpu().numpy(),
-                    target=point.cpu().numpy(),travel_yaw=plan.travel_yaw)
+                    target=point.cpu().numpy(),travel_yaw=plan.travel_yaw,initial_layer_yaw=travel_yaw,
+                    raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+                    layer_footprints_json=json.dumps(map_details['collision_layers']))
         except NavigationError as exc:
             details.update(status='failed',error_code=exc.code,error=str(exc))
             raise SkillError(exc.code,str(exc)) from exc
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
                 stream.write(json.dumps(details)+'\n')
+        stage_result=None
+        if stage is not None:
+            stage_result=self._execute_gt_plan(*stage,max_steps)
+            max_steps-=stage_result['steps']
+        turn_result=None
         if turn is not None:
             turn_result=self._execute_gt_plan(*turn,max_steps)
             max_steps-=turn_result['steps']
             details['heading_change']['execution']=turn_result
         result=self._execute_gt_plan(grid,plan,max_steps)
-        self.navigation_distance+=result['actual_path_distance_m']
+        self.navigation_distance+=result['actual_path_distance_m']+sum(p['actual_path_distance_m'] for p in (stage_result,turn_result) if p)
+        phases=[phase for phase in (recovery_result,stage_result,turn_result) if phase is not None]
+        for key in ('steps','motion_steps','actual_path_distance_m'):
+            result[key]+=sum(phase.get(key,0) for phase in phases)
         return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
                 'start_grid_offset_m':plan.start_grid_offset_m,

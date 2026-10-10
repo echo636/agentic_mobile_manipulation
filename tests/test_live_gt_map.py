@@ -70,3 +70,26 @@ class LiveGridTests(unittest.TestCase):
         blocked=list(feasible_heading_grids(grid,raw.tobytes(),footprint,(0.,0.),0.))
         positive=[yaw for _,yaw,_,_ in blocked if yaw>0]
         self.assertTrue(all(yaw<np.pi/4 for yaw in positive))
+
+    def test_height_layers_do_not_extend_wide_base_into_overhead_obstacle(self):
+        import numpy as np
+        from manipulation_agent.executors.gt_navigation import GridMap
+        from manipulation_agent.executors.live_gt_map import feasible_heading_grids
+        raw=np.ones((41,41),dtype='uint8');upper=raw.copy();upper[:,25]=0
+        grid=GridMap(41,41,.05,(-1.,-1.),raw.tobytes())
+        wide=[[-.35,-.35],[.35,-.35],[.35,.35],[-.35,.35]]
+        narrow=[[-.05,-.05],[.05,-.05],[.05,.05],[-.05,.05]]
+        self.assertFalse(list(feasible_heading_grids(grid,upper.tobytes(),wide,(0.,0.),0.)))
+        layered=list(feasible_heading_grids(grid,upper.tobytes(),wide,(0.,0.),0.,
+                     collision_layers=[(raw,wide),(upper,narrow)]))
+        self.assertTrue(layered)
+        self.assertTrue(all(turn.navigable(turn.cell((0.,0.))) for _,_,turn,_ in layered))
+
+    def test_collision_hull_is_clipped_before_height_projection(self):
+        import numpy as np
+        from manipulation_agent.executors.live_gt_map import clipped_body_projection
+        points=np.array([[x,y,z] for z,radius in [(0.,.1),(1.,.4)]
+                         for x in (-radius,radius) for y in (-radius,radius)])
+        lower=clipped_body_projection(points,0.,.2)
+        self.assertAlmostEqual(float(abs(lower).max()),.16,places=6)
+        self.assertIsNone(clipped_body_projection(points,1.1,1.2))
