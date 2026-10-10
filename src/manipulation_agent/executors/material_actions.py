@@ -4,6 +4,7 @@ The simulator's particle and transition states remain the source of truth.  No
 task objects, goal predicates, or alternative visual targets are consulted.
 """
 from ..contracts import SkillError
+from ..asset_preflight import inspect_model_assets, inspect_particle_system_assets, object_part_models
 
 
 def eligible_systems(systems, modifier, *, covered=None, ideal_projection=False):
@@ -122,6 +123,7 @@ class CheckedMaterialActions:
 
     def _checked_cut(self, target, max_steps):
         from omnigibson.transition_rules import DicingRule, SlicingRule
+        from omnigibson.utils.asset_utils import get_dataset_path
 
         tool = self._get_held()
         if tool is None:
@@ -136,6 +138,34 @@ class CheckedMaterialActions:
                      if isinstance(item, rule_type)), None)
         if rule is None:
             raise SkillError('pre_condition_error', 'Simulator has no active cutting transition')
+        # execute_transition removes originals before loading additions. Dicing's
+        # transition itself initializes a system and generates particles. Check
+        # every selected output before either call; do not catch and continue
+        # after a partially applied transition.
+        try:
+            asset_root = get_dataset_path('behavior-1k-assets')
+            if ability == 'sliceable':
+                parts = object_part_models(target.metadata)
+                if not parts:
+                    raise ValueError('Sliceable object has no object_parts metadata')
+                # Future cuts of a child are not dependencies of this cut.
+                assets = inspect_model_assets(parts, asset_root, follow_object_parts=False)
+                missing = assets['missing_model_usds']
+                invalid = bool(assets['metadata_errors'])
+            else:
+                from omnigibson.object_states import Cooked
+                system_name = 'diced__' + target.category.removeprefix('half_')
+                if Cooked in target.states and target.states[Cooked].get_value():
+                    system_name = 'cooked__' + system_name
+                assets = inspect_particle_system_assets(system_name, asset_root)
+                missing = assets['missing_assets']
+                invalid = False
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise SkillError('cut_asset_unavailable',
+                'Required cutting asset metadata is unavailable; the object has not been changed.') from exc
+        if missing or invalid:
+            raise SkillError('cut_asset_unavailable',
+                'A required cutting output asset is unavailable; the object has not been changed.')
         output = rule.transition({ability: [target]})
         if target not in output.remove or not (output.add or ability == 'diceable'):
             raise SkillError('execution_error', 'Cutting transition produced no valid result')

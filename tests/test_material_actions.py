@@ -2,6 +2,9 @@
 import sys
 import types
 import unittest
+import json
+import tempfile
+from pathlib import Path
 from contextlib import nullcontext
 from unittest.mock import patch
 
@@ -18,10 +21,16 @@ class MaterialActionTests(unittest.TestCase):
         self.Saturated = type('Saturated', (), {})
         self.ParticleSource = type('ParticleSource', (), {})
         self.Contains = type('Contains', (), {})
+        self.Cooked = type('Cooked', (), {})
         states = types.ModuleType('omnigibson.object_states')
         for name in ('Covered', 'ParticleRemover', 'ParticleApplier', 'Saturated',
-                     'ParticleSource', 'Contains'):
+                     'ParticleSource', 'Contains', 'Cooked'):
             setattr(states, name, getattr(self, name))
+        self.asset_folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.asset_folder.cleanup)
+        self.asset_root = Path(self.asset_folder.name)
+        asset_utils = types.ModuleType('omnigibson.utils.asset_utils')
+        asset_utils.get_dataset_path = lambda name: str(self.asset_root)
         methods = types.SimpleNamespace(ADJACENCY=1, PROJECTION=2)
         constants = types.ModuleType('omnigibson.utils.constants')
         constants.ParticleModifyMethod = methods
@@ -30,6 +39,7 @@ class MaterialActionTests(unittest.TestCase):
             'omnigibson.object_states': states,
             'omnigibson.utils': types.ModuleType('omnigibson.utils'),
             'omnigibson.utils.constants': constants,
+            'omnigibson.utils.asset_utils': asset_utils,
         })
         self.methods = methods
         self.system = types.SimpleNamespace(name='dust', states={})
@@ -127,6 +137,9 @@ class MaterialActionTests(unittest.TestCase):
         transitions.DicingRule = type('DicingRule', (), {})
         self.tool._abilities = {'slicer'}
         self.target._abilities = {'sliceable'}
+        self.target.metadata = {'object_parts': {'0': {'category': 'half_vegetable', 'model': 'part'}}}
+        usd = self.asset_root/'objects/half_vegetable/part/usd/part.encrypted.usd'
+        usd.parent.mkdir(parents=True); usd.write_bytes(b'fixture')
         self.scene.objects = [self.target]
         self.scene.transition_rule_api = types.SimpleNamespace(
             active_rules=[rule],
@@ -137,6 +150,66 @@ class MaterialActionTests(unittest.TestCase):
             result = self.backend._checked_cut(self.target, 6)
         self.assertEqual(result['transition'], 'SlicingRule')
         self.assertEqual(self.backend.frames_revision, -1)
+        self.assertNotIn(self.target, self.scene.objects)
+
+    def test_missing_slice_part_rejects_before_transition_and_preserves_original(self):
+        class SlicingRule:
+            def transition(rule, candidates):
+                self.fail('Missing asset must be detected before transition')
+        transitions = types.ModuleType('omnigibson.transition_rules')
+        transitions.SlicingRule = SlicingRule
+        transitions.DicingRule = type('DicingRule', (), {})
+        self.tool._abilities = {'slicer'}
+        self.target._abilities = {'sliceable'}
+        self.target.metadata = {'object_parts': {'0': {'category': 'half_onion', 'model': 'first'},
+                                                '1': {'category': 'half_onion', 'model': 'missing_second'}}}
+        usd = self.asset_root/'objects/half_onion/first/usd/first.encrypted.usd'
+        usd.parent.mkdir(parents=True); usd.write_bytes(b'fixture')
+        self.scene.objects = [self.target]
+        self.scene.transition_rule_api = types.SimpleNamespace(active_rules=[SlicingRule()],
+            execute_transition=lambda **kw: self.fail('Must not remove original object'))
+        with self.modules, patch.dict(sys.modules, {'omnigibson.transition_rules': transitions}), \
+                self.assertRaises(SkillError) as failure:
+            self.backend._checked_cut(self.target, 6)
+        self.assertEqual(failure.exception.code, 'cut_asset_unavailable')
+        self.assertFalse(failure.exception.changed)
+        self.assertIn(self.target, self.scene.objects)
+
+    def test_dicing_checks_only_current_cooked_output_before_particle_generation(self):
+        class DicingRule:
+            def transition(rule, candidates):
+                self.generated = True
+                return types.SimpleNamespace(add=[], remove=[self.target])
+        transitions = types.ModuleType('omnigibson.transition_rules')
+        transitions.DicingRule = DicingRule
+        transitions.SlicingRule = type('SlicingRule', (), {})
+        self.tool._abilities = {'slicer'}
+        self.target._abilities = {'diceable'}
+        self.target.category = 'half_onion'
+        self.target.states[self.Cooked] = types.SimpleNamespace(get_value=lambda: True)
+        self.scene.objects = [self.target]
+        self.generated = False
+        self.scene.transition_rule_api = types.SimpleNamespace(active_rules=[DicingRule()],
+            execute_transition=lambda **kw: self.scene.objects.remove(self.target))
+        system = self.asset_root/'systems/cooked__diced__onion'
+        with self.modules, patch.dict(sys.modules, {'omnigibson.transition_rules': transitions}):
+            with self.assertRaises(SkillError) as missing_system:
+                self.backend._checked_cut(self.target, 6)
+            self.assertFalse(missing_system.exception.changed)
+            self.assertFalse(self.generated)
+            self.assertIn(self.target, self.scene.objects)
+            system.mkdir(parents=True)
+            (system/'metadata.json').write_text(json.dumps({'type':'granular'}))
+            (system/'part/usd').mkdir(parents=True)
+            with self.assertRaises(SkillError) as failure:
+                self.backend._checked_cut(self.target, 6)
+            self.assertFalse(failure.exception.changed)
+            self.assertFalse(self.generated)
+            self.assertIn(self.target, self.scene.objects)
+            (system/'part/usd/part.encrypted.usd').write_bytes(b'fixture')
+            result = self.backend._checked_cut(self.target, 6)
+        self.assertTrue(self.generated)
+        self.assertEqual(result['transition'], 'DicingRule')
         self.assertNotIn(self.target, self.scene.objects)
 
 
