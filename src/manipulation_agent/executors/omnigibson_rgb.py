@@ -594,8 +594,16 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             actual_pos,actual_quat=self.robot.get_position_orientation()
             final_error=math.dist(actual_pos[:2].cpu().tolist(),plan.goal)
             if final_error>follower.position_tolerance or not grid.navigable(grid.cell(actual_pos[:2].cpu().tolist())):
+                with (self.output/'navigation_failures.jsonl').open('a') as stream:
+                    stream.write(json.dumps({'at':now(),'audience':'executor_private',
+                        'reason':'final_pose_verification','goal':plan.goal,
+                        'actual_xy':actual_pos[:2].cpu().tolist(),'final_error_m':final_error})+'\n')
                 raise SkillError('navigation_unreachable','GT follower final pose verification failed',changed=self.steps>before)
         except NavigationError as exc:
+            with (self.output/'navigation_failures.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at':now(),'audience':'executor_private',
+                    'reason':str(exc),'code':exc.code,'goal':plan.goal,
+                    'actual_xy':self.robot.get_position_orientation()[0][:2].cpu().tolist()})+'\n')
             raise SkillError(exc.code,str(exc),changed=self.steps>before) from exc
         finally:
             self._base_target=None

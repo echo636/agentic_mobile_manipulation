@@ -600,3 +600,12 @@ Trash r14 exited after one grasp because the external model provider rejected
 a continuation with a missing linked reasoning item. Its controller and audit
 failed; this is an infrastructure failure, not a successful or failed task
 execution. A new Astra-low episode must be run.
+
+Plates-and-food r14 likewise ended in a provider continuation error (`No tool
+output found for function call`) after a successful placement; its official
+whole-task check and audit failed. It needs a fresh autonomous episode. In
+can-meat r14, several planned navigation candidates were reachable in the
+static grid but the executor returned `navigation_unreachable` during path
+execution. Future trials now record the private follower failure reason and
+actual final XY in `navigation_failures.jsonl`, so a targeted motor repair can
+be based on the precise failure rather than the sanitized model-facing error.
