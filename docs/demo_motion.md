@@ -1215,3 +1215,9 @@ or a gap above 0.18 m never triggers the correction. The CPU regression covers
 the 0.0723 m failure and wrong-surface exclusions. A real-simulator component
 probe and then another autonomous trial are required before claiming the task
 works with this change.
+The first natural component probe on the initial Christmas scene passed
+placement with a 0.0132 m gap and therefore did not exercise the correction;
+its validation file is marked failed for that narrower test. A second probe
+will inject a documented sampler-height offset on the same real selected
+table surface to reproduce the archived 0.0723 m clearance branch. This
+fault injection is executor evidence only.

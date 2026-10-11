@@ -127,3 +127,7 @@ alignment and video structure passed. A guarded pre-settle seating correction
 has been added for the exact selected support. The next validation is a short
 real-simulator component probe using the archived model-selected world point,
 followed by one autonomous task trial. This does not retroactively pass r32.
+The first natural component probe used the initial scene's upright candle and
+found only a 1.32 cm gap, so it did not trigger the repair. The probe records
+this as an unexercised correction and will be repeated with an explicit
+sampler-height fault injection matching r32's measured gap.

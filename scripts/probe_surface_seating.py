@@ -19,10 +19,14 @@ def main():
     parser.add_argument('--held', required=True)
     parser.add_argument('--target', required=True)
     parser.add_argument('--point', nargs=3, required=True, type=float)
+    parser.add_argument('--inject-sampler-clearance-m', type=float, default=0.0,
+                        help='Diagnostic fault injection: raise the returned sampled pose')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--instance', type=int, default=301)
     parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
+    if not 0 <= args.inject_sampler_clearance_m <= .15:
+        parser.error('Injected sampler clearance must be in [0, 0.15] m')
     recorder = Recorder(args.output, {'task': args.task, 'instance': args.instance,
         'seed': args.seed, 'policy': 'scripted_private_surface_seating_probe',
         'model_used': False, 'task_success_assessed': False,
@@ -41,6 +45,14 @@ def main():
             raise AssertionError('Archived probe object was not found')
         point = backend.torch.tensor(args.point, device=held.get_position_orientation()[0].device)
         backend._ideal_grasp(held, 50)
+        if args.inject_sampler_clearance_m:
+            original_sample = backend._surface_pose
+            def elevated_sample(*sample_args, **sample_kwargs):
+                sampled_position, sampled_orientation = original_sample(*sample_args, **sample_kwargs)
+                raised = sampled_position.clone()
+                raised[2] += args.inject_sampler_clearance_m
+                return raised, sampled_orientation
+            backend._surface_pose = elevated_sample
         placement = backend._checked_place_on_top(target, 150, point)
         supported, detail = backend._selected_surface_support(
             held, target, point, False)
@@ -49,12 +61,13 @@ def main():
         diagnostics = [json.loads(line) for line in
                        (args.output / 'placement_diagnostics.jsonl').read_text().splitlines()]
         corrections = [row for row in diagnostics if row['status'] == 'preseat_adjusted']
-        if not corrections:
+        if args.inject_sampler_clearance_m and not corrections:
             raise AssertionError('Sampler-clearance correction was not exercised')
         result = {'status': 'passed', 'model_used': False, 'task_success_assessed': False,
+                  'injected_sampler_clearance_m': args.inject_sampler_clearance_m,
                   'selected_world_point_from_archived_model_pixel': args.point,
-                  'initial_bottom_gap_m': corrections[-1]['initial_bottom_gap_m'],
-                  'lowered_m': corrections[-1]['lowered_m'],
+                  'initial_bottom_gap_m': corrections[-1]['initial_bottom_gap_m'] if corrections else None,
+                  'lowered_m': corrections[-1]['lowered_m'] if corrections else 0.0,
                   'final_bottom_gap_m': detail['bottom_gap_m'],
                   'official_on_top': bool(held.states[OnTop].get_value(target)),
                   'placement': placement, 'sim_steps': backend.steps}
