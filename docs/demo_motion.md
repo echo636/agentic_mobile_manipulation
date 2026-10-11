@@ -1191,3 +1191,27 @@ cover both rejected and confirmed routes. The next autonomous Christmas run
 must show whether the model responds by finding an exposed decoration and
 whether official task success improves. A rejected mistaken grasp alone is
 not task success.
+
+Christmas r32 used the bulk-grasp guard. The model selected `candy_cane_224`
+directly and placed it on `sofa_lugrhk_0`. It then grasped
+`pillar_candle_223` and selected the white dining table
+`breakfast_table_rhjoby_0`, but two `place_on_top` attempts failed their
+postcondition and the model finished `blocked`. The first placement's recorded
+support ray hit the correct table with an upward normal at the selected shelf
+height; the candle bottom was nevertheless 0.0723 m above it. The cuboid
+sampler had left clearance and the placement loop pinned its sampled pose for
+50 physics steps, so gravity could not close the gap. The second retry
+sampled still higher and its short support ray could not reach the table.
+The official whole-task evaluator failed; call alignment and five-view video
+passed, with 12 visible motion segments. This is a new motor failure after a
+correct model-selected target, not a reason to keep asking the model for random
+table pixels.
+
+The selected-surface motor now probes up to 0.22 m below the sampled item
+before the settling loop. If the first surface is the exact model-selected
+support, upward-facing and at the selected shelf height, it lowers the item
+to a 3 mm clearance before the pose hold begins. A different object, shelf,
+or a gap above 0.18 m never triggers the correction. The CPU regression covers
+the 0.0723 m failure and wrong-surface exclusions. A real-simulator component
+probe and then another autonomous trial are required before claiming the task
+works with this change.

@@ -17,6 +17,18 @@ def rotated_footprint_extents(extents, yaw_degrees):
     return rotated
 
 
+def surface_seating_delta(support):
+    """Remove sampler clearance only above the model-selected support patch."""
+    gap = support.get('bottom_gap_m')
+    checks = support.get('checks', {})
+    if (gap is None or not math.isfinite(gap) or not .025 < gap <= .18 or
+            not all(checks.get(key, False) for key in (
+                'support_ray_hits_selected_object', 'upward_support',
+                'selected_shelf_height', 'selected_surface_neighborhood'))):
+        return 0.0
+    return gap - .003
+
+
 @contextmanager
 def placement_transaction(sim, record):
     """Restore the pre-action state, including the grasp, on a failed placement."""
@@ -319,6 +331,27 @@ class CheckedPlacement:
             held.set_position_orientation(*pose)
             self._relocate_contents(held,contents)
             held.keep_still()
+            if point is not None:
+                # The upstream cuboid sampler may leave a small item several
+                # centimetres above a rigid tabletop. The selected-pose hold
+                # below prevents gravity from closing that gap. Probe downward
+                # before recording any settling frames and seat only when the
+                # ray actually hits the model-selected support at its level.
+                _, initial_support = self._selected_surface_support(
+                    held, target, point, False, [obj for obj, _ in contents],
+                    probe_below=.22)
+                adjustment = surface_seating_delta(initial_support)
+                if adjustment:
+                    seated = pose[0].clone()
+                    seated[2] -= adjustment
+                    pose = (seated, pose[1])
+                    held.set_position_orientation(*pose)
+                    self._relocate_contents(held,contents)
+                    held.keep_still()
+                    self._placement_record({'status':'preseat_adjusted',
+                        'target':target.name,'held':held.name,
+                        'initial_bottom_gap_m':initial_support['bottom_gap_m'],
+                        'lowered_m':adjustment})
             for _ in range(min(50,max_steps)):
                 if point is not None:
                     # Broad upholstered surfaces can eject a shallow object
@@ -381,7 +414,7 @@ class CheckedPlacement:
                 self._stabilized_containers[held]=tuple(v.clone() for v in held.get_position_orientation())
         return 'selected_surface_geometric_support_after_settling' if point is not None else 'official_OnTop'
 
-    def _selected_surface_support(self, held, target, point, touching, payload=()):
+    def _selected_surface_support(self, held, target, point, touching, payload=(), *, probe_below=.08):
         """An actual lower shelf can support an object while official OnTop is false.
 
         This motor check is independent of task goals. It never writes predicates
@@ -391,7 +424,7 @@ class CheckedPlacement:
         if point is None:
             return False, {'available':False,'reason':'No selected surface point'}
         lo,hi=held.aabb;center=(lo+hi)/2
-        end=center.clone();end[2]=lo[2]-.08
+        end=center.clone();end[2]=lo[2]-probe_below
         # A shallow plate's AABB center can lie inside its food's collision
         # proxy. The ray checks the support UNDER the entire carried assembly;
         # internal payload contact must not hide the actual supporting surface.

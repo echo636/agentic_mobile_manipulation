@@ -116,3 +116,14 @@ feedback to reselect visible individual decorations. A can-meat r30 video
 inspection also found 59 spectator-camera position jumps over 1 m within
 single actions; its task and structural video pass do not imply that its
 presentation gate has passed.
+
+Christmas r32 selected and placed one individual candy cane correctly, then
+hit a repeatable motor failure while placing a candle on the selected dining
+table. Its first postcondition trace showed a 7.23 cm bottom gap over the
+correct table despite 50 settling steps; the pose-hold loop kept the sampled
+clearance from closing. The model tried another table pixel and eventually
+finished `blocked`. The official evaluator failed; formal finish, call
+alignment and video structure passed. A guarded pre-settle seating correction
+has been added for the exact selected support. The next validation is a short
+real-simulator component probe using the archived model-selected world point,
+followed by one autonomous task trial. This does not retroactively pass r32.
