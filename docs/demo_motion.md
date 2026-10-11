@@ -1096,3 +1096,8 @@ The navigation filter now accepts a first ray hit on any part of the same
 selected object; a hit on a wall or other object still fails visibility.
 This changes only the private motor check for a model-selected RGB target and
 needs a fresh real-simulator gift-placement trial.
+R27 ended `blocked` after repeated `navigation_unreachable` errors for
+`place_next_to`/`place_under` on the tree. Its independent audit passed formal
+finish, model/simulator call alignment and video with 13 visible motion
+segments, but failed official whole-task success and empty-hand checks. The
+tree-visibility fix was committed after this episode's source snapshot.
