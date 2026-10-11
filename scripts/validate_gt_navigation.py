@@ -1,4 +1,4 @@
-"""Offline reference-policy parity and archived navigation regression checks."""
+"""Reference candidate geometry, intentional ranking changes and archived checks."""
 import argparse
 import ast
 from collections import Counter
@@ -43,6 +43,7 @@ def reference_parity(reference):
             error=math.dist(a,(float(point[0]),float(point[2])));max_error=max(max_error,error)
             assert error<3e-6
             checked+=1
+    score_cases=[]
     for distance in (.1,.44,.45,1.,10.):
         point=np.array([1.,0.,2.],dtype=np.float32);hint=np.array([1.6,1.,2.],dtype=np.float32)
         snapped=point+np.array([.03,0.,.02],dtype=np.float32)
@@ -51,9 +52,13 @@ def reference_parity(reference):
         expected=namespace['_validate_candidate'](point=point,hint=hint,current_position=np.zeros(3,dtype=np.float32),pathfinder=pf,horizon_m=10000.,standoff_m=.7)
         target_dist=namespace['_horizontal_distance'](snapped,hint)
         snap_dist=namespace['_horizontal_distance'](point,snapped)
-        assert candidate_score(target_dist,snap_dist,distance)==expected['score']
+        score_cases.append({'path_m':distance,'reference_score':expected['score'],
+                            'current_score':candidate_score(target_dist,snap_dist,distance)})
+    assert candidate_score(.913,.02,3.932)<candidate_score(.737,.139,16.372)
     return {'status':'passed','candidate_coordinates_checked':checked,'max_coordinate_difference_m':max_error,
-            'score_cases':5,'reference_sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
+            'score_cases':score_cases,'ranking_parity':False,
+            'ranking_change':'Path length contributes directly; no penalty for an already valid approach.',
+            'reference_sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
 def unproject(folder,target):

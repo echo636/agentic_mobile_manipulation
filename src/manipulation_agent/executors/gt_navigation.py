@@ -128,9 +128,13 @@ def candidate_points(hint, current, standoff=.7):
     return points
 
 
-def candidate_score(target_distance, snap_distance, geodesic, standoff=.7, goal_radius=.3):
-    """Same point-mode ranking as jinkai: standoff, snapping, no-progress penalty."""
-    return round(2*abs(target_distance-standoff)+snap_distance+(1 if geodesic<goal_radius+.15 else 0),4)
+def candidate_score(target_distance, snap_distance, geodesic, standoff=.7):
+    """Balance approach distance with actual travel, not Euclidean proximity alone.
+
+    A slightly better standoff must not buy a long trip around a wall. Already
+    standing at a valid visible approach is also a valid navigation outcome.
+    """
+    return round(geodesic+2*abs(target_distance-standoff)+snap_distance,4)
 
 
 def visual_approach_settings(camera_height, base_z, target_z, *, pitch_degrees=20,

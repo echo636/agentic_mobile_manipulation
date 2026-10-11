@@ -184,9 +184,12 @@ class GTNavigationTests(unittest.TestCase):
         self.assertGreater(plan.geodesic_m,math.dist(plan.points[0],plan.goal))
         self.assertTrue(all(g.segment_free(a,b) for a,b in zip(plan.points,plan.points[1:])))
 
-    def test_ranking_penalizes_no_progress_like_reference_policy(self):
-        self.assertGreater(candidate_score(.7,0.,.1),candidate_score(.7,0.,1.))
+    def test_ranking_accepts_valid_nearby_approach_and_penalizes_detours(self):
+        self.assertLess(candidate_score(.7,0.,.1),candidate_score(.7,0.,1.))
         self.assertLess(candidate_score(.7,.05,1.),candidate_score(1.2,0.,1.))
+        # Archived task003: the outside point was closer to the desired 0.7 m
+        # standoff but required a 16 m trip instead of a 4 m indoor route.
+        self.assertLess(candidate_score(.913,.02,3.932),candidate_score(.737,.139,16.372))
 
     def test_search_and_projection_budgets_are_enforced(self):
         g=grid()

@@ -559,21 +559,22 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                  'selected_world_point':point.cpu().tolist(),
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
+                 'approach_visibility_required':mode=='approach',
+                 'candidate_ranking':'path_length_plus_standoff_and_projection',
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  **map_details,'precomputed_walkability':True,'online_mapping':False}
         try:
             with component(self,'navigation_planning'):
-                # Ground goals do not need to remain visible under the head
-                # camera after arrival. Elevated clicks approach the point;
-                # only actual manipulation needs an unobstructed reach ray.
+                # Ground goals may end below the camera. Elevated targets must
+                # remain visible from the approach, including explicit navigation:
+                # a reachable cell across a wall is not a valid approach.
                 planning_xy=position[:2].cpu().tolist()
                 def make_plan(candidate_grid,yaw):
                     return replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
                         standoff=standoff,goal_mode=mode,check_cancelled=self.deadline.check,
-                        candidate_filter=(lambda xy:math.dist(xy,point[:2].cpu().tolist())<=1.4 and (
-                            not for_manipulation or self._approach_visible(
+                        candidate_filter=(lambda xy:self._approach_visible(
                                 xy,point,getattr(target,'selected_object',None),
-                                margin=0.,max_distance=1.4,base_yaw=yaw))) if mode=='approach' else None),
+                                margin=0.,max_distance=1.4,base_yaw=yaw)) if mode=='approach' else None),
                         travel_yaw=yaw,final_yaw=yaw)
                 turn=None;stage=None
                 try:
@@ -635,6 +636,21 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         phases=[phase for phase in (recovery_result,stage_result,turn_result) if phase is not None]
         for key in ('steps','motion_steps','actual_path_distance_m'):
             result[key]+=sum(phase.get(key,0) for phase in phases)
+        actual,orientation=self.robot.get_position_orientation()
+        rotation=T.quat2mat(orientation)
+        actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        visible=(self._approach_visible(actual[:2].cpu().tolist(),point,
+                    getattr(target,'selected_object',None),margin=0.,max_distance=1.4,
+                    base_yaw=actual_yaw) if mode=='approach' else None)
+        with (self.output/'navigation_arrivals.jsonl').open('a') as stream:
+            stream.write(json.dumps({'at':now(),'audience':'executor_private',
+                'grid_artifact':details['grid_artifact'],'goal_mode':mode,
+                'selected_world_point':point.cpu().tolist(),'planned_goal':list(plan.goal),
+                'actual_position':actual.cpu().tolist(),'target_visible':visible,
+                'status':'failed' if visible is False else 'reached'})+'\n')
+        if visible is False:
+            raise SkillError('navigation_unreachable',
+                'The selected target is occluded from the reached approach; inspect updated RGB',changed=True)
         return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
                 'start_grid_offset_m':plan.start_grid_offset_m,
@@ -935,17 +951,16 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
-            'geometry':'OmniGibson static eroded traversability grid',
-            'map_input':'precomputed scene floor traversability; selected-pixel depth supplies the target only',
+            'geometry':'GT floor support and live height-matched collision hulls',
+            'map_input':'GT floor support plus current PhysX overlaps; selected-pixel depth supplies the target',
             'localization':'private simulator pose',
             'precomputed_walkability':True,'static_map_loader_disabled':False,'online_mapping':False,
-            'habitat_native_navmesh':False,'dynamic_collision_check':False,
-            'erosion':{'implementation':'pinned OmniGibson _erode_trav_map without robot argument',
-                'configured_default_erosion_radius':0.57,'map_resolution_m':0.05,
-                'kernel':'12x12 square at configured resolution; parameter is not a disk radius'},
+            'habitat_native_navmesh':False,'dynamic_collision_check':True,
+            'erosion':{'implementation':'height-matched robot collision footprint',
+                'map_resolution_m':0.05},
             'segment_validation':'exact_grid_supercover_for_planner_and_follower',
-            'approach_visibility':'actual_four_camera_frusta_and_collision_rays',
-            'goal_selection':'jinkai visual-point candidate sampling and ranking',
+            'approach_visibility':'four-camera frusta and scene rays for all elevated goals, rechecked on arrival',
+            'goal_selection':'jinkai candidate geometry with path-length-aware approach ranking',
             'pixel_grounding':'same RGB pixel depth and visual mesh triangle ray; no neighboring-pixel substitution',
             'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
