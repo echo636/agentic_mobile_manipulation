@@ -1141,3 +1141,11 @@ events and `fresh_thread_restarts` metadata remain available for independent
 review. Provider-history protocol errors use the same fresh-thread mechanism
 with their existing two-restart limit. This requires validation in a later
 autonomous trial.
+
+Christmas r29 successfully placed one individually grasped candy cane on
+`sofa_lugrhk_0` after recovering from an unsupported first cushion point.
+The model returned to the basket, then its next grasp reported
+`navigation_unreachable` and it finished `blocked`. The independent audit
+passed formal finish, call alignment, video and empty hand with ten visible
+motion segments, but failed official whole-task success. No gift placement
+was attempted, so this run does not validate the new tree-visibility motor.
