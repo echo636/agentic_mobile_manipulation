@@ -1149,3 +1149,20 @@ The model returned to the basket, then its next grasp reported
 passed formal finish, call alignment, video and empty hand with ten visible
 motion segments, but failed official whole-task success. No gift placement
 was attempted, so this run does not validate the new tree-visibility motor.
+
+Can-meat r30 used the payload-settling repair and passed the full official
+goal and independent demo audit with 68 visible motion segments. It is the
+first autonomous `gpt-6-astra`/`low` can-meat success, not evidence of a high
+per-run success rate. Its roughly 75-minute wall run produced a roughly
+311-second five-view video; action failures and presentation quality still
+need review. Christmas r30 did not pass: the first grasp selected the loaded
+wicker basket, and a later release scattered its contents. The model completed
+only the wreath and one candy cane, then incorrectly claimed insufficient
+execution time after about 19 of 120 available minutes. A short CPU regression
+now proves release preserves a captured basket payload during settling; the
+demo finish handler also rejects an explicit false time-limit claim and exposes
+the remaining time in managed tool replies. A privileged real-simulator probe
+of the same basket verified all six contents remained Inside after release;
+it is executor evidence, not a model trial. These changes have not yet been
+validated by a post-fix autonomous Christmas run. The per-task reliability and
+presentation gates are specified in [demo_reliability.md](demo_reliability.md).

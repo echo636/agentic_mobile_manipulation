@@ -3,16 +3,38 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import Mock, patch
 
 from manipulation_agent import bridge
+from manipulation_agent.contracts import SkillError
+from manipulation_agent.deadline import EpisodeDeadline
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
 from manipulation_agent.vision_harness import VisionHarness
 
 
 class FinishResponseTests(unittest.TestCase):
+    def test_demo_rejects_false_time_exhaustion_without_cancelling_episode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)/'episode'
+            recorder=Recorder(output,{'backend':'mock','observation_mode':'rgb_only'})
+            backend=MockRGBBackend(output)
+            backend.demo_motion=True
+            backend.deadline=EpisodeDeadline(time.time()+3600)
+            harness=VisionHarness(backend,recorder,profile='minimal')
+            arguments={'outcome':'blocked','reason':'Could not complete within the available execution window.'}
+            first=harness.call('initialize',{},'initialize')
+            self.assertGreater(first['time_remaining_seconds'],3500)
+
+            harness.request_finish(arguments,'finish-early')
+            self.assertFalse(harness.deadline.stop_requested)
+            with self.assertRaises(SkillError) as rejected:
+                harness.finish(**arguments)
+            self.assertEqual(rejected.exception.code,'time_budget_available')
+            self.assertFalse(harness.closed)
+
     def test_http_finish_persists_score_and_returns_before_offline_render(self):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'episode'

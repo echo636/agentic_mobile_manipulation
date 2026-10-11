@@ -326,9 +326,16 @@ class ControlledCarry:
 
     def _ideal_release(self,max_steps):
         if self._ideal_held is None:raise SkillError('empty_hand','No carried object')
-        self._carry_record(status='released',object=self._ideal_held.name)
+        held=self._ideal_held
+        contents=list(self._carry_contents)
+        dependencies=list(self._carry_dependencies)
+        self._carry_record(status='released',object=held.name)
         self._carry_detach()
         if getattr(self,'demo_motion',False):self._demo_arm=None
         with self._anchored_operation():
-            for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-        return {'primitive':'release','implementation':'controlled_carry_detach_and_settle','physical_grasp':False}
+            for _ in range(min(30,max_steps)):
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                if contents:self._relocate_contents(held,contents)
+        if dependencies:self._verify_payload(dependencies)
+        return {'primitive':'release','implementation':'controlled_carry_detach_and_settle',
+                'physical_grasp':False,'preserved_carried_objects':len(contents)}

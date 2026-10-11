@@ -159,6 +159,35 @@ class ContainerStabilityTests(unittest.TestCase):
 
 
 class NestedStabilizationTests(unittest.TestCase):
+    def test_release_keeps_captured_contents_with_falling_container(self):
+        """An accidental basket grasp must not scatter its contents on release."""
+        basket=types.SimpleNamespace(name='basket',position=0.)
+        child=types.SimpleNamespace(name='candy_cane',position=.2)
+        backend=ControlledCarry()
+        backend.ideal_carry=True
+        backend.demo_motion=False
+        backend._ideal_held=basket
+        backend._carry_relative=None
+        backend._carry_orientation=None
+        backend._carry_contents=[(child,.2)]
+        backend._carry_dependencies=[(child,basket,'Inside')]
+        backend._carry_record=lambda **kwargs:None
+        backend._anchored_operation=lambda:nullcontext()
+        backend.robot=types.SimpleNamespace(get_joint_positions=lambda:0,
+            q_to_action=lambda joints:joints)
+        backend._step=lambda action:(setattr(basket,'position',basket.position-1),
+            setattr(child,'position',child.position+5))
+        backend._relocate_contents=lambda parent,contents:[
+            setattr(item,'position',parent.position+offset) for item,offset in contents]
+        backend._verify_payload=lambda dependencies:self.assertAlmostEqual(
+            child.position,basket.position+.2)
+
+        result=backend._ideal_release(3)
+
+        self.assertEqual(result['primitive'],'release')
+        self.assertIsNone(backend._ideal_held)
+        self.assertAlmostEqual(child.position,basket.position+.2)
+
     def test_grasp_and_release_nested_container_does_not_restore_old_contents(self):
         import numpy as np
         from manipulation_agent.executors.omnigibson_rgb import RGBBackend

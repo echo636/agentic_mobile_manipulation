@@ -14,6 +14,11 @@ from .tools import REGISTRY, tool_specs
 from .tool_context import ToolContext
 from .surround import SurroundJobs
 
+TIME_EXHAUSTION_CLAIMS = ('execution window', 'time window', 'time budget',
+                          'time limit', 'deadline', 'out of time',
+                          'running out of time', 'available time',
+                          '时间不够', '时间不足', '时限', '时间窗口')
+
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills'):
         self.backend,self.recorder,self.budget=backend,recorder,budget
@@ -68,6 +73,13 @@ class VisionHarness:
 
     def image_bytes(self, image_ref): return self.backend.image_bytes(image_ref)
 
+    def _false_time_exhaustion_claim(self, outcome, reason):
+        """Reject only a concrete false clock claim, without using goal state."""
+        remaining=self.deadline.remaining()
+        return (getattr(self.backend,'demo_motion',False) and outcome=='blocked'
+                and remaining is not None and remaining>600
+                and any(term in reason.casefold() for term in TIME_EXHAUSTION_CLAIMS))
+
     def request_finish(self, arguments, request_id):
         """Accept closure intent from HTTP without touching the simulator."""
         if self.closed or not isinstance(request_id,str) or not 0<len(request_id)<=200:
@@ -85,6 +97,8 @@ class VisionHarness:
         if (arguments['outcome']=='achieved' and
                 getattr(self.backend,'ideal_carry',False) and
                 getattr(self.backend,'_ideal_held',None) is not None):
+            return
+        if self._false_time_exhaustion_claim(arguments['outcome'],arguments['reason']):
             return
         self.deadline.request_stop()
 
@@ -126,6 +140,8 @@ class VisionHarness:
         except SkillError as exc:
             result={'ok':False,'error':{'code':exc.code,'message':str(exc)}}
             result['observation']=self.snapshot
+        if self.deadline.managed and self.deadline.unix is not None:
+            result['time_remaining_seconds']=round(self.deadline.remaining(),1)
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result})
         result['evidence_id']=event_id
         self.evidence[event_id]={'name':'act' if name in {'act','look'} else name,'ok':result['ok'],'revision':self.revision}
@@ -169,6 +185,11 @@ class VisionHarness:
     def remember(self,key,text,revision): return LegacyPlanHelpers._tool_remember(self,key,text,revision)
     def recall(self): return LegacyPlanHelpers._tool_recall(self)
     def finish(self,outcome,reason):
+        if self._false_time_exhaustion_claim(outcome,reason):
+            raise SkillError('time_budget_available',
+                             f'About {int(self.deadline.remaining())} seconds remain. '
+                             'Inspect the current RGB and try a materially different recovery, '
+                             'or name the actual technical blocker without claiming time ran out.')
         if (outcome=='achieved' and getattr(self.backend,'ideal_carry',False) and
                 getattr(self.backend,'_ideal_held',None) is not None):
             raise SkillError('hand_occupied','Place or release the carried object before reporting achieved')
