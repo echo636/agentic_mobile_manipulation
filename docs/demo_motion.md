@@ -1029,3 +1029,10 @@ the still-available clear-floor `release` recovery. The skill now directs
 that recovery explicitly. The independent audit passed model/simulator call
 alignment and video with 17 visible motion segments, but failed official task
 success and the empty-hand finish check.
+
+Christmas r25's 1024×1024 front view made the striped candy cane visible, but
+the first model-selected basket-interior pixel still resolved to the wicker
+basket. Resolution alone did not resolve the selection ambiguity. The skill
+now suggests removing a clearly separated white-and-red cane first when the
+wreath is visually mixed with the basket, then reexamining the newly exposed
+contents. The whole r25 attempt remains under audit until it ends.
