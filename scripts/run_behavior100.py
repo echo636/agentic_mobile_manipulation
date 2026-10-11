@@ -797,8 +797,11 @@ class Batch:
         log=self.ssh(['journalctl','--user','-u',row['simulator_unit'],'--no-pager','-o','short-iso'],timeout=60)
         (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
         # rsync needs the SSH command without the final host argument.
-        cmd=['rsync','-a','-e',shlex.join(self.c['ssh'][:-1]),self.c['ssh'][-1]+':'+str(remote_run)+'/',str(dest)+'/']
-        p=subprocess.run(cmd,capture_output=True,text=True,timeout=180)
+        # Full episodes can contain many camera frames. Bound stalled I/O, not
+        # total copy time: a healthy transfer must not lose its replay at 180s.
+        # Partial files make a later archival recovery resume the original data.
+        cmd=['rsync','-a','--partial','--timeout=180','-e',shlex.join(self.c['ssh'][:-1]),self.c['ssh'][-1]+':'+str(remote_run)+'/',str(dest)+'/']
+        p=subprocess.run(cmd,capture_output=True,text=True)
         (self.root/'logs'/f"{row['run_id']}_archive.log").write_text(p.stdout+p.stderr)
         if p.returncode:raise RuntimeError('Episode rsync failed; remote raw output retained')
         simlog=self.root/'logs'/f"{row['run_id']}_simulator.log"
