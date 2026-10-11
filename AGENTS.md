@@ -11,6 +11,7 @@ Never label a mock, scripted policy, oracle-state experiment, or symbolic execut
 
 For new atomic-action model experiments, reviews, and result publication, follow [the experiment requirements](docs/atomic_action_experiment_requirements.md).
 For visible first-ten demonstrations, follow the two independent task/presentation gates and failure-driven probe-to-model iteration in [the demo reliability record](docs/demo_reliability.md). A private motor probe never counts as autonomous task success.
+The evaluator's `goal_options` are alternative object bindings, not a time series: use the best binding or `goal_satisfaction_fraction`, never the last row. A transient `OnTop=false` inside an action is not grounds to abort a run until the final post-action relation has been checked; hand retreat can restore contact.
 
 Keep operational steps, faults and fixes in journals and structured records; do not create an HTML report for every operation. The existing retest32_v7 replay URL shows only the historical 32 tasks; use a separate summary page for current comparisons. Preserve bookmarked replay links, distinguish cohorts, and publish compact display data rather than full evaluator payloads.
 

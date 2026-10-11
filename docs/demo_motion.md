@@ -1351,3 +1351,16 @@ now admits this 0.19 m-high container. The green replay planned around it,
 reached the same target, and held the basket within 0.0000072 m maximum
 translation and 0° rotation. This validates only the repaired navigation
 component; the r37 autonomous task and presentation gates are separate.
+
+Christmas r37 confirmed that the model could return past the low basket,
+grasp a candle, and put it on the dining table after placing a candy cane
+there. The supervisor mistakenly ended the episode early because the cane's
+immediate post-seat `OnTop` was false. A same-point private probe showed that
+the contact becomes true during arm retreat, and the independent r37 audit
+found 2/9 goals in its best object binding: the table cane and one candle.
+The last row of `goal_options` is merely one alternative binding and must
+not be read as the total score. No full-task success or presentation approval
+exists for r37. Its structural five-view review is
+`http://10.130.140.115:8769/demo_motion_first10_20261009/10_putting_up_Christmas_decorations_inside_r37/review_5view.html`.
+R38 must continue the autonomous sequence rather than retesting an
+unsupported placement-failure hypothesis.

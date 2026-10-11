@@ -309,3 +309,24 @@ displacement 0.0000072 m, and 0° rotation. The red and green records are under
 `experiments/demo_basket_nav_collision_probe_20261011_{red2,green}` outside
 Git. They establish this route's motor safety; r37 must still verify model
 choices, whole-task success, and presentation quality.
+
+Christmas r37 tested the low-basket obstacle repair in another autonomous
+`gpt-6-astra`/`low` run. The model selected an individual candy cane, placed
+it on the dining table, returned along a route that included the basket in
+the dynamic obstacle overlay, then placed an individual pillar candle on the
+same table. A supervisor stopped the run prematurely after seeing
+`official_on_top=false` at the candy cane's immediate post-seat check. A
+private probe of the same model-selected table point showed this can be
+transient: `OnTop` became true six retreat steps later and stayed true after
+ten additional physics steps. The independent evaluator at r37's early finish
+reported **2/9** in its best goal binding, including the table candy cane and
+one candle. The initial report of 1/9 was an analysis error: `goal_options`
+contains 3888 *alternative bindings*, not a timeline, and its last row is
+not the score. The run remains a failed, supervisor-aborted whole-task demo;
+its five-view video passes structure only:
+`http://10.130.140.115:8769/demo_motion_first10_20261009/10_putting_up_Christmas_decorations_inside_r37/review_5view.html`.
+Do not stop future runs on an intermediate contact check alone. Read the
+post-action relation and use the best binding when evaluating partial goals.
+The unfinished diagnostic depth scan was stopped because the corrected audit
+did not support that failure hypothesis. r38 resumes the unmodified motor
+implementation with model-selected actions.
