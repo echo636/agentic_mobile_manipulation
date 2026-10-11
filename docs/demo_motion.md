@@ -1035,4 +1035,8 @@ the first model-selected basket-interior pixel still resolved to the wicker
 basket. Resolution alone did not resolve the selection ambiguity. The skill
 now suggests removing a clearly separated white-and-red cane first when the
 wreath is visually mixed with the basket, then reexamining the newly exposed
-contents. The whole r25 attempt remains under audit until it ends.
+contents. R25 finished `blocked` after basket staging failed twice, a release
+scattered contents, and two further pixels hit fixed surfaces. Its independent
+audit passed the formal model finish, call alignment, video, and empty-hand
+checks, but official whole-task success failed; five visible motion segments
+were recorded. R26 is the first Christmas attempt with the cane-first skill.
