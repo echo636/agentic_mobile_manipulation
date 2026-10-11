@@ -19,7 +19,11 @@ each `act` / `look` supplies the next one.
    the point. Do not add a camera standoff or require the floor pixel to remain
    visible at arrival. For an elevated object/surface, sample approach positions
    using the reference's 0.3 / 0.6 / 0.9 / 1.2 m rings and 0.7 m preference.
-   An implicit manipulation approach still checks actual reach and visibility.
+   Every elevated approach, including explicit `navigate_to`, must see the
+   selected target through a camera frustum and an unobstructed scene ray.
+   Candidates are ranked by path length + twice the standoff deviation +
+   projection distance. A small standoff improvement cannot justify a long
+   detour, and an already valid approach has no artificial no-progress penalty.
 3. Load the GT floor support raster, query current PhysX collision geometry,
    and update dirty regions when object poses or joints change. AABBs bound the
    query region; the actual collision query determines occupied cells. Closed
@@ -35,9 +39,12 @@ each `act` / `look` supplies the next one.
 6. Execute bounded pose increments (at most 0.5 m/s and 60 degrees/s), read back
    the actual pose after each simulator step, and verify arrival. Pruned paths
    reserve a 5 mm corridor against tiny feedback deviations at grid corners.
+   Recheck elevated-target visibility at the actual final pose before reporting
+   success; reaching a goal behind an occluder is a navigation failure.
 
-Candidate geometry and elevated-target scoring originate from Jinkai's visual
-point strategy. OmniGibson supplies its own floor support, current collisions
+Candidate geometry originates from Jinkai's visual point strategy. Scoring now
+adds actual route length and removes the reference's no-progress penalty.
+OmniGibson supplies its own floor support, current collisions
 and ideal pose follower; Habitat's native C++ navmesh/follower is not running
 inside this system. Floor-point goals intentionally use direct-point semantics.
 
@@ -53,8 +60,10 @@ incomplete. A genuinely blocked or disconnected point must
 return a navigation failure rather than cross a closed door. Floor raster and
 cell resolution also limit how closely a selected point can be reached.
 
-`navigation_plans.jsonl`, `navigation_grids/*.npz`, `navigation_recovery.jsonl`
-and `base_motion.jsonl` retain private geometry and actual motion evidence.
+`navigation_plans.jsonl`, `navigation_grids/*.npz`, `navigation_recovery.jsonl`,
+`navigation_arrivals.jsonl` and `base_motion.jsonl` retain private geometry and
+actual motion evidence. Arrivals record the selected target, planned goal,
+actual endpoint and final target visibility.
 `scripts/probe_navigation_regression.py` reproduces archived failed geometries
 in the real simulator and checks closed-door negatives, arrival, four-camera
 capture, scoring and video closure. These are scripted component diagnostics,
@@ -78,13 +87,19 @@ yaw after each simulation step and verifies the final position.
 - CPU tests exercise recorded pose rounding, obstacle corners, disconnected
   regions, bounded snapping/search, doorway routes, command rate limits, stalls
   and divergence. The existing RGB information boundary tests also apply.
-- `scripts/validate_gt_navigation.py` compares candidate coordinates and scoring
-  directly against pure functions extracted from the pinned reference. It can
+- `scripts/validate_gt_navigation.py` compares candidate coordinates against
+  pure functions extracted from the pinned reference and records the intentional
+  scoring differences. It can
   replay archived failed navigation queries using original maps and private
   camera calibration/depth. This is offline execution validation, not task success.
 - `scripts/probe_gt_navigation.py` is an explicitly scripted real-simulator
   regression using archived geometry. It does not run an LLM or count toward
   the benchmark. Its result is separate from the 100-task batch.
+- `scripts/probe_navigation_wall.py` restores the archived task003 base pose,
+  carries the same bowl and reuses the same sink pixel. It checks that the
+  outside-wall goal is rejected and the new arrival has target visibility, four
+  RGB views, scoring and a complete video. This is a component regression, not
+  a full replay of preceding actions or an autonomous task-success measurement.
 
 The checks below describe historical validation of the GT strategy. They do not
 establish real-simulator or task success for the restored current default. New
