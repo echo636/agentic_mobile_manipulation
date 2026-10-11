@@ -131,3 +131,8 @@ The first natural component probe used the initial scene's upright candle and
 found only a 1.32 cm gap, so it did not trigger the repair. The probe records
 this as an unexercised correction and will be repeated with an explicit
 sampler-height fault injection matching r32's measured gap.
+That injected real-simulator probe passed: 8.00 cm initial bottom gap,
+7.70 cm controlled lowering, near-zero final gap and `OnTop` true on the same
+table. It used a private object handle and injected clearance, so its status
+is executor-component validation only. The next autonomous trial remains the
+task-level test.

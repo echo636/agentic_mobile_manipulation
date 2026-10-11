@@ -1221,3 +1221,9 @@ its validation file is marked failed for that narrower test. A second probe
 will inject a documented sampler-height offset on the same real selected
 table surface to reproduce the archived 0.0723 m clearance branch. This
 fault injection is executor evidence only.
+The injected probe passed in the real simulator: a 0.060 m added sample offset
+produced a measured 0.0800 m initial bottom gap over the archived model-selected
+dining-table point. The motor lowered the candle 0.0770 m before settling;
+the final gap was approximately zero and OmniGibson's `OnTop` predicate was
+true. This validates the clearance-correction path as an executor component,
+but it does not validate model choices or the whole Christmas task.
