@@ -45,7 +45,12 @@ class ControlledCarry:
 
     def _restore_object_anchor(self):
         if getattr(self,'_object_anchor',None) is not None:
-            obj,pose=self._object_anchor;obj.set_position_orientation(*pose);obj.keep_still()
+            obj,pose=self._object_anchor
+            if not any(current is obj for current in self.env.scene.objects):
+                self._object_anchor=None
+                self.frames_revision=-1
+                return
+            obj.set_position_orientation(*pose);obj.keep_still()
 
     def _ideal_state_action(self, primitive, obj, max_steps):
         from omnigibson.object_states import Open,ToggledOn
@@ -150,6 +155,11 @@ class ControlledCarry:
 
     def _carry_follow(self):
         if not self.ideal_carry or self._ideal_held is None:return
+        live={id(obj) for obj in self.env.scene.objects}
+        if any(id(obj) not in live for obj in (self._ideal_held,*(c for c,_ in self._carry_contents))):
+            self._carry_detach()
+            self.frames_revision=-1
+            raise SkillError('target_changed','Carried object changed during simulation',changed=True)
         from omnigibson.utils import transform_utils as T
         origin=(self.robot.eef_links[self._demo_arm].get_position_orientation()
                 if getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None)
@@ -171,16 +181,32 @@ class ControlledCarry:
             self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[]
 
     @contextmanager
-    def _placement_context(self,target=None):
+    def _placement_context(self,target=None,*,watch=()):
         from .placement import placement_transaction
         held=getattr(self,'_ideal_held',None);relative=getattr(self,'_carry_relative',None);contents=list(getattr(self,'_carry_contents',[]))
         dependencies=list(getattr(self,'_carry_dependencies',[]))
+        previous=getattr(self,'_placement_watch',())
+        self._placement_watch=tuple(obj for obj in (held,target,*watch,*(c for c,_ in contents)) if obj is not None)
         try:
             with self._anchored_operation(target),placement_transaction(self.og.sim,self._placement_record):yield
-        except Exception:
-            self._ideal_held=held;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
-            if held is not None:self._carry_follow()
+        except Exception as exc:
+            if isinstance(exc,SkillError) and exc.code=='target_changed':
+                self._carry_detach()
+                self.frames_revision=-1
+            else:
+                self._ideal_held=held;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
+                if held is not None:self._carry_follow()
             raise
+        finally:
+            self._placement_watch=previous
+
+    def _check_placement_objects(self):
+        watched=getattr(self,'_placement_watch',())
+        if watched:
+            live={id(obj) for obj in self.env.scene.objects}
+            if any(id(obj) not in live for obj in watched):
+                self.frames_revision=-1
+                raise SkillError('target_changed','Placement object changed during simulation',changed=True)
 
     def _ideal_grasp(self,obj,max_steps):
         from omnigibson.utils import transform_utils as T

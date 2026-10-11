@@ -309,8 +309,23 @@ class Batch:
             self.publish()
 
     def unit_state(self, unit):
-        p=self.ssh(['systemctl','--user','show',unit,'-p','ActiveState','-p','MainPID','-p','ExecMainStatus','-p','Result','-p','Description','-p','MemoryPeak'])
+        try:
+            p=self.ssh(['systemctl','--user','show',unit,'-p','ActiveState','-p','MainPID','-p','ExecMainStatus','-p','Result','-p','Description','-p','MemoryPeak'])
+        except subprocess.TimeoutExpired:
+            return {'query_status':'unavailable','reason':'ssh_timeout'}
+        if p.returncode:
+            return {'query_status':'unavailable','returncode':p.returncode}
         return dict(line.split('=',1) for line in p.stdout.splitlines() if '=' in line)
+
+    def initializing_unit_state(self, unit):
+        """An unavailable SSH query is not evidence that the simulator exited."""
+        state=self.unit_state(unit)
+        if state.get('ActiveState') in {'inactive','failed'} and state.get('MainPID')=='0':
+            raise RuntimeError('Simulator exited before bridge ready: '+str(state))
+        if state.get('ActiveState') not in {'active','activating'} or not state.get('MainPID'):
+            self.journal({'event':'startup_unit_query_unavailable','unit':unit,'query':state})
+            return None
+        return state
 
     def health(self, port):
         p=self.ssh(['curl','--noproxy','*','-fsS','--max-time','3',f'http://127.0.0.1:{port}/healthz'])
@@ -697,9 +712,7 @@ class Batch:
                 if time.time()>=row['startup_deadline_unix']:
                     self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
                     raise TimeoutError('Simulator initialization made no milestone progress before watchdog expiry')
-                state=self.unit_state(unit)
-                if state.get('ActiveState') not in {'active','activating'}:
-                    raise RuntimeError('Simulator exited before bridge ready: '+str(state))
+                state=self.initializing_unit_state(unit)
                 health=self.health(port)
                 if health and health.get('ready') and not health.get('closed'):
                     if {t['name'] for t in health['tools']}!={t['name'] for t in tool_specs(self.manifest['agent_profile'])}:
@@ -915,8 +928,10 @@ class Batch:
                 raise TimeoutError('Original simulator startup exceeded its progress watchdog' if
                     row.get('startup_watchdog_policy')==STARTUP_POLICY else
                     'Original simulator startup exceeded its unchanged deadline')
-            state=self.unit_state(unit)
-            if state.get('ActiveState') not in {'active','activating'}:raise RuntimeError('Original simulator exited during initialization')
+            state=self.initializing_unit_state(unit)
+            if state is None:
+                time.sleep(4)
+                continue
             if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}" or int(state['MainPID'])!=spec['simulator_pid']:
                 raise RuntimeError('Original simulator identity changed during initialization')
             h=self.health(port)

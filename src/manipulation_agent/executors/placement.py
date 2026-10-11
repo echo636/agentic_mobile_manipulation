@@ -6,13 +6,26 @@ from contextlib import contextmanager
 from ..contracts import SkillError
 
 
+def scene_object_identities(sim):
+    """State snapshots cannot recreate USD objects removed by transition rules."""
+    scenes = getattr(sim, 'scenes', None)
+    return None if scenes is None else tuple(
+        (id(scene), frozenset(id(obj) for obj in scene.objects)) for scene in scenes)
+
+
 @contextmanager
 def placement_transaction(sim, record):
     """Restore the pre-action state, including the grasp, on a failed placement."""
     state = sim.dump_state(serialized=False)
+    objects = scene_object_identities(sim)
     try:
         yield
     except Exception as exc:
+        if objects is not None and scene_object_identities(sim) != objects:
+            record({'status': 'rollback_skipped', 'reason': 'scene_objects_replaced',
+                    'error_type': type(exc).__name__})
+            raise SkillError('target_changed', 'Scene objects changed during placement; inspect updated RGB',
+                             changed=True) from exc
         sim.load_state(state, serialized=False)
         record({'status': 'rolled_back', 'error_type': type(exc).__name__, 'error': str(exc)})
         raise
@@ -306,7 +319,7 @@ class CheckedPlacement:
     def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
-        with self._placement_context():
+        with self._placement_context(watch=(held, target)):
             contents = list(self._carry_contents) if self.ideal_carry else []
             payload = [obj for obj, _ in contents]
             dependencies = list(getattr(self, '_carry_dependencies', []))

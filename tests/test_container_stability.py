@@ -50,6 +50,7 @@ class ContainerStabilityTests(unittest.TestCase):
         pos=torch.tensor([1.,2.,3.]);quat=torch.tensor([0.,0.,0.,1.]);base=torch.zeros(3)
         obj=types.SimpleNamespace(get_position_orientation=lambda:(pos.clone(),quat.clone()),
             set_position_orientation=lambda p,q:pos.copy_(p),keep_still=lambda:None)
+        b.env=types.SimpleNamespace(scene=types.SimpleNamespace(objects=[obj]))
         b.robot=types.SimpleNamespace(get_position_orientation=lambda:(base.clone(),quat.clone()),
             get_joint_positions=lambda:torch.zeros(4),base_idx=torch.tensor([0,1]))
         b._restore_base_target=lambda:base.copy_(b._base_target['position'])
