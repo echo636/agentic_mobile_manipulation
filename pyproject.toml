@@ -29,3 +29,4 @@ manipulation_agent = ["tasks.json", "replay_assets/*.html", "replay_assets/*.css
 "share/manipulation-agentic-system/skills/visual-exploration" = ["skills/visual-exploration/SKILL.md"]
 "share/manipulation-agentic-system/skills/pick-and-place" = ["skills/pick-and-place/SKILL.md"]
 "share/manipulation-agentic-system/skills/failure-recovery" = ["skills/failure-recovery/SKILL.md"]
+"share/manipulation-agentic-system/skills/goal-decomposition" = ["skills/goal-decomposition/SKILL.md"]

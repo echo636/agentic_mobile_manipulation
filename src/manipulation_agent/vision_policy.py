@@ -56,7 +56,7 @@ SKILLS_PROMPT = MINIMAL_PROMPT.replace(
     'using RGB and four tools: initialize, look, act, finish.',
     'using front/back/left/right RGB and six tools: initialize, look, act, finish, list_skills, read_skill.').replace(
     'Use the current RGB to find the instructed objects,',
-    'Read visual-manipulation/SKILL.md through list_skills/read_skill. Read relevant skills as needed, including pick-and-place before carrying objects. Use the current RGB to find the instructed objects,').replace(
+    'Read visual-manipulation/SKILL.md and goal-decomposition/SKILL.md through list_skills/read_skill before acting. Use goal-decomposition to infer observable subgoals from the instruction and current RGB, order prerequisites, and revise your approach from feedback. Read relevant skills as needed, including pick-and-place before carrying objects. Use the current RGB to find the instructed objects,').replace(
     'There is no explicit planning tool, memory store or skill-reading phase.',
     'There is no explicit planning tool or memory store. Skills are callable workflow documents, not autonomous executors.') + '\nYour public assistant messages and MCP calls are recorded verbatim for replay. There is no extra decision-summary schema or required language. Use normal conversation history to track progress; plan/remember/recall are unavailable.\n'
 SKILLS_PROMPT += """
