@@ -1,7 +1,16 @@
 import math
 import unittest
+from types import SimpleNamespace
 
 from manipulation_agent.observations.rig import camera_mount, centered_head_height, visible_rig_rays, DIRECTIONS
+from manipulation_agent.executors.omnigibson_rgb import ray_hits_selected_object
+
+
+class SelectedObjectVisibilityTests(unittest.TestCase):
+    def test_tree_branch_is_a_visible_hit_on_selected_tree(self):
+        tree=SimpleNamespace(prim_path='/World/scene_0/tree_1')
+        self.assertTrue(ray_hits_selected_object({'rigidBody':'/World/scene_0/tree_1/branch_3'},tree))
+        self.assertFalse(ray_hits_selected_object({'rigidBody':'/World/scene_0/wall_2/base_link'},tree))
 
 
 class CenteredRigTests(unittest.TestCase):

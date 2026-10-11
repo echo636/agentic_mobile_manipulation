@@ -18,6 +18,14 @@ from .carry import ControlledCarry
 from .material_actions import CheckedMaterialActions
 from .demo_motion import DemoMotion
 
+
+def ray_hits_selected_object(hit, selected_object):
+    """An early ray hit on another part of the selected object is still visible."""
+    path = getattr(selected_object, 'prim_path', None)
+    body = hit.get('rigidBody') if isinstance(hit, dict) else None
+    return bool(path and isinstance(body, str) and
+                (body == path or body.startswith(path.rstrip('/') + '/')))
+
 class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
@@ -518,7 +526,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             if segment_hits_self_hull(local(origin),local(point.cpu().tolist()),self_hulls):
                 continue
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
-            if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
+            if (not hit['hit'] or ray_hits_selected_object(hit,selected_object) or
+                    float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10):return True
         return False
 
     def _navigate(self, target, max_steps, *, for_manipulation=False):

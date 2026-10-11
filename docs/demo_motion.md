@@ -1086,3 +1086,13 @@ after a quarter turn and can reject a valid tabletop pose. The sampler now
 uses the projected footprint for the requested yaw; quarter-turn and diagonal
 geometry tests pass. R27 itself still uses the older source snapshot, and a
 new autonomous trial must validate the actual simulator placement.
+
+Christmas r27 then exposed a visibility bug during gift placement: the model
+selected the visible Christmas tree, but navigation projected its motor point
+to the tree base and required an unobstructed ray to that exact point. A ray
+through the tree's own branches was treated as an occlusion, so the planner
+reported no navigable visual approach despite the tree being in open view.
+The navigation filter now accepts a first ray hit on any part of the same
+selected object; a hit on a wall or other object still fails visibility.
+This changes only the private motor check for a model-selected RGB target and
+needs a fresh real-simulator gift-placement trial.
