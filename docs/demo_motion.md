@@ -1123,6 +1123,12 @@ the jar settled. The motor now realigns carried contents both before and
 after each physics step of container placement, as its surface-placement
 path already does. R29 still uses the older motor snapshot; a later model
 trial must verify the whole task with this correction.
+R29 ultimately ended `blocked` after another old-snapshot jar-return attempt
+failed the same payload-containment check. Its independent audit passed formal
+finish, model/simulator call alignment, video and empty-hand checks, and
+recorded 67 visible motion segments, but official whole-task success failed.
+This is the strongest autonomous can-meat partial trajectory so far; it does
+not count as a completed task.
 
 Christmas r28 ended its model thread after three `fixed_object` grasp errors
 without calling `finish`; the supervisor closed the episode as aborted. Its
