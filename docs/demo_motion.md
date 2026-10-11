@@ -1077,3 +1077,12 @@ video, but failed official success and empty hand; six visible motion segments
 were recorded. The executor now rejects wall targets for `place_on_top` with
 a specific recoverable error, and the skill directs the model to select the
 interior horizontal counter patch. This requires a new autonomous trial.
+
+During Christmas r27 the model tried `placement_yaw_degrees=90` for a candy
+cane after an initial table placement failed. The placement sampler had been
+using the object's horizontal diagonal as both footprint dimensions for
+every explicit yaw. That overestimates a long thin object's occupied width
+after a quarter turn and can reject a valid tabletop pose. The sampler now
+uses the projected footprint for the requested yaw; quarter-turn and diagonal
+geometry tests pass. R27 itself still uses the older source snapshot, and a
+new autonomous trial must validate the actual simulator placement.

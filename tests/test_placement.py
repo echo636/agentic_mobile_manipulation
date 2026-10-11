@@ -1,6 +1,19 @@
 import unittest
 from types import SimpleNamespace
-from manipulation_agent.executors.placement import placement_transaction
+from manipulation_agent.executors.placement import placement_transaction, rotated_footprint_extents
+import torch
+
+
+class PlacementFootprint(unittest.TestCase):
+ def test_quarter_turn_swaps_long_and_short_sides(self):
+  original=torch.tensor([.4,.2,.1])
+  rotated=rotated_footprint_extents(original,90)
+  self.assertTrue(torch.allclose(rotated,torch.tensor([.2,.4,.1])))
+  self.assertTrue(torch.equal(original,torch.tensor([.4,.2,.1])))
+
+ def test_diagonal_turn_uses_projected_axes(self):
+  rotated=rotated_footprint_extents(torch.tensor([.4,.2,.1]),45)
+  self.assertTrue(torch.allclose(rotated,torch.tensor([.42426407,.42426407,.1])))
 
 class PlacementTransactions(unittest.TestCase):
  def test_failed_sampling_restores_world_and_grasp(self):

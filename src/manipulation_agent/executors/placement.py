@@ -1,9 +1,20 @@
 """Transactional ideal placement; all geometry stays inside the motor adapter."""
 import json
+import math
 import time
 from contextlib import contextmanager
 
 from ..contracts import SkillError
+
+
+def rotated_footprint_extents(extents, yaw_degrees):
+    """Axis-aligned footprint needed by the sampler after the chosen yaw."""
+    rotated = extents.clone()
+    cosine = abs(math.cos(math.radians(yaw_degrees)))
+    sine = abs(math.sin(math.radians(yaw_degrees)))
+    rotated[0] = cosine * extents[0] + sine * extents[1]
+    rotated[1] = sine * extents[0] + cosine * extents[1]
+    return rotated
 
 
 @contextmanager
@@ -231,8 +242,7 @@ class CheckedPlacement:
         torch = self.torch
         _, _, extents, bb_pos = held.get_base_aligned_bbox()
         if yaw_degrees is not None:
-            # Conservative horizontal envelope contains every requested yaw.
-            extents=extents.clone();radius=torch.linalg.norm(extents[:2]);extents[:2]=radius
+            extents=rotated_footprint_extents(extents,yaw_degrees)
         if point is not None:
             # A short ray can reach a lower shelf; the upstream object-wide ray
             # always approaches from above the entire object's bounding box.
