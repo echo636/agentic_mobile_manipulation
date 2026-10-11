@@ -118,78 +118,143 @@ class CheckedPlacement:
         return {'primitive': 'place_under', 'implementation': method,
                 'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
 
-    def _checked_place_next_to(self, target, max_steps, point):
-        """Search floor poses near the selected parent pixel; accept only official NextTo."""
+    def _next_to_candidates(self, held, target, point, payload=()):
+        """Find upward physical surfaces near the reference, without class filters."""
         import math
-        from omnigibson.object_states import NextTo, OnTop
+        from .surface_geometry import bottom_anchor
         from omnigibson.utils.sampling_utils import raytest
+        pose = held.get_position_orientation()
+        anchor = bottom_anchor(self._collision_vertices(held)) - pose[0].cpu().numpy()
+        anchor = self.torch.as_tensor(anchor, dtype=point.dtype, device=point.device)
+        moving = (held, self.robot, *payload)
+        ignored = [link.prim_path for obj in (*moving, target) for link in obj.links.values()]
+        by_link = {link.prim_path: obj for obj in self.env.scene.objects
+                   if all(obj is not item for item in (*moving, target)) for link in obj.links.values()}
+        clearance = .025 + .5 * 9.81 * self.og.sim.get_physics_dt() ** 2
+        # Use the reference's supporting surface to avoid stacking a later item
+        # on an earlier one. This is geometric discovery, not a category list.
+        def downward(xy, z):
+            start = self.torch.tensor([float(xy[0]), float(xy[1]), z + .6], device=point.device)
+            end = start.clone(); end[2] = min(z - 1.5, -.5)
+            return raytest(start, end, ignore_bodies=ignored)
+        reference_hits = [downward(point[:2], float(point[2]))]
+        reference_bottom = bottom_anchor(self._collision_vertices(target))
+        reference_hits.append(downward(reference_bottom[:2], float(reference_bottom[2])))
+        reference_supports = {hit.get('rigidBody') for hit in reference_hits
+                              if hit.get('hit') and float(hit['normal'][2]) >= .9
+                              and hit.get('rigidBody') in by_link}
+        # A support can have several links; accept its full physical object.
+        reference_objects = {id(by_link[path]) for path in reference_supports}
+        candidates = []
+        for index, (radius, angle) in enumerate((r, a) for r in (.12, .22, .34, .48)
+                                               for a in (0, 45, 90, 135, 180, 225, 270, 315)):
+            theta = math.radians(angle)
+            xy = point[:2] + self.torch.tensor([radius*math.cos(theta), radius*math.sin(theta)], device=point.device)
+            hit = downward(xy, float(point[2]))
+            support = by_link.get(hit.get('rigidBody'))
+            reason = ('no_support_surface' if not hit.get('hit') else
+                      'support_not_upward' if float(hit['normal'][2]) < .9 else
+                      'unknown_support_body' if support is None else
+                      'different_reference_support_or_occupied' if reference_objects and id(support) not in reference_objects else None)
+            if reason:
+                self._placement_record({'status': 'candidate_rejected', 'primitive': 'place_next_to',
+                    'stage': 'surface_ray', 'candidate': index, 'reason': reason,
+                    'target': target.name, 'held': held.name, 'support_hit_body': hit.get('rigidBody')})
+                continue
+            root = self.torch.as_tensor(hit['position'], dtype=point.dtype, device=point.device) - anchor
+            root[2] += clearance
+            candidates.append({'index': index, 'pose': (root, pose[1].clone()), 'support': support,
+                'support_position': hit['position'], 'radius_m': radius, 'angle_deg': angle,
+                'clearance_m': clearance})
+        return candidates
+
+    def _next_to_check(self, held, target, support, payload=()):
+        from omnigibson.object_states import NextTo, OnTop, Touching, VerticalAdjacency
+        adjacency = held.states[VerticalAdjacency].get_value()
+        contacts = self._placement_contacts(held, payload)
+        speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
+        angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
+        checks = {'next_to': bool(held.states[NextTo].get_value(target)),
+                  'on_top': OnTop in held.states and bool(held.states[OnTop].get_value(support)),
+                  'released': self._get_held() is None,
+                  'settled': speed <= .10 and angular_speed <= .5}
+        return all(checks.values()), {'checks': checks,
+            'touching_support': bool(held.states[Touching].get_value(support)),
+            'support_below': support in adjacency.negative_neighbors,
+            'support_above': support in adjacency.positive_neighbors,
+            'contact_bodies': contacts, 'speed_m_s': speed, 'angular_speed_rad_s': angular_speed,
+            'position': held.get_position_orientation()[0].tolist()}
+
+    def _checked_place_next_to(self, target, max_steps, point):
+        """Try complete release/settle/verify cycles; preserve preceding placements."""
+        from omnigibson.object_states import NextTo
         held = self._get_held()
         if held is None:
             raise SkillError('empty_hand', 'No object is held')
         if held is target or NextTo not in held.states:
             raise SkillError('unsupported_relation', 'Carried object cannot be placed next to this target')
-        if str(getattr(target,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
-            raise SkillError('unsupported_relation', 'Select the visible tree or fixture itself for place_next_to')
-        pose = held.get_position_orientation()
-        lo, hi = held.aabb
-        bottom_offset = float(pose[0][2] - lo[2])
-        ignored = [link.prim_path for obj in (held, target, self.robot)
-                   for link in obj.links.values()]
-        supports = [obj for obj in self.env.scene.objects if any(
-            name in str(getattr(obj,'category','')).lower() for name in ('floor','lawn','ground'))]
-        support_by_link = {link.prim_path:obj for obj in supports
-                           for link in obj.links.values()}
-        candidates = [(radius, angle) for radius in (.12, .22, .34, .48)
-                      for angle in (0, 45, 90, 135, 180, 225, 270, 315)]
-        with self._placement_context(target):
-            contents = list(self._carry_contents) if self.ideal_carry else []
-            dependencies = list(getattr(self, '_carry_dependencies', []))
-            self._carry_detach()
-            accepted = None
-            for radius, angle in candidates:
-                theta = math.radians(angle)
-                xy = point[:2] + self.torch.tensor([radius * math.cos(theta),
-                    radius * math.sin(theta)], device=point.device)
-                start = self.torch.tensor([float(xy[0]), float(xy[1]), float(point[2]) + .6], device=point.device)
-                end = start.clone(); end[2] = min(float(point[2]) - 1.5, -.5)
-                hit = raytest(start, end, ignore_bodies=ignored)
-                if (not hit['hit'] or float(hit['normal'][2]) < .9
-                        or hit.get('rigidBody') not in support_by_link):
-                    continue
-                place = pose[0].clone(); place[:2] = xy
-                place[2] = hit['position'][2] + bottom_offset + .003
-                candidate_lo=lo+(place-pose[0]);candidate_hi=hi+(place-pose[0])
-                blocked=False
-                for other in self.env.scene.objects:
-                    if other in (held,target,self.robot) or other in supports or getattr(other,'fixed_base',True):
+        try:
+            with self._placement_context(target):
+                contents = list(self._carry_contents) if self.ideal_carry else []
+                payload = [obj for obj, _ in contents]
+                dependencies = list(getattr(self, '_carry_dependencies', []))
+                candidates = self._next_to_candidates(held, target, point, payload)
+                self._carry_detach()
+                trial_state = self.og.sim.dump_state(serialized=False)
+                accepted = None
+                settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
+                for number, candidate in enumerate(candidates):
+                    if number:
+                        self.og.sim.load_state(trial_state, serialized=False)
+                    held.set_position_orientation(*candidate['pose'])
+                    self._relocate_contents(held, contents)
+                    for obj in (held, *payload):
+                        obj.keep_still(); obj.wake()
+                    self._placement_physics_step()
+                    contacts = self._placement_contacts(held, payload)
+                    if contacts:
+                        self._placement_record({'status': 'candidate_rejected', 'primitive': 'place_next_to',
+                            'stage': 'raised_pose_collision', 'candidate': candidate['index'],
+                            'target': target.name, 'held': held.name, 'contact_bodies': contacts})
                         continue
-                    other_lo,other_hi=other.aabb
-                    if bool(((candidate_hi>other_lo+.005)&(candidate_lo<other_hi-.005)).all()):
-                        blocked=True;break
-                if blocked:continue
-                held.set_position_orientation(place, pose[1]); held.keep_still()
-                self._relocate_contents(held, contents)
-                if held.states[NextTo].get_value(target):
-                    accepted = (radius, angle, place.clone(), support_by_link[hit['rigidBody']])
-                    break
-            if accepted is None:
-                raise SkillError('sampling_error', 'No supported floor pose satisfied NextTo near the selected parent point', changed=True)
-            for _ in range(min(50, max_steps)):
-                held.set_position_orientation(accepted[2], pose[1]); held.keep_still()
-                self._relocate_contents(held, contents)
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-            held.set_position_orientation(accepted[2], pose[1]); held.keep_still()
-            self._relocate_contents(held, contents)
-            if not held.states[NextTo].get_value(target):
-                raise SkillError('postcondition_error', 'Object is no longer next to the selected target', changed=True)
-            if OnTop not in held.states or not held.states[OnTop].get_value(accepted[3]):
-                raise SkillError('postcondition_error','NextTo placement is not supported by the sampled floor or lawn',changed=True)
-            self._verify_payload(dependencies)
-            self._placement_record({'status': 'next_to_verified', 'target': target.name,
-                                    'held': held.name, 'radius_m': accepted[0], 'angle_deg': accepted[1]})
-        self.frames_revision = -1
-        return {'primitive': 'place_next_to', 'implementation': 'selected_parent_floor_search',
-                'postcondition': 'NextTo.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
+                    # Gravity and contacts determine the final pose. No pose
+                    # reset, velocity reset, or payload projection during settling.
+                    for _ in range(settle_steps):
+                        self._placement_physics_step()
+                    valid, details = self._next_to_check(held, target, candidate['support'], payload)
+                    if valid:
+                        try:
+                            self._verify_payload(dependencies)
+                        except SkillError as exc:
+                            if exc.code != 'postcondition_error':
+                                raise
+                            valid = False; details['payload_error'] = str(exc)
+                    if valid:
+                        # Commit the physical result to the environment/replay,
+                        # then verify again before leaving the candidate loop.
+                        self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                        valid, details = self._next_to_check(held, target, candidate['support'], payload)
+                        if valid:
+                            try:
+                                self._verify_payload(dependencies)
+                            except SkillError as exc:
+                                if exc.code != 'postcondition_error':
+                                    raise
+                                valid = False; details['payload_error'] = str(exc)
+                    self._placement_record({'status': 'next_to_verified' if valid else 'candidate_rejected',
+                        'primitive': 'place_next_to', 'stage': 'free_settling', 'candidate': candidate['index'],
+                        'target': target.name, 'held': held.name, 'support': candidate['support'].name,
+                        'radius_m': candidate['radius_m'], 'angle_deg': candidate['angle_deg'], **details})
+                    if valid:
+                        accepted = candidate
+                        break
+                if accepted is None:
+                    raise SkillError('sampling_error', 'No stable supported pose satisfied NextTo near the selected reference', changed=True)
+        finally:
+            self.frames_revision = -1
+        return {'primitive': 'place_next_to', 'implementation': 'generic_surface_search_and_free_settling',
+                'postcondition': 'official_NextTo_and_OnTop_after_free_settling',
+                'failure_policy': 'restore_pre_action_state'}
 
     def _collision_vertices(self, held):
         """Read active physical geometry, including world scale, without a box proxy."""

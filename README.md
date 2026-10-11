@@ -8,7 +8,7 @@ Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/a
 
 - Four 512 x 512 RGB views: **front, back, left, and right**, relative to the robot heading.
 - Cameras follow the robot rigidly. All four render products are read after a shared render barrier and carry the same `capture_id`, `captured_at`, and `sim_step`. Observation does not rotate the robot or advance physics.
-- The research rig replaces stock head and wrist sensors. The four cameras share an optical XY center; their fixed base-relative height is fitted to the robot's initial visual geometry, with 5 cm clearance. They use a 90-degree horizontal field of view and 20-degree downward pitch. This is a recorded simulation configuration, not a real-hardware calibration claim.
+- The research rig replaces stock head and wrist sensors. The four cameras are mounted 35 cm outward in their respective viewing directions; their fixed base-relative height is fitted to the robot's initial visual geometry, with 5 cm clearance. They use a 90-degree horizontal field of view and 35-degree downward pitch. This is a recorded simulation configuration, not a real-hardware calibration claim.
 - The model receives RGB and capture metadata. Depth, camera extrinsics, simulator object identity, and task ground truth remain inside the executor or offline evaluator.
 
 ## Observation and action tools

@@ -23,8 +23,9 @@ The model selects `target={image_ref, point:[x,y]}` in the latest RGB. x increas
 All four current views are valid point-selection surfaces; no robot turn is needed simply to see another direction. Use the newest returned image_ref and revision after each action. If an appliance process needs time, use act with primitive=wait, target=null and wait_seconds, then inspect its returned RGB. Check the complete instruction against the latest returned images and feedback before finish; no extra capture is required solely for final verification. An executed operation and a model's finish claim remain separate from independent task success.
 
 The exact selected pixel indexes private linear depth captured with the RGB.
-The executor directly backprojects it through the calibrated camera into world
-coordinates. This is the target position: no collision-ray or visual-mesh depth
+The integer pixel index `(i,j)` reads that array cell; the calibrated camera
+ray uses its renderer sample center `(i+0.5,j+0.5)`. The executor backprojects
+the measured axial depth on this center ray into world coordinates. This is the target position: no collision-ray or visual-mesh depth
 agreement check is performed, and no mesh hit replaces the backprojected point.
 Depth must still be finite, positive and below the executor's existing 30 m limit;
 an absent depth sample cannot define a 3D position.
@@ -44,21 +45,43 @@ lower image edge. A later grasp can approach the already selected object to
 reach it; the model must select the object again from the fresh RGB returned by
 navigation. This prevents a small ground-level tool from becoming only a few
 pixels at the bottom of the image after the model navigates toward it.
-Grasp, placement and state operations also need a simulator object handle. For
-these actions, a separate query finds the first positive visual-mesh hit on the
-exact selected camera ray. This query does not receive depth. Its broad phase
-uses visual mesh bounds; cached local geometry uses the links' current transforms.
-The robot participates in occlusion: selecting its body cannot silently select an
-object behind it. A ray without an object, or a ray hitting the robot first,
-still cannot designate a manipulation object. No object-name search, task-scope
-filtering or nearby-pixel substitution occurs.
+Grasp, placement and state operations also need a simulator object handle.
+They query the visible mesh surface nearest that same backprojected world point.
+There is no independent camera ray cast for identity. World-space triangle
+distances handle nonuniform asset scale; transformed visual bounds only accelerate
+the query and never identify the object by themselves. Rigid geometry is cached
+with live transforms, and cloth vertices are read live. Invisible and USD guide
+meshes, including container fill volumes, are excluded. A point on the robot is
+rejected instead of being assigned to another object. No object-name search,
+task-scope filtering, or neighboring-pixel substitution occurs.
 
-The previous visual-depth tolerance (at least 1.5 cm) and depth-based ownership
-ranking have been removed. Earlier collision-agreement gates and segmentation
-experiments are historical, not current behavior. Segmentation is not re-enabled:
-earlier annotator probes crashed, without establishing a general crash cause.
-Depth, calibration, mesh ownership and query diagnostics remain private in the
-executor records; the model receives RGB and public execution feedback only.
+The previous depth/mesh agreement tolerance is not restored: measured surface
+distance is a private diagnostic, not a threshold that rejects an otherwise valid
+selection. The nearest mesh point does not replace the measured action position.
+Depth, calibration, mesh ownership and query diagnostics remain executor-private.
+The production observer supplies only RGB to the model and does not require a
+segmentation annotator. Same-frame renderer instance labels can be enabled in
+private regression probes to check object ownership.
+
+`place_next_to` selects a reference object from RGB, then searches nearby upward
+physical surfaces without a floor/lawn category whitelist. When the reference's
+supporting surface can be identified geometrically, candidates use that support
+rather than stacking an item on one already placed nearby. Each candidate is
+released, allowed to settle under gravity, and checked using official `NextTo`
+and `OnTop`, motion stability and payload relations. Failed trials restore the
+pre-trial scene and continue searching. Exhaustion restores the pre-action carry.
+Detailed support, contact and adjacency checks are recorded privately.
+
+The 2026-10-11 targeted validation used real public instance-301 scenes with
+archived camera poses and private scripted setup. The historical sausage pixel
+selected and carried only the sausage while the board remained in place. Three
+sequential eggs all satisfied official `NextTo(tree)` and `OnTop(lawn)` at the
+end; a coffee bottle satisfied `NextTo(coffee_maker)` and `OnTop(countertop)`.
+The production spatial-point query also agreed with renderer instance labels for
+441/441 exported pixels, and 26 focused CPU regression checks passed. These are
+executor component results, not autonomous model episodes or a new 100-task
+success rate. Raw fixtures, source patches, versions, per-candidate diagnostics
+and videos are retained in the `navigation100_20261010` operations journal.
 
 ## Legacy workflow compatibility
 

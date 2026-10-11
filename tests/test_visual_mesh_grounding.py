@@ -1,4 +1,4 @@
-"""Real triangle-ray ownership; rendered depth does not choose an object."""
+"""Point-to-surface ownership using the depth-backprojected spatial location."""
 import importlib.util
 import sys
 import types
@@ -12,7 +12,7 @@ from manipulation_agent.executors.visual_mesh_grounding import query_visual_surf
 
 @unittest.skipUnless(importlib.util.find_spec('torch') and importlib.util.find_spec('trimesh'),
                      'Requires torch and trimesh geometry dependencies')
-class VisualRayOwnership(unittest.TestCase):
+class VisualPointOwnership(unittest.TestCase):
     def setUp(self):
         import torch
         import trimesh
@@ -48,103 +48,70 @@ class VisualRayOwnership(unittest.TestCase):
         return SimpleNamespace(robot=robot if robot is not None else SimpleNamespace(links={}),
                                env=SimpleNamespace(scene=SimpleNamespace(objects=objects)))
 
-    def test_nearest_positive_visual_hit_wins_independent_of_scene_order(self):
-        near, near_mesh = self.box('near', [0., 0., 1.])
-        far, far_mesh = self.box('far', [0., 0., -2.])
-        behind, _ = self.box('behind_camera', [0., 0., 5.])
-        off_ray, off_mesh = self.box('off_ray', [10., 0., 0.])
-        backend = self.backend([far, behind, off_ray, near])
-        owner, result = query_visual_surface(backend, self.origin, self.direction)
-        self.assertIs(owner, near)
-        self.torch.testing.assert_close(self.torch.tensor(result['visual_triangle_position']),
-                                       self.torch.tensor([.1, .15, 1.5]))
-        # Coarse bounds must reject meshes before expensive USD conversion.
-        self.assertEqual(result['visual_meshes_tested'], 2)
-        self.assertCountEqual([call.args[0] for call in self.loader.call_args_list],
-                              [far_mesh.prim, near_mesh.prim])
-        # A mesh excluded by the first ray remains available to later rays.
-        shifted = self.origin+self.torch.tensor([10., 0., 0.])
-        self.assertIs(query_visual_surface(backend, shifted, self.direction)[0], off_ray)
-        self.assertCountEqual([call.args[0] for call in self.loader.call_args_list],
-                              [far_mesh.prim, near_mesh.prim, off_mesh.prim])
-
-    def test_cached_local_geometry_uses_live_transform_without_collision_aabb(self):
-        near, mesh = self.box('moving', [0., 0., 1.])
+    def test_surface_point_selects_owner_independent_of_order_or_centers(self):
+        near, _ = self.box('near', [0., 0., 1.])
         far, _ = self.box('far', [0., 0., -2.])
         backend = self.backend([far, near])
-        self.assertIs(query_visual_surface(backend, self.origin, self.direction)[0], near)
-        conversions = self.loader.call_count
-        mesh.scaled_transform[0, 3] = 2.
-        # A stale collision AABB cannot veto the current visible-mesh pose.
-        near.aabb = (self.torch.tensor([40., 40., 40.]), self.torch.tensor([41., 41., 41.]))
-        owner, result = query_visual_surface(backend, self.origin+self.torch.tensor([2., 0., 0.]),
-                                             self.direction)
+        point = self.torch.tensor([.1, .15, 1.5])
+        owner, result = query_visual_surface(backend, point)
         self.assertIs(owner, near)
-        self.assertAlmostEqual(result['visual_triangle_position'][0], 2.1, places=5)
-        self.assertIs(query_visual_surface(backend, self.origin, self.direction)[0], far)
-        self.assertEqual(self.loader.call_count, conversions)
+        self.assertLess(result['surface_point_distance_m'], 1e-7)
+        self.assertEqual(result['visual_meshes_tested'], 1)
+        self.assertIs(query_visual_surface(backend, self.torch.tensor([0., 0., -1.5]))[0], far)
 
-    def test_robot_visual_surface_blocks_objects_behind_it(self):
+    def test_nearest_surface_not_nearest_object_center_or_containing_box(self):
+        outer, mesh = self.box('large_hollow', [0., 0., 0.])
+        mesh.scaled_transform[:3, :3] *= 10
+        inner, _ = self.box('inner', [1., 0., 0.])
+        point = self.torch.tensor([.5, 0., 0.])
+        self.assertIs(query_visual_surface(self.backend([outer, inner]), point)[0], inner)
+
+    def test_world_metric_respects_nonuniform_scale_and_live_transform(self):
+        stretched, mesh = self.box('stretched', [0., 0., 0.])
+        mesh.scaled_transform[0, 0] = 100.
+        other, other_mesh = self.box('other', [54., 0., 0.])
+        backend = self.backend([stretched, other])
+        point = self.torch.tensor([53., 0., 0.])
+        # Local distance to stretched box is .03, but WORLD distance is 3m.
+        # Other's world distance is .5m, so it must win.
+        self.assertIs(query_visual_surface(backend, point)[0], other)
+        other_mesh.scaled_transform[0, 3] = 60.
+        self.assertIs(query_visual_surface(backend, point)[0], stretched)
+
+    def test_robot_surface_rejected_without_selecting_object_behind(self):
         robot, _ = self.box('robot', [0., 0., 1.])
-        far, _ = self.box('target_behind_robot', [0., 0., -2.])
+        far, _ = self.box('far', [0., 0., -2.])
         with self.assertRaises(SkillError) as error:
-            query_visual_surface(self.backend([far, robot], robot), self.origin, self.direction)
+            query_visual_surface(self.backend([far, robot], robot), self.torch.tensor([0., 0., 1.5]))
         self.assertEqual(error.exception.code, 'invalid_visual_target')
 
-    def test_cloth_owns_occluding_ray_and_new_points_replace_old_geometry(self):
+    def test_cloth_uses_current_deformed_vertices(self):
         torch = self.torch
-        # ClothPrim is itself the mesh and has no rigid visual_meshes mapping.
         link = SimpleNamespace(visible=True, prim_path='/cloth/link',
-            prim=SimpleNamespace(computed_purpose='default'),
-            scaled_transform=torch.eye(4),
-            points=torch.tensor([[-.5, -.5, 1.], [.5, -.5, 1.],
-                                 [.5, .5, 1.], [-.5, .5, 1.]]),
+            prim=SimpleNamespace(computed_purpose='default'), scaled_transform=torch.eye(4),
+            points=torch.tensor([[-.5, -.5, 1.], [.5, -.5, 1.], [.5, .5, 1.], [-.5, .5, 1.]]),
             faces=torch.tensor([[0, 1, 2], [0, 2, 3]]))
         cloth = SimpleNamespace(prim_path='/cloth', links={'cloth': link})
-        far, _ = self.box('behind_cloth', [0., 0., -2.])
-        backend = self.backend([far, cloth])
-        owner, result = query_visual_surface(backend, self.origin, self.direction)
-        self.assertIs(owner, cloth)
-        self.assertAlmostEqual(result['visual_triangle_position'][2], 1.)
-        link.points = link.points + torch.tensor([3., 0., 0.])
-        owner, result = query_visual_surface(backend, self.origin, self.direction)
-        self.assertIs(owner, far)
-        self.assertAlmostEqual(result['visual_triangle_position'][2], -1.5)
-        # Only the unchanged rigid box uses cached USD-to-mesh conversion.
-        self.assertEqual(self.loader.call_count, 1)
-
-    def test_invisible_mesh_is_not_an_occluder_and_no_forward_hit_fails(self):
-        near, _ = self.box('invisible', [0., 0., 1.], visible=False)
         far, _ = self.box('far', [0., 0., -2.])
-        self.assertIs(query_visual_surface(self.backend([near, far]), self.origin, self.direction)[0], far)
-        with self.assertRaises(SkillError) as error:
-            query_visual_surface(self.backend([near]), self.origin, self.direction)
-        self.assertEqual(error.exception.code, 'invalid_visual_target')
+        backend = self.backend([far, cloth])
+        self.assertIs(query_visual_surface(backend, torch.tensor([0., 0., 1.]))[0], cloth)
+        link.points = link.points + torch.tensor([10., 0., 0.])
+        self.assertIs(query_visual_surface(backend, torch.tensor([0., 0., -1.5]))[0], far)
 
-    def test_guide_fill_volume_does_not_occlude_food_but_container_body_does(self):
-        container, helper = self.box('fridge/meta__base_link_fillable', [0., 0., 1.],
-                                     purpose='guide')
-        food, food_mesh = self.box('egg', [0., 0., -1.])
-        _, body = self.box('fridge/door', [2., 0., 1.])
-        container.links['door'] = SimpleNamespace(visual_meshes={'mesh': body})
-        backend = self.backend([container, food])
-        owner, result = query_visual_surface(backend, self.origin, self.direction)
+    def test_guide_volume_excluded_but_visible_meta_button_preserved(self):
+        helper, _ = self.box('fridge/fill', [0., 0., 0.], purpose='guide')
+        food, _ = self.box('egg', [.2, 0., 0.])
+        point = self.torch.tensor([.5, 0., 0.])
+        owner, result = query_visual_surface(self.backend([helper, food]), point)
         self.assertIs(owner, food)
         self.assertEqual(result['guide_meshes_skipped'], 1)
-        self.assertEqual(result['visual_mesh_purpose'], 'default')
-        self.assertEqual([c.args[0] for c in self.loader.call_args_list], [food_mesh.prim])
-        # A click on the actual fridge door must still resolve to the fridge.
-        self.assertIs(query_visual_surface(backend, self.origin+self.torch.tensor([2., 0., 0.]),
-                                          self.direction)[0], container)
-        # Visibility/purpose changes must not be hidden by the geometry cache.
-        helper.prim.computed_purpose = 'render'
-        self.assertIs(query_visual_surface(backend, self.origin, self.direction)[0], container)
+        button, _ = self.box('appliance/button', [0., 0., 0.])
+        self.assertIs(query_visual_surface(self.backend([food, button]), point)[0], button)
 
-    def test_visible_meta_toggle_button_remains_an_occluding_target(self):
-        appliance, _ = self.box('appliance/meta__togglebutton', [0., 0., 1.])
-        food, _ = self.box('behind_button', [0., 0., -1.])
-        self.assertIs(query_visual_surface(self.backend([food, appliance]),
-                                          self.origin, self.direction)[0], appliance)
+    def test_invisible_mesh_excluded_and_no_geometry_reports_error(self):
+        hidden, _ = self.box('hidden', [0., 0., 0.], visible=False)
+        with self.assertRaises(SkillError):
+            query_visual_surface(self.backend([hidden]), self.torch.zeros(3))
 
 
 if __name__ == '__main__':

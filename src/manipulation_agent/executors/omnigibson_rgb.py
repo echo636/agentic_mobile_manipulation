@@ -410,8 +410,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
     def _ground(self,target, *, require_object=True):
         """Use the chosen pixel's depth backprojection directly as the target.
 
-        Navigation needs only this point. Manipulation additionally resolves the
-        first visual object on the same ray, solely for its simulator handle.
+        Navigation needs only this point. Manipulation resolves the visible
+        surface nearest this same point, solely for its simulator handle.
         No mesh/collision depth comparison, point replacement, alternate pixel,
         semantic target search or task-scope lookup occurs.
         """
@@ -421,8 +421,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         x,y=target['point'];K=frame['intrinsic'].cpu()
         px=round(x*(frame['width']-1));py=round(y*(frame['height']-1))
         # USD cameras look along -Z; image down corresponds to camera -Y.
-        local=self.torch.tensor([(px-float(K[0,2]))/float(K[0,0]),
-                                 -(py-float(K[1,2]))/float(K[1,1]),-1.0])
+        # Replicator samples pixel centers; array indices denote pixel corners.
+        local=self.torch.tensor([(px+.5-float(K[0,2]))/float(K[0,0]),
+                                 -(py+.5-float(K[1,2]))/float(K[1,1]),-1.0])
         start=frame['position'].cpu()
         depth=float(frame['depth_linear'][py,px])
         if not math.isfinite(depth) or not 0<depth<30:
@@ -432,14 +433,14 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         diagnostic={'at':now(),'routing':'direct_pixel_depth_backprojection',
             'depth_linear':depth,'hit_position':point.tolist(),'depth_consistency_check':False,
             'object_resolution_required':require_object,'selected_pixel':target['point'],
-            'raster_pixel':[px,py],'image_ref':target['image_ref'],'audience':'executor_private'}
+            'raster_pixel':[px,py],'pixel_center':[px+.5,py+.5],
+            'image_ref':target['image_ref'],'audience':'executor_private'}
         obj=None
         if require_object:
             from .visual_mesh_grounding import query_visual_surface
-            unit=direction/self.torch.linalg.norm(direction)
             try:
                 with component(self,'visual_grounding'):
-                    obj,visual=query_visual_surface(self,start,unit)
+                    obj,visual=query_visual_surface(self,point)
             except SkillError as exc:
                 diagnostic.update(status='failed',code=exc.code,detail=str(exc),
                                   visual_query=getattr(exc,'diagnostics',{}))
@@ -770,8 +771,6 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
-        if primitive=='place_next_to' and str(getattr(obj,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
-            raise SkillError('unsupported_relation','Select the visible tree or fixture itself for place_next_to')
         held=self._get_held()
         if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
             self._demo_arm=None
@@ -933,8 +932,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                       model_visible_truth=False)
         result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
             'depth_consistency_check':False, 'navigation_object_lookup':False,
-            'manipulation_object_lookup':'first_visual_surface_on_selected_ray',
-            'mesh_hit_replaces_backprojected_point':False, 'robot_mesh_blocks_object_selection':True}
+            'pixel_sample':'renderer_pixel_center_index_plus_half',
+            'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
+            'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
@@ -961,10 +961,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             'segment_validation':'exact_grid_supercover_for_planner_and_follower',
             'approach_visibility':'four-camera frusta and scene rays for all elevated goals, rechecked on arrival',
             'goal_selection':'jinkai candidate geometry with path-length-aware approach ranking',
-            'pixel_grounding':'same RGB pixel depth and visual mesh triangle ray; no neighboring-pixel substitution',
+            'pixel_grounding':'pixel-center backprojection; no neighboring-pixel substitution',
             'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
-        result['private_grounding_provider']='CPU visual mesh ray + selected-pixel depth; no segmentation annotator'
+        result['private_grounding_provider']='selected-pixel depth point to nearest visible mesh surface; no segmentation annotator'
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':self.rig_pitch_degrees,
             'mount_radius_m':self.rig_radius,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),

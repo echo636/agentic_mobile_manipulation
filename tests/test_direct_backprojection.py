@@ -1,4 +1,4 @@
-"""Direct selected-pixel depth geometry and independent mesh identity routing."""
+"""Pixel-center depth geometry also supplies the object-identity query."""
 import importlib.util
 from pathlib import Path
 import sys
@@ -46,14 +46,14 @@ class DirectBackprojection(unittest.TestCase):
         b.current_frames = {'current-front': self.frame}
         b.robot = SimpleNamespace(links={})
         self.target = {'image_ref': 'current-front', 'point': [.6, .25]}
-        self.expected = torch.tensor([7.6, 20.6, 28.8])
+        self.expected = torch.tensor([7.6, 20.3, 28.2])
         b.robot.get_position_orientation = lambda: (self.expected.clone(), torch.tensor([0., 0., 0., 1.]))
         self.object = SimpleNamespace(prim_path='/selected', states={})
         # Identity's triangle is deliberately 20cm from the depth point.
         self.visual = {'visual_mesh': '/selected/mesh',
                        'visual_triangle_position': (self.expected+torch.tensor([.2, 0., 0.])).tolist()}
 
-    def test_integer_pixel_axial_depth_and_camera_transform_define_position(self):
+    def test_renderer_pixel_center_and_axial_depth_define_position(self):
         with patch('manipulation_agent.executors.visual_mesh_grounding.query_visual_surface',
                    return_value=(self.object, self.visual)) as query:
             owner, point, diagnostic = self.backend._ground(self.target)
@@ -62,11 +62,10 @@ class DirectBackprojection(unittest.TestCase):
         self.assertEqual(diagnostic['raster_pixel'], [4, 1])
         self.torch.testing.assert_close(self.torch.tensor(diagnostic['hit_position']), self.expected)
         # Depth is optical-axis depth, not distance along a normalized ray.
-        expected_direction = self.torch.tensor([-1., .25, -.5])
-        self.assertEqual(len(query.call_args.args), 3)
+        self.assertEqual(diagnostic['pixel_center'], [4.5, 1.5])
+        self.assertEqual(len(query.call_args.args), 2)
         self.assertIs(query.call_args.args[0], self.backend)
-        self.torch.testing.assert_close(query.call_args.args[1], self.frame['position'])
-        self.torch.testing.assert_close(query.call_args.args[2], expected_direction/expected_direction.norm())
+        self.torch.testing.assert_close(query.call_args.args[1], self.expected)
         self.assertGreater(float(self.torch.linalg.norm(point-self.torch.tensor(self.visual['visual_triangle_position']))), .015)
         self.physics_ray.assert_not_called()
 
@@ -94,7 +93,7 @@ class DirectBackprojection(unittest.TestCase):
         query.assert_not_called()
         self.physics_ray.assert_not_called()
 
-    def test_manipulation_still_requires_ray_owner_and_uses_depth_point(self):
+    def test_manipulation_queries_owner_at_same_backprojected_point(self):
         b = self.backend
         b.ideal_carry = True
         b._get_held = lambda: SimpleNamespace(name='held')
