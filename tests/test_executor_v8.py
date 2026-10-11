@@ -226,14 +226,19 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             states.VerticalAdjacency:types.SimpleNamespace(get_value=lambda:types.SimpleNamespace(negative_neighbors=[target],positive_neighbors=[]))},
             set_position_orientation=lambda *a:None,keep_still=lambda:None,get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
         target=types.SimpleNamespace(name='fridge');b=CheckedPlacement();b.ideal_carry=True;b._carry_contents=[]
-        b._placement_context=nullcontext;b._surface_pose=lambda *a:(torch.zeros(3),torch.tensor([0.,0.,0.,1.]))
+        b.demo_motion=True
+        b._nearby_transport_anchors=lambda selected:[selected]
+        anchored=[]
+        b._placement_context=lambda group:(anchored.append(group),nullcontext())[1]
+        b._surface_pose=lambda *a:(torch.zeros(3),torch.tensor([0.,0.,0.,1.]))
         b._carry_detach=lambda:None;b._relocate_contents=lambda *a:None;b._step=lambda action:None
         b.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
-        b._selected_surface_support=lambda *a:(False,{'selected_height_error_m':.692})
+        b._selected_surface_support=lambda *a,**kw:(False,{'selected_height_error_m':.692})
         b._placement_record=lambda data:None;b._get_held=lambda:None;b._verify_payload=lambda x:None
         with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.action_primitives.action_primitive_set_base':errors}):
             with self.assertRaisesRegex(SkillError,'selected surface'):
                 b._try_place_on_top(held,target,1,torch.zeros(3))
+        self.assertEqual(anchored,[[target]])
 
 
 if __name__=='__main__':unittest.main()

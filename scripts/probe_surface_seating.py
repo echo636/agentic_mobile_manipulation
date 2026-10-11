@@ -21,6 +21,8 @@ def main():
     parser.add_argument('--point', nargs=3, required=True, type=float)
     parser.add_argument('--inject-sampler-clearance-m', type=float, default=0.0,
                         help='Diagnostic fault injection: raise the returned sampled pose')
+    parser.add_argument('--require-official-on-top', action='store_true',
+                        help='Fail unless the unmodified OmniGibson OnTop predicate is true')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--instance', type=int, default=301)
     parser.add_argument('--seed', type=int, default=0)
@@ -58,6 +60,9 @@ def main():
             held, target, point, False)
         if not supported:
             raise AssertionError('Selected-surface support did not pass after placement')
+        official_on_top = bool(held.states[OnTop].get_value(target))
+        if args.require_official_on_top and not official_on_top:
+            raise AssertionError('Official OnTop did not pass after placement')
         diagnostics = [json.loads(line) for line in
                        (args.output / 'placement_diagnostics.jsonl').read_text().splitlines()]
         corrections = [row for row in diagnostics if row['status'] == 'preseat_adjusted']
@@ -69,7 +74,7 @@ def main():
                   'initial_bottom_gap_m': corrections[-1]['initial_bottom_gap_m'] if corrections else None,
                   'lowered_m': corrections[-1]['lowered_m'] if corrections else 0.0,
                   'final_bottom_gap_m': detail['bottom_gap_m'],
-                  'official_on_top': bool(held.states[OnTop].get_value(target)),
+                  'official_on_top': official_on_top,
                   'placement': placement, 'sim_steps': backend.steps}
         write_json(args.output / 'validation.json', result)
         recorder.finish({'status': 'passed', 'task_success': None, 'validation': result})

@@ -110,6 +110,46 @@ class GridMap:
             yield nxt,self.resolution*(math.sqrt(2) if dr and dc else 1)
 
 
+def mask_dynamic_obstacles(grid, boxes, *, margin, start):
+    """Overlay current floor furniture on the static map without moving start.
+
+    The scene supplies axis-aligned XY boxes. The robot keeps at least the
+    requested footprint margin from each box. If it already starts within
+    that margin, only moves that approach the object still closer are masked;
+    a base actually inside the object is an invalid start.
+    """
+    if not math.isfinite(margin) or margin <= 0:
+        raise ValueError('A positive finite dynamic obstacle margin is required')
+    start = tuple(float(v) for v in start)
+    grid.cell(start)
+    free = bytearray(grid.free)
+    changed = 0
+    def distance(x, y, lo_x, lo_y, hi_x, hi_y):
+        return math.hypot(max(lo_x-x, 0., x-hi_x),
+                          max(lo_y-y, 0., y-hi_y))
+    for lo_x, lo_y, hi_x, hi_y in boxes:
+        if not all(math.isfinite(v) for v in (lo_x, lo_y, hi_x, hi_y)) or lo_x>hi_x or lo_y>hi_y:
+            raise ValueError('Dynamic obstacle has an invalid box')
+        start_distance = distance(*start, lo_x, lo_y, hi_x, hi_y)
+        if start_distance == 0:
+            raise NavigationError('Robot base overlaps current movable furniture',
+                                  'navigation_invalid_start')
+        # A margin that already contains the base must still permit an exit.
+        forbidden_distance = (min(margin, start_distance-.02)
+                              if start_distance < margin else margin)
+        col_min = max(0, math.floor((lo_x-margin-grid.origin[0])/grid.resolution))
+        col_max = min(grid.width-1, math.ceil((hi_x+margin-grid.origin[0])/grid.resolution))
+        row_min = max(0, math.floor((lo_y-margin-grid.origin[1])/grid.resolution))
+        row_max = min(grid.height-1, math.ceil((hi_y+margin-grid.origin[1])/grid.resolution))
+        for row in range(row_min, row_max+1):
+            for col in range(col_min, col_max+1):
+                x,y = grid.world((row,col))
+                if distance(x,y,lo_x,lo_y,hi_x,hi_y) < forbidden_distance:
+                    index=row*grid.width+col
+                    if free[index]:free[index]=0;changed+=1
+    return GridMap(grid.width,grid.height,grid.resolution,grid.origin,bytes(free)),changed
+
+
 def candidate_points(hint, current, standoff=.7):
     """Port of jinkai _candidate_points_for_hint, converting XZ to OG XY."""
     points=[tuple(hint)]

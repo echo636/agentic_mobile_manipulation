@@ -318,7 +318,13 @@ class CheckedPlacement:
     def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
-        with self._placement_context():
+        # In demo mode, the visible hand is still over the selected support
+        # while 50 settling steps run. Keep a movable table and its adjacent
+        # chairs at their model-selected pose until the item is checked.
+        anchors=(self._nearby_transport_anchors(target)
+                 if getattr(self,'demo_motion',False) and
+                 hasattr(self,'_nearby_transport_anchors') else None)
+        with self._placement_context(anchors):
             try:
                 pose = self._surface_pose(held, target, point, yaw_degrees)
             except ActionPrimitiveError as exc:
@@ -434,7 +440,8 @@ class CheckedPlacement:
         speed=float(self.torch.linalg.norm(held.get_linear_velocity()))
         gap=float(lo[2]-hit['position'][2]) if hit['hit'] else None
         normal_z=float(hit['normal'][2]) if hit['hit'] else None
-        height_error=abs(float(hit['position'][2]-point[2])) if hit['hit'] else None
+        height_delta=float(hit['position'][2]-point[2]) if hit['hit'] else None
+        height_error=abs(height_delta) if height_delta is not None else None
         selected_xy_distance=float(self.torch.linalg.norm(center[:2]-point[:2]))
         # The contact predicate can be false for a motionless object whose
         # bottom is flush with the selected support (archived cabinet-door
@@ -450,7 +457,8 @@ class CheckedPlacement:
                 'selected_surface_neighborhood':selected_xy_distance<=.22,'settled':speed<=.10}
         return all(checks.values()), {'checks':checks,'touching_selected_object':touching,
             'speed_m_s':speed,'bottom_gap_m':gap,
-            'normal_z':normal_z,'selected_height_error_m':height_error,'selected_xy_distance_m':selected_xy_distance,
+            'normal_z':normal_z,'selected_height_error_m':height_error,
+            'selected_height_delta_m':height_delta,'selected_xy_distance_m':selected_xy_distance,
             'support_hit_body':hit.get('rigidBody'),'ignored_payload_names':[obj.name for obj in payload]}
 
     def _fillable_grid_pose(self, held, target, fillable, contents):

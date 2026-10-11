@@ -135,11 +135,10 @@ class DemoMotion:
                           hand_target_error_m=residual)
         return steps
 
-    def _demo_transport_pose(self, max_steps):
-        """Bring a newly held object back toward the robot before driving."""
-        if not self.demo_motion or self._demo_arm is None or max_steps < 16:
+    def _demo_transport_pose(self, max_steps, *, required=False, anchor=None):
+        """Lift a reached item clear, then stow it before base motion."""
+        if not self.demo_motion or self._demo_arm is None:
             return 0
-        steps = min(24, max_steps)
         arm = self._demo_arm
         indices = self._demo_joint_indices(arm)
         joints = self.robot.get_joint_positions().clone()
@@ -148,7 +147,36 @@ class DemoMotion:
         arm_indices = self.robot.arm_control_idx[arm]
         joints[arm_indices] = self.robot.untucked_default_joint_pos[arm_indices].to(device=joints.device)
         finish = joints[indices].clone()
-        with self._anchored_operation():
+        if float(self.torch.linalg.norm(finish-start)) < .12:
+            return 0
+        lift_steps = 0
+        if required:
+            if max_steps < 64:
+                raise SkillError('action_timeout',
+                                 'Insufficient steps for a clear held-item retreat')
+            hand = self.robot.eef_links[arm].get_position_orientation()[0]
+            above = hand.clone()
+            above[2] += .32
+            lift_steps = self._demo_reach(
+                above, max_steps - 24, anchor=anchor, arm=arm,
+                action='lift_before_navigation')
+            if self._demo_last_reach_error > .12:
+                raise SkillError('out_of_reach',
+                                 'Held item could not be lifted clear before navigation',
+                                 changed=True)
+            max_steps -= lift_steps
+            joints = self.robot.get_joint_positions().clone()
+            start = joints[indices].clone()
+            joints[self.robot.trunk_control_idx] = self._demo_trunk_home.to(device=joints.device)
+            joints[arm_indices] = self.robot.untucked_default_joint_pos[arm_indices].to(device=joints.device)
+            finish = joints[indices].clone()
+        if max_steps < 16:
+            if required:
+                raise SkillError('action_timeout',
+                                 'Insufficient steps to retract the held item before navigation')
+            return 0
+        steps = min(24, max_steps)
+        with self._anchored_operation(anchor):
             for values in eased_positions(start, finish, steps):
                 current = self.robot.get_joint_positions().clone()
                 current[indices] = values
@@ -156,4 +184,4 @@ class DemoMotion:
                 self._step(self.robot.q_to_action(current))
         self._demo_record(action='transport_pose', status='shown', arm=arm, steps=steps,
                           joint_delta=float(self.torch.linalg.norm(finish-start)))
-        return steps
+        return lift_steps + steps

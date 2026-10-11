@@ -60,7 +60,10 @@ class ControlledCarry:
         indices=self.torch.tensor([i for i in range(len(joints)) if i not in self.robot.base_idx.tolist()],device=joints.device)
         self._base_target={'position':pos.clone(),'orientation':quat.clone(),'indices':indices,
                            'posture':joints[indices].clone(),'held':None,'relative':None}
-        if obj is not None:self._object_anchor=(obj,tuple(v.clone() for v in obj.get_position_orientation()))
+        if obj is not None:
+            anchored = obj if isinstance(obj,(tuple,list)) else (obj,)
+            self._object_anchor=tuple((item,tuple(v.clone() for v in item.get_position_orientation()))
+                                      for item in anchored)
         original_step=self.og.sim.step_physics
         def anchored_physics(*args,**kwargs):
             self._restore_base_target();self._restore_object_anchor()
@@ -75,7 +78,8 @@ class ControlledCarry:
 
     def _restore_object_anchor(self):
         if getattr(self,'_object_anchor',None) is not None:
-            obj,pose=self._object_anchor;obj.set_position_orientation(*pose);obj.keep_still()
+            for obj,pose in self._object_anchor:
+                obj.set_position_orientation(*pose);obj.keep_still()
 
     def _ideal_state_action(self, primitive, obj, max_steps):
         from omnigibson.object_states import Open,ToggledOn

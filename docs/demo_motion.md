@@ -1227,3 +1227,65 @@ dining-table point. The motor lowered the candle 0.0770 m before settling;
 the final gap was approximately zero and OmniGibson's `OnTop` predicate was
 true. This validates the clearance-correction path as an executor component,
 but it does not validate model choices or the whole Christmas task.
+
+Christmas r33 (Astra low, public instance 301 / seed 0) remained incomplete.
+The model's first cane-to-dining-table placement had the correct selected
+table but failed the postcondition: the selected visual table point was
+0.7983 m high, the table's post-settling support at that patch was 0.0594 m
+higher, and the cane bottom still had a 0.0022 m gap. The official `OnTop`
+predicate requires contact and was false. A later table attempt could not
+sample a collision-free pose. The model placed two gift boxes beside the tree,
+but chairs and the table became visibly displaced during later navigation, so
+the diagnostic supervisor ended the run before model finish. Its independent
+whole-task audit is false; its structural video pass does not approve the clip.
+The five-view page is
+`http://10.130.140.115:8769/demo_motion_first10_20261009/10_putting_up_Christmas_decorations_inside_r33/review_5view.html`.
+
+The r33 review initially suggested the table fell during the second table
+approach. A frame-by-frame check corrected that timing: capture 9 still shows
+the table flat, capture 10 shows fallen chairs, and capture 12 shows the table
+leaning by the window. The archived navigation plans had
+`dynamic_collision_check=false`; the robot's base and held arm were allowed to
+sweep close to movable dining furniture. `scripts/probe_navigation_furniture.py`
+replays archived model-selected world points with simulator object handles only
+inside a labeled executor-component probe. It never uses a scripted probe as
+model success. An initial 0.48 m furniture margin rejected every visible
+approach; 0.38 m allowed a detour. A bare-base two-segment probe reached the
+selected table patch and then returned toward the basket with all six dining
+chairs stable (`demo_navigation_furniture_probe_20261011_r11`).
+
+The held-item probe reproduced a stronger signature: after an extended
+model-like cane reach, the old retract/navigation path moved the dining table
+0.75 m and displaced several chairs over 1 m (`r5`). Anchoring only the table
+during retreat still ejected one neighboring chair 1.21 m (`r8`), including
+when the hand first lifted clear (`r9`: 1.28 m). The executor now raises the
+held item by 0.32 m over visible control steps, briefly anchors the selected
+support and adjacent floor furniture during the fixed-base retreat, and then
+plans the base path on a current AABB overlay. The identical held-item probe
+completed both retreat and table approach (`r10`): 66 retreat steps, 3.61 m
+actual base travel, no chair movement above 0.005 m, table displacement
+0.023 m and rotation 0.85°. The next model trial must still verify choices,
+whole-task BDDL success, and the presentation gate.
+
+The archived table point also defined a placement regression. An initial-scene
+probe without the robot near the table passed official `OnTop`: the support
+surface was only 0.0144 m above the RGB point. A near-table probe then staged
+the same cane at the right hand, reached the archived point, and reproduced a
+`postcondition_error`. A snapshot taken before rollback showed the table
+displaced 1.249 m and rotated 35.5°, with several chairs displaced up to
+1.34 m; the final support ray no longer hit the table. The earlier 0.0594 m
+height mismatch was thus an effect of the unstable scene, not evidence for a
+permanent 0.08 m visual/collision tolerance. The original 0.05 m same-shelf
+check remains in place.
+
+The demo `place_on_top` motor now holds the model-selected support and
+geometrically adjacent floor furniture in their current pose during sampling
+and settling. Its subsequent visible arm retreat uses the same short-lived
+anchor group. The identical near-table probe passed official `OnTop`; after
+retreat and ten free physics steps, all tracked furniture remained within
+0.005 m and 0.1° of its pre-placement pose. These are private motor probes,
+recorded at `experiments/demo_selected_table_placement_probe_20261011_r2`
+and `_r3`, not model-task successes. The offline spectator selector now keeps
+one usable camera side within a tool action, allowing an emergency change only
+if its clearance falls below 0.65 m. The next autonomous Astra-low run and
+five-view review must assess both whole-task success and presentation quality.

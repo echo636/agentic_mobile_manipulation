@@ -64,7 +64,7 @@ while more than ten minutes remain is rejected without closing the episode.
 This guards a false clock claim; it does not force the model to solve a truly
 blocked scene or reveal evaluator state.
 
-## Status after r31 (2026-10-11, Asia/Shanghai)
+## Status after r33 (2026-10-11, Asia/Shanghai)
 
 Nine of ten tasks have at least one independently audited success. The passing
 attempts are radio r1/r2, trash r15, Halloween r17, plates/food r19, can-meat
@@ -136,3 +136,49 @@ That injected real-simulator probe passed: 8.00 cm initial bottom gap,
 table. It used a private object handle and injected clearance, so its status
 is executor-component validation only. The next autonomous trial remains the
 task-level test.
+
+Christmas r33 was a model-controlled partial run, stopped by the supervisor
+after the dining table and chairs were visibly displaced; it is not a model
+finish or a passing task attempt. The model selected an individual candy cane,
+but the first table placement failed: RGB depth selected the table at 0.798 m,
+while the post-settling support ray reported the table 0.0594 m higher.
+The placed cane had a 0.0022 m support gap, so the unmodified `OnTop` predicate
+was false. Subsequent table attempts also failed. Review captures 9–12 show
+the table still flat at capture 9, chairs displaced by capture 10, and the
+table leaning against a window by capture 12. The old navigation log used only
+a static eroded grid and did not include movable furniture.
+
+Short, explicitly non-model component probes isolated two motor hazards before
+another full task run. A static-grid overlay of current movable floor-furniture
+boxes at 0.48 m clearance left no visible goal for the archived table pixel;
+0.38 m preserved an approach. A bare-base probe reached that point and the
+subsequent basket approach without toppling any chair. Reproducing the archived
+held-item posture made an unprotected retract/navigation move the table 0.75 m
+and several chairs more than 1 m. Anchoring only the table while retracting
+still ejected one adjacent chair by about 1.2 m. The revised executor lifts the
+held item, briefly stabilizes the selected furniture cluster during the fixed-
+base retreat, and then drives around current furniture bounds. The same held-
+item probe reached the selected table point; the table moved 0.023 m and
+rotated 0.85°, with no chair exceeding the 0.03 m / 2° stability threshold.
+These are motor-component checks, not evidence of task success or polished
+video. The records are outside Git under `experiments/demo_navigation_furniture_probe_20261011_r5`
+through `_r11`.
+
+The first simulator placement probe, with the robot still far from the table,
+passed official `OnTop` and saw only a 0.0144 m visual/support height gap. A
+second probe staged the cane in the visible right hand at r33's archived base
+pose, reached the exact model-selected table pixel, and reproduced the failed
+placement. Before transaction rollback, the table had moved 1.249 m and
+rotated 35.5°; several chairs had moved 0.09–1.34 m. The support ray then missed
+the table entirely. This refutes a fixed visual/collision mesh offset as the
+primary cause, so the original 0.05 m selected-shelf tolerance remains.
+
+The placement motor now stabilizes the selected support and adjacent floor
+furniture through sampling, 50 settling steps, and the following visible arm
+retreat. On the identical near-table probe, official `OnTop` passed; after
+retreat and ten unanchored physics steps, no tracked furniture moved more than
+0.005 m or rotated more than 0.1°. This is component evidence, not a model
+task pass. The records are `experiments/demo_selected_table_placement_probe_20261011_r2`
+(red) and `_r3` (green). Spectator filming also keeps one usable camera side
+within each tool action, switching only if its clearance collapses; a full
+model trial is needed to judge the resulting video.

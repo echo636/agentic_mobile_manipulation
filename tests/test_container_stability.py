@@ -100,6 +100,31 @@ class ContainerStabilityTests(unittest.TestCase):
         self.assertIs(b.og.sim.step_physics,physics)
         self.assertIsNone(b._object_anchor);self.assertIsNone(b._base_target)
 
+    def test_short_operation_can_anchor_adjacent_furniture_as_a_group(self):
+        import torch
+        b=ControlledCarry();b.torch=torch;b._base_target=None;b._object_anchor=None
+        quat=torch.tensor([0.,0.,0.,1.]);base=torch.zeros(3)
+        poses=[torch.tensor([1.,0.,0.]),torch.tensor([2.,0.,0.])]
+        objects=[]
+        for index in range(2):
+            furniture=types.SimpleNamespace(
+                get_position_orientation=lambda i=index:(poses[i].clone(),quat.clone()),
+                set_position_orientation=lambda p,q,i=index:poses[i].copy_(p),
+                keep_still=lambda:None)
+            objects.append(furniture)
+        b.robot=types.SimpleNamespace(get_position_orientation=lambda:(base.clone(),quat.clone()),
+            get_joint_positions=lambda:torch.zeros(4),base_idx=torch.tensor([0,1]))
+        b._restore_base_target=lambda:base.copy_(b._base_target['position'])
+        def physics():
+            base.add_(10)
+            for pose in poses:pose.add_(10)
+        b.og=types.SimpleNamespace(sim=types.SimpleNamespace(step_physics=physics))
+        with b._anchored_operation(objects):
+            b.og.sim.step_physics()
+            self.assertEqual([float(p[0]) for p in poses],[1.,2.])
+            self.assertTrue(torch.equal(base,torch.zeros(3)))
+        self.assertIsNone(b._object_anchor)
+
     def test_second_placement_preserves_existing_content_during_sampling_and_settling(self):
         import torch
         class Inside:pass

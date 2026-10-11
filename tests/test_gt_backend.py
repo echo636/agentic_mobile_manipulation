@@ -46,6 +46,8 @@ class GTBackendTests(unittest.TestCase):
         b.navigation_distance = 0.
         b.deadline = EpisodeDeadline()
         b.ideal_carry = True
+        b.demo_motion = False
+        b._demo_arm = None
         b.record_video = False
         b.video = None
         b.video_render_stride, b.video_render_flushes = 2, 4
@@ -65,7 +67,9 @@ class GTBackendTests(unittest.TestCase):
             occupancy[35:41, 30] = 255  # Route must go through this doorway.
         trav = SimpleNamespace(floor_heights=[0.], map_resolution=.1,
                                floor_map=[Tensor(occupancy)], _erode_trav_map=lambda x: x)
-        b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav))
+        b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav, objects=[]))
+        b._ideal_held = None
+        b._carry_contents = []
         b._navigation_self_hulls = lambda: ((), {'hulls_prepared': 0})
         b._approach_visible = lambda xy, point, selected, **kwargs: xy[0] >= .5
         b._ground = Mock(return_value=(None, Tensor([1., 0., 0.]),
@@ -114,13 +118,59 @@ class GTBackendTests(unittest.TestCase):
         self.assertGreater(plan.geodesic_m, 1.5)
         self.assertEqual(limit, 700)
         self.assertEqual(result['strategy'], 'jinkai_visual_point_gt_grid_v1')
-        self.assertFalse(result['dynamic_collision_check'])
+        self.assertTrue(result['dynamic_collision_check'])
         record = json.loads((self.output/'navigation_plans.jsonl').read_text())
         self.assertEqual(record['audience'], 'executor_private')
-        self.assertEqual(record['collision_substrate'], 'static_eroded_grid')
+        self.assertEqual(record['collision_substrate'],
+                         'static_eroded_grid_plus_current_movable_floor_aabbs')
+        self.assertEqual(record['dynamic_obstacle_count'], 0)
         self.assertTrue(record['precomputed_walkability'])
         self.assertFalse(record['online_mapping'])
         b._update_online_map.assert_not_called()
+
+    def test_current_movable_furniture_is_selected_without_task_bindings(self):
+        b=self.backend()
+        table=SimpleNamespace(name='table',category='breakfast_table',fixed_base=False,
+                              aabb=([-.6,-.4,0.],[.6,.4,.8]))
+        tree=SimpleNamespace(name='tree',category='christmas_tree',fixed_base=False,
+                             aabb=([-.8,-.8,0.],[.8,.8,2.]))
+        small=SimpleNamespace(name='candle',category='pillar_candle',fixed_base=False,
+                              aabb=([0.,0.,.8],[.1,.1,.9]))
+        b.env.scene.objects=[table,tree,small]
+        self.assertEqual(b._dynamic_floor_obstacles(0.),
+                         ([(-.6,-.4,.6,.4)],['table']))
+        b._ideal_held=table
+        self.assertEqual(b._dynamic_floor_obstacles(0.),([],[]))
+
+    def test_carried_item_is_retracted_before_base_navigation(self):
+        b = self.backend()
+        b.demo_motion = True
+        b._demo_arm = 'right'
+        b._ideal_held = object()
+        selected = SimpleNamespace(name='selected', aabb=([.9,-.1,0.],[1.1,.1,1.]))
+        def retract(limit, *, required=False, anchor=None):
+            self.assertTrue(required)
+            self.assertEqual(limit, 700)
+            self.assertEqual(anchor,[selected])
+            b.steps += 24
+            return 24
+        b._demo_transport_pose = Mock(side_effect=retract)
+        target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 1.]), None),
+                                 selected_object=selected)
+        b._navigate(target, 700)
+        b._demo_transport_pose.assert_called_once()
+        self.assertEqual(b._execute_gt_plan.call_args.args[2], 676)
+
+    def test_transport_anchors_include_adjacent_chairs_but_not_remote_furniture(self):
+        b=self.backend()
+        table=SimpleNamespace(name='table',category='breakfast_table',fixed_base=False,
+                              aabb=([-.6,-.4,0.],[.6,.4,.8]))
+        chair=SimpleNamespace(name='chair',category='straight_chair',fixed_base=False,
+                              aabb=([.5,.4,0.],[.9,.9,1.]))
+        remote=SimpleNamespace(name='remote',category='sofa',fixed_base=False,
+                               aabb=([3.,3.,0.],[4.,4.,1.]))
+        b.env.scene.objects=[table,chair,remote]
+        self.assertEqual(b._nearby_transport_anchors(table),[table,chair])
 
     def test_public_navigation_checks_own_silhouette_but_selected_pixel_reach_may_cross_it(self):
         b=self.backend()

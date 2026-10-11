@@ -26,6 +26,18 @@ def ray_hits_selected_object(hit, selected_object):
     return bool(path and isinstance(body, str) and
                 (body == path or body.startswith(path.rstrip('/') + '/')))
 
+
+def stable_spectator_candidate(candidates, previous_choice, *, same_request):
+    """Keep one filming side through an action unless its view collapses."""
+    if not candidates:
+        raise ValueError('At least one spectator pose is required')
+    if same_request:
+        previous=next((row for row in candidates if row[3]==previous_choice),None)
+        if previous is not None and previous[2]>=.65:
+            return previous
+    return max(candidates,key=lambda row:row[0])
+
+
 class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
@@ -64,6 +76,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self.spectator = None
         self._spectator_anchor = None
         self._spectator_choice = None
+        self._spectator_request_id = None
         self._base_target = None
         self.image_size=int(os.environ.get('MAS_RGB_IMAGE_SIZE','512'))
         if self.image_size not in (512,768,1024):
@@ -174,7 +187,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             # Film the selected interaction, while keeping part of the robot in shot.
             target = (target+self._demo_focus.cpu())/2
         ignore = [link.prim_path for link in self.robot.links.values()]
-        best = None
+        request_id=self.video.context.get('request_id') if self.video else None
+        candidates=[]
         for i,angle in enumerate((135,-135,90,-90,180,0,45,-45)):
             theta = math.radians(angle)
             for j,height in enumerate((.8,1.2)):
@@ -183,9 +197,13 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 hit = raytest(target,target+offset,ignore_bodies=ignore)
                 clearance = float(torch.linalg.norm(hit['position'].cpu()-target))-.25 if hit['hit'] else distance
                 usable = max(.12,min(distance,clearance))
-                score = usable-.015*i-.005*j + (.65 if (i,j)==self._spectator_choice else 0)
-                if best is None or score>best[0]: best=(score,target+direction*usable,usable,(i,j))
-        _,camera,clearance,self._spectator_choice = best
+                score = usable-.015*i-.005*j + (
+                    .65 if (i,j)==self._spectator_choice and usable>=.65 else 0)
+                candidates.append((score,target+direction*usable,usable,(i,j)))
+        _,camera,clearance,self._spectator_choice = stable_spectator_candidate(
+            candidates,self._spectator_choice,
+            same_request=request_id==self._spectator_request_id)
+        self._spectator_request_id=request_id
         orientation = torch.tensor(look_at_orientation(camera.tolist(),target.tolist()),dtype=camera.dtype)
         self.spectator.set_position_orientation(camera,orientation)
         self._spectator_anchor = (pos.clone(),yaw)
@@ -193,7 +211,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         # Rendering here would draw the old surround-camera poses unnecessarily.
         with (self.output/'spectator_poses.jsonl').open('a') as stream:
             stream.write(json.dumps({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
-                                     'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})+'\n')
+                                     'look_at':target.tolist(),'clearance_m':clearance,
+                                     'choice':self._spectator_choice,'request_id':request_id,
+                                     'audience':'offline_only'})+'\n')
 
     def _prepare_spectator(self):
         try:
@@ -530,10 +550,65 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10):return True
         return False
 
+    def _dynamic_floor_obstacles(self, base_z):
+        """Current movable floor furniture, for private base-path clearance."""
+        held=self._get_held()
+        carried={id(held),*(id(obj) for obj,_ in self._carry_contents)}
+        boxes=[];names=[]
+        for obj in self.env.scene.objects:
+            if obj is self.robot or id(obj) in carried or getattr(obj,'fixed_base',True):
+                continue
+            category=str(getattr(obj,'category','')).lower()
+            if 'tree' in category or 'plant' in category:
+                # Branch AABBs cover navigable floor; these sparse objects
+                # need the simulator's actual route and visual-ray checks.
+                continue
+            lo,hi=obj.aabb
+            width=float(hi[0]-lo[0]);depth=float(hi[1]-lo[1])
+            if (float(lo[2])>base_z+.12 or float(hi[2])<base_z+.25
+                    or max(width,depth)<.35):
+                continue
+            boxes.append((float(lo[0]),float(lo[1]),float(hi[0]),float(hi[1])))
+            names.append(obj.name)
+        return boxes,names
+
+    def _nearby_transport_anchors(self, selected):
+        """Temporarily stabilize the selected support and adjacent floor furniture."""
+        if selected is None:
+            return None
+        lo,hi=selected.aabb
+        base_z=float(self.robot.get_position_orientation()[0][2])
+        _,names=self._dynamic_floor_obstacles(base_z)
+        furniture={obj.name:obj for obj in self.env.scene.objects if obj.name in names}
+        anchors=[selected]
+        for name in names:
+            obj=furniture[name]
+            if obj is selected:
+                continue
+            other_lo,other_hi=obj.aabb
+            dx=max(float(lo[0]-other_hi[0]),float(other_lo[0]-hi[0]),0.)
+            dy=max(float(lo[1]-other_hi[1]),float(other_lo[1]-hi[1]),0.)
+            if math.hypot(dx,dy)<=.65:
+                anchors.append(obj)
+        return anchors
+
     def _navigate(self, target, max_steps, *, for_manipulation=False):
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
         from dataclasses import asdict
-        from .gt_navigation import GridMap, NavigationError, plan_navigation, visual_approach_settings, STRATEGY
+        from .gt_navigation import (GridMap, NavigationError, mask_dynamic_obstacles,
+                                    plan_navigation, visual_approach_settings, STRATEGY)
+        # A failed placement leaves the hand above the selected surface while
+        # the item remains held. Carrying that long lever through a base turn
+        # can knock over furniture even on a clear base path.
+        selected=getattr(target,'selected_object',None)
+        transport_anchors=(self._nearby_transport_anchors(selected)
+                           if self.demo_motion and self._get_held() is not None
+                           and self._demo_arm is not None else None)
+        transport_steps = (self._demo_transport_pose(
+            max_steps, required=True, anchor=transport_anchors)
+                           if self.demo_motion and self._get_held() is not None
+                           and self._demo_arm is not None else 0)
+        max_steps -= transport_steps
         trav=self.env.scene.trav_map
         position,_=self.robot.get_position_orientation()
         point=target.get_position_orientation()[0]
@@ -543,9 +618,15 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
         height,width=occupancy.shape
-        grid=GridMap(width,height,float(trav.map_resolution),
-                     (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
-                     (occupancy!=0).astype('uint8').tobytes())
+        static_grid=GridMap(width,height,float(trav.map_resolution),
+                            (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
+                            (occupancy!=0).astype('uint8').tobytes())
+        furniture,furniture_names=self._dynamic_floor_obstacles(float(position[2]))
+        try:
+            grid,masked_cells=mask_dynamic_obstacles(
+                static_grid,furniture,margin=.38,start=position[:2].cpu().tolist())
+        except NavigationError as exc:
+            raise SkillError(exc.code,str(exc)) from exc
         # Public navigation must leave the selected surface observable in the
         # resulting RGB. An in-action reach may move closer after the model has
         # already selected its pixel; its hand is expected to enter that ray.
@@ -565,7 +646,14 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                  'visual_standoff_m':standoff,'visual_margin':margin,
                  'self_occlusion_geometry':self_report,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
-                 'dynamic_collision_check':False,'collision_substrate':'static_eroded_grid',
+                 'dynamic_collision_check':True,
+                 'collision_substrate':'static_eroded_grid_plus_current_movable_floor_aabbs',
+                 'dynamic_obstacle_count':len(furniture),
+                 'dynamic_masked_cells':masked_cells,
+                 'dynamic_obstacle_names':furniture_names,
+                 'pre_navigation_transport_steps':transport_steps,
+                 'pre_navigation_anchored_furniture':
+                     [obj.name for obj in transport_anchors] if transport_anchors else [],
                  'precomputed_walkability':True,'online_mapping':False}
         with (self.output/'navigation_plans.jsonl').open('a') as stream:
             stream.write(json.dumps(details)+'\n')
@@ -573,7 +661,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self.navigation_distance+=result['actual_path_distance_m']
         return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
-                'start_grid_offset_m':plan.start_grid_offset_m,'dynamic_collision_check':False}
+                'start_grid_offset_m':plan.start_grid_offset_m,'dynamic_collision_check':True,
+                'pre_navigation_transport_steps':transport_steps,
+                'steps':result['steps']+transport_steps}
 
     def _execute_gt_plan(self, grid, plan, max_steps):
         """Follow the GT path using actual pose feedback and bounded commands."""
@@ -825,7 +915,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                                    'toggle_on','toggle_off'}:
             # A stretched arm must not sweep the destination over when the
             # model's next navigation action moves the base away.
-            shown+=self._demo_transport_pose(max_steps-(self.steps-before_effect_steps))
+            post_anchor=(self._nearby_transport_anchors(obj)
+                         if primitive=='place_on_top' else None)
+            shown+=self._demo_transport_pose(max_steps-(self.steps-before_effect_steps),
+                                             anchor=post_anchor)
         if shown:
             result={**result,'demo_motion':{'real_env_steps':shown,'ideal_contact':True}}
         return {**result,'private_grounding':grounding}
