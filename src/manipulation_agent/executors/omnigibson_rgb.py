@@ -921,11 +921,15 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                                              anchor=post_anchor)
         if shown:
             result={**result,'demo_motion':{'real_env_steps':shown,'ideal_contact':True}}
+        if primitive == 'grasp':
+            # Report only the class of the object actually selected by this
+            # grasp. Instance names, pose and task bindings stay private.
+            result = {**result, 'grounded_category': getattr(obj, 'category', None)}
         return {**result,'private_grounding':grounding}
 
     def evaluate(self):
         result=super().evaluate()
-        result['protocol']='rgb_agent_ideal_executor_v9_shared_episode_clock'
+        result['protocol']='rgb_agent_ideal_executor_v10_selected_grasp_category_feedback'
         result['observation_mode']=self.mode
         result['demo_motion']=getattr(self,'demo_motion',False)
         return result
@@ -936,7 +940,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         result.update(executor='controlled_carry_and_checked_placement_plus_jinkai_gt_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_jinkai_gt_grid_navigation',
                       observation_mode=self.mode,image_size=self.image_size,demo_motion=getattr(self,'demo_motion',False),
                       grounding='direct_pixel_depth_backprojection_private_executor_only',
-                      model_visible_truth=False)
+                      model_visible_truth={'successful_grasp_category':True,
+                          'instance_id':False,'pose':False,'task_binding':False,
+                          'goal_state':False,'evaluator':False})
+        result['action_feedback_contract']='selected_object_category_after_successful_grasp_only'
         result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
             'depth_consistency_check':False, 'navigation_object_lookup':False,
             'manipulation_object_lookup':'first_visual_surface_on_selected_ray',

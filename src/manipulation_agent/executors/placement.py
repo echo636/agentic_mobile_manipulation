@@ -29,6 +29,23 @@ def surface_seating_delta(support):
     return gap - .003
 
 
+def postsettle_seating_delta(support):
+    """Close a measured support gap even if a one-step contact cache says OnTop.
+
+    A selected pose can still sit centimetres above its support after the
+    final physics step. The contact predicate may be true for that step and
+    turn false on the very next step without any pose or furniture movement.
+    """
+    gap = support.get('bottom_gap_m')
+    checks = support.get('checks', {})
+    if (gap is None or not math.isfinite(gap) or not .002 < gap <= .06 or
+            not all(checks.get(key, False) for key in (
+                'released', 'support_ray_hits_selected_object', 'upward_support',
+                'selected_shelf_height', 'selected_surface_neighborhood', 'settled'))):
+        return 0.0
+    return gap + .001
+
+
 @contextmanager
 def placement_transaction(sim, record):
     """Restore the pre-action state, including the grasp, on a failed placement."""
@@ -397,23 +414,30 @@ class CheckedPlacement:
             self._verify_payload(dependencies)
             if point is not None:
                 if not hasattr(self,'_stabilized_containers'):self._stabilized_containers={}
-                # A sampler may leave a shallow object just above upholstery:
-                # geometrically supported, but without the contact required by
-                # official OnTop. Seat it by the measured ray gap and retain
-                # the motor's ideal support through subsequent control steps.
-                gap=support.get('bottom_gap_m')
-                if not official_on_top and gap is not None and .002<gap<=.025:
+                # The last placement step may report transient contact even
+                # when a shallow item remains centimetres above its selected
+                # surface. Use the measured gap, not that one-step predicate,
+                # before fixing its pose through subsequent control steps.
+                adjustment=postsettle_seating_delta(support)
+                if adjustment:
                     original=held.get_position_orientation()
-                    seated=original[0].clone();seated[2]-=gap+.001
+                    seated=original[0].clone();seated[2]-=adjustment
                     self._stabilized_containers[held]=(seated,original[1])
                     try:
-                        for _ in range(min(4,max_steps)):
+                        postseat_steps=min(10,max_steps)
+                        for _ in range(postseat_steps):
                             self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
                     except Exception:
                         self._stabilized_containers.pop(held,None)
                         raise
-                    seated_ok,_=self._selected_surface_support(held,target,point,
+                    seated_official=bool(held.states[OnTop].get_value(target))
+                    seated_ok,seated_support=self._selected_surface_support(held,target,point,
                         bool(held.states[Touching].get_value(target)),[obj for obj,_ in contents])
+                    self._placement_record({'status':'postseat_check',
+                        'target':target.name,'held':held.name,
+                        'lowered_m':adjustment,'settling_steps':postseat_steps,
+                        'official_on_top':seated_official,
+                        'selected_surface_support':seated_support})
                     if not seated_ok:
                         self._stabilized_containers.pop(held,None)
                         held.set_position_orientation(*original);held.keep_still()

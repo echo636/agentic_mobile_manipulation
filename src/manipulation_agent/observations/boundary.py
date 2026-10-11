@@ -1,5 +1,6 @@
 """Strict allowlist: fail closed if an observer accidentally includes simulator truth."""
 import copy
+import re
 from ..contracts import SkillError
 
 OBS_KEYS = {"images", "observation_mode"}
@@ -51,3 +52,20 @@ ERROR_MESSAGES = {
 def public_execution_error(exc: SkillError) -> dict:
     code = exc.code if exc.code in ERROR_MESSAGES else "execution_error"
     return {"code":code,"message":ERROR_MESSAGES[code],"world_may_have_changed":exc.changed}
+
+
+def public_action_effect(primitive: str, details: dict) -> dict:
+    """Allow one selected-object class through after a successful grasp.
+
+    The motor may know the selected simulator object, but its name, pose and
+    task binding remain private. This feedback is about the action just
+    completed, not an inventory or evaluator observation.
+    """
+    effect = {'primitive': primitive, 'status': 'completed',
+              'verification': 'executor_operation_only'}
+    category = details.get('grounded_category') if primitive == 'grasp' and isinstance(details, dict) else None
+    if (isinstance(category, str) and len(category) <= 64
+            and re.fullmatch(r'[a-z][a-z0-9_]*', category)
+            and not re.search(r'_[0-9]+$', category)):
+        effect['grasped_category'] = category
+    return effect

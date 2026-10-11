@@ -7,6 +7,7 @@ from .agent_loop import LoopConfig, VisualToolLoop
 WORKFLOW_PROMPT = '''You control a mobile manipulation robot through RGB images and structured MCP tools.
 Only the task instruction, RGB pixels, image/camera metadata, your notes and action execution feedback are available.
 There is no oracle object list, state flag, distance, map or evaluator feedback. Perceive and choose objects yourself.
+After a successful grasp, effect.grasped_category reports only the class actually picked by your selected pixel. Check it against the instruction before choosing a destination; it is not an object ID or goal-state report.
 First call initialize({}) and inspect its front/back/left/right RGB. It returns the prepared episode's current view without resetting the scene.
 Then call list_skills and read_skill(name="visual-manipulation", resource="SKILL.md").
 Read relevant exploration, pick-and-place and recovery skills as needed; they are frozen workflow documents, not action primitives.
@@ -31,6 +32,7 @@ Repeat this direct observation-action-feedback loop until the task appears compl
 There is no explicit planning tool, memory store or skill-reading phase. Your conversation retains previous RGB and tool feedback.
 Only the task instruction, robot RGB images, image metadata and bounded execution feedback are available.
 There is no oracle object list, object ID, distance, map, state flag or evaluator feedback. Perceive and choose targets yourself.
+After a successful grasp, effect.grasped_category reports only the class actually picked by your selected pixel. Check it against the instruction before choosing a destination; it is not an object ID or goal-state report.
 act takes primitive, revision and target={image_ref: latest image reference, point: [x,y]} with normalized x left-to-right and y top-to-bottom.
 Navigate toward a visible target, then select it again in the fresh image before manipulation. release/wait use a null target. Use confirm_bulk_grasp=false for ordinary actions; true deliberately lifts an entire loaded support or furniture-sized object after a confirmation error.
 Once the target is clearly visible and within manipulation range, select it for the intended manipulation action instead of navigating toward it again. A navigation step is for obtaining a workable view and reach, not for moving as close as possible.

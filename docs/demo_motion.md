@@ -1289,3 +1289,27 @@ and `_r3`, not model-task successes. The offline spectator selector now keeps
 one usable camera side within a tool action, allowing an emergency change only
 if its clearance falls below 0.65 m. The next autonomous Astra-low run and
 five-view review must assess both whole-task success and presentation quality.
+
+Christmas r34 tested the furniture fix under autonomous `gpt-6-astra`/`low`
+control. The robot and selected dining furniture stayed stable, but the
+supervisor stopped the model after repeated item-identity errors. Its second
+pillar candle was grasped from the basket and then put on a sofa because the
+model called it a candy cane. The run failed the independent whole-task audit
+(1/9 expanded goals satisfied), though its five-view video passed structural
+validation. This is an intentionally stopped partial run, not a successful
+model finish. The review is
+`http://10.130.140.115:8769/demo_motion_first10_20261009/10_putting_up_Christmas_decorations_inside_r34/review_5view.html`.
+
+The `grasp` effect now returns the category of the object selected by the
+model's pixel. This executor feedback can correct a visual identity mistake
+without choosing any action or target for the model. It exposes no instance
+ID, pose, task binding or evaluator state; the experiment provenance records
+that it is simulator-derived rather than a pure RGB observation. A second
+r34 failure came from shallow table placement: the cane could be 4.4 cm above
+the selected table while the official contact predicate briefly read true.
+On the next simulated step, `OnTop` disappeared despite unchanged poses. A
+measured-gap seating correction, guarded by a ray to the exact selected
+support and its shelf height, now holds the item through ten control steps.
+Private real-simulator cane and wreath probes confirmed official `OnTop` both
+before arm retreat and after ten further free steps. These probes do not
+establish whole-task success or presentation quality; r35 must test both.

@@ -25,6 +25,8 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--instance', type=int, default=301)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--trace-contact', action='store_true',
+                        help='Record official contact after placement and every retreat/free physics step')
     args = parser.parse_args()
     recorder = Recorder(args.output, {'task': args.task, 'instance': args.instance,
         'seed': args.seed, 'policy': 'scripted_private_selected_table_placement_probe',
@@ -33,7 +35,7 @@ def main():
     backend = None
     try:
         from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-        from omnigibson.object_states import OnTop
+        from omnigibson.object_states import OnTop, Touching
         import omnigibson.utils.transform_utils as T
         backend = RGBBackend(args.task, args.instance, args.output, seed=args.seed,
                              record_video=False, inside_placement='official_volume')
@@ -89,15 +91,42 @@ def main():
         backend._placement_record = observed_placement_record
         placement = None
         placement_error = None
+        contact_trace = []
+        original_step = None
+        phase = 'retreat'
+        def contact_snapshot(label):
+            item_position = held.get_position_orientation()[0]
+            support_position = table.get_position_orientation()[0]
+            hand_position = backend.robot.eef_links['right'].get_position_orientation()[0]
+            return {'phase': label, 'env_step': backend.steps,
+                    'official_on_top': bool(held.states[OnTop].get_value(table)),
+                    'touching_support': bool(held.states[Touching].get_value(table)),
+                    'item_position': item_position.tolist(),
+                    'item_bottom_z': float(held.aabb[0][2]),
+                    'support_position': support_position.tolist(),
+                    'hand_distance_m': float(backend.torch.linalg.norm(hand_position-item_position))}
         try:
             placement = backend._checked_place_on_top(table, 150, point)
+            if args.trace_contact:
+                contact_trace.append(contact_snapshot('after_place'))
+                original_step = backend._step
+                def traced_step(action):
+                    original_step(action)
+                    contact_trace.append(contact_snapshot(phase))
+                backend._step = traced_step
             backend._demo_transport_pose(90,
                 anchor=backend._nearby_transport_anchors(table))
+            phase = 'free'
             for _ in range(10):
                 backend._step(backend.robot.q_to_action(backend.robot.get_joint_positions()))
         except Exception as exc:
             placement_error = {'type': type(exc).__name__, 'message': str(exc),
                                'code': getattr(exc, 'code', None)}
+        finally:
+            if original_step is not None:
+                backend._step = original_step
+            if args.trace_contact:
+                write_json(args.output / 'contact_trace.json', contact_trace)
         motion = {}
         for name,obj in tracked.items():
             old_pos,old_quat = before[name]

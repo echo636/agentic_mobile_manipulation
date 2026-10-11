@@ -64,7 +64,7 @@ while more than ten minutes remain is rejected without closing the episode.
 This guards a false clock claim; it does not force the model to solve a truly
 blocked scene or reveal evaluator state.
 
-## Status after r33 (2026-10-11, Asia/Shanghai)
+## Status after r34 (2026-10-11, Asia/Shanghai)
 
 Nine of ten tasks have at least one independently audited success. The passing
 attempts are radio r1/r2, trash r15, Halloween r17, plates/food r19, can-meat
@@ -182,3 +182,47 @@ task pass. The records are `experiments/demo_selected_table_placement_probe_2026
 (red) and `_r3` (green). Spectator filming also keeps one usable camera side
 within each tool action, switching only if its clearance collapses; a full
 model trial is needed to judge the resulting video.
+
+Christmas r34 was an autonomous `gpt-6-astra`/`low` partial run stopped by the
+supervisor after 23 model-selected actions. Its official whole-task success was
+false and only 1/9 expanded goals were satisfied; the continuous video passed
+structural review, but presentation quality is not approved. Furniture stayed
+stable. The model visibly placed a candy cane on the dining table, the first
+pillar candle on that table, and a wreath on a living-room sofa. These visible
+placements are not counted as task success. It twice tried to place the first
+candle on a sofa before correcting to the table. After a later grasp resolved
+to `pillar_candle_223`, the model's own reasoning said it would place a *cane*
+on the sofa and it put that second candle on a sofa. This repeated identity
+mismatch made continuing the 120-minute episode low value. The supervisor
+closed it as `aborted`; the model did not formally finish. Its failed audit and
+five-view review remain at
+`http://10.130.140.115:8769/demo_motion_first10_20261009/10_putting_up_Christmas_decorations_inside_r34/review_5view.html`.
+
+The selected pixel still comes from the model's current RGB, but a successful
+`grasp` now reports only the selected object's simulator category in
+`effect.grasped_category`. No instance ID, pose, task binding, goal-state list,
+or evaluator result is exposed. The model prompt and pick-and-place skill tell
+the model to compare this bounded execution feedback with the task instruction
+before choosing a destination. This is simulator-derived feedback, so new
+trials must not be described as pure RGB-only perception. It is not a scripted
+action or a task-answer oracle. The response allowlist has CPU regression
+coverage; the next autonomous run must verify that the model actually uses it.
+
+r34 also exposed a separate motor defect. Its cane postcheck reported a
+0.0388 m gap above the selected table surface and official `OnTop=false`, yet
+accepted geometric support. A short real-simulator probe staged the same cane
+at the archived base pose and selected table point. In the traced red run,
+`OnTop` was momentarily true at the end of placement but false on the first
+arm-retreat step without item or table pose movement; the actual ray-measured
+gap was 0.0439 m. The table moved less than 0.01 mm. The old code skipped
+seating whenever that transient `OnTop` was true. The motor now seats a released,
+settled item by its measured gap only when a ray hits the exact selected
+support at the correct shelf height, then runs ten controlled physics steps.
+The same cane probe finished with official `OnTop=true` before retreat and
+after ten free steps; the gap was about -0.001 m, and furniture remained stable.
+A second private component probe placed the wreath on r34's selected sofa:
+official `OnTop` was true before retreat and after ten free steps. The red/green
+records are outside Git under `experiments/demo_cane_contact_probe_20261011_r2`
+through `_r5` and `experiments/demo_wreath_contact_probe_20261011_r1`.
+Neither probe is a model-task pass. The next full trial is r35 on a new exact
+source/skill/model configuration; its task and presentation gates remain open.

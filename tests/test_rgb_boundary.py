@@ -3,8 +3,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
-from manipulation_agent.observations.boundary import public_observation
+from manipulation_agent.observations.boundary import public_observation, public_action_effect
 from manipulation_agent.observations.boundary import public_execution_error
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.records import Recorder
@@ -48,6 +49,19 @@ class RGBBoundary(unittest.TestCase):
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
+    def test_grasp_reports_only_selected_category(self):
+        details={'grounded_category':'pillar_candle',
+                 'private_grounding':{'selected_object_prim':'/World/scene_0/pillar_candle_223',
+                                      'private_pose':[1,2,3]}}
+        with patch.object(self.backend,'execute_visual',return_value=details):
+            result=self.act('grasp')
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['effect']['grasped_category'],'pillar_candle')
+        self.assertNotIn('pillar_candle_223',json.dumps(result))
+        self.assertNotIn('private_pose',json.dumps(result))
+        self.assertNotIn('grasped_category',public_action_effect('place_on_top',details))
+        self.assertNotIn('grasped_category',public_action_effect('grasp',
+                                                                {'grounded_category':'pillar_candle_223'}))
     def test_old_image_ref_expires_even_without_physics(self):
         old=self.target();self.call('observe')
         r=self.act(target=old)

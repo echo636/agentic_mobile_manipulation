@@ -7,7 +7,7 @@ from dataclasses import asdict
 from .contracts import Budget, SkillError, validate
 from .deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
 from .harness import Harness as LegacyPlanHelpers
-from .observations.boundary import public_observation, public_execution_error
+from .observations.boundary import public_observation, public_execution_error, public_action_effect
 from .records import write_json
 from .skill_runtime import SkillLibrary
 from .tools import REGISTRY, tool_specs
@@ -179,7 +179,7 @@ class VisionHarness:
             # but do not spend the expired task budget rendering another capture.
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
-        return {'effect':{'primitive':primitive,'status':'completed','verification':'executor_operation_only'},
+        return {'effect':public_action_effect(primitive, details),
                 'observation':self.snapshot,'actions_used':self.actions}
 
     def update_plan(self,reason,subgoals): return LegacyPlanHelpers._tool_update_plan(self,reason,subgoals)
