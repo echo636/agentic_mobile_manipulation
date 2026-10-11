@@ -1055,3 +1055,13 @@ reported `blocked` after inspecting multiple cabinets without a reliable RGB
 view of both jars. Formal finish, model/simulator call alignment, video and
 empty-hand checks passed, with ten visible motion segments. The next can-meat
 trial must establish whether the 18° pitch resolves this failure.
+
+Christmas r26 first grasped an individual candy cane (`candy_cane_224`) and
+placed it on `sofa_lugrhk_1`, then grasped `candy_cane_226`. Its first table
+placement failed, and its retry succeeded on the floor beneath/near the table
+even though the model later described it as a dining-table placement. It then
+regrasped the wicker basket and ended `blocked`; official task success failed.
+The independent review passed formal finish, call alignment, video and empty
+hand, with 15 visible motion segments. The pick-and-place skill now directs
+the model to select the tabletop itself and regrasp any item left on the
+floor; that correction requires a new autonomous trial.
