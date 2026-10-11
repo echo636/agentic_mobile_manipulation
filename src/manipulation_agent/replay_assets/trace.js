@@ -98,8 +98,8 @@ window.ReplayToolTrace = class ReplayToolTrace {
     }
     const viewLabel = {front: '前视', back: '后视', left: '左视', right: '右视'}[image.view] || image.view || 'RGB';
     const caption = target
-      ? `${viewLabel} · ${image.image_ref || target.image_ref} · (u=${target.point[0]}, v=${target.point[1]}) · 调用前原图；${target.description}`
-      : `${image.view || 'RGB'} · 工具返回原图${image.image_ref ? ' · ' + image.image_ref : ''}`;
+      ? `${viewLabel} · ${image.image_ref || target.image_ref} · (u=${target.point[0]}, v=${target.point[1]})`
+      : `${viewLabel}${image.image_ref ? ' · ' + image.image_ref : ''}`;
     figure.append(wrap, this.node('figcaption', caption, 'tt-caption'));
     return figure;
   }
@@ -117,12 +117,7 @@ window.ReplayToolTrace = class ReplayToolTrace {
       return;
     }
     const primitive = String(arguments_.primitive || '').toLowerCase();
-    const description = primitive === 'navigate_to'
-      ? '红圈为所选表面点，不是机器人最终位置。'
-      : primitive.startsWith('place')
-        ? '红圈选择容器或承载面，不是手中物体或精确落点。'
-        : '红圈选择操作对象，不代表按钮或夹爪的精确接触点。';
-    const figure = this.imageFigure(image, entry, {...target, primitive, description});
+    const figure = this.imageFigure(image, entry, {...target, primitive});
     if (figure) {
       const media = this.node('div', undefined, 'tt-media tt-target');
       media.append(figure);

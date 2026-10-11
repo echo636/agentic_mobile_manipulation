@@ -24,7 +24,7 @@ const showAll=()=>$('show-all')?.checked||false;
 function playbackLabel(){text('video-play',isPlaying()?'Ⅱ 暂停':'▶ 播放')}
 function pause(){reviewPlaying=false;video.pause();playbackLabel()}
 const conversation=new ReplayTranscript($('conversation'),$('follow'),number=>selectStep(D.steps.findIndex(s=>s.index===number),true),pause);conversation.setData(D);
-const navigationTarget=new ReplayNavigationTarget($('navigation-target'),()=>{pause();zoomView='target';text('zoom-title',navigationTarget.title.textContent+' · 调用前原图');paintZoom();$('zoom').showModal()});
+const navigationTarget=new ReplayNavigationTarget($('navigation-target'),()=>{pause();zoomView='target';text('zoom-title',navigationTarget.title.textContent);paintZoom();$('zoom').showModal()});
 function setPrimary(name){primary=name;for(const [view,t] of tiles){t.tile.classList.toggle('camera-primary',view===name);t.tile.setAttribute('aria-label',names[view]+(view===name?'，点击放大':'，点击设为主画面'))}}
 for(const name of views){
  const tile=document.createElement('figure');tile.className='camera-tile camera-'+name;tile.tabIndex=0;tile.setAttribute('role','button');

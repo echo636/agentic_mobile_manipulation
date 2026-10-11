@@ -29,10 +29,9 @@ window.ReplayNavigationTarget = class {
     this.panel.dataset.step=step.index;
     this.panel.dataset.imageRef=target.image_ref;this.panel.dataset.point=JSON.stringify(point);
     const kind=primitive==='navigate_to'?'导航目标':primitive.startsWith('place')?'放置目标':'操作目标';
-    const description=primitive==='navigate_to'?'红圈为所选表面点，不是机器人最终站立位置。':primitive.startsWith('place')?'红圈选择容器或承载面，不是手中物体或精确落点。':'红圈选择操作对象，不代表按钮或夹爪的精确接触点。';
     this.title.textContent=kind+' · '+primitive+' · '+({front:'前视',back:'后视',left:'左视',right:'右视'}[item?.view]||'RGB');
-    this.note.textContent='调用前原图 · 红圈为模型点击点';
-    this.detail.textContent=target.image_ref+' · (u='+point[0]+', v='+point[1]+') · '+description;
+    this.note.hidden=false;this.note.textContent='';
+    this.detail.textContent=target.image_ref+' · (u='+point[0]+', v='+point[1]+')';
     if(!item?.file){this.note.textContent='目标原图未归档，无法标注。';return}
     let url;
     try{url=new URL(item.file,location.href)}catch{this.note.textContent='目标原图路径不可用。';return}
@@ -45,7 +44,7 @@ window.ReplayNavigationTarget = class {
       if(this.key!==key)return;
       this.image=image;this.canvas.width=image.naturalWidth;this.canvas.height=image.naturalHeight;
       this.canvas.getContext('2d').drawImage(image,0,0);this.mark(this.canvas,target.image_ref);
-      this.button.hidden=false;this.note.textContent='调用前原图 · 红圈为模型点击点';
+      this.button.hidden=false;this.note.textContent='';this.note.hidden=true;
     };
     image.onerror=()=>{if(this.key===key)this.note.textContent='目标原图读取失败。'};
     image.src=url.href;
