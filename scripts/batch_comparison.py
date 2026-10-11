@@ -72,6 +72,8 @@ def render_arm_dashboard(progress):
     esc = lambda x: html.escape(str(x))
     protocol = progress.get('protocol') or {}
     standalone = protocol.get('standalone_batch') is True
+    if standalone:
+        return render_standalone_dashboard(progress)
     title = (protocol.get('batch_title') if standalone else None) or protocol.get('comparison_arm', protocol.get('agent_profile', 'original'))
     page_title = title if standalone else 'Execution comparison'
     navigation = '' if standalone else '<p><a href="../">Three-arm comparison</a></p>'
@@ -93,6 +95,59 @@ def render_arm_dashboard(progress):
         link = '<a href="' + esc(r['replay_url']) + '">Replay ↗</a>' if r.get('replay_url') else 'Pending'
         rows.append('<tr><td>' + str(r['index'] + 1) + '</td><td>' + esc(r['name']) + '</td><td>' + esc(outcome(r) or r['status']) + ' / ' + esc(r.get('stage', 'queued')) + '</td><td>' + esc(r.get('q_score', '—')) + '</td><td>' + link + '</td></tr>')
     return '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="30"><title>' + esc(page_title) + '</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:32px auto;padding:0 20px}table{width:100%;border-collapse:collapse}td,th{padding:12px;text-align:left;border-bottom:1px solid #ddd}a{color:#087866}' + extra_style + '</style><h1>' + esc(title) + '</h1>' + navigation + summary + '<p>Updated ' + esc(progress['updated_at']) + '. Task success and complete evidence are separate fields.</p><p>' + esc(protocol.get('protocol', 'Four-camera RGB; see frozen manifest for execution protocol')) + '</p><table><tr><th>#</th><th>Task</th><th>Status</th><th>Q</th><th>Replay</th></tr>' + ''.join(rows) + '</table></html>'
+
+
+def render_standalone_dashboard(progress):
+    """Compact result view. Provenance stays in the existing run records."""
+    from datetime import timedelta
+    esc=lambda value:html.escape(str(value),quote=True)
+    tasks=progress['tasks'];total=len(tasks);protocol=progress.get('protocol') or {}
+    status_of=lambda row:outcome(row) or ('queued' if row['status'] in ('planned','queued') else 'running')
+    counts=Counter(status_of(row) for row in tasks)
+    ended=sum(counts[k] for k in ('success','failure','timeout'))
+    labels={'success':'成功','failure':'失败','timeout':'超时','running':'进行中','queued':'待开始'}
+    completed=ended==total
+    title=f'{total} 项任务评测' if total==100 else f'{total} 项任务补测'
+    def local_time(value,fmt):
+        if not value:return '—'
+        try:return datetime.fromisoformat(value.replace('Z','+00:00')).astimezone(timezone(timedelta(hours=8))).strftime(fmt)
+        except ValueError:return '—'
+    rows=[]
+    for row in tasks:
+        state=status_of(row);q=row.get('q_score')
+        score=(f'<div class="score"><span>{float(q)*100:.0f}<small>%</small></span><span class="score-track"><i style="width:{max(0,min(100,float(q)*100)):.2f}%"></i></span></div>'
+               if isinstance(q,(int,float)) else '<span class="unavailable">未取得评分</span>' if state in ('failure','timeout') else '<span class="unavailable">—</span>')
+        reason={'controller_failed':'模型运行中断','execution_error':'运行异常'}.get(row.get('termination_reason'),'')
+        if row.get('failure_stage')=='simulator_starting':reason='初始化中断'
+        status=f'<span class="badge {state}"><i></i>{labels[state]}</span>'
+        if reason:status+=f'<span class="reason">{esc(reason)}</span>'
+        replay=row.get('replay_url')
+        if replay and row.get('video_validation')!='failed':
+            link=f'<a class="replay-link" href="{esc(replay)}" aria-label="回放 {esc(row["name"])}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 3 7 5-7 5z"/></svg>查看回放<span>↗</span></a>'
+        else:link='<span class="unavailable">暂无回放</span>'
+        detail=f'<details><summary>{esc(row["name"])}<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg></summary><p>{esc(row.get("instruction",""))}</p></details>'
+        search=' '.join(str(row.get(k,'')) for k in ('index','name','task','instruction'))
+        rows.append(f'<tr data-status="{state}" data-search="{esc(search.lower())}"><td class="task-cell"><span class="task-index">{row["index"]+1:02d}</span>{detail}</td><td>{status}</td><td>{score}</td><td class="replay-cell">{link}</td></tr>')
+    tabs='<button class="filter active" data-filter="all" aria-pressed="true">全部<span>'+str(total)+'</span></button>'
+    for key in ('success','failure','timeout','running','queued'):
+        if counts[key] or key in ('success','failure','timeout'):
+            tabs+=f'<button class="filter" data-filter="{key}" aria-pressed="false">{labels[key]}<span>{counts[key]}</span></button>'
+    segments=''.join(f'<i class="segment {key}" style="width:{counts[key]/max(total,1)*100:.4f}%" title="{labels[key]} {counts[key]}"></i>' for key in labels if counts[key])
+    values={'TITLE':title,'TOTAL':str(total),'ENDED':str(ended),'SUCCESS':str(counts['success']),
+        'FAILURE':str(counts['failure']),'TIMEOUT':str(counts['timeout']),
+        'RATE':f'{counts["success"]/max(total,1)*100:.0f}',
+        'STATE':'已完成' if completed else '评测中','STATE_CLASS':'done' if completed else 'live',
+        'UPDATE_LABEL':'完成时间' if completed else '最近更新',
+        'UPDATED':local_time(progress.get('updated_at'),'%m月%d日 %H:%M'),
+        'BATCH_DATE':local_time(protocol.get('revision_started_at') or progress.get('updated_at'),'%Y.%m.%d'),
+        'METHOD':esc({'original':'Original','official':'Official','motor':'Motor'}.get(protocol.get('comparison_arm'),'Original')),
+        'PROGRESS_NOTE':f'进行中 {counts["running"]} · 待开始 {counts["queued"]}' if not completed else '所有任务已结束',
+        'ROWS':''.join(rows),'TABS':tabs,'SEGMENTS':segments,
+        'LIVE_JSON':json.dumps(not completed),'UPDATED_JSON':json.dumps(progress.get('updated_at','')),
+        'SCOPE_NOTE':'本页仅展示本轮 100 项任务结果。' if total==100 else '本页展示故障任务的独立补测结果，原始成绩保留。'}
+    template=Path(__file__).with_name('batch_dashboard.html').read_text()
+    for key,value in values.items():template=template.replace('__'+key+'__',value)
+    return template
 
 
 DASHBOARD_VERSION = 2
