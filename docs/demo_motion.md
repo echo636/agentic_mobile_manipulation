@@ -1313,3 +1313,25 @@ support and its shelf height, now holds the item through ten control steps.
 Private real-simulator cane and wreath probes confirmed official `OnTop` both
 before arm retreat and after ten further free steps. These probes do not
 establish whole-task success or presentation quality; r35 must test both.
+
+Christmas r35 used the grasped-category feedback and achieved 3/9 expanded
+goals, including stable table and sofa `OnTop` relations, but did not complete
+the task. Its second-cane grasp tipped the wicker basket, and placing a cane
+deep on the sofa folded the robot over the cushion. The supervisor aborted the
+attempt; the five-view video passed structure only. A same-scene component
+probe reproduced the basket disturbance during the first failed left-arm
+reach: 0.076 m translation and 21.3° rotation. Temporarily anchoring the
+selected child's existing movable container and other contents brought that
+to 0.000013 m and 0°, with all contents still `Inside` after free physics.
+The two-reach, grasp, lift, and stow probe also preserved the basket.
+
+For the sofa, the archived deep patch required 1.66 radians of aggregate
+trunk motion. A 0.9-radian posture budget prevented the body fold but made
+that exact point unreachable by 0.377 m; the real action will reject it, not
+place from a distant hand. A private point near the visible cushion edge
+passed the stricter 0.18 m hand-reach gate with 0.108 m error and official
+`OnTop=true`. That point was selected offline for diagnosis, not by the model.
+The executor now reports `posture_limited_reach` after retracting from a deep
+sofa pixel, and the pick-and-place skill asks the model to choose a fresh
+near-edge cushion patch in its own RGB. The next autonomous r36 trial must
+show whether the model uses this feedback and meets both task and video gates.

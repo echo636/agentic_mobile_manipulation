@@ -819,6 +819,15 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         pregrasp_payload=(self._grasp_payload_snapshot(obj)
                           if primitive=='grasp' and self.ideal_carry and getattr(self,'demo_motion',False)
                           else None)
+        grasp_support_anchors=(self._grasp_support_anchors(obj)
+                               if pregrasp_payload is not None else ())
+        grasp_reach_anchor=((obj,*grasp_support_anchors)
+                            if grasp_support_anchors else obj)
+        # A low sofa surface is reachable by folding all four individually
+        # bounded trunk joints. Keep the combined posture upright instead.
+        trunk_budget=(.9 if primitive=='place_on_top' and
+                      str(getattr(obj,'category','')).lower() in {'sofa','couch'}
+                      else None)
         if (pregrasp_payload is not None and not kwargs.get('confirm_bulk_grasp',False)
                 and bulk_grasp_reason(obj,pregrasp_payload[0]) is not None):
             raise SkillError('bulk_grasp_confirmation_required',
@@ -839,10 +848,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             base=self.robot.get_position_orientation()[0]
             if float(self.torch.linalg.norm(base[:2]-point[:2]))>reach_limit or max_steps<30:
                 raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
-        shown = (self._demo_reach(point,max_steps,anchor=None if obj is held else obj,
+        shown = (self._demo_reach(point,max_steps,anchor=None if obj is held else grasp_reach_anchor,
                                   arm=self._demo_arm if held is not None else None,
                                   action=primitive,
-                                  support_payload=pregrasp_payload[1] if pregrasp_payload else None)
+                                  support_payload=pregrasp_payload[1] if pregrasp_payload else None,
+                                  trunk_budget_l1_rad=trunk_budget)
                  if getattr(self,'demo_motion',False) else 0)
         max_steps -= shown
         contact_limit=(.45 if primitive=='spray' else .30 if primitive=='vacuum' else .18)
@@ -859,12 +869,20 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             max_steps-=self.steps-before_retry
             self._demo_record(action=primitive,status='approach_retry',first_error_m=first_error,
                               target_point=point.tolist())
-            retry=self._demo_reach(point,max_steps,anchor=obj,
+            retry=self._demo_reach(point,max_steps,anchor=grasp_reach_anchor,
                                    arm=self._demo_arm if held is not None else None,
                                    action=primitive+'_after_approach',
-                                   support_payload=pregrasp_payload[1] if pregrasp_payload else None)
+                                   support_payload=pregrasp_payload[1] if pregrasp_payload else None,
+                                   trunk_budget_l1_rad=trunk_budget)
             shown+=retry;max_steps-=retry
         if shown and self._demo_last_reach_error>contact_limit:
+            if trunk_budget is not None:
+                # Leave the carried item in a safe, visible transport pose
+                # after rejecting a sofa patch that would require a body fold.
+                self._demo_transport_pose(max_steps,
+                    anchor=self._nearby_transport_anchors(obj))
+                raise SkillError('posture_limited_reach',
+                    'Selected sofa patch is beyond upright arm reach',changed=True)
             raise SkillError('out_of_reach',
                              'Robot hand could not approach the selected surface; choose a closer visible approach',
                              changed=True)
@@ -880,13 +898,16 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         before_effect_steps=self.steps if shown else 0
         if primitive=='grasp' and self.ideal_carry:
             before_grasp=self.steps
-            result=self._ideal_grasp(obj,max_steps,payload_snapshot=pregrasp_payload)
+            result=self._ideal_grasp(obj,max_steps,payload_snapshot=pregrasp_payload,
+                                     support_anchors=grasp_support_anchors)
             if shown and self._demo_arm is not None:
                 hand=self.robot.eef_links[self._demo_arm].get_position_orientation()[0]
                 lifted=hand.clone();lifted[2]+=.16
                 shown+=self._demo_reach(lifted,max_steps-(self.steps-before_grasp),
+                                        anchor=grasp_support_anchors or None,
                                         arm=self._demo_arm,action='lift_after_grasp')
-                shown+=self._demo_transport_pose(max_steps-(self.steps-before_grasp))
+                shown+=self._demo_transport_pose(max_steps-(self.steps-before_grasp),
+                                                 anchor=grasp_support_anchors or None)
         elif primitive in {'attach','hang'}:
             if primitive=='hang' and not any(word in str(obj.category).lower() for word in ('nail','hook','hanger')):
                 raise SkillError('unsupported_relation','Selected object is not a hanging anchor')

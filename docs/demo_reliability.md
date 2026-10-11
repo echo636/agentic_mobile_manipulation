@@ -226,3 +226,58 @@ records are outside Git under `experiments/demo_cane_contact_probe_20261011_r2`
 through `_r5` and `experiments/demo_wreath_contact_probe_20261011_r1`.
 Neither probe is a model-task pass. The next full trial is r35 on a new exact
 source/skill/model configuration; its task and presentation gates remain open.
+
+Christmas r35 was another autonomous `gpt-6-astra`/`low` attempt on public
+instance 301 / seed 0. The model used the new successful-grasp category
+feedback correctly for a pillar candle and candy canes. Dining-table cane
+placement, dining-table candle placement, and one sofa cane placement retained
+official `OnTop` after the actions. The supervisor still stopped the episode
+because taking a second cane from the wicker basket overturned it and visibly
+spilled items, while a later sofa placement folded the robot's body down onto
+the cushion. The official whole-task result is **false** (3/9 expanded goals);
+there was no formal model finish or presentation approval. The continuous
+video passed structural validation only. Preserve its five-view failure page:
+`http://10.130.140.115:8769/demo_motion_first10_20261009/10_putting_up_Christmas_decorations_inside_r35/review_5view.html`.
+
+The archived second-cane attempt first reached from a distant base pose with
+the left arm and missed the selected point by 0.379 m, then navigated closer
+and retried with the right arm. A private real-simulator probe reproduced this
+first 42-step reach with the archived base pose and XY target. It kept the
+original basket at a valid floor height, shifting its XY and the chosen item's
+target Z together to preserve their local geometry. Without support anchors,
+the first failed reach alone moved the basket 0.076 m and rotated it 21.3°.
+With the model-selected child, its existing basket, and remaining contents
+briefly anchored during that same visible arm movement, the basket moved only
+0.000013 m, rotated 0°, and every remaining item stayed officially `Inside`
+after ten free physics steps. A longer protected component replay covering
+the near-base retry, grasp, lift, stow, and ten free steps also kept every
+remaining item `Inside`; maximum basket motion was 0.000015 m and 0°.
+The first staging attempt mistakenly lowered the basket into the floor and
+was discarded as a valid containment comparison. These probes use private
+object handles and a staged base, so they verify the motor mechanism only;
+r36 must verify an autonomous task run and its video.
+
+The r35 sofa contact was officially valid but visually poor. A private probe
+at the exact model-selected sofa point reproduced official `OnTop=true` and
+a hand error of 0.065 m, while the combined four-joint trunk excursion was
+1.66 radians; the r35 video shows the body folded across the cushion. A
+0.9-radian combined trunk budget kept the body more upright at that same
+point, but left the hand 0.377 m from it. The first version of the probe
+incorrectly marked this as passed because it checked `OnTop` and furniture
+motion without checking hand reach. Its raw result is preserved with a
+`presentation_reach_audit.json` addendum marking the visible-reach gate false;
+the probe now requires a hand error at most 0.18 m.
+
+To test whether a task-valid patch is reachable, a separate **diagnostic**, not
+model-selected, point was backprojected from the archived r35 front RGB near
+the robot-facing cushion edge. At the same base pose and 0.9-radian trunk
+budget, the hand error was 0.108 m and official `OnTop` remained true after
+retreat and ten free steps. The five-view component clip shows a shallower
+lean and item release near the hand; it does not approve a full-task demo.
+`experiments/demo_sofa_posture_probe_20261011_near_edge/point_provenance_addendum.json`
+records the diagnostic pixel and explicitly excludes it from model-choice
+evidence. The autonomous model still has to select its own current RGB pixel.
+When a deep sofa patch exceeds upright reach, the executor now retracts the
+held item and returns `posture_limited_reach`, directing the model to select a
+visible near-edge patch or another approach to the same sofa. This is a
+failure-specific recovery hint, not an executor-selected replacement point.

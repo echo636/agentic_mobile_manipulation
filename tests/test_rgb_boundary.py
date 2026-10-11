@@ -46,6 +46,14 @@ class RGBBoundary(unittest.TestCase):
         self.assertFalse(error['world_may_have_changed'])
         self.assertIn('fresh RGB',error['message'])
         self.assertNotIn('wicker_basket_218',json.dumps(error))
+    def test_sofa_reach_feedback_gives_actionable_rgb_recovery_without_private_pose(self):
+        error=public_execution_error(SkillError('posture_limited_reach',
+                                                 'private selected point [12.351, -1.035, .362]',
+                                                 changed=True))
+        self.assertEqual(error['code'],'posture_limited_reach')
+        self.assertTrue(error['world_may_have_changed'])
+        self.assertIn('nearer visible patch',error['message'])
+        self.assertNotIn('12.351',json.dumps(error))
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))

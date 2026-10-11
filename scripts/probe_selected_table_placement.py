@@ -1,8 +1,9 @@
-"""Private component probe for a cane placed after a visible table reach.
+"""Private component probe for placing a held item on a selected surface.
 
-The robot start, RGB-grounded table point and object names are archived from an
-autonomous attempt. This stages a synthetic held item and does not assess task
-success or count as a model experiment.
+The robot start and object names come from an autonomous attempt. The point is
+either that attempt's RGB-grounded selection or a clearly labeled diagnostic
+point backprojected from its RGB. This stages a synthetic held item and does
+not assess task success or count as a model experiment.
 """
 import argparse
 import json
@@ -22,14 +23,26 @@ def main():
     parser.add_argument('--table', required=True)
     parser.add_argument('--start', nargs=3, required=True, type=float)
     parser.add_argument('--point', nargs=3, required=True, type=float)
+    parser.add_argument('--point-origin', choices=('model_selected','diagnostic_rgb'),
+                        default='model_selected')
+    parser.add_argument('--diagnostic-rgb-pixel', nargs=2, type=float,
+                        help='RGB pixel used to derive a diagnostic point, if not model selected')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--instance', type=int, default=301)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--trace-contact', action='store_true',
                         help='Record official contact after placement and every retreat/free physics step')
+    parser.add_argument('--trunk-budget', type=float,
+                        help='Component-only combined trunk-angle budget for the selected reach')
+    parser.add_argument('--record-video', action='store_true',
+                        help='Record a five-view component clip for posture inspection')
     args = parser.parse_args()
+    if (args.point_origin == 'diagnostic_rgb') != (args.diagnostic_rgb_pixel is not None):
+        parser.error('--diagnostic-rgb-pixel is required exactly for diagnostic_rgb points')
     recorder = Recorder(args.output, {'task': args.task, 'instance': args.instance,
         'seed': args.seed, 'policy': 'scripted_private_selected_table_placement_probe',
+        'point_origin':args.point_origin,
+        'diagnostic_rgb_pixel':args.diagnostic_rgb_pixel,
         'model_used': False, 'task_success_assessed': False,
         'validation_level': 'real_simulator_executor_component'})
     backend = None
@@ -38,7 +51,7 @@ def main():
         from omnigibson.object_states import OnTop, Touching
         import omnigibson.utils.transform_utils as T
         backend = RGBBackend(args.task, args.instance, args.output, seed=args.seed,
-                             record_video=False, inside_placement='official_volume')
+                             record_video=args.record_video, inside_placement='official_volume')
         recorder.run['backend'] = backend.provenance()
         write_json(args.output / 'run.json', recorder.run)
         held = backend.env.scene.object_registry('name', args.held)
@@ -59,7 +72,8 @@ def main():
         backend._demo_arm = 'right'
         backend._ideal_grasp(held, 50)
         reach_steps = backend._demo_reach(point, 90, anchor=table, arm='right',
-                                         action='probe_preceding_table_reach')
+                                         action='probe_preceding_table_reach',
+                                         trunk_budget_l1_rad=args.trunk_budget)
         _, names = backend._dynamic_floor_obstacles(float(start[2]))
         tracked = {name: backend.env.scene.object_registry('name', name)
                    for name in names}
@@ -139,12 +153,29 @@ def main():
         diagnostics = [json.loads(row) for row in
                        (args.output / 'placement_diagnostics.jsonl').read_text().splitlines()]
         postchecks = [row for row in diagnostics if row.get('status') == 'postcondition_check']
+        motion_records = [json.loads(row) for row in
+                          (args.output / 'demo_motion.jsonl').read_text().splitlines()]
+        reach = next((row for row in motion_records
+                      if row.get('action') == 'probe_preceding_table_reach'), None)
+        trunk_sum = (sum(abs(value - home) for value,home in
+                     zip(reach['trunk_finish'],backend._demo_trunk_home.tolist()))
+                     if reach else None)
         stable = all(row['displacement_m'] < .03 and row['rotation_deg'] < 2
                      for row in motion.values())
-        status = 'passed' if placement_error is None and official and stable else 'failed'
+        reachable = backend._demo_last_reach_error <= .18
+        posture_ok = (args.trunk_budget is None or
+                      (trunk_sum is not None and trunk_sum <= args.trunk_budget + .02))
+        status = ('passed' if placement_error is None and official and stable
+                  and posture_ok and reachable else 'failed')
         result = {'status': status, 'model_used': False, 'task_success_assessed': False,
                   'synthetic_held_setup': True, 'archived_start_xy_yaw': args.start,
-                  'archived_selected_world_point': args.point,
+                  'point_origin':args.point_origin,
+                  'archived_or_diagnostic_world_point': args.point,
+                  'diagnostic_rgb_pixel':args.diagnostic_rgb_pixel,
+                  'trunk_budget_l1_rad':args.trunk_budget,
+                  'trunk_excursion_l1_rad':trunk_sum,
+                  'posture_within_budget':posture_ok,
+                  'visible_hand_reachable':reachable,
                   'reach_steps': reach_steps,
                   'initial_support_ray': initial_support,
                   'hand_target_error_m': backend._demo_last_reach_error,

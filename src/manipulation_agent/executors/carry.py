@@ -278,7 +278,47 @@ class ControlledCarry:
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
         return dependencies,contents
 
-    def _ideal_grasp(self,obj,max_steps,payload_snapshot=None):
+    def _grasp_support_anchors(self, obj):
+        """Protect only the movable container currently holding the selected item.
+
+        Reaching into a light basket can tip it before the selected child is
+        attached. Its other contents must remain in their original volume while
+        the visible arm withdraws. This is motor-only scene state: it never
+        changes the model's selected object, point, or target destination.
+        """
+        from omnigibson.object_states import Inside
+        if Inside not in obj.states:
+            return ()
+        center = sum(obj.aabb) / 2
+        anchors = []
+        seen = {id(obj), id(self.robot)}
+        for parent in self.env.scene.objects:
+            if (id(parent) in seen or getattr(parent, 'fixed_base', True)
+                    or not hasattr(parent, 'states')):
+                continue
+            lo, hi = parent.aabb
+            if not bool(((center >= lo - .03) & (center <= hi + .03)).all()):
+                continue
+            if not obj.states[Inside].get_value(parent):
+                continue
+            anchors.append(parent)
+            seen.add(id(parent))
+            for sibling in self.env.scene.objects:
+                if (id(sibling) in seen or getattr(sibling, 'fixed_base', True)
+                        or Inside not in getattr(sibling, 'states', {})):
+                    continue
+                a, b = sibling.aabb
+                sibling_center = (a + b) / 2
+                if (bool(((sibling_center >= lo - .03) & (sibling_center <= hi + .03)).all())
+                        and sibling.states[Inside].get_value(parent)):
+                    anchors.append(sibling)
+                    seen.add(id(sibling))
+        if anchors:
+            self._carry_record(status='grasp_support_snapshot', object=obj.name,
+                               anchored_objects=[item.name for item in anchors])
+        return tuple(anchors)
+
+    def _ideal_grasp(self,obj,max_steps,payload_snapshot=None,support_anchors=()):
         from omnigibson.utils import transform_utils as T
         torch=self.torch
         if self._ideal_held is obj:return {'primitive':'grasp','postcondition':'selected_object_already_held'}
@@ -322,7 +362,8 @@ class ControlledCarry:
                            payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
                            implementation='pose_projection_no_fixed_joint',original_position=original[0].tolist())
         self._carry_follow()
-        with self._anchored_operation():
+        with (self._anchored_operation(support_anchors)
+              if support_anchors else self._anchored_operation()):
             for _ in range(min(6,max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
         pos,quat=obj.get_position_orientation()

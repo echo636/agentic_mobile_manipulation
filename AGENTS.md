@@ -10,6 +10,7 @@ The model selects every action and RGB pixel. A successful grasp may return only
 Never label a mock, scripted policy, oracle-state experiment, or symbolic execution run as a visual autonomous policy or an official challenge submission. Record source, assets, task instance, host, interpreter, GPU UUID, PID/unit, configuration and validation level for each run. A tool success or agent finish claim is not task success: use the independent task evaluator.
 
 For new atomic-action model experiments, reviews, and result publication, follow [the experiment requirements](docs/atomic_action_experiment_requirements.md).
+For visible first-ten demonstrations, follow the two independent task/presentation gates and failure-driven probe-to-model iteration in [the demo reliability record](docs/demo_reliability.md). A private motor probe never counts as autonomous task success.
 
 Keep operational steps, faults and fixes in journals and structured records; do not create an HTML report for every operation. The existing retest32_v7 replay URL shows only the historical 32 tasks; use a separate summary page for current comparisons. Preserve bookmarked replay links, distinguish cohorts, and publish compact display data rather than full evaluator payloads.
 

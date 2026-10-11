@@ -48,7 +48,7 @@ class DemoMotion:
         return jacobian[link, :3, columns]
 
     def _demo_reach(self, point, max_steps, *, anchor=None, arm=None, action='reach',
-                    support_payload=None):
+                    support_payload=None, trunk_budget_l1_rad=None):
         """Move a visible arm over real env steps; return the consumed step count."""
         if not self.demo_motion:
             return 0
@@ -96,7 +96,8 @@ class DemoMotion:
                     self._base_target['posture'] = joints[self._base_target['indices']].clone()
                     self._step(self.robot.q_to_action(joints))
                     if support_payload:
-                        self._relocate_contents(anchor,support_payload)
+                        root = anchor[0] if isinstance(anchor, (tuple, list)) else anchor
+                        self._relocate_contents(root,support_payload)
             first_hand = self.robot.eef_links[chosen].get_position_orientation()[0].clone()
             for fraction in eased_positions(0., 1., steps-prepose_steps):
                 hand = self.robot.eef_links[chosen].get_position_orientation()[0]
@@ -115,13 +116,23 @@ class DemoMotion:
                 joints[trunk_indices] = self.torch.maximum(
                     self.torch.minimum(joints[trunk_indices], trunk_home + .55),
                     trunk_home - .55)
+                if trunk_budget_l1_rad is not None:
+                    # A shallow couch can be reached by pitching several
+                    # individually valid trunk joints in the same direction.
+                    # Bound their combined excursion to keep the body upright.
+                    excursion = joints[trunk_indices] - trunk_home
+                    total = float(excursion.abs().sum())
+                    if total > trunk_budget_l1_rad:
+                        joints[trunk_indices] = trunk_home + excursion * (
+                            trunk_budget_l1_rad / total)
                 joints[indices] = self.torch.maximum(
                     self.torch.minimum(joints[indices], self.robot.joint_upper_limits[indices]),
                     self.robot.joint_lower_limits[indices])
                 self._base_target['posture'] = joints[self._base_target['indices']].clone()
                 self._step(self.robot.q_to_action(joints))
                 if support_payload:
-                    self._relocate_contents(anchor,support_payload)
+                    root = anchor[0] if isinstance(anchor, (tuple, list)) else anchor
+                    self._relocate_contents(root,support_payload)
         finish = self.robot.get_joint_positions()[indices]
         final_hand = self.robot.eef_links[chosen].get_position_orientation()[0]
         residual=float(self.torch.linalg.norm(final_hand-point))
@@ -132,6 +143,7 @@ class DemoMotion:
                           joint_delta=float(self.torch.linalg.norm(finish - start)),
                           trunk_start=start[:len(trunk_indices)].tolist(),
                           trunk_finish=finish[:len(trunk_indices)].tolist(),
+                          trunk_budget_l1_rad=trunk_budget_l1_rad,
                           hand_target_error_m=residual)
         return steps
 

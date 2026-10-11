@@ -31,6 +31,7 @@ ERROR_MESSAGES = {
     "navigation_path_blocked":"The selected navigation endpoint became blocked or unobserved. Inspect fresh RGB and choose a different visible approach.",
     "navigation_unobserved_route":"No observed free route reaches this point. Inspect fresh RGB and choose a different visible approach.",
     "out_of_reach":"The selected surface is beyond the executor's manipulation reach. Approach using RGB first.",
+    "posture_limited_reach":"The robot cannot reach this selected surface patch without excessive body lean. Select a nearer visible patch on the same support or approach from another side; do not retry the same pixel.",
     "hand_occupied":"The executor cannot perform this action while carrying an object.",
     "empty_hand":"The executor cannot place, attach or release without a held object.",
     "container_closed":"The executor could not access the requested placement or grasp. Reinspect the opening in RGB.",
