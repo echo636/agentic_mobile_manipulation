@@ -33,6 +33,30 @@ class EpisodeDeadlineTests(unittest.TestCase):
                                  'target':{'image_ref':self.h.snapshot['images'][0]['image_ref'],
                                            'point':[.5,.5]}},request_id)
 
+    def test_public_remaining_time_is_after_execution_without_rearming_or_scene_state(self):
+        initialized = self.h.call('initialize', {}, 'first')
+        self.assertEqual(initialized['execution_budget']['remaining_seconds'], 100)
+        original = self.backend.execute_visual
+        def slow_action(*args, **kwargs):
+            result = original(*args, **kwargs)
+            self.clock += 35
+            return result
+        self.backend.execute_visual = slow_action
+        reply = self.act()
+        self.assertEqual(reply['execution_budget'], {
+            'remaining_seconds': 65.0,
+            'scope': 'execution_wall_time_excluding_initialization',
+        })
+        self.assertEqual(self.h.deadline.unix, 200)
+        self.clock = 150
+        # Historical retry evidence remains idempotent, including its timestamped budget.
+        self.assertEqual(self.h.call('initialize', {}, 'first'), initialized)
+        self.clock = 201
+        expired = self.act('late')
+        self.assertEqual(expired['execution_budget']['remaining_seconds'], 0)
+        self.assertEqual(expired['error']['code'], 'episode_timeout')
+        self.assertTrue(self.h.call('finish', {'outcome':'blocked','reason':'time'}, 'finish')['closed'])
+
     def test_video_failure_does_not_prevent_or_replace_score_and_finish_event(self):
         self.act()
         self.backend.finalize_video=Mock(side_effect=RuntimeError('incomplete frames'))
@@ -160,9 +184,11 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.assertTrue(reply['ok'])
         self.assertFalse(self.h.deadline.expired)
         self.assertIsNone(self.h.deadline.unix)
+        self.assertNotIn('execution_budget', reply)
         clock=write_execution_clock(path,1800)
         reply=self.h.call('initialize',{},'model-first-observe')
         self.assertTrue(reply['ok'])
+        self.assertEqual(reply['execution_budget']['remaining_seconds'],1800)
         self.assertEqual(self.recorder.run['execution_started_at_unix'],4100)
         self.assertEqual(self.recorder.run['episode_deadline_unix'],5900)
         self.assertLess(time.monotonic()-self.h.started,1)

@@ -120,6 +120,14 @@ class VisionHarness:
         except SkillError as exc:
             result={'ok':False,'error':{'code':exc.code,'message':str(exc)}}
             result['observation']=self.snapshot
+        # Report the existing clock after execution/rendering, without arming,
+        # extending or adding a limit. This is runtime metadata, never scene GT.
+        remaining = self.deadline.remaining()
+        if remaining is not None and not self.closed:
+            result['execution_budget'] = {
+                'remaining_seconds': round(remaining, 1),
+                'scope': 'execution_wall_time_excluding_initialization',
+            }
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result})
         result['evidence_id']=event_id
         self.evidence[event_id]={'name':'act' if name in {'act','look'} else name,'ok':result['ok'],'revision':self.revision}
