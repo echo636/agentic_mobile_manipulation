@@ -31,11 +31,14 @@ class V7Contracts(unittest.TestCase):
 
     def test_invalid_action_options_do_not_move_robot(self):
         calls=[];ctx=SimpleNamespace(perform=lambda *a,**kw:calls.append((a,kw)))
-        for primitive,options in [('grasp',{'wait_seconds':2}),('open',{'placement_yaw_degrees':90})]:
+        for primitive,options in [('grasp',{'wait_seconds':2}),('open',{'placement_yaw_degrees':90}),
+                                  ('release',{'confirm_bulk_grasp':True})]:
             with self.assertRaises(SkillError):act(ctx,primitive,None,0,**options)
         self.assertEqual(calls,[])
         act(ctx,'wait',None,0,wait_seconds=12)
         self.assertEqual(calls[-1][1],{'seconds':12})
+        act(ctx,'grasp',{'image_ref':'rgb','point':[.5,.5]},0,confirm_bulk_grasp=True)
+        self.assertEqual(calls[-1][1],{'confirm_bulk_grasp':True})
 
     def test_placement_rollback_restores_controlled_carry_ownership(self):
         obj=object();contents=[(object(),'relative child')];records=[];restored=[];follow=[]

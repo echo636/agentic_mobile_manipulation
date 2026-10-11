@@ -86,7 +86,8 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
         kind = next(k for k in kind if k != "null")
     valid = {"object": isinstance(value, dict), "array": isinstance(value, list),
              "string": isinstance(value, str), "integer": type(value) is int,
-             "number": type(value) in (int, float) and math.isfinite(value)}.get(kind, False)
+             "number": type(value) in (int, float) and math.isfinite(value),
+             "boolean": type(value) is bool}.get(kind, False)
     if not valid:
         raise SkillError("invalid_arguments", f"{path} must be {kind}")
     if "enum" in schema and value not in schema["enum"]:

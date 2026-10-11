@@ -34,6 +34,7 @@ ERROR_MESSAGES = {
     "empty_hand":"The executor cannot place, attach or release without a held object.",
     "container_closed":"The executor could not access the requested placement or grasp. Reinspect the opening in RGB.",
     "fixed_object":"The selected object cannot be moved by this executor.",
+    "bulk_grasp_confirmation_required":"The selected pixel resolves to a support carrying multiple movable items or furniture-sized object. No grasp occurred. Choose a clearly exposed pixel on the intended smaller item in fresh RGB; if you deliberately want the whole support, retry grasp with confirm_bulk_grasp=true.",
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
     "sampling_error":"The executor could not find a valid placement; inspect the new RGB before recovery.",
     "post_condition_error":"The executor could not verify its operation after settling; inspect the new RGB.",

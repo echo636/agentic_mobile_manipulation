@@ -22,6 +22,16 @@ def support_closure(root, objects, relation):
     return edges
 
 
+def bulk_grasp_reason(obj, dependencies):
+    """Flag a risky selected support without substituting another object."""
+    if len(dependencies) >= 2:
+        return 'multiple_payloads'
+    lo, hi = obj.aabb
+    if max(float(hi[axis] - lo[axis]) for axis in (0, 1)) > 1.35:
+        return 'furniture_size'
+    return None
+
+
 def supported_child_on_top(child, parent, on_top, touching):
     """Reject inverted contacts: a support beneath food is not its payload."""
     if on_top not in child.states or touching not in child.states:

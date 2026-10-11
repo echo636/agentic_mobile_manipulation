@@ -64,7 +64,7 @@ while more than ten minutes remain is rejected without closing the episode.
 This guards a false clock claim; it does not force the model to solve a truly
 blocked scene or reveal evaluator state.
 
-## Status after r30 (2026-10-11, Asia/Shanghai)
+## Status after r31 (2026-10-11, Asia/Shanghai)
 
 Nine of ten tasks have at least one independently audited success. The passing
 attempts are radio r1/r2, trash r15, Halloween r17, plates/food r19, can-meat
@@ -100,3 +100,19 @@ post-fix Christmas run or full video-quality approval exists yet. The model
 skill now requires a visibly isolated item
 pixel before grasping from a mixed basket; this is guidance, not deterministic
 grounding.
+
+Christmas r31 validated the release repair in an autonomous model run:
+`release` reported six preserved payloads, and the five-view video passed its
+structural audit. The task still failed. The first grasp selected the loaded
+basket; after release, a pixel on the basket's open wicker resolved through
+the gaps to the breakfast table, which was also grasped. Its `blocked` finish
+did not claim a false time limit, so the clock-specific guard correctly did
+not intervene. A new default grasp preflight rejects loaded supports and
+furniture-size objects before hand motion, while allowing an explicit
+`confirm_bulk_grasp=true` when carrying the whole selected object is intended.
+The r31 visual and private grounding trace define the regression; CPU tests
+cover the guard. The next autonomous run will test whether the model uses the
+feedback to reselect visible individual decorations. A can-meat r30 video
+inspection also found 59 spectator-camera position jumps over 1 m within
+single actions; its task and structural video pass do not imply that its
+presentation gate has passed.

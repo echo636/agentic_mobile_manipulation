@@ -110,6 +110,25 @@ class DirectBackprojection(unittest.TestCase):
         query.assert_called_once()
         self.physics_ray.assert_not_called()
 
+    def test_bulk_grasp_rejected_before_hand_motion_unless_confirmed(self):
+        b = self.backend
+        b.ideal_carry = True
+        b.demo_motion = True
+        b._get_held = lambda: None
+        b._demo_arm = None
+        obj = SimpleNamespace(fixed_base=False, states={},
+                              aabb=([0, 0, 0], [0.6, 0.4, 0.25]))
+        b._ground = Mock(return_value=(obj, self.expected, {}))
+        b._grasp_payload_snapshot = Mock(return_value=([object()] * 6, []))
+        b._demo_reach = Mock(side_effect=RuntimeError('hand motion started'))
+        with self.assertRaises(SkillError) as error:
+            b.execute_visual('grasp', self.target, 100)
+        self.assertEqual(error.exception.code, 'bulk_grasp_confirmation_required')
+        b._demo_reach.assert_not_called()
+        with self.assertRaisesRegex(RuntimeError, 'hand motion started'):
+            b.execute_visual('grasp', self.target, 100, confirm_bulk_grasp=True)
+        b._demo_reach.assert_called_once()
+
     def test_invalid_depth_and_stale_capture_fail_before_identity_query(self):
         with patch('manipulation_agent.executors.visual_mesh_grounding.query_visual_surface') as query:
             for depth in [float('nan'), float('inf'), 0., -1., 30.]:

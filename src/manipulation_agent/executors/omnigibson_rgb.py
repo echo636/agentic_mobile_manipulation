@@ -14,7 +14,7 @@ from ..observations.rig import DIRECTIONS, camera_mount, centered_head_height, l
 from ..records import now
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
-from .carry import ControlledCarry
+from .carry import ControlledCarry, bulk_grasp_reason
 from .material_actions import CheckedMaterialActions
 from .demo_motion import DemoMotion
 
@@ -729,6 +729,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         pregrasp_payload=(self._grasp_payload_snapshot(obj)
                           if primitive=='grasp' and self.ideal_carry and getattr(self,'demo_motion',False)
                           else None)
+        if (pregrasp_payload is not None and not kwargs.get('confirm_bulk_grasp',False)
+                and bulk_grasp_reason(obj,pregrasp_payload[0]) is not None):
+            raise SkillError('bulk_grasp_confirmation_required',
+                             'Selected pixel resolves to a loaded support or furniture-sized object')
         base=self.robot.get_position_orientation()[0]
         # A long cabinet/floor AABB can contain the base while the selected
         # visible surface is far away. Reach belongs to that selected point.

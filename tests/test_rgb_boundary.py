@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.observations.boundary import public_observation
+from manipulation_agent.observations.boundary import public_execution_error
+from manipulation_agent.contracts import SkillError
 from manipulation_agent.records import Recorder
 from manipulation_agent.vision_harness import VisionHarness
 from manipulation_agent.tools import tool_specs
@@ -36,6 +38,13 @@ class RGBBoundary(unittest.TestCase):
         self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(r));self.assertNotIn('REAL_STATE',json.dumps(r))
         self.assertEqual(r['observation']['revision'],1)
         self.assertIn('PRIVATE_OBJECT_NAME',(self.output/'events.jsonl').read_text())
+    def test_bulk_grasp_feedback_explains_reselection_without_identity(self):
+        error=public_execution_error(SkillError('bulk_grasp_confirmation_required',
+                                                 'wicker_basket_218 contains six target objects'))
+        self.assertEqual(error['code'],'bulk_grasp_confirmation_required')
+        self.assertFalse(error['world_may_have_changed'])
+        self.assertIn('fresh RGB',error['message'])
+        self.assertNotIn('wicker_basket_218',json.dumps(error))
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))

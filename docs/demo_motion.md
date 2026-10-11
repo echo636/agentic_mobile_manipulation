@@ -1166,3 +1166,28 @@ of the same basket verified all six contents remained Inside after release;
 it is executor evidence, not a model trial. These changes have not yet been
 validated by a post-fix autonomous Christmas run. The per-task reliability and
 presentation gates are specified in [demo_reliability.md](demo_reliability.md).
+
+Christmas r31 used the repaired release. The first `grasp` pixel
+`rgb-00003-front` `[0.5, 0.64]` hit `wicker_basket_218` and carried its six
+contents. Two broad-surface placements failed, but `release` preserved all six
+contents in the basket. A second `grasp` pixel `rgb-00007-front` `[0.6, 0.49]`
+was in the basket's open/wicker area; the visual ray passed through it and
+resolved to `breakfast_table_rhjoby_0` behind it. The model then lifted and
+released the table before finishing `blocked`. Official whole-task success
+failed; the independent audit still passed formal finish, call alignment and
+video structure. The basket's small RGB footprint and the background visible
+through its gaps are the observed causes, not a depth inconsistency or a
+simulator decision to pick a different target.
+
+The next focused intervention is a grasp preflight: a selected support with
+two or more movable payload objects, or an object wider than 1.35 m in the
+horizontal plane, requires `confirm_bulk_grasp=true`. Without it, the
+executor returns `bulk_grasp_confirmation_required` and fresh RGB before any
+hand motion. The model may explicitly confirm when carrying that whole object
+is intentional. This uses the selected pixel's resolved object only; it never
+selects another object, looks up goals or injects a model pixel. A plate with
+one pizza and ordinary small items remain direct grasps. CPU integration tests
+cover both rejected and confirmed routes. The next autonomous Christmas run
+must show whether the model responds by finding an exposed decoration and
+whether official task success improves. A rejected mistaken grasp alone is
+not task success.
