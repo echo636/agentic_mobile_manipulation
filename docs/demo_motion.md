@@ -1101,3 +1101,14 @@ R27 ended `blocked` after repeated `navigation_unreachable` errors for
 finish, model/simulator call alignment and video with 13 visible motion
 segments, but failed official whole-task success and empty-hand checks. The
 tree-visibility fix was committed after this episode's source snapshot.
+
+Can-meat r28 selected the jar correctly and staged it on the counter, so the
+shallow camera and wall-target feedback overcame r27's first failure. Its
+next grasp pixel landed on the cutting board between/just below orange meat
+pixels, carrying `cutting_board_234` and all four bratwursts instead of an
+individual sausage. The model did not use clear-floor release after staging
+failed and finished `blocked`. Independent review passed formal finish,
+model/simulator call alignment and video with 14 visible motion segments,
+but failed official whole-task success and empty-hand checks. This was a
+policy pixel-selection and recovery failure, not proof the jar-staging motor
+is broken.
