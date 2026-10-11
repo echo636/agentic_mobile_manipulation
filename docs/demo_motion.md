@@ -1050,3 +1050,8 @@ the upper shelf, while Christmas keeps 35° down for its floor basket. All
 four views share the chosen pitch and the same selected-pixel grounding.
 R26 itself retains its original 35° source snapshot and is not evidence that
 the new pitch succeeds.
+Its final independent audit failed official whole-task success: the model
+reported `blocked` after inspecting multiple cabinets without a reliable RGB
+view of both jars. Formal finish, model/simulator call alignment, video and
+empty-hand checks passed, with ten visible motion segments. The next can-meat
+trial must establish whether the 18° pitch resolves this failure.
