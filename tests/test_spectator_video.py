@@ -4,8 +4,9 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
-from manipulation_agent.spectator_video import export_spectator_video
+from manipulation_agent.spectator_video import export_spectator_video, export_spectator_walltime
 from manipulation_agent.streaming_video import file_hash
 
 
@@ -40,6 +41,24 @@ class FullSpectatorTests(unittest.TestCase):
             self.assertEqual(len(expected), len(actual))
             self.assertLess(sum(abs(a-b) for a,b in zip(expected, actual))/len(actual), 4)
             self.assertEqual(export_spectator_video(root), record)
+            controller = root / 'controller'; controller.mkdir()
+            iso = lambda seconds: datetime.fromtimestamp(seconds, timezone.utc).isoformat()
+            (root / 'run.json').write_text(json.dumps({'execution_started_at_unix': 100}))
+            (controller / 'controller.json').write_text(json.dumps({'started_at': iso(100), 'finished_at': iso(106)}))
+            (root / 'video_frames.jsonl').write_text(''.join(
+                json.dumps({'at': iso(100+i*.2), 'frame_index': i})+'\n' for i in range(24)))
+            wall = export_spectator_walltime(root, controller, fps=10)
+            self.assertAlmostEqual(wall['duration_seconds'], 6, places=2)
+            self.assertEqual(wall['frame_count'], 60)
+            self.assertTrue(wall['model_wait_time_included'])
+            self.assertEqual(wall['source_frames_displayed'], 24)
+            frames = decode(root / wall['file']); size = 64 * 64 * 3
+            self.assertEqual(len(frames), size * 60)
+            # The final 1.4s wait must hold the last real camera frame.
+            last = actual[-size:]
+            held = frames[-size:]
+            self.assertLess(sum(abs(a-b) for a,b in zip(last, held))/size, 4)
+            self.assertEqual(file_hash(source), before)
 
     def test_incomplete_source_cannot_be_labeled_complete(self):
         with tempfile.TemporaryDirectory() as folder:

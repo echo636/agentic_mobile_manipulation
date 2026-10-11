@@ -837,13 +837,19 @@ class Batch:
             if not (dest/filename).exists(): write_json(dest/filename,{'status':'failed','reason':'Validator could not complete','exit_code':p.returncode})
         controller_ready=(controller/'controller.json').is_file() and (controller/'model_events.jsonl').is_file()
         if self.c.get('export_spectator_video'):
+            media_validation_field='spectator_video_validation'
             try:
                 from manipulation_agent.spectator_video import export_spectator_video
                 spectator = export_spectator_video(dest)
                 self.update(row,spectator_video_validation=spectator['status'])
+                if controller_ready:
+                    media_validation_field='spectator_walltime_validation'
+                    from manipulation_agent.spectator_video import export_spectator_walltime
+                    walltime_spectator = export_spectator_walltime(dest,controller)
+                    self.update(row,spectator_walltime_validation=walltime_spectator['status'])
             except Exception as exc:
-                errors.append('Full spectator export failed: '+str(exc))
-                self.update(row,spectator_video_validation='failed')
+                errors.append(media_validation_field+' failed: '+str(exc))
+                self.update(row,**{media_validation_field:'failed'})
         try:
             replay=render_replay(dest,controller if controller_ready else None)
         except Exception as exc:

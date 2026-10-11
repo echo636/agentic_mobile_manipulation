@@ -118,6 +118,10 @@ class ReplayBrowserTests(unittest.TestCase):
         self.page.locator('#view-video').click()
         self.assertTrue(self.page.locator('.camera-spectator').evaluate("e=>e.classList.contains('camera-primary')"))
         self.assertEqual(self.errors, [])
+        data['spectator_walltime_video'] = {'status': 'passed', 'file': 'spectator_walltime.mp4'}
+        self.page.goto('about:blank')
+        self.page.set_content(render_replay_page(data))
+        self.assertEqual(self.page.locator('#spectator-full-video').get_attribute('href'), 'spectator_walltime.mp4')
 
     def test_action_target_is_hidden_before_call_and_stays_on_input_image(self):
         data = fixture()

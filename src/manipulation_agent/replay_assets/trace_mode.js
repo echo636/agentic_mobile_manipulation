@@ -12,6 +12,10 @@ if(data.spectator_video?.status==='passed'&&data.spectator_video.file==='spectat
  const link=$('spectator-full-video');link.href=data.spectator_video.file;link.hidden=false;
  link.textContent='完整第三人称 · 仿真时间 ↗';
 }
+if(data.spectator_walltime_video?.status==='passed'&&data.spectator_walltime_video.file==='spectator_walltime.mp4'){
+ const link=$('spectator-full-video');link.href=data.spectator_walltime_video.file;link.hidden=false;
+ link.textContent='完整第三人称 · 实际耗时 ↗';
+}
 let mode='trace';
 function activate(next){
  mode=next==='video'?'video':'trace';document.body.classList.toggle('trace-mode',mode==='trace');

@@ -12,6 +12,8 @@ Separate what the instruction requires from what you infer. Preserve explicit qu
 
 Describe completion as observable results, not a list of tool names. For a multi-stage task, briefly state the intended end state and the next few subgoals in normal assistant text. This is a working plan that may change, not a requirement to narrate every thought or write a separate plan file. A simple goal may need only one subgoal.
 
+If a destination is unspecified, compare the useful options already visible across all four views before committing. Prefer an appropriate, visibly usable container or support over an unverified storage mechanism; a drawer-like appearance alone does not establish that it opens. Confirm the destination's feasibility early, so the rest of the plan does not depend on repeated attempts to make an assumed destination work. Keep the chosen destination consistent with the task's purpose, and revise it when observations contradict the assumption.
+
 ## Order work by its prerequisites
 
 For the next result, determine what must be true before it can happen: the target and destination must be found, an approach must be reachable, required access must be open, and the appropriate hand or tool must be available. Resolve missing prerequisites first. For example, prepare a closed destination while the hand is free before fetching an item; make a tool ready before using it. Group work only when it preserves the intended objects and relations. If something must be processed, distinguish preparation, the process itself, and its resulting state; starting an appliance is not evidence that processing has completed.
