@@ -605,6 +605,7 @@ class CheckedPlacement:
             def preserve_payload_poses():
                 if residents:self._relocate_container_payload(residents)
                 if settling_payload:self._relocate_container_payload(settling_payload)
+                if contents:self._relocate_contents(held,contents)
             def preserve_residents(*args,**kwargs):
                 # The near-bin arm can push an earlier item out while the
                 # official sampler or the settling steps advance physics.

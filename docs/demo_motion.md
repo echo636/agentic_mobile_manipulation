@@ -1113,6 +1113,17 @@ but failed official whole-task success and empty-hand checks. This was a
 policy pixel-selection and recovery failure, not proof the jar-staging motor
 is broken.
 
+Can-meat r29 reached a new full-chain partial result: Astra low staged both
+jars, put `bratwurst_231` and `bratwurst_233` into `hinged_jar_236`, then
+corrected a third meat mistakenly placed in that jar by regrasping
+`bratwurst_230` and placing it in `hinged_jar_235`. It closed and carried the
+two-meat jar toward the cabinet. The `place_inside` motor then rejected the
+return because the carried bratwursts lost their verified containment while
+the jar settled. The motor now realigns carried contents both before and
+after each physics step of container placement, as its surface-placement
+path already does. R29 still uses the older motor snapshot; a later model
+trial must verify the whole task with this correction.
+
 Christmas r28 ended its model thread after three `fixed_object` grasp errors
 without calling `finish`; the supervisor closed the episode as aborted. Its
 independent audit failed formal finish, call alignment, visible-motion and
