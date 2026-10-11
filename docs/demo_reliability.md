@@ -281,3 +281,31 @@ When a deep sofa patch exceeds upright reach, the executor now retracts the
 held item and returns `posture_limited_reach`, directing the model to select a
 visible near-edge patch or another approach to the same sofa. This is a
 failure-specific recovery hint, not an executor-selected replacement point.
+
+Christmas r36 was an autonomous `gpt-6-astra`/`low` partial run on public
+instance 301 / seed 0. The model selected an individual wreath from the
+loaded basket, then chose a near-edge sofa pixel in its own RGB; the bounded
+reach ended 0.126 m from that point and official `OnTop` survived seating.
+It then selected an individual pillar candle and placed it on the breakfast
+table, also retaining official `OnTop`. The supervisor stopped the run when
+the basket was pushed across the floor and tipped on the return journey.
+The whole-task audit is **false**, with no model finish or presentation
+approval. The five-view page passed video structure only:
+`http://10.130.140.115:8769/demo_motion_first10_20261009/10_putting_up_Christmas_decorations_inside_r36/review_5view.html`.
+
+The archived return plan crossed the basket's original footprint and listed
+13 other dynamic obstacles but omitted `wicker_basket_218`. The floor-object
+filter required an AABB top above base height + 0.25 m, while this basket's
+top is about 0.19 m. A private real-simulator replay of the archived base
+pose and model-selected target recreated the exact path. The basket first
+moved more than 0.01 m at simulation step 202; by the end it had translated
+2.125 m and rotated 36.4°. This is causal motor evidence, not an autonomous
+task result. The filter now includes large-footprint floor objects whose top
+is above base height + 0.08 m, so the basket enters the current dynamic
+occupancy overlay. The same-scene green replay included the basket among 14
+dynamic obstacles and planned a detour. It reached the original target over
+461 simulation steps, with basket displacement 0.0000037 m, maximum observed
+displacement 0.0000072 m, and 0° rotation. The red and green records are under
+`experiments/demo_basket_nav_collision_probe_20261011_{red2,green}` outside
+Git. They establish this route's motor safety; r37 must still verify model
+choices, whole-task success, and presentation quality.

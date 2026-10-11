@@ -565,7 +565,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 continue
             lo,hi=obj.aabb
             width=float(hi[0]-lo[0]);depth=float(hi[1]-lo[1])
-            if (float(lo[2])>base_z+.12 or float(hi[2])<base_z+.25
+            # Low floor containers still intersect the moving base: the
+            # Christmas basket reaches only 0.19 m yet a route through its
+            # footprint pushed it over two metres in the simulator.
+            if (float(lo[2])>base_z+.12 or float(hi[2])<base_z+.08
                     or max(width,depth)<.35):
                 continue
             boxes.append((float(lo[0]),float(lo[1]),float(hi[0]),float(hi[1])))

@@ -30,6 +30,10 @@ def main():
     parser.add_argument('--followup-point', nargs=3, type=float,
                         metavar=('X', 'Y', 'Z'),
                         help='Run a subsequent public-style navigation from the first reached pose')
+    parser.add_argument('--public-navigation', action='store_true',
+                        help='Replay a public navigate_to pixel (no resolved object, visual standoff)')
+    parser.add_argument('--trace-furniture', action='store_true',
+                        help='Record selected furniture motion after each navigation control step')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--instance', type=int, default=301)
     parser.add_argument('--seed', type=int, default=0)
@@ -77,7 +81,7 @@ def main():
                       'hand_target_error_m': backend._demo_last_reach_error}
         before_pos,before_quat = furniture.get_position_orientation()
         boxes,names = backend._dynamic_floor_obstacles(float(start[2]))
-        if furniture.name not in names:
+        if furniture.name not in names and not args.public_navigation:
             raise AssertionError('The selected furniture was not included in the dynamic obstacle overlay')
         from manipulation_agent.executors.gt_navigation import (
             GridMap, candidate_points, mask_dynamic_obstacles, plan_navigation)
@@ -112,7 +116,7 @@ def main():
         write_json(args.output / 'obstacle_diagnostic.json', diagnostic)
         anchor = SimpleNamespace(aabb=(point,point),
                                  get_position_orientation=lambda:(point,None),
-                                 selected_object=furniture)
+                                 selected_object=None if args.public_navigation else furniture)
         tracked = {name: backend.env.scene.object_registry('name', name)
                    for name in names}
         before_poses = {name: obj.get_position_orientation()
@@ -136,7 +140,24 @@ def main():
                 'boxes_after_transport': dict(zip(current_names, current_boxes))})
             return taken
         backend._demo_transport_pose = observed_transport
-        motion = backend._navigate(anchor,700,for_manipulation=True)
+        trace = []
+        original_step = backend._step
+        if args.trace_furniture:
+            def traced_step(action):
+                original_step(action)
+                current_pos, current_quat = furniture.get_position_orientation()
+                trace.append({'env_step':backend.steps,
+                    'displacement_m':float(backend.torch.linalg.norm(current_pos-before_pos)),
+                    'rotation_deg':2*math.degrees(math.acos(min(1.,abs(float(
+                        (current_quat*before_quat).sum()))))),
+                    'position':current_pos.tolist()})
+            backend._step = traced_step
+        try:
+            motion = backend._navigate(anchor,700,for_manipulation=not args.public_navigation)
+        finally:
+            backend._step = original_step
+            if args.trace_furniture:
+                write_json(args.output / 'furniture_trace.json', trace)
         followup_motion = None
         if args.followup_point:
             next_point = backend.torch.tensor(args.followup_point, device=start.device)
@@ -155,13 +176,16 @@ def main():
                 'rotation_deg': 2*math.degrees(math.acos(min(1.,abs(float((new_quat*old_quat).sum())))))}
         stable = all(row['displacement_m'] < .03 and row['rotation_deg'] < 2
                      for row in furniture_motion.values())
+        stable = stable and displacement < .03 and angular < 2
         result = {'status':'passed' if stable else 'failed',
                   'model_used':False,'task_success_assessed':False,
+                  'public_navigation':args.public_navigation,
                   'staged_carry': staged,
                   'archived_start_xy_yaw':args.start,
                   'archived_selected_world_point':args.point,
                   'furniture_aabb':[[float(v) for v in side] for side in furniture.aabb],
                   'dynamic_obstacle_count':len(boxes),
+                  'selected_furniture_in_dynamic_mask':furniture.name in names,
                   'furniture_motion': furniture_motion,
                   'furniture_displacement_m':displacement,
                   'furniture_rotation_deg':angular,

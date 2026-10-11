@@ -1335,3 +1335,19 @@ The executor now reports `posture_limited_reach` after retracting from a deep
 sofa pixel, and the pick-and-place skill asks the model to choose a fresh
 near-edge cushion patch in its own RGB. The next autonomous r36 trial must
 show whether the model uses this feedback and meets both task and video gates.
+
+Christmas r36 showed that the model can choose the visible near-edge sofa
+patch itself: it placed the wreath there with 0.126 m hand error and stable
+official `OnTop`, then placed a pillar candle on the breakfast table with
+stable `OnTop`. This did not become a complete demo. On the route back to the
+floor basket, the navigation overlay omitted the low basket and planned a
+line through it. The robot pushed it over, so the supervisor aborted the
+run; independent task success and presentation approval both failed. The
+five-view structural review is at
+`http://10.130.140.115:8769/demo_motion_first10_20261009/10_putting_up_Christmas_decorations_inside_r36/review_5view.html`.
+Replaying that exact public navigation in a private simulator probe moved
+the basket 2.125 m, first measurably at step 202. The live obstacle filter
+now admits this 0.19 m-high container. The green replay planned around it,
+reached the same target, and held the basket within 0.0000072 m maximum
+translation and 0° rotation. This validates only the repaired navigation
+component; the r37 autonomous task and presentation gates are separate.

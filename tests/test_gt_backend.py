@@ -136,11 +136,14 @@ class GTBackendTests(unittest.TestCase):
                              aabb=([-.8,-.8,0.],[.8,.8,2.]))
         small=SimpleNamespace(name='candle',category='pillar_candle',fixed_base=False,
                               aabb=([0.,0.,.8],[.1,.1,.9]))
-        b.env.scene.objects=[table,tree,small]
+        basket=SimpleNamespace(name='basket',category='wicker_basket',fixed_base=False,
+                               aabb=([1.,1.,0.],[1.4,1.3,.19]))
+        b.env.scene.objects=[table,tree,small,basket]
         self.assertEqual(b._dynamic_floor_obstacles(0.),
-                         ([(-.6,-.4,.6,.4)],['table']))
+                         ([(-.6,-.4,.6,.4),(1.,1.,1.4,1.3)],['table','basket']))
         b._ideal_held=table
-        self.assertEqual(b._dynamic_floor_obstacles(0.),([],[]))
+        self.assertEqual(b._dynamic_floor_obstacles(0.),
+                         ([(1.,1.,1.4,1.3)],['basket']))
 
     def test_carried_item_is_retracted_before_base_navigation(self):
         b = self.backend()
