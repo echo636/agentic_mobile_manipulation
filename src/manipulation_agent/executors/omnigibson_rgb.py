@@ -307,11 +307,15 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self._restore_stabilized_containers()
         self._carry_follow()
         with component(self,'physics_and_metrics'):super()._step(action)
-        self._check_placement_objects()
-        if self._base_target is not None:
-            self._restore_base_target()
-        self._restore_object_anchor();self._restore_stabilized_containers();self._carry_follow()
-        self._video_frame('env_step')
+        try:
+            self._check_placement_objects()
+            if self._base_target is not None:
+                self._restore_base_target()
+            self._restore_object_anchor();self._restore_stabilized_containers();self._carry_follow()
+        finally:
+            # Physics already advanced, including when a transition replaced a
+            # watched object. Keep that executed step in the continuous replay.
+            self._video_frame('env_step')
 
     def _restore_stabilized_containers(self):
         # Ideal support keeps a filled movable container upright when a later

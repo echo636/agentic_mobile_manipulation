@@ -63,7 +63,9 @@ def main():
                     recoverable_error=result.get('error',{}).get('code')=='target_changed',
                     fresh_four_views=set(item['views'])=={'front','back','left','right'},
                     stale_carry_cleared=backend._get_held() is None)
-                followup=harness.call('act',{'primitive':'wait','revision':harness.revision,'wait_seconds':0.1},'probe-followup')
+                followup=harness.call('act',{'primitive':'wait','revision':harness.revision,'wait_seconds':0.1,
+                    'target':None,'placement_yaw_degrees':None},'probe-followup')
+                validation['followup_result']={k:v for k,v in followup.items() if k!='observation'}
                 validation['checks']['next_tool_still_works']=followup.get('ok') is True
             elif not result.get('ok'):
                 raise RuntimeError('Archived prefix diverged: '+str(item))

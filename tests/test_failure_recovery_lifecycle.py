@@ -5,11 +5,13 @@ from pathlib import Path
 import subprocess
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.carry import ControlledCarry
 from manipulation_agent.executors.placement import placement_transaction
+from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+from manipulation_agent.omnigibson_backend import OmniGibsonBackend
 
 spec = importlib.util.spec_from_file_location('recovery_batch', Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch = importlib.util.module_from_spec(spec)
@@ -95,6 +97,22 @@ class DeletedPlacementObject(unittest.TestCase):
             ControlledCarry._carry_follow(b)
         self.assertEqual(failure.exception.code, 'target_changed')
         self.assertIsNone(b._ideal_held)
+
+    def test_transition_error_keeps_the_executed_physics_step_in_video(self):
+        b=RGBBackend.__new__(RGBBackend)
+        b.deadline=Mock();b._base_target=None;b.steps=0
+        b._restore_object_anchor=Mock();b._restore_stabilized_containers=Mock();b._carry_follow=Mock()
+        b._check_placement_objects=Mock(side_effect=SkillError('target_changed','object replaced',changed=True))
+        recorded=[]
+        b._video_frame=lambda kind:recorded.append((kind,b.steps))
+        def physics_step(*_):b.steps+=1
+        with patch.object(OmniGibsonBackend,'_step',side_effect=physics_step), \
+             patch('manipulation_agent.executors.omnigibson_rgb.component',return_value=nullcontext()):
+            with self.assertRaises(SkillError):b._step('action')
+            self.assertEqual(recorded,[('env_step',1)])
+            b._check_placement_objects.side_effect=None
+            b._step('next action')
+            self.assertEqual(recorded,[('env_step',1),('env_step',2)])
 
 
 if __name__ == '__main__':
