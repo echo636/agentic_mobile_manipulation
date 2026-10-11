@@ -1065,3 +1065,15 @@ The independent review passed formal finish, call alignment, video and empty
 hand, with 15 visible motion segments. The pick-and-place skill now directs
 the model to select the tabletop itself and regrasp any item left on the
 floor; that correction requires a new autonomous trial.
+
+Can-meat r27 verified that the shallower 18° camera pitch exposes a jar:
+Astra low opened the cabinet and grasped `hinged_jar_236` immediately. Its
+next `place_on_top` pixel, however, lay just above the far edge of the tan
+counter and privately grounded to `walls_ooixcz_0`, not the countertop. The
+sampler returned `sampling_error`; repeated navigation did not fix a wrongly
+selected support pixel, and the model finished `blocked` while still holding
+the jar. The independent audit passed formal finish, call alignment and
+video, but failed official success and empty hand; six visible motion segments
+were recorded. The executor now rejects wall targets for `place_on_top` with
+a specific recoverable error, and the skill directs the model to select the
+interior horizontal counter patch. This requires a new autonomous trial.

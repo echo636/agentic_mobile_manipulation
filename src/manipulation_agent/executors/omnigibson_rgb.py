@@ -689,6 +689,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
         if primitive=='place_next_to' and str(getattr(obj,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
             raise SkillError('unsupported_relation','Select the visible tree or fixture itself for place_next_to')
+        if primitive=='place_on_top' and str(getattr(obj,'category','')).lower() in {'wall','walls'}:
+            raise SkillError('invalid_visual_target','Select a horizontal support patch, not the wall or counter backsplash')
         held=self._get_held()
         if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
             self._demo_arm=None
