@@ -836,6 +836,14 @@ class Batch:
             # Failed validation never gets converted to success merely because the file exists.
             if not (dest/filename).exists(): write_json(dest/filename,{'status':'failed','reason':'Validator could not complete','exit_code':p.returncode})
         controller_ready=(controller/'controller.json').is_file() and (controller/'model_events.jsonl').is_file()
+        if self.c.get('export_spectator_video'):
+            try:
+                from manipulation_agent.spectator_video import export_spectator_video
+                spectator = export_spectator_video(dest)
+                self.update(row,spectator_video_validation=spectator['status'])
+            except Exception as exc:
+                errors.append('Full spectator export failed: '+str(exc))
+                self.update(row,spectator_video_validation='failed')
         try:
             replay=render_replay(dest,controller if controller_ready else None)
         except Exception as exc:
@@ -852,6 +860,7 @@ class Batch:
         self.update(row,video_validation=video['status'],observation_validation=observation['status'],evidence_alignment=audit.get('evidence_alignment','unavailable'),
                     model_usage=audit.get('usage'),replay_url=prefix+'replay.html',record_url=prefix+'run.json',
                     video_url=prefix+'episode.mp4' if (dest/'episode.mp4').exists() else None,
+                    spectator_video_url=prefix+'spectator.mp4' if (dest/'spectator.mp4').exists() else None,
                     replay_errors=errors,recording_warnings=sum(1 for _ in (dest/'recording_warnings.jsonl').open()) if (dest/'recording_warnings.jsonl').exists() else 0,video_frames=video.get('frame_count'),video_seconds=video.get('duration_seconds'))
         # Checksums cover original evidence as well as exports; streamed for large videos.
         hashes=episode_artifact_hashes(row['run_id'],dest,controller)

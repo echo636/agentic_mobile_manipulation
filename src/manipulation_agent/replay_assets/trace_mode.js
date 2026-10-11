@@ -8,6 +8,10 @@ $('title').textContent=title;$('instruction').textContent=data.instruction||'未
 const success=data.evaluation_offline_only?.task_success;
 $('evaluation-badge').textContent=success===true?'独立评分：成功':success===false?'独立评分：未完成':'未取得最终评分';
 $('evaluation-badge').classList.add(success===true?'passed':success===false?'failed':'unknown');
+if(data.spectator_video?.status==='passed'&&data.spectator_video.file==='spectator.mp4'){
+ const link=$('spectator-full-video');link.href=data.spectator_video.file;link.hidden=false;
+ link.textContent='完整第三人称 · 仿真时间 ↗';
+}
 let mode='trace';
 function activate(next){
  mode=next==='video'?'video':'trace';document.body.classList.toggle('trace-mode',mode==='trace');

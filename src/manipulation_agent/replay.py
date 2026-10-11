@@ -28,6 +28,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
     video_path = run_dir / 'video.json'
     video = json.loads(video_path.read_text()) if video_path.exists() else None
+    spectator_path = run_dir / 'spectator_video.json'
+    spectator = json.loads(spectator_path.read_text()) if spectator_path.exists() else None
     explained_path = run_dir / 'explained_video.json'
     explained = json.loads(explained_path.read_text()) if explained_path.exists() else None
     walltime_path = run_dir / 'walltime_video.json'
@@ -140,7 +142,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
             'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else run.get('native_loop', {}).get('model', run.get('config', {}).get('model')),
-            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review, 'inspection_video':inspection,
+            'audit': audit, 'steps': steps, 'video':video, 'spectator_video':spectator, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review, 'inspection_video':inspection,
             'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(model_events),
             'model_transcript':build_transcript(model_events, steps, summaries),
             'model_reasoning_summaries':summaries,

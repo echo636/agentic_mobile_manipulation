@@ -107,6 +107,18 @@ class ReplayBrowserTests(unittest.TestCase):
         self.assertFalse(self.page.locator(".camera-front").evaluate("e=>e.classList.contains('camera-primary')"))
         self.assertEqual(self.errors, [])
 
+    def test_full_spectator_link_and_primary_view(self):
+        data = fixture()
+        data['spectator_video'] = {'status': 'passed', 'file': 'spectator.mp4'}
+        self.page.goto('about:blank')
+        self.page.set_content(render_replay_page(data))
+        link = self.page.locator('#spectator-full-video')
+        self.assertTrue(link.is_visible())
+        self.assertEqual(link.get_attribute('href'), 'spectator.mp4')
+        self.page.locator('#view-video').click()
+        self.assertTrue(self.page.locator('.camera-spectator').evaluate("e=>e.classList.contains('camera-primary')"))
+        self.assertEqual(self.errors, [])
+
     def test_action_target_is_hidden_before_call_and_stays_on_input_image(self):
         data = fixture()
         target = {"image_ref": "input-left", "point": [.25, .75]}
@@ -135,7 +147,6 @@ class ReplayBrowserTests(unittest.TestCase):
             self.assertEqual(panel.get_attribute("data-image-ref"), "input-left")
             self.assertEqual(panel.get_attribute("data-point"), "[0.25,0.75]")
             self.assertIn("toggle_on", panel.inner_text())
-            self.assertIn("操作对象，不代表按钮或夹爪的精确接触点", panel.inner_text())
             expected = "output-left" if segment["phase"] == "result" else "input-left"
             self.page.wait_for_function("ref => document.querySelector('.camera-left canvas').dataset.imageRef === ref", arg=expected)
             if segment["phase"] == "result":

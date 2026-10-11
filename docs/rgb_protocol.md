@@ -4,7 +4,7 @@ The current default exposes initialize, look, act, finish, list_skills and read_
 
 ## Three distinct layers
 
-- `skills/*/SKILL.md`: agent workflow instructions, with references; no simulator code. Four packages: visual-manipulation, visual-exploration, pick-and-place, failure-recovery.
+- `skills/*/SKILL.md`: agent workflow instructions, with references; no simulator code. Five packages: visual-manipulation, goal-decomposition, visual-exploration, pick-and-place, failure-recovery.
 - `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry. `minimal` exposes initialize/look/act/finish; `skills` adds list_skills/read_skill. The optional historical `workflow` profile retains observe, asynchronous observation jobs, update_plan, remember and recall for compatibility.
 - `src/manipulation_agent/executors/`: the motor primitive catalog and OmniGibson adapter. Primitives are not the workflow skill packages.
 
@@ -89,7 +89,7 @@ Only the optional workflow profile exposes observe and start_observation/get_obs
 
 ## Comparison to the proposed harness diagram
 
-The core loop returns four-direction RGB at initialization and after each action. Explicit initial decomposition/task-step Stack and independent plan/memory remain deferred. The same LLM judges continuation or finish; there is no forced separate completion-model stage. The private final evaluator is not model input.
+The core loop returns four-direction RGB at initialization and after each action. The goal-decomposition skill guides initial subgoal selection and ongoing revision in conversation; a separate task-step stack and independent plan/memory stores remain deferred. The same LLM judges continuation or finish; there is no forced separate completion-model stage. The private final evaluator is not model input.
 
 
 ## Running

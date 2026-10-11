@@ -35,7 +35,7 @@ for(const name of views){
  tile.onclick=()=>{if(primary!==name){setPrimary(name);return}if(!tile.classList.contains('has-image'))return;zoomView=name;text('zoom-title',names[name]);paintZoom();$('zoom').showModal()};
  tile.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();tile.click()}};
 }
-setPrimary('front');
+setPrimary(D.spectator_video?.status==='passed'?'spectator':'front');
 function paintZoom(){if(!zoomView)return;const source=zoomView==='target'?navigationTarget.canvas:tiles.get(zoomView).canvas,target=$('zoom-canvas');if(target.width!==source.width||target.height!==source.height){target.width=source.width;target.height=source.height}target.getContext('2d').drawImage(source,0,0)}
 $('close-zoom').onclick=()=>{$('zoom').close();zoomView=null};
 function blank(name,message){const t=tiles.get(name);t.tile.classList.remove('has-image');t.empty.textContent=message;t.canvas.getContext('2d').clearRect(0,0,t.canvas.width,t.canvas.height);delete t.canvas.dataset.imageRef}

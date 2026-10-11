@@ -26,7 +26,7 @@ Use the latest returned revision and image references for the next action. Older
 
 The default `skills` profile exposes six MCP tools: `initialize`, `look`, `act`, `finish`, `list_skills`, and `read_skill`. `minimal` exposes the first four. The legacy `workflow` profile retains `observe` and asynchronous observation jobs for compatibility; they are absent from the default tool catalog.
 
-Four readable workflow skills are available: `visual-manipulation`, `visual-exploration`, `pick-and-place`, and `failure-recovery`. Explicit planning stacks and memory are currently deferred. Skills provide guidance; the LLM selects actions through tools.
+Five readable workflow skills are available: `visual-manipulation`, `goal-decomposition`, `visual-exploration`, `pick-and-place`, and `failure-recovery`. The goal-decomposition skill guides the model to form observable subgoals, order prerequisites, and revise its working plan in conversation. Separate planning stacks and persistent memory are currently deferred. Skills provide guidance; the LLM selects actions through tools.
 
 ## Installation and execution
 
@@ -89,6 +89,8 @@ Both methods can use multiple workers in separately assigned resource pools. Wit
 Launch a frozen checkout with `scripts/start_behavior100_service.py --config <config.json> --unit mas-b100-<name>.service`. The supervisor restarts after an unexpected exit and retains task identities, deadlines and original records. For disjoint method resource pools, configure a separate `shared_lease_dir` per method and respect each host's actual GPU and memory capacity. A supervisor may finish the cohort only when every manifest task has a terminal outcome; unexpected worker exit cannot silently drop a task. Source versions and protocol changes remain attached to individual attempts; earlier completed attempts are not silently reclassified as new-code experiments.
 
 Each run retains video, images, available model messages and returned reasoning summaries, tool traces, skill snapshots, versions, host/interpreter/GPU/PID provenance, and failure records. Replays do not invent hidden reasoning or unrecorded arm motion. Raw experiment data, credentials, and assets are excluded from Git.
+
+`scripts/prepare_behavior100.py --instruction-mode mixed-coarse` preserves the 50 official gallery instructions and gives the other 50 tasks short task-level goals instead of detailed BDDL translations. The official evaluator is unchanged; omitted goal information can affect scores, so this condition must be reported separately from detailed-instruction runs. Batch configuration `export_spectator_video: true` exports every third-person frame to `spectator.mp4`, validates its frame count and full duration, and links it from the replay. This untrimmed export uses simulation time; model waiting is represented by the replay's separate timing modes.
 
 - [Observation and tool protocol](docs/rgb_protocol.md)
 - [Legacy asynchronous four-camera compatibility](docs/async_observation.md)

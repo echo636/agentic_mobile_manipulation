@@ -107,7 +107,7 @@ def render_standalone_dashboard(progress):
     ended=sum(counts[k] for k in ('success','failure','timeout'))
     labels={'success':'成功','failure':'失败','timeout':'超时','running':'进行中','queued':'待开始'}
     completed=ended==total
-    title=f'{total} 项任务评测' if total==100 else f'{total} 项任务补测'
+    title=protocol.get('display_title') or (f'{total} 项任务评测' if total==100 else f'{total} 项任务补测')
     def local_time(value,fmt):
         if not value:return '—'
         try:return datetime.fromisoformat(value.replace('Z','+00:00')).astimezone(timezone(timedelta(hours=8))).strftime(fmt)
@@ -144,7 +144,7 @@ def render_standalone_dashboard(progress):
         'PROGRESS_NOTE':f'进行中 {counts["running"]} · 待开始 {counts["queued"]}' if not completed else '所有任务已结束',
         'ROWS':''.join(rows),'TABS':tabs,'SEGMENTS':segments,
         'LIVE_JSON':json.dumps(not completed),'UPDATED_JSON':json.dumps(progress.get('updated_at','')),
-        'SCOPE_NOTE':'本页仅展示本轮 100 项任务结果。' if total==100 else '本页展示故障任务的独立补测结果，原始成绩保留。'}
+        'SCOPE_NOTE':esc(protocol.get('display_scope_note') or ('本页仅展示本轮 100 项任务结果。' if total==100 else '本页展示故障任务的独立补测结果，原始成绩保留。'))}
     template=Path(__file__).with_name('batch_dashboard.html').read_text()
     for key,value in values.items():template=template.replace('__'+key+'__',value)
     return template
