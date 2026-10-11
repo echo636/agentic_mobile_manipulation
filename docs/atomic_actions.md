@@ -2,6 +2,8 @@
 
 The RGB agent still selects one point in the latest four-camera snapshot. The executor grounds only that selected target, checks the held tool and reach, applies the simulator's object/material state, and verifies the result after settling. Tool completion is distinct from independent task success. `wait` remains a time-control utility outside the 18 task actions.
 
+Manipulation keeps the robot base at its current position and orientation. `grasp`, placement, opening/closing, toggling, attachment and material actions never navigate automatically, including in demo-motion mode. The existing ideal-executor reach check measures horizontal distance from the base to the selected surface point, with a 1.4 m limit; this is not a physical arm IK guarantee. A distant target returns `out_of_reach` before physics advances. The agent must explicitly call `act(primitive="navigate_to")`, inspect the returned four-camera RGB, and select the target again. An in-place demo arm attempt can also return `out_of_reach` after moving the arm; it does not retry by moving the base. Base translation belongs to `navigate_to`, and deliberate in-place rotation belongs to `look` (navigation may also turn to follow its route).
+
 | Added action | Required held object | Simulator effect |
 | --- | --- | --- |
 | `wipe` | Contact particle remover other than a broom/vacuum | Remove compatible `Covered` material |

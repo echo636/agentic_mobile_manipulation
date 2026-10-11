@@ -764,7 +764,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             with self._anchored_operation():
                 for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
-        if primitive=='release':return self.execute(primitive,None,max_steps)
+        if primitive=='release':
+            with self._anchored_operation():
+                return self.execute(primitive,None,max_steps)
         obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to')
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
@@ -772,8 +774,6 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
         held=self._get_held()
-        if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
-            self._demo_arm=None
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
         if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','wipe','sweep','vacuum',
@@ -791,7 +791,17 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             for parent in self.env.scene.objects:
                 if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
                     raise SkillError('container_closed','Grasp through closed container rejected')
-        # A carried slicer may trigger the official rule during an approach or
+        # Manipulation never navigates implicitly. Reach belongs to the selected
+        # visible point, not an object's potentially room-sized bounding box.
+        # Reject before arm motion or physics, leaving repositioning to the agent.
+        base=self.robot.get_position_orientation()[0]
+        if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
+            raise SkillError('out_of_reach',
+                             'Selected surface is beyond manipulation reach; call navigate_to, '
+                             'then reselect the target in the returned RGB before retrying')
+        if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
+            self._demo_arm=None
+        # A carried slicer may trigger the official rule during an arm
         # demonstration step. Save identity/output metadata while the selected
         # object is alive, and resolve replacement before touching it again.
         cut_target = self._capture_cut_target(obj) if primitive == 'cut' else None
@@ -804,25 +814,6 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             if demo_steps:
                 result = {**result, 'demo_motion': {'real_env_steps': demo_steps, 'ideal_contact': True}}
             return {**result, 'private_grounding': grounding}
-        base=self.robot.get_position_orientation()[0]
-        # A long cabinet/floor AABB can contain the base while the selected
-        # visible surface is far away. Reach belongs to that selected point.
-        reach_limit=1.4
-        if float(self.torch.linalg.norm(base[:2]-point[:2]))>reach_limit:
-            if primitive in {'attach','hang'}:
-                raise SkillError('out_of_reach','Navigate to a visible approach to the selected parent before attaching')
-            # Approach only the selected target, within this action's existing
-            # step budget; no new object discovery or goal access.
-            before_approach=self.steps
-            anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
-            self._navigate(anchor,max(1,max_steps-60),for_manipulation=True)
-            max_steps-=self.steps-before_approach
-            completed = completed_cut('implicit_approach')
-            if completed is not None:
-                return completed
-            base=self.robot.get_position_orientation()[0]
-            if float(self.torch.linalg.norm(base[:2]-point[:2]))>reach_limit or max_steps<30:
-                raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
         # A cut target must be free to be destroyed by its legitimate transition;
         # holding its root pose after env.step would dereference a deleted prim.
         shown = (self._demo_reach(point,max_steps,anchor=None if obj is held or primitive == 'cut' else obj,
@@ -834,32 +825,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if completed is not None:
             return completed
         contact_limit=(.45 if primitive=='spray' else .30 if primitive=='vacuum' else .18)
-        if (shown and self._demo_last_reach_error>contact_limit and obj is not held
-                and max_steps>170):
-            # A visual standoff may keep the selected pixel in view while the
-            # posture-limited hand cannot touch it. Reuse that exact pixel for
-            # one closer, visibility-checked approach; never select a new goal.
-            first_error=self._demo_last_reach_error
-            anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),
-                                   selected_object=obj)
-            before_retry=self.steps
-            self._navigate(anchor,max_steps-120,for_manipulation=True)
-            max_steps-=self.steps-before_retry
-            completed = completed_cut('demo_approach_retry', shown)
-            if completed is not None:
-                return completed
-            self._demo_record(action=primitive,status='approach_retry',first_error_m=first_error,
-                              target_point=point.tolist())
-            retry=self._demo_reach(point,max_steps,anchor=None if primitive == 'cut' else obj,
-                                   arm=self._demo_arm if held is not None else None,
-                                   action=primitive+'_after_approach')
-            shown+=retry;max_steps-=retry
-            completed = completed_cut('demo_reach_retry', shown)
-            if completed is not None:
-                return completed
         if shown and self._demo_last_reach_error>contact_limit:
             raise SkillError('out_of_reach',
-                             'Robot hand could not approach the selected surface; choose a closer visible approach',
+                             'Robot hand could not reach the selected surface from this base pose; '
+                             'call navigate_to, then reselect the target in fresh RGB',
                              changed=True)
         if shown and primitive in {'wipe','sweep','vacuum','spray','spread','soak','cut'}:
             stroke=point.clone()
@@ -894,7 +863,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         elif primitive=='soak':
             result=self._checked_soak(obj,max_steps)
         elif primitive=='cut':
-            result=self._checked_cut(obj,max_steps)
+            # Hold only the robot, not the target: cutting can delete its prim.
+            with self._anchored_operation():
+                result=self._checked_cut(obj,max_steps)
         elif primitive in {'open','close','toggle_on','toggle_off'} and self.ideal_carry:
             result=self._ideal_state_action(primitive,obj,max_steps)
         elif primitive=='place_on_top':
@@ -906,7 +877,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         elif primitive=='place_inside' and self.inside_placement=='official_volume':
             result=self._checked_place_inside(obj,max_steps)
         else:
-            result=self.execute(primitive,obj.name,max_steps)
+            # The pinned symbolic actions do not navigate for manipulation;
+            # hold the base during their release/settling physics as well.
+            with self._anchored_operation():
+                result=self.execute(primitive,obj.name,max_steps)
         if shown and primitive in {'place_inside','place_on_top','place_under','place_next_to','attach','hang','open','close',
                                    'toggle_on','toggle_off'}:
             # A stretched arm must not sweep the destination over when the
@@ -936,6 +910,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
+        result['manipulation_navigation'] = {'implicit_navigation':False,
+            'reach_check':'base_to_selected_point_xy', 'reach_limit_m':1.4,
+            'out_of_reach':'return_to_agent_for_explicit_navigate_to_and_fresh_pixel',
+            'demo_reach_navigation_retry':False}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
             'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,

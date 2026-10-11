@@ -1,4 +1,4 @@
-"""Regressions for an official cut that happens during visual-action approach.
+"""Regressions for an official cut that happens during in-place arm motion.
 
 Run the real execute_visual routing with tiny scene/step fixtures. A removed
 target throws if dereferenced, reproducing the deleted-prim failure boundary.
@@ -8,6 +8,7 @@ import sys
 import tempfile
 import types
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -61,7 +62,8 @@ class CutTargetLifecycle(unittest.TestCase):
         self.backend.demo_motion = False
         self.backend._demo_arm = 'left'
         self.backend._get_held = lambda: self.tool
-        self.point = np.array([2., 0., .1]).view(Point)
+        self.backend._anchored_operation = nullcontext
+        self.point = np.array([1., 0., .1]).view(Point)
         self.base = np.zeros(3)
         self.backend.robot = types.SimpleNamespace(
             get_position_orientation=lambda: (self.base.copy(), None),
@@ -77,20 +79,15 @@ class CutTargetLifecycle(unittest.TestCase):
         self.manual_transition_calls = 0
 
         def navigate(*args, **kwargs):
-            self.backend.steps += 1
-            self.base[:] = self.point
-            if self.stage in {'implicit_approach', 'demo_approach_retry'}:
-                self.replace_target()
+            self.fail('Cut must never navigate implicitly')
         self.backend._navigate = navigate
 
         def reach(point, max_steps, *, anchor, arm, action):
             self.assertIsNone(anchor, 'Cut must not pin a target that a rule can delete')
             self.demo_calls += 1
             self.backend.steps += 1
-            stage = ('demo_stroke' if action.endswith('_stroke') else
-                     'demo_reach_retry' if action.endswith('_after_approach') else 'demo_reach')
-            self.backend._demo_last_reach_error = (
-                .2 if stage == 'demo_reach' and self.stage in {'demo_approach_retry', 'demo_reach_retry'} else 0.)
+            stage = 'demo_stroke' if action.endswith('_stroke') else 'demo_reach'
+            self.backend._demo_last_reach_error = 0.
             if self.stage == stage:
                 self.replace_target()
             return 1
@@ -142,19 +139,21 @@ class CutTargetLifecycle(unittest.TestCase):
             parts[1].model = 'unrelated_model'
         self.remove_and_add(parts)
 
-    def test_implicit_approach_recognizes_both_new_halves_without_dead_target_read(self):
-        self.stage = 'implicit_approach'
+    def test_arm_motion_recognizes_both_new_halves_without_dead_target_read(self):
+        self.backend.demo_motion = True
+        self.stage = 'demo_reach'
         with self.modules:
             result = self.route(self.backend, 'cut', object(), 700)
         self.assertEqual(result['created_objects'], 2)
-        self.assertEqual(result['completed_during'], 'implicit_approach')
+        self.assertEqual(result['completed_during'], 'demo_reach')
         self.assertEqual(result['transition'], 'SlicingRule')
         self.assertTrue(result['replacement_verified'])
         self.assertEqual(self.manual_transition_calls, 0)
         self.assertEqual(self.backend.frames_revision, -1)
 
     def test_unknown_disappearance_is_recoverable_failure_and_invalidates_rgb(self):
-        self.stage = 'implicit_approach'
+        self.backend.demo_motion = True
+        self.stage = 'demo_reach'
         self.replacement = 'unknown'
         with self.modules, self.assertRaises(SkillError) as failure:
             self.route(self.backend, 'cut', object(), 700)
@@ -173,7 +172,8 @@ class CutTargetLifecycle(unittest.TestCase):
         for replacement in ('partial', 'wrong_model'):
             with self.subTest(replacement=replacement):
                 self.setUp()
-                self.stage = 'implicit_approach'
+                self.backend.demo_motion = True
+                self.stage = 'demo_reach'
                 self.replacement = replacement
                 with self.modules, self.assertRaises(SkillError) as failure:
                     self.route(self.backend, 'cut', object(), 700)
@@ -181,7 +181,8 @@ class CutTargetLifecycle(unittest.TestCase):
 
     def test_preexisting_matching_names_do_not_prove_new_cut(self):
         self.scene.objects += self.parts()
-        self.stage = 'implicit_approach'
+        self.backend.demo_motion = True
+        self.stage = 'demo_reach'
         with self.modules, self.assertRaises(SkillError) as failure:
             self.route(self.backend, 'cut', object(), 700)
         self.assertEqual(failure.exception.code, 'target_changed')
@@ -196,7 +197,7 @@ class CutTargetLifecycle(unittest.TestCase):
         self.assertEqual(self.backend.frames_revision, -1)
 
     def test_each_demo_boundary_resolves_cut_before_reusing_target(self):
-        for stage in ('demo_reach', 'demo_approach_retry', 'demo_reach_retry', 'demo_stroke'):
+        for stage in ('demo_reach', 'demo_stroke'):
             with self.subTest(stage=stage):
                 self.setUp()
                 self.base[:] = self.point

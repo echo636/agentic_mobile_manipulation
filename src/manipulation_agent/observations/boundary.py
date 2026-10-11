@@ -30,7 +30,7 @@ ERROR_MESSAGES = {
     "navigation_stalled":"The navigation executor made no progress. Inspect the fresh RGB before trying one alternative; do not repeat the same request.",
     "navigation_path_blocked":"The selected navigation endpoint became blocked or unobserved. Inspect fresh RGB and choose a different visible approach.",
     "navigation_unobserved_route":"No observed free route reaches this point. Inspect fresh RGB and choose a different visible approach.",
-    "out_of_reach":"The selected surface is beyond the executor's manipulation reach. Approach using RGB first.",
+    "out_of_reach":"The selected surface cannot be reached from the current base position. Manipulation does not move the base. Call act with primitive=navigate_to to choose a closer visible approach, then reselect the target in the returned RGB before retrying.",
     "hand_occupied":"The executor cannot perform this action while carrying an object.",
     "empty_hand":"The executor cannot place, attach or release without a held object.",
     "container_closed":"The executor could not access the requested placement or grasp. Reinspect the opening in RGB.",
