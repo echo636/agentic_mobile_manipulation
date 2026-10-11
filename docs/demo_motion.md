@@ -1040,3 +1040,13 @@ scattered contents, and two further pixels hit fixed surfaces. Its independent
 audit passed the formal model finish, call alignment, video, and empty-hand
 checks, but official whole-task success failed; five visible motion segments
 were recorded. R26 is the first Christmas attempt with the cane-first skill.
+
+Can-meat r26 showed an upper-shelf framing limitation: with every camera
+pitched 35° down, the opened upper cabinet and jars were cut by the top edge
+even after successful aisle navigation, so the model repeatedly selected
+cabinet structure. The RGB rig now reads a validated
+`MAS_RGB_PITCH_DEGREES` value; future can-meat trials use 18° down to include
+the upper shelf, while Christmas keeps 35° down for its floor basket. All
+four views share the chosen pitch and the same selected-pixel grounding.
+R26 itself retains its original 35° source snapshot and is not evidence that
+the new pitch succeeds.

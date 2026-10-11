@@ -65,10 +65,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             raise ValueError('RGB JPEG quality must be between 70 and 95')
         # Preserve the current four simultaneous virtual head cameras.
         # Their private depth is used only to ground the selected RGB pixel.
-        # Put the model-facing cameras ahead of the robot head. The steeper
-        # pitch keeps nearby floor targets in frame at navigation distance.
+        # Put the model-facing cameras ahead of the robot head. Demo trials
+        # may use a shallower pitch for high shelves or a steeper one for floor items.
         self.rig_radius=0.35
-        self.rig_pitch_degrees=35.0
+        self.rig_pitch_degrees=float(os.environ.get('MAS_RGB_PITCH_DEGREES','35'))
+        if not math.isfinite(self.rig_pitch_degrees) or not 10<=self.rig_pitch_degrees<=45:
+            raise ValueError('RGB pitch must be between 10 and 45 degrees down')
         self.capture_index=0
         self.image_files={}
         self.current_frames={}

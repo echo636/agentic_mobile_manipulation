@@ -77,7 +77,8 @@ def main():
         OMNIGIBSON_DATA_PATH=str(og.parent / 'datasets'),
         OMNIGIBSON_APPDATA_PATH=str((args.appdata or root.parent / f'appdata_gpu{args.gpu}').resolve()),
         MAS_DEMO_MOTION='1', MAS_VIDEO_RENDER_STRIDE='3',
-        MAS_RGB_IMAGE_SIZE='1024' if args.task == 'putting_up_Christmas_decorations_inside' else '512')
+        MAS_RGB_IMAGE_SIZE='1024' if args.task == 'putting_up_Christmas_decorations_inside' else '512',
+        MAS_RGB_PITCH_DEGREES='18' if args.task == 'can_meat' else '35')
     Path(environment['OMNIGIBSON_APPDATA_PATH']).mkdir(parents=True, exist_ok=True)
     # USD and Python tempfile create large per-scene scratch assets. Keep them
     # on the experiment data volume rather than the small /tmp user quota.
