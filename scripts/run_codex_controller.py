@@ -73,6 +73,8 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
     p.add_argument('--provider-history-restarts', type=int, default=0,
                    help='Start a fresh Codex thread in the same live episode after malformed provider tool history')
+    p.add_argument('--unfinished-restarts', type=int, default=0,
+                   help='Start a fresh Codex thread when the model ends without calling finish')
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
     adapter = get_adapter(client)
@@ -83,9 +85,10 @@ def main(argv=None, *, allow_client=False):
     deadline=(EpisodeDeadline() if args.execution_clock_command_json is not None else
               EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env())
     if args.timeout<=0:p.error('--timeout must be positive')
-    if args.rate_limit_resumes < 0 or args.resume_backoff_seconds < 1 or args.provider_history_restarts < 0:
+    if (args.rate_limit_resumes < 0 or args.resume_backoff_seconds < 1 or
+            args.provider_history_restarts < 0 or args.unfinished_restarts < 0):
         p.error('Rate-limit resume count must be nonnegative and backoff positive')
-    if (args.rate_limit_resumes or args.provider_history_restarts) and client != 'codex':
+    if (args.rate_limit_resumes or args.provider_history_restarts or args.unfinished_restarts) and client != 'codex':
         p.error('Provider recovery is supported only for Codex')
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
@@ -213,19 +216,31 @@ def main(argv=None, *, allow_client=False):
         process.duration_seconds=time.monotonic()-policy_started_monotonic
     if continuations:
         metadata['rate_limit_continuations']=continuations
-    history_restarts=[]
-    for attempt in range(1,args.provider_history_restarts+1):
+    fresh_restarts=[]
+    history_count=0
+    unfinished_count=0
+    for attempt in range(1,args.provider_history_restarts+args.unfinished_restarts+1):
         remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
-        if (process.returncode == 0 or process.timed_out or not provider_history_error(segment_events)
-                or remaining <= 60):
+        if process.timed_out or remaining <= 60:
             break
-        segment_dir=args.output/'history_restarts'/str(attempt)
+        if provider_history_error(segment_events) and history_count<args.provider_history_restarts:
+            reason='provider_tool_history_protocol_error'
+            history_count+=1
+        elif (process.returncode == 0 and
+              not adapter.parse(raw_events).formal_finish_observed and
+              unfinished_count<args.unfinished_restarts):
+            reason='model_ended_without_formal_finish'
+            unfinished_count+=1
+        else:
+            break
+        segment_dir=args.output/'fresh_restarts'/str(attempt)
         segment_dir.mkdir(parents=True,exist_ok=False)
-        restart_instruction=(args.instruction + '\n\nThe model service interrupted a previous thread '
-                             'during this same live simulator episode. Call initialize to inspect the current '
-                             'RGB observation; it does not reset the episode. Infer which goals remain from '
-                             'visible evidence, choose all actions yourself, and call finish when done. '
-                             'Do not assume any earlier action succeeded without checking.')
+        restart_instruction=(args.instruction + '\n\nA previous model thread ended during this same '
+                             'live simulator episode (' + reason + '). Call initialize to inspect the '
+                             'current RGB observation; it does not reset the episode. Infer which goals '
+                             'remain from visible evidence, choose all actions yourself, and call finish '
+                             'with an evidence-based outcome before final text. Do not assume any earlier '
+                             'action succeeded without checking.')
         restart_config=replace(config,output=segment_dir,instruction=restart_instruction,
                                timeout=remaining)
         restart_project=adapter.prepare_project(restart_config,system_prompt(args.agent_profile),
@@ -235,16 +250,18 @@ def main(argv=None, *, allow_client=False):
         segment_events=adapter.parse(segment_path).raw_events
         with raw_events.open('ab') as combined,segment_path.open('rb') as segment:
             combined.write(segment.read())
-        history_restarts.append({'attempt':attempt,'reason':'provider_tool_history_protocol_error',
-                                 'thread_id':codex_thread_id(segment_events),
-                                 'returncode':restarted.returncode,'timed_out':restarted.timed_out,
-                                 'raw_events':str(segment_path.relative_to(args.output))})
+        fresh_restarts.append({'attempt':attempt,'reason':reason,
+                               'thread_id':codex_thread_id(segment_events),
+                               'returncode':restarted.returncode,'timed_out':restarted.timed_out,
+                               'raw_events':str(segment_path.relative_to(args.output))})
         process.returncode=restarted.returncode
         process.timed_out=process.timed_out or restarted.timed_out
         process.policy_finished_at_unix=restarted.policy_finished_at_unix
         process.duration_seconds=time.monotonic()-policy_started_monotonic
-    if history_restarts:
-        metadata['provider_history_restarts']=history_restarts
+    if fresh_restarts:
+        metadata['fresh_thread_restarts']=fresh_restarts
+        metadata['provider_history_restarts']=[entry for entry in fresh_restarts
+                                               if entry['reason']=='provider_tool_history_protocol_error']
     policy_finished_at = process.policy_finished_at_unix
     if process.timed_out:
         metadata['timeout'] = True

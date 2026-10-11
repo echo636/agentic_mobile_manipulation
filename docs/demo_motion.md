@@ -1112,3 +1112,15 @@ model/simulator call alignment and video with 14 visible motion segments,
 but failed official whole-task success and empty-hand checks. This was a
 policy pixel-selection and recovery failure, not proof the jar-staging motor
 is broken.
+
+Christmas r28 ended its model thread after three `fixed_object` grasp errors
+without calling `finish`; the supervisor closed the episode as aborted. Its
+independent audit failed formal finish, call alignment, visible-motion and
+official task success checks. The controller now permits one fresh-thread
+continuation in the same live simulator episode for a clean model exit without
+formal finish. The new thread must call `initialize`, inspect current RGB,
+choose remaining actions itself, and call `finish`; the concatenated model
+events and `fresh_thread_restarts` metadata remain available for independent
+review. Provider-history protocol errors use the same fresh-thread mechanism
+with their existing two-restart limit. This requires validation in a later
+autonomous trial.
