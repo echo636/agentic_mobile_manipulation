@@ -1,8 +1,9 @@
 """Private ownership at the selected pixel's backprojected surface point."""
 from ..contracts import SkillError
+from types import SimpleNamespace
 
 
-def query_visual_surface(backend, point):
+def query_visual_surface(backend, point, *, reject_particles=False):
     """Find the rendered mesh surface nearest the measured world-space point.
 
     Do not cast another ray, replace the point, search neighboring pixels, or
@@ -30,6 +31,32 @@ def query_visual_surface(backend, point):
     objects = list(backend.env.scene.objects)
     if not any(obj is backend.robot for obj in objects):
         objects.append(backend.robot)
+    particle_owners = {}
+    particle_transforms = {}
+    particle_geometry = {}
+    if reject_particles:
+        import omnigibson.utils.transform_utils as T
+        for system in getattr(backend.env.scene, 'active_systems', {}).values():
+            particles = getattr(system, 'particles', None)
+            view = getattr(system, 'particles_view', None)
+            if not particles or view is None:
+                continue
+            # Macro particles have actual rendered meshes. Include their exact
+            # surfaces in the same nearest-surface query, without a radius
+            # threshold or redirecting the pixel to a container/background.
+            owner = SimpleNamespace(links={'particles': SimpleNamespace(visual_meshes=particles)})
+            objects.append(owner)
+            particle_owners[id(owner)] = system
+            raw = view.get_transforms()
+            rotations = T.quat2mat(raw[:, 3:]).detach().cpu().numpy()
+            by_path = {mesh.prim_path: mesh for mesh in particles.values()}
+            for i, path in enumerate(view.prim_paths):
+                mesh = by_path[path]
+                transform = np.eye(4)
+                transform[:3, :3] = rotations[i] * mesh.scale.detach().cpu().numpy()
+                transform[:3, 3] = raw[i, :3].detach().cpu().numpy()
+                particle_transforms[path] = transform
+                particle_geometry[path] = system.particle_object
     for obj in objects:
         for link in obj.links.values():
             rigid = hasattr(link, 'visual_meshes')
@@ -41,19 +68,22 @@ def query_visual_surface(backend, point):
                     guides_skipped += 1
                     continue
                 path = mesh.prim_path
+                source_mesh = particle_geometry.get(path, mesh)
+                cache_path = source_mesh.prim_path
                 vertices = None
-                if rigid and path in bounds_cache:
-                    bounds = bounds_cache[path]
+                if rigid and cache_path in bounds_cache:
+                    bounds = bounds_cache[cache_path]
                 else:
-                    vertices = mesh.points.detach().cpu().numpy()
+                    vertices = source_mesh.points.detach().cpu().numpy()
                     finite_vertices = vertices[np.isfinite(vertices).all(axis=1)]
                     if not len(finite_vertices):
                         invalid_meshes += 1
                         continue
                     bounds = np.stack((finite_vertices.min(axis=0), finite_vertices.max(axis=0)))
                     if rigid:
-                        bounds_cache[path] = bounds
-                transform = mesh.scaled_transform.detach().cpu().numpy().astype(float)
+                        bounds_cache[cache_path] = bounds
+                transform = (particle_transforms[path] if path in particle_transforms else
+                             mesh.scaled_transform.detach().cpu().numpy().astype(float))
                 if not np.isfinite(transform).all():
                     invalid_meshes += 1
                     continue
@@ -68,10 +98,11 @@ def query_visual_surface(backend, point):
         if best is not None and lower_bound > best[0] + 1e-9:
             break
         if rigid:
-            if mesh.prim_path not in cache:
-                cache[mesh.prim_path] = mesh_prim_to_trimesh_mesh(
-                    mesh.prim, include_normals=False, include_texcoord=False)
-            geometry = cache[mesh.prim_path]
+            source_mesh = particle_geometry.get(mesh.prim_path, mesh)
+            if source_mesh.prim_path not in cache:
+                cache[source_mesh.prim_path] = mesh_prim_to_trimesh_mesh(
+                    source_mesh.prim, include_normals=False, include_texcoord=False)
+            geometry = cache[source_mesh.prim_path]
         else:
             geometry = trimesh.Trimesh(vertices=vertices, faces=mesh.faces.cpu().numpy(), process=False)
         if geometry.is_empty:
@@ -116,6 +147,14 @@ def query_visual_surface(backend, point):
                            **numerical_diagnostics}
         raise exc
     distance, obj, path, nearest, purpose = best
+    if id(obj) in particle_owners:
+        exc = SkillError('particle_target', 'Selected surface belongs to loose physical particles')
+        exc.diagnostics = {'reason': 'physical_particle_surface',
+                           'particle_system': particle_owners[id(obj)].name,
+                           'visual_mesh': path, 'visual_triangle_position': nearest,
+                           'surface_point_distance_m': distance, 'visual_meshes_tested': checked,
+                           **numerical_diagnostics}
+        raise exc
     return obj, {'visual_mesh': path, 'visual_triangle_position': nearest,
                  'visual_mesh_purpose': purpose, 'guide_meshes_skipped': guides_skipped,
                  'surface_point_distance_m': distance, 'visual_meshes_tested': checked,

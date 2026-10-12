@@ -214,7 +214,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             states.VerticalAdjacency:types.SimpleNamespace(get_value=lambda:types.SimpleNamespace(negative_neighbors=[target],positive_neighbors=[]))},
             set_position_orientation=lambda *a:None,keep_still=lambda:None,wake=lambda:None,get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
         target=types.SimpleNamespace(name='fridge',links={'root':types.SimpleNamespace(prim_path='/fridge')});b=CheckedPlacement();b.ideal_carry=True;b._carry_contents=[]
-        b._placement_context=nullcontext
+        b._placement_context=lambda *args, **kwargs:nullcontext()
         b._surface_candidates=lambda *a:[{'index':0,'pose':(torch.zeros(3),torch.tensor([0.,0.,0.,1.])),
             'clearance_m':.025,'support_position':[0.,0.,0.]}]
         b.og=types.SimpleNamespace(sim=types.SimpleNamespace(dump_state=lambda **kw:{},get_physics_dt=lambda:1.))

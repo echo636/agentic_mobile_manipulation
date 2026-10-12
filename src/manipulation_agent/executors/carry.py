@@ -8,6 +8,7 @@ from contextlib import contextmanager
 import json
 from ..contracts import SkillError
 from ..records import now
+from .particle_payload import snapshot_particles, relocate_particles, verify_particles, particle_count
 
 
 def support_closure(root, objects, relation):
@@ -33,14 +34,14 @@ class ControlledCarry:
         if obj is not None:self._object_anchor=(obj,tuple(v.clone() for v in obj.get_position_orientation()))
         original_step=self.og.sim.step_physics
         def anchored_physics(*args,**kwargs):
-            self._restore_base_target();self._restore_object_anchor()
+            self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
             try:return original_step(*args,**kwargs)
-            finally:self._restore_base_target();self._restore_object_anchor()
+            finally:self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
         self.og.sim.step_physics=anchored_physics
         try:yield
         finally:
             self.og.sim.step_physics=original_step
-            try:self._restore_base_target();self._restore_object_anchor()
+            try:self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
             finally:self._base_target=previous;self._object_anchor=old_object
 
     def _restore_object_anchor(self):
@@ -61,16 +62,19 @@ class ControlledCarry:
         # Open.set_value teleports articulated joints. Drawer contents must move
         # with their supporting volume, not be left at the previous world pose.
         payload=self._container_payload(obj) if state is Open else []
+        particles=snapshot_particles(self.env.scene,[obj]) if state is Open else []
         with self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
             # Upstream symbolic OPEN samples a random opening and returns early
             # when already ajar. Fully open/close all annotated joints instead.
             accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
             if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
             self._relocate_container_payload(payload)
+            relocate_particles(self.env.scene,particles)
             for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if bool(obj.states[state].get_value())!=wanted:
                 raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
             self._verify_container_payload(obj,payload)
+            verify_particles(self.env.scene,particles)
         return {'primitive':primitive,'implementation':'transactional_official_state_setter_with_link_payload',
                 'fully_open_or_closed':state is Open,'postcondition':'official_state_and_containment_after_settling',
                 'preserved_contained_objects':len(payload),'failure_policy':'restore_pre_action_state'}
@@ -168,23 +172,41 @@ class ControlledCarry:
         self._ideal_held.set_position_orientation(*pose);self._ideal_held.keep_still()
         for obj,relative in self._carry_contents:
             obj.set_position_orientation(*T.pose_transform(*pose,*relative));obj.keep_still()
+        try:
+            relocate_particles(self.env.scene,getattr(self,'_carry_particles',[]))
+        except SkillError:
+            self._carry_detach()
+            self.frames_revision=-1
+            raise
 
     def _relocate_contents(self, held, contents):
         from omnigibson.utils import transform_utils as T
         for obj,relative in contents:
             obj.set_position_orientation(*T.pose_transform(*held.get_position_orientation(),*relative));obj.keep_still()
+        root,particles=getattr(self,'_placement_particle_payload',(None,[]))
+        if root is held:relocate_particles(self.env.scene,particles)
+
+    def _follow_placement_particles(self):
+        # Preserve the selected assembly until the placement transaction ends,
+        # including sampler physics and Environment.step's separate code path.
+        _,particles=getattr(self,'_placement_particle_payload',(None,[]))
+        if particles:relocate_particles(self.env.scene,particles)
 
     def _carry_detach(self):
         if not self.ideal_carry:
             for arm in self.robot.arm_names:self.robot.release_grasp_immediately(arm=arm)
         else:
             self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[]
+            self._carry_particles=[]
 
     @contextmanager
     def _placement_context(self,target=None,*,watch=()):
         from .placement import placement_transaction
         held=getattr(self,'_ideal_held',None);relative=getattr(self,'_carry_relative',None);contents=list(getattr(self,'_carry_contents',[]))
         dependencies=list(getattr(self,'_carry_dependencies',[]))
+        particles=list(getattr(self,'_carry_particles',[]))
+        old_particles=getattr(self,'_placement_particle_payload',(None,[]))
+        self._placement_particle_payload=(held,particles)
         previous=getattr(self,'_placement_watch',())
         self._placement_watch=tuple(obj for obj in (held,target,*watch,*(c for c,_ in contents)) if obj is not None)
         try:
@@ -195,10 +217,12 @@ class ControlledCarry:
                 self.frames_revision=-1
             else:
                 self._ideal_held=held;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
+                self._carry_particles=particles
                 if held is not None:self._carry_follow()
             raise
         finally:
             self._placement_watch=previous
+            self._placement_particle_payload=old_particles
 
     def _check_placement_objects(self):
         watched=getattr(self,'_placement_watch',())
@@ -229,6 +253,7 @@ class ControlledCarry:
             return None
         dependencies=support_closure(obj,candidates,relation)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
+        particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in dependencies]])
         # The entire selected assembly is leaving its old support. An outer
         # container can have recorded nested children as well as this root;
         # retaining those records would pull the children back after release.
@@ -251,8 +276,10 @@ class ControlledCarry:
             lifted=original[0].clone();lifted[2]+=.18
             relative=T.relative_pose_transform(lifted,original[1],base_pos,base_quat)
         self._ideal_held=obj;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
+        self._carry_particles=particles
         self._carry_record(status='attached',object=obj.name,contained_objects=[c.name for c,_ in contents],
                            payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
+                           contained_particles=particle_count(particles),
                            implementation='pose_projection_no_fixed_joint',original_position=original[0].tolist())
         self._carry_follow()
         with self._anchored_operation():
@@ -261,11 +288,14 @@ class ControlledCarry:
         pos,quat=obj.get_position_orientation()
         if not bool(torch.isfinite(pos).all() and torch.isfinite(quat).all()):
             raise SkillError('physics_instability','Non-finite held pose',changed=True)
+        verify_particles(self.env.scene,particles)
         return {'primitive':'grasp','implementation':'controlled_pose_carry','postcondition':'selected_object_held_and_finite',
-                'physical_grasp':False,'fixed_joint_created':False,'contained_rigid_objects':len(contents)}
+                'physical_grasp':False,'fixed_joint_created':False,'contained_rigid_objects':len(contents),
+                'contained_particles':particle_count(particles)}
 
     def _verify_payload(self, dependencies):
         from omnigibson.object_states import Inside,OnTop
+        verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
         for child,parent,kind in dependencies:
             state=Inside if kind=='Inside' else OnTop
             if state not in child.states or not child.states[state].get_value(parent):

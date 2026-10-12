@@ -4,6 +4,7 @@ import time
 from contextlib import contextmanager
 
 from ..contracts import SkillError
+from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
 
 
 def scene_object_identities(sim):
@@ -18,15 +19,23 @@ def placement_transaction(sim, record):
     """Restore the pre-action state, including the grasp, on a failed placement."""
     state = sim.dump_state(serialized=False)
     objects = scene_object_identities(sim)
+    particles = snapshot_particle_state(sim)
     try:
         yield
     except Exception as exc:
+        if (isinstance(exc, SkillError) and exc.code == 'target_changed') or not particle_state_unchanged(particles):
+            # A particle system may have changed without replacing a scene
+            # object. Loading the old snapshot would recreate consumed matter.
+            record({'status': 'rollback_skipped', 'reason': 'target_identity_changed',
+                    'error_type': type(exc).__name__})
+            raise SkillError('target_changed', 'Particle or object identities changed during placement', changed=True) from exc
         if objects is not None and scene_object_identities(sim) != objects:
             record({'status': 'rollback_skipped', 'reason': 'scene_objects_replaced',
                     'error_type': type(exc).__name__})
             raise SkillError('target_changed', 'Scene objects changed during placement; inspect updated RGB',
                              changed=True) from exc
         sim.load_state(state, serialized=False)
+        restore_particle_state(particles)
         record({'status': 'rolled_back', 'error_type': type(exc).__name__, 'error': str(exc)})
         raise
     else:
@@ -542,9 +551,9 @@ class CheckedPlacement:
                         self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>180):
                     raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
                 self.sampling_physics_steps+=1
-                if contents:
+                if contents or getattr(self,'_placement_particle_payload',(None,[]))[1]:
                     # Randomly flipping a plate is not a valid way to place
-                    # its food. Preserve the carried assembly's orientation.
+                    # its food (or a bag its particles). Preserve orientation.
                     held.set_position_orientation(held.get_position_orientation()[0],orientation)
                 self._relocate_contents(held,contents)
                 return preserve_residents(*args,**kwargs)

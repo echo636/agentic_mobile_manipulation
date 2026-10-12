@@ -57,6 +57,34 @@ meshes, including container fill volumes, are excluded. A point on the robot is
 rejected instead of being assigned to another object. No object-name search,
 task-scope filtering, or neighboring-pixel substitution occurs.
 
+For `grasp`, the same query also includes the rendered meshes of active physical
+macro particles, using their current PhysX poses and instance scales. A winning
+particle surface returns `particle_target`; it is not assigned to the fixed
+countertop beneath it. Fixed scene objects still return `fixed_object`. Material
+actions continue to resolve the supporting object. This addition covers mesh
+macro particles such as popcorn, not fluid isosurfaces or micro point instancers.
+
+Controlled carry snapshots existing macro particles inside the carried
+assembly's annotated container volumes, including nested rigid containers.
+Particle poses follow their own container link through grasp, navigation and
+placement; unrelated particles are untouched. Stable prim paths survive index
+reordering, while deleted particles or replaced systems invalidate the carry
+instead of restoring consumed material. Rejected placements restore the carry
+and raw PhysX particle frames unless target identity changed. This supplemental
+snapshot avoids the center/frame offset in OG 3.9.2's macro state restoration.
+Particles follow the container through placement sampling and settling;
+successful placement and
+release clear the carry constraint and resume particle physics. This remains
+ideal pose actuation, and does not claim physical grasp control or fluid carry.
+
+The 2026-10-13 private instance-301 popcorn regression reproduced the old
+255-to-0 loss on grasp. The repaired grasp, base turn, rejected-placement
+rollback and successful microwave placement each retained the original 255
+contained particles. Particle-surface rejection, release of the constraint and
+video finalization also passed, alongside 80 focused CPU tests. This is executor
+component validation, not evidence of autonomous whole-task success. Attempts,
+failures and source snapshots are in `operations/particle_payload_repair_20261013`.
+
 The previous depth/mesh agreement tolerance is not restored: measured surface
 distance is a private diagnostic, not a threshold that rejects an otherwise valid
 selection. The nearest mesh point does not replace the measured action position.

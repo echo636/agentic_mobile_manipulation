@@ -35,6 +35,7 @@ ERROR_MESSAGES = {
     "empty_hand":"The executor cannot place, attach or release without a held object.",
     "container_closed":"The executor could not access the requested placement or grasp. Reinspect the opening in RGB.",
     "fixed_object":"The selected object cannot be moved by this executor.",
+    "particle_target":"The selected point is on loose particles, which cannot be grasped directly. Select a visible container or a suitable tool instead.",
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
     "sampling_error":"The executor could not find a valid placement; inspect the new RGB before recovery.",
     "post_condition_error":"The executor could not verify its operation after settling; inspect the new RGB.",

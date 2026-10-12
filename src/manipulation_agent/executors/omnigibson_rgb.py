@@ -31,6 +31,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self._demo_arm = None
         self._demo_focus = None
         self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
+        self._carry_particles=[]
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False
         self.record_video = record_video
@@ -306,12 +307,14 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self._restore_object_anchor()
         self._restore_stabilized_containers()
         self._carry_follow()
+        self._follow_placement_particles()
         with component(self,'physics_and_metrics'):super()._step(action)
         try:
             self._check_placement_objects()
             if self._base_target is not None:
                 self._restore_base_target()
             self._restore_object_anchor();self._restore_stabilized_containers();self._carry_follow()
+            self._follow_placement_particles()
         finally:
             # Physics already advanced, including when a transition replaced a
             # watched object. Keep that executed step in the continuous replay.
@@ -407,7 +410,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if ref not in self.image_files: raise KeyError(ref)
         return self.image_files[ref].read_bytes(),'image/jpeg'
 
-    def _ground(self,target, *, require_object=True):
+    def _ground(self,target, *, require_object=True, reject_particles=False):
         """Use the chosen pixel's depth backprojection directly as the target.
 
         Navigation needs only this point. Manipulation resolves the visible
@@ -440,7 +443,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             from .visual_mesh_grounding import query_visual_surface
             try:
                 with component(self,'visual_grounding'):
-                    obj,visual=query_visual_surface(self,point)
+                    obj,visual=query_visual_surface(self,point,reject_particles=reject_particles)
             except SkillError as exc:
                 diagnostic.update(status='failed',code=exc.code,detail=str(exc),
                                   visual_query=getattr(exc,'diagnostics',{}))
@@ -822,7 +825,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if primitive=='release':
             with self._anchored_operation():
                 return self.execute(primitive,None,max_steps)
-        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to')
+        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to',reject_particles=primitive=='grasp')
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}

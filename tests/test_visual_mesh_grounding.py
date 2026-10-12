@@ -174,6 +174,29 @@ class VisualPointOwnership(unittest.TestCase):
         self.assertEqual(error.exception.diagnostics['invalid_triangles_skipped'], 1)
         json.dumps(error.exception.diagnostics, allow_nan=False)
 
+    def test_macro_particle_surface_is_not_attributed_to_fixed_countertop(self):
+        torch = self.torch
+        table, _ = self.box('countertop', [0., 0., -.5])
+        _, particle = self.box('particle', [0., 0., 0.])
+        particle.scale = torch.tensor([.02, .02, .02])
+        system = SimpleNamespace(name='popcorn', particles={'p': particle}, particle_object=particle,
+            particles_view=SimpleNamespace(prim_paths=[particle.prim_path],
+                get_transforms=lambda: torch.tensor([[0., 0., .04, 0., 0., 0., 1.]])))
+        backend = self.backend([table])
+        backend.env.scene.active_systems = {'popcorn': system}
+        transform = types.ModuleType('omnigibson.utils.transform_utils')
+        transform.quat2mat = lambda q: torch.eye(3).expand(len(q), 3, 3)
+        with patch.dict(sys.modules, {'omnigibson.utils.transform_utils': transform}):
+            with self.assertRaises(SkillError) as error:
+                query_visual_surface(backend, torch.tensor([0., 0., .05]), reject_particles=True)
+            self.assertEqual(error.exception.code, 'particle_target')
+            self.assertLess(error.exception.diagnostics['surface_point_distance_m'], 1e-7)
+            # A visible table pixel still belongs to the fixed table.
+            owner, _ = query_visual_surface(backend, torch.tensor([.3, .3, 0.]), reject_particles=True)
+            self.assertIs(owner, table)
+            # Material actions continue to ground their supporting surface.
+            self.assertIs(query_visual_surface(backend, torch.tensor([0., 0., .05]))[0], table)
+
 
 if __name__ == '__main__':
     unittest.main()

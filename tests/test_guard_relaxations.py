@@ -84,6 +84,7 @@ class GuardRelaxationTests(unittest.TestCase):
         robot.set_joint_positions = lambda *args, **kwargs: None
         robot.q_to_action = lambda q: q
         backend.robot, backend._ideal_held = robot, held
+        backend.env = SimpleNamespace(scene=SimpleNamespace(objects=[robot, held, payload], active_systems={}))
         backend._carry_relative = (held.position.clone(), quat.clone())
         backend._carry_contents = [(payload, (torch.tensor([0., 0., .2]), quat.clone()))]
         backend._carry_dependencies = [('unchanged',)]
