@@ -132,8 +132,9 @@ def controller_process_alive(pid, output):
 def prepolicy_failure(record, controller):
     if record.get('status')!='failed': return False
     stream=controller/'model_events.jsonl'
-    if 'actions' not in record:
-        # A pre-recorder startup failure has no action counter. Admit only the
+    if record.get('actions') is None:
+        # A pre-recorder startup failure has no action counter; archival may
+        # preserve that unknown value as JSON null. Admit only the
         # explicitly pre-policy stages, without inventing fields in its record.
         if record.get('failure_stage') not in {'asset_preflight','simulator_starting'}:
             return False

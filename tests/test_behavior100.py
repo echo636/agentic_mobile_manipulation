@@ -302,6 +302,9 @@ class BatchEvidenceTests(unittest.TestCase):
                 self.assertTrue(batch.prepolicy_failure(record,path))
                 self.assertEqual(record,original)
                 self.assertNotIn('actions',record)
+                archived={**record,'actions':None}
+                self.assertTrue(batch.prepolicy_failure(archived,path))
+                self.assertIsNone(archived['actions'])
 
     def test_missing_action_count_never_allows_retry_after_controller_or_policy_start(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -309,15 +312,16 @@ class BatchEvidenceTests(unittest.TestCase):
             for changed in ({'failure_stage':None},{'failure_stage':'controller_starting'},
                             {'controller_pid':123},{'controller_wrapper_pid':123},
                             {'controller_status':'failed'},{'execution_started_at_unix':0},
-                            {'episode_deadline_unix':123},{'bridge_ready_at':'timestamp'},
-                            {'actions':None}):
-                with self.subTest(changed=changed):
-                    self.assertFalse(batch.prepolicy_failure({**record,**changed},path))
+                            {'episode_deadline_unix':123},{'bridge_ready_at':'timestamp'}):
+                for counter in ({},{'actions':None}):
+                    with self.subTest(changed=changed,counter=counter):
+                        self.assertFalse(batch.prepolicy_failure({**record,**counter,**changed},path))
             stream=path/'model_events.jsonl'
             for kind in ('agent_message','reasoning','mcp_tool_call','error'):
-                with self.subTest(kind=kind):
-                    stream.write_text(json.dumps({'type':'item.started','item':{'type':kind}})+'\n')
-                    self.assertFalse(batch.prepolicy_failure(record,path))
+                for counter in ({},{'actions':None}):
+                    with self.subTest(kind=kind,counter=counter):
+                        stream.write_text(json.dumps({'type':'item.started','item':{'type':kind}})+'\n')
+                        self.assertFalse(batch.prepolicy_failure({**record,**counter},path))
             stream.unlink()
             (path/'controller.json').write_text('{}')
             self.assertFalse(batch.prepolicy_failure(record,path))
