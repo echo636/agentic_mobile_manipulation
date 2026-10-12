@@ -135,10 +135,13 @@ class VisualPointOwnership(unittest.TestCase):
     def test_invalid_first_mesh_cannot_win_over_nearest_valid_object(self):
         import numpy as np
         import trimesh
-        bad, _ = self.box('bad', [0., 0., 0.])
+        bad, mesh = self.box('bad', [0., 0., 0.])
+        mesh.scaled_transform[:3, :3] *= 10
         good, _ = self.box('good', [0., 0., 0.])
-        collapsed = trimesh.Trimesh(vertices=np.zeros((3, 3)), faces=[[0, 1, 2]], process=False)
-        self.loader.side_effect = [collapsed, self.geometry]
+        broken = trimesh.Trimesh(
+            vertices=np.vstack([self.geometry.vertices, [np.nan, 0., 0.]]),
+            faces=np.vstack([self.geometry.faces, [0, 1, 8]]), process=False)
+        self.loader.side_effect = [broken, self.geometry]
         selected, result = query_visual_surface(self.backend([bad, good]), self.torch.tensor([.5, 0., 0.]))
         self.assertIs(selected, good)
         self.assertEqual(result['invalid_triangles_skipped'], 1)
