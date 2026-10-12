@@ -1,5 +1,6 @@
 """Point-to-surface ownership using the depth-backprojected spatial location."""
 import importlib.util
+import json
 import sys
 import types
 import unittest
@@ -112,6 +113,63 @@ class VisualPointOwnership(unittest.TestCase):
         hidden, _ = self.box('hidden', [0., 0., 0.], visible=False)
         with self.assertRaises(SkillError):
             query_visual_surface(self.backend([hidden]), self.torch.zeros(3))
+
+
+    def test_collapsed_and_nonfinite_faces_do_not_hide_valid_surface(self):
+        import numpy as np
+        import trimesh
+        valid = self.geometry
+        # Preserve malformed triangles instead of mocking the solver's output.
+        extra = np.array([[0., 0., 0.], [np.nan, 0., 0.]])
+        self.geometry = trimesh.Trimesh(
+            vertices=np.vstack([valid.vertices, extra]),
+            faces=np.vstack([valid.faces, [8, 8, 8], [0, 1, 9]]), process=False)
+        self.loader.return_value = self.geometry
+        owner, _ = self.box('real_surface', [0., 0., 0.])
+        selected, result = query_visual_surface(self.backend([owner]), self.torch.tensor([.5, 0., 0.]))
+        self.assertIs(selected, owner)
+        self.assertLess(result['surface_point_distance_m'], 1e-7)
+        self.assertEqual(result['invalid_triangles_skipped'], 2)
+        json.dumps(result, allow_nan=False)
+
+    def test_invalid_first_mesh_cannot_win_over_nearest_valid_object(self):
+        import numpy as np
+        import trimesh
+        bad, _ = self.box('bad', [0., 0., 0.])
+        good, _ = self.box('good', [0., 0., 0.])
+        collapsed = trimesh.Trimesh(vertices=np.zeros((3, 3)), faces=[[0, 1, 2]], process=False)
+        self.loader.side_effect = [collapsed, self.geometry]
+        selected, result = query_visual_surface(self.backend([bad, good]), self.torch.tensor([.5, 0., 0.]))
+        self.assertIs(selected, good)
+        self.assertEqual(result['invalid_triangles_skipped'], 1)
+        json.dumps(result, allow_nan=False)
+
+    def test_nonfinite_solver_results_do_not_poison_other_finite_faces(self):
+        import numpy as np
+        import trimesh
+        owner, _ = self.box('object', [0., 0., 0.])
+        original = trimesh.triangles.closest_point
+        def partly_invalid(triangles, points):
+            result = original(triangles, points)
+            result[0] = np.nan
+            return result
+        with patch.object(trimesh.triangles, 'closest_point', side_effect=partly_invalid):
+            selected, result = query_visual_surface(self.backend([owner]), self.torch.tensor([.5, 0., 0.]))
+        self.assertIs(selected, owner)
+        self.assertLess(result['surface_point_distance_m'], 1e-7)
+        self.assertEqual(result['invalid_surface_points_skipped'], 1)
+
+    def test_no_finite_surface_reports_existing_target_error(self):
+        import numpy as np
+        import trimesh
+        self.loader.return_value = trimesh.Trimesh(
+            vertices=np.zeros((3, 3)), faces=[[0, 1, 2]], process=False)
+        owner, _ = self.box('collapsed', [0., 0., 0.])
+        with self.assertRaises(SkillError) as error:
+            query_visual_surface(self.backend([owner]), self.torch.zeros(3))
+        self.assertEqual(error.exception.code, 'invalid_visual_target')
+        self.assertEqual(error.exception.diagnostics['invalid_triangles_skipped'], 1)
+        json.dumps(error.exception.diagnostics, allow_nan=False)
 
 
 if __name__ == '__main__':

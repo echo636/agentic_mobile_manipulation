@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import math
 import os
 import platform
 import shutil
@@ -14,6 +15,24 @@ from pathlib import Path
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _finite_diagnostic(value, path, warnings):
+    """Keep invalid private numbers as null plus their exact path and value.
+
+    This is only for diagnostic events: public responses and evaluator records
+    remain strict, and no invalid score is converted into a successful result.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        warnings.append({'path': path, 'value': str(value)})
+        return None
+    if isinstance(value, dict):
+        return {key: _finite_diagnostic(item, path + [key], warnings)
+                for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_finite_diagnostic(item, path + [index], warnings)
+                for index, item in enumerate(value)]
+    return value
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -80,6 +99,11 @@ class Recorder:
         self.sequence += 1
         event_id = f"event-{self.sequence:05d}"
         event = {"id": event_id, "at": now(), "kind": kind, **payload}
+        if kind in {'private_executor_result', 'private_executor_error'}:
+            warnings = []
+            event = _finite_diagnostic(event, [], warnings)
+            if warnings:
+                event['serialization_warnings'] = warnings
         with (self.output / "events.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(event, ensure_ascii=False, allow_nan=False) + "\n")
             stream.flush()

@@ -39,6 +39,34 @@ class RGBBoundary(unittest.TestCase):
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
+    def test_invalid_private_diagnostic_does_not_abort_act_or_scoring(self):
+        execute = self.backend.execute_visual
+        diagnostic = {'surface_point_distance_m': float('nan'),
+                      'visual_triangle_position': [float('inf'), -float('inf'), 1.]}
+        def nonfinite_details(*args, **kwargs):
+            return {**execute(*args, **kwargs), 'private_grounding': diagnostic}
+        self.backend.execute_visual = nonfinite_details
+        result = self.act()
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['observation']['revision'], 1)
+        self.assertNotIn('private_grounding', json.dumps(result, allow_nan=False))
+        finished = self.call('finish', outcome='achieved', reason='test')
+        self.assertTrue(finished['closed'])
+        self.assertTrue(self.recorder.run['task_success'])
+        # Diagnostic serialization must not modify the original backend result.
+        self.assertNotEqual(diagnostic['surface_point_distance_m'], diagnostic['surface_point_distance_m'])
+        events = [json.loads(line, parse_constant=lambda x: self.fail('Nonstandard JSON: '+x))
+                  for line in (self.output/'events.jsonl').read_text().splitlines()]
+        private = next(e for e in events if e['kind'] == 'private_executor_result')
+        self.assertIsNone(private['details']['private_grounding']['surface_point_distance_m'])
+        self.assertEqual(private['serialization_warnings'], [
+            {'path': ['details','private_grounding','surface_point_distance_m'], 'value': 'nan'},
+            {'path': ['details','private_grounding','visual_triangle_position',0], 'value': 'inf'},
+            {'path': ['details','private_grounding','visual_triangle_position',1], 'value': '-inf'}])
+        self.assertTrue(any(e['kind'] == 'independent_evaluation' for e in events))
+    def test_nonfinite_evaluator_values_are_not_silently_sanitized(self):
+        with self.assertRaises(ValueError):
+            self.recorder.event('independent_evaluation', {'q_score': float('nan')})
     def test_old_image_ref_expires_even_without_physics(self):
         old=self.target();self.call('observe')
         r=self.act(target=old)

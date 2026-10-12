@@ -24,6 +24,9 @@ def query_visual_surface(backend, point):
         bounds_cache = backend._visual_mesh_bounds_cache = {}
     candidates = []
     guides_skipped = 0
+    invalid_meshes = 0
+    invalid_triangles = 0
+    invalid_surface_points = 0
     objects = list(backend.env.scene.objects)
     if not any(obj is backend.robot for obj in objects):
         objects.append(backend.robot)
@@ -43,12 +46,17 @@ def query_visual_surface(backend, point):
                     bounds = bounds_cache[path]
                 else:
                     vertices = mesh.points.detach().cpu().numpy()
-                    if not len(vertices):
+                    finite_vertices = vertices[np.isfinite(vertices).all(axis=1)]
+                    if not len(finite_vertices):
+                        invalid_meshes += 1
                         continue
-                    bounds = np.stack((vertices.min(axis=0), vertices.max(axis=0)))
+                    bounds = np.stack((finite_vertices.min(axis=0), finite_vertices.max(axis=0)))
                     if rigid:
                         bounds_cache[path] = bounds
                 transform = mesh.scaled_transform.detach().cpu().numpy().astype(float)
+                if not np.isfinite(transform).all():
+                    invalid_meshes += 1
+                    continue
                 corners = np.array(list(itertools.product(*bounds.T)))
                 corners = corners @ transform[:3, :3].T + transform[:3, 3]
                 lo, hi = corners.min(axis=0), corners.max(axis=0)
@@ -70,23 +78,46 @@ def query_visual_surface(backend, point):
             continue
         # World-space distances remain correct under nonuniform asset scale.
         triangles = geometry.triangles @ transform[:3, :3].T + transform[:3, 3]
-        nearest = trimesh.triangles.closest_point(
-            triangles, np.broadcast_to(world_point, (len(triangles), 3)))
+        # Real assets contain collapsed faces. They do not define a rendered
+        # surface, and closest_point may divide by zero for them. Never let a
+        # NaN win argmin and poison the best object's distance for later meshes.
+        finite = np.isfinite(triangles).all(axis=(1, 2))
+        invalid_triangles += int((~finite).sum())
+        triangles = triangles[finite]
+        area = np.linalg.norm(np.cross(triangles[:, 1] - triangles[:, 0],
+                                      triangles[:, 2] - triangles[:, 0]), axis=1)
+        valid = np.isfinite(area) & (area > 0)
+        invalid_triangles += int((~valid).sum())
+        triangles = triangles[valid]
+        checked += 1
+        if not len(triangles):
+            continue
+        with np.errstate(divide='ignore', invalid='ignore'):
+            nearest = trimesh.triangles.closest_point(
+                triangles, np.broadcast_to(world_point, (len(triangles), 3)))
         distances = np.linalg.norm(nearest-world_point, axis=1)
+        finite = np.isfinite(distances)
+        invalid_surface_points += int((~finite).sum())
+        if not finite.any():
+            continue
+        distances = np.where(finite, distances, np.inf)
         index = int(distances.argmin())
         distance = float(distances[index])
-        checked += 1
         if best is None or distance < best[0]:
             best = distance, obj, mesh.prim_path, nearest[index].tolist(), purpose
+    numerical_diagnostics = {'invalid_meshes_skipped': invalid_meshes,
+                             'invalid_triangles_skipped': invalid_triangles,
+                             'invalid_surface_points_skipped': invalid_surface_points}
     if best is None or best[1] is backend.robot:
         exc = SkillError('invalid_visual_target',
                          'Selected surface belongs to the robot' if best else 'No visible mesh surface')
         exc.diagnostics = {'reason': 'robot_surface' if best else 'no_visual_surface',
-                           'meshes_tested': checked, 'guide_meshes_skipped': guides_skipped}
+                           'meshes_tested': checked, 'guide_meshes_skipped': guides_skipped,
+                           **numerical_diagnostics}
         raise exc
     distance, obj, path, nearest, purpose = best
     return obj, {'visual_mesh': path, 'visual_triangle_position': nearest,
                  'visual_mesh_purpose': purpose, 'guide_meshes_skipped': guides_skipped,
                  'surface_point_distance_m': distance, 'visual_meshes_tested': checked,
                  'method': 'nearest_visual_surface_to_backprojected_point',
-                 'depth_consistency_check': False}
+                 'depth_consistency_check': False, **numerical_diagnostics}
