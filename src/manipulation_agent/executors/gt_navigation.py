@@ -12,7 +12,7 @@ import heapq
 import math
 
 SOURCE_COMMIT = '0815cf234ee591bacd8017e9b1def4fac13e649b'
-STRATEGY = 'visual_point_live_collision_gt_grid_v2'
+STRATEGY = 'visual_point_connected_projection_gt_grid_v3'
 
 
 class NavigationError(Exception):
@@ -174,6 +174,69 @@ class NavigationPlan:
     travel_yaw: float | None = None
 
 
+def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizon, check_cancelled):
+    """Flood connectivity once, then A* only to the nearest feasible goals.
+
+    Four-neighbor connectivity equals our no-corner-cut eight-neighbor graph.
+    Flat indices avoid a million-cell Dijkstra heap on large floor maps. The
+    optional numpy/scipy acceleration has an equivalent dependency-free path.
+    """
+    if check_cancelled is not None:check_cancelled()
+    width=grid.width;count=width*grid.height;start_index=start[0]*width+start[1]
+    try:
+        import numpy as np
+        from scipy.ndimage import label
+    except ImportError:
+        visited=bytearray(count);visited[start_index]=1;component=[start_index]
+        for visited_count,index in enumerate(component):
+            if len(component)>max_expansions:raise NavigationError('GT path search exhausted its expansion budget')
+            if check_cancelled is not None and visited_count%2048==0:check_cancelled()
+            row,col=divmod(index,width)
+            for nxt in (index-width if row else -1,index+width if row+1<grid.height else -1,
+                        index-1 if col else -1,index+1 if col+1<width else -1):
+                if nxt>=0 and not visited[nxt] and grid.free[nxt]:
+                    visited[nxt]=1;component.append(nxt)
+        ranked=sorted((round(math.dist(grid.world(divmod(i,width)),hint),9),i) for i in component)
+        total=len(component)
+    else:
+        if check_cancelled is not None:check_cancelled()
+        labels,_=label(np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,width))
+        indices=np.flatnonzero(labels.ravel()==labels[start])
+        total=len(indices)
+        if total>max_expansions:raise NavigationError('GT path search exhausted its expansion budget')
+        distances=np.round(np.hypot(indices%width*grid.resolution+grid.origin[0]-hint[0],
+                                   indices//width*grid.resolution+grid.origin[1]-hint[1]),9)
+        order=np.argsort(distances,kind='stable')
+        ranked=((float(distances[i]),int(indices[i])) for i in order)
+    if check_cancelled is not None:check_cancelled()
+    goals=set();best=None
+    for index,(distance,flat) in enumerate(ranked):
+        if best is not None and distance>best:break
+        if check_cancelled is not None and index%256==0:check_cancelled()
+        cell=divmod(flat,width)
+        if acceptable(cell):goals.add(cell);best=distance
+    if not goals:raise NavigationError('No visible feasible destination in the start-connected region')
+    def heuristic(cell):
+        # Octile is an admissible lower bound on this eight-neighbor grid.
+        return min((max(abs(cell[0]-r),abs(cell[1]-c))+
+                    (math.sqrt(2)-1)*min(abs(cell[0]-r),abs(cell[1]-c)))*grid.resolution for r,c in goals)
+    distances={start:0.};parents={};closed=set();queue=[(heuristic(start),0.,start)]
+    while queue:
+        _,distance,cell=heapq.heappop(queue)
+        if cell in closed:continue
+        if check_cancelled is not None and len(closed)%2048==0:check_cancelled()
+        if len(closed)>=max_expansions:raise NavigationError('GT path search exhausted its expansion budget')
+        closed.add(cell)
+        if distance>horizon:continue
+        if cell in goals:return cell,distance,parents,total+len(closed)
+        for neighbor,cost in grid.neighbors(cell):
+            updated=distance+cost
+            if updated<distances.get(neighbor,math.inf):
+                distances[neighbor]=updated;parents[neighbor]=cell
+                heapq.heappush(queue,(updated+heuristic(neighbor),updated,neighbor))
+    raise NavigationError('Nearest feasible destination exceeds the path search horizon')
+
+
 def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
                     horizon=10000., max_expansions=None, candidate_filter=None, goal_mode='approach',
                     check_cancelled=None):
@@ -182,6 +245,11 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     One multi-goal Dijkstra search supplies exact grid geodesics for all
     candidates. Occupied/disconnected starts fail; rounding is not permission
     to teleport to another connected region.
+
+    With max_snap=None both goal modes use the entire start-connected region,
+    ranked by target distance then geodesic. A candidate filter may enforce
+    visibility, but there is no target-distance rejection or standoff radius.
+    Explicit finite bounds remain available for exact internal staging goals.
     """
     current=tuple(map(float,current));hint=tuple(map(float,hint))
     start=grid.cell(current);grid.cell(hint)
@@ -209,35 +277,45 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
                 goal=grid.world(cell)
                 projected.append((cell,math.dist(goal,raw),math.dist(goal,hint)))
         return projected
-    candidates=project()
-    if not candidates:raise NavigationError('No bounded projection of the selected visual target is navigable')
-    pending={c[0] for c in candidates};distances={start:0.};parents={};closed=set();queue=[(0.,start)]
-    while queue and pending:
-        distance,cell=heapq.heappop(queue)
-        if cell in closed:continue
-        if check_cancelled is not None and len(closed)%2048==0:check_cancelled()
-        if distance>horizon:break
-        if len(closed)>=max_expansions:raise NavigationError('GT path search exhausted its expansion budget')
-        closed.add(cell);pending.discard(cell)
-        for neighbor,cost in grid.neighbors(cell):
-            updated=distance+cost
-            if updated<distances.get(neighbor,math.inf):
-                distances[neighbor]=updated;parents[neighbor]=cell;heapq.heappush(queue,(updated,neighbor))
-    viable=[]
-    for cell,snap_distance,target_distance in candidates:
-        if cell not in closed or distances[cell]>horizon:continue
-        score=target_distance if goal_mode=='point' else candidate_score(target_distance,snap_distance,distances[cell],standoff)
-        viable.append((score,distances[cell],cell))
-    if not viable:
-        # If the nearest projections fell on another connected region, the
-        # exhausted search already tells us which cells are actually reachable.
-        # Reproject within the same distance bound; never cross walls or move
-        # the start pose to a different component.
-        candidates=project(closed)
+    if max_snap is None:
+        goal_cell,distance,parents,expanded=_connected_goal_search(
+            grid,start,hint,acceptable,max_expansions,horizon,check_cancelled)
+        score=math.dist(grid.world(goal_cell),hint)
+        considered=len(visibility);reachable=sum(visibility.values())
+    else:
+        candidates=project()
+        if not candidates:
+            raise NavigationError('No bounded projection of the selected visual target is navigable')
+        pending={c[0] for c in candidates}
+        distances={start:0.};parents={};closed=set();queue=[(0.,start)]
+        while queue and pending:
+            distance,cell=heapq.heappop(queue)
+            if cell in closed:continue
+            if check_cancelled is not None and len(closed)%2048==0:check_cancelled()
+            if distance>horizon:break
+            if len(closed)>=max_expansions:raise NavigationError('GT path search exhausted its expansion budget')
+            closed.add(cell)
+            pending.discard(cell)
+            for neighbor,cost in grid.neighbors(cell):
+                updated=distance+cost
+                if updated<distances.get(neighbor,math.inf):
+                    distances[neighbor]=updated;parents[neighbor]=cell;heapq.heappush(queue,(updated,neighbor))
+        viable=[]
         for cell,snap_distance,target_distance in candidates:
-            viable.append((target_distance if goal_mode=='point' else candidate_score(target_distance,snap_distance,distances[cell],standoff),distances[cell],cell))
-    if not viable:raise NavigationError('No candidate near the visual target is reachable from this start')
-    score,distance,goal_cell=min(viable)
+            if cell not in closed or distances[cell]>horizon:continue
+            score=target_distance if goal_mode=='point' else candidate_score(target_distance,snap_distance,distances[cell],standoff)
+            viable.append((score,distances[cell],cell))
+        if not viable:
+            # If the nearest projections fell on another connected region, the
+            # exhausted search already tells us which cells are actually reachable.
+            # Reproject within the same distance bound; never cross walls or move
+            # the start pose to a different component.
+            candidates=project(closed)
+            for cell,snap_distance,target_distance in candidates:
+                viable.append((target_distance if goal_mode=='point' else candidate_score(target_distance,snap_distance,distances[cell],standoff),distances[cell],cell))
+        if not viable:raise NavigationError('No candidate near the visual target is reachable from this start')
+        score,distance,goal_cell=min(viable)
+        expanded=len(closed);considered=len(candidates);reachable=len(viable)
     cells=[goal_cell]
     while cells[-1]!=start:cells.append(parents[cells[-1]])
     cells.reverse()
@@ -256,7 +334,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     if not all(grid.segment_free(a,b) for a,b in zip(simplified,simplified[1:])):
         raise NavigationError('Planned segment failed static collision validation')
     return NavigationPlan(tuple(simplified),goal,hint,math.atan2(hint[1]-goal[1],hint[0]-goal[0]),
-                          distance,score,len(candidates),len(viable),math.dist(current,grid.world(start)),len(closed))
+                          distance,score,considered,reachable,math.dist(current,grid.world(start)),expanded)
 
 
 class GreedyGridFollower:
@@ -363,27 +441,36 @@ class GreedyGridFollower:
         return command
 
 
-def plan_start_clearance_exit(grid, raw_free, overlap, current, *, radius):
-    """Leave an existing footprint overlap without crossing an occupied centre.
+def plan_start_clearance_exit(grid, raw_free, overlap, current, *, radius,
+                              transition_allowed=None, check_cancelled=None):
+    """Leave an existing footprint overlap without acquiring new contacts.
 
     Door opening can put a leaf into the already occupied robot footprint. This
     is a short physical retreat, not a start teleport or a clearance-free route.
-    Every grid step must decrease (or preserve) overlap area, the base centre
-    must remain free, and the endpoint must have zero footprint overlap.
+    Every grid step must decrease (or preserve) overlap area. A geometry guard
+    additionally rejects new obstacle regions or growing per-obstacle contact. Only
+    with that guard may an already occupied centre retreat from its contact;
+    without it, the conservative raw-centre-free rule remains mandatory.
     """
     start=grid.cell(current)
-    if not grid.contains(start) or not raw_free[start[0]*grid.width+start[1]]:
+    if not grid.contains(start) or (transition_allowed is None and not raw_free[start[0]*grid.width+start[1]]):
         raise NavigationError('Base centre is inside an obstacle; no clearance exit','navigation_invalid_start')
+    if transition_allowed is not None and not transition_allowed(start,start):
+        raise NavigationError('Start lacks supported clearance-recovery geometry','navigation_invalid_start')
     cost=lambda cell:float(overlap[cell[0]*grid.width+cell[1]])
     queue=[(0.,start)];distance={start:0.};parents={};closed=set();goal=None
     while queue:
         length,cell=heapq.heappop(queue)
         if cell in closed:continue
+        if check_cancelled is not None:check_cancelled()
         closed.add(cell)
         if grid.navigable(cell):goal=cell;break
         r,c=cell
         for nxt in ((r-1,c),(r+1,c),(r,c-1),(r,c+1)):
-            if not grid.contains(nxt) or not raw_free[nxt[0]*grid.width+nxt[1]]:continue
+            if not grid.contains(nxt):continue
+            if transition_allowed is None:
+                if not raw_free[nxt[0]*grid.width+nxt[1]]:continue
+            elif not transition_allowed(cell,nxt):continue
             if cost(nxt)>cost(cell)+1e-4 or math.dist(grid.world(nxt),current)>radius:continue
             updated=length+grid.resolution
             if updated<distance.get(nxt,math.inf):
@@ -402,4 +489,5 @@ def plan_start_clearance_exit(grid, raw_free, overlap, current, *, radius):
     plan=NavigationPlan(tuple(points),grid.world(goal),grid.world(goal),0.,distance[goal],0.,1,1,
                         math.dist(current,grid.world(start)),len(closed))
     return recovery,plan,{'overlap_cells_before':cost(start),'overlap_cells_after':cost(goal),
-                          'overlap_sequence':[cost(c) for c in cells], 'radius_m':radius}
+                          'overlap_sequence':[cost(c) for c in cells], 'radius_m':radius,
+                          'new_contacts_forbidden':transition_allowed is not None}

@@ -1,4 +1,6 @@
 import math
+import sys
+from unittest.mock import patch
 import unittest
 
 from manipulation_agent.executors.gt_navigation import (
@@ -15,6 +17,40 @@ def grid(width=81, height=81, resolution=.05, blocked=()):
 
 
 class GTNavigationTests(unittest.TestCase):
+    def test_unbounded_projection_uses_nearest_connected_cell_for_both_modes(self):
+        g=grid(101,101,blocked=[(r,40) for r in range(101)])
+        for mode in ('point','approach'):
+            p=plan_navigation(g,(.5,.5),(3.5,.5),goal_mode=mode,max_snap=None)
+            self.assertAlmostEqual(p.goal[0],1.95)
+            self.assertAlmostEqual(p.goal[1],.5)
+            self.assertGreater(math.dist(p.goal,p.target),1.4)
+            self.assertTrue(all(g.segment_free(a,b) for a,b in zip(p.points,p.points[1:])))
+
+    def test_accelerated_and_dependency_free_connected_search_agree(self):
+        g=grid(35,35,blocked=[(r,15) for r in range(24)])
+        args=(g,(.5,.5),(1.13,1.07))
+        fast=plan_navigation(*args,max_snap=None)
+        with patch.dict(sys.modules,{'scipy.ndimage':None}):
+            plain=plan_navigation(*args,max_snap=None)
+        self.assertEqual(fast.goal,plain.goal)
+        self.assertAlmostEqual(fast.geodesic_m,plain.geodesic_m)
+        self.assertEqual(fast.points,plain.points)
+
+    def test_unbounded_visibility_is_checked_without_distance_cap(self):
+        g=grid()
+        p=plan_navigation(g,(.5,.5),(3.,.5),max_snap=None,
+                          candidate_filter=lambda xy:xy[0]<=1.)
+        self.assertEqual(p.goal,(1.,.5))
+        with self.assertRaisesRegex(NavigationError,'No visible feasible'):
+            plan_navigation(g,(.5,.5),(3.,.5),max_snap=None,candidate_filter=lambda xy:False)
+
+    def test_unbounded_search_still_honors_budget_and_cancellation(self):
+        with self.assertRaisesRegex(NavigationError,'expansion budget'):
+            plan_navigation(grid(),(.5,.5),(3.,3.),max_snap=None,max_expansions=1)
+        def stop():raise TimeoutError('expired')
+        with self.assertRaisesRegex(TimeoutError,'expired'):
+            plan_navigation(grid(),(.5,.5),(3.,3.),max_snap=None,check_cancelled=stop)
+
     def test_point_navigation_goes_to_click_without_visual_standoff(self):
         g=grid()
         plan=plan_navigation(g,(.5,.5),(2.12,2.33),goal_mode='point')

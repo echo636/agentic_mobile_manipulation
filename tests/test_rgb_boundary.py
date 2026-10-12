@@ -39,6 +39,15 @@ class RGBBoundary(unittest.TestCase):
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
+    def test_navigation_partial_approach_is_public_but_geometry_stays_private(self):
+        for status in ('reached','approached','already_at_closest_approach'):
+            self.backend.execute_visual=lambda *a,**kw:{'nav_status':status,'private_pose':[1,2,3],
+                'target_projection_distance_m':2.5,'private_object':'hidden'}
+            result=self.act('navigate_to')
+            self.assertEqual(result['effect']['navigation_status'],status)
+            self.assertNotIn('private_pose',json.dumps(result))
+            self.assertNotIn('target_projection_distance_m',json.dumps(result))
+            self.assertNotIn('hidden',json.dumps(result))
     def test_invalid_private_diagnostic_does_not_abort_act_or_scoring(self):
         execute = self.backend.execute_visual
         diagnostic = {'surface_point_distance_m': float('nan'),

@@ -15,38 +15,45 @@ each `act` / `look` supplies the next one.
 
 1. Backproject the exact selected pixel using the capture's calibrated depth.
    There is no navigation object lookup or depth-to-mesh agreement gate.
-2. For a floor click, find the closest reachable grid position within 0.75 m of
-   the point. Do not add a camera standoff or require the floor pixel to remain
-   visible at arrival. For an elevated object/surface, sample approach positions
-   using the reference's 0.3 / 0.6 / 0.9 / 1.2 m rings and 0.7 m preference.
-   Every elevated approach, including explicit `navigate_to`, must see the
-   selected target through a camera frustum and an unobstructed scene ray.
-   Candidates are ranked by path length + twice the standoff deviation +
-   projection distance. A small standoff improvement cannot justify a long
-   detour, and an already valid approach has no artificial no-progress penalty.
+2. Both floor and elevated clicks search the entire start-connected component,
+   choosing the closest feasible point to the selected XY, then breaking ties
+   by travel distance. There is no 0.75 m projection radius, ring sampling, or
+   1.4 m navigation cutoff. Elevated approaches must see the target through a
+   camera frustum and unobstructed scene ray; a floor point may be below the
+   camera at arrival. This visibility difference does not change the search
+   radius or connectivity rules. Manipulation retains its separate reach check.
 3. Load the GT floor support raster, query current PhysX collision geometry,
    and update dirty regions when object poses or joints change. AABBs bound the
    query region; the actual collision query determines occupied cells. Closed
    doors block travel, and opening a door changes the next navigation grid.
 4. Combine occupancy eroded by the measured oriented robot footprint in each height band. Plan a
    collision-free grid route without cutting corners. If the current heading
-   cannot fit, test alternative headings and the whole in-place turn's swept
+   cannot reach the nearest target region, compare alternative headings and the whole in-place turn's swept
    footprint. Use a feasible turn followed by holonomic fixed-heading travel.
-5. If the existing chassis footprint partly overlaps a newly opened leaf, allow
-   only a short continuous exit with non-increasing overlap and a free base
-   centre, ending at zero overlap. This is not a start teleport or a general
-   permission to cross obstacles.
+5. If the starting footprint overlaps an obstacle, seek a short continuous
+   retreat with non-increasing overlap for each connected 3D obstacle across
+   height bands, no new obstacle regions, and continuous contact patches. Once
+   the raw base centre becomes free it cannot enter an occupied cell again. With this geometry proof, even an occupied base centre
+   can retreat; floor support remains mandatory. Rebuild the live map after
+   each retreat and repeat if necessary, respecting the action/deadline budget
+   and rejecting repeated blocked states. Without a verified exit, retain
+   `navigation_invalid_start`. No start teleport or wall crossing is permitted.
 6. Execute bounded pose increments (at most 0.5 m/s and 60 degrees/s), read back
    the actual pose after each simulator step, and verify arrival. Pruned paths
    reserve a 5 mm corridor against tiny feedback deviations at grid corners.
    Recheck elevated-target visibility at the actual final pose before reporting
    success; reaching a goal behind an occluder is a navigation failure.
 
-Candidate geometry originates from Jinkai's visual point strategy. Scoring now
-adds actual route length and removes the reference's no-progress penalty.
-OmniGibson supplies its own floor support, current collisions
-and ideal pose follower; Habitat's native C++ navmesh/follower is not running
-inside this system. Floor-point goals intentionally use direct-point semantics.
+`reached` means the selected XY was reached to grid/feedback precision.
+`approached` means the executor reached a feasible projected endpoint, which may
+still be too far for manipulation. `already_at_closest_approach` explicitly
+reports that another identical request cannot make progress. Only these action
+outcomes cross the RGB boundary; coordinates and distances remain private.
+
+The original bounded candidate helper retains the reference algorithm for
+historical diagnostics and exact staging (`max_snap=0`). Runtime navigation
+uses `max_snap=None`. OmniGibson supplies floor support, current collisions and
+an ideal pose follower; Habitat's native navmesh/follower is not running here.
 
 ## Limits and evidence
 
@@ -56,8 +63,8 @@ translation leg, with a checked turn at its start. When the start lacks room
 to turn, first follow a continuous route to a reachable clear turning position. Scene obstacles and robot collision hulls are matched in four height bands,
 avoiding a base-width column through the head. Convex hulls within each band
 remain conservative; carried-object and articulated motion planning remain
-incomplete. A genuinely blocked or disconnected point must
-return a navigation failure rather than cross a closed door. Floor raster and
+incomplete. A disconnected point can yield only an explicitly reported partial
+approach in the start-connected region; it never permits crossing a closed door. Floor raster and
 cell resolution also limit how closely a selected point can be reached.
 
 `navigation_plans.jsonl`, `navigation_grids/*.npz`, `navigation_recovery.jsonl`,

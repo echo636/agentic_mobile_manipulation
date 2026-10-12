@@ -147,6 +147,57 @@ def build_navigation_grid(backend, floor):
         'held_object_footprint_included':False}
 
 
+def clearance_transition_guard(grid, collision_layers, support):
+    """Shed existing contacts without entering a new obstacle region.
+
+    A non-increasing overlap count alone can exchange an old contact for a new
+    one and permit crossing a wall. Require non-increasing overlap separately
+    for each connected 3D obstacle, plus continuity of its contact
+    patch. Sliding off a door can shift the contact pixels along that same leaf;
+    an exact world-cell subset test would incorrectly forbid this retreat.
+    Once the raw centre is free it cannot enter an occupied cell again. Floor
+    support is mandatory even if the robot starts overlapped by a door.
+    """
+    import numpy as np
+    from scipy.ndimage import label
+    # Join the height bands before counting contacts. A slanted door can shift
+    # one raster contact from the torso to the base while total overlap falls;
+    # requiring every height band's count to fall would trap the robot there.
+    labels=label(np.stack([raw==0 for raw,_ in collision_layers]),structure=np.ones((3,3,3)))[0]
+    layers=[]
+    for index,(raw,footprint) in enumerate(collision_layers):
+        kernel=footprint_kernel(footprint,grid.resolution)
+        offsets=np.argwhere(kernel)-np.array(kernel.shape)//2
+        layers.append((raw,offsets,labels[index]))
+    cache={}
+    def contacts(cell):
+        if cell not in cache:
+            hits=set();counts={}
+            for index,(raw,offsets,labels) in enumerate(layers):
+                for dr,dc in offsets:
+                    r,c=cell[0]+int(dr),cell[1]+int(dc)
+                    if not grid.contains((r,c)):
+                        cache[cell]=None
+                        return None
+                    if not raw[r,c]:
+                        hits.add((index,r,c))
+                        key=int(labels[r,c]);counts[key]=counts.get(key,0)+1
+            cache[cell]=(hits,counts)
+        return cache[cell]
+    def allowed(previous,current):
+        if not layers or not grid.contains(current) or not support[current]:return False
+        before=contacts(previous);after=contacts(current)
+        if before is None or after is None:return False
+        if all(raw[previous] for raw,_,_ in layers) and not all(raw[current] for raw,_,_ in layers):return False
+        old,old_counts=before;new,new_counts=after
+        if any(count>old_counts.get(key,0) for key,count in new_counts.items()):return False
+        # No new, spatially separate contact patch on a connected wall/table.
+        return all(any((layer+dz,r+dr,c+dc) in old
+                       for dz in (-1,0,1) for dr in (-1,0,1) for dc in (-1,0,1))
+                   for layer,r,c in new-old)
+    return allowed
+
+
 def feasible_heading_grids(grid, raw_free, footprint, current, yaw, *, check_cancelled=None, collision_layers=None):
     """Alternative fixed headings with a collision-checked in-place turn.
 

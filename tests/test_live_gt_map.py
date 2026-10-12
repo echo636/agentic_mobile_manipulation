@@ -10,6 +10,36 @@ from unittest.mock import patch
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('torch'),
                      'Run with the pinned simulator Python; simulator itself is not started')
 class LiveGridTests(unittest.TestCase):
+    def test_occupied_centre_can_shed_contacts_but_cannot_enter_new_obstacles(self):
+        import cv2
+        import numpy as np
+        from manipulation_agent.executors.gt_navigation import GridMap,plan_start_clearance_exit,NavigationError
+        from manipulation_agent.executors.live_gt_map import clearance_transition_guard,footprint_kernel
+        raw=np.ones((21,21),dtype='uint8');raw[:,10]=0
+        footprint=np.array([[-.2,-.1],[.2,-.1],[.2,.1],[-.2,.1]])
+        kernel=footprint_kernel(footprint,.1)
+        free=cv2.erode(raw,kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+        overlap=cv2.filter2D((1-raw).astype('float32'),-1,kernel.astype('float32')).ravel()
+        g=GridMap(21,21,.1,(0.,0.),free.tobytes())
+        guard=clearance_transition_guard(g,[(raw,footprint)],np.ones_like(raw))
+        self.assertTrue(guard((10,10),(10,9)))
+        # Contact pixels can slide along the same leaf while retreating.
+        self.assertTrue(guard((10,10),(11,10)))
+        other=raw.copy();other[12,8]=0
+        guarded=clearance_transition_guard(g,[(other,footprint)],np.ones_like(raw))
+        self.assertFalse(guarded((10,10),(11,10)))
+        # A free centre must not cross into the wall during recovery.
+        self.assertFalse(guard((10,9),(10,10)))
+        corridor,p,report=plan_start_clearance_exit(g,raw.tobytes(),overlap,(1.,1.),radius=.4,
+                                                   transition_allowed=guard)
+        self.assertTrue(g.navigable(g.cell(p.goal)))
+        self.assertTrue(report['new_contacts_forbidden'])
+        self.assertTrue(all(corridor.segment_free(a,b) for a,b in zip(p.points,p.points[1:])))
+        blocked_support=np.ones_like(raw);blocked_support[10,10]=0
+        with self.assertRaisesRegex(NavigationError,'supported'):
+            plan_start_clearance_exit(g,raw.tobytes(),overlap,(1.,1.),radius=.4,
+                transition_allowed=clearance_transition_guard(g,[(raw,footprint)],blocked_support))
+
     def test_rigid_props_door_updates_and_robot_exclusion(self):
         import cv2
         import numpy as np

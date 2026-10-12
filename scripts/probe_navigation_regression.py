@@ -85,10 +85,20 @@ def main():
             dz=max((abs(m['actual_position'][2]-m['commanded_position'][2]) for m in motion),default=0.)
             case_record['max_vertical_feedback_error_m']=dz
             validation['checks'][case['name']+'_no_collision_lift']=dz<=.03
-            validation['checks'][case['name']+'_reached']=result['nav_status']=='reached'
-            if case['goal_mode']=='point':validation['checks'][case['name']+'_near_click']=case_record['clicked_xy_error_m']<=.15
+            validation['checks'][case['name']+'_navigation_outcome']=result['nav_status'] in case.get(
+                'expected_nav_status',['reached'] if case['goal_mode']=='point' else ['reached','approached'])
+            if 'projection_range_m' in case:
+                low,high=case['projection_range_m']
+                validation['checks'][case['name']+'_projection_range']=low<=case_record['clicked_xy_error_m']<=high
+            elif case['goal_mode']=='point':validation['checks'][case['name']+'_near_click']=case_record['clicked_xy_error_m']<=.15
             else:validation['checks'][case['name']+'_within_reach']=case_record['clicked_xy_error_m']<=1.4
-            if doors:validation['checks'][case['name']+'_closed_door_blocks']=case_record['closed_door_plan']['status']=='blocked'
+            if case.get('require_recovery'):
+                recovery=a.output/'navigation_recovery.jsonl'
+                records=[json.loads(line) for line in recovery.read_text().splitlines()] if recovery.exists() else []
+                validation['checks'][case['name']+'_revalidated_recovery']=any(
+                    r.get('refreshed_start_navigable') is True for r in records)
+            if doors and case.get('check_closed_door_block',True):
+                validation['checks'][case['name']+'_closed_door_blocks']=case_record['closed_door_plan']['status']=='blocked'
             recorder.event('diagnostic_navigation_result',case_record);save();print(json.dumps(case_record),flush=True)
     except Exception as exc:
         validation['error']={'type':type(exc).__name__,'message':str(exc)}

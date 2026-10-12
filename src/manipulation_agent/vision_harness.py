@@ -164,7 +164,18 @@ class VisionHarness:
             # but do not spend the expired task budget rendering another capture.
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
-        return {'effect':{'primitive':primitive,'status':'completed','verification':'executor_operation_only'},
+        effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
+        if primitive=='navigate_to':
+            # Only an action outcome crosses the RGB boundary, never private
+            # coordinates, target distances, object identities or map geometry.
+            messages={
+                'reached':'Reached the selected point. Inspect the updated RGB.',
+                'approached':'Moved to a feasible approach toward the selected point. This does not verify manipulation reach; inspect the updated RGB.',
+                'already_at_closest_approach':'Already at the closest approach found by this navigation search. Repeating the same click will not move closer; inspect the updated RGB for an alternative.',
+            }
+            status=details.get('nav_status')
+            if status in messages:effect.update(navigation_status=status,message=messages[status])
+        return {'effect':effect,
                 'observation':self.snapshot,'actions_used':self.actions}
 
     def update_plan(self,reason,subgoals): return LegacyPlanHelpers._tool_update_plan(self,reason,subgoals)

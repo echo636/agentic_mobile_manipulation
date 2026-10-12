@@ -481,14 +481,14 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         hulls,report=prepare_self_hulls(vertices)
         return hulls,report
 
-    def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=1.4,
+    def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=None,
                           self_hulls=(), base_yaw=None):
         """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
         from .self_depth_filter import segment_hits_self_hull
         torch=self.torch
-        if math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
+        if max_distance is not None and math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
         ignore=[l.prim_path for l in self.robot.links.values()]
         held=self._get_held()
         if held is not None:ignore.extend(l.prim_path for l in held.links.values())
@@ -512,6 +512,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
     def _navigate(self, target, max_steps, *, for_manipulation=False):
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
         from dataclasses import asdict, replace
+        import numpy as np
         import omnigibson.utils.transform_utils as T
         from .gt_navigation import NavigationError, plan_navigation, STRATEGY
         trav=self.env.scene.trav_map
@@ -523,26 +524,66 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         ground_click=not for_manipulation and float(point[2])-float(trav.floor_heights[floor]) <= .15
         mode='point' if ground_click else 'approach'
-        standoff,margin=(0.,0.) if ground_click else (.7,0.)
+        standoff,margin=0.,0.
         grid,map_details=build_navigation_grid(self,floor)
-        recovery_result=None
-        if not grid.navigable(grid.cell(position[:2].cpu().tolist())):
+        recovery_results=[];recovery_states=set()
+        while not grid.navigable(grid.cell(position[:2].cpu().tolist())):
             from .gt_navigation import plan_start_clearance_exit
+            from .live_gt_map import clearance_transition_guard
             raw_free,overlap,radius=self._navigation_clearance
+            record={'at':now(),'audience':'executor_private','attempt':len(recovery_results)+1,
+                    'start':position.cpu().tolist(),'map_sha256':hashlib.sha256(grid.free).hexdigest()}
+            # Keep the actual failed-start geometry too; previously a rejected
+            # escape left no map artifact with which to diagnose its contacts.
+            self._navigation_recovery_index=getattr(self,'_navigation_recovery_index',0)+1
+            recovery_dir=self.output/'navigation_recovery_grids';recovery_dir.mkdir(exist_ok=True)
+            recovery_file=recovery_dir/f'{self._navigation_recovery_index:04d}.npz'
+            np.savez_compressed(recovery_file,
+                free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+                raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
+                overlap=overlap.reshape(grid.height,grid.width),origin=grid.origin,resolution=grid.resolution,
+                start=position.cpu().numpy(),target=point.cpu().numpy(),travel_yaw=travel_yaw,
+                raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+                support=self._live_gt_collision_cache[floor]['support'],
+                layer_footprints_json=json.dumps(map_details['collision_layers']))
+            record['grid_artifact']=str(recovery_file.relative_to(self.output))
             try:
+                self.deadline.check()
+                state=(grid.cell(position[:2].cpu().tolist()),record['map_sha256'])
+                if state in recovery_states:
+                    raise NavigationError('Clearance recovery revisited a blocked pose without map progress','navigation_invalid_start')
+                recovery_states.add(state)
+                if max_steps<=10:raise SkillError('action_timeout','Clearance recovery exhausted its control-step budget')
+                support=self._live_gt_collision_cache[floor]['support']
+                guard=clearance_transition_guard(grid,self._navigation_layers,support)
                 escape_grid,escape,escape_details=plan_start_clearance_exit(
-                    grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius)
+                    grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius,
+                    transition_allowed=guard,check_cancelled=self.deadline.check)
                 escape=replace(escape,travel_yaw=travel_yaw,final_yaw=travel_yaw)
+                record.update(status='planned',plan=asdict(escape),**escape_details)
                 with (self.output/'navigation_recovery.jsonl').open('a') as stream:
-                    stream.write(json.dumps({'at':now(),'plan':asdict(escape),**escape_details})+'\n')
+                    stream.write(json.dumps(record)+'\n')
                 recovery_result=self._execute_gt_plan(escape_grid,escape,max_steps)
+                recovery_results.append(recovery_result)
                 max_steps-=recovery_result['steps']
                 self.navigation_distance+=recovery_result['actual_path_distance_m']
-                position,_=self.robot.get_position_orientation()
+                position,orientation=self.robot.get_position_orientation()
+                rotation=T.quat2mat(orientation)
+                travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
                 grid,map_details=build_navigation_grid(self,floor)
+                valid=grid.navigable(grid.cell(position[:2].cpu().tolist()))
+                record.update(status='passed' if valid else 'running',execution=recovery_result,
+                              actual_position=position.cpu().tolist(),refreshed_start_navigable=valid,
+                              refreshed_map_sha256=hashlib.sha256(grid.free).hexdigest())
             except NavigationError as exc:
-                raise SkillError(exc.code,str(exc)) from exc
-        import numpy as np
+                record.update(status='failed',error_code=exc.code,error=str(exc))
+                raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
+            except SkillError as exc:
+                record.update(status='failed',error_code=exc.code,error=str(exc))
+                raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results)) from exc
+            finally:
+                with (self.output/'navigation_recovery.jsonl').open('a') as stream:
+                    stream.write(json.dumps(record)+'\n')
         self._navigation_plan_index=getattr(self,'_navigation_plan_index',0)+1
         map_dir=self.output/'navigation_grids';map_dir.mkdir(exist_ok=True)
         map_file=map_dir/f'{self._navigation_plan_index:04d}.npz'
@@ -555,13 +596,13 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
             layer_footprints_json=json.dumps(map_details['collision_layers']))
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
-                 'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_result,
+                 'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_results,
                  'grid_artifact':str(map_file.relative_to(self.output)),
                  'selected_world_point':point.cpu().tolist(),
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
                  'approach_visibility_required':mode=='approach',
-                 'candidate_ranking':'path_length_plus_standoff_and_projection',
+                 'candidate_ranking':'nearest_feasible_connected_cell_then_travel','target_search_radius_m':None,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  **map_details,'precomputed_walkability':True,'online_mapping':False}
         try:
@@ -572,42 +613,53 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 planning_xy=position[:2].cpu().tolist()
                 def make_plan(candidate_grid,yaw):
                     return replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
-                        standoff=standoff,goal_mode=mode,check_cancelled=self.deadline.check,
+                        standoff=standoff,goal_mode=mode,max_snap=None,check_cancelled=self.deadline.check,
                         candidate_filter=(lambda xy:self._approach_visible(
                                 xy,point,getattr(target,'selected_object',None),
-                                margin=0.,max_distance=1.4,base_yaw=yaw)) if mode=='approach' else None),
+                                margin=0.,base_yaw=yaw)) if mode=='approach' else None),
                         travel_yaw=yaw,final_yaw=yaw)
-                turn=None;stage=None
+                from .live_gt_map import feasible_heading_grids, rotation_staging_plan
+                from .gt_navigation import NavigationPlan
+                initial_grid=grid;initial_xy=tuple(planning_xy)
+                turn=None;stage=None;plan=None;original_error=None;best_key=None
                 try:
                     plan=make_plan(grid,travel_yaw)
-                except NavigationError as original_error:
-                    from .live_gt_map import feasible_heading_grids
-                    from .gt_navigation import NavigationPlan
+                    best_key=(round(plan.score,9),plan.geodesic_m)
+                except NavigationError as exc:original_error=exc
+                # An unbounded projection always finds *some* ground endpoint.
+                # Compare headings even when that first endpoint is distant;
+                # otherwise the fallback would silently stop at a doorway.
+                exact_tolerance=grid.resolution/math.sqrt(2)+1e-9
+                if plan is None or plan.score>exact_tolerance:
                     raw_free,_,_=self._navigation_clearance
                     for staged in (False,True):
+                        candidate_stage=None
                         if staged:
-                            from .live_gt_map import rotation_staging_plan
                             try:
-                                stage_plan=rotation_staging_plan(grid,self._navigation_layers,planning_xy,travel_yaw,
+                                stage_plan=rotation_staging_plan(initial_grid,self._navigation_layers,initial_xy,travel_yaw,
                                                                  check_cancelled=self.deadline.check)
                             except NavigationError:break
                             planning_xy=stage_plan.goal
-                            stage=(grid,stage_plan)
+                            candidate_stage=(initial_grid,stage_plan)
                         for other_grid,other_yaw,turn_grid,footprint in feasible_heading_grids(
-                                grid,raw_free,map_details['chassis_footprint_world_offsets'],planning_xy,
+                                initial_grid,raw_free,map_details['chassis_footprint_world_offsets'],planning_xy,
                                 travel_yaw,check_cancelled=self.deadline.check,collision_layers=self._navigation_layers):
                             try:other_plan=make_plan(other_grid,other_yaw)
                             except NavigationError:continue
+                            turn_distance=.5*abs(other_yaw-travel_yaw)/(math.pi/3)
+                            key=(round(other_plan.score,9),other_plan.geodesic_m+turn_distance+
+                                 (candidate_stage[1].geodesic_m if candidate_stage else 0.))
+                            if best_key is not None and key>=best_key:continue
+                            best_key=key
                             xy=tuple(planning_xy)
                             turn_plan=NavigationPlan((xy,),xy,xy,other_yaw,0.,0.,1,1,0.,0,other_yaw)
-                            turn=(turn_grid,turn_plan)
+                            turn=(turn_grid,turn_plan);stage=candidate_stage
                             details['heading_change']={'from':travel_yaw,'to':other_yaw,
                                 'check':'full_swept_collision_hulls','footprint':footprint,
                                 'staging_plan':asdict(stage[1]) if stage else None}
                             grid,plan=other_grid,other_plan
-                            break
-                        if turn is not None:break
-                    if turn is None:raise original_error
+                        if plan is not None and plan.score<=exact_tolerance:break
+                if plan is None:raise original_error
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
             if turn is not None:
                 np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
@@ -619,7 +671,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     layer_footprints_json=json.dumps(map_details['collision_layers']))
         except NavigationError as exc:
             details.update(status='failed',error_code=exc.code,error=str(exc))
-            raise SkillError(exc.code,str(exc)) from exc
+            raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
                 stream.write(json.dumps(details)+'\n')
@@ -634,25 +686,28 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             details['heading_change']['execution']=turn_result
         result=self._execute_gt_plan(grid,plan,max_steps)
         self.navigation_distance+=result['actual_path_distance_m']+sum(p['actual_path_distance_m'] for p in (stage_result,turn_result) if p)
-        phases=[phase for phase in (recovery_result,stage_result,turn_result) if phase is not None]
+        phases=recovery_results+[phase for phase in (stage_result,turn_result) if phase is not None]
         for key in ('steps','motion_steps','actual_path_distance_m'):
             result[key]+=sum(phase.get(key,0) for phase in phases)
         actual,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
         actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         visible=(self._approach_visible(actual[:2].cpu().tolist(),point,
-                    getattr(target,'selected_object',None),margin=0.,max_distance=1.4,
+                    getattr(target,'selected_object',None),margin=0.,
                     base_yaw=actual_yaw) if mode=='approach' else None)
+        projection=math.dist(actual[:2].cpu().tolist(),plan.target)
+        nav_status='reached' if projection<=grid.resolution/math.sqrt(2)+.002 else (
+            'already_at_closest_approach' if result['actual_path_distance_m']<.002 else 'approached')
         with (self.output/'navigation_arrivals.jsonl').open('a') as stream:
             stream.write(json.dumps({'at':now(),'audience':'executor_private',
                 'grid_artifact':details['grid_artifact'],'goal_mode':mode,
                 'selected_world_point':point.cpu().tolist(),'planned_goal':list(plan.goal),
                 'actual_position':actual.cpu().tolist(),'target_visible':visible,
-                'status':'failed' if visible is False else 'reached'})+'\n')
+                'status':'failed' if visible is False else nav_status})+'\n')
         if visible is False:
             raise SkillError('navigation_unreachable',
                 'The selected target is occluded from the reached approach; inspect updated RGB',changed=True)
-        return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
+        return {**result,'nav_status':nav_status,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
                 'start_grid_offset_m':plan.start_grid_offset_m,
                 'goal_mode':mode,'target_projection_distance_m':math.dist(plan.goal,plan.target),
