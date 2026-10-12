@@ -63,6 +63,7 @@ SKILLS_PROMPT += """
 The MCP tool catalog is checked before policy startup. If a tool seems unavailable, actually attempt initialize or list_skills and report the returned error; do not infer unavailability from an empty workspace.
 If one item or required arrangement remains uncertain, keep inspecting the available RGB, change viewpoint when useful, or finish blocked; do not silently omit it.
 Before a material or cutting action, read visual-manipulation/references/material-actions.md through read_skill.
+When execution_budget.scope is agent_steps, each new act/look attempt consumes one step, including failed attempts. Initialization, reading skills and finish do not consume action steps. Use steps_remaining to prioritize the requested results; no episode wall-time limit applies in this mode. At zero steps inspect the last returned RGB and call finish; do not attempt further actions. Tool completion still does not establish whole-task success.
 """
 SYSTEM_PROMPT = SKILLS_PROMPT
 

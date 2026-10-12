@@ -36,7 +36,8 @@ class SurroundJobs:
         self.active_id = ident
         # Observation may legitimately wait behind a long owner-thread action.
         # It shares the episode clock, not an independent 30-second queue timer.
-        self.deadline = self.h.started + self.h.budget.wall_seconds
+        self.deadline = (self.h.started + self.h.budget.wall_seconds
+                         if self.h.budget.wall_seconds is not None else float('inf'))
         self._save(job, 'observation_planned')
         return self.get(ident)
 

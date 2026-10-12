@@ -117,7 +117,7 @@ def render_standalone_dashboard(progress):
         state=status_of(row);q=row.get('q_score')
         score=(f'<div class="score"><span>{float(q)*100:.0f}<small>%</small></span><span class="score-track"><i style="width:{max(0,min(100,float(q)*100)):.2f}%"></i></span></div>'
                if isinstance(q,(int,float)) else '<span class="unavailable">未取得评分</span>' if state in ('failure','timeout') else '<span class="unavailable">—</span>')
-        reason={'controller_failed':'模型运行中断','execution_error':'运行异常'}.get(row.get('termination_reason'),'')
+        reason={'controller_failed':'模型运行中断','execution_error':'运行异常','agent_step_budget_exhausted':'agent step 用尽'}.get(row.get('termination_reason'),'')
         if row.get('failure_stage')=='simulator_starting':reason='初始化中断'
         status=f'<span class="badge {state}"><i></i>{labels[state]}</span>'
         if reason:status+=f'<span class="reason">{esc(reason)}</span>'
@@ -133,6 +133,9 @@ def render_standalone_dashboard(progress):
         if counts[key] or key in ('success','failure','timeout'):
             tabs+=f'<button class="filter" data-filter="{key}" aria-pressed="false">{labels[key]}<span>{counts[key]}</span></button>'
     segments=''.join(f'<i class="segment {key}" style="width:{counts[key]/max(total,1)*100:.4f}%" title="{labels[key]} {counts[key]}"></i>' for key in labels if counts[key])
+    scope=protocol.get('display_scope_note') or ('本页仅展示本轮 100 项任务结果。' if total==100 else '本页展示故障任务的独立补测结果，原始成绩保留。')
+    if protocol.get('episode_budget_policy')=='agent_steps':
+        scope+=' 模型：'+str(protocol.get('model'))+' / '+str(protocol.get('model_reasoning_effort'))+'；每项最多 '+str(protocol['max_agent_steps'])+' 个 agent step；任务执行无时间上限。'
     values={'TITLE':title,'TOTAL':str(total),'ENDED':str(ended),'SUCCESS':str(counts['success']),
         'FAILURE':str(counts['failure']),'TIMEOUT':str(counts['timeout']),
         'RATE':f'{counts["success"]/max(total,1)*100:.0f}',
@@ -144,7 +147,7 @@ def render_standalone_dashboard(progress):
         'PROGRESS_NOTE':f'进行中 {counts["running"]} · 待开始 {counts["queued"]}' if not completed else '所有任务已结束',
         'ROWS':''.join(rows),'TABS':tabs,'SEGMENTS':segments,
         'LIVE_JSON':json.dumps(not completed),'UPDATED_JSON':json.dumps(progress.get('updated_at','')),
-        'SCOPE_NOTE':esc(protocol.get('display_scope_note') or ('本页仅展示本轮 100 项任务结果。' if total==100 else '本页展示故障任务的独立补测结果，原始成绩保留。'))}
+        'SCOPE_NOTE':esc(scope)}
     template=Path(__file__).with_name('batch_dashboard.html').read_text()
     for key,value in values.items():template=template.replace('__'+key+'__',value)
     return template

@@ -35,17 +35,19 @@ class Harness:
 
     def sync_execution_clock(self):
         deadline=self.deadline.unix
-        if deadline is None or getattr(self,'_clock_recorded',False):return
-        self._clock_recorded=True
-        timing={'episode_deadline_unix':deadline}
         clock=self.deadline.clock
+        if (deadline is None and clock is None) or getattr(self,'_clock_recorded',False):return
+        timing={'episode_deadline_unix':deadline}
         if clock:
+            if clock.get('budget_policy')=='agent_steps' and clock['max_agent_steps']!=getattr(self,'agent_step_limit',None):
+                raise ValueError('Controller and simulator agent-step limits differ')
             # Existing observation-job deadlines and wall-time diagnostics share
             # the execution origin too; simulator construction is excluded.
             self.started=time.monotonic()-max(0,time.time()-clock['execution_started_at_unix'])
             timing.update(execution_started_at_unix=clock['execution_started_at_unix'],
                           execution_budget_seconds=clock['execution_budget_seconds'],
                           execution_clock_kind=clock.get('clock_kind','policy_execution'))
+        self._clock_recorded=True
         self.recorder.run.update(timing)
         self.recorder.event('execution_clock_armed',timing)
         write_json(self.recorder.output/'run.json',self.recorder.run)
@@ -53,7 +55,7 @@ class Harness:
     def start_standalone_clock(self):
         if not self.deadline.managed:
             self.started=time.monotonic()
-            self.deadline.arm_local(self.budget.wall_seconds)
+            self.deadline.arm_local(self.budget.wall_seconds,max_agent_steps=getattr(self,'agent_step_limit',None))
         self.sync_execution_clock()
 
     def call(self, name: str, arguments: dict, request_id: str) -> dict:
@@ -201,6 +203,12 @@ class Harness:
                   "deadline_expired_at_finish": expired,
                   "evaluation_finished_at_unix": evaluation_finished_at,
                   "evaluation_finished_after_deadline": self.deadline.unix is not None and evaluation_finished_at >= self.deadline.unix}
+        if getattr(self,'agent_step_limit',None) is not None:
+            exhausted=self.agent_steps>=self.agent_step_limit
+            result.update(agent_steps=self.agent_steps,max_agent_steps=self.agent_step_limit,
+                          agent_step_budget_exhausted=exhausted)
+            if exhausted and not task_success:
+                result['termination_reason']='agent_step_budget_exhausted'
         if expired:
             result.update(timeout=True, episode_outcome='timeout', termination_reason='episode_deadline_exceeded',
                           episode_deadline_unix=self.deadline.unix)

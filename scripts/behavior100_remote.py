@@ -224,6 +224,8 @@ def main():
           '--port',str(a.port),'--controller','codex:'+manifest['model'],
           '--max-actions',str(manifest['max_actions']),'--max-sim-steps',str(manifest['max_sim_steps']),
           '--output',str(a.data_root/'runs'/row['run_id'])]
+    if manifest.get('episode_budget_policy')=='agent_steps':
+        args+=['--max-agent-steps',str(manifest['max_agent_steps'])]
     os.execv(sys.executable,args)
 
 

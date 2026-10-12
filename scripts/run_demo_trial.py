@@ -82,7 +82,7 @@ def main():
         '--backend', 'omnigibson', '--policy', 'serve', '--agent-profile', 'skills',
         '--task', args.task, '--instance', str(args.instance), '--seed', str(args.seed),
         '--instruction', args.instruction, '--wall-seconds', str(args.timeout + 180),
-        '--record-video', '--controller', 'codex:gpt-6-astra', '--output', str(run),
+        '--record-video', '--controller', 'codex:gpt-6.1-sol', '--output', str(run),
         '--port', str(port)]
     with (root / 'simulator.log').open('w') as sim_log, (root / 'controller.log').open('w') as model_log:
         simulator = subprocess.Popen(simulator_command, cwd=source, env=environment,
@@ -100,7 +100,7 @@ def main():
             else:
                 raise TimeoutError('Simulator startup exceeded 900 seconds')
             command = [sys.executable, str(source / 'scripts/run_codex_controller.py'),
-                '--model', 'gpt-6-astra', '--reasoning-effort', 'low',
+                '--model', 'gpt-6.1-sol', '--reasoning-effort', 'low',
                 '--model-provider-profile', args.provider_profile,
                 '--instruction', args.instruction, '--mcp-command', sys.executable,
                 '--mcp-args-json', json.dumps(['-m', 'manipulation_agent.mcp_server', '--bridge', url]),
@@ -125,7 +125,7 @@ def main():
         record = json.loads((run / 'run.json').read_text()) if (run / 'run.json').exists() else {}
         control = json.loads((controller / 'controller.json').read_text()) if (controller / 'controller.json').exists() else {}
         summary = {'task': args.task, 'instance': args.instance, 'seed': args.seed,
-                   'model': 'gpt-6-astra', 'reasoning_effort': 'low',
+                   'model': 'gpt-6.1-sol', 'reasoning_effort': 'low',
                    'provider_profile':args.provider_profile,'provider_host':provider_host,
                    'demo_motion': True, 'controller_exit_code': model_code,
                    'supervisor_failure_type': failure_type,

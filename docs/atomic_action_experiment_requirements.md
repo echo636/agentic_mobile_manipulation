@@ -14,7 +14,7 @@ and current evidence are described in [atomic_actions.md](atomic_actions.md).
   through the real MCP `act` interface, inspect returned RGB and feedback, and
   call `finish` itself. Do not supply object IDs, depth, evaluator state,
   hand-selected action sequences, or target pixels to the controller.
-- Use `gpt-6-astra` with reasoning effort `low` for **new** experiments. Retain
+- Use `gpt-6.1-sol` with reasoning effort `low` for **new** experiments (user update, 2026-10-13). Retain
   already completed `high` attempts as historical evidence, label their actual
   effort on every result and history link, and do not rerun them solely to change
   effort. Never silently mix efforts in a reported cohort.

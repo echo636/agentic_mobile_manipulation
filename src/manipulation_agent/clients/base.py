@@ -13,7 +13,7 @@ from .types import ClientCapability, ClientRunResult, PreparedProject
 from .events import parse_events
 
 
-def run_process(project: PreparedProject, output: Path, timeout: float,
+def run_process(project: PreparedProject, output: Path, timeout: float | None,
                 on_start: Callable[[int], None] | None = None) -> ClientRunResult:
     started = time.monotonic()
     timed_out = False

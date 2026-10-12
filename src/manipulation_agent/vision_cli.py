@@ -32,6 +32,8 @@ def main():
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
+    p.add_argument('--max-agent-steps',type=int,default=None,
+                   help='Count act/look attempts; disables episode wall-time and legacy physics/call limits')
     p.add_argument('--wall-seconds',type=float,default=1800,
                    help='Policy execution budget after bridge readiness (default: 1800 seconds)')
     p.add_argument('--model-max-turns', type=int, default=100, help='Native Responses loop only')
@@ -39,6 +41,9 @@ def main():
     p.add_argument('--image-history-captures', type=int, default=0,
                    help='Native loop: keep the latest N RGB captures in requests; zero preserves all. Raw records are retained.')
     a=p.parse_args()
+    if a.max_agent_steps is not None:
+        if a.max_agent_steps<=0:p.error('--max-agent-steps must be positive')
+        a.wall_seconds=None
     if a.record_video is None: a.record_video = a.backend == 'omnigibson'
     if a.instruction is None:
         catalog=json.loads((Path(__file__).parent/'tasks.json').read_text())
@@ -61,7 +66,8 @@ def main():
         backend.deadline=deadline
         with startup_stage(a.output, 'first_observation_and_harness'):
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
-                                                          wall_seconds=a.wall_seconds),profile=a.agent_profile)
+                                                          wall_seconds=a.wall_seconds),profile=a.agent_profile,
+                                  agent_step_limit=a.max_agent_steps)
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)

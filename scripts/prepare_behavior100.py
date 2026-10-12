@@ -157,8 +157,10 @@ def main():
         'official_submission_eligible':False,'official_catalog_sha256':hashlib.sha256(a.official.read_bytes()).hexdigest(),
         'instruction_mode':a.instruction_mode,
         'instruction_counts':dict(Counter(row['instruction_source'] for row in rows)),
-        'model':'gpt-6-astra','agent_profile':'skills','max_actions':80,'max_sim_steps':20000,'model_timeout_seconds':1800,
-        'simulator_runtime_max_seconds':3300,'startup_timeout_seconds':1200,'tasks':rows}
+        'model':'gpt-6.1-sol','model_reasoning_effort':'low','agent_profile':'skills',
+        'episode_budget_policy':'agent_steps','max_agent_steps':50,
+        'max_actions':50,'max_sim_steps':20000,'model_timeout_seconds':None,
+        'simulator_runtime_max_seconds':None,'startup_timeout_seconds':1200,'tasks':rows}
     a.output.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');print(json.dumps({'tasks':len(rows),'instruction_counts':result['instruction_counts']}))
 
 

@@ -52,7 +52,7 @@ findings remain separate from the machine checks. Preserve failed attempts.
 To run a public-task model trial, use `scripts/run_demo_trial.py` with the
 task instruction, an output directory outside Git, the local OmniGibson source
 path, and the name of an already configured Codex provider profile. The script
-starts the RGB MCP simulator with `MAS_DEMO_MOTION=1`, runs `gpt-6-astra` at
+starts the RGB MCP simulator with `MAS_DEMO_MOTION=1`, runs `gpt-6.1-sol` at
 `low` effort through the real `act`/`finish` interface, and records model and
 simulator evidence. It reads the provider endpoint from the installed Codex
 config while keeping the rest of that config disabled; authentication stays

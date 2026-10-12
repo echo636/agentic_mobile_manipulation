@@ -37,7 +37,7 @@ class ClientConfig:
     mcp_command: str
     mcp_args: list[str]
     output: Path
-    timeout: float = 900
+    timeout: float | None = 900
     agent_profile: str = "skills"
     isolate_client_storage: bool = False
     reasoning_effort: str | None = None
@@ -46,7 +46,7 @@ class ClientConfig:
     def __post_init__(self):
         if self.client not in {"codex", "opencode", "kimi"}:
             raise ValueError(f"Unsupported client: {self.client}")
-        if self.timeout <= 0:
+        if self.timeout is not None and self.timeout <= 0:
             raise ValueError("timeout must be positive")
         if not isinstance(self.mcp_args, list) or any(not isinstance(x, str) for x in self.mcp_args):
             raise ValueError("mcp_args must be an argv string array")

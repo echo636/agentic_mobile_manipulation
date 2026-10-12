@@ -189,13 +189,21 @@ def render_dashboard(progress):
             if previous.get('replay_url'):
                 links.append(f'<a href="{esc(previous["replay_url"])}">历史尝试</a>')
         outcome='成功' if r.get('task_success') is True else ('未成功' if r.get('task_success') is False else '未取得最终评分')
-        rows.append(f'<tr data-status="{esc(r["status"])}"><td>{r["index"]+1}</td><td>{esc(r["name"])}<small>{esc(r["task"])}</small><details><summary>任务输入与来源</summary><p>{esc(r["instruction"])}</p><p>{esc(r["instruction_source"])}</p></details></td><td class="{r["status"]}">{esc(r["status"])}<small>{esc(r.get("stage","queued"))}</small></td><td>{outcome}<small>Q={esc(r.get("q_score","—"))}</small></td><td>{esc(r.get("actions","—"))}<small>{esc(r.get("tool_calls","—"))} tool calls</small></td><td>{esc(r.get("evidence_alignment","—"))}<small>video: {esc(r.get("video_validation","—"))}</small></td><td>{" · ".join(links)}<small>{esc(r.get("failure",""))}</small></td></tr>')
+        rows.append(f'<tr data-status="{esc(r["status"])}"><td>{r["index"]+1}</td><td>{esc(r["name"])}<small>{esc(r["task"])}</small><details><summary>任务输入与来源</summary><p>{esc(r["instruction"])}</p><p>{esc(r["instruction_source"])}</p></details></td><td class="{r["status"]}">{esc(r["status"])}<small>{esc(r.get("stage","queued"))}</small></td><td>{outcome}<small>Q={esc(r.get("q_score","—"))}</small></td><td>{esc(r.get("agent_steps",r.get("actions","—")))}<small>{esc(r.get("actions","—"))} executor actions</small><small>{esc(r.get("tool_calls","—"))} tool calls</small></td><td>{esc(r.get("evidence_alignment","—"))}<small>video: {esc(r.get("video_validation","—"))}</small></td><td>{" · ".join(links)}<small>{esc(r.get("failure",""))}</small></td></tr>')
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BEHAVIOR 100 · 批量测试</title>
 <style>body{font:16px system-ui;background:#eef3f8;color:#142c43;margin:25px auto;max-width:1500px;padding:0 18px}a{color:#07599b}article,.cards>div{background:white;border:1px solid #d3dfe9;border-radius:10px;padding:18px;margin:14px 0}.cards{display:flex;gap:14px;flex-wrap:wrap}.cards>div{flex:1;min-width:150px}.cards strong{font-size:30px;display:block}table{border-collapse:collapse;width:100%;min-width:1050px}td,th{text-align:left;border-bottom:1px solid #ddd;padding:12px;vertical-align:top}small{display:block;color:#586d81;margin-top:7px;overflow-wrap:anywhere}td:nth-child(2){max-width:360px}td:last-child{max-width:270px}summary{cursor:pointer}input,select{font:inherit;padding:8px;margin:8px}.table{overflow-x:auto}.passed{color:#087044}.failed{color:#ad3030}.blocked{color:#9c6700}.running{color:#065fa7}p{line-height:1.65}code{overflow-wrap:anywhere}</style>
 <h1>BEHAVIOR 2026 · 100 项任务测试</h1><p>RGB agent + ideal motor executor · gpt-6-astra · public instance 301 · seed 0</p>''' + f'''
 <div class="cards"><div><strong>{s['completed']} / {s['total']}</strong>已结束（包括失败和受阻）</div><div><strong>{s['task_successes']} / {s['total']}</strong>独立评估成功 / 固定总数</div><div><strong>{s['final_evaluations']}</strong>取得最终评分</div><div><strong>{s['complete_videos']}</strong>录像完整性验证通过</div></div>
 <article><p><b>失败与重试：</b>首次尝试成功 {s['first_attempt_task_successes']} / {s['total']}；另有 {s['extra_infrastructure_attempts']} 次模型启动前的基础设施重试、{s['extra_policy_attempts']} 次执行器修复后重测。上方成功数含修复后的最新尝试，原始失败记录保留在该任务行，任务总数始终为 100。</p><p><b>协议：</b>每种任务运行一个公开测试实例，共 100 个 episode，不等于所有公开实例或官方排行榜提交。机器人输入是同时采集的前、后、左、右 RGB，无腕部相机；模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。切割、擦洗等能力未扩展，相关失败保留在总数中。</p><p><b>输入来源：</b>50 项使用官方原文，50 项按静态 BDDL 目标补写，逐项标注。独立评估、几何和 spectator 录像只供执行器或离线审阅，不作为模型观测。</p><p><b>回放：</b>连续录像记录实际控制步；模型等待时间不铺成静止画面。Replay 同步四路 RGB、模型公开 assistant 原文、工具参数和返回结果。不补写思考，不展示隐藏推理；原始私有运行记录保存在实验目录。</p><p><b>状态：</b>passed 要求任务成功、控制器正常结束、证据对齐、四相机观测和录像验证通过；failed/blocked 分别保留具体阶段。失败任务有最终评分时显示 Q，仿真在初始化前失败时无法生成观测或视频。部分录像不标成完整。</p><p>批次状态：{esc(s['execution_status'])} · 更新：{esc(progress['updated_at'])} · <a href="behavior100/progress.json">实时 JSON</a> · <a href="behavior100/manifest.json">冻结清单</a> · <a href="behavior100/validation.json">验证记录</a> · <a href="behavior100/journal.md">迭代日志</a></p></article>
 <input id="search" placeholder="搜索任务 / 阶段"><select id="status"><option value="">所有状态</option><option>planned</option><option>running</option><option>passed</option><option>failed</option><option>blocked</option></select><label><input id="refresh" type="checkbox" checked>每 60 秒刷新</label><div class="table"><table><thead><tr><th>#</th><th>任务</th><th>运行状态</th><th>独立评估</th><th>动作数</th><th>证据与录像</th><th>回放 / 原始记录</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>''' + '''<script>const search=document.querySelector('#search'), status=document.querySelector('#status');function filter(){document.querySelectorAll('tbody tr').forEach(r=>r.hidden=!(r.textContent.toLowerCase().includes(search.value.toLowerCase())&&(!status.value||r.dataset.status===status.value)))}search.oninput=status.onchange=filter;setInterval(()=>{if(document.querySelector('#refresh').checked&&!search.value&&!status.value)location.reload()},60000)</script></html>'''
+    protocol=progress.get('protocol',{})
+    model=protocol.get('model','gpt-6-astra')
+    effort=protocol.get('model_reasoning_effort')
+    page=page.replace(' · gpt-6-astra · ', ' · '+esc(model)+((' / '+esc(effort)) if effort else '')+' · ')
+    if protocol.get('episode_budget_policy')=='agent_steps':
+        page=page.replace('模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。',
+            '模型通过 MCP 工具和任务分解 skill 操作当前理想执行器。每项上限 '+str(protocol['max_agent_steps'])+' 个 agent step（act/look 请求，失败计步，重复传输不计）；无任务执行时间上限。初始化与结束归档单独监控。')
+        page=page.replace('动作数</th>','agent step / 执行动作</th>')
     total = s['total']
     official=sum(r['instruction_source']=='official_gallery' for r in progress['tasks'])
     page=page.replace('50 项使用官方原文，50 项按静态 BDDL 目标补写',f'{official} 项使用官方原文，{total-official} 项按静态 BDDL 目标补写')
@@ -516,7 +524,7 @@ class Batch:
 
     def capture_result(self, row, remote_run):
         """Fetch the compact immutable outcome before potentially large media IO."""
-        keys=('task_success','actions','tool_calls','sim_steps','agent_outcome','finish_reason','failure',
+        keys=('task_success','actions','agent_steps','max_agent_steps','agent_step_budget_exhausted','tool_calls','sim_steps','agent_outcome','finish_reason','failure','termination_reason',
               'source','backend','execution_finished_at_unix','deadline_expired_at_finish',
               'evaluation_finished_at_unix','evaluation_finished_after_deadline','episode_deadline_unix','execution_started_at_unix','episode_outcome')
         code=("import json; from pathlib import Path; p=Path("+repr(str(remote_run/'run.json'))+
@@ -552,8 +560,12 @@ class Batch:
 
     def execution_clock_command(self, path, seconds, runtime=None):
         runtime=Path(runtime or self.source)
+        manifest=getattr(self,'manifest',{})
+        if manifest.get('episode_budget_policy')=='agent_steps':seconds=None
+        options=(',max_agent_steps='+repr(manifest['max_agent_steps'])
+                 if manifest.get('episode_budget_policy')=='agent_steps' else '')
         code=('import json; from manipulation_agent.deadline import write_execution_clock; '
-              'print(json.dumps(write_execution_clock('+repr(str(path))+','+repr(seconds)+')))')
+              'print(json.dumps(write_execution_clock('+repr(str(path))+','+repr(seconds)+options+')))')
         remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-c',code])
         return self.c['ssh']+[remote]
 
@@ -563,12 +575,13 @@ class Batch:
         except (FileNotFoundError,json.JSONDecodeError):return {}
         deadline=metadata.get('episode_deadline_unix')
         started=metadata.get('execution_started_at_unix')
-        if isinstance(deadline,(int,float)) and isinstance(started,(int,float)):
-            if row.get('episode_deadline_unix')!=deadline:
+        step_only=(metadata.get('execution_clock') or {}).get('budget_policy')=='agent_steps'
+        if isinstance(started,(int,float)) and (isinstance(deadline,(int,float)) or step_only):
+            if row.get('execution_started_at_unix')!=started or row.get('episode_deadline_unix')!=deadline:
                 self.update(row,execution_started_at_unix=started,episode_deadline_unix=deadline,
                             execution_budget_seconds=metadata.get('execution_budget_seconds',row.get('episode_timeout_seconds')),
                             deadline_origin='model_start_after_mcp_handshake',
-                            budget_basis='model_execution_excludes_initialization',stage='policy_running')
+                            budget_basis='agent_steps' if step_only else 'model_execution_excludes_initialization',stage='policy_running')
                 self.worker_state('running',run_id=row['run_id'],deadline_unix=deadline)
         return metadata
 
@@ -578,8 +591,8 @@ class Batch:
             self.controller_metadata(row,controller)
             self.refresh_startup_progress(row)
             deadline=row.get('episode_deadline_unix')
-            cutoff=deadline or row['startup_deadline_unix']
-            if time.time()>=cutoff:
+            cutoff=deadline or (None if row.get('execution_started_at_unix') else row['startup_deadline_unix'])
+            if cutoff is not None and time.time()>=cutoff:
                 if deadline:self.update(row,episode_timed_out=True)
                 else:self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
                 if deadline:
@@ -587,14 +600,30 @@ class Batch:
                     except subprocess.TimeoutExpired:self.stop_controller(process,controller)
                 else:self.stop_controller(process,controller)
                 break
-            time.sleep(min(2,max(0,cutoff-time.time())))
+            # In step-only mode a closed/exited simulator must not leave an
+            # unbounded controller alive. This is closure, not an episode timer.
+            if cutoff is None and self.step_episode_closed(row):
+                try:process.wait(timeout=20)
+                except subprocess.TimeoutExpired:self.stop_controller(process,controller)
+                break
+            time.sleep(2 if cutoff is None else min(2,max(0,cutoff-time.time())))
             if time.monotonic()-getattr(process,'last_heartbeat',0)>30:
                 process.last_heartbeat=time.monotonic();self.update(row,heartbeat_at=now())
         return self.controller_metadata(row,controller)
 
+    def step_episode_closed(self, row):
+        if self.manifest.get('episode_budget_policy')!='agent_steps':return False
+        last=getattr(self._worker_local,'closure_poll',None);current=time.monotonic()
+        if last and last[0]==row['run_id'] and current-last[1]<10:return False
+        self._worker_local.closure_poll=(row['run_id'],current)
+        health=self.health(row['port'])
+        if health is not None:return bool(health.get('closed'))
+        state=self.unit_state(row['simulator_unit'])
+        return state.get('ActiveState') in {'inactive','failed'} and str(state.get('MainPID'))=='0'
+
     def refresh_startup_progress(self, row):
         """Read actual remote milestones, never mistake polling for progress."""
-        if row.get('startup_watchdog_policy') != STARTUP_POLICY or row.get('episode_deadline_unix'):
+        if row.get('startup_watchdog_policy') != STARTUP_POLICY or row.get('execution_started_at_unix') or row.get('episode_deadline_unix'):
             return
         # Avoid launching a Python reader on every two-second health poll.
         last=getattr(self._worker_local,'startup_progress_poll',None)
@@ -650,9 +679,10 @@ class Batch:
                 raise RuntimeError('Unit collision; refusing to reuse')
             if self.ssh(['test','-e',str(remote_run)]).returncode==0:
                 raise RuntimeError('Output exists; immutable attempt cannot be overwritten')
-            # Initialization has its own watchdog. The 30-minute execution
-            # clock is armed by the controller only after its MCP handshake.
-            seconds=self._config.get('episode_timeout_seconds',self.manifest.get('model_timeout_seconds',1800))
+            # Initialization has its own watchdog; the execution clock is
+            # armed after MCP handshake, with no duration in step-only mode.
+            seconds=(None if self.manifest.get('episode_budget_policy')=='agent_steps' else
+                     self._config.get('episode_timeout_seconds',self.manifest.get('model_timeout_seconds',1800)))
             startup_seconds=self._config.get('startup_timeout_seconds',1800)
             started=time.time();startup_deadline=started+startup_seconds
             clock_path=remote_run/'execution_clock.json'
@@ -691,7 +721,7 @@ class Batch:
                         startup_deadline_unix=startup_deadline,startup_timeout_seconds=startup_seconds,
                         startup_watchdog_policy=STARTUP_POLICY,
                         execution_clock_path=str(clock_path),deadline_origin='model_start_after_mcp_handshake',
-                        budget_basis='model_execution_excludes_initialization',
+                        budget_basis='agent_steps' if self.manifest.get('episode_budget_policy')=='agent_steps' else 'model_execution_excludes_initialization',
                         episode_timeout_seconds=seconds,
                         cleanup_grace_seconds=grace,port=port,simulator_interpreter=self.c['sim_python'],
                         source=getattr(self,'source_info',None) or source_version())
@@ -728,7 +758,7 @@ class Batch:
             cmd=[sys.executable,str(self.source/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
                  '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
                  '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
-                 '--timeout',str(seconds),'--execution-clock-command-json',
+                 '--timeout',str(seconds if seconds is not None else 0),'--execution-clock-command-json',
                  json.dumps(self.execution_clock_command(clock_path,seconds)),
                  '--agent-profile',self.manifest['agent_profile']]
             if self.manifest.get('model_reasoning_effort'):
@@ -750,7 +780,7 @@ class Batch:
         except Exception as exc:
             deadline=row.get('episode_deadline_unix')
             expired=deadline is not None and time.time()>=deadline
-            if deadline is None and startup_deadline is not None and time.time()>=row['startup_deadline_unix']:
+            if deadline is None and not row.get('execution_started_at_unix') and startup_deadline is not None and time.time()>=row['startup_deadline_unix']:
                 self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
             self.update(row,failure=f'{type(exc).__name__}: {exc}',failure_stage=row.get('stage'),
                         episode_timed_out=bool(row.get('episode_timed_out') or expired))
@@ -778,7 +808,7 @@ class Batch:
 
     def finish_and_wait(self, row, metadata):
         """Execution deadline is fixed; score/cleanup receives a separate grace."""
-        now_unix=time.time();deadline=row.get('episode_deadline_unix') or row.get('startup_deadline_unix') or now_unix
+        now_unix=time.time();deadline=row.get('episode_deadline_unix') or (now_unix if row.get('execution_started_at_unix') else row.get('startup_deadline_unix')) or now_unix
         end=min(deadline+row.get('cleanup_grace_seconds',120),now_unix+row.get('cleanup_grace_seconds',120))
         if not metadata.get('formal_finish_observed') and now_unix<end:
             self.update(row,supervisor_intervention=True,stage='finishing')
@@ -818,7 +848,8 @@ class Batch:
         if row.get('outcome_provisional') and isinstance(run.get('task_success'),bool):
             self.update(row,episode_outcome=None,outcome_provisional=False,termination_reason=None)
         self.update(row,**{key:run[key] for key in ('execution_finished_at_unix','deadline_expired_at_finish',
-            'evaluation_finished_at_unix','evaluation_finished_after_deadline','episode_deadline_unix','execution_started_at_unix') if key in run})
+            'evaluation_finished_at_unix','evaluation_finished_after_deadline','episode_deadline_unix','execution_started_at_unix',
+            'agent_steps','max_agent_steps','agent_step_budget_exhausted','termination_reason') if key in run})
         if run.get('deadline_expired_at_finish') is True or run.get('episode_outcome')=='timeout':
             self.update(row,episode_timed_out=True)
         if run.get('failure') and run.get('task_success') is None:
@@ -892,7 +923,7 @@ class Batch:
         try:
             path=controller/'controller.json'
             if path.exists():metadata=self.controller_metadata(row,controller)
-            if not row.get('episode_deadline_unix') and not row.get('execution_clock_path'):
+            if not row.get('episode_deadline_unix') and not row.get('execution_clock_path') and self.manifest.get('episode_budget_policy')!='agent_steps':
                 started=datetime.fromisoformat(metadata.get('started_at') or row['started_at']).timestamp()
                 row['episode_deadline_unix']=started+self.manifest['model_timeout_seconds']
             row.setdefault('cleanup_grace_seconds',self._config.get('cleanup_grace_seconds',120))
@@ -903,8 +934,8 @@ class Batch:
                 self.controller_metadata(row,controller)
                 self.refresh_startup_progress(row)
                 deadline=row.get('episode_deadline_unix')
-                cutoff=deadline or row['startup_deadline_unix']
-                if time.time()>=cutoff:
+                cutoff=deadline or (None if row.get('execution_started_at_unix') else row['startup_deadline_unix'])
+                if cutoff is not None and time.time()>=cutoff:
                     if deadline:self.update(row,episode_timed_out=True)
                     else:self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
                     if process is not None:self.stop_controller(process,controller)
@@ -913,6 +944,13 @@ class Batch:
                         while controller_process_alive(pid,controller) and time.time()<cleanup_until:time.sleep(.2)
                         if controller_process_alive(pid,controller):self.stop_controller(None,controller,wrapper_pid=pid)
                     break
+                if cutoff is None and self.step_episode_closed(row):
+                    cleanup_until=time.time()+20
+                    while controller_process_alive(pid,controller) and time.time()<cleanup_until:time.sleep(.2)
+                    if controller_process_alive(pid,controller):
+                        if process is not None:self.stop_controller(process,controller)
+                        else:self.stop_controller(None,controller,wrapper_pid=pid)
+                    break
                 self.update(row,heartbeat_at=now());time.sleep(2)
             if process is not None:process.wait(timeout=10)
             if path.exists():metadata=self.controller_metadata(row,controller)
@@ -920,7 +958,7 @@ class Batch:
                         controller_timeout=bool(metadata.get('timeout')),model_duration_seconds=metadata.get('duration_seconds'))
             self.finish_and_wait(row,metadata)
         except Exception as exc:
-            if not row.get('episode_deadline_unix') and row.get('startup_deadline_unix',float('inf'))<=time.time():
+            if not row.get('execution_started_at_unix') and not row.get('episode_deadline_unix') and row.get('startup_deadline_unix',float('inf'))<=time.time():
                 self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
             self.update(row,failure=f'{type(exc).__name__}: {exc}',failure_stage='adopted_controller')
         finally:
@@ -965,7 +1003,7 @@ class Batch:
         cmd=[sys.executable,str(runtime/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
              '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
-             '--timeout',str(self.manifest['model_timeout_seconds']),'--agent-profile',self.manifest['agent_profile']]
+             '--timeout',str(self.manifest['model_timeout_seconds'] or 0),'--agent-profile',self.manifest['agent_profile']]
         if self.manifest.get('model_reasoning_effort'):
             cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
         if self.c.get('model_provider_profile'):

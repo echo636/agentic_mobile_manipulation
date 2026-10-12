@@ -16,6 +16,7 @@ import sys
 from .contracts import SkillError
 
 FINISH_GRACE_SECONDS = 120
+UNBOUNDED_TOOL_TIMEOUT_SECONDS = 2**31 - 1
 # OmniGibson and executor APIs require an integer step limit. Managed episodes
 # use their wall-clock deadline; this sentinel disables a second episode cutoff.
 DEADLINE_STEP_SENTINEL = sys.maxsize
@@ -23,12 +24,23 @@ DEADLINE_STEP_SENTINEL = sys.maxsize
 
 def tool_wait_seconds(execution_seconds):
     """Transport waits may cover execution plus closure, never shorten the task."""
+    # Codex requires a numeric MCP timeout. This is a transport sentinel, not
+    # an episode deadline; step-budget controllers use communicate(timeout=None).
+    if execution_seconds is None:return UNBOUNDED_TOOL_TIMEOUT_SECONDS
     return math.ceil(float(execution_seconds) + FINISH_GRACE_SECONDS)
 
 
 def validate_execution_clock(value):
     """Validate clock data without accepting a new start or extending its budget."""
     if not isinstance(value,dict):raise ValueError('Execution clock must be a JSON object')
+    if value.get('budget_policy') == 'agent_steps':
+        started=value.get('execution_started_at_unix');steps=value.get('max_agent_steps')
+        if (isinstance(started,bool) or not isinstance(started,(int,float)) or
+                not math.isfinite(started) or started<=0 or type(steps) is not int or steps<=0):
+            raise ValueError('Step clock requires a finite start and positive step limit')
+        if value.get('episode_deadline_unix') is not None or value.get('execution_budget_seconds') is not None:
+            raise ValueError('Step-only episodes must not carry a wall-clock deadline')
+        return dict(value)
     keys=('execution_started_at_unix','episode_deadline_unix','execution_budget_seconds')
     for key in keys:
         number=value.get(key)
@@ -39,13 +51,16 @@ def validate_execution_clock(value):
     return dict(value)
 
 
-def write_execution_clock(path, duration_seconds):
+def write_execution_clock(path, duration_seconds, *, max_agent_steps=None):
     """Atomically arm once, called privately after MCP handshake and before policy.
 
     Repeated calls return the existing clock, including when already expired.
     The model has neither this command nor access to its file.
     """
-    if isinstance(duration_seconds,bool) or not math.isfinite(duration_seconds) or duration_seconds<=0:
+    step_only=max_agent_steps is not None
+    if step_only and (duration_seconds is not None or type(max_agent_steps) is not int or max_agent_steps<=0):
+        raise ValueError('Step-only clock requires positive max_agent_steps and no duration')
+    if not step_only and (isinstance(duration_seconds,bool) or not isinstance(duration_seconds,(int,float)) or not math.isfinite(duration_seconds) or duration_seconds<=0):
         raise ValueError('Execution duration must be positive and finite')
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     with path.with_suffix(path.suffix+'.lock').open('a') as lock:
@@ -53,7 +68,8 @@ def write_execution_clock(path, duration_seconds):
         if path.exists():return validate_execution_clock(json.loads(path.read_text()))
         started=time.time()
         record=validate_execution_clock({'schema_version':1,'clock_kind':'policy_execution',
-            'execution_started_at_unix':started,'episode_deadline_unix':started+duration_seconds,
+            **({'budget_policy':'agent_steps','max_agent_steps':max_agent_steps} if step_only else {}),
+            'execution_started_at_unix':started,'episode_deadline_unix':None if step_only else started+duration_seconds,
             'execution_budget_seconds':duration_seconds,'writer_pid':os.getpid()})
         temporary=None
         try:
@@ -86,7 +102,7 @@ class EpisodeDeadline:
     @property
     def managed(self):
         """A pending external clock must suppress legacy ready-time timers too."""
-        return self.clock_path is not None or self._unix is not None
+        return self.clock_path is not None or self._unix is not None or self._clock is not None
 
     def _load_clock(self):
         if self.clock_path is None or self._clock is not None:return
@@ -105,12 +121,13 @@ class EpisodeDeadline:
         self._load_clock()
         return dict(self._clock) if self._clock is not None else None
 
-    def arm_local(self, duration_seconds):
+    def arm_local(self, duration_seconds, *, max_agent_steps=None):
         """Standalone fallback at bridge readiness, never during construction."""
         if not self.managed:
             started=time.time()
             self._clock=validate_execution_clock({'clock_kind':'standalone_ready',
-                'execution_started_at_unix':started,'episode_deadline_unix':started+duration_seconds,
+                **({'budget_policy':'agent_steps','max_agent_steps':max_agent_steps} if max_agent_steps is not None else {}),
+                'execution_started_at_unix':started,'episode_deadline_unix':None if duration_seconds is None else started+duration_seconds,
                 'execution_budget_seconds':duration_seconds})
             self._unix=self._clock['episode_deadline_unix']
         return self.clock

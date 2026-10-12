@@ -43,12 +43,12 @@ def main(argv=None, *, allow_client=False):
     if allow_client:
         p.add_argument('--client', choices=['codex', 'opencode', 'kimi'], default='codex')
         p.add_argument('--probe', action='store_true', help='Report installed CLI capabilities; does not call a model')
-    p.add_argument("--model", required=not probing)
+    p.add_argument("--model", default='gpt-6.1-sol')
     p.add_argument("--instruction", required=not probing)
     p.add_argument("--mcp-command", required=not probing)
     p.add_argument("--mcp-args-json", required=not probing)
     p.add_argument("--output", type=Path, required=not probing)
-    p.add_argument("--timeout", type=int, default=900)
+    p.add_argument("--timeout", type=int, default=900,help='Controller wall timeout; 0 disables it for step-budget episodes')
     timing=p.add_mutually_exclusive_group()
     timing.add_argument('--deadline-unix', type=float,
                         help='Legacy absolute deadline; preserved for existing run configurations')
@@ -64,6 +64,7 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
+    if client == 'codex' and args.reasoning_effort is None:args.reasoning_effort='low'
     adapter = get_adapter(client)
     if probing:
         capability = adapter.probe()
@@ -71,7 +72,8 @@ def main(argv=None, *, allow_client=False):
         return 0 if capability.status == 'available' else 3
     deadline=(EpisodeDeadline() if args.execution_clock_command_json is not None else
               EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env())
-    if args.timeout<=0:p.error('--timeout must be positive')
+    if args.timeout<0:p.error('--timeout must be nonnegative')
+    if args.timeout==0:args.timeout=None
     if args.rate_limit_resumes < 0 or args.resume_backoff_seconds < 1:
         p.error('Rate-limit resume count must be nonnegative and backoff positive')
     if args.rate_limit_resumes and client != 'codex':
@@ -171,14 +173,16 @@ def main(argv=None, *, allow_client=False):
     segment_events=first_events
     continuations=[]
     for attempt in range(1,args.rate_limit_resumes+1):
-        remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
+        remaining=(None if metadata['effective_timeout_seconds'] is None else
+                   metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
         if (process.returncode == 0 or process.timed_out or not thread_id or
                 not rate_limit_error(segment_events) or
-                remaining <= args.resume_backoff_seconds+30):
+                (remaining is not None and remaining <= args.resume_backoff_seconds+30)):
             break
         time.sleep(args.resume_backoff_seconds)
-        remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
-        if remaining <= 30:
+        remaining=(None if metadata['effective_timeout_seconds'] is None else
+                   metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
+        if remaining is not None and remaining <= 30:
             break
         segment_dir=args.output/'continuations'/str(attempt)
         segment_dir.mkdir(parents=True,exist_ok=False)
