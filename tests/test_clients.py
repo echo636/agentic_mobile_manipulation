@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -56,6 +57,32 @@ class ClientAdapterTests(unittest.TestCase):
             self.assertEqual(prepared.env_overlay, {})
             self.assertIsNone(prepared.cwd)
             self.assertTrue(prepared.stdin.endswith('Inspect and finish.'))
+
+    @unittest.skipUnless(shutil.which('bwrap'), 'bubblewrap is required for the mount regression')
+    def test_codex_session_symlink_is_isolated_by_actual_mount(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            user_home = root / 'home'
+            client_root = user_home / '.codex'
+            client_root.mkdir(parents=True)
+            shared_sessions = root / 'shared_sessions'
+            shared_sessions.mkdir()
+            (shared_sessions / 'prior-session').write_text('unchanged')
+            (client_root / 'sessions').symlink_to(shared_sessions, target_is_directory=True)
+            output = root / 'episode'
+            output.mkdir()
+            with patch('pathlib.Path.home', return_value=user_home), patch.dict(
+                    os.environ, {'MAS_CLIENT_STATE_ROOT': str(root / 'state')}, clear=True):
+                prepared = get_adapter('codex').prepare_project(
+                    self.config(output, isolate_client_storage=True), 'Policy', ['finish'])
+            marker = client_root / 'sessions' / 'new-session'
+            process = subprocess.run([*prepared.mcp_prefix, '--', sys.executable, '-c',
+                'from pathlib import Path; import sys; Path(sys.argv[1]).write_text("isolated")',
+                str(marker)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            self.assertEqual((prepared.native_sessions / 'new-session').read_text(), 'isolated')
+            self.assertFalse((shared_sessions / 'new-session').exists())
+            self.assertEqual((shared_sessions / 'prior-session').read_text(), 'unchanged')
 
     def test_codex_run_records_explicit_effort_and_only_selected_provider(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'CODEX_HOME': folder}):

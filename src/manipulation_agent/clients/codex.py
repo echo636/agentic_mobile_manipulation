@@ -96,7 +96,10 @@ class CodexAdapter(ClientAdapter):
             native_sessions = (config.output / "native_sessions").resolve()
             native_sessions.mkdir()
             client_root = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-            session_mount = client_root / "sessions"
+            # bubblewrap cannot bind onto a symlink destination. Mount its real
+            # directory so Codex still follows the existing sessions symlink,
+            # while writes remain isolated in this episode's private directory.
+            session_mount = (client_root / "sessions").resolve()
             if not session_mount.is_dir():
                 raise RuntimeError("Expected existing native sessions directory")
             local_root = os.environ.get("MAS_CLIENT_STATE_ROOT")
