@@ -48,14 +48,17 @@ respect to the simulated world but updates image references, so it is not marked
 idempotent. Every executor attempt advances the revision, including partial
 failures. Invalid requests rejected before execution do not move the robot.
 
-The default six tools are `initialize`, `look`, `act`, `finish`, `list_skills`, and
-`read_skill`; minimal exposes the first four. `initialize` returns the prepared
+The default seven tools are `initialize`, `look`, `act`, `finish`, `list_skills`,
+`read_skill`, and `task_notes`; minimal exposes the first four. `initialize` returns the prepared
 episode's current snapshot without resetting or rendering again. Each act/look
 response includes its resulting four-camera RGB, so the next decision uses that
 response directly. Use the wait action when simulation time must pass. Final
 verification can use the last action's images without an additional capture.
-Four workflow documents cover manipulation, exploration, pick and
-place, and recovery. They guide the model; they do not secretly run actions.
+Workflow documents cover manipulation, exploration, pick and place, recovery, and
+[hierarchical goal decomposition](hierarchical_goal_planning.md). The goal skill
+teaches L1/L2 outcome planning and a separate current L3 action plan, saved as
+versioned model-authored task_notes. The no-goal-skill control has the same note
+store and tools. Documents guide the model; they do not secretly run actions.
 
 ## FastMCP and concurrency
 
@@ -186,4 +189,4 @@ Architecture references were inspected at Jinkai's `jinkai/harness` commit
 FastMCP registration, and the native tool-call/image-history loop. The implementations
 here retain OmniGibson's owner-thread model, RGB-only policy boundary, existing
 executor profiles and independent evaluator. Navigation environments are not imported
-or modified; explicit planning and memory remain deferred.
+or modified; task_notes now provides explicit persistent model-authored planning state.

@@ -29,6 +29,8 @@ def main():
     p.add_argument('--instruction');p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
+    p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
+    p.add_argument('--require-task-notes',action='store_true',help='Require model-authored working notes before the first action; same rule in both comparison arms')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
@@ -67,7 +69,8 @@ def main():
         with startup_stage(a.output, 'first_observation_and_harness'):
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
                                                           wall_seconds=a.wall_seconds),profile=a.agent_profile,
-                                  agent_step_limit=a.max_agent_steps)
+                                  agent_step_limit=a.max_agent_steps,goal_skill=a.goal_skill,
+                                  require_task_notes=a.require_task_notes)
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)

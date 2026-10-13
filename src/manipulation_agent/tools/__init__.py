@@ -1,11 +1,11 @@
 """Public RGB agent tools. Historical oracle contracts are not this catalog."""
 from dataclasses import replace
 from .base import REGISTRY, ToolMetadata
-from . import observation, action, planning, memory, skills, session, surround
+from . import observation, action, planning, memory, skills, session, surround, notes
 from copy import deepcopy
 
 MINIMAL_TOOLS = frozenset({'initialize', 'look', 'act', 'finish'})
-SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill'}
+SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill', 'task_notes'}
 
 # Execution hints, not additional permission gates or changed input contracts.
 _METADATA = {
@@ -16,6 +16,7 @@ _METADATA = {
     'finish': ToolMetadata(closes_episode=True),
     'list_skills': ToolMetadata(read_only=True, idempotent=True),
     'read_skill': ToolMetadata(read_only=True, idempotent=True),
+    'task_notes': ToolMetadata(),
     'start_observation': ToolMetadata(read_only=True),
     'get_observation': ToolMetadata(read_only=True),
     'cancel_observation': ToolMetadata(read_only=True),

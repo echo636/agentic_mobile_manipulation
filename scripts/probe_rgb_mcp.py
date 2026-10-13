@@ -30,7 +30,7 @@ async def probe(output):
         params=StdioServerParameters(command=sys.executable,args=['-m','manipulation_agent.mcp_server','--bridge',url],env=dict(os.environ))
         async with stdio_client(params) as (read,write):
             async with ClientSession(read,write) as client:
-                await client.initialize();tools=await client.list_tools();assert {t.name for t in tools.tools}=={'initialize','look','act','finish','list_skills','read_skill'}
+                await client.initialize();tools=await client.list_tools();assert {t.name for t in tools.tools}=={'initialize','look','act','finish','list_skills','read_skill','task_notes'}
                 added={'wipe','cut','soak','sweep','spray','spread','hang','vacuum'}
                 act_schema=next(t.inputSchema for t in tools.tools if t.name=='act')
                 assert added <= set(act_schema['properties']['primitive']['enum'])

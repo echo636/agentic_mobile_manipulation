@@ -14,9 +14,16 @@ from .tools import REGISTRY, tool_specs
 from .tool_context import ToolContext
 from .surround import SurroundJobs
 from .closure import EpisodeClosure
+from .task_notes import TaskNotes
 
 class VisionHarness:
-    def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None):
+    def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
+                 goal_skill='hierarchical', require_task_notes=False):
+        if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
+        if require_task_notes and profile not in {'skills','workflow'}:
+            raise ValueError('Task notes require skills or workflow profile')
+        self.goal_skill=goal_skill;self.require_task_notes=require_task_notes
+        self.task_notes=TaskNotes(recorder.output)
         if agent_step_limit is not None and (type(agent_step_limit) is not int or agent_step_limit<=0):
             raise ValueError('agent_step_limit must be a positive integer')
         if agent_step_limit is not None and budget.wall_seconds is not None:
@@ -44,8 +51,9 @@ class VisionHarness:
         if profile == 'workflow':
             self.plan,self.memory=[],{}
         if profile in {'skills','workflow'}:
-            self.skills=SkillLibrary(recorder.output)
+            self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition'} if goal_skill=='none' else ())
         recorder.run['config']['agent_profile'] = profile
+        recorder.run['config'].update(goal_skill=goal_skill,require_task_notes=require_task_notes)
         recorder.run['episode_deadline_unix']=self.deadline.unix
         self.deadline.check()
         self.snapshot=self.refresh()
@@ -79,7 +87,9 @@ class VisionHarness:
 
     def initialize(self):
         """Deliver the ready episode snapshot without reset, physics or rendering."""
-        return {'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
+        result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
+        if 'task_notes' in self.catalog: result['notes']=self.task_notes.read()
+        return result
 
     def refresh(self):
         self.snapshot=public_observation(self.backend.observe(),self.revision)
@@ -143,6 +153,8 @@ class VisionHarness:
             if name=='act' and isinstance(arguments,dict):
                 arguments={'placement_yaw_degrees':None,'wait_seconds':None,**arguments}
             validate(arguments,self.catalog[name]['inputSchema'])
+            if name in {'act','look'} and self.require_task_notes and not self.task_notes.state['content']:
+                raise SkillError('task_notes_required','Before acting, write your intended approach with task_notes. Choose your own note format.')
             if name!='finish': self.deadline.check()
             if name!='finish' and (
                     (self.legacy_limits_active and self.calls>self.budget.max_calls) or

@@ -8,7 +8,7 @@ from .contracts import SkillError
 from .records import write_json
 
 class SkillLibrary:
-    def __init__(self, output: Path):
+    def __init__(self, output: Path, *, exclude=()):
         root = Path(__file__).resolve().parents[2] / "skills"
         if not root.is_dir():
             root = Path(sys.prefix) / "share/manipulation-agentic-system/skills"
@@ -16,6 +16,7 @@ class SkillLibrary:
         digest = hashlib.sha256()
         for main in sorted(root.glob("*/SKILL.md")):
             name = main.parent.name
+            if name in exclude: continue
             files = [main, *sorted((main.parent / "references").glob("*.md"))]
             text = main.read_text()
             desc = next((line.split(":",1)[1].strip() for line in text.splitlines() if line.startswith("description:")), "")

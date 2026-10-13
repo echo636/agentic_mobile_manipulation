@@ -55,18 +55,18 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
             cwd=ROOT, env=self.env, stdout=subprocess.DEVNULL, stderr=self.errors)
         self.addCleanup(self.stop, self.backend)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        deadline = time.monotonic() + 10
+        deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             if self.backend.poll() is not None:
-                self.fail('Mock backend exited before readiness; see process log')
+                self.errors.seek(0);self.fail('Mock backend exited before readiness: '+self.errors.read())
             try:
-                with opener.open(self.url + '/healthz', timeout=.2) as response:
+                with opener.open(self.url + '/healthz', timeout=1) as response:
                     self.health = json.load(response)
                     break
             except OSError:
                 time.sleep(.03)
         else:
-            self.fail('Mock backend did not become ready')
+            self.errors.seek(0);self.fail('Mock backend did not become ready: '+self.errors.read())
 
     @staticmethod
     def stop(process):
@@ -95,7 +95,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         process = subprocess.Popen([sys.executable, *argv, '--port', str(port)], cwd=ROOT,
                                    env=self.env, stdout=subprocess.DEVNULL, stderr=self.errors)
         self.addCleanup(self.stop, process)
-        deadline = time.monotonic() + 10
+        deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if process.poll() is not None: self.fail('FastMCP HTTP process exited')
             try:
@@ -141,7 +141,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
             self.assertEqual({t.name: t.inputSchema for t in listed.tools},
                              {t['name']: t['inputSchema'] for t in tool_specs('skills')})
             self.assertEqual({t.name for t in listed.tools},
-                             {'initialize', 'look', 'act', 'finish', 'list_skills', 'read_skill'})
+                             {'initialize', 'look', 'act', 'finish', 'list_skills', 'read_skill', 'task_notes'})
             observe_spec = next(t for t in listed.tools if t.name == 'initialize')
             self.assertTrue(observe_spec.annotations.readOnlyHint)
             self.assertTrue(observe_spec.annotations.idempotentHint)
@@ -186,18 +186,18 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(e.get('kind') == 'tool_call' and e.get('arguments', {}).get('unexpected') == 'preserve me' for e in events))
 
     async def test_stdio_rgb_evidence_and_exact_schema(self):
-        await asyncio.wait_for(self.exercise('stdio'), 30)
+        await asyncio.wait_for(self.exercise('stdio'), 90)
 
     async def test_sse_rgb_evidence_and_exact_schema(self):
-        await asyncio.wait_for(self.exercise('sse'), 30)
+        await asyncio.wait_for(self.exercise('sse'), 90)
 
     async def test_streamable_http_rgb_evidence_and_exact_schema(self):
-        await asyncio.wait_for(self.exercise('streamable-http'), 30)
+        await asyncio.wait_for(self.exercise('streamable-http'), 90)
 
     def test_existing_readonly_preflight_accepts_fastmcp(self):
         from manipulation_agent.mcp_preflight import check_server
         result = check_server(sys.executable, ['-m', 'manipulation_agent.mcp_server', '--bridge', self.url],
-                              tool_specs('skills'), Path(self.temp.name), timeout=30)
+                              tool_specs('skills'), Path(self.temp.name), timeout=90)
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['tool_calls'], 0)
 

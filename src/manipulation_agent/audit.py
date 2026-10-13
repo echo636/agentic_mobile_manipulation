@@ -71,6 +71,8 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
             run.get('source', {}).get('dirty') is False and controller.get('source', {}).get('dirty') is False
             and bool(run['source'].get('source_sha256'))
             and run['source']['source_sha256'] == controller.get('source', {}).get('source_sha256'))
+        if 'goal_skill' in run.get('config',{}):
+            checks['same_goal_skill_mode'] = run['config']['goal_skill'] == controller.get('goal_skill')
         profile = run.get('config', {}).get('agent_profile', 'workflow')
         if profile in {'workflow','skills'}:
             manifest = run_dir / 'skill_manifest.json'

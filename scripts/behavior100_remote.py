@@ -224,6 +224,8 @@ def main():
           '--port',str(a.port),'--controller','codex:'+manifest['model'],
           '--max-actions',str(manifest['max_actions']),'--max-sim-steps',str(manifest['max_sim_steps']),
           '--output',str(a.data_root/'runs'/row['run_id'])]
+    args+=['--goal-skill',manifest.get('goal_skill','hierarchical')]
+    if manifest.get('require_task_notes'): args.append('--require-task-notes')
     if manifest.get('episode_budget_policy')=='agent_steps':
         args+=['--max-agent-steps',str(manifest['max_agent_steps'])]
     os.execv(sys.executable,args)

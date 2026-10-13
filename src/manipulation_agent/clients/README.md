@@ -9,7 +9,7 @@ The controller passes `vision_policy.system_prompt(profile)` unchanged to each
 adapter. Codex receives it as developer instructions, OpenCode as the configured
 agent prompt, and Kimi through its project-local system.md. Native Responses uses
 the same function. The current minimal catalog is initialize/look/act/finish;
-skills adds list_skills/read_skill. Initialize supplies the prepared episode's
+skills adds list_skills/read_skill/task_notes. Goal-skill mode is supplied by the controller CLI to the common prompt builder. Initialize supplies the prepared episode's
 current four-camera RGB, and act/look supply the next images in their results.
 Clients need no separate capture request or polling loop. Legacy observe and
 observation-job calls remain parseable in historical traces and are exposed only

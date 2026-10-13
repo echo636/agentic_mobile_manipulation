@@ -156,7 +156,7 @@ class GTBackendTests(unittest.TestCase):
         self.assertTrue(initial['initialized'])
         self.assertEqual(b._render_rgb_views.call_count, 1)
         self.assertEqual(initial['observation']['capture']['capture_id'], 'capture-00001')
-        self.assertEqual(set(h.catalog), {'initialize', 'look', 'act', 'finish', 'list_skills', 'read_skill'})
+        self.assertEqual(set(h.catalog), {'initialize', 'look', 'act', 'finish', 'list_skills', 'read_skill', 'task_notes'})
         first_image = initial['observation']['images'][1]
         target = {'image_ref': first_image['image_ref'], 'point': [.5, .5]}
         action = h.call('act', {'primitive': 'navigate_to', 'target': target, 'revision': 0}, 'navigate')

@@ -1,42 +1,41 @@
 ---
 name: goal-decomposition
-description: Decompose a manipulation goal into observable subgoals that cover its requirements and order the necessary prerequisites, especially when no procedure is given.
+description: Turn a brief or ambiguous manipulation instruction into a revisable two-level goal tree, then plan and execute only the current subgoal's concrete steps using RGB evidence.
 ---
-# Decompose a goal from RGB
+# Maintain goals, plan the next subgoal
 
-Use this skill before acting on a multi-stage or underspecified goal, and when new evidence changes its decomposition. Available evidence is the instruction, current four-camera RGB, conversation history, and tool feedback. There is no hidden inventory, task recipe, evaluator query, or separate planning tool.
+Use the instruction, returned RGB and action feedback. No hidden BDDL, inventory, recipe, evaluator or oracle state is available. The goal tree is your working interpretation, not ground truth. Keep it in `task_notes` as JSON using the format below. `task_notes` only stores your text; it does not plan, validate completion, or execute actions.
 
-## Identify the required end state
+## L1: interpret the requested outcome
 
-Extract the task's objects or material, required changes, destinations or spatial relations, quantities, and final device/access states. Preserve qualifiers such as all, each, exactly, the same container, separate containers, and do not mix. A requested relation is not interchangeable with a nearby or easier arrangement. Distinguish a final requirement from a temporary step needed to achieve it.
+After initialize, interpret what the user wants to be true when the task is over. Preserve the original request, object groups, quantities, destinations, spatial relations and required final device/access states. Separate explicit conditions from assumptions inferred from ordinary task meaning and visible context. A short phrase is a goal to interpret, not an instruction to perform one arbitrary action.
 
-Separate explicit requirements from assumptions. For a broad goal, use ordinary task meaning and visible context; briefly state any assumption that changes what counts as completion. Missing steps do not mean missing goals. Do not invent exact counts, hidden destinations, or benchmark-specific recipes. If quantity is unspecified, retain the relevant group as the scope and identify its members from observations; do not replace a plural goal with the first visible item. Missing objects or uncertain destinations become identification/search subgoals, not guessed facts.
+For an unspecified detail, choose the least additional commitment consistent with the request and scene. Prefer functional suitability before convenience. Do not invent exact counts, invisible objects or a benchmark-specific recipe. For a plural or group task, retain the full relevant group: discover members from RGB instead of treating the first item as the entire scope. Missing identity, scope or destination is an uncertainty to resolve. Do not add unrelated cleanup or optional processing.
 
-Choose an unspecified destination by its function in the task, then by access. Temporary staging, grouping for use, and final storage serve different purposes. Check that a candidate object or device fits the required role; similar appearance or a successful open/toggle action does not establish identity or capability. When that distinction affects the plan, resolve it from RGB and informative feedback before committing dependent work. Do not add unrelated tidying or optional processing steps.
+Write observable completion criteria for L1. These criteria anchor revisions: an execution obstacle can change the means, but cannot erase the requested result. If a new observation corrects an assumption, record the change and preserve explicit requirements.
 
-## Form subgoals that cover the goal
+## L2: decompose into result-level subgoals
 
-Define a subgoal by an observable result: which object or group must have which state or relation, to which destination if relevant. Include how that result can be checked. Avoid vague steps such as "handle the items" and bare tool lists such as "grasp, place, finish."
+Create a child subgoal when a distinct intermediate or final result needs its own completion check. Each child records its result, the L1 criteria it serves, necessary dependencies, status and evidence. Required results, enabling prerequisites and discovery can all be children. There are exactly two levels in the goal tree; dependencies between children describe ordering without adding more tree depth.
 
-Split when the intended result, target group, destination, or required capability changes. Keep repeated equivalent transfers as one group subgoal with the required count or allocation; execute its members individually as needed. A simple task may have one subgoal. There is no fixed number of steps and no need to narrate private reasoning.
+Use the granularity the task needs. One child can cover a simple task. Equivalent transfers can share one child, with progress on individual members tracked in its evidence. Do not fill the tree with atomic grasp/navigate/place commands or force a fixed number of children. Each child must achieve an L1 criterion or enable another child; every L1 criterion needs coverage.
 
-Before the first action, give a compact outline in ordinary assistant text: the intended end state, ordered result-level subgoals, and any unresolved prerequisite needed next. Cover every explicit outcome, including required final closures or device states. Check that each requirement appears in the outline and that each added step either achieves a requirement or enables one. Do not require a JSON report, plan file, or extra tool call.
+Check prerequisites that affect ordering: identify the object and destination; open access with an empty hand before carrying through it; obtain a compatible tool before processing; preserve finished arrangements and leave final closures/device states until dependent work is done. Starting a device is a process prerequisite, not proof of completed cooking or washing. Search or capability uncertainty may require a discovery subgoal. Do not plan unsupported operations as though they were available.
 
-## Order only the necessary prerequisites
+Before the first act/look, save the initial L1/L2 tree and the current child's L3 plan with task_notes. Read [references/working-state.md](references/working-state.md) for the compact format and update example. The public record should show what you intend to achieve before execution begins.
 
-For the next subgoal, check whether its object and destination are identified, access is available, and the needed hand or compatible tool is ready. Add work only for missing or uncertain prerequisites; do not reopen an already open container or move an item already correctly placed merely to follow a template.
+## L3: plan only the active child's steps
 
-- Prepare closed access while the hand is free before carrying an item through it. Prepare a compatible tool before a process that needs it.
-- Choose a receptacle for the full intended group and its least flexible item. When useful and consistent with the final goal, prepare or position a visibly portable receptacle before repeated transfers; do not assume fixed furniture can move.
-- For processing tasks, distinguish preparation, processing, and the required resulting state. Starting an appliance is not completion of heating or cleaning; include necessary process time and a result check. Do not invent a particular recipe absent from the goal or available evidence.
-- Keep independent subgoals flexible. Prefer an order that avoids closing access too early or undoing a result already established. A convenient order must preserve all required objects, counts, and relations.
+Choose an unfinished child whose necessary dependencies are satisfied. Expand only this child into a short, revisable sequence of immediate actions and checks in `active.steps`, outside the goal tree. Other children keep outcome descriptions until their turn. If discovery is needed before manipulation, make that the active work.
 
-Expand only the next subgoal into actions using the newest RGB. Explicitly navigate when needed and reselect the target afterward; a feasible navigation approach does not guarantee manipulation reach. Do not precompute future pixels. Read visual-exploration for search, pick-and-place for carrying, and visual-manipulation for supported operations; plan/remember/recall are unavailable.
+Choose concrete primitives using the other skills and current RGB. Do not preselect future pixels: every act target must come from the latest returned image. An approach does not guarantee manipulation reach. Resolve unexpected feedback with a changed approach, prerequisite or local step sequence rather than repeating blindly.
 
-## Revise locally and check completion
+After each action inspect its returned RGB and feedback against the active child's check. Continue the local steps while the plan is valid; writing notes after every motor action is unnecessary. Save a new note version whenever a child completes or blocks, focus changes, scope expands, an assumption is corrected, or the local approach changes materially. Include a short public reason and relevant observation/tool evidence IDs. Track completed and remaining members of repeated work.
 
-After an action, use its fresh RGB and feedback to check the current result. If an assumption fails, revise the affected object choice, prerequisite, or subgoal; use failure-recovery for execution errors. Preserve valid completed work and the original requirements. Access difficulty alone is not a reason to redefine completion or change to a functionally unsuitable destination.
+## Revise the tree without losing the task
 
-Keep a brief account of completed and remaining items in the conversation, distinguishing repeated objects by appearance and location. Use available remaining execution time and recent action durations to avoid starting infeasible rework; leave time to finish honestly.
+Keep stable child IDs. Add discovered prerequisites or missing group members; revise dependencies and local steps when evidence warrants it. Reopen a done child if its result was undone. Preserve unaffected completed work. Retire a redundant or mistaken child with a reason instead of silently deleting it. If the L1 interpretation changes, explain which assumption changed; keep explicit user criteria intact.
 
-Before finish, compare the observed results and action history with the original requirements. Check the relevant area for remaining members of a plural task. Tool completion alone does not prove correct object identity or the whole goal. Occlusion alone also does not disprove a result supported by identified-object continuity and successful operation feedback; distinguish supported inference from unresolved uncertainty, and seek another view only when it can resolve a material doubt. Report achieved only when evidence supports the whole interpreted goal; otherwise report blocked or aborted with the unresolved result. The independent official score remains unavailable.
+Statuses are pending, active, done, blocked and retired. Done means your evidence supports the child's result, not merely that a tool returned ok. A failed grasp need not invalidate the whole tree; a wrong destination may require revising multiple children. Blocked means the result remains unresolved. Use steps_remaining to prioritize required outcomes and avoid spending all 50 steps on one unchanged failure.
+
+Before finish, reconcile all L1 criteria with the current child states and available evidence, including remaining members of a group and required final states. Supported object continuity and operation feedback can complement occluded RGB; unresolved uncertainty must stay explicit. Save the final notes, then finish achieved only when the whole interpreted goal is supported; otherwise finish blocked or aborted with the remaining result. Never replace independent evaluation with your tree's done labels.

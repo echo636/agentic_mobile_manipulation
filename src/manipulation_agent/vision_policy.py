@@ -52,23 +52,27 @@ Verify every instructed item, destination, count and final door/appliance state 
 Finish with achieved/blocked/aborted and a short reason based on your visual evidence. Receive closed=true before final text.
 This is an RGB agent with ideal motor execution, not an official physical-control leaderboard submission.
 '''
-SKILLS_PROMPT = MINIMAL_PROMPT.replace(
+SKILLS_BASE_PROMPT = MINIMAL_PROMPT.replace(
     'using RGB and four tools: initialize, look, act, finish.',
-    'using front/back/left/right RGB and six tools: initialize, look, act, finish, list_skills, read_skill.').replace(
+    'using front/back/left/right RGB and seven tools: initialize, look, act, finish, list_skills, read_skill, task_notes.').replace(
     'Use the current RGB to find the instructed objects,',
-    'Read visual-manipulation/SKILL.md and goal-decomposition/SKILL.md through list_skills/read_skill before acting. Use goal-decomposition to infer observable subgoals from the instruction and current RGB, order prerequisites, and revise your approach from feedback. Read relevant skills as needed, including pick-and-place before carrying objects. Use the current RGB to find the instructed objects,').replace(
-    'There is no explicit planning tool, memory store or skill-reading phase.',
-    'There is no explicit planning tool or memory store. Skills are callable workflow documents, not autonomous executors.') + '\nYour public assistant messages and MCP calls are recorded verbatim for replay. There is no extra decision-summary schema or required language. Use normal conversation history to track progress; plan/remember/recall are unavailable.\n'
-SKILLS_PROMPT += """
+    'Read visual-manipulation/SKILL.md through list_skills/read_skill before acting. Read relevant available skills as needed, including pick-and-place before carrying objects. Use the current RGB to find the instructed objects,').replace(
+    'There is no explicit planning tool, memory store or skill-reading phase. Your conversation retains previous RGB and tool feedback.',
+    'task_notes stores your own working text across this episode. Read with operation=read, content=null, expected_version=null; write the replacement content using the current expected_version (initially 0). Choose your own note format. Before the first act/look, write your intended approach to meeting the instruction. Keep notes useful as work progresses and read them if context is missing. Notes are your beliefs, not simulator truth.') + """
+Your public assistant messages and MCP calls are recorded verbatim for replay. Record concise plans, observations and progress; no private reasoning transcript is requested. Skills are workflow documents, not autonomous executors. Legacy update_plan/remember/recall are unavailable.
 The MCP tool catalog is checked before policy startup. If a tool seems unavailable, actually attempt initialize or list_skills and report the returned error; do not infer unavailability from an empty workspace.
 If one item or required arrangement remains uncertain, keep inspecting the available RGB, change viewpoint when useful, or finish blocked; do not silently omit it.
 Before a material or cutting action, read visual-manipulation/references/material-actions.md through read_skill.
-When execution_budget.scope is agent_steps, each new act/look attempt consumes one step, including failed attempts. Initialization, reading skills and finish do not consume action steps. Use steps_remaining to prioritize the requested results; no episode wall-time limit applies in this mode. At zero steps inspect the last returned RGB and call finish; do not attempt further actions. Tool completion still does not establish whole-task success.
+When execution_budget.scope is agent_steps, each new act/look attempt consumes one step, including failed attempts. Initialization, reading skills, task_notes and finish do not consume action steps. Use steps_remaining to prioritize the requested results; no episode wall-time limit applies in this mode. At zero steps inspect the last returned RGB, update notes if needed, and call finish; do not attempt further actions. Tool completion still does not establish whole-task success.
 """
+GOAL_SKILL_INSTRUCTION = '\nBefore the first act/look, also read goal-decomposition/SKILL.md and follow it for planning and maintaining your task notes.\n'
+SKILLS_PROMPT = SKILLS_BASE_PROMPT + GOAL_SKILL_INSTRUCTION
 SYSTEM_PROMPT = SKILLS_PROMPT
 
-def system_prompt(profile='skills'):
-    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_PROMPT,'workflow':WORKFLOW_PROMPT}[profile]
+def system_prompt(profile='skills', *, goal_skill='hierarchical'):
+    if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
+    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
+            'workflow':WORKFLOW_PROMPT}[profile]
 
 class RGBResponsesPolicy(ResponsesPolicy):
     def _request_with_observation_jobs(self, harness, payload):
@@ -81,7 +85,7 @@ class RGBResponsesPolicy(ResponsesPolicy):
             return future.result()
 
     def run(self, harness, instruction, *, image_history_captures=0):
-        loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile),
+        loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile,goal_skill=harness.goal_skill),
                               request=self._request_with_observation_jobs,
                               config=LoopConfig(max_turns=self.max_turns, max_tokens=self.max_tokens,
                                                 image_history_captures=image_history_captures))

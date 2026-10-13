@@ -819,7 +819,7 @@ class Batch:
                  '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
                  '--timeout',str(seconds if seconds is not None else 0),'--execution-clock-command-json',
                  json.dumps(self.execution_clock_command(clock_path,seconds)),
-                 '--agent-profile',self.manifest['agent_profile']]
+                 '--agent-profile',self.manifest['agent_profile'],'--goal-skill',self.manifest.get('goal_skill','hierarchical')]
             if self.manifest.get('model_reasoning_effort'):
                 cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
             if self.c.get('model_provider_profile'):
@@ -972,6 +972,7 @@ class Batch:
         self.update(row,video_validation=video['status'],observation_validation=observation['status'],evidence_alignment=audit.get('evidence_alignment','unavailable'),
                     model_finish=audit.get('model_finish','unavailable'),controller_exit=audit.get('controller_exit','unavailable'),
                     supervisor_finish_calls=audit.get('supervisor_finish_calls'),
+                    planning_metrics=replay.get('planning_metrics'),
                     model_usage=audit.get('usage'),replay_url=prefix+'replay.html',record_url=prefix+'run.json',
                     video_url=prefix+'episode.mp4' if (dest/'episode.mp4').exists() else None,
                     spectator_video_url=prefix+'spectator.mp4' if (dest/'spectator.mp4').exists() else None,
@@ -1074,7 +1075,8 @@ class Batch:
         cmd=[sys.executable,str(runtime/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
              '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
-             '--timeout',str(self.manifest['model_timeout_seconds'] or 0),'--agent-profile',self.manifest['agent_profile']]
+             '--timeout',str(self.manifest['model_timeout_seconds'] or 0),'--agent-profile',self.manifest['agent_profile'],
+             '--goal-skill',self.manifest.get('goal_skill','hierarchical')]
         if self.manifest.get('model_reasoning_effort'):
             cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
         if self.c.get('model_provider_profile'):
