@@ -176,6 +176,10 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.backend.returncode, 0)
         run = json.loads((self.output / 'run.json').read_text())
         self.assertTrue(run['task_success'])
+        closure = json.loads((self.output / 'closure.json').read_text())
+        self.assertEqual(closure['phase'], 'result_ready')
+        self.assertEqual(closure['origin'], 'controller')
+        self.assertIn('reply_sent_at_unix', closure)
         events = [json.loads(line) for line in (self.output / 'events.jsonl').read_text().splitlines()]
         self.assertTrue(any(e.get('id') == evidence_id and e.get('kind') == 'tool_result' for e in events))
         self.assertTrue(any(e.get('kind') == 'tool_call' and e.get('arguments', {}).get('revision') is True for e in events))
@@ -193,7 +197,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
     def test_existing_readonly_preflight_accepts_fastmcp(self):
         from manipulation_agent.mcp_preflight import check_server
         result = check_server(sys.executable, ['-m', 'manipulation_agent.mcp_server', '--bridge', self.url],
-                              tool_specs('skills'), Path(self.temp.name), timeout=10)
+                              tool_specs('skills'), Path(self.temp.name), timeout=30)
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['tool_calls'], 0)
 

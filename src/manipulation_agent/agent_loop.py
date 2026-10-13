@@ -169,4 +169,4 @@ class VisualToolLoop:
         canonical_event('run_finished', content={'reason': reason, 'origin': 'harness_budget'})
         harness.recorder.event('model_loop_stopped', {'reason': reason, 'cumulative_tokens': tokens})
         if not harness.closed:
-            harness.call('finish', {'outcome': 'aborted', 'reason': reason}, 'native-loop-budget-stop')
+            harness.call('finish', {'outcome': 'aborted', 'reason': reason}, 'native-loop-budget-stop', origin='supervisor')

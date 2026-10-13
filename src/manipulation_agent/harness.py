@@ -9,6 +9,7 @@ from dataclasses import asdict
 from .contracts import Backend, Budget, SkillError, tool_specs, validate
 from .deadline import EpisodeDeadline
 from .records import Recorder, write_json
+from .closure import EpisodeClosure
 
 
 class Harness:
@@ -22,6 +23,7 @@ class Harness:
         backend.deadline = self.deadline
         self.revision = self.actions = self.calls = 0
         self.closed = False
+        self.closure = EpisodeClosure(recorder.output)
         self.plan, self.memory, self.cache, self.evidence = [], {}, {}, {}
         self.schemas = {s["name"]: s["inputSchema"] for s in tool_specs()}
         self.snapshot = self._observe()
@@ -58,7 +60,7 @@ class Harness:
             self.deadline.arm_local(self.budget.wall_seconds,max_agent_steps=getattr(self,'agent_step_limit',None))
         self.sync_execution_clock()
 
-    def call(self, name: str, arguments: dict, request_id: str) -> dict:
+    def call(self, name: str, arguments: dict, request_id: str, *, origin='controller') -> dict:
         if threading.get_ident() != self.owner:
             raise RuntimeError("Simulator access must stay on its owning thread")
         fingerprint = json.dumps([name, arguments], sort_keys=True, allow_nan=False)
@@ -71,7 +73,8 @@ class Harness:
             return {"ok": False, "error": {"code": "invalid_request_id", "message": "A bounded nonempty request ID is required"}}
         self.calls += 1
         self.sync_execution_clock()
-        self.recorder.event("tool_call", {"name": name, "arguments": arguments, "request_id": request_id})
+        self.recorder.event("tool_call", {"name": name, "arguments": arguments, "request_id": request_id, "origin": origin})
+        self._call_origin = origin
         try:
             if self.closed:
                 raise SkillError("episode_closed", "This episode has already ended")
@@ -86,12 +89,14 @@ class Harness:
         except SkillError as exc:
             result = {"ok": False, "error": {"code": exc.code, "message": str(exc), "world_may_have_changed": exc.changed},
                       "observation": self.snapshot}
-        event_id = self.recorder.event("tool_result", {"name": name, "request_id": request_id, "result": result})
+        event_id = self.recorder.event("tool_result", {"name": name, "request_id": request_id, "result": result, "origin": origin})
         result["evidence_id"] = event_id
         self.evidence[event_id] = {"name": name, "ok": result["ok"], "revision": self.revision}
         self.cache[request_id] = (fingerprint, copy.deepcopy(result))
         if self.closed:
             self.recorder.render()
+        if name == 'finish' and result.get('closed'):
+            self.closure.advance('result_ready')
         return result
 
     def _tool_observe(self) -> dict:
@@ -182,6 +187,8 @@ class Harness:
         execution_finished_at = time.time()
         expired = self.deadline.unix is not None and execution_finished_at >= self.deadline.unix
         self.closed = True
+        self.closure.advance('scoring', origin=getattr(self, '_call_origin', 'controller'),
+                             execution_finished_at_unix=execution_finished_at)
         self.recorder.run.update(scoring={'status':'running'},execution_finished_at_unix=execution_finished_at,
                                  deadline_expired_at_finish=expired)
         write_json(self.recorder.output / 'run.json', self.recorder.run)
@@ -213,5 +220,6 @@ class Harness:
             result.update(timeout=True, episode_outcome='timeout', termination_reason='episode_deadline_exceeded',
                           episode_deadline_unix=self.deadline.unix)
         self.recorder.event("independent_evaluation", result)
+        self.closure.advance('persisting', scoring_completed_at_unix=evaluation_finished_at)
         self.recorder.finish(result, render=render)
         return {"closed": True, "agent_outcome": outcome}

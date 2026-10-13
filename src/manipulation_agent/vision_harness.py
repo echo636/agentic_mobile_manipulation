@@ -13,6 +13,7 @@ from .skill_runtime import SkillLibrary
 from .tools import REGISTRY, tool_specs
 from .tool_context import ToolContext
 from .surround import SurroundJobs
+from .closure import EpisodeClosure
 
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None):
@@ -34,6 +35,7 @@ class VisionHarness:
         self.legacy_limits_active=not self.unrestricted_physics
         self._video_finalized=False
         self.revision=self.actions=self.calls=0; self.closed=False
+        self.closure=EpisodeClosure(recorder.output)
         self.profile = profile
         self.surround = SurroundJobs(self)
         self.catalog = {t['name']: t for t in tool_specs(profile)}
@@ -107,7 +109,7 @@ class VisionHarness:
         return (self.agent_steps_exhausted_at is not None and
                 time.monotonic()-self.agent_steps_exhausted_at>=FINISH_GRACE_SECONDS)
 
-    def call(self,name,arguments,request_id):
+    def call(self,name,arguments,request_id, *, origin='controller'):
         if threading.get_ident()!=self.owner: raise RuntimeError('Simulator owner thread required')
         if not isinstance(request_id,str) or not request_id or len(request_id)>200:
             return {'ok':False,'error':{'code':'invalid_request_id','message':'A bounded request ID is required'}}
@@ -119,7 +121,8 @@ class VisionHarness:
             return copy.deepcopy(result)
         self.calls+=1
         self.sync_execution_clock()
-        self.recorder.event('tool_call',{'name':name,'arguments':arguments,'request_id':request_id})
+        self.recorder.event('tool_call',{'name':name,'arguments':arguments,'request_id':request_id,'origin':origin})
+        self._call_origin=origin
         if hasattr(self.backend, 'mark_video_tool'):
             self.backend.mark_video_tool(name, arguments, request_id)
         try:
@@ -168,10 +171,12 @@ class VisionHarness:
                 'remaining_seconds': round(remaining, 1),
                 'scope': 'execution_wall_time_excluding_initialization',
             }
-        event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result})
+        event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result,'origin':origin})
         result['evidence_id']=event_id
         self.evidence[event_id]={'name':'act' if name in {'act','look'} else name,'ok':result['ok'],'revision':self.revision}
         self.cache[request_id]=(fingerprint,copy.deepcopy(result))
+        if name=='finish' and result.get('closed'):
+            self.closure.advance('result_ready')
         # Batch archive / the CPU replay worker renders after the RPC returns.
         # Large evaluator records must not delay closure or cached finish replies.
         return result

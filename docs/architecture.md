@@ -125,15 +125,15 @@ returned public assistant messages and available reasoning summaries; they do no
 reconstruct unavailable internal reasoning. Model claims never override the private
 BDDL/TaskMetric result.
 
-The 30-minute benchmark execution clock starts after simulator initialization and
-MCP setup, immediately before the model starts. Initialization has a separate
-watchdog. Native checks are cooperative; an external supervisor enforces process
-limits when native code cannot return. Source and protocol changes are recorded
-per attempt and do not rewrite historical benchmark scores.
+New benchmark batches use 50 agent act/look attempts without an episode wall-time
+deadline. The execution clock starts after simulator initialization and MCP setup.
+Initialization and shutdown have separate watchdogs. Historical time-budget batches
+retain their configured execution deadline. Source and protocol changes are
+recorded per attempt and do not rewrite historical benchmark scores.
 
 Current timing policy:
 
-- One execution deadline governs the model, environment steps and managed
+- In time-budget mode, one execution deadline governs the model, environment steps and managed
   placement sampling. Managed actions use remaining episode steps rather than a
   separate 700-step cap; the former managed sampling 120-second/6000-tick cap is
   also removed. Native finite sampling attempts and geometry checks remain.
@@ -152,14 +152,27 @@ Current timing policy:
   calls that never return. Network connection, image-download and SSH timeouts
   remain communication checks, not task-success criteria. A native crash may
   still make a final score unavailable; missing scores are never filled with zero.
+- An accepted finish transitions through `scoring`, `persisting`, and
+  `result_ready`; `closed=true` alone does not mean the reply is ready. Health and
+  `closure.json` expose lifecycle metadata without private evaluator results.
+  Each scoring/persistence phase receives 600 seconds by default
+  (`finish_stage_timeout_seconds`); a ready result receives 120 seconds for client
+  exit (`controller_exit_grace_seconds`). Repeated polls and coordinator adoption
+  do not renew a phase's saved watchdog. These limits apply only to shutdown.
+  A successfully sent HTTP reply is recorded separately from receipt in the model
+  transcript. Forced cleanup writes sidecars while preserving raw client records.
+- Audit schema v2 separates task success, evidence alignment, model finish receipt,
+  and controller exit. A post-finish client failure cannot overwrite a scored goal
+  failure. Explicit supervisor finish calls are tracked separately; unlabelled
+  extra calls still fail trace alignment. Existing historical results stay intact.
 - The recorder's 90-second pipe stall watchdog runs in the encoder worker.
   Bounded frame-queue backpressure checks episode cancellation every 50 ms.
   A pipe failure disables recording and preserves available evidence without
   aborting physics or replacing the independent final score.
 
-The experiment still configures 80 actions, 240 tool calls and 20,000 environment
-steps per episode. These count limits remain visible in run records; this change
-does not claim that all non-time limits have been removed. OpenCode and Kimi tool
+Legacy profiles may configure 80 actions, 240 tool calls and 20,000 environment
+steps per episode. New step-budget runs record their actual policy separately.
+OpenCode and Kimi tool
 timeout behavior remains unvalidated because their live clients are unavailable.
 
 Validation levels remain separate: CPU contracts; real MCP transport with a mock;

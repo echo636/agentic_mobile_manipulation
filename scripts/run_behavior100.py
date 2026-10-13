@@ -29,6 +29,8 @@ from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
 from manipulation_agent.startup_progress import STARTUP_POLICY, startup_progress_update
+from manipulation_agent.closure import closure_watchdog
+from manipulation_agent.clients.events import parse_events
 
 FINAL = {'passed','failed','blocked'}
 
@@ -552,6 +554,10 @@ class Batch:
             reason=('episode_deadline_exceeded' if outcome=='timeout' else
                     'task_completed' if outcome=='success' else
                     'execution_error' if row.get('failure') else
+                    'task_goal_not_satisfied' if row.get('task_success') is False and (
+                        row.get('controller_finish_acknowledged') or
+                        ((row.get('episode_closure') or {}).get('origin')=='controller' and
+                         (row.get('episode_closure') or {}).get('phase')=='result_ready')) else
                     'controller_failed' if row.get('controller_status')!='passed' else
                     'task_goal_not_satisfied')
         self.update(row,status='passed' if outcome=='success' else 'failed',episode_outcome=outcome,
@@ -592,7 +598,13 @@ class Batch:
             self.refresh_startup_progress(row)
             deadline=row.get('episode_deadline_unix')
             cutoff=deadline or (None if row.get('execution_started_at_unix') else row['startup_deadline_unix'])
-            if cutoff is not None and time.time()>=cutoff:
+            closing=self.step_episode_closed(row)
+            if closing:
+                reason=self.closure_timeout(row)
+                if reason:
+                    self.cleanup_controller_after_finish(row,process,controller,reason)
+                    break
+            elif cutoff is not None and time.time()>=cutoff:
                 if deadline:self.update(row,episode_timed_out=True)
                 else:self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
                 if deadline:
@@ -600,26 +612,73 @@ class Batch:
                     except subprocess.TimeoutExpired:self.stop_controller(process,controller)
                 else:self.stop_controller(process,controller)
                 break
-            # In step-only mode a closed/exited simulator must not leave an
-            # unbounded controller alive. This is closure, not an episode timer.
-            if cutoff is None and self.step_episode_closed(row):
-                try:process.wait(timeout=20)
-                except subprocess.TimeoutExpired:self.stop_controller(process,controller)
-                break
-            time.sleep(2 if cutoff is None else min(2,max(0,cutoff-time.time())))
+            time.sleep(2 if closing or cutoff is None else min(2,max(0,cutoff-time.time())))
             if time.monotonic()-getattr(process,'last_heartbeat',0)>30:
                 process.last_heartbeat=time.monotonic();self.update(row,heartbeat_at=now())
         return self.controller_metadata(row,controller)
 
     def step_episode_closed(self, row):
-        if self.manifest.get('episode_budget_policy')!='agent_steps':return False
+        if not row.get('port'):return False
         last=getattr(self._worker_local,'closure_poll',None);current=time.monotonic()
-        if last and last[0]==row['run_id'] and current-last[1]<10:return False
+        known=row.get('episode_closure') or {}
+        if last and last[0]==row['run_id'] and current-last[1]<2:
+            return known.get('phase','running')!='running'
         self._worker_local.closure_poll=(row['run_id'],current)
         health=self.health(row['port'])
-        if health is not None:return bool(health.get('closed'))
+        if health is not None:
+            if not health.get('closed'):return False
+            state=health.get('closure') or {'phase':'legacy_closed'}
+            # An early closed flag is not a completed evaluation or reply.
+            if state.get('phase')=='running':state={'phase':'legacy_closed'}
+            if state!=known:self.update(row,episode_closure=state)
+            return True
         state=self.unit_state(row['simulator_unit'])
-        return state.get('ActiveState') in {'inactive','failed'} and str(state.get('MainPID'))=='0'
+        exited=state.get('ActiveState') in {'inactive','failed'} and str(state.get('MainPID'))=='0'
+        if exited:
+            if known.get('phase')!='result_ready':
+                self.update(row,episode_closure={**known,'phase':'simulator_exited'})
+            return True
+        # A transient health failure must not erase observed shutdown progress.
+        return known.get('phase','running')!='running'
+
+    def closure_timeout(self, row):
+        previous=dict(row.get('closure_watchdog') or {})
+        reason=closure_watchdog(row,now=time.time(),
+            stage_seconds=self._config.get('finish_stage_timeout_seconds',600),
+            client_seconds=self._config.get('controller_exit_grace_seconds',120))
+        if previous!=row.get('closure_watchdog'):
+            self.update(row,closure_watchdog=row['closure_watchdog'])
+        return reason
+
+    def cleanup_controller_after_finish(self,row,process,controller,reason,wrapper_pid=None):
+        cleanup={'status':'forced','reason':reason,'at':now(),
+                 'episode_closure':row.get('episode_closure')}
+        self.update(row,controller_cleanup=cleanup)
+        write_json(controller/'controller_cleanup.json',cleanup)
+        self.stop_controller(process,controller,wrapper_pid=wrapper_pid)
+
+    def record_controller_end(self,row,controller,metadata):
+        """Keep original client metadata; record receipt and cleanup separately."""
+        receipt=bool(metadata.get('formal_finish_observed'))
+        evidence_error=None
+        try:
+            client=self.manifest.get('controller_client','codex_cli').removesuffix('_cli')
+            receipt=receipt or parse_events(controller/'model_events.jsonl',client).formal_finish_observed
+        except (OSError,ValueError,TypeError) as exc:
+            evidence_error=type(exc).__name__
+        status=metadata.get('status')
+        if status in {None,'running'}:
+            status='terminated' if row.get('controller_cleanup') else 'exited_without_final_metadata'
+        fields={'controller_pid':metadata.get('pid'),'controller_status':status,
+                'controller_timeout':bool(metadata.get('timeout')),
+                'model_duration_seconds':metadata.get('duration_seconds'),
+                'controller_finish_acknowledged':receipt}
+        self.update(row,**fields)
+        write_json(controller/'controller_closure.json',{
+            'at':now(),'formal_finish_observed':receipt,'process_status':status,
+            'exit_code':metadata.get('exit_code'),'cleanup':row.get('controller_cleanup'),
+            'evidence_error':evidence_error})
+        return {**metadata,'formal_finish_observed':receipt}
 
     def refresh_startup_progress(self, row):
         """Read actual remote milestones, never mistake polling for progress."""
@@ -773,9 +832,8 @@ class Batch:
                 self.wait_controller(row,process,controller)
                 self.update(row,controller_wrapper_exit_code=process.returncode,stage='finishing')
             metadata=self.controller_metadata(row,controller)
-            self.update(row,controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),
-                controller_timeout=bool(metadata.get('timeout')),model_duration_seconds=metadata.get('duration_seconds'))
             if not metadata:self.update(row,failure='Controller metadata unavailable',failure_stage='controller_launch')
+            metadata=self.record_controller_end(row,controller,metadata)
             self.finish_and_wait(row,metadata)
         except Exception as exc:
             deadline=row.get('episode_deadline_unix')
@@ -807,21 +865,32 @@ class Batch:
         return (controller,remote_run) if own_unit else None
 
     def finish_and_wait(self, row, metadata):
-        """Execution deadline is fixed; score/cleanup receives a separate grace."""
-        now_unix=time.time();deadline=row.get('episode_deadline_unix') or (now_unix if row.get('execution_started_at_unix') else row.get('startup_deadline_unix')) or now_unix
-        end=min(deadline+row.get('cleanup_grace_seconds',120),now_unix+row.get('cleanup_grace_seconds',120))
-        if not metadata.get('formal_finish_observed') and now_unix<end:
+        """An accepted finish gets time to score, persist, reply and exit."""
+        state=self.unit_state(row['simulator_unit'])
+        if state.get('ActiveState') in {'inactive','failed'} and str(state.get('MainPID'))=='0':return
+        health=self.health(row['port'])
+        known=(row.get('episode_closure') or {}).get('phase','running')!='running'
+        if not metadata.get('formal_finish_observed') and not (health or {}).get('closed') and not known:
             self.update(row,supervisor_intervention=True,stage='finishing')
-            timeout=max(1,end-time.time()-10)
+            timeout=self._config.get('finish_stage_timeout_seconds',600)
             code=("from manipulation_agent.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{row["port"]}')+
-                ",'finish',{'outcome':'aborted','reason':'Controller ended or episode deadline reached'},'batch-supervisor-finish',timeout="+str(timeout)+"))")
+                ",'finish',{'outcome':'aborted','reason':'Controller ended or episode deadline reached'},'batch-supervisor-finish',timeout="+str(timeout)+",origin='supervisor'))")
             result=self.ssh(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],'-c',code],timeout=timeout+5)
             (self.root/'logs'/f'{row["run_id"]}_forced_finish.log').write_text(result.stdout+result.stderr)
             self.update(row,supervisor_finish_exit_code=result.returncode)
-        while time.time()<end:
+        fallback_end=time.time()+self._config.get('finish_stage_timeout_seconds',600)
+        while True:
             state=self.unit_state(row['simulator_unit'])
-            if state.get('ActiveState') in {'inactive','failed'} and state.get('MainPID')=='0':return
-            time.sleep(min(2,max(0,end-time.time())))
+            if state.get('ActiveState') in {'inactive','failed'} and str(state.get('MainPID'))=='0':return
+            if self.step_episode_closed(row):
+                reason=self.closure_timeout(row)
+                if reason:
+                    self.update(row,simulator_closure_timeout=reason)
+                    return
+            elif time.time()>=fallback_end:
+                self.update(row,simulator_closure_timeout='finish_unresponsive')
+                return
+            time.sleep(2)
 
     def archive(self,row,controller,remote_run):
         dest=self.root/'runs'/row['run_id'];dest.mkdir(exist_ok=True)
@@ -845,6 +914,8 @@ class Batch:
             write_json(dest/'termination.json',{'status':'failed','at':now(),'reason':row.get('failure') or 'Simulator ended without final recorder',
                        'unit':row['simulator_unit'],'unit_state':row.get('unit_final_state'),'final_evaluation_available':False})
         run=read_run(dest)
+        if (dest/'closure.json').exists():
+            self.update(row,episode_closure=json.loads((dest/'closure.json').read_text()))
         if row.get('outcome_provisional') and isinstance(run.get('task_success'),bool):
             self.update(row,episode_outcome=None,outcome_provisional=False,termination_reason=None)
         self.update(row,**{key:run[key] for key in ('execution_finished_at_unix','deadline_expired_at_finish',
@@ -899,6 +970,8 @@ class Batch:
         prefix='manipulation_runs/'+row['run_id']+'/'
         observation=json.loads((dest/'observation_validation.json').read_text())
         self.update(row,video_validation=video['status'],observation_validation=observation['status'],evidence_alignment=audit.get('evidence_alignment','unavailable'),
+                    model_finish=audit.get('model_finish','unavailable'),controller_exit=audit.get('controller_exit','unavailable'),
+                    supervisor_finish_calls=audit.get('supervisor_finish_calls'),
                     model_usage=audit.get('usage'),replay_url=prefix+'replay.html',record_url=prefix+'run.json',
                     video_url=prefix+'episode.mp4' if (dest/'episode.mp4').exists() else None,
                     spectator_video_url=prefix+'spectator.mp4' if (dest/'spectator.mp4').exists() else None,
@@ -935,7 +1008,13 @@ class Batch:
                 self.refresh_startup_progress(row)
                 deadline=row.get('episode_deadline_unix')
                 cutoff=deadline or (None if row.get('execution_started_at_unix') else row['startup_deadline_unix'])
-                if cutoff is not None and time.time()>=cutoff:
+                closing=self.step_episode_closed(row)
+                if closing:
+                    reason=self.closure_timeout(row)
+                    if reason:
+                        self.cleanup_controller_after_finish(row,process,controller,reason,wrapper_pid=pid)
+                        break
+                elif cutoff is not None and time.time()>=cutoff:
                     if deadline:self.update(row,episode_timed_out=True)
                     else:self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
                     if process is not None:self.stop_controller(process,controller)
@@ -944,18 +1023,10 @@ class Batch:
                         while controller_process_alive(pid,controller) and time.time()<cleanup_until:time.sleep(.2)
                         if controller_process_alive(pid,controller):self.stop_controller(None,controller,wrapper_pid=pid)
                     break
-                if cutoff is None and self.step_episode_closed(row):
-                    cleanup_until=time.time()+20
-                    while controller_process_alive(pid,controller) and time.time()<cleanup_until:time.sleep(.2)
-                    if controller_process_alive(pid,controller):
-                        if process is not None:self.stop_controller(process,controller)
-                        else:self.stop_controller(None,controller,wrapper_pid=pid)
-                    break
                 self.update(row,heartbeat_at=now());time.sleep(2)
             if process is not None:process.wait(timeout=10)
             if path.exists():metadata=self.controller_metadata(row,controller)
-            self.update(row,controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),
-                        controller_timeout=bool(metadata.get('timeout')),model_duration_seconds=metadata.get('duration_seconds'))
+            metadata=self.record_controller_end(row,controller,metadata)
             self.finish_and_wait(row,metadata)
         except Exception as exc:
             if not row.get('execution_started_at_unix') and not row.get('episode_deadline_unix') and row.get('startup_deadline_unix',float('inf'))<=time.time():

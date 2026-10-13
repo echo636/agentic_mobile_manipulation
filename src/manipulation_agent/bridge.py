@@ -16,8 +16,10 @@ from .startup_progress import startup_event
 CLOSED_REPLAY_SECONDS = 10
 
 def rpc(url: str, name: str, arguments: dict, request_id: str,
-        timeout: float = tool_wait_seconds(1800)) -> dict:
-    body = json.dumps({"name": name, "arguments": arguments, "request_id": request_id}).encode()
+        timeout: float = tool_wait_seconds(1800), *, origin='controller') -> dict:
+    payload = {"name": name, "arguments": arguments, "request_id": request_id}
+    if origin != 'controller': payload['origin'] = origin
+    body = json.dumps(payload).encode()
     request = urllib.request.Request(url.rstrip("/") + "/call", data=body,
                                      headers={"Content-Type": "application/json"})
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -42,13 +44,16 @@ def serve(harness, port: int) -> None:
             self.end_headers()
             try:
                 self.wfile.write(encoded)
+                self.wfile.flush()
+                return True
             except (BrokenPipeError, ConnectionResetError):
-                pass  # The request ID remains replayable when the client reconnects.
+                return False  # The request ID remains replayable on reconnect.
 
         def do_GET(self):
             if self.path == "/healthz":
                 catalog = harness.tool_specs() if hasattr(harness, "tool_specs") else tool_specs()
                 self.send(200, {"ready": True, "closed": harness.closed, "tools": catalog,
+                                "closure": harness.closure.snapshot(),
                                 "rpc_timeout_seconds":rpc_timeout})
             elif self.path.startswith("/image/") and hasattr(harness, "image_bytes"):
                 ref = self.path.removeprefix("/image/")
@@ -75,8 +80,12 @@ def serve(harness, port: int) -> None:
                 if not 0 < length <= 65536:
                     raise ValueError("Invalid request size")
                 body = json.loads(self.rfile.read(length))
-                if not isinstance(body, dict) or set(body) != {"name", "arguments", "request_id"}:
+                if not isinstance(body, dict) or set(body)-{'origin'} != {"name", "arguments", "request_id"}:
                     raise ValueError("Expected name, arguments and request_id")
+                if body.get('origin','controller') not in {'controller','supervisor'}:
+                    raise ValueError('Invalid call origin')
+                if body.get('origin')=='supervisor' and body['name']!='finish':
+                    raise ValueError('Supervisor may only close an episode')
                 if not isinstance(body["name"], str) or not isinstance(body["arguments"], dict) or not isinstance(body["request_id"], str):
                     raise ValueError("Invalid request types")
                 future = concurrent.futures.Future()
@@ -90,7 +99,8 @@ def serve(harness, port: int) -> None:
             except concurrent.futures.TimeoutError:
                 # Do not claim cancellation: the action may already be running.
                 return self.send(504, {"error": "outcome_unknown", "retry_with_same_request_id": True})
-            self.send(200, result)
+            if self.send(200, result) and body['name']=='finish' and result.get('closed'):
+                harness.closure.reply_sent()
 
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
@@ -109,11 +119,11 @@ def serve(harness, port: int) -> None:
                 if time.monotonic() - closed_at > CLOSED_REPLAY_SECONDS:
                     break
             elif harness.deadline.expired:
-                harness.call('finish', {'outcome':'aborted','reason':'Episode wall-clock deadline exhausted'}, 'episode-deadline-finish')
+                harness.call('finish', {'outcome':'aborted','reason':'Episode wall-clock deadline exhausted'}, 'episode-deadline-finish', origin='supervisor')
             elif hasattr(harness,'agent_step_closure_due') and harness.agent_step_closure_due():
-                harness.call('finish', {'outcome':'aborted','reason':'Agent step budget exhausted; controller did not finish during closure grace'}, 'agent-step-budget-finish')
+                harness.call('finish', {'outcome':'aborted','reason':'Agent step budget exhausted; controller did not finish during closure grace'}, 'agent-step-budget-finish', origin='supervisor')
             elif harness.budget.wall_seconds is not None and not harness.deadline.managed and time.monotonic() - harness.started > harness.budget.wall_seconds:
-                harness.call("finish", {"outcome": "aborted", "reason": "Service wall-clock budget exhausted"}, "service-timeout")
+                harness.call("finish", {"outcome": "aborted", "reason": "Service wall-clock budget exhausted"}, "service-timeout", origin='supervisor')
             if hasattr(harness, 'tick_background') and not harness.closed and not harness.deadline.stop_requested:
                 harness.tick_background()
             try:
@@ -122,7 +132,7 @@ def serve(harness, port: int) -> None:
             except queue.Empty:
                 continue
             try:
-                result = harness.call(body["name"], body["arguments"], body["request_id"])
+                result = harness.call(body["name"], body["arguments"], body["request_id"], origin=body.get('origin','controller'))
             except Exception as exc:
                 future.set_result({"ok": False, "error": {"code": "runtime_failure", "type": type(exc).__name__}})
                 raise

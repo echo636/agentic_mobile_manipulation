@@ -16,8 +16,14 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
     run = json.loads((run_dir / 'run.json').read_text())
     controller = json.loads((controller_dir / 'controller.json').read_text())
     sim_events = [json.loads(s) for s in (run_dir / 'events.jsonl').read_text().splitlines()]
+    supervisor_calls = [e for e in sim_events if e.get('kind')=='tool_call' and e.get('origin')=='supervisor']
+    # Only explicitly attributed supervisor closure is excluded. Unknown or
+    # unlabelled calls still have to match the controller trace exactly.
+    model_sim_events = [e for e in sim_events if not (
+        e.get('origin')=='supervisor' and e.get('name')=='finish' and
+        e.get('kind') in {'tool_call','tool_result'})]
     model_events = [json.loads(s) for s in event_path(controller_dir).read_text().splitlines()]
-    sim_calls = [{'name': e['name'], 'arguments': e['arguments']} for e in sim_events if e['kind'] == 'tool_call']
+    sim_calls = [{'name': e['name'], 'arguments': e['arguments']} for e in model_sim_events if e['kind'] == 'tool_call']
     calls = []; unexpected = []; usage = {}; closed = False
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
     if rgb:
@@ -51,6 +57,7 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         'real_controller_finished': controller.get('status') == 'passed' and controller.get('exit_code') == 0,
         'formal_finish_in_model_trace': closed,
         'only_allowed_tools': not unexpected,
+        'supervisor_only_closed_episode': all(e['name']=='finish' for e in supervisor_calls),
         'controller_calls_match_simulator_exactly': calls == sim_calls and bool(calls),
         'same_source_commit': same_commit,
         'independent_task_success': run.get('task_success') is True,
@@ -58,7 +65,7 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
     }
     rgb_evidence = {}
     if rgb:
-        rgb_evidence = audit_rgb_transport(run_dir, sim_events, model_events)
+        rgb_evidence = audit_rgb_transport(run_dir, model_sim_events, model_events)
         checks.update(rgb_evidence.pop('checks'))
         checks['same_clean_source_digest'] = (
             run.get('source', {}).get('dirty') is False and controller.get('source', {}).get('dirty') is False
@@ -78,10 +85,15 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         else:
             checks['minimal_profile_on_both_sides'] = controller.get('agent_profile') == 'minimal'
             checks['no_workflow_tools_called'] = all(c['name'] in catalog for c in calls)
-    evidence_ok = all(v for k, v in checks.items() if k not in {'independent_task_success', 'official_task_success'})
-    return {'schema_version': 1, 'audited_at': now(), 'run_id': run['run_id'], 'model': controller['model'],
+    evidence_ok = all(v for k, v in checks.items() if k not in {
+        'independent_task_success', 'official_task_success',
+        'real_controller_finished', 'formal_finish_in_model_trace'})
+    return {'schema_version': 2, 'audited_at': now(), 'run_id': run['run_id'], 'model': controller['model'],
             'status': 'passed' if all(checks.values()) else 'failed',
             'evidence_alignment': 'passed' if evidence_ok else 'failed',
+            'model_finish': 'passed' if closed else 'failed',
+            'controller_exit': 'passed' if checks['real_controller_finished'] else 'failed',
+            'supervisor_finish_calls': len(supervisor_calls),
             'task_success': run.get('task_success'), 'checks': checks, 'unexpected_items': unexpected,
             'model_tool_calls': len(calls), 'usage': usage,
             'rgb_evidence': rgb_evidence,
