@@ -66,7 +66,16 @@ macro particles such as popcorn, not fluid isosurfaces or micro point instancers
 
 Controlled carry snapshots existing macro particles inside the carried
 assembly's annotated container volumes, including nested rigid containers.
-Particle poses follow their own container link through grasp, navigation and
+Grasp also captures particles supported by collision surfaces on the selected
+assembly, such as diced food on a cutting board. Short downward collision probes
+sample the lower hemisphere within the particle contact radius plus OG's contact
+tolerance, including off-center pile contacts. Each probe respects the nearest
+upward-facing collision. Lower particles already owned by the assembly
+extend this support to piles, including mixed materials. Intervening rigid
+objects block selection; neighboring table particles, side contacts, and
+disconnected floating particles do not follow merely because they are nearby.
+Annotated containment takes priority over surface support.
+Particle poses follow their own supporting link through grasp, navigation and
 placement; unrelated particles are untouched. Stable prim paths survive index
 reordering, while deleted particles or replaced systems invalidate the carry
 instead of restoring consumed material. Rejected placements restore the carry
@@ -76,6 +85,10 @@ Particles follow the container through placement sampling and settling;
 successful placement and
 release clear the carry constraint and resume particle physics. This remains
 ideal pose actuation, and does not claim physical grasp control or fluid carry.
+Surface support is checked again after grasp and placement, with the original
+contact probe transformed in the supporting link's frame. Carrying a board
+does not pour or scrape its contents into another object: no transfer primitive
+is added, and `spread` retains its absorbed-tool-material semantics.
 
 The 2026-10-13 private instance-301 popcorn regression reproduced the old
 255-to-0 loss on grasp. The repaired grasp, base turn, rejected-placement

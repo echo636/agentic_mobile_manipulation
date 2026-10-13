@@ -253,7 +253,7 @@ class ControlledCarry:
             return None
         dependencies=support_closure(obj,candidates,relation)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
-        particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in dependencies]])
+        particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in dependencies]],include_supported=True)
         # The entire selected assembly is leaving its old support. An outer
         # container can have recorded nested children as well as this root;
         # retaining those records would pull the children back after release.
@@ -279,7 +279,8 @@ class ControlledCarry:
         self._carry_particles=particles
         self._carry_record(status='attached',object=obj.name,contained_objects=[c.name for c,_ in contents],
                            payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
-                           contained_particles=particle_count(particles),
+                           contained_particles=particle_count(particles,'contained'),
+                           supported_particles=particle_count(particles,'supported'),
                            implementation='pose_projection_no_fixed_joint',original_position=original[0].tolist())
         self._carry_follow()
         with self._anchored_operation():
@@ -291,7 +292,8 @@ class ControlledCarry:
         verify_particles(self.env.scene,particles)
         return {'primitive':'grasp','implementation':'controlled_pose_carry','postcondition':'selected_object_held_and_finite',
                 'physical_grasp':False,'fixed_joint_created':False,'contained_rigid_objects':len(contents),
-                'contained_particles':particle_count(particles)}
+                'contained_particles':particle_count(particles,'contained'),
+                'supported_particles':particle_count(particles,'supported')}
 
     def _verify_payload(self, dependencies):
         from omnigibson.object_states import Inside,OnTop
