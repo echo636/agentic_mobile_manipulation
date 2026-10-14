@@ -78,8 +78,27 @@ def source_import_readiness(data_root):
             'packages': checks, 'simulator_imported': False}
 
 
+def runtime_storage_readiness(paths):
+    """Resolve symlinks so a roomy output mount cannot hide a full cache disk."""
+    checks = []
+    for value in dict.fromkeys(map(str, paths)):
+        path = Path(value)
+        try:
+            resolved = path.resolve(strict=True)
+            free = shutil.disk_usage(resolved).free
+            writable = resolved.is_dir() and os.access(resolved, os.W_OK | os.X_OK)
+            checks.append({'path': value, 'resolved_path': str(resolved),
+                           'free_bytes': free, 'minimum_free_bytes': 16 * 1024**3,
+                           'writable': writable,
+                           'status': 'passed' if writable and free > 16 * 1024**3 else 'blocked'})
+        except OSError as exc:
+            checks.append({'path': value, 'status': 'blocked', 'error': str(exc)})
+    return {'status': 'passed' if all(c['status'] == 'passed' for c in checks) else 'blocked',
+            'paths': checks}
+
+
 def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *, light=False,
-              reserved_host_memory_gib=0):
+              reserved_host_memory_gib=0, runtime_storage_paths=()):
     # A worker performs the full version/encoder check once. Resource polling
     # only rechecks quantities that can change while it waits for a GPU lease.
     encoding_check = None
@@ -131,6 +150,8 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
               'bridge_port_free': port_free}
     host_available=int(mem['MemAvailable'].split()[0])*1024
     checks['host_memory_including_peer_reservations']=host_available>(40+reserved_host_memory_gib)*1024**3
+    runtime_storage = runtime_storage_readiness(runtime_storage_paths)
+    checks['runtime_storage_headroom_16GiB'] = runtime_storage['status'] == 'passed'
     if not light:
         checks.update(video_encoder=encoding_check['exit_code'] == 0,
                       pinned_source_imports=imports['status'] == 'passed')
@@ -142,6 +163,7 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
             'gpu_uuid': selected[1].strip(), 'cgroup': cg, 'checks': checks, 'source_imports': imports,
             'required_working_memory_gib':memory_budget_gib,
             'quota_free_bytes':quota_free,
+            'runtime_storage':runtime_storage,
             'host_available_bytes':host_available,'reserved_host_memory_gib':reserved_host_memory_gib,
             'driver_version':selected[4].strip(),'gpu_policy':{'shared':bool(min_free_gpu_mib),'minimum_free_mib':min_free_gpu_mib},
             'validation_scope': 'dynamic_resources' if light else 'resources_and_static_runtime',
@@ -188,13 +210,15 @@ def main():
     p.add_argument('--light', action='store_true', help='Only recheck dynamic worker resources')
     p.add_argument('--deadline-unix', type=float, help='Legacy absolute task deadline; new runs arm the execution clock after initialization')
     p.add_argument('--reserved-host-memory-gib',type=int,default=0)
+    p.add_argument('--runtime-storage-path',type=Path,action='append',default=[])
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
     if a.mode == 'assets':
         selected=manifest if a.index is None else {'tasks':[manifest_task(manifest,a.index)]}
         print(json.dumps(assets(selected,a.data_root))); return
     if a.mode == 'preflight':
         print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
-                                  reserved_host_memory_gib=a.reserved_host_memory_gib))); return
+                                  reserved_host_memory_gib=a.reserved_host_memory_gib,
+                                  runtime_storage_paths=a.runtime_storage_path))); return
     row=manifest_task(manifest,a.index)
     if a.run_id:
         import re
@@ -207,7 +231,8 @@ def main():
             raise ValueError('Task deadline must be a finite epoch timestamp')
         os.environ['MAS_EPISODE_DEADLINE_UNIX'] = str(a.deadline_unix)
     result=preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
-                     reserved_host_memory_gib=a.reserved_host_memory_gib)
+                     reserved_host_memory_gib=a.reserved_host_memory_gib,
+                     runtime_storage_paths=a.runtime_storage_path)
     # Persist a second check inside the allocated unit, immediately before startup.
     check_path=a.manifest.parent/'preflight'/f"{row['run_id']}_in_unit.json"
     check_path.write_text(json.dumps(result,indent=2)+'\n')

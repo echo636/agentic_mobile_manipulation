@@ -84,7 +84,7 @@ def worker_configs(config):
     allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env',
                'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
                'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib', 'admission_delay_seconds',
-               'simulator_appdata_path'}
+               'simulator_appdata_path', 'simulator_tmpdir'}
     result=[]; ids=set(); devices=set(); ports=set()
     for lane in lanes:
         if set(lane)-allowed: raise ValueError('Unsupported worker fields')
@@ -103,6 +103,8 @@ def worker_configs(config):
             raise ValueError('Only reviewed recording options may be worker environment overrides')
         if merged.get('simulator_appdata_path') and not Path(merged['simulator_appdata_path']).is_absolute():
             raise ValueError('Simulator appdata path must be absolute')
+        if merged.get('simulator_tmpdir') and not Path(merged['simulator_tmpdir']).is_absolute():
+            raise ValueError('Simulator temporary directory must be absolute')
         ids.add(worker_id);devices.add((host,gpu));ports.add((host,port));result.append(merged)
     # Workers are candidates, not simultaneous reservations. Shared host/GPU
     # leases below constrain actual admission across both comparison arms.
@@ -112,6 +114,13 @@ def worker_configs(config):
         if worker.get('memory_budget_gib',28)>slot_size or limit<slot_size:
             raise ValueError('Worker memory exceeds shared host slot capacity')
     return result
+
+
+def runtime_storage_args(config):
+    """Check scratch/cache disks separately from potentially remote run output."""
+    paths = [config.get(key) for key in ('simulator_appdata_path', 'simulator_tmpdir')]
+    return [arg for path in dict.fromkeys(p for p in paths if p)
+            for arg in ('--runtime-storage-path', str(path))]
 
 
 def controller_process_alive(pid, output):
@@ -424,6 +433,7 @@ class Batch:
               '--port',str(self.c['base_port']+self.c['gpu']),'--data-root',self.c['data_root'],
               '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
               '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0))]
+        args += runtime_storage_args(self.c)
         lease=getattr(self._worker_local,'lease',None)
         if lease:args+=['--reserved-host-memory-gib',str(lease.other_reserved_gib(self._config.get('host_slot_memory_gib',28)))]
         if getattr(self._worker_local,'static_ready',False):args.append('--light')
@@ -753,6 +763,7 @@ class Batch:
                 '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
                 '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0)),
                 '--light']
+            command += runtime_storage_args(self.c)
             # Optional external first-fault capture; no in-process tracing thread.
             # GDB follows the helper's execv into vision_cli and preserves normal
             # exit codes. The capture script creates files only on a native fault.
@@ -763,11 +774,13 @@ class Batch:
                 fault_env='\nexport MAS_NATIVE_FAULT_DIR='+q(str(remote_run))
             overrides=''.join('\nexport '+key+'='+q(str(value)) for key,value in self.c.get('simulator_env',{}).items())
             appdata=self.c.get('simulator_appdata_path',self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))
+            scratch=('\nexport TMPDIR='+q(self.c['simulator_tmpdir'])+
+                     '\nmkdir -p "$TMPDIR"') if self.c.get('simulator_tmpdir') else ''
             launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+
                 '\nsource '+q(self.c['sim_env'])+overrides+fault_env+'\nunset MAS_EPISODE_DEADLINE_UNIX'+
                 '\nexport MAS_EXECUTION_CLOCK_PATH='+q(str(clock_path))+
                 '\nexport PYTHONPATH='+q(str(self.source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(appdata)+
-                '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
+                '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"'+scratch+'\nexec '+shlex.join(command)+'\n')
             launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
                 '-p','MemoryMax='+self.c.get('simulator_memory_max',str(self.c.get('memory_budget_gib',28))+'G'),
                 '-p','CPUQuota=800%',

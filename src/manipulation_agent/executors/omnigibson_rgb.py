@@ -98,15 +98,20 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
                     modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
                     focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
-                sensor.load(None)
-                sensor.initialize()
+                with self._startup_stage(f'surround_camera_{direction}_load'):
+                    sensor.load(None)
+                with self._startup_stage(f'surround_camera_{direction}_initialize'):
+                    sensor.initialize()
                 # Otherwise intrinsic_matrix lazily attaches a new annotator AFTER
                 # RGB readback and warms only four frames, sometimes returning a
                 # degenerate projection. Attach all before the shared barrier.
-                sensor.initialize_sensors(names='camera_params')
+                with self._startup_stage(f'surround_camera_{direction}_camera_params'):
+                    sensor.initialize_sensors(names='camera_params')
                 self.rig[direction] = sensor
             self._position_rig()
-            for _ in range(20): self.og.sim.render()
+            for frame in range(20):
+                with self._startup_stage(f'surround_camera_warmup_frame_{frame + 1:02d}'):
+                    self.og.sim.render()
         with self._startup_stage('spectator_camera_setup_and_warmup'):
             if self.record_video:
                 from ..video import EpisodeVideo
@@ -117,12 +122,16 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 self.spectator = VisionSensor(relative_prim_path='/mas_spectator',name='mas_spectator',
                                               modalities=['rgb'],image_width=self.image_size,
                                               image_height=self.image_size,viewport_name=None)
-                self.spectator.load(None)
-                self.spectator.initialize()
+                with self._startup_stage('spectator_camera_load'):
+                    self.spectator.load(None)
+                with self._startup_stage('spectator_camera_initialize'):
+                    self.spectator.initialize()
                 self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size,
                                           views=(*DIRECTIONS,'spectator'),demo_motion=self.demo_motion)
                 self._position_spectator()
-                for _ in range(20): self.og.sim.render()
+                for frame in range(20):
+                    with self._startup_stage(f'spectator_camera_warmup_frame_{frame + 1:02d}'):
+                        self.og.sim.render()
 
     def _position_rig(self):
         """Kinematic sensor mount only: never writes robot pose or advances physics."""

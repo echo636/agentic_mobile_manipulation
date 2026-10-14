@@ -46,6 +46,44 @@ class StartupProgressTests(unittest.TestCase):
                 {'stage':'heartbeat','status':'heartbeat','at_unix':at}],at),{})
         self.assertEqual(row['startup_deadline_unix'],2000.)
 
+    def test_slow_camera_substages_renew_only_for_real_new_progress(self):
+        row = self.row()
+        events = [
+            {'stage': 'surround_camera_setup_and_warmup', 'status': 'running', 'at_unix': 200.},
+            {'stage': 'surround_camera_front_initialize', 'status': 'running', 'at_unix': 201.},
+            {'stage': 'surround_camera_front_initialize', 'status': 'passed', 'at_unix': 1700.},
+            {'stage': 'surround_camera_back_initialize', 'status': 'running', 'at_unix': 1701.},
+            {'stage': 'surround_camera_back_initialize', 'status': 'passed', 'at_unix': 2400.},
+            {'stage': 'surround_camera_warmup_frame_01', 'status': 'running', 'at_unix': 2401.},
+        ]
+        row.update(startup_progress_update(row, events, 2402.))
+        # The whole camera stage exceeds 30 minutes, but completed work renewed it.
+        self.assertEqual(row['startup_deadline_unix'], 4201.)
+        # A render stuck on frame 1 still expires; rereading or a late completion
+        # cannot fabricate progress or restart the model execution clock.
+        self.assertEqual(startup_progress_update(row, events, 4202.), {})
+        self.assertEqual(startup_progress_update(row, [{
+            'stage': 'surround_camera_warmup_frame_01', 'status': 'passed',
+            'at_unix': 4202.,
+        }], 4203.), {})
+        self.assertNotIn('execution_started_at_unix', row)
+
+    def test_nested_camera_failure_identifies_substage_without_success_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(RuntimeError, 'renderer'):
+                with startup_stage(tmp, 'surround_camera_setup_and_warmup'):
+                    with startup_stage(tmp, 'surround_camera_front_load'):
+                        pass
+                    with startup_stage(tmp, 'surround_camera_front_initialize'):
+                        raise RuntimeError('renderer')
+            events = [json.loads(s) for s in (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines()]
+            self.assertEqual([(e['stage'], e['status']) for e in events[-2:]], [
+                ('surround_camera_front_initialize', 'failed'),
+                ('surround_camera_setup_and_warmup', 'failed'),
+            ])
+            self.assertNotIn(('surround_camera_front_initialize', 'passed'),
+                             [(e['stage'], e['status']) for e in events])
+
     def test_legacy_and_execution_clocks_are_never_extended(self):
         event={'stage':'ready','status':'passed','at_unix':1800.}
         row=self.row();row.pop('startup_watchdog_policy')
