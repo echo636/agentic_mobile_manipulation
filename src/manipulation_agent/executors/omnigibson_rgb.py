@@ -526,7 +526,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         from dataclasses import asdict, replace
         import numpy as np
         import omnigibson.utils.transform_utils as T
-        from .gt_navigation import NavigationError, plan_navigation, STRATEGY
+        from .gt_navigation import NavigationError, PlanningBudget, SearchBudgetExhausted, plan_navigation, STRATEGY
         trav=self.env.scene.trav_map
         position,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
@@ -536,7 +536,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         ground_click=not for_manipulation and float(point[2])-float(trav.floor_heights[floor]) <= .15
         mode='point' if ground_click else 'approach'
-        standoff,margin=0.,0.
+        standoff,margin=0.,(.08 if mode=='approach' else 0.)
         grid,map_details=build_navigation_grid(self,floor)
         recovery_results=[];recovery_states=set()
         while not grid.navigable(grid.cell(position[:2].cpu().tolist())):
@@ -618,60 +618,78 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  **map_details,'precomputed_walkability':True,'online_mapping':False}
         try:
-            with component(self,'navigation_planning'):
-                # Ground goals may end below the camera. Elevated targets must
-                # remain visible from the approach, including explicit navigation:
-                # a reachable cell across a wall is not a valid approach.
-                planning_xy=position[:2].cpu().tolist()
-                def make_plan(candidate_grid,yaw):
-                    return replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
-                        standoff=standoff,goal_mode=mode,max_snap=None,check_cancelled=self.deadline.check,
-                        candidate_filter=(lambda xy:self._approach_visible(
-                                xy,point,getattr(target,'selected_object',None),
-                                margin=0.,base_yaw=yaw)) if mode=='approach' else None),
-                        travel_yaw=yaw,final_yaw=yaw)
-                from .live_gt_map import feasible_heading_grids, rotation_staging_plan
-                from .gt_navigation import NavigationPlan
-                initial_grid=grid;initial_xy=tuple(planning_xy)
-                turn=None;stage=None;plan=None;original_error=None;best_key=None
-                try:
-                    plan=make_plan(grid,travel_yaw)
-                    best_key=(round(plan.score,9),plan.geodesic_m)
-                except NavigationError as exc:original_error=exc
-                # An unbounded projection always finds *some* ground endpoint.
-                # Compare headings even when that first endpoint is distant;
-                # otherwise the fallback would silently stop at a doorway.
-                exact_tolerance=grid.resolution/math.sqrt(2)+1e-9
-                if plan is None or plan.score>exact_tolerance:
-                    raw_free,_,_=self._navigation_clearance
-                    for staged in (False,True):
-                        candidate_stage=None
-                        if staged:
-                            try:
-                                stage_plan=rotation_staging_plan(initial_grid,self._navigation_layers,initial_xy,travel_yaw,
-                                                                 check_cancelled=self.deadline.check)
-                            except NavigationError:break
-                            planning_xy=stage_plan.goal
-                            candidate_stage=(initial_grid,stage_plan)
-                        for other_grid,other_yaw,turn_grid,footprint in feasible_heading_grids(
-                                initial_grid,raw_free,map_details['chassis_footprint_world_offsets'],planning_xy,
-                                travel_yaw,check_cancelled=self.deadline.check,collision_layers=self._navigation_layers):
-                            try:other_plan=make_plan(other_grid,other_yaw)
-                            except NavigationError:continue
-                            turn_distance=.5*abs(other_yaw-travel_yaw)/(math.pi/3)
-                            key=(round(other_plan.score,9),other_plan.geodesic_m+turn_distance+
-                                 (candidate_stage[1].geodesic_m if candidate_stage else 0.))
-                            if best_key is not None and key>=best_key:continue
-                            best_key=key
-                            xy=tuple(planning_xy)
-                            turn_plan=NavigationPlan((xy,),xy,xy,other_yaw,0.,0.,1,1,0.,0,other_yaw)
-                            turn=(turn_grid,turn_plan);stage=candidate_stage
-                            details['heading_change']={'from':travel_yaw,'to':other_yaw,
-                                'check':'full_swept_collision_hulls','footprint':footprint,
-                                'staging_plan':asdict(stage[1]) if stage else None}
-                            grid,plan=other_grid,other_plan
-                        if plan is not None and plan.score<=exact_tolerance:break
-                if plan is None:raise original_error
+            plan=None
+            try:
+                with component(self,'navigation_planning'):
+                    # Ground goals may end below the camera. Elevated targets must
+                    # remain visible from the approach, including explicit navigation:
+                    # a reachable cell across a wall is not a valid approach.
+                    planning_xy=position[:2].cpu().tolist()
+                    budget=PlanningBudget(self.deadline.check)
+                    def visible(xy,yaw):
+                        budget.visibility()
+                        return self._approach_visible(xy,point,getattr(target,'selected_object',None),
+                                                      margin=margin,base_yaw=yaw)
+                    def make_plan(candidate_grid,yaw):
+                        return replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
+                            standoff=standoff,goal_mode=mode,max_snap=None,check_cancelled=budget.check,
+                            max_candidate_checks=64 if mode=='approach' else None,
+                            candidate_filter=(lambda xy:visible(xy,yaw)) if mode=='approach' else None),
+                            travel_yaw=yaw,final_yaw=yaw)
+                    from .live_gt_map import feasible_heading_grids, rotation_staging_plan
+                    from .gt_navigation import NavigationPlan
+                    initial_grid=grid;initial_xy=tuple(planning_xy)
+                    turn=None;stage=None;plan=None;original_error=None;best_key=None
+                    exact_tolerance=grid.resolution/math.sqrt(2)+1e-9
+                    def adequate(candidate):
+                        if candidate is None:return False
+                        distance=math.dist(candidate.goal,candidate.target)
+                        return distance <= (1.4 if mode=='approach' else exact_tolerance)
+                    try:
+                        plan=make_plan(grid,travel_yaw)
+                        best_key=(round(plan.score,9),plan.geodesic_m)
+                    except SearchBudgetExhausted:raise
+                    except NavigationError as exc:original_error=exc
+                    # A visible manipulation approach need not occupy the object's XY.
+                    # Keep heading fallback for distant/blocked results, bounded jointly.
+                    if not adequate(plan):
+                        raw_free,_,_=self._navigation_clearance
+                        for staged in (False,True):
+                            candidate_stage=None
+                            if staged:
+                                try:
+                                    stage_plan=rotation_staging_plan(initial_grid,self._navigation_layers,initial_xy,travel_yaw,
+                                                                     check_cancelled=budget.check)
+                                except SearchBudgetExhausted:raise
+                                except NavigationError:break
+                                planning_xy=stage_plan.goal
+                                candidate_stage=(initial_grid,stage_plan)
+                            for other_grid,other_yaw,turn_grid,footprint in feasible_heading_grids(
+                                    initial_grid,raw_free,map_details['chassis_footprint_world_offsets'],planning_xy,
+                                    travel_yaw,check_cancelled=budget.check,collision_layers=self._navigation_layers):
+                                try:other_plan=make_plan(other_grid,other_yaw)
+                                except SearchBudgetExhausted:raise
+                                except NavigationError:continue
+                                turn_distance=.5*abs(other_yaw-travel_yaw)/(math.pi/3)
+                                key=(round(other_plan.score,9),other_plan.geodesic_m+turn_distance+
+                                     (candidate_stage[1].geodesic_m if candidate_stage else 0.))
+                                if best_key is not None and key>=best_key:continue
+                                best_key=key
+                                xy=tuple(planning_xy)
+                                turn_plan=NavigationPlan((xy,),xy,xy,other_yaw,0.,0.,1,1,0.,0,other_yaw)
+                                turn=(turn_grid,turn_plan);stage=candidate_stage
+                                details['heading_change']={'from':travel_yaw,'to':other_yaw,
+                                    'check':'full_swept_collision_hulls','footprint':footprint,
+                                    'staging_plan':asdict(stage[1]) if stage else None}
+                                grid,plan=other_grid,other_plan
+                                if adequate(plan):break
+                            if adequate(plan):break
+                    details['planning_visibility_checks']=budget.visibility_checks
+                    if plan is None:raise original_error
+            except SearchBudgetExhausted:
+                details['planning_budget_exhausted']=True
+                details['planning_visibility_checks']=budget.visibility_checks
+                if plan is None:raise
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
             if turn is not None:
                 np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
@@ -705,7 +723,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         rotation=T.quat2mat(orientation)
         actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         visible=(self._approach_visible(actual[:2].cpu().tolist(),point,
-                    getattr(target,'selected_object',None),margin=0.,
+                    getattr(target,'selected_object',None),margin=margin,
                     base_yaw=actual_yaw) if mode=='approach' else None)
         projection=math.dist(actual[:2].cpu().tolist(),plan.target)
         nav_status='reached' if projection<=grid.resolution/math.sqrt(2)+.002 else (
@@ -942,7 +960,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         elif primitive=='place_next_to':
             result=self._checked_place_next_to(obj,max_steps,point)
         elif primitive=='place_inside' and self.inside_placement=='official_volume':
-            result=self._checked_place_inside(obj,max_steps)
+            result=self._checked_place_inside(obj,max_steps,point=point)
         else:
             # The pinned symbolic actions do not navigate for manipulation;
             # hold the base during their release/settling physics as well.

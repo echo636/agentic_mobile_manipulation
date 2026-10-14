@@ -507,7 +507,7 @@ class CheckedPlacement:
             'support_hit_body': hit.get('rigidBody'), 'contact_bodies': contacts,
             'ignored_payload_names': [obj.name for obj in payload]}
 
-    def _checked_place_inside(self, target, max_steps):
+    def _checked_place_inside(self, target, max_steps, point=None):
         from omnigibson.object_states import Inside
         held = self._get_held()
         if held is None:
@@ -523,6 +523,7 @@ class CheckedPlacement:
         stabilized_payload=None
         with self._placement_context(target):
             contents=list(self._carry_contents) if self.ideal_carry else []
+            assembly_search=bool(contents)
             dependencies=list(getattr(self,'_carry_dependencies',[]))
             orientation=held.get_position_orientation()[1].clone()
             self._carry_detach()
@@ -551,7 +552,7 @@ class CheckedPlacement:
                         self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>180):
                     raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
                 self.sampling_physics_steps+=1
-                if contents or getattr(self,'_placement_particle_payload',(None,[]))[1]:
+                if not assembly_search and (contents or getattr(self,'_placement_particle_payload',(None,[]))[1]):
                     # Randomly flipping a plate is not a valid way to place
                     # its food (or a bag its particles). Preserve orientation.
                     held.set_position_orientation(held.get_position_orientation()[0],orientation)
@@ -568,7 +569,11 @@ class CheckedPlacement:
             if contents:RigidContactAPI.is_in_contact=assembly_contact
             sampling_done=False
             try:
-                sampled=held.states[Inside].set_value(target,True)
+                if assembly_search:
+                    from .inside_sampling import sample_assembly_inside
+                    sampled=sample_assembly_inside(self,held,target,contents,point=point)
+                else:
+                    sampled=held.states[Inside].set_value(target,True)
                 sampling_done=True
             finally:
                 if contents:RigidContactAPI.is_in_contact=original_contact
@@ -576,7 +581,8 @@ class CheckedPlacement:
                 self.frames_revision=-1
             try:
                 if not sampled:
-                    raise SkillError('sampling_error','Official volume sampler could not find a valid placement',changed=True)
+                    raise SkillError('sampling_error',('Assembly volume search could not find a valid placement'
+                                     if assembly_search else 'Official volume sampler could not find a valid placement'),changed=True)
                 # Once the official sampler has found an Inside pose, retain
                 # that link-relative pose while the action's settling ticks
                 # run. Otherwise contact with the nearby robot may eject the
@@ -605,7 +611,8 @@ class CheckedPlacement:
             self._stabilized_containers[target]=tuple(v.clone() for v in target.get_position_orientation())
             if not hasattr(self,'_stabilized_container_payloads'):self._stabilized_container_payloads={}
             self._stabilized_container_payloads[target]=stabilized_payload
-        return {'primitive':'place_inside','implementation':'transactional_official_Inside_with_rigid_payload_sampling',
+        return {'primitive':'place_inside','implementation':('transactional_assembly_volume_with_official_Inside'
+                if assembly_search else 'transactional_official_Inside_with_rigid_payload_sampling'),
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
                 'target_root_anchored':True,'existing_containment_verified':resident_count,
                 'sampling_physics_steps':self.sampling_physics_steps-before}

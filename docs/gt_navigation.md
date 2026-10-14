@@ -19,7 +19,7 @@ each `act` / `look` supplies the next one.
    choosing the closest feasible point to the selected XY, then breaking ties
    by travel distance. There is no 0.75 m projection radius, ring sampling, or
    1.4 m navigation cutoff. Elevated approaches must see the target through a
-   camera frustum and unobstructed scene ray; a floor point may be below the
+   camera frustum with an 8% image-edge margin and unobstructed scene ray; a floor point may be below the
    camera at arrival. This visibility difference does not change the search
    radius or connectivity rules. Manipulation retains its separate reach check.
 3. Load the GT floor support raster, query current PhysX collision geometry,
@@ -54,6 +54,20 @@ The original bounded candidate helper retains the reference algorithm for
 historical diagnostics and exact staging (`max_snap=0`). Runtime navigation
 uses `max_snap=None`. OmniGibson supplies floor support, current collisions and
 an ideal pose follower; Habitat's native navmesh/follower is not running here.
+
+Each runtime planning action has a shared cooperative 20-second / 256-visibility-query
+budget across headings, with at most 64 candidate cells tested per elevated-target
+heading. These limit work, not the geographical search domain or episode duration.
+An already visible approach within the executor's 1.4 m manipulation check stops
+heading refinement; it need not project onto the object's XY within one grid cell.
+When the work budget expires, an existing validated plan can execute; otherwise
+`navigation_search_exhausted` returns fresh RGB for policy recovery. This is not
+proof that no path exists. Native calls are cooperatively checked between calls.
+
+The MCP proxy lets `finish` reach the bridge while another tool is pending. The
+bridge requests cancellation, then runs scoring on the simulator owner thread.
+Ordinary tools and RGB downloads remain serialized. The episode still uses 50
+agent act/look attempts without a wall-time deadline.
 
 ## Limits and evidence
 

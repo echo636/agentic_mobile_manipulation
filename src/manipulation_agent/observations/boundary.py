@@ -26,6 +26,7 @@ ERROR_MESSAGES = {
     "invalid_visual_target":"The selected surface cannot be used for this action. Inspect RGB and select a different visible point.",
     "target_changed":"The selected object changed during this action and its result could not be verified. Inspect the updated RGB before selecting the next target.",
     "navigation_unreachable":"The motor executor could not reach the selected visual point. Choose a visible alternative.",
+    "navigation_search_exhausted":"The navigation search reached its per-action work limit. This does not prove the target is unreachable. Inspect the returned RGB and choose another visible approach.",
     "navigation_invalid_start":"The executor cannot safely navigate from its current base position. Changing the target point will not repair this; stop repeating navigation and report blocked if the limitation persists.",
     "navigation_stalled":"The navigation executor made no progress. Inspect the fresh RGB before trying one alternative; do not repeat the same request.",
     "navigation_path_blocked":"The selected navigation endpoint became blocked or unobserved. Inspect fresh RGB and choose a different visible approach.",

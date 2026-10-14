@@ -49,7 +49,7 @@ class ExplicitNavigationTests(unittest.TestCase):
         for method in ('_ideal_grasp', '_checked_attach', '_checked_surface_action', '_checked_soak',
                        '_checked_cut', '_ideal_state_action', '_checked_place_on_top',
                        '_checked_place_under', '_checked_place_next_to', '_checked_place_inside'):
-            def effect(*args, method=method):
+            def effect(*args, method=method, **kwargs):
                 self.effects.append(method)
                 self.b.steps += 1
                 return {'operation': method}

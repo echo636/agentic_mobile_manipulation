@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import heapq
 import math
+import time
 
 SOURCE_COMMIT = '0815cf234ee591bacd8017e9b1def4fac13e649b'
 STRATEGY = 'visual_point_connected_projection_gt_grid_v3'
@@ -19,6 +20,33 @@ class NavigationError(Exception):
     def __init__(self, message, code='navigation_unreachable'):
         super().__init__(message)
         self.code = code
+
+
+class SearchBudgetExhausted(NavigationError):
+    """One recoverable navigation action exhausted its planning work budget."""
+    def __init__(self):
+        super().__init__('Navigation planning budget exhausted; select another visible approach',
+                         'navigation_search_exhausted')
+
+
+class PlanningBudget:
+    """Shared across heading searches; separate from the episode step budget."""
+    def __init__(self, check_cancelled, *, seconds=20., visibility_checks=256):
+        self.check_cancelled = check_cancelled
+        self.expires = time.monotonic() + seconds
+        self.limit = visibility_checks
+        self.visibility_checks = 0
+
+    def check(self):
+        self.check_cancelled()
+        if time.monotonic() >= self.expires:
+            raise SearchBudgetExhausted()
+
+    def visibility(self):
+        self.check()
+        if self.visibility_checks >= self.limit:
+            raise SearchBudgetExhausted()
+        self.visibility_checks += 1
 
 
 @dataclass(frozen=True)
@@ -174,7 +202,8 @@ class NavigationPlan:
     travel_yaw: float | None = None
 
 
-def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizon, check_cancelled):
+def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizon, check_cancelled,
+                           max_candidate_checks=None):
     """Flood connectivity once, then A* only to the nearest feasible goals.
 
     Four-neighbor connectivity equals our no-corner-cut eight-neighbor graph.
@@ -212,6 +241,10 @@ def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizo
     goals=set();best=None
     for index,(distance,flat) in enumerate(ranked):
         if best is not None and distance>best:break
+        if max_candidate_checks is not None and index >= max_candidate_checks:
+            if goals:break
+            raise NavigationError('No visible destination within this heading search budget',
+                                  'navigation_search_exhausted')
         if check_cancelled is not None and index%256==0:check_cancelled()
         cell=divmod(flat,width)
         if acceptable(cell):goals.add(cell);best=distance
@@ -239,7 +272,7 @@ def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizo
 
 def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
                     horizon=10000., max_expansions=None, candidate_filter=None, goal_mode='approach',
-                    check_cancelled=None):
+                    check_cancelled=None, max_candidate_checks=None):
     """Project candidate goals, validate reachability, rank and plan one GT hop.
 
     One multi-goal Dijkstra search supplies exact grid geodesics for all
@@ -279,7 +312,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
         return projected
     if max_snap is None:
         goal_cell,distance,parents,expanded=_connected_goal_search(
-            grid,start,hint,acceptable,max_expansions,horizon,check_cancelled)
+            grid,start,hint,acceptable,max_expansions,horizon,check_cancelled,max_candidate_checks)
         score=math.dist(grid.world(goal_cell),hint)
         considered=len(visibility);reachable=sum(visibility.values())
     else:

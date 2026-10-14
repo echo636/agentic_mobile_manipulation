@@ -69,9 +69,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
 
     def wrap(name):
         async def invoke(**arguments):
-            # Serialize actions and RGB downloads: another HTTP client cannot
-            # expire returned image refs midway through response assembly.
-            async with lock:
+            async def call():
                 result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
                 observation = result.get('observation', {})
@@ -83,6 +81,14 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
                         content.append(types.TextContent(type='text', text=f'RGB view={frame["view"]}, image_ref={frame["image_ref"]}'))
                         content.append(types.ImageContent(type='image', data=base64.b64encode(data).decode(), mimeType=frame['mime_type']))
                 return content
+            # Finish must reach bridge.request_finish while an action is pending.
+            # The bridge sets only stop intent here; simulator access and scoring
+            # still happen serially on its owner thread, after action cancellation.
+            if name == 'finish':
+                return await call()
+            # Serialize ordinary actions and their RGB downloads to retain refs.
+            async with lock:
+                return await call()
         return invoke
 
     registered = [Tool(

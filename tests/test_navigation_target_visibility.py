@@ -77,6 +77,18 @@ class TargetVisibilityTests(unittest.TestCase):
         self.assertTrue(failure.exception.changed)
         self.assertFalse(json.loads((b.output/'navigation_arrivals.jsonl').read_text())['target_visible'])
 
+    def test_reachable_visible_approach_stops_heading_enumeration(self):
+        b=self.backend
+        free=np.ones((41,41),dtype='uint8');free[:,24:]=0
+        g=GridMap(41,41,.1,(0.,0.),free.tobytes())
+        self.build_grid.return_value=(g,self.build_grid.return_value[1])
+        b._approach_visible.side_effect=lambda *args,**kwargs:True
+        target=SimpleNamespace(get_position_orientation=lambda:(Tensor([2.8,1.,1.5]),None))
+        result=b._navigate(target,1000)
+        self.assertLess(result['target_projection_distance_m'],1.4)
+        self.headings.assert_not_called()
+        self.assertTrue(all(call.kwargs['margin']>=.08 for call in b._approach_visible.call_args_list))
+
     def test_distant_floor_projection_is_approached_and_repeat_reports_no_progress(self):
         b=self.backend
         free=np.ones((41,41),dtype='uint8');free[:,20]=0
