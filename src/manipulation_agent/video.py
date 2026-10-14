@@ -118,10 +118,25 @@ class EpisodeVideo:
             encoded_frames_completed=self._encoded_frames, every_env_step_recorded=False,
             encoder_exit_code=self.process.poll() if self.process is not None else None,
             markers=self.markers, **self.recording_failure)
-        write_json(self.output/'video.json', self.manifest)
+        try:
+            write_json(self.output/'video.json', self.manifest)
+        except OSError as persistence_error:
+            # A failed NAS write must not replace the original recording fault
+            # or stop the physics owner before independent task scoring.
+            self.manifest['failure_manifest_write_error'] = str(persistence_error)
 
     def append(self, pixels, env_step: int, kind: str, *, capture_env_step=None, repeated=False,
                check_active=None):
+        try:
+            return self._append(pixels, env_step, kind, capture_env_step=capture_env_step,
+                                repeated=repeated, check_active=check_active)
+        except OSError as exc:
+            # Covers timeline, poster, log and manifest I/O, in addition to the
+            # encoder pipe failures handled below. Contract errors still raise.
+            self._disable_encoder(exc)
+
+    def _append(self, pixels, env_step: int, kind: str, *, capture_env_step=None, repeated=False,
+                check_active=None):
         import numpy as np
         from PIL import Image, ImageDraw, ImageFont
         if self.closed: return

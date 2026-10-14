@@ -210,6 +210,8 @@ class Harness:
                   "deadline_expired_at_finish": expired,
                   "evaluation_finished_at_unix": evaluation_finished_at,
                   "evaluation_finished_after_deadline": self.deadline.unix is not None and evaluation_finished_at >= self.deadline.unix}
+        if getattr(self.backend, 'diagnostic_write_failures', None):
+            result['diagnostic_write_failures'] = self.backend.diagnostic_write_failures
         if getattr(self,'agent_step_limit',None) is not None:
             exhausted=self.agent_steps>=self.agent_step_limit
             result.update(agent_steps=self.agent_steps,max_agent_steps=self.agent_step_limit,

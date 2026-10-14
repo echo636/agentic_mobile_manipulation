@@ -7,6 +7,8 @@ import tempfile
 import threading
 import time
 import unittest
+import errno
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -16,9 +18,56 @@ from manipulation_agent.deadline import EpisodeDeadline
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
 from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.executors.profiling import action_profile
+from manipulation_agent.contracts import SkillError
 
 
 class VideoFailureIsolationTests(unittest.TestCase):
+    def test_timeline_eio_and_failed_failure_manifest_do_not_prevent_scoring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output=Path(tmp)/'episode';recorder=Recorder(output,{})
+            backend=MockRGBBackend(output)
+            harness=VisionHarness(backend,recorder,profile='minimal')
+            views=('front','back','left','right','spectator')
+            recording=video.EpisodeVideo(output,30,size=32,views=views)
+            backend.finalize_video=lambda:recording.finish(backend.steps)
+            pixels={v:np.zeros((32,32,3),dtype=np.uint8) for v in views}
+            original_open=Path.open
+            def faulty_open(path,*args,**kwargs):
+                if path.name in {'video_frames.jsonl','video.json.tmp'}:
+                    raise OSError(errno.EIO,'simulated NAS I/O error',str(path))
+                return original_open(path,*args,**kwargs)
+            with patch.object(Path,'open',faulty_open):
+                recording.append(pixels,0,'observation')
+                self.assertTrue(recording.closed)
+                self.assertEqual(recording.manifest['status'],'failed')
+                self.assertIn('failure_manifest_write_error',recording.manifest)
+                self.assertIsNotNone(recording.process.poll())
+                backend.on=True
+                harness.call('finish',{'outcome':'achieved','reason':'fixture'},'finish')
+                self.assertTrue(recorder.run['task_success'])
+                self.assertEqual(recorder.run['scoring']['status'],'passed')
+            harness.finalize_recording()
+            run=json.loads((output/'run.json').read_text())
+            self.assertTrue(run['task_success'])
+            self.assertEqual(run['video']['status'],'failed')
+            self.assertEqual(run['video']['failure_type'],'OSError')
+
+    def test_timing_eio_preserves_primary_failure_and_success(self):
+        @action_profile
+        def execute(backend,primitive):
+            if primitive=='close':raise SkillError('postcondition_error','original failure')
+            return {'effect':'executed'}
+        with tempfile.TemporaryDirectory() as tmp:
+            for primitive in ('close','open'):
+                backend=SimpleNamespace(output=Path(tmp))
+                with patch.object(Path,'open',side_effect=OSError(errno.EIO,'NAS unavailable')):
+                    if primitive=='close':
+                        with self.assertRaisesRegex(SkillError,'original failure'):
+                            execute(backend,primitive)
+                    else:self.assertEqual(execute(backend,primitive),{'effect':'executed'})
+                self.assertEqual(backend.diagnostic_write_failures[0]['artifact'],'performance.jsonl')
+
     def test_real_pipe_stall_isolated_and_stop_interrupts_bounded_backpressure(self):
         real_popen = subprocess.Popen
         for stop in (False, True):
