@@ -1,0 +1,612 @@
+{
+  "schema_version": 1,
+  "kind": "design_specification_not_runtime_task_manifest",
+  "status": "planned",
+  "official_submission_eligible": false,
+  "policy_input": [
+    "public_instruction",
+    "public_context",
+    "current_RGB",
+    "ordinary_tool_feedback"
+  ],
+  "private_only": [
+    "reference_DAG",
+    "scene_object_bindings",
+    "evaluator_predicates",
+    "initial_state_seed"
+  ],
+  "graph_semantics": "Reference decomposition with conjunctive prerequisite results, not one compulsory linear action script. Milestones can be consumed; terminal predicates must all hold together at finish. Only explicit_trace_constraints are additional historical requirements. Equivalent decompositions and legal interleavings are accepted.",
+  "budget_proposal": {
+    "existing_behavior100_unchanged": 50,
+    "new_task_pilot_cap": 200,
+    "candidate_caps_for_calibration": [
+      100,
+      200,
+      300
+    ],
+    "calibrated": false,
+    "note": "Design proposal only; benchmark limits require actual feasible trace lengths. Single-action cooperative budgets are separate."
+  },
+  "tasks": [
+    {
+      "id": "warm_lunch_and_restore",
+      "status": "planned",
+      "runtime_ready": false,
+      "public_instruction": "帮我把午饭准备好，装好放到餐桌上，再把厨房收拾好。",
+      "public_context": [
+        "这份午饭包括两根热狗、两块苹果和一瓶茶；热狗需要熟透。",
+        "所有食物和茶放进饭盒，饭盒放餐桌指定空位；用过的准备工具放回指定收纳处，剩余食材回冰箱，冰箱门关闭，加热设备关闭，准备区不留杂物。"
+      ],
+      "candidate_scene": "house_single_floor",
+      "reference_task_types": [
+        "cook_hot_dogs",
+        "preparing_lunch_box",
+        "putting_dishes_away_after_cleaning"
+      ],
+      "required_roles": {
+        "hotdogs": 2,
+        "apple_halves": 2,
+        "tea_bottle": 1,
+        "lunch_container": 1,
+        "microwave": 1,
+        "fridge": 1,
+        "prep_surface": 1,
+        "serving_surface": 1,
+        "prep_tools": "resolve supported assets and fixed task scope during scene build"
+      },
+      "nodes": [
+        {
+          "id": "box_ready",
+          "goal": "饭盒可用于装餐",
+          "kind": "milestone",
+          "condition": "饭盒已找到并在可操作位置；如有盖则处于可放入状态",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "ingredients_ready",
+          "goal": "需处理的食材已备好",
+          "kind": "milestone",
+          "condition": "热狗和苹果已从初始存放处取出并放在准备区",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "hot_food_cooked",
+          "goal": "热狗已熟",
+          "kind": "terminal",
+          "condition": "所有目标热狗的官方 Cooked 为真",
+          "requires": [
+            "ingredients_ready"
+          ],
+          "dependency_reasons": {
+            "ingredients_ready": "本实例需从冷藏位置取出食材，才能进行处理"
+          }
+        },
+        {
+          "id": "drink_ready",
+          "goal": "茶已备好",
+          "kind": "milestone",
+          "condition": "目标茶瓶已从冷藏处取出并可装入饭盒",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "lunch_packed",
+          "goal": "午饭已装入饭盒",
+          "kind": "terminal",
+          "condition": "两个热狗、两个苹果块和茶瓶均 Inside 饭盒",
+          "requires": [
+            "box_ready",
+            "hot_food_cooked",
+            "ingredients_ready",
+            "drink_ready"
+          ],
+          "dependency_reasons": {
+            "box_ready": "装入需要可用容积",
+            "hot_food_cooked": "用户要求打包的午饭已熟",
+            "ingredients_ready": "苹果需要备齐",
+            "drink_ready": "茶需备齐"
+          }
+        },
+        {
+          "id": "table_ready",
+          "goal": "餐桌指定位置可用",
+          "kind": "milestone",
+          "condition": "指定饭盒区域已有杂物移开且能支撑饭盒",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "lunch_delivered",
+          "goal": "午饭已送到餐桌",
+          "kind": "terminal",
+          "condition": "装好午饭的饭盒 OnTop 指定餐桌区域",
+          "requires": [
+            "lunch_packed",
+            "table_ready"
+          ],
+          "dependency_reasons": {
+            "lunch_packed": "这是装好的午饭送达里程碑；空盒提前摆放允许但不计送餐完成",
+            "table_ready": "最终放置需有空余支撑面"
+          }
+        },
+        {
+          "id": "tools_stored",
+          "goal": "准备工具已归位",
+          "kind": "terminal",
+          "condition": "本次使用的准备工具均位于公开约定的收纳处",
+          "requires": [
+            "ingredients_ready"
+          ],
+          "dependency_reasons": {
+            "ingredients_ready": "在食材准备不再需要这些工具后核验最终归位"
+          }
+        },
+        {
+          "id": "leftovers_stored",
+          "goal": "剩余食材已收好",
+          "kind": "terminal",
+          "condition": "任务清单内未装餐的剩余食材均 Inside 冰箱",
+          "requires": [
+            "ingredients_ready"
+          ],
+          "dependency_reasons": {
+            "ingredients_ready": "备餐份量确定后才能核验余料范围"
+          }
+        },
+        {
+          "id": "fridge_closed",
+          "goal": "冰箱已关好",
+          "kind": "terminal",
+          "condition": "冰箱 Open 为假，余料仍在冰箱内",
+          "requires": [
+            "leftovers_stored",
+            "drink_ready"
+          ],
+          "dependency_reasons": {
+            "leftovers_stored": "最终关门状态应与余料归位同时成立",
+            "drink_ready": "取茶操作不应使最后的关门状态失效"
+          }
+        },
+        {
+          "id": "heat_off",
+          "goal": "加热设备已关闭",
+          "kind": "terminal",
+          "condition": "用于本次处理的设备 ToggledOn 为假",
+          "requires": [
+            "hot_food_cooked"
+          ],
+          "dependency_reasons": {
+            "hot_food_cooked": "本节点是处理完毕后的关闭状态，允许更早临时关闭"
+          }
+        },
+        {
+          "id": "prep_area_clear",
+          "goal": "厨房准备区已恢复",
+          "kind": "terminal",
+          "condition": "准备区无本次餐食、工具或待收余料残留",
+          "requires": [
+            "lunch_packed",
+            "tools_stored",
+            "leftovers_stored"
+          ],
+          "dependency_reasons": {
+            "lunch_packed": "打包完成后核验准备区",
+            "tools_stored": "工具归位",
+            "leftovers_stored": "余料归位"
+          }
+        }
+      ],
+      "final_nodes": [
+        "hot_food_cooked",
+        "lunch_packed",
+        "lunch_delivered",
+        "tools_stored",
+        "leftovers_stored",
+        "fridge_closed",
+        "heat_off",
+        "prep_area_clear"
+      ],
+      "explicit_trace_constraints": [],
+      "validation_gates": {
+        "asset_affordances": "planned",
+        "joint_scene_instantiation": "planned",
+        "initial_state_and_reset": "planned",
+        "private_evaluator": "planned",
+        "scripted_physical_feasibility": "planned",
+        "autonomous_trial": "planned"
+      }
+    },
+    {
+      "id": "movie_night_and_restore",
+      "status": "planned",
+      "runtime_ready": false,
+      "public_instruction": "帮我们准备好电影之夜的零食和桌面，客厅和厨房也收拾好。",
+      "public_context": [
+        "零食是这一袋爆米花，保持在袋中并放在客厅茶几；为两人摆好约定的杯子和餐具。",
+        "茶几先清洁再摆食品和餐具；桌面玩具归玩具柜、垃圾入垃圾桶；清洁工具归位，微波炉最后关门并断电。",
+        "加热完成并关闭电源后再取出爆米花袋。"
+      ],
+      "candidate_scene": "house_double_floor_lower",
+      "reference_task_types": [
+        "make_microwave_popcorn",
+        "picking_up_trash",
+        "rearranging_kitchen_furniture"
+      ],
+      "required_roles": {
+        "popcorn_bag": 1,
+        "microwave": 1,
+        "serving_table": 1,
+        "cups": 2,
+        "place_settings": 2,
+        "table_clutter": "fixed per instance, separate toys and garbage",
+        "cleaning_tool": 1,
+        "toy_storage": 1,
+        "trash_bin": 1
+      },
+      "nodes": [
+        {
+          "id": "table_clear",
+          "goal": "茶几待用区域已腾空",
+          "kind": "milestone",
+          "condition": "本次茶几待清洁区域内的可移动杂物全部移出",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "table_clean",
+          "goal": "茶几已清洁",
+          "kind": "terminal",
+          "condition": "指定区域目标污物的官方 Covered/粒子状态达到冻结清洁标准",
+          "requires": [
+            "table_clear"
+          ],
+          "dependency_reasons": {
+            "table_clear": "全区域清洁需移开覆盖该区域的物体"
+          }
+        },
+        {
+          "id": "places_ready",
+          "goal": "两人餐具已摆好",
+          "kind": "terminal",
+          "condition": "两套目标餐具和杯子 OnTop 对应茶几区域",
+          "requires": [
+            "table_clean"
+          ],
+          "dependency_reasons": {
+            "table_clean": "最终摆台建立在清洁后的区域"
+          }
+        },
+        {
+          "id": "popcorn_loaded",
+          "goal": "爆米花袋已放入微波炉",
+          "kind": "milestone",
+          "condition": "目标袋 Inside 微波炉，袋内初始爆米花仍存在",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "heating_ready",
+          "goal": "爆米花已开始有效加热",
+          "kind": "milestone",
+          "condition": "袋仍在炉内、炉门关闭，设备已启动",
+          "requires": [
+            "popcorn_loaded"
+          ],
+          "dependency_reasons": {
+            "popcorn_loaded": "有效加热对象需在炉内"
+          }
+        },
+        {
+          "id": "popcorn_cooked",
+          "goal": "爆米花已完成转化",
+          "kind": "terminal",
+          "condition": "官方 real(cooked__popcorn) 且 contains(目标袋,cooked__popcorn)",
+          "requires": [
+            "heating_ready"
+          ],
+          "dependency_reasons": {
+            "heating_ready": "本实例的原料须经历官方微波转化"
+          }
+        },
+        {
+          "id": "heat_off",
+          "goal": "微波炉已断电",
+          "kind": "terminal",
+          "condition": "本次加热结束，微波炉 ToggledOn 为假",
+          "requires": [
+            "popcorn_cooked"
+          ],
+          "dependency_reasons": {
+            "popcorn_cooked": "处理完成后的断电状态"
+          }
+        },
+        {
+          "id": "snack_retrieved",
+          "goal": "成品袋已取出",
+          "kind": "milestone",
+          "condition": "成品袋在微波炉外且仍 contains 熟爆米花",
+          "requires": [
+            "popcorn_cooked",
+            "heat_off"
+          ],
+          "dependency_reasons": {
+            "popcorn_cooked": "应取出成品",
+            "heat_off": "公开家庭操作约定：结束加热后取出"
+          }
+        },
+        {
+          "id": "snack_served",
+          "goal": "零食已送上茶几",
+          "kind": "terminal",
+          "condition": "成品袋 OnTop 茶几零食区，内容物保留",
+          "requires": [
+            "snack_retrieved",
+            "table_clean"
+          ],
+          "dependency_reasons": {
+            "snack_retrieved": "成品需离开加热设备",
+            "table_clean": "公开约定先清洁再摆食品；餐具与零食的摆放可互换顺序"
+          }
+        },
+        {
+          "id": "toys_stored",
+          "goal": "玩具已归位",
+          "kind": "terminal",
+          "condition": "清单内玩具均 Inside 指定玩具柜",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "trash_stored",
+          "goal": "垃圾已收好",
+          "kind": "terminal",
+          "condition": "清单内垃圾均 Inside 垃圾桶",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "cleaner_stored",
+          "goal": "清洁工具已归位",
+          "kind": "terminal",
+          "condition": "清洁工具位于公开收纳位置",
+          "requires": [
+            "table_clean"
+          ],
+          "dependency_reasons": {
+            "table_clean": "清洁结束后的最终收纳"
+          }
+        },
+        {
+          "id": "microwave_closed",
+          "goal": "微波炉已关门",
+          "kind": "terminal",
+          "condition": "微波炉 Open 为假且成品在炉外",
+          "requires": [
+            "snack_retrieved"
+          ],
+          "dependency_reasons": {
+            "snack_retrieved": "取出成品后的最终关门状态"
+          }
+        }
+      ],
+      "final_nodes": [
+        "table_clean",
+        "places_ready",
+        "popcorn_cooked",
+        "heat_off",
+        "snack_served",
+        "toys_stored",
+        "trash_stored",
+        "cleaner_stored",
+        "microwave_closed"
+      ],
+      "explicit_trace_constraints": [
+        "取出成品袋之前结束加热；这是公开操作约定，需要事件和状态证据，不从最终快照猜测。"
+      ],
+      "validation_gates": {
+        "asset_affordances": "planned",
+        "joint_scene_instantiation": "planned",
+        "initial_state_and_reset": "planned",
+        "private_evaluator": "planned",
+        "scripted_physical_feasibility": "planned",
+        "autonomous_trial": "planned"
+      }
+    },
+    {
+      "id": "workshop_setup_and_return",
+      "status": "planned",
+      "runtime_ready": false,
+      "public_instruction": "帮维修师傅把工作区准备好，把工具送过去摆好，原来的储物区也整理好。",
+      "public_context": [
+        "指定工具包括电钻、钳子、手电筒、内六角扳手和螺丝刀，最终放到维修台的工具区。",
+        "这次使用工具箱从储物区运送整套工具，运输时箱盖保持关闭；到达后取出工具摆好，空箱放回储物区原位。",
+        "维修台先清洁再摆工具；储物区的非维修物品归指定收纳处、垃圾入桶，清洁工具归位。"
+      ],
+      "candidate_scene": "house_single_floor",
+      "reference_task_types": [
+        "outfit_a_basic_toolbox",
+        "clean_up_your_desk",
+        "sorting_household_items"
+      ],
+      "required_roles": {
+        "tools": [
+          "drill",
+          "pliers",
+          "flashlight",
+          "allen_wrench",
+          "screwdriver"
+        ],
+        "toolbox_with_lid": 1,
+        "source_storage": 1,
+        "destination_workbench": 1,
+        "workbench_clutter": "fixed set",
+        "cleaning_tool": 1,
+        "trash_bin": 1
+      },
+      "nodes": [
+        {
+          "id": "box_available",
+          "goal": "运输工具箱可用",
+          "kind": "milestone",
+          "condition": "箱内无无关物品、有足够容积并可装工具",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "tools_gathered",
+          "goal": "维修工具已找齐",
+          "kind": "milestone",
+          "condition": "公开清单五件工具已确认并可取用",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "kit_packed",
+          "goal": "整套工具已装箱",
+          "kind": "milestone",
+          "condition": "五件工具均 Inside 工具箱",
+          "requires": [
+            "box_available",
+            "tools_gathered"
+          ],
+          "dependency_reasons": {
+            "box_available": "容积可用",
+            "tools_gathered": "整套工具已齐备"
+          }
+        },
+        {
+          "id": "kit_closed",
+          "goal": "运输前箱盖已关闭",
+          "kind": "milestone",
+          "condition": "工具保持在箱内，工具箱 Open 为假",
+          "requires": [
+            "kit_packed"
+          ],
+          "dependency_reasons": {
+            "kit_packed": "公开要求整套装好后封闭运输"
+          }
+        },
+        {
+          "id": "kit_arrived",
+          "goal": "工具箱已安全运抵维修区",
+          "kind": "milestone",
+          "condition": "装有整套工具的工具箱已进入指定维修区",
+          "requires": [
+            "kit_closed"
+          ],
+          "dependency_reasons": {
+            "kit_closed": "公开运输约束：途中箱盖保持关闭"
+          }
+        },
+        {
+          "id": "bench_clear",
+          "goal": "维修台已腾空",
+          "kind": "milestone",
+          "condition": "维修台工具区的既有杂物已移开",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "bench_clean",
+          "goal": "维修台已清洁",
+          "kind": "terminal",
+          "condition": "指定污物状态满足冻结清洁标准",
+          "requires": [
+            "bench_clear"
+          ],
+          "dependency_reasons": {
+            "bench_clear": "需暴露整个待清洁区域"
+          }
+        },
+        {
+          "id": "kit_accessible",
+          "goal": "到达后的工具可取用",
+          "kind": "milestone",
+          "condition": "工具箱在维修区并已开盖",
+          "requires": [
+            "kit_arrived"
+          ],
+          "dependency_reasons": {
+            "kit_arrived": "本里程碑是到达后的开箱"
+          }
+        },
+        {
+          "id": "tools_laid_out",
+          "goal": "五件工具已摆好",
+          "kind": "terminal",
+          "condition": "五件目标工具均 OnTop 维修台工具区",
+          "requires": [
+            "kit_accessible",
+            "bench_clean"
+          ],
+          "dependency_reasons": {
+            "kit_accessible": "从运达工具箱取出",
+            "bench_clean": "清洁后摆放最终工具"
+          }
+        },
+        {
+          "id": "empty_box_returned",
+          "goal": "空工具箱已归位",
+          "kind": "terminal",
+          "condition": "工具箱不含本次工具且位于储物区原位",
+          "requires": [
+            "tools_laid_out"
+          ],
+          "dependency_reasons": {
+            "tools_laid_out": "本节点是卸货完成后的空箱归还"
+          }
+        },
+        {
+          "id": "unrelated_stored",
+          "goal": "无关物品已归位",
+          "kind": "terminal",
+          "condition": "源区域及工作台清单内的非维修物品均在指定收纳处",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "trash_stored",
+          "goal": "垃圾已清走",
+          "kind": "terminal",
+          "condition": "清单内垃圾均 Inside 垃圾桶",
+          "requires": [],
+          "dependency_reasons": {}
+        },
+        {
+          "id": "cleaner_returned",
+          "goal": "清洁工具已归位",
+          "kind": "terminal",
+          "condition": "清洁工具位于公开存放处",
+          "requires": [
+            "bench_clean"
+          ],
+          "dependency_reasons": {
+            "bench_clean": "工作台清洁结束后的归位"
+          }
+        }
+      ],
+      "final_nodes": [
+        "bench_clean",
+        "tools_laid_out",
+        "empty_box_returned",
+        "unrelated_stored",
+        "trash_stored",
+        "cleaner_returned"
+      ],
+      "explicit_trace_constraints": [
+        "工具运输必须通过指定工具箱；记录对象内容物与跨区域运输事件。",
+        "工具箱运输期间 Open 为假；在目的地开箱合法。"
+      ],
+      "validation_gates": {
+        "asset_affordances": "planned",
+        "joint_scene_instantiation": "planned",
+        "initial_state_and_reset": "planned",
+        "private_evaluator": "planned",
+        "scripted_physical_feasibility": "planned",
+        "autonomous_trial": "planned"
+      }
+    }
+  ]
+}
