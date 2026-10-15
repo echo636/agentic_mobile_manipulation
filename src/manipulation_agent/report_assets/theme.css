@@ -1,0 +1,29 @@
+/* Shared presentation only. Recorded RGB, video and canvas pixels are untouched. */
+html[data-mas-theme="dark"] { color-scheme: dark !important; background: #101925 !important; color: #e3ebf6 !important; }
+html[data-mas-theme="dark"] body { background-color: #101925 !important; color: #e3ebf6 !important; }
+html[data-mas-theme="light"] { color-scheme: light !important; }
+#mas-theme-toolbar {
+  box-sizing: border-box; display: flex; justify-content: flex-end; align-items: center;
+  gap: 10px; min-height: 44px; padding: 6px 20px; margin: 0;
+  font: 12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #526379 !important; background: #f4f6fa !important; border-bottom: 1px solid #dfe6ef !important;
+  position: relative; z-index: 10; flex-shrink: 0;
+}
+#mas-theme-toolbar .mas-theme-options { display: flex; gap: 2px; padding: 2px; border: 1px solid #cbd5e3 !important; border-radius: 8px; background: #fff !important; }
+#mas-theme-toolbar button {
+  appearance: none; border: 0 !important; border-radius: 5px; background: transparent !important; color: #53657d !important;
+  font: inherit; line-height: 24px; padding: 1px 10px; cursor: pointer; white-space: nowrap;
+}
+#mas-theme-toolbar button[aria-pressed="true"] { background: #e5edfa !important; color: #194a98 !important; font-weight: 650; }
+#mas-theme-toolbar button:hover { background: #eef2f8 !important; }
+#mas-theme-toolbar button:focus-visible { outline: 2px solid #538be1; outline-offset: 2px; }
+html[data-mas-theme="dark"] #mas-theme-toolbar { background: #101925 !important; color: #aebdd0 !important; border-color: #344258 !important; }
+html[data-mas-theme="dark"] #mas-theme-toolbar .mas-theme-options { background: #1b2738 !important; border-color: #344258 !important; }
+html[data-mas-theme="dark"] #mas-theme-toolbar button { background: transparent !important; color: #bdcbe0 !important; }
+html[data-mas-theme="dark"] #mas-theme-toolbar button[aria-pressed="true"] { background: #304c73 !important; color: #eff6ff !important; }
+html[data-mas-theme="dark"] #mas-theme-toolbar button:hover { background: #2a3d57 !important; }
+@media (max-width: 600px) {
+  #mas-theme-toolbar { padding: 6px 12px; gap: 7px; }
+  #mas-theme-toolbar button { padding-inline: 9px; min-height: 30px; }
+}
+@media print { #mas-theme-toolbar { display: none !important; } }
