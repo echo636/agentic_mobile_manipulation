@@ -31,6 +31,7 @@ from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_out
 from manipulation_agent.startup_progress import STARTUP_POLICY, startup_progress_update
 from manipulation_agent.closure import closure_watchdog
 from manipulation_agent.clients.events import parse_events
+from manipulation_agent.batch_storage import BatchStorage
 
 FINAL = {'passed','failed','blocked'}
 
@@ -244,6 +245,11 @@ class Batch:
         self.manifest=json.loads((self.root/'manifest.json').read_text()); self.reports=Path(config['reports'])
         self.lock=threading.RLock(); self.queue=queue.Queue(); self.rows=self.manifest['tasks']
         self.worker_states={};self._archive_pool=None
+        self._draining=False
+        self.storage=BatchStorage(self.root,self.reports,self.manifest,
+            spool=config.get('supervisor_spool_dir'),retry_seconds=config.get('publication_retry_seconds',5),
+            renderer=render_dashboard)
+        recovered=self.storage.recovered_rows()
         validate_manifest_coverage(self.rows,config.get('expected_task_count'))
         expected_tasks={r['index']:r['task'] for r in self.rows}
         for directory in ('records','preflight','controllers','runs','launchers','logs'):
@@ -263,7 +269,15 @@ class Batch:
                     previous.append({k:v for k,v in record.items() if k!='previous_attempts'})
                 r.update(run_id=selection['run_id'],attempt=len(previous)+1,previous_attempts=previous,retry_reason=selection['reason'])
                 saved=self.root/'records'/f"{r['run_id']}.json"
-            if saved.exists(): r.update(json.loads(saved.read_text()))
+            local=recovered.get(r['run_id'])
+            try:r.update(json.loads(saved.read_text()))
+            except FileNotFoundError:pass
+            except OSError:
+                if not local:raise
+            if local and local.get('updated_at','')>r.get('updated_at',''):
+                if (local['index'],local['task'])!=(r['index'],r['task']):
+                    raise RuntimeError('Local checkpoint task identity mismatch')
+                r.update(local)
             if (r['status']=='running' or (r.get('simulator_cleanup') or {}).get('status')=='blocked') and r['run_id'] not in config.get('adopt_inflight',{}):
                 if r.get('execution_finished_at') and (r.get('simulator_cleanup') or {}).get('status')=='passed':
                     continue  # CPU archival is recovered independently below.
@@ -295,7 +309,16 @@ class Batch:
 
     def journal(self, message):
         with self.lock:
-            with (self.root/'journal.md').open('a') as f: f.write(f'\n- {now()} · {message}\n')
+            self.storage.journal(message)
+
+    def drain_requested(self):
+        # Only admission reads the shared control file. Publication during an
+        # active episode must not depend on even a stat() against shared storage.
+        try:self._draining=(self.root/'drain_requested.json').exists()
+        except OSError as exc:
+            self.journal('Admission held: cannot read drain control: '+str(exc))
+            self._draining=True
+        return self._draining
 
     def publish(self):
         with self.lock:
@@ -304,28 +327,21 @@ class Batch:
                       'workers':[{'id':w['id'],'host':w['ssh'][-1], 'gpu':w['gpu'],
                           'port':w['base_port']+w['gpu'], 'interpreter':w['sim_python'],
                           'recording_options':w.get('simulator_env',{})} for w in self.workers],
-                      'draining':(self.root/'drain_requested.json').exists(),
+                      'draining':getattr(self,'_draining',False),
+                      'storage_sync':self.storage.status(),
                       'worker_states':self.worker_states,
                       'run_source_commits':dict(Counter((r.get('run_source') or r.get('source') or {}).get('commit','pending') for r in self.rows))}
             progress['summary']['waiting_resource_workers']=sum(v.get('stage') in
                 {'waiting_for_lease','waiting_for_resources'} for v in self.worker_states.values())
-            write_json(self.root/'progress.json',progress)
-            write_json(self.root/'run_records.json',{'updated_at':now(),'runs':self.rows})
             validation={'status':'running' if progress['summary']['execution_status']=='running' else ('passed' if all(r['status']=='passed' for r in self.rows) else 'failed'),
                         'level':'real_rgb_simulator_batch','task_count':len(self.rows),'summary':progress['summary'],
                         'source':progress['source'],'official_submission_eligible':False,
                         'note':'Task success, controller termination, transport alignment and video completeness are separate fields.'}
-            write_json(self.root/'validation.json',validation)
-            public=self.reports/'behavior100';public.mkdir(parents=True,exist_ok=True)
-            for name in ('progress.json','manifest.json','validation.json','journal.md'):
-                temp=public/(name+'.tmp');shutil.copyfile(self.root/name,temp);temp.replace(public/name)
-            target=self.reports/'behavior100.html'; tmp=target.with_suffix('.html.tmp')
-            tmp.write_text(render_dashboard(progress));tmp.replace(target)
+            self.storage.submit(progress,validation)
 
     def update(self, row, **values):
         with self.lock:
             row.update(values,updated_at=now())
-            write_json(self.root/'records'/f"{row['run_id']}.json",row)
             self.publish()
 
     def unit_state(self, unit):
@@ -1134,8 +1150,10 @@ class Batch:
                 not (r.get('execution_finished_at') and (r.get('simulator_cleanup') or {}).get('status')=='passed')]
             while inflight or not self.queue.empty():
                 adopting=inflight[0] if inflight else None
-                if not adopting and (self.root/'drain_requested.json').exists():
+                if not adopting and self.drain_requested():
                     self.worker_state('drained');return
+                if not adopting and getattr(self,'storage',None) and self.storage.status()['local_checkpoint_error']:
+                    self.worker_state('waiting_for_local_storage');time.sleep(poll);continue
                 if not capacity.acquire(blocking=False):
                     self.worker_state('waiting_for_capacity');time.sleep(poll);continue
                 lease=None;row=None;paths=None;cleared=True
@@ -1147,7 +1165,7 @@ class Batch:
                         row=inflight.pop(0);cleared=False;paths=self.adopt_one(row)
                     else:
                         if not self.resource_admission():continue
-                        if (self.root/'drain_requested.json').exists():continue
+                        if self.drain_requested():continue
                         try:row=self.queue.get_nowait()
                         except queue.Empty:return
                         cleared=False;paths=self.run_one(row,config['gpu'])
@@ -1198,7 +1216,7 @@ class Batch:
                 for future in futures:
                     try:future.result()
                     except Exception as exc:self.journal('WORKER EXIT: '+str(exc))
-            if not self.queue.empty() and not (self.root/'drain_requested.json').exists() and all(
+            if not self.queue.empty() and not self.drain_requested() and all(
                     self.worker_states.get(w['id'],{}).get('stage')=='disabled' for w in self.workers):
                 raise RuntimeError('No usable worker: static admission failed; unstarted tasks remain planned')
             for future in archived:
@@ -1206,7 +1224,7 @@ class Batch:
                 except Exception as exc:self.journal('ARCHIVE EXIT: '+str(exc))
         self._archive_pool=None
         self.publish()
-        require_completed_scope(required_rows,draining=(self.root/'drain_requested.json').exists())
+        require_completed_scope(required_rows,draining=self.drain_requested())
 
 
 def main():
@@ -1215,15 +1233,19 @@ def main():
     with (root/'supervisor.lock').open('w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         batch=Batch(config)
-        if a.publish_only:batch.publish()
-        elif a.bootstrap_first:
-            first=next(r for r in batch.rows if r['status']=='planned')
-            batch.run(1)
-            if first.get('evidence_alignment')!='passed' or first.get('video_validation')!='passed':
-                raise RuntimeError('First episode did not validate the real model/replay pipeline; remaining tasks stay planned')
-            batch.journal('Real model/replay pipeline passed; continuing all remaining planned tasks on the configured GPU slots.')
-            batch.run(a.limit)
-        else:batch.run(a.limit)
+        try:
+            if a.publish_only:batch.publish()
+            elif a.bootstrap_first:
+                first=next(r for r in batch.rows if r['status']=='planned')
+                batch.run(1)
+                if first.get('evidence_alignment')!='passed' or first.get('video_validation')!='passed':
+                    raise RuntimeError('First episode did not validate the real model/replay pipeline; remaining tasks stay planned')
+                batch.journal('Real model/replay pipeline passed; continuing all remaining planned tasks on the configured GPU slots.')
+                batch.run(a.limit)
+            else:batch.run(a.limit)
+        finally:
+            if not batch.storage.close(config.get('publication_flush_seconds',30)):
+                print('Supervisor metadata sync pending; durable local checkpoint: '+str(batch.storage.spool),file=sys.stderr)
 
 
 if __name__=='__main__':main()
