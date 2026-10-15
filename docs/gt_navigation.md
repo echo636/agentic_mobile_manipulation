@@ -1,5 +1,7 @@
 # Visual-point GT navigation
 
+> Historical implementation. The current RGB backend uses [official Symbolic navigation](symbolic_navigation.md), with endpoint teleportation and no path execution. Descriptions and results below belong to the earlier GT/online implementations.
+
 The default RGB executor now uses the visual-point GT planning strategy from
 `dadwadw233/habitat-gs`, branch `jinkai/harness`, commit
 `0815cf234ee591bacd8017e9b1def4fac13e649b`. Attribution and the source license

@@ -12,7 +12,7 @@ Then call list_skills and read_skill(name="visual-manipulation", resource="SKILL
 Read relevant exploration, pick-and-place and recovery skills as needed; they are frozen workflow documents, not action primitives.
 Build and revise a plan. Remember visual landmarks, completed items and uncertainty with remember; use recall when needed.
 For act, select a normalized pixel in the exact latest image_ref. Never invent a simulator object name or ID.
-Use navigate_to with a visible floor pixel to move to that floor location (or the nearest safe reachable point). An elevated object pixel instead requests a nearby approach position. Re-mark the object in the returned RGB before manipulating it.
+Use navigate_to on a visible object to approach it. Navigation selects a valid nearby stance and moves directly there; it does not execute a travel path. The pixel selects the object, not an exact floor destination. Re-mark the object in the returned RGB before manipulating it.
 Manipulation primitives, including grasp, never move or turn the base automatically. If out_of_reach is returned, explicitly call act with primitive=navigate_to to a closer visible approach, inspect its returned RGB, and reselect the manipulation target before retrying.
 Use look for bounded in-place turns when searching. Positive yaw turns left. Inspect the four camera images and execution feedback; no wrist camera or inventory truth is available.
 The ideal motor executor may use private geometry only to execute YOUR chosen pixel/action; it cannot choose a target for you.
@@ -35,7 +35,7 @@ There is no oracle object list, object ID, distance, map, state flag or evaluato
 act takes primitive, revision and target={image_ref: latest image reference, point: [x,y]} with normalized x left-to-right and y top-to-bottom.
 Navigate toward a visible target, then select it again in the fresh image before manipulation. release/wait use a null target.
 Manipulation primitives, including grasp, never move or turn the base automatically. If out_of_reach is returned, explicitly call act with primitive=navigate_to to a closer visible approach, inspect its returned RGB, and reselect the manipulation target before retrying.
-Once the target is clearly visible and within manipulation range, select it for the intended manipulation action instead of navigating toward it again. For floor travel, click the desired destination; for manipulation, approach the visible object only when needed.
+Once the target is clearly visible and within manipulation range, select it for the intended manipulation action instead of navigating toward it again. navigate_to selects a valid stance near the visible object and moves directly there without executing a travel path. Its pixel selects an object, not an exact floor destination.
 When approaching an object to manipulate it, navigate toward a visible point on that object. If the object becomes cropped, hidden by the robot, or too small to identify in the fresh RGB, first move to a visible observation position and reselect the object; do not guess a manipulation pixel.
 Four fixed cameras share capture_id/captured_at/sim_step and show directions relative to the robot. Capture does not rotate or move the robot. No wrist image, depth or geometry is model input.
 Any of the four current image refs can supply a target; no turn is needed merely to see sideways or behind. look turns in place when a different physical orientation is useful; positive yaw turns left, within +/-90 degrees.
