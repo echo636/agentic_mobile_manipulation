@@ -68,10 +68,56 @@ class GoalReplayBrowserTests(unittest.TestCase):
                 self.assertGreater(page.locator('#tool-trace-feed .goal-notes').count(),0)
                 self.assertIn('agent step 1',page.locator('#tool-trace-feed').inner_text())
                 page.locator('#view-video').click();page.locator('#step-select').select_option('1')
-                page.locator('#video-task-notes .goal-tree summary').click()
+                page.locator('#video-task-notes .goal-tree > summary').click()
                 self.assertIn('Device on',page.locator('#video-task-notes').inner_text())
                 self.assertEqual(page.locator('#video-task-notes').get_attribute('data-version'),'1')
                 self.assertFalse(errors,errors)
+            finally:browser.close()
+
+    def test_goal_history_revisions_keep_matching_actions_and_plain_control(self):
+        data=fixture()
+        first={'version':1,'agent_step':0,'content':json.dumps(tree())}
+        final_state=tree('blocked');final_state['active']['steps']=[]
+        final={'version':2,'agent_step':1,'content':json.dumps(final_state)}
+        data['task_note_versions']=[first,final]
+        data['steps'][1].update(task_notes_before=first,task_notes=first,agent_step=1,is_motor_action=True)
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            try:
+                page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+                page.set_content(render_replay_page(data));page.locator('#view-goals').click()
+                self.assertEqual(page.locator('.gh-current').get_attribute('data-version'),'1')
+                self.assertIn('进行中',page.locator('.gh-current').inner_text())
+                self.assertNotIn('受阻',page.locator('.gh-current').inner_text())
+                self.assertEqual(page.locator('.gh-action').count(),1)
+                page.locator('.gh-action button').click()
+                self.assertEqual(page.locator('#step-select').input_value(),'1')
+                page.locator('#view-goals').click();page.locator('.gh-version').nth(1).click()
+                self.assertIn('进行中 → 受阻',page.locator('.gh-diff').inner_text())
+                self.assertEqual(page.locator('.gh-action').count(),0)
+                self.assertEqual(page.locator('.gh-current .goal-local ol li').count(),0)
+                data['task_note_versions']=[{'version':1,'agent_step':0,'content':'Find and move the device.'}]
+                page.set_content(render_replay_page(data));page.locator('#view-goals').click()
+                self.assertEqual(page.locator('.gh-current .goal-child').count(),0)
+                self.assertIn('自由格式',page.locator('.gh-current').inner_text())
+                self.assertFalse(errors,errors)
+            finally:browser.close()
+
+    def test_goal_diff_preserves_removal_and_reopening(self):
+        old=tree('done');new=tree('active')
+        old['L2'].append({'id':'g2','goal':'Unused child','status':'pending'})
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            try:
+                page=browser.new_page();page.set_content('<div id="goals"></div>')
+                assets=Path(__file__).parents[1]/'src/manipulation_agent/replay_assets'
+                for name in ['goals.js','goal_history.js']:page.add_script_tag(path=str(assets/name))
+                page.evaluate('(ns)=>new ReplayGoalHistory(document.querySelector("#goals"),{task_note_versions:ns,steps:[]})',
+                    [{'version':1,'agent_step':0,'content':json.dumps(old)},
+                     {'version':2,'agent_step':1,'content':json.dumps(new)}])
+                page.locator('.gh-version').nth(1).click();diff=page.locator('.gh-diff').inner_text()
+                self.assertIn('认为已完成 → 进行中',diff)
+                self.assertIn('移除不代表完成',diff)
             finally:browser.close()
 
 

@@ -215,8 +215,8 @@ def render_replay_page(data: dict, source_dir: Path | None = None,
     # Escape < so task text cannot close a JSON script element.
     embedded = json.dumps(data, ensure_ascii=False, allow_nan=False).replace('<', '\\u003c').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
     page = template.replace('@@TITLE@@', html.escape(data['run_id']))
-    page = page.replace('@@CSS@@', (assets / 'style.css').read_text() + (assets / 'transcript.css').read_text() + (assets / 'trace.css').read_text())
-    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', '\n'.join((assets / name).read_text() for name in ('timing.js', 'transcript.js', 'navigation_target.js', 'goals.js', 'player.js', 'trace.js', 'trace_mode.js')))
+    page = page.replace('@@CSS@@', ''.join((assets / name).read_text() for name in ('style.css', 'transcript.css', 'trace.css', 'goal_history.css')))
+    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', '\n'.join((assets / name).read_text() for name in ('timing.js', 'transcript.js', 'navigation_target.js', 'goals.js', 'goal_history.js', 'player.js', 'trace.js', 'trace_mode.js')))
     if not data['audit']:
         page = page.replace(' href="replay_audit.json"', '')
     if not data['video']:
