@@ -24,6 +24,31 @@ from .goal_grounding import efficient_grounding, evaluate_once_per_literal
 from .task_bindings import audit_wildcard_bindings, validate_runtime_bindings
 
 
+def configure_native_fault_reporting(output: Path):
+    """Use external GDB capture instead of Kit's in-process crash reporter.
+
+    The pinned Isaac Sim launcher exposes this option, but OmniGibson does not
+    forward it. Set only the process-local launcher default before constructing
+    the app; never edit installed simulator files or change signal handling.
+    """
+    if not os.environ.get("MAS_NATIVE_FAULT_DIR"):
+        return
+    os.environ.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
+    from isaacsim import SimulationApp
+    defaults = SimulationApp.DEFAULT_LAUNCHER_CONFIG
+    if "enable_crashreporter" not in defaults:
+        raise RuntimeError("Isaac Sim lacks the documented enable_crashreporter option")
+    defaults["enable_crashreporter"] = False
+    write_json(Path(output) / "native_fault_reporting.json", {
+        "status": "configured",
+        "capture": "external_gdb_first_native_signal",
+        "isaacsim_enable_crashreporter": False,
+        "scope": "process_local_launcher_default",
+        "reason": "Kit crashreporter plugin startup SIGSEGV with external capture",
+        "simulation_startup_validated": False,
+    })
+
+
 def normalize_embedded_robot(data, *, reset_controller_state=False):
     """Migrate the known legacy R1Pro serialization in a derived scene copy only."""
     changes = []
@@ -204,6 +229,8 @@ class OmniGibsonBackend:
                         metric._compute_episode_metrics = cached_compute
                 return metrics
 
+        with self._startup_stage('configure_native_fault_reporting'):
+            configure_native_fault_reporting(output)
         with self._startup_stage('construct_evaluator_and_environment'), efficient_grounding():
             self.evaluator = ResearchEvaluator(OmegaConf.create({
                 "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
