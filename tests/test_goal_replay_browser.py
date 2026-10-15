@@ -120,5 +120,68 @@ class GoalReplayBrowserTests(unittest.TestCase):
                 self.assertIn('移除不代表完成',diff)
             finally:browser.close()
 
+    def test_graph_separates_hierarchy_dependencies_and_active_local_plan(self):
+        state=tree()
+        first_id=state['L2'][0]['id']
+        state['L2'].append({'id':'g2','goal':'Store the device','status':'pending',
+                            'depends_on':[first_id],'covers':['r1'],
+                            'check':'Device in storage','evidence':[]})
+        revised=json.loads(json.dumps(state))
+        revised['L2'][0]['status']='done'
+        revised['L2'][1]['status']='active'
+        revised['active']={'subgoal_id':'g2','steps':['Move it to storage'], 'next_check':'Stored'}
+        data=fixture()
+        data['task_note_versions']=[{'version':i+1,'agent_step':i,
+            'content':json.dumps(s)} for i,s in enumerate([state,revised])]
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            try:
+                page=browser.new_page();errors=[]
+                page.on('pageerror',lambda e:errors.append(str(e)))
+                page.set_content(render_replay_page(data));page.locator('#view-goals').click()
+                page.wait_for_selector('.gt-hierarchy',state='attached')
+                self.assertEqual(page.locator('.gt-hierarchy').count(),2)
+                self.assertEqual(page.locator('.gt-dependency').count(),1)
+                self.assertIn('toggle_on',page.locator('.gt-inspector .goal-local').inner_text())
+                page.locator('.gt-child[data-goal-id="g2"]').click()
+                self.assertIn('Device in storage',page.locator('.gt-inspector').inner_text())
+                self.assertEqual(page.locator('.gt-inspector .goal-local').count(),0)
+                page.locator('.gh-version').nth(1).click()
+                self.assertEqual(page.locator('.gt-child[aria-pressed="true"]').get_attribute('data-goal-id'),'g2')
+                self.assertIn('Move it to storage',page.locator('.gt-inspector .goal-local').inner_text())
+                self.assertEqual(page.locator('.gt-changed').count(),2)
+                page.locator('.gt-dependency-toggle input').uncheck()
+                page.wait_for_function('document.querySelectorAll(".gt-dependency").length===0')
+                page.locator('.gt-root').click()
+                self.assertIn('完成条件',page.locator('.gt-inspector').inner_text())
+                self.assertEqual(page.locator('.gt-inspector .goal-local').count(),0)
+                page.set_viewport_size({'width':390,'height':844})
+                self.assertTrue(page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+                page.get_by_role('button',name='适合宽度',exact=True).click()
+                self.assertFalse(errors,errors)
+            finally:browser.close()
+
+    def test_graph_preserves_malformed_authored_dependencies_without_html_execution(self):
+        state=tree();g=state['L2'][0]
+        g.update(goal='<img src=x onerror=alert(1)>',depends_on=['absent',g['id']])
+        state['L2'].append({'id':'duplicate','goal':'A','depends_on':[g['id']]})
+        state['L2'].append({'id':'duplicate','goal':'B','depends_on':'not-an-array'})
+        data=fixture();data['task_note_versions']=[{'version':1,'agent_step':0,'content':json.dumps(state)}]
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            try:
+                page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+                page.set_content(render_replay_page(data));page.locator('#view-goals').click()
+                page.wait_for_selector('.gt-warning')
+                self.assertEqual(page.locator('.gt-child').count(),3)
+                self.assertIn('<img',page.locator('.gt-child').first.inner_text())
+                self.assertEqual(page.locator('.gt-workspace img').count(),0)
+                self.assertIn('absent',page.locator('.gt-warning').inner_text())
+                self.assertIn('重复',page.locator('.gt-warning').inner_text())
+                self.assertTrue(page.get_by_role('button',name='absent · 缺失或重复 ID',exact=True).is_disabled())
+                self.assertTrue(page.get_by_role('button',name='duplicate · 缺失或重复 ID',exact=True).is_disabled())
+                self.assertFalse(errors,errors)
+            finally:browser.close()
+
 
 if __name__=='__main__':unittest.main()

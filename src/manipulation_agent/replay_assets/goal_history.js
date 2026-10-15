@@ -4,12 +4,12 @@ window.ReplayGoalHistory = class {
     this.root=root;this.data=data;this.options=options;
     const candidates=data.task_note_versions?.length?data.task_note_versions:(data.steps??[]).map(s=>s.task_notes).filter(Boolean);
     const seen=new Set();this.notes=candidates.filter(n=>{
-      if(typeof n.content!=='string'||seen.has(n.version))return false;
+      if(typeof n?.content!=='string'||seen.has(n.version))return false;
       seen.add(n.version);return true;
     });
     root.replaceChildren();
     const header=this.node('div',null,'gh-heading');
-    header.append(this.node('h2','目标拆解与维护'),this.node('p','按笔记版本查看：L1 总目标 → L2 子目标，以及当前子目标的 L3 步骤。完成状态是模型判断，独立评分见页面顶部。'));
+    header.append(this.node('h2','目标树与演化'),this.node('p','按笔记版本查看 L1 → L2 目标树。点击节点查看完成检查和证据，当前目标的 L3 计划显示在详情中。节点状态是模型判断，独立评分见页面顶部。'));
     root.append(header);
     if(!this.notes.length){
       root.append(this.node('p','这条运行没有归档可展示的 task_notes。不能从动作轨迹反推模型曾维护的目标树。','gh-empty'));return;
@@ -45,7 +45,8 @@ window.ReplayGoalHistory = class {
       if(!p){out.push('新增子目标：'+name);continue;}
       if(p.status!==g.status)out.push(`${name}：${label[p.status]??p.status??'未记录'} → ${label[g.status]??g.status??'未记录'}`);
       if(changed(p.goal,g.goal))out.push(`${g.id} 的目标描述已修改：${p.goal??'未记录'} → ${g.goal??'未记录'}`);
-      if(changed(p.depends_on,g.depends_on))out.push(`${g.id} 的依赖已修改：${(p.depends_on??[]).join(', ')||'无'} → ${(g.depends_on??[]).join(', ')||'无'}`);
+      const deps=v=>Array.isArray(v)?v.join(', ')||'无':v==null?'无':JSON.stringify(v);
+      if(changed(p.depends_on,g.depends_on))out.push(`${g.id} 的依赖已修改：${deps(p.depends_on)} → ${deps(g.depends_on)}`);
       if(changed(p.covers,g.covers)||changed(p.check,g.check))out.push(`${g.id} 的覆盖条件或完成检查已更新。`);
       if(changed(p.evidence,g.evidence))out.push(`${g.id} 的证据或成员进度已更新。`);
     }
@@ -57,6 +58,7 @@ window.ReplayGoalHistory = class {
     return out.length?out:['目标、状态和步骤未改变；请查看本次更新说明。'];
   }
   select(index){
+    const selectedId=this.tree?.selectedId;this.tree?.destroy();this.tree=null;
     this.selected=index;const note=this.notes[index];this.panel.replaceChildren();
     this.buttons.forEach((b,i)=>{b.setAttribute('aria-current',i===index?'step':'false');b.classList.toggle('selected',i===index);});
     const controls=this.node('div',null,'gh-controls');
@@ -64,13 +66,20 @@ window.ReplayGoalHistory = class {
     prev.disabled=index===0;next.disabled=index===this.notes.length-1;
     prev.onclick=()=>this.select(index-1);next.onclick=()=>this.select(index+1);
     controls.append(prev,this.node('strong',`第 ${index+1} / ${this.notes.length} 次记录 · v${note.version}`),next);this.panel.append(controls);
-    const diff=this.node('section',null,'gh-diff');
-    diff.append(this.node('h3',index?'这一版改了什么':'初始目标拆解'));
+    const scrub=this.node('label',null,'gh-version-slider');scrub.append(this.node('span','计划演化'));
+    const slider=this.node('input');slider.type='range';slider.min='0';slider.max=String(this.notes.length-1);slider.value=String(index);slider.disabled=this.notes.length<2;slider.setAttribute('aria-label','目标树版本');
+    slider.onchange=()=>this.select(Number(slider.value));scrub.append(slider,this.node('span',note.agent_step===0?'行动前':`agent step ${note.agent_step??'?'} 后`));this.panel.append(scrub);
+    const state=this.state(note);
+    const notes=this.node('section',null,'gh-current');notes.dataset.version=String(note.version??'');this.panel.append(notes);
+    if(state&&window.ReplayGoalTree)this.tree=new ReplayGoalTree(notes,state,{previous:this.state(this.notes[index-1]),selectedId});
+    else renderTaskNotes(notes,note);
+    const diff=this.node('details',null,'gh-diff');diff.open=true;
+    diff.append(this.node('summary',index?'这一版改了什么':'初始目标拆解'));
     const list=this.node('ul');for(const change of this.changes(this.notes[index-1],note))list.append(this.node('li',change));
-    diff.append(list);const state=this.state(note);
+    diff.append(list);
     if(state?.change)diff.append(this.node('p','模型给出的更新理由：'+state.change,'gh-reason'));
     this.panel.append(diff);
-    const notes=this.node('section',null,'gh-current');renderTaskNotes(notes,note);this.panel.append(notes);
+    if(this.tree){const raw=this.node('details',null,'goal-raw');raw.append(this.node('summary','查看该版本笔记原文'),this.node('pre',note.content));this.panel.append(raw);}
     const actionSection=this.node('section',null,'gh-actions');actionSection.append(this.node('h3','此版本之后，实际执行了什么'));
     const actions=(this.data.steps??[]).filter(s=>s.is_motor_action&&(s.task_notes_before??s.task_notes)?.version===note.version);
     if(!actions.length)actionSection.append(this.node('p','归档中没有使用此笔记版本的后续 act/look。笔记里的计划步骤不等于已执行动作。'));
