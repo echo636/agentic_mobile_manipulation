@@ -7,12 +7,19 @@ destination or use task-goal knowledge. The selected point orders nearby volumes
 it is not interpreted as the exact origin of the placed object.
 
 Candidate centers account for the offset between object origin and geometry
-center. Asset-supported resting poses within 45 degrees of the carried local
+center. A fitting assembly no longer needs an extra 2 mm on each horizontal
+side or 12 mm above and below to enter the search. Centers are distributed inside
+the remaining fitting interval, even when it is narrow; actual collision,
+support, settling and containment checks still decide acceptance. The complete
+assembly AABB must still fit the volume AABB for a proposed orientation, so this
+does not add partially protruding placements or unrestricted orientation search.
+Asset-supported resting poses within 45 degrees of the carried local
 gravity direction can correct carry-induced tilt without flipping the payload.
 Four world-up yaw rotations of these poses and the carried pose preserve all
 carried relative poses. Candidates are distributed across volumes and orientations
 instead of letting the first volume consume the complete search. Single objects
-without a rigid payload retain the official OmniGibson sampler.
+without a rigid payload try the official OmniGibson volume sampler first and use
+this geometric search if that sampler fails or exhausts its reserved budget.
 
 Candidate acceptance checks initial external collision, support contact, physical
 settling, container root/joint motion and the official `Inside` relation. The

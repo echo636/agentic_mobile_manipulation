@@ -12,15 +12,21 @@ from ..contracts import SkillError
 
 
 def inset_centers(low, high, extent):
-    """Distribute a bounded search over height as well as horizontal position."""
-    padding = (.002, .002, .012)
-    lo = [a + e/2 + pad for a, e, pad in zip(low, extent, padding)]
-    hi = [a - e/2 - pad for a, e, pad in zip(high, extent, padding)]
+    """Sample the fitting center domain without a fixed clearance requirement.
+
+    A narrow but nonempty domain must reach the physical checks: a fixed inset
+    used to reject recorded sandwich/box and magazine/bucket candidates before
+    any collision test. Interior fractions avoid starting flush with the volume
+    boundary when space exists; they never require extra room to admit a pose.
+    """
+    lo = [a + e/2 for a, e in zip(low, extent)]
+    hi = [a - e/2 for a, e in zip(high, extent)]
     if any(a > b for a, b in zip(lo, hi)):
         return []
     xy = [(x, y) for x, y in itertools.product((.5, .15, .85), repeat=2)]
-    return [tuple(a + f*(b-a) for a, b, f in zip(lo, hi, (x, y, z)))
-            for x, y in xy for z in (0., .5, 1.)]
+    return list(dict.fromkeys(
+        tuple(a + f*(b-a) for a, b, f in zip(lo, hi, (x, y, z)))
+        for x, y in xy for z in (.05, .5, .95)))
 
 
 def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None):

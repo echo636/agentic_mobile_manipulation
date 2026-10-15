@@ -48,6 +48,28 @@ class InsetCentersTests(unittest.TestCase):
     def test_oversized_assembly_has_no_spurious_candidates(self):
         self.assertEqual(inset_centers((0,0,0), (1,1,1), (1.1,.1,.1)), [])
 
+    def test_recorded_tight_fits_reach_physical_validation(self):
+        # Recorded placement_retest geometry: these fit the volume AABB but
+        # previously lost every candidate to the 12mm Z / 2mm XY insets.
+        cases = [
+            ((.2910165786743164, .32209181785583496, .1131281852722168),
+             (.16069293022155762, .16447266936302185, .1019972562789917)),
+            ((.3109314441680908, .3201044797897339, .3919306993484497),
+             (.27587199211120605, .3161287307739258, .010726094245910645)),
+        ]
+        for volume, extent in cases:
+            with self.subTest(volume=volume, extent=extent):
+                points = inset_centers((0., 0., 0.), volume, extent)
+                self.assertTrue(points)
+                for point in points:
+                    for center, size, bound in zip(point, extent, volume):
+                        self.assertGreaterEqual(center - size / 2, 0.)
+                        self.assertLessEqual(center + size / 2, bound)
+
+    def test_exact_fit_is_a_candidate_not_a_success_certificate(self):
+        self.assertEqual(inset_centers((0., 0., 0.), (1., 1., 1.), (1., 1., 1.)),
+                         [(.5, .5, .5)])
+
 
 @unittest.skipUnless(importlib.util.find_spec('torch'), 'Requires CPU torch')
 class AssemblySamplingTests(unittest.TestCase):
