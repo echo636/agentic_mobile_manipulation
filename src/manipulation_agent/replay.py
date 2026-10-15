@@ -4,11 +4,11 @@ from __future__ import annotations
 import argparse
 import copy
 from datetime import datetime
-import html
 import json
 import subprocess
 from pathlib import Path
 
+from .replay_shell import render_replay_shell
 from .audit import audit_episode
 from .records import now, write_json, read_run
 from .transcript import build_transcript
@@ -196,14 +196,13 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     return data
 
 
+
 def render_replay_page(data: dict, source_dir: Path | None = None,
                        asset_dir: Path | None = None, *, trace_stats: dict | None = None) -> str:
     """Render archived replay data without rebuilding or changing experiment evidence."""
     data = enrich_tool_trace(data, source_dir, asset_dir)
     if trace_stats is not None:
         trace_stats.update(data['tool_trace_stats'])
-    assets = Path(__file__).with_name('replay_assets')
-    template = (assets / 'index.html').read_text()
     # Combinatorial evaluator arrays can exceed hundreds of MB. They remain
     # in raw run.json, but scores and scalar metrics suffice for the viewer.
     offline = dict(data.get('evaluation_offline_only') or {})
@@ -214,9 +213,7 @@ def render_replay_page(data: dict, source_dir: Path | None = None,
     data = {**data, 'evaluation_offline_only': offline}
     # Escape < so task text cannot close a JSON script element.
     embedded = json.dumps(data, ensure_ascii=False, allow_nan=False).replace('<', '\\u003c').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
-    page = template.replace('@@TITLE@@', html.escape(data['run_id']))
-    page = page.replace('@@CSS@@', ''.join((assets / name).read_text() for name in ('style.css', 'transcript.css', 'trace.css', 'goal_history.css', 'goal_tree.css')))
-    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', '\n'.join((assets / name).read_text() for name in ('timing.js', 'transcript.js', 'navigation_target.js', 'goals.js', 'goal_tree.js', 'goal_history.js', 'player.js', 'trace.js', 'trace_mode.js')))
+    page = render_replay_shell(embedded, title=data['run_id'])
     if not data['audit']:
         page = page.replace(' href="replay_audit.json"', '')
     if not data['video']:

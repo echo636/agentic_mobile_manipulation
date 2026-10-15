@@ -8,7 +8,7 @@ import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, ProxyHandler, build_opener
 
-from manipulation_agent.report_server import ReportHandler, themed_html
+from manipulation_agent.report_server import ReportHandler, themed_html, current_replay_html
 
 urlopen = build_opener(ProxyHandler({})).open
 
@@ -78,6 +78,30 @@ class ReportServerTests(unittest.TestCase):
         self.assertTrue(output.endswith(b'<p>History</p>'))
         evidence = b'<script type="application/json">{"text":"<head>literal"}</script>'
         self.assertIn(evidence, themed_html(legacy + evidence))
+
+    def test_frozen_replay_gets_current_shell_without_rewriting_evidence_or_disk(self):
+        payload = b'{"run_id":"fixture","text":"@@JS@@ @@CSS@@ @@DATA@@","score":0.125}'
+        old = (b'<html><head><title>Old &amp; task \xc2\xb7 Replay</title></head><body>'
+               b'<a class="back" href="/historical/">Back</a><div id="video-workspace"></div>'
+               b'<script type="application/json" id="replay-data">' + payload + b'</script></body></html>')
+        path = self.root / 'replay.html'
+        path.write_bytes(old)
+        with urlopen(self.base + '/replay.html?view=goals') as response:
+            body = response.read()
+            self.assertIn(b'window.ReplayGoalTree = class', body)
+            self.assertIn(payload, body)
+            self.assertIn(b'href="/historical/"', body)
+            self.assertIn(b'<title>Old &amp; task \xc2\xb7 Replay</title>', body)
+        self.assertEqual(path.read_bytes(), old)
+        # A later publication by the frozen coordinator still gets the current UI.
+        path.write_bytes(old.replace(b'0.125', b'0.25'))
+        with urlopen(self.base + '/replay.html') as response:
+            body = response.read()
+            self.assertIn(b'window.ReplayGoalTree = class', body)
+            self.assertIn(payload.replace(b'0.125', b'0.25'), body)
+
+    def test_non_replay_html_is_not_rebuilt(self):
+        self.assertEqual(current_replay_html(self.html), self.html)
 
 
 if __name__ == '__main__':

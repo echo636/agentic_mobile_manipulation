@@ -13,6 +13,9 @@ window.renderTaskNotes = function(root, notes, options = {}) {
     root.append(node('p','自由格式工作笔记 · 未记录结构化目标树；以下保留模型原文。','goal-format-note'));
     root.append(node('pre',notes.content,'goal-plain'));return;
   }
+  const treeLink=node('a',`打开交互目标树 · v${notes.version??'?' } ↗`,'goal-tree-link');
+  const treeUrl=new URL(location.href);treeUrl.searchParams.set('view','goals');treeUrl.searchParams.set('version',String(notes.version??''));treeUrl.hash='';
+  treeLink.href=treeUrl.href;root.append(treeLink);
   const list=(value)=>Array.isArray(value)?value:[];
   const text=(value)=>typeof value==='string'?value:JSON.stringify(value);
   root.append(node('div','L1 · 总目标','goal-level-label'));

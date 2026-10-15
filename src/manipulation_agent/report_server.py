@@ -1,5 +1,6 @@
 """Report-only HTTP server with shared themes and unchanged media byte ranges."""
 import argparse
+import html
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -10,6 +11,29 @@ from urllib.parse import urlsplit
 ASSETS = Path(__file__).with_name('report_assets')
 THEME_HEAD = (b'\n<link rel="stylesheet" href="/_report_theme/theme.css">'
               b'<script src="/_report_theme/theme.js"></script>\n')
+
+
+def current_replay_html(data):
+    """Serve current replay UI even when a frozen experiment publishes an old shell.
+
+    Raw pages, JSON, model notes, scores and media on disk remain immutable.
+    Only the known replay template with its explicit JSON archive is eligible.
+    """
+    payload = re.search(br'<script type="application/json" id="replay-data">(.*?)</script>', data, re.S)
+    if not payload or b'id="video-workspace"' not in data:
+        return data
+    from .replay_shell import render_replay_shell
+    title = re.search(br'<title>(.*?)</title>', data, re.S)
+    back = re.search(br'<a class="back" href="([^"]*)"', data)
+    output = render_replay_shell(payload[1].decode('utf-8'),
+        title=html.unescape(title[1].decode('utf-8')).removesuffix(' · Replay') if title else 'Episode',
+        back_url=html.unescape(back[1].decode('utf-8')) if back else '/').encode('utf-8')
+    for name in (b'replay_audit.json', b'video.json', b'model_public_events.jsonl'):
+        attribute = b' href="' + name + b'"'
+        if attribute not in data:
+            output = output.replace(attribute, b'')
+    assert re.search(br'<script type="application/json" id="replay-data">(.*?)</script>', output, re.S)[1] == payload[1]
+    return output
 
 
 def themed_html(data):
@@ -50,7 +74,10 @@ class ReportHandler(SimpleHTTPRequestHandler):
             self.send_error(403)
             return None
         if path.is_file() and path.suffix.lower() in {'.html', '.htm'}:
-            return self.send_bytes(themed_html(path.read_bytes()), 'text/html; charset=utf-8')
+            data = path.read_bytes()
+            if path.name == 'replay.html':
+                data = current_replay_html(data)
+            return self.send_bytes(themed_html(data), 'text/html; charset=utf-8')
         value = self.headers.get('Range')
         if not value or not path.is_file():
             return super().send_head()
