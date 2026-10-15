@@ -59,10 +59,12 @@ omitting their goals.
    that a task requires 200 useful actions.
 5. Both arms share tools, generic `task_notes`, executor, other skills, scene,
    public context, and budget. Only the hierarchical goal decomposition skill
-   and its read instruction differ. Both disable the harness's mandatory-notes
-   gate: planning instructions come from the skill, and notes are available to
-   both controllers. Report whether planning occurred rather than changing the
-   action admission rules between arms. Do not merge this pilot with BEHAVIOR100 or
+   and its read instruction differ. Both enable the harness's mandatory-notes
+   gate (`require_task_notes=true` in the actual pilot protocol): the first
+   act/look requires a nonempty note in either arm. The control can write freeform
+   notes and has no prescribed goal tree. Report this shared intervention when
+   interpreting the ablation; it is not an entirely unprompted planning baseline.
+   Do not merge this pilot with BEHAVIOR100 or
    the six-identity I/O repair cohort.
 6. Audit controller closure, ordered MCP calls, independent score, observation
    alignment and continuous video. Replay shows model-authored goal-tree versions
