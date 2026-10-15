@@ -21,6 +21,8 @@ SPECS = (
      '/long_horizon_execution_20261015/placement_retest/'),
     ('unscored', '无评分任务补测', 'long_horizon_execution_20261015/unscored_retest', 6,
      '/long_horizon_execution_20261015/unscored_retest/'),
+    ('placement_recovery', '放置 I/O 中断补测', 'long_horizon_execution_20261015/placement_io_retest',
+     {'hierarchical': 6, 'unguided': 2}, '/long_horizon_execution_20261015/placement_io_retest/'),
 )
 
 
@@ -93,7 +95,12 @@ class Overview:
         cohorts = []
         active = []
         for key, title, relative, expected, url in SPECS:
+            if key == 'placement_recovery' and not (ops / relative).exists():
+                continue
             cohort = {'id': key, 'title': title, 'url': url, 'expected_per_arm': expected, 'arms': {}}
+            if key == 'placement_recovery':
+                cohort['url'] = '/long_horizon_execution_20261015/?batch=placement_recovery#explorer'
+                cohort['not_balanced_ablation'] = True
             for arm in ARMS:
                 path = ops / relative / arm / 'progress.json'
                 progress = self.read(path)
@@ -131,6 +138,9 @@ class Overview:
                 'status': 'running', 'summary': counts(progress.get('tasks', [])),
                 'url': '/long_horizon_execution_20261015/custom_pilot/'}
         return {'updated_at': datetime.now(timezone.utc).isoformat(), 'cohorts': cohorts, 'active': active,
+                'placement_audit': self.read(
+                    self.root / 'reports/long_horizon_execution_20261015/placement_failure_audit.json',
+                    None, optional=True),
                 'custom_autonomous': custom,
                 'diagnostics_updated_at': diagnostics.get('updated_at'),
                 'diagnostics': [{k: r.get(k) for k in ('run_id', 'initial_state', 'latest_result', 'service')}

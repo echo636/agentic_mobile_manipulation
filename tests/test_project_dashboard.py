@@ -39,7 +39,7 @@ class ProjectOverviewTests(unittest.TestCase):
         row.update(status='planned')
         self.assertIsNone(overview.compact_row(row, '/', set(), {'fixed'})['source_commit'])
 
-    def test_same_task_in_three_cohorts_keeps_three_denominators(self):
+    def test_same_task_in_four_cohorts_keeps_four_denominators(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             for key, _, relative, _, _ in overview.SPECS:
@@ -50,11 +50,28 @@ class ProjectOverviewTests(unittest.TestCase):
                          'status': 'passed' if key == 'placement' else 'failed',
                          'task_success': key == 'placement'}]}))
             result = overview.Overview(root).build()
-            self.assertEqual(len(result['cohorts']), 3)
-            self.assertEqual([c['arms']['hierarchical']['summary']['successes'] for c in result['cohorts']], [0, 1, 0])
+            self.assertEqual(len(result['cohorts']), 4)
+            self.assertEqual([c['arms']['hierarchical']['summary']['successes'] for c in result['cohorts']], [0, 1, 0, 0])
             self.assertTrue(all(c['arms']['hierarchical']['summary']['total'] == 1 for c in result['cohorts']))
             self.assertTrue(all(a['status'] == 'planned' for a in result['custom_autonomous'].values()))
             self.assertNotIn('overall_success_rate', result)
+            recovery = result['cohorts'][-1]
+            self.assertTrue(recovery['not_balanced_ablation'])
+            self.assertEqual(recovery['expected_per_arm'], {'hierarchical': 6, 'unguided': 2})
+
+    def test_uneven_recovery_sets_are_not_paired_or_imported_into_placement(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            directory = root / 'operations/long_horizon_execution_20261015/placement_io_retest'
+            for arm, indices in [('hierarchical', [23, 56]), ('unguided', [58])]:
+                p = directory / arm; p.mkdir(parents=True)
+                (p / 'progress.json').write_text(json.dumps({'tasks': [
+                    {'index': i, 'run_id': arm + str(i), 'status': 'planned'} for i in indices]}))
+            result = overview.Overview(root).build()
+            recovery = next(c for c in result['cohorts'] if c['id'] == 'placement_recovery')
+            self.assertEqual(recovery['arms']['hierarchical']['summary']['total'], 2)
+            self.assertEqual(recovery['arms']['unguided']['summary']['total'], 1)
+            self.assertFalse(next(c for c in result['cohorts'] if c['id'] == 'placement')['arms']['hierarchical']['available'])
 
 
 if __name__ == '__main__':
