@@ -9,7 +9,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import write_json
 
 ARMS=('hierarchical','unguided')
-MATCH=('task','instance','seed','instruction_sha256','bddl_sha256')
+MATCH=('task','instance','seed','instruction_sha256','bddl_sha256','custom_task_spec_sha256','custom_instance_sha256')
 
 
 def summarize(progress):
@@ -22,7 +22,7 @@ def summarize(progress):
             raise ValueError('Unmatched input at index '+str(i))
         tasks.append({'index':i,'task':rows['hierarchical']['task'],
             'instruction_source':rows['hierarchical'].get('instruction_source'),
-            'arms':{a:{k:r.get(k) for k in ('status','stage','task_success','q_score','agent_steps','replay_url',
+            'arms':{a:{k:r.get(k) for k in ('status','stage','task_success','q_score','custom_score','agent_steps','replay_url',
                 'planning_metrics','termination_reason','controller_status','controller_cleanup','model_usage')} for a,r in rows.items()}})
     def stats(rows):
         return {'total':len(rows),'completed':sum(r.get('status') in {'passed','failed','blocked'} for r in rows),
@@ -32,8 +32,13 @@ def summarize(progress):
     cohorts={'all':list(maps['hierarchical']),
         'detailed_first50':[i for i in maps['hierarchical'] if i<50],
         'short_phrase_last50':[i for i in maps['hierarchical'] if i>=50]}
+    custom=any(r.get('custom_task_spec') for r in maps['hierarchical'].values())
+    if custom:cohorts={'all':list(maps['hierarchical'])}
     paired=[t for t in tasks if all(type(t['arms'][a]['task_success']) is bool for a in ARMS)]
     return {'updated_at':datetime.now(timezone.utc).isoformat(),
+        'custom_tasks':custom,'task_count':len(tasks),
+        'title':'自定义长程任务 · 分层目标规划对照' if custom else '分层目标规划 · 配对对照实验',
+        'max_agent_steps':progress['hierarchical'].get('protocol',progress['hierarchical']).get('max_agent_steps'),
         'cohorts':{c:{a:stats([maps[a][i] for i in ids]) for a in ARMS} for c,ids in cohorts.items()},
         'paired':{'scored':len(paired),'both_success':sum(all(t['arms'][a]['task_success'] for a in ARMS) for t in paired),
             'hierarchical_only':sum(t['arms']['hierarchical']['task_success'] and not t['arms']['unguided']['task_success'] for t in paired),

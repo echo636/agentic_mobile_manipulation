@@ -47,7 +47,7 @@ def evaluation_summary(evaluation):
     if not isinstance(evaluation, dict):
         return evaluation
     return {key: value for key, value in evaluation.items()
-            if key not in {'goal_options', 'initial_goal_options'}}
+            if key not in {'goal_options', 'initial_goal_options', 'goal_events'}}
 
 
 def episode_artifact_hashes(runid, episode, controller):
@@ -548,6 +548,8 @@ class Batch:
         values={key:raw[key] for key in keys if key in raw and key not in {'failure','source','episode_outcome'}}
         values.update(evaluation=raw.get('evaluation'),q_score=(raw.get('evaluation') or {}).get('official_metrics',{}).get('q_score',{}).get('final'),
                       result_capture_status='passed')
+        if (raw.get('evaluation') or {}).get('score_type')=='custom_joint_terminal_and_public_history_v1':
+            values['custom_score']=raw['evaluation']['goal_satisfaction_fraction']
         if raw.get('source'):values['run_source']=raw['source']
         if raw.get('failure') and raw.get('task_success') is None:values['simulator_failure_type']=raw['failure']
         if row.get('outcome_provisional') and isinstance(raw.get('task_success'),bool):
@@ -944,6 +946,8 @@ class Batch:
                     sim_steps=run.get('sim_steps'),evaluation=evaluation_summary(run.get('evaluation')),
                     evaluation_record='runs/'+row['run_id']+'/run.json',
                     q_score=(run.get('evaluation') or {}).get('official_metrics',{}).get('q_score',{}).get('final'),
+                    custom_score=((run.get('evaluation') or {}).get('goal_satisfaction_fraction')
+                                  if (run.get('evaluation') or {}).get('score_type')=='custom_joint_terminal_and_public_history_v1' else None),
                     run_source=run.get('source'),backend=run.get('backend'),agent_outcome=run.get('agent_outcome'),finish_reason=run.get('finish_reason'))
         errors=[]
         for script,filename in [('validate_async_observation.py','observation_validation.json'),('validate_episode_video.py','video_validation.json')]:

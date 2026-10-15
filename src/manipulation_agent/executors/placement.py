@@ -7,6 +7,21 @@ from ..contracts import SkillError
 from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
 
 
+def inside_sample_with_fallback(native, fallback, restore, record):
+    """A bounded native search must leave work available for geometric search."""
+    try:
+        sampled = native()
+    except SkillError as exc:
+        if exc.code != 'native_sampling_budget_exhausted':
+            raise
+        sampled = False
+        record({'status': 'native_sampling_exhausted', 'error': str(exc)})
+    if sampled:
+        return True, False
+    restore()
+    return fallback(), True
+
+
 def scene_object_identities(sim):
     """State snapshots cannot recreate USD objects removed by transition rules."""
     scenes = getattr(sim, 'scenes', None)
@@ -517,9 +532,11 @@ class CheckedPlacement:
         if not fillable or Inside not in held.states:
             raise SkillError('unsupported_relation','Target has no supported fillable volume')
         start=time.monotonic();before=self.sampling_physics_steps
-        residents=self._container_payload(target)
+        # Regrasping an item already inside the destination does not turn the
+        # currently carried assembly into an existing resident to pin in place.
+        moving_ids={id(held),*(id(child) for child,_ in getattr(self,'_carry_contents',[]))}
+        residents=[record for record in self._container_payload(target) if id(record[0]) not in moving_ids]
         resident_count=len(residents)
-        settling_payload=[]
         stabilized_payload=None
         with self._placement_context(target):
             contents=list(self._carry_contents) if self.ideal_carry else []
@@ -529,16 +546,15 @@ class CheckedPlacement:
             self._carry_detach()
             # Capture the anchored physics wrapper installed by the context.
             original_step=self.og.sim.step_physics
+            native_sampling=False
             def preserve_payload_poses():
                 if residents:self._relocate_container_payload(residents)
-                if settling_payload:self._relocate_container_payload(settling_payload)
             def preserve_residents(*args,**kwargs):
                 # The near-bin arm can push an earlier item out while the
                 # official sampler or the settling steps advance physics.
                 # Existing contents are part of the destination's committed
                 # state; keep their link-relative poses until this placement
-                # has been checked. The new item is free during sampling, then
-                # kept at its accepted pose during settling.
+                # has been checked. The new item remains free during settling.
                 preserve_payload_poses()
                 try:return original_step(*args,**kwargs)
                 finally:
@@ -546,6 +562,9 @@ class CheckedPlacement:
             def bounded_step(*args,**kwargs):
                 deadline=getattr(self,'deadline',None)
                 if deadline is not None:deadline.check(changed=True)
+                if native_sampling and (self.sampling_physics_steps-before>=1200 or time.monotonic()-start>30):
+                    raise SkillError('native_sampling_budget_exhausted',
+                                     'Native Inside search exhausted its reserved budget',changed=True)
                 # Managed benchmark episodes have one execution deadline;
                 # the legacy sampler caps apply only to standalone calls.
                 if not getattr(deadline,'managed',False) and (
@@ -568,12 +587,29 @@ class CheckedPlacement:
                 return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
             if contents:RigidContactAPI.is_in_contact=assembly_contact
             sampling_done=False
+            geometric_fallback=False
             try:
                 if assembly_search:
                     from .inside_sampling import sample_assembly_inside
                     sampled=sample_assembly_inside(self,held,target,contents,point=point)
                 else:
-                    sampled=held.states[Inside].set_value(target,True)
+                    from .inside_sampling import sample_assembly_inside
+                    checkpoint=self.og.sim.dump_state(serialized=False)
+                    identities=scene_object_identities(self.og.sim)
+                    particles=snapshot_particle_state(self.og.sim)
+                    def native():
+                        nonlocal native_sampling
+                        native_sampling=True
+                        try:return held.states[Inside].set_value(target,True)
+                        finally:native_sampling=False
+                    def restore():
+                        if scene_object_identities(self.og.sim)!=identities or not particle_state_unchanged(particles):
+                            raise SkillError('target_changed','Scene identities changed during Inside sampling',changed=True)
+                        self.og.sim.load_state(checkpoint,serialized=False)
+                        restore_particle_state(particles)
+                    sampled,geometric_fallback=inside_sample_with_fallback(
+                        native,lambda:sample_assembly_inside(self,held,target,contents,point=point),
+                        restore,self._placement_record)
                 sampling_done=True
             finally:
                 if contents:RigidContactAPI.is_in_contact=original_contact
@@ -583,12 +619,10 @@ class CheckedPlacement:
                 if not sampled:
                     raise SkillError('sampling_error',('Assembly volume search could not find a valid placement'
                                      if assembly_search else 'Official volume sampler could not find a valid placement'),changed=True)
-                # Once the official sampler has found an Inside pose, retain
-                # that link-relative pose while the action's settling ticks
-                # run. Otherwise contact with the nearby robot may eject the
-                # newly placed object before the postcondition is checked.
-                settling_payload.extend(record for record in self._container_payload(target)
-                                        if record[0] is held)
+                # Containers must support the new object under gravity before
+                # its resting pose becomes an ideal carry/stabilization pose.
+                # Freezing an airborne sampler pose falsely validates Inside
+                # and can leave food in a shelf or tools obstructing a lid.
                 self._relocate_contents(held,contents)
                 for _ in range(min(50,max_steps)):
                     # Environment.step does not dispatch through the patched
@@ -599,7 +633,7 @@ class CheckedPlacement:
             finally:
                 self.og.sim.step_physics=original_step
             if not held.states[Inside].get_value(target):
-                raise SkillError('postcondition_error','Object left container after settling',changed=True)
+                raise SkillError('postcondition_error','Object did not remain inside after settling; try another placement',changed=True)
             self._verify_container_payload(target,residents)
             self._verify_payload(dependencies)
             if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
@@ -612,7 +646,9 @@ class CheckedPlacement:
             if not hasattr(self,'_stabilized_container_payloads'):self._stabilized_container_payloads={}
             self._stabilized_container_payloads[target]=stabilized_payload
         return {'primitive':'place_inside','implementation':('transactional_assembly_volume_with_official_Inside'
-                if assembly_search else 'transactional_official_Inside_with_rigid_payload_sampling'),
+                if assembly_search else 'transactional_Inside_with_geometric_fallback' if geometric_fallback
+                else 'transactional_official_Inside_with_rigid_payload_sampling'),
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
                 'target_root_anchored':True,'existing_containment_verified':resident_count,
+                'new_object_settling':'free_physics',
                 'sampling_physics_steps':self.sampling_physics_steps-before}

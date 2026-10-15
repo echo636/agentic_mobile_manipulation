@@ -242,6 +242,11 @@ class OmniGibsonBackend:
         # Keep original task-instance files intact. Evaluator performs its official restoration.
         self.task_metadata = {"task": task, "instance": instance, "split": "public_test",
                               "scene": self.env.task.scene_name, "seed": seed}
+        self._prepare_task_instance()
+
+    def _prepare_task_instance(self):
+        """Extension point before RGB sensors and the first agent observation."""
+        pass
 
     def _config(self, task: str, gpu: int, max_steps: int) -> dict:
         import yaml

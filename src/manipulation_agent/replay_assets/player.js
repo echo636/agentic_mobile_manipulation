@@ -88,6 +88,8 @@ function applyState(next){
   if(zoomView==='target'){$('zoom').close();zoomView=null}
   navigationTarget.update(s,state);updateObservationNote();paintCameras();
   if(window.renderTaskNotes)window.renderTaskNotes($('video-task-notes'),state.side==='before'?s?.task_notes_before:s?.task_notes,{compact:true});
+  if(window.renderGoalEvidence)window.renderGoalEvidence($('video-goal-evidence'),D.evaluation_offline_only?.evaluation,
+    (state.side==='before'?s?.before:s?.after)?.capture?.sim_step??0);
  }
  const paging=state.pages>1?' · '+state.page+'/'+state.pages+' 页':'';
  phaseLabel.textContent=(phaseLabels[phase]||phase)+paging+(state.duration?' · '+state.elapsed.toFixed(1)+' / '+state.duration.toFixed(1)+' s':'');

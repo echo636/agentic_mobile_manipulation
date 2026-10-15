@@ -12,7 +12,7 @@ from ..contracts import SkillError
 
 
 def inset_centers(low, high, extent):
-    """Deterministic, spatially distributed assembly centers, low shelves first."""
+    """Distribute a bounded search over height as well as horizontal position."""
     padding = (.002, .002, .012)
     lo = [a + e/2 + pad for a, e, pad in zip(low, extent, padding)]
     hi = [a - e/2 - pad for a, e, pad in zip(high, extent, padding)]
@@ -20,10 +20,10 @@ def inset_centers(low, high, extent):
         return []
     xy = [(x, y) for x, y in itertools.product((.5, .15, .85), repeat=2)]
     return [tuple(a + f*(b-a) for a, b, f in zip(lo, hi, (x, y, z)))
-            for z in (0., .5, 1.) for x, y in xy]
+            for x, y in xy for z in (0., .5, 1.)]
 
 
-def assembly_orientations(held, root_quat, torch, transforms):
+def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None):
     """Nearby asset-supported resting poses may correct carry-induced tilt.
 
 Compare gravity in the object's local frame, so arbitrary yaw cannot exclude a
@@ -46,9 +46,14 @@ rotation and still must pass post-placement containment checks.
         yaw = transforms.euler2quat(torch.tensor([0.,0.,angle],device=root_quat.device))
         bases.append(('asset_resting_pose', transforms.quat_multiply(yaw,stable)))
     bases.append(('carried_pose',root_quat))
+    angles=[0.,math.pi/2,math.pi,3*math.pi/2]
+    if reference_quat is not None:
+        reference=transforms.quat2mat(reference_quat)
+        aligned=math.atan2(float(reference[1,0]),float(reference[0,0]))-current_yaw
+        angles.extend(aligned+a for a in (0.,math.pi/2,math.pi,3*math.pi/2))
     result = []
     for label, base in bases:
-        for angle in (0.,math.pi/2,math.pi,3*math.pi/2):
+        for angle in angles:
             yaw = transforms.euler2quat(torch.tensor([0.,0.,angle],device=root_quat.device))
             quat = transforms.quat_multiply(yaw,base)
             if any(abs(float(torch.dot(quat,other))) > .99999 for _,other,_ in result):
@@ -65,7 +70,7 @@ Unlike sampling root origins uniformly, inset bounds refer to the whole assembly
 center. Orientations preserve every carried relative pose and never flip it.
 Rejected candidate poses never become committed actions or task evidence.
 """
-    from omnigibson.object_states import Inside
+    from omnigibson.object_states import Inside, Open
     from omnigibson.utils import transform_utils as T
     from omnigibson.utils.usd_utils import RigidContactAPI
     torch, sim = backend.torch, backend.og.sim
@@ -73,10 +78,11 @@ Rejected candidate poses never become committed actions or task evidence.
     initial = sim.dump_state(serialized=False)
     root_pos, root_quat = (v.clone() for v in held.get_position_orientation())
     target_pos, target_quat = (v.clone() for v in target.get_position_orientation())
-    joints = target.get_joint_positions().clone() if target.n_joints else None
+    was_open = bool(target.states[Open].get_value()) if Open in target.states else None
     assembly = [held, *[obj for obj, _ in contents]]
     volumes = [link for link in target.links.values() if link.is_meta_link and
                link.meta_link_type in {'fillable', 'openfillable'}]
+    volume_poses={link.prim_path:tuple(v.clone() for v in link.get_position_orientation()) for link in volumes}
     if point is not None:
         def distance(link):
             lo, hi = link.visual_aabb
@@ -106,7 +112,7 @@ Rejected candidate poses never become committed actions or task evidence.
         # Compute envelopes once for each nearby resting/carried orientation. Merely
         # computing candidates must not step physics or load the whole scene.
         groups = []
-        for orientation_source, quat, angle in assembly_orientations(held,root_quat,torch,T):
+        for orientation_source, quat, angle in assembly_orientations(held,root_quat,torch,T,reference_quat=target_quat):
             check()
             held.set_position_orientation(root_pos, quat)
             backend._relocate_contents(held, contents)
@@ -124,8 +130,18 @@ Rejected candidate poses never become committed actions or task evidence.
                 groups.append([(volume, center, center_offset.clone(), quat.clone(), angle,orientation_source) for center in centers])
         held.set_position_orientation(root_pos, root_quat)
         backend._relocate_contents(held, contents)
-        # Round-robin prevents the first volume/orientation consuming every try.
-        candidates = (c for layer in itertools.zip_longest(*groups) for c in layer if c is not None)
+        # Spread early work across positions as well as orientations. Repeating
+        # many yaws at one occupied center can exhaust the time budget before
+        # trying empty space beside an existing item. Keep each height triplet
+        # together so a thick container bottom does not starve higher poses.
+        diversified=[]
+        for index,group in enumerate(groups):
+            if not group:continue
+            offset=(index*3)%len(group)
+            shifted=group[offset:]+group[:offset]
+            diversified.append([shifted[i:i+3] for i in range(0,len(shifted),3)])
+        candidates=(c for layer in itertools.zip_longest(*diversified)
+                    for chunk in layer if chunk is not None for c in chunk)
         for volume, center, offset, quat, angle, orientation_source in candidates:
             check()
             if attempted >= max_candidates: break
@@ -165,11 +181,18 @@ Rejected candidate poses never become committed actions or task evidence.
             if float(torch.linalg.norm(pos-target_pos)) > .05 or float(T.get_orientation_diff_in_radian(orn,target_quat)) > math.radians(10):
                 reject('container_moved', candidate)
                 continue
-            if joints is not None:
-                threshold = torch.where(target.get_joint_dof_types(), math.radians(1), .01)
-                if bool((torch.abs(target.get_joint_positions()-joints) > threshold).any()):
-                    reject('container_joint_moved', candidate)
-                    continue
+            # A passive lid may settle while the box's usable interior stays
+            # still. Reject motion of the selected volume (e.g. a sliding
+            # drawer), not unrelated articulated joints elsewhere on the asset.
+            volume_pos,volume_quat=volume.get_position_orientation()
+            before_pos,before_quat=volume_poses[volume.prim_path]
+            if float(torch.linalg.norm(volume_pos-before_pos))>.05 or \
+                    float(T.get_orientation_diff_in_radian(volume_quat,before_quat))>math.radians(10):
+                reject('container_volume_moved',candidate)
+                continue
+            if was_open is True and not target.states[Open].get_value():
+                reject('container_closed_during_sampling',candidate)
+                continue
             backend._relocate_contents(held, contents)
             if not held.states[Inside].get_value(target):
                 reject('official_inside_false', candidate)

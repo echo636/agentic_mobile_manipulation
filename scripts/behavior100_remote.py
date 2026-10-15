@@ -177,13 +177,23 @@ def assets(manifest, data_root):
     catalog = yaml.safe_load(config.read_text())
     rows = []
     for task in manifest['tasks']:
-        name, instance = task['task'], task['instance']
+        custom = None
+        if task.get('custom_task_spec'):
+            custom_path = Path(task['custom_task_spec'])
+            if hashlib.sha256(custom_path.read_bytes()).hexdigest() != task['custom_task_spec_sha256']:
+                raise ValueError('Frozen custom task specification changed')
+            custom = json.loads(custom_path.read_text())
+            base = custom['base']
+            name, instance = base['task'], base['instance']
+        else:
+            name, instance = task['task'], task['instance']
         scene = catalog[name][0]['scene_model']
         folder = root/'scene_test/public'/scene/'json'
         paths = {'scene_template': folder/f'{scene}_task_{name}_0_0_template-partial_rooms.json',
                  'instance_state': folder/f'{scene}_task_{name}_instances'/f'{scene}_task_{name}_0_{instance}_template-tro_state.json',
                  'bddl': data_root/'src/BEHAVIOR-1K/bddl3/bddl/activity_definitions'/name/'problem0.bddl'}
-        row = {'task': name, 'scene': scene, 'scene_matches_catalog': scene == task['scene'], 'files': {}}
+        row = {'task': task['task'], 'base_task': name, 'scene': scene,
+               'scene_matches_catalog': scene == task['scene'], 'files': {}}
         for key, path in paths.items():
             row['files'][key] = {'path': str(path), 'exists': path.is_file(),
                                 'sha256': hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None}
@@ -192,9 +202,17 @@ def assets(manifest, data_root):
         try:
             row['runtime_assets'] = inspect_scene_assets(paths['scene_template'], paths['instance_state'],
                 data_root/'data/omnigibson/behavior-1k-assets', scene, task_name=name)
+            if custom is not None:
+                frozen = (custom_path.parent/custom['frozen_instance']['path']).resolve()
+                digest = hashlib.sha256(frozen.read_bytes()).hexdigest()
+                if digest != custom['frozen_instance']['sha256'] or digest != task['custom_instance_sha256']:
+                    raise ValueError('Custom joint initial scene changed')
+                row['custom_scene_assets'] = inspect_scene_assets(frozen, paths['instance_state'],
+                    data_root/'data/omnigibson/behavior-1k-assets', scene, task_name=name)
+                row['custom_scene_sha256'] = digest
         except (OSError, ValueError, KeyError) as exc:
             row['runtime_assets'] = {'status':'failed','error':str(exc)}
-        row['status'] = 'passed' if all(v['exists'] for v in row['files'].values()) and row['scene_matches_catalog'] and row['bddl_matches_manifest'] and row['runtime_assets']['status']=='passed' else 'failed'
+        row['status'] = 'passed' if all(v['exists'] for v in row['files'].values()) and row['scene_matches_catalog'] and row['bddl_matches_manifest'] and row['runtime_assets']['status']=='passed' and row.get('custom_scene_assets',{'status':'passed'})['status']=='passed' else 'failed'
         rows.append(row)
     return {'status': 'passed' if all(r['status']=='passed' for r in rows) else 'failed',
             'available_tasks_sha256': hashlib.sha256(config.read_bytes()).hexdigest(), 'tasks': rows}
@@ -250,6 +268,8 @@ def main():
           '--max-actions',str(manifest['max_actions']),'--max-sim-steps',str(manifest['max_sim_steps']),
           '--output',str(a.data_root/'runs'/row['run_id'])]
     args+=['--goal-skill',manifest.get('goal_skill','hierarchical')]
+    if row.get('custom_task_spec'):
+        args+=['--custom-task',row['custom_task_spec']]
     if manifest.get('require_task_notes'): args.append('--require-task-notes')
     if manifest.get('episode_budget_policy')=='agent_steps':
         args+=['--max-agent-steps',str(manifest['max_agent_steps'])]

@@ -9,6 +9,33 @@ from manipulation_agent.replay import render_replay_page
 
 @unittest.skipUnless(sync_playwright,'optional Playwright browser dependency')
 class GoalReplayBrowserTests(unittest.TestCase):
+    def test_independent_evidence_tracks_time_and_preserves_violations(self):
+        evaluation={'score_type':'custom_joint_terminal_and_public_history_v1',
+            'terminal_conditions':{'clean':False},'historical_conditions':{'delivered':True},
+            'goal_events':[{'kind':'terminal_state','id':'clean','satisfied':True,'env_step':0},
+                           {'kind':'terminal_state','id':'clean','satisfied':False,'env_step':20}],
+            'milestone_events':{'delivered':{'env_step':10}},
+            'public_constraint_violations':[{'id':'lid_open','env_step':15}]}
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            try:
+                page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+                page.set_content('<div id="evidence"></div>')
+                page.add_script_tag(path=str(Path(__file__).parents[1]/'src/manipulation_agent/replay_assets/goals.js'))
+                render=lambda step:page.evaluate('([e,s])=>renderGoalEvidence(document.querySelector("#evidence"),e,s)',[evaluation,step])
+                render(5);text=page.locator('#evidence').inner_text()
+                self.assertIn('1/1',text);self.assertIn('未提供给模型',text)
+                self.assertIn('尚未达成',page.locator('#evidence ul').text_content())
+                self.assertNotIn('lid_open',page.locator('#evidence ul').text_content())
+                render(25)
+                self.assertIn('0/1',page.locator('#evidence').inner_text())
+                self.assertIn('已达成',page.locator('#evidence ul').text_content())
+                self.assertIn('lid_open',page.locator('#evidence ul').text_content())
+                page.evaluate('()=>renderGoalEvidence(document.querySelector("#evidence"),{},25)')
+                self.assertTrue(page.locator('#evidence').is_hidden())
+                self.assertFalse(errors,errors)
+            finally:browser.close()
+
     def test_notes_render_tree_local_steps_and_plain_control_safely(self):
         with sync_playwright() as p:
             browser=p.chromium.launch(headless=True)

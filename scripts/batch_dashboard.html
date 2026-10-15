@@ -32,12 +32,12 @@
 <section class="results" aria-labelledby="task-heading">
 <div class="results-heading"><div class="heading-label"><h2 id="task-heading">任务列表</h2><span class="total-label">__TOTAL__ 项</span></div><label class="search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input id="search" type="search" placeholder="搜索任务名称…" aria-label="搜索任务名称" autocomplete="off"></label></div>
 <nav class="filters" aria-label="按结果筛选">__TABS__</nav>
-<div class="table-wrap"><table><thead><tr><th>任务名称</th><th>结果</th><th title="官方目标满足比例；超时任务仍按超时统计">目标完成度 <span>Q</span></th><th>执行回放</th></tr></thead><tbody>__ROWS__</tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>任务名称</th><th>结果</th><th title="__SCORE_HELP__">__SCORE_LABEL__ <span>__SCORE_SUFFIX__</span></th><th>执行回放</th></tr></thead><tbody>__ROWS__</tbody></table></div>
 <div class="empty" id="empty" hidden>没有找到匹配的任务，试试其他关键词或筛选条件。</div>
 <div class="table-bottom"><span id="visible-count" aria-live="polite">共 __TOTAL__ 项任务</span><span class="desktop-note">点击任务名称可查看任务说明</span><span class="mobile-note">左右滑动查看完整结果</span></div>
 </section>
 </main>
-<footer><span>__SCOPE_NOTE__ <span class="budget">单任务限时 30 分钟，初始化不计入。</span></span><span class="footer-mark">BEHAVIOR · MOBILE MANIPULATION</span></footer>
+<footer><span>__SCOPE_NOTE__ <span class="budget">__BUDGET_NOTE__</span></span><span class="footer-mark">MOBILE MANIPULATION</span></footer>
 </div>
 <script>
 const input=document.querySelector('#search'),rows=[...document.querySelectorAll('tbody tr')],buttons=[...document.querySelectorAll('[data-filter]')];

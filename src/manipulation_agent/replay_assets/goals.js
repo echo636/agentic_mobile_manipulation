@@ -41,3 +41,29 @@ window.renderTaskNotes = function(root, notes, options = {}) {
   if(list(state.uncertainties).length)root.append(node('p','未决问题：'+state.uncertainties.map(text).join('；'),'goal-uncertainties'));
   if(state.change)root.append(node('p','本次更新：'+text(state.change),'goal-change'));
 };
+
+/* Independent evidence is shown only in archived review, never policy input. */
+window.renderGoalEvidence = function(root, evaluation, envStep) {
+  root.replaceChildren();
+  root.hidden=evaluation?.score_type!=='custom_joint_terminal_and_public_history_v1';
+  if(root.hidden)return;
+  root.classList.add('goal-notes');
+  const node=(tag,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=String(text);return e;};
+  const terminal={};
+  for(const event of evaluation.goal_events??[]){
+    if(event.kind==='terminal_state'&&event.env_step<=envStep)terminal[event.id]=event.satisfied;
+  }
+  const done=Object.values(terminal).filter(Boolean).length;
+  const total=Object.keys(evaluation.terminal_conditions??{}).length;
+  root.append(node('strong',`独立验证 · 当前终态条件 ${done}/${total} · 仅供回放，未提供给模型`));
+  const details=node('details'),list=node('ul');
+  details.append(node('summary','历史条件与过程中违反的约束'));
+  for(const id of Object.keys(evaluation.historical_conditions??{})){
+    const event=evaluation.milestone_events?.[id];
+    list.append(node('li',`${event&&event.env_step<=envStep?'已达成':'尚未达成'} · ${id}`));
+  }
+  for(const event of evaluation.public_constraint_violations??[]){
+    if(event.env_step<=envStep)list.append(node('li',`约束违反 · ${event.id} · 仿真步 ${event.env_step}`));
+  }
+  details.append(list);root.append(details);
+};

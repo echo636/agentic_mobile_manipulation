@@ -81,7 +81,9 @@ class ContainerStabilityTests(unittest.TestCase):
         def physics():
             resident.position=5.
             if sampled['done']:held.position=5.
-        sim=types.SimpleNamespace(step_physics=physics)
+        sim=types.SimpleNamespace(step_physics=physics,
+            dump_state=lambda **kw:(resident.position,held.position),
+            load_state=lambda state,**kw:None)
         def sample(target,wanted):
             sim.step_physics();sampled['done']=True;held.position=0.
             return True
@@ -100,7 +102,11 @@ class ContainerStabilityTests(unittest.TestCase):
         b._relocate_contents=lambda held,contents:None
         # Environment.step advances physics without calling the patched
         # sim.step_physics method used by the official volume sampler.
-        b._step=lambda action:physics()
+        def environment_step(action):
+            # An ordinary supported new placement settles naturally. Existing
+            # contents are still protected from the robot during this action.
+            resident.position=5.;held.position=0.
+        b._step=environment_step
         b._verify_container_payload=lambda container,residents:(
             None if resident.states[Inside].get_value(container) else
             (_ for _ in ()).throw(SkillError('postcondition_error','Existing item escaped')))
@@ -183,6 +189,44 @@ class NestedStabilizationTests(unittest.TestCase):
         np.testing.assert_allclose(child.position,[3.1,0,0])
         np.testing.assert_allclose(outer.position,[0,0,0])
         np.testing.assert_allclose(unrelated.position,[1.5,0,0])
+
+
+class CarriedArticulationTests(unittest.TestCase):
+    def fixture(self,initial=.1):
+        class JointVector(list):
+            def clone(self):return JointVector(self)
+        class Body:
+            def __init__(self):self.joints=JointVector([initial])
+            def get_joint_positions(self):return self.joints.clone()
+            def set_joint_positions(self,value):self.joints=JointVector(value)
+            def keep_still(self):pass
+        body=Body();b=ControlledCarry();b.ideal_carry=True
+        b._carry_joint_positions={body:body.get_joint_positions()}
+        return b,body
+
+    def test_carry_preserves_actual_open_or_closed_pose_until_release(self):
+        for initial in [.1,1.5]:
+            b,body=self.fixture(initial)
+            body.joints[0]=2.;b._restore_carry_joints()
+            self.assertEqual(body.joints,[initial])
+            b._carry_detach();body.joints[0]=2.;b._restore_carry_joints()
+            self.assertEqual(body.joints,[2.])
+
+    def test_explicit_operation_can_change_held_articulation(self):
+        b,body=self.fixture()
+        with b._editable_carry_joints(body):
+            body.joints[0]=1.5;b._restore_carry_joints()
+            self.assertEqual(body.joints,[1.5])
+        body.joints[0]=2.;b._restore_carry_joints()
+        self.assertEqual(body.joints,[1.5])
+
+    def test_failed_operation_restores_previous_carry_configuration(self):
+        b,body=self.fixture()
+        with self.assertRaises(ValueError):
+            with b._editable_carry_joints(body):
+                body.joints[0]=1.5
+                raise ValueError('checked operation rejected')
+        b._restore_carry_joints();self.assertEqual(body.joints,[.1])
 
 
 if __name__=='__main__':unittest.main()

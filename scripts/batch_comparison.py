@@ -114,7 +114,7 @@ def render_standalone_dashboard(progress):
         except ValueError:return '—'
     rows=[]
     for row in tasks:
-        state=status_of(row);q=row.get('q_score')
+        state=status_of(row);q=row.get('custom_score') if row.get('custom_task_spec') else row.get('q_score')
         score=(f'<div class="score"><span>{float(q)*100:.0f}<small>%</small></span><span class="score-track"><i style="width:{max(0,min(100,float(q)*100)):.2f}%"></i></span></div>'
                if isinstance(q,(int,float)) else '<span class="unavailable">未取得评分</span>' if state in ('failure','timeout') else '<span class="unavailable">—</span>')
         reason={'controller_failed':'模型运行中断','execution_error':'运行异常','agent_step_budget_exhausted':'agent step 用尽'}.get(row.get('termination_reason'),'')
@@ -147,7 +147,14 @@ def render_standalone_dashboard(progress):
         'PROGRESS_NOTE':f'进行中 {counts["running"]} · 待开始 {counts["queued"]}' if not completed else '所有任务已结束',
         'ROWS':''.join(rows),'TABS':tabs,'SEGMENTS':segments,
         'LIVE_JSON':json.dumps(not completed),'UPDATED_JSON':json.dumps(progress.get('updated_at','')),
-        'SCOPE_NOTE':esc(scope)}
+        'SCOPE_NOTE':esc(scope),
+        'BUDGET_NOTE':('失败的 act/look 调用也计入步数。' if protocol.get('episode_budget_policy')=='agent_steps'
+                       else '任务时间预算以冻结配置为准，初始化单独计时。'),
+        'SCORE_HELP':'官方任务指标；任务成功由独立终态评分决定',
+        'SCORE_LABEL':'目标完成度','SCORE_SUFFIX':'Q'}
+    if any(row.get('custom_task_spec') for row in tasks):
+        values.update(SCORE_HELP='终态与历史条件满足比例；公开过程约束另行判定，全部通过才成功',
+                      SCORE_LABEL='目标与阶段完成度',SCORE_SUFFIX='')
     template=Path(__file__).with_name('batch_dashboard.html').read_text()
     for key,value in values.items():template=template.replace('__'+key+'__',value)
     return template

@@ -27,6 +27,7 @@ def main():
     p.add_argument('--task',default='turning_on_radio');p.add_argument('--instance',type=int,default=301)
     p.add_argument('--seed',type=int,default=0);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--instruction');p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
+    p.add_argument('--custom-task',type=Path,help='Private frozen custom task specification; public instruction only goes to controller')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
@@ -47,6 +48,12 @@ def main():
         if a.max_agent_steps<=0:p.error('--max-agent-steps must be positive')
         a.wall_seconds=None
     if a.record_video is None: a.record_video = a.backend == 'omnigibson'
+    if a.custom_task is not None:
+        custom=json.loads(a.custom_task.read_text())
+        public='\n'.join([custom['public_instruction'],*custom.get('public_context',[])])
+        if a.instruction is not None and a.instruction!=public:
+            p.error('Custom task instruction must equal its frozen public instruction/context')
+        a.instruction=public
     if a.instruction is None:
         catalog=json.loads((Path(__file__).parent/'tasks.json').read_text())
         a.instruction=catalog['tasks'].get(a.task,{}).get('instruction')
@@ -58,13 +65,20 @@ def main():
                    image_history_captures=a.image_history_captures)
         policy.max_turns, policy.max_tokens = a.model_max_turns, a.model_max_tokens
     config=vars(a).copy();config['output']=str(a.output.resolve());config['observation_mode']='rgb_only'
+    config['custom_task']=str(a.custom_task.resolve()) if a.custom_task else None
     config['validation_level']='cpu_rgb_contract_only' if a.backend=='mock' else 'rgb_simulator_requires_controller_image_evidence'
     config['episode_deadline_unix']=deadline.unix
     config['execution_clock_path']=str(deadline.clock_path) if deadline.clock_path is not None else None
     recorder=Recorder(a.output,config);backend=None;harness=None
     try:
         deadline.check()
-        backend=MockRGBBackend(a.output) if a.backend=='mock' else RGBBackend(a.task,a.instance,a.output,seed=a.seed,max_steps=a.max_sim_steps,inside_placement=a.inside_placement,record_video=a.record_video)
+        if a.custom_task:
+            if a.backend!='omnigibson':raise ValueError('Custom task trials require the real simulator')
+            from .executors.custom_task import CustomTaskBackend
+            backend=CustomTaskBackend(a.custom_task,a.output,max_steps=a.max_sim_steps,
+                                      inside_placement=a.inside_placement,record_video=a.record_video)
+        else:
+            backend=MockRGBBackend(a.output) if a.backend=='mock' else RGBBackend(a.task,a.instance,a.output,seed=a.seed,max_steps=a.max_sim_steps,inside_placement=a.inside_placement,record_video=a.record_video)
         backend.deadline=deadline
         with startup_stage(a.output, 'first_observation_and_harness'):
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,

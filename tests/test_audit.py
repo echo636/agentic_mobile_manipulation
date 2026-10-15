@@ -29,6 +29,18 @@ class ModelEvidenceAudit(unittest.TestCase):
     def test_matching_evidence_passes(self):
         self.assertEqual(self.audit()['status'],'passed')
 
+    def test_custom_score_requires_frozen_scene_and_evaluator_provenance(self):
+        self.run['config']['custom_task']='/private/frozen_spec.json'
+        self.run['evaluation']={
+            'score_type':'custom_joint_terminal_and_public_history_v1',
+            'official_submission_eligible':False,'model_notes_used_for_scoring':False,
+            'input_hashes':{'custom_task_spec':'spec-hash','custom_initial_scene':'scene-hash'}}
+        result=self.audit()
+        self.assertEqual(result['status'],'passed')
+        self.assertNotIn('official_task_success',result['checks'])
+        del self.run['evaluation']['input_hashes']['custom_initial_scene']
+        self.assertEqual(self.audit()['status'],'failed')
+
     def test_successful_simulator_does_not_hide_controller_mismatch(self):
         self.item['arguments'] = {'outcome':'achieved','reason':'different trace'}
         self.assertEqual(self.audit()['evidence_alignment'],'failed')

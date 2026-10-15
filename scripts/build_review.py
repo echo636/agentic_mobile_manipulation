@@ -180,6 +180,10 @@ def main():
         </article>''')
     evaluation = run_record.get("evaluation") or {}
     score = ((evaluation.get("official_metrics") or {}).get("q_score") or {}).get("final", "未评分")
+    score_label = '本地官方指标 Q'
+    if evaluation.get('score_type')=='custom_joint_terminal_and_public_history_v1':
+        score=evaluation.get('goal_satisfaction_fraction','未评分')
+        score_label='自定义目标满足比例（非官方 Q）'
     success = evaluation.get("official_task_success", run_record.get("task_success"))
     html_doc = f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>机器人实验审阅 · {h(data.get('run_id', ''))}</title><style>
@@ -204,7 +208,7 @@ def main():
     video{{display:block;width:100%;background:black}}.video-wrap{{width:min(100%,640px);background:var(--panel);padding:12px;border-radius:14px}}
     a{{color:var(--accent)}}@media(max-width:1100px){{.views{{grid-template-columns:repeat(3,1fr)}}}}@media(max-width:650px){{.views{{grid-template-columns:repeat(2,1fr)}}.detailsgrid{{grid-template-columns:1fr}}}}
     </style></head><body><header><a href="#video">① 连续视频</a><a href="#steps">② 逐次工具调用</a></header><main>
-    <h1>机器人实验审阅</h1><p class="meta">{h(args.label)} · {len(cards)} 次工具调用 · {h(data.get('status'))} · 独立任务成功 {h(success)} · 本地官方指标 Q {h(score)}</p>
+    <h1>机器人实验审阅</h1><p class="meta">{h(args.label)} · {len(cards)} 次工具调用 · {h(data.get('status'))} · 独立任务成功 {h(success)} · {h(score_label)} {h(score)}</p>
     <div class="run-meta"><div><small>任务</small>{h(metadata['task'])}</div><div><small>实例 / 种子</small>{h(metadata['instance'])} / {h(metadata['seed'])}</div><div><small>执行方式</small>{h(metadata['execution'])}</div><div><small>模型</small>{h(metadata['model'])}</div><div><small>推理强度</small>{h(metadata['reasoning_effort'])}</div><div><small>动作呈现</small>{h(demo_mode)}</div></div>
     <p class="meta">任务指令：{h(data.get('instruction') or '未记录')}</p>
     <p class="meta">四路 RGB 是执行器录制的机器人观测；第三视角仅供审阅。视频按模拟控制步连续记录，等待时间不计入片长。{h(reasoning_note)}</p>

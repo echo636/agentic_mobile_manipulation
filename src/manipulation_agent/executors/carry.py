@@ -4,7 +4,7 @@ Object identity comes from the selected RGB pixel only. This is a research
 motor protocol, not physical grasp control. Ordinary environment collisions
 and gravity remain enabled; held poses are projected around each control step.
 """
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import json
 from ..contracts import SkillError
 from ..records import now
@@ -24,6 +24,24 @@ def support_closure(root, objects, relation):
 
 
 class ControlledCarry:
+    def _restore_carry_joints(self):
+        # Pose carry represents the selected assembly as a controlled body.
+        # Preserve the captured articulation too; root projection alone can
+        # kick a passive lid open during a turn. Never infer a desired state.
+        for obj,joints in getattr(self,'_carry_joint_positions',{}).items():
+            obj.set_joint_positions(joints);obj.keep_still()
+
+    @contextmanager
+    def _editable_carry_joints(self,obj):
+        positions=getattr(self,'_carry_joint_positions',{})
+        previous=positions.pop(obj,None)
+        try:yield
+        except BaseException:
+            if previous is not None:positions[obj]=previous
+            raise
+        else:
+            if previous is not None:positions[obj]=obj.get_joint_positions().clone()
+
     @contextmanager
     def _anchored_operation(self, obj=None):
         previous=self._base_target;old_object=getattr(self,'_object_anchor',None)
@@ -63,7 +81,8 @@ class ControlledCarry:
         # with their supporting volume, not be left at the previous world pose.
         payload=self._container_payload(obj) if state is Open else []
         particles=snapshot_particles(self.env.scene,[obj]) if state is Open else []
-        with self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
+        edit=self._editable_carry_joints(obj) if state is Open else nullcontext()
+        with edit,self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
             # Upstream symbolic OPEN samples a random opening and returns early
             # when already ajar. Fully open/close all annotated joints instead.
             accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
@@ -170,6 +189,7 @@ class ControlledCarry:
                 else self.robot.get_position_orientation())
         pose=T.pose_transform(*origin,*self._carry_relative)
         self._ideal_held.set_position_orientation(*pose);self._ideal_held.keep_still()
+        self._restore_carry_joints()
         for obj,relative in self._carry_contents:
             obj.set_position_orientation(*T.pose_transform(*pose,*relative));obj.keep_still()
         try:
@@ -198,6 +218,7 @@ class ControlledCarry:
         else:
             self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[]
             self._carry_particles=[]
+            self._carry_joint_positions={}
 
     @contextmanager
     def _placement_context(self,target=None,*,watch=()):
@@ -205,6 +226,7 @@ class ControlledCarry:
         held=getattr(self,'_ideal_held',None);relative=getattr(self,'_carry_relative',None);contents=list(getattr(self,'_carry_contents',[]))
         dependencies=list(getattr(self,'_carry_dependencies',[]))
         particles=list(getattr(self,'_carry_particles',[]))
+        joints=dict(getattr(self,'_carry_joint_positions',{}))
         old_particles=getattr(self,'_placement_particle_payload',(None,[]))
         self._placement_particle_payload=(held,particles)
         previous=getattr(self,'_placement_watch',())
@@ -218,6 +240,7 @@ class ControlledCarry:
             else:
                 self._ideal_held=held;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
                 self._carry_particles=particles
+                self._carry_joint_positions=joints
                 if held is not None:self._carry_follow()
             raise
         finally:
@@ -277,10 +300,13 @@ class ControlledCarry:
             relative=T.relative_pose_transform(lifted,original[1],base_pos,base_quat)
         self._ideal_held=obj;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
         self._carry_particles=particles
+        self._carry_joint_positions={body:body.get_joint_positions().clone()
+            for body in [obj,*[child for child,_ in contents]] if getattr(body,'n_joints',0)}
         self._carry_record(status='attached',object=obj.name,contained_objects=[c.name for c,_ in contents],
                            payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
                            contained_particles=particle_count(particles,'contained'),
                            supported_particles=particle_count(particles,'supported'),
+                           preserved_articulated_objects=[body.name for body in self._carry_joint_positions],
                            implementation='pose_projection_no_fixed_joint',original_position=original[0].tolist())
         self._carry_follow()
         with self._anchored_operation():

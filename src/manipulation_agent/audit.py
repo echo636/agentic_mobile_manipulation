@@ -63,6 +63,15 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         'independent_task_success': run.get('task_success') is True,
         'official_task_success': run.get('evaluation', {}).get('official_task_success') is True,
     }
+    if run['config'].get('custom_task'):
+        checks.pop('official_task_success')
+        evaluation=run.get('evaluation') or {}
+        checks['custom_evaluator_provenance'] = (
+            evaluation.get('score_type')=='custom_joint_terminal_and_public_history_v1'
+            and evaluation.get('official_submission_eligible') is False
+            and evaluation.get('model_notes_used_for_scoring') is False
+            and all(evaluation.get('input_hashes',{}).get(key) for key in
+                    ('custom_task_spec','custom_initial_scene')))
     rgb_evidence = {}
     if rgb:
         rgb_evidence = audit_rgb_transport(run_dir, model_sim_events, model_events)

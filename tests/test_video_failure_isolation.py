@@ -80,13 +80,23 @@ class VideoFailureIsolationTests(unittest.TestCase):
                 backend.finalize_video=lambda:recording.finish(backend.steps)
                 pixels={v:np.zeros((32,32,3),dtype=np.uint8) for v in views}
                 children=[];timers=[];owner=threading.get_ident();callback_threads=[]
+                encoder_startup_seconds=0.
 
                 def stalled_encoder(command,**kwargs):
+                    nonlocal encoder_startup_seconds
                     # Accept the first bytes, preserve an output fragment, then
                     # stop draining stdin. No simulator dependency or fake Future.
                     script="from pathlib import Path; import os,sys,time; Path(sys.argv[1]).write_bytes(b'partial-video'); os.read(0,1); time.sleep(30)"
-                    child=real_popen([sys.executable,'-c',script,command[-1]],**kwargs)
+                    started=time.monotonic()
+                    child=real_popen([sys.executable,'-I','-S','-c',script,command[-1]],**kwargs)
                     children.append(child)
+                    # Exercise a running encoder blocked on stdin, rather than
+                    # racing cancellation against Python/site startup on NAS.
+                    deadline=started+5
+                    while not Path(command[-1]).exists() and child.poll() is None and time.monotonic()<deadline:
+                        time.sleep(.01)
+                    self.assertTrue(Path(command[-1]).exists(),'Fixture encoder did not become ready')
+                    encoder_startup_seconds+=time.monotonic()-started
                     return child
 
                 def check_active():
@@ -121,7 +131,7 @@ class VideoFailureIsolationTests(unittest.TestCase):
                         else:
                             self.assertTrue(action['ok'])
                             self.assertTrue(recording.closed)
-                            self.assertLess(elapsed,2)
+                            self.assertLess(elapsed-encoder_startup_seconds,2)
                         finished=harness.call('finish',{'outcome':'aborted' if stop else 'achieved',
                                                        'reason':'fixture result'},'finish')
                         self.assertTrue(finished['closed'])
