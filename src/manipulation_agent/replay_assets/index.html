@@ -8,7 +8,7 @@
 </header>
 <main>
   <nav class="replay-viewbar" aria-label="回放展示方式">
-    <div class="replay-view-tabs"><button id="view-trace" aria-pressed="true">完整过程</button><button id="view-goals" aria-pressed="false">目标树与演化</button><button id="view-video" aria-pressed="false">视频回放</button></div>
+    <div class="replay-view-tabs"><button id="view-trace" aria-pressed="true">完整过程</button><button id="view-video" aria-pressed="false">视频回放</button></div>
     <span id="trace-stats" class="trace-stats"></span>
     <a id="spectator-full-video" hidden target="_blank" rel="noopener">完整第三人称视频 ↗</a>
     <button id="trace-top" class="trace-top" title="返回过程开头">↑ 顶部</button>
@@ -17,7 +17,6 @@
     <div class="trace-caption">按记录顺序展示模型原文、工具调用及实际返回的图片。点击图片可放大，点击“回放此步”可跳到视频。</div>
     <div id="tool-trace-feed"></div>
   </section>
-  <section id="goals-workspace" class="goals-workspace" aria-label="目标拆解与维护历史" hidden></section>
   <div class="replay-workspace" id="video-workspace" hidden>
     <section class="observation-panel" aria-label="同步观测">
       <div class="panel-heading"><div><span class="eyebrow">ROBOT VIEW</span><h2>机器人视角</h2></div><div class="view-actions"><div class="view-tabs" role="group" aria-label="观测来源"><button id="mode-execution" aria-pressed="true">执行画面</button><button id="mode-input" aria-pressed="false">模型输入</button></div><button id="fullscreen" class="icon-button" title="全屏回放" aria-label="全屏回放">⛶</button></div></div>

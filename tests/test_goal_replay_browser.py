@@ -56,131 +56,77 @@ class GoalReplayBrowserTests(unittest.TestCase):
                 self.assertFalse(errors,errors)
             finally:browser.close()
 
-    def test_full_replay_keeps_plan_visible_at_its_action_step(self):
-        data=fixture();notes={'version':1,'agent_step':0,'content':json.dumps(tree())}
-        action=data['steps'][1]
-        action.update(task_notes_before=notes,task_notes=notes,agent_step=1,is_motor_action=True)
+    def test_inline_tree_follows_step_versions_and_video_without_separate_view(self):
+        data=fixture();first={'version':1,'agent_step':0,'content':json.dumps(tree())}
+        final_state=tree('blocked');final_state['active']['steps']=[]
+        final={'version':2,'agent_step':1,'content':json.dumps(final_state)}
+        data['steps'][0].update(task_notes=first,task_notes_before=first,agent_step=1,is_motor_action=True)
+        data['steps'][1].update(task_notes=final,task_notes_before=first,agent_step=2,is_motor_action=True)
+        data['task_note_versions']=[first,final]
         with sync_playwright() as p:
             browser=p.chromium.launch(headless=True)
             try:
                 page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
                 page.set_content(render_replay_page(data))
-                self.assertGreater(page.locator('#tool-trace-feed .goal-notes').count(),0)
-                self.assertIn('agent step 1',page.locator('#tool-trace-feed').inner_text())
+                self.assertEqual(page.locator('#view-goals, #goals-workspace, .goal-tree-link').count(),0)
+                panels=page.locator('#tool-trace-feed .goal-notes')
+                self.assertEqual(panels.count(),2)
+                self.assertIn('进行中',panels.nth(0).inner_text())
+                self.assertNotIn('受阻',panels.nth(0).inner_text())
+                self.assertIn('受阻',panels.nth(1).inner_text())
+                self.assertEqual(panels.nth(1).locator('.goal-local ol li').count(),0)
+                self.assertTrue(panels.nth(0).locator('.goal-child').is_visible())
+                self.assertTrue(panels.nth(0).locator('.goal-support p').is_hidden())
                 page.locator('#view-video').click();page.locator('#step-select').select_option('1')
-                page.locator('#video-task-notes .goal-tree > summary').click()
-                self.assertIn('Device on',page.locator('#video-task-notes').inner_text())
-                self.assertEqual(page.locator('#video-task-notes').get_attribute('data-version'),'1')
-                self.assertFalse(errors,errors)
+                notes=page.locator('#video-task-notes')
+                self.assertEqual(notes.get_attribute('data-version'),'1')
+                self.assertTrue(notes.locator('.goal-child').is_visible())
+                notes.locator('.goal-local summary').click()
+                self.assertIn('toggle_on',notes.locator('.goal-local').inner_text())
+                self.assertEqual(errors,[])
             finally:browser.close()
 
-    def test_goal_history_revisions_keep_matching_actions_and_plain_control(self):
+    def test_legacy_goal_bookmark_lands_on_matching_inline_record(self):
         data=fixture()
-        first={'version':1,'agent_step':0,'content':json.dumps(tree())}
-        final_state=tree('blocked');final_state['active']['steps']=[]
-        final={'version':2,'agent_step':1,'content':json.dumps(final_state)}
-        data['task_note_versions']=[first,final]
-        data['steps'][1].update(task_notes_before=first,task_notes=first,agent_step=1,is_motor_action=True)
+        for i,s in enumerate(data['steps'][:2]):
+            note={'version':i+1,'agent_step':i,'content':json.dumps(tree('active' if i==0 else 'blocked'))}
+            s.update(task_notes=note,is_motor_action=True,agent_step=i+1)
         with sync_playwright() as p:
             browser=p.chromium.launch(headless=True)
             try:
                 page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-                page.set_content(render_replay_page(data));page.locator('#view-goals').click()
-                self.assertEqual(page.locator('.gh-current').get_attribute('data-version'),'1')
-                self.assertIn('进行中',page.locator('.gh-current').inner_text())
-                self.assertNotIn('受阻',page.locator('.gh-current').inner_text())
-                self.assertEqual(page.locator('.gh-action').count(),1)
-                page.locator('.gh-action button').click()
-                self.assertEqual(page.locator('#step-select').input_value(),'1')
-                page.locator('#view-goals').click();page.locator('.gh-version').nth(1).click()
-                self.assertIn('进行中 → 受阻',page.locator('.gh-diff').inner_text())
-                self.assertEqual(page.locator('.gh-action').count(),0)
-                self.assertEqual(page.locator('.gh-current .goal-local ol li').count(),0)
-                data['task_note_versions']=[{'version':1,'agent_step':0,'content':'Find and move the device.'}]
-                page.set_content(render_replay_page(data));page.locator('#view-goals').click()
-                self.assertEqual(page.locator('.gh-current .goal-child').count(),0)
-                self.assertIn('自由格式',page.locator('.gh-current').inner_text())
-                self.assertFalse(errors,errors)
+                page.route('http://replay.test/**',lambda route:route.fulfill(body=render_replay_page(data),content_type='text/html'))
+                page.goto('http://replay.test/replay.html?view=goals&version=2')
+                target=page.locator('#tool-trace-feed .goal-notes[data-version="2"]')
+                page.wait_for_function("document.querySelector('#tool-trace-feed').scrollTop>0")
+                self.assertTrue(page.locator('#trace-workspace').is_visible())
+                self.assertIn('受阻',target.inner_text())
+                self.assertNotIn('view=goals',page.url)
+                self.assertEqual(errors,[])
             finally:browser.close()
 
-    def test_goal_diff_preserves_removal_and_reopening(self):
-        old=tree('done');new=tree('active')
-        old['L2'].append({'id':'g2','goal':'Unused child','status':'pending'})
+    def test_compact_tree_keeps_dependencies_and_plain_notes_on_mobile(self):
+        state=tree();state['L2'][0]['depends_on']=['missing']
+        state['L2'].append({'id':'g2','goal':'Store the device','status':'pending','depends_on':['g1']})
+        data=fixture();note={'version':1,'agent_step':0,'content':json.dumps(state)}
+        data['steps'][1].update(task_notes=note,is_motor_action=True,agent_step=1)
         with sync_playwright() as p:
             browser=p.chromium.launch(headless=True)
             try:
-                page=browser.new_page();page.set_content('<div id="goals"></div>')
-                assets=Path(__file__).parents[1]/'src/manipulation_agent/replay_assets'
-                for name in ['goals.js','goal_history.js']:page.add_script_tag(path=str(assets/name))
-                page.evaluate('(ns)=>new ReplayGoalHistory(document.querySelector("#goals"),{task_note_versions:ns,steps:[]})',
-                    [{'version':1,'agent_step':0,'content':json.dumps(old)},
-                     {'version':2,'agent_step':1,'content':json.dumps(new)}])
-                page.locator('.gh-version').nth(1).click();diff=page.locator('.gh-diff').inner_text()
-                self.assertIn('认为已完成 → 进行中',diff)
-                self.assertIn('移除不代表完成',diff)
-            finally:browser.close()
-
-    def test_graph_separates_hierarchy_dependencies_and_active_local_plan(self):
-        state=tree()
-        first_id=state['L2'][0]['id']
-        state['L2'].append({'id':'g2','goal':'Store the device','status':'pending',
-                            'depends_on':[first_id],'covers':['r1'],
-                            'check':'Device in storage','evidence':[]})
-        revised=json.loads(json.dumps(state))
-        revised['L2'][0]['status']='done'
-        revised['L2'][1]['status']='active'
-        revised['active']={'subgoal_id':'g2','steps':['Move it to storage'], 'next_check':'Stored'}
-        data=fixture()
-        data['task_note_versions']=[{'version':i+1,'agent_step':i,
-            'content':json.dumps(s)} for i,s in enumerate([state,revised])]
-        with sync_playwright() as p:
-            browser=p.chromium.launch(headless=True)
-            try:
-                page=browser.new_page();errors=[]
-                page.on('pageerror',lambda e:errors.append(str(e)))
-                page.set_content(render_replay_page(data));page.locator('#view-goals').click()
-                page.wait_for_selector('.gt-hierarchy',state='attached')
-                self.assertEqual(page.locator('.gt-hierarchy').count(),2)
-                self.assertEqual(page.locator('.gt-dependency').count(),1)
-                self.assertIn('toggle_on',page.locator('.gt-inspector .goal-local').inner_text())
-                page.locator('.gt-child[data-goal-id="g2"]').click()
-                self.assertIn('Device in storage',page.locator('.gt-inspector').inner_text())
-                self.assertEqual(page.locator('.gt-inspector .goal-local').count(),0)
-                page.locator('.gh-version').nth(1).click()
-                self.assertEqual(page.locator('.gt-child[aria-pressed="true"]').get_attribute('data-goal-id'),'g2')
-                self.assertIn('Move it to storage',page.locator('.gt-inspector .goal-local').inner_text())
-                self.assertEqual(page.locator('.gt-changed').count(),2)
-                page.locator('.gt-dependency-toggle input').uncheck()
-                page.wait_for_function('document.querySelectorAll(".gt-dependency").length===0')
-                page.locator('.gt-root').click()
-                self.assertIn('完成条件',page.locator('.gt-inspector').inner_text())
-                self.assertEqual(page.locator('.gt-inspector .goal-local').count(),0)
-                page.set_viewport_size({'width':390,'height':844})
+                page=browser.new_page(viewport={'width':390,'height':844})
+                errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+                page.set_content(render_replay_page(data))
+                panel=page.locator('#tool-trace-feed .goal-notes')
+                self.assertEqual(panel.locator('.goal-child').count(),2)
+                self.assertIn('missing',panel.locator('.goal-dependencies').first.inner_text())
+                self.assertEqual(panel.locator('.goal-current').get_attribute('data-goal-id'),'g1')
                 self.assertTrue(page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
-                page.get_by_role('button',name='适合宽度',exact=True).click()
-                self.assertFalse(errors,errors)
-            finally:browser.close()
-
-    def test_graph_preserves_malformed_authored_dependencies_without_html_execution(self):
-        state=tree();g=state['L2'][0]
-        g.update(goal='<img src=x onerror=alert(1)>',depends_on=['absent',g['id']])
-        state['L2'].append({'id':'duplicate','goal':'A','depends_on':[g['id']]})
-        state['L2'].append({'id':'duplicate','goal':'B','depends_on':'not-an-array'})
-        data=fixture();data['task_note_versions']=[{'version':1,'agent_step':0,'content':json.dumps(state)}]
-        with sync_playwright() as p:
-            browser=p.chromium.launch(headless=True)
-            try:
-                page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-                page.set_content(render_replay_page(data));page.locator('#view-goals').click()
-                page.wait_for_selector('.gt-warning')
-                self.assertEqual(page.locator('.gt-child').count(),3)
-                self.assertIn('<img',page.locator('.gt-child').first.inner_text())
-                self.assertEqual(page.locator('.gt-workspace img').count(),0)
-                self.assertIn('absent',page.locator('.gt-warning').inner_text())
-                self.assertIn('重复',page.locator('.gt-warning').inner_text())
-                self.assertTrue(page.get_by_role('button',name='absent · 缺失或重复 ID',exact=True).is_disabled())
-                self.assertTrue(page.get_by_role('button',name='duplicate · 缺失或重复 ID',exact=True).is_disabled())
-                self.assertFalse(errors,errors)
+                page.evaluate("()=>document.documentElement.dataset.masTheme='dark'")
+                self.assertNotEqual(panel.evaluate('(e)=>getComputedStyle(e).color'),'rgb(38, 62, 80)')
+                page.evaluate("()=>renderTaskNotes(document.querySelector('.goal-notes'),{version:2,content:'Find and move the device.'})")
+                self.assertEqual(panel.locator('.goal-child').count(),0)
+                self.assertIn('Find and move',panel.inner_text())
+                self.assertEqual(errors,[])
             finally:browser.close()
 
 

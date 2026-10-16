@@ -16,18 +16,14 @@ if(data.spectator_walltime_video?.status==='passed'&&data.spectator_walltime_vid
  const link=$('spectator-full-video');link.href=data.spectator_walltime_video.file;link.hidden=false;
  link.textContent='完整第三人称 · 实际耗时 ↗';
 }
-let mode='trace',goalHistory=null;
+let mode='trace';
 function activate(next){
- mode=['video','goals'].includes(next)?next:'trace';document.body.classList.toggle('trace-mode',mode==='trace');
- document.body.classList.toggle('goals-mode',mode==='goals');
+ mode=next==='video'?'video':'trace';document.body.classList.toggle('trace-mode',mode==='trace');
  $('trace-workspace').hidden=mode!=='trace';$('video-workspace').hidden=mode!=='video';
- $('goals-workspace').hidden=mode!=='goals';
  $('view-trace').setAttribute('aria-pressed',String(mode==='trace'));$('view-video').setAttribute('aria-pressed',String(mode==='video'));
- $('view-goals').setAttribute('aria-pressed',String(mode==='goals'));
  $('trace-stats').hidden=mode!=='trace';$('trace-top').hidden=mode!=='trace';
  if(mode==='video')window.startReplayPlayer();
  else if(window.replayPlayerStarted){const play=$('video-play');if(play.textContent.includes('暂停'))play.click();$('episode-video').pause();}
- if(mode==='goals'&&!goalHistory)goalHistory=new ReplayGoalHistory($('goals-workspace'),data,{onReplay:replay});
  const url=new URL(location.href);if(mode!=='trace')url.searchParams.set('view',mode);else url.searchParams.delete('view');if(mode!=='video')url.hash='';if(location.protocol!=='about:')history.replaceState(null,'',url);
  window.dispatchEvent(new Event('resize'));
 }
@@ -46,9 +42,15 @@ const trace=new ReplayToolTrace($('tool-trace-feed'),data,{onReplay:replay,onIma
 const entries=data.tool_trace||data.model_transcript||[];
 $('trace-stats').textContent=entries.filter(e=>['assistant','provider_summary'].includes(e.kind)).length+' 条模型输出 · '+entries.filter(e=>e.kind==='tool_call').length+' 次工具调用 · '+entries.reduce((n,e)=>n+(e.images?.length||0),0)+' 张附件';
 $('view-trace').onclick=()=>activate('trace');$('view-video').onclick=()=>activate('video');
-$('view-goals').onclick=()=>activate('goals');
 $('trace-top').onclick=()=>{$('tool-trace-feed').scrollTo({top:0,behavior:'auto'});if(matchMedia('(max-width:700px)').matches)window.scrollTo(0,0)};
 $('trace-image-close').onclick=()=>$('trace-image-dialog').close();
 $('trace-image-dialog').addEventListener('click',e=>{if(e.target===$('trace-image-dialog'))$('trace-image-dialog').close()});
-activate(params.get('view')==='goals'?'goals':params.get('view')==='video'||/^#step=\d+$/.test(location.hash)?'video':'trace');
+activate(params.get('view')==='video'||/^#step=\d+$/.test(location.hash)?'video':'trace');
+// Existing bookmarks land on the same archived version, now inside the trace.
+if(params.get('view')==='goals'){
+ const version=params.get('version');
+ const notes=[...$('tool-trace-feed').querySelectorAll('.goal-notes')];
+ const target=version?notes.find(n=>n.dataset.version===version):notes[0];
+ if(target)requestAnimationFrame(()=>target.scrollIntoView({block:'start'}));
+}
 })();

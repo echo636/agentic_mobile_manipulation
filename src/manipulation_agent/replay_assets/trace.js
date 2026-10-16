@@ -228,7 +228,7 @@ window.ReplayToolTrace = class ReplayToolTrace {
       }
       const recordedStep=steps.get(entry.step ?? result?.step);
       if(recordedStep?.is_motor_action)header.append(this.node('span',`agent step ${recordedStep.agent_step ?? '?'}`,'tt-count'));
-      if(window.renderTaskNotes && recordedStep?.task_notes && (recordedStep.is_motor_action || (entry.tool==='task_notes' && result))){
+      if(!message && window.renderTaskNotes && recordedStep?.task_notes && (recordedStep.is_motor_action || (entry.tool==='task_notes' && result))){
         const panel=this.node('section');window.renderTaskNotes(panel,recordedStep.task_notes,{compact:recordedStep.is_motor_action});card.append(panel);
       }
       this.source(card, paired ? [entry, result] : [entry]);

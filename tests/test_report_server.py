@@ -88,7 +88,8 @@ class ReportServerTests(unittest.TestCase):
         path.write_bytes(old)
         with urlopen(self.base + '/replay.html?view=goals') as response:
             body = response.read()
-            self.assertIn(b'window.ReplayGoalTree = class', body)
+            self.assertIn(b'goal-inline-tree', body)
+            self.assertNotIn(b'id="view-goals"', body)
             self.assertIn(payload, body)
             self.assertIn(b'href="/historical/"', body)
             self.assertIn(b'<title>Old &amp; task \xc2\xb7 Replay</title>', body)
@@ -97,7 +98,8 @@ class ReportServerTests(unittest.TestCase):
         path.write_bytes(old.replace(b'0.125', b'0.25'))
         with urlopen(self.base + '/replay.html') as response:
             body = response.read()
-            self.assertIn(b'window.ReplayGoalTree = class', body)
+            self.assertIn(b'goal-inline-tree', body)
+            self.assertNotIn(b'id="view-goals"', body)
             self.assertIn(payload.replace(b'0.125', b'0.25'), body)
 
     def test_non_replay_html_is_not_rebuilt(self):

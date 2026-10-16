@@ -1,70 +1,62 @@
-/* Render only explicit model-authored notes. No reconstruction of hidden reasoning. */
+/* Render only explicit model-authored notes, at their original point in the replay. */
 window.renderTaskNotes = function(root, notes, options = {}) {
   root.replaceChildren();
   root.hidden = !notes?.content;
   if (root.hidden) return;
-  const node = (tag, text, cls) => {const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cls)e.className=cls;return e;};
+  const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cls)e.className=cls;return e;};
+  const list=value=>Array.isArray(value)?value:[];
+  const text=value=>typeof value==='string'?value:JSON.stringify(value);
   root.classList.add('goal-notes');
-  root.dataset.version=String(notes.version ?? '');
-  root.append(node('div', `工作记录 v${notes.version ?? '?'} · agent step ${notes.agent_step ?? '?'} · 模型自述，非独立评分`, 'goal-caption'));
+  root.dataset.version=String(notes.version??'');
+  root.setAttribute('aria-label','目标与当前计划');
+  const when=notes.agent_step===0?'行动前':`step ${notes.agent_step??'?'} 后`;
+  root.append(node('div',`目标 · v${notes.version??'?'} · ${when} · 状态由模型记录`,'goal-caption'));
   let state;
-  try {state=JSON.parse(notes.content);} catch {state=null;}
+  try{state=JSON.parse(notes.content);}catch{state=null;}
   if(state?.format!=='goal-tree-v1'||!state.L1||!Array.isArray(state.L2)||state.L2.some(g=>!g||typeof g!=='object')){
-    root.append(node('p','自由格式工作笔记 · 未记录结构化目标树；以下保留模型原文。','goal-format-note'));
     root.append(node('pre',notes.content,'goal-plain'));return;
   }
-  const treeLink=node('a',`打开交互目标树 · v${notes.version??'?' } ↗`,'goal-tree-link');
-  const treeUrl=new URL(location.href);treeUrl.searchParams.set('view','goals');treeUrl.searchParams.set('version',String(notes.version??''));treeUrl.hash='';
-  treeLink.href=treeUrl.href;root.append(treeLink);
-  const list=(value)=>Array.isArray(value)?value:[];
-  const text=(value)=>typeof value==='string'?value:JSON.stringify(value);
-  root.append(node('div','L1 · 总目标','goal-level-label'));
-  root.append(node('strong', text(state.L1.goal ?? state.L1.instruction ?? ''), 'goal-root'));
-  const criteria=node('ul',null,'goal-criteria');
-  for(const r of list(state.L1.criteria))criteria.append(node('li',typeof r==='object'&&r!==null?`${r.id ?? ''}: ${r.condition ?? ''} (${r.basis ?? '来源未注明'})`:text(r)));
-  root.append(criteria);
-  if(list(state.L1.assumptions).length)root.append(node('p','解释假设：'+state.L1.assumptions.map(text).join('；'),'goal-assumptions'));
-  const tree=node('div',null,'goal-children');
-  const labels={pending:'待做',active:'进行中',done:'认为已完成',blocked:'受阻',retired:'已撤销'};
-  const counts=node('div',null,'goal-status-counts');
-  for(const status of ['done','active','pending','blocked','retired']){
-    const n=state.L2.filter(g=>g.status===status).length;
-    if(n)counts.append(node('span',`${labels[status]} ${n}`,'goal-state-pill goal-state-'+status));
-  }
-  root.append(counts);
-  const current=state.L2.find(g=>g.id===state.active?.subgoal_id);
-  if(current)root.append(node('p',`当前聚焦：${current.id} · ${text(current.goal??'')} · ${labels[current.status]??'状态未记录'}`,'goal-focus'));
-  const criterionNames=new Map(list(state.L1.criteria).filter(r=>r&&typeof r==='object').map(r=>[r.id,r.condition]));
-  const goalNames=new Map(state.L2.map(g=>[g.id,g.goal]));
+  const labels={pending:'待做',active:'进行中',done:'已完成',blocked:'受阻',retired:'已撤销'};
+  const tree=node('div',null,'goal-inline-tree');tree.setAttribute('aria-label','总目标与子目标');
+  const top=node('div',null,'goal-root-node');
+  top.append(node('span','总目标','goal-level-label'),node('strong',text(state.L1.goal??state.L1.instruction??''),'goal-root'));
+  tree.append(top);
+  const children=node('ul',null,'goal-children');
+  const goalNames=new Map(state.L2.map(g=>[g.id,text(g.goal??'')]));
   for(const g of state.L2){
     const status=Object.hasOwn(labels,g.status)?g.status:'unknown';
-    const child=node('div',null,'goal-child goal-'+status);child.dataset.goalId=String(g.id??'');
-    if(g.id===state.active?.subgoal_id)child.classList.add('goal-current');
+    const child=node('li',null,'goal-child goal-'+status);child.dataset.goalId=String(g.id??'');
+    const current=g.id===state.active?.subgoal_id;
+    if(current)child.classList.add('goal-current');
     const head=node('div',null,'goal-child-head');
-    head.append(node('span',g.id??'','goal-id'),node('span',labels[status]??'状态未记录','goal-state-pill goal-state-'+status));
-    if(g.id===state.active?.subgoal_id)head.append(node('span','当前聚焦','goal-focus-tag'));
-    child.append(head,node('strong',text(g.goal??''),'goal-child-title'));
+    head.append(node('span',g.id??'','goal-id'),node('strong',text(g.goal??''),'goal-child-title'),node('span',labels[status]??'未记录状态','goal-state-pill goal-state-'+status));
+    if(current)head.append(node('span','当前','goal-focus-tag'));
+    child.append(head);
     const deps=list(g.depends_on);
-    child.append(node('p',deps.length?'依赖：'+deps.map(id=>`${id} · ${goalNames.get(id)??'未记录的子目标'}`).join('；'):'依赖：模型未列出前置子目标','goal-dependencies'));
-    const evidence=node('details',null,'goal-support');
-    evidence.append(node('summary','完成检查与依据'),node('p','服务条件：'+(list(g.covers).map(id=>`${id} · ${criterionNames.get(id)??'条件内容未记录'}`).join('；')||'未注明')),node('p','完成检查：'+text(g.check??'未记录')));
-    if(list(g.evidence).length)evidence.append(node('p','模型记录的证据/成员进度：'+g.evidence.map(text).join('；')));
-    child.append(evidence);
-    tree.append(child);
+    if(deps.length){
+      const dependency=node('p','前置：'+deps.map(text).join('、'),'goal-dependencies');
+      dependency.title=deps.map(id=>`${id} · ${goalNames.get(id)??'未记录的子目标'}`).join('；');child.append(dependency);
+    }
+    if(g.check||list(g.evidence).length){
+      const detail=node('details',null,'goal-support');detail.append(node('summary','完成依据'));
+      if(g.check)detail.append(node('p',text(g.check)));
+      for(const item of list(g.evidence))detail.append(node('p',text(item)));
+      child.append(detail);
+    }
+    children.append(child);
   }
-  const details=node('details',null,'goal-tree');details.open=!options.compact;
-  details.append(node('summary',`L2 · ${state.L2.length} 个子目标 · 状态由模型记录`),tree);root.append(details);
-  if(state.active&&typeof state.active==='object'){
-    const local=node('div',null,'goal-local');
-    local.append(node('strong','L3 · 当前 '+text(state.active.subgoal_id??'无')+' 的局部步骤'));
-    local.append(node('p','仅规划当前子目标，不属于目标树的新一层。','goal-local-caption'));
-    const steps=node('ol');for(const s of list(state.active.steps))steps.append(node('li',text(s)));
-    if(!list(state.active.steps).length)local.append(node('p','当前版本没有记录待执行步骤。'));
-    local.append(steps,node('p','下一检查：'+text(state.active.next_check??'')));root.append(local);
+  if(!state.L2.length)children.append(node('li','尚未记录子目标','goal-empty'));
+  tree.append(children);root.append(tree);
+  const active=state.active;
+  if(active&&(list(active.steps).length||active.next_check)){
+    const local=node('details',null,'goal-local');local.open=!options.compact;
+    local.append(node('summary',`当前步骤${active.subgoal_id?' · '+text(active.subgoal_id):''}`));
+    if(list(active.steps).length){const steps=node('ol');for(const s of active.steps)steps.append(node('li',text(s)));local.append(steps);}
+    if(active.next_check)local.append(node('p','下一检查：'+text(active.next_check)));
+    root.append(local);
   }
-  if(list(state.uncertainties).length)root.append(node('p','未决问题：'+state.uncertainties.map(text).join('；'),'goal-uncertainties'));
-  if(state.change)root.append(node('p','本次更新：'+text(state.change),'goal-change'));
-  const raw=node('details',null,'goal-raw');raw.append(node('summary','查看该版本笔记原文'),node('pre',notes.content));root.append(raw);
+  if(state.change)root.append(node('p','更新：'+text(state.change),'goal-change'));
+  const raw=node('details',null,'goal-raw');raw.append(node('summary','笔记原文'),node('pre',notes.content));root.append(raw);
 };
 
 /* Independent evidence is shown only in archived review, never policy input. */
