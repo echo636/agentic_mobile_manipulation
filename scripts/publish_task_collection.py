@@ -1,4 +1,4 @@
-"""Publish a compact task replay collection from an existing episode inventory."""
+"""Publish experimental-arm task replays from an existing episode inventory."""
 import argparse
 import json
 from pathlib import Path
@@ -22,13 +22,15 @@ def main():
     parser.add_argument('--input', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    episodes = json.loads(args.input.read_text())
+    episodes = [episode for episode in json.loads(args.input.read_text())
+                if episode['arm'] == 'hierarchical']
     page = render_collection(episodes)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix('.html.tmp')
     temporary.write_text(page)
     temporary.replace(args.output)
-    print(json.dumps({'status': 'passed', 'tasks': len({r['index'] for r in episodes}),
+    print(json.dumps({'status': 'passed', 'arm': 'hierarchical',
+                      'tasks': len({r['index'] for r in episodes}),
                       'episodes': len(episodes), 'output': str(args.output),
                       'validation_level': 'presentation generation; browser checks separate'}))
 
