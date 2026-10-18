@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 from ..contracts import SkillError
 from ..deadline import EpisodeDeadline
@@ -16,9 +17,8 @@ from .profiling import component, action_profile
 from .carry import ControlledCarry
 from .material_actions import CheckedMaterialActions
 from .demo_motion import DemoMotion
-from .symbolic_navigation import SymbolicNavigation
 
-class RGBBackend(SymbolicNavigation, DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
@@ -66,7 +66,6 @@ class RGBBackend(SymbolicNavigation, DemoMotion, CheckedMaterialActions, Control
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
-        self._initialize_symbolic_navigation()
         self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
                                  if self.demo_motion else None)
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
@@ -423,9 +422,8 @@ class RGBBackend(SymbolicNavigation, DemoMotion, CheckedMaterialActions, Control
     def _ground(self,target, *, require_object=True, reject_particles=False):
         """Use the chosen pixel's depth backprojection directly as the target.
 
-        Navigation and manipulation resolve the visible surface nearest this
-        same point, solely for its simulator handle. Native navigation approaches
-        the selected object; the pixel is not a requested base XY coordinate.
+        Navigation needs only this point. Manipulation resolves the visible
+        surface nearest this same point, solely for its simulator handle.
         No mesh/collision depth comparison, point replacement, alternate pixel,
         semantic target search or task-scope lookup occurs.
         """
@@ -523,7 +521,7 @@ class RGBBackend(SymbolicNavigation, DemoMotion, CheckedMaterialActions, Control
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
         return False
 
-    def _navigate_gt(self, target, max_steps, *, for_manipulation=False):
+    def _navigate(self, target, max_steps, *, for_manipulation=False):
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
         from dataclasses import asdict, replace
         import numpy as np
@@ -854,9 +852,10 @@ class RGBBackend(SymbolicNavigation, DemoMotion, CheckedMaterialActions, Control
         if primitive=='release':
             with self._anchored_operation():
                 return self.execute(primitive,None,max_steps)
-        obj,point,grounding=self._ground(target,require_object=True,reject_particles=primitive=='grasp')
+        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to',reject_particles=primitive=='grasp')
         if primitive=='navigate_to':
-            return {**self._navigate(obj,max_steps),'private_grounding':grounding}
+            anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
+            return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
         held=self._get_held()
@@ -981,20 +980,17 @@ class RGBBackend(SymbolicNavigation, DemoMotion, CheckedMaterialActions, Control
         result['protocol']='rgb_agent_ideal_executor_v9_shared_episode_clock'
         result['observation_mode']=self.mode
         result['demo_motion']=getattr(self,'demo_motion',False)
-        result.pop('ideal_navigation_distance_m', None)
-        result['navigation_execution']='official_symbolic_endpoint_teleport'
-        result['navigation_path_executed']=False
-        result['time_metric_scope']='env.step including native settling; no travel trajectory or travel duration'
         return result
 
     def provenance(self):
+        from .gt_navigation import SOURCE_COMMIT, STRATEGY
         result=super().provenance()
-        result.update(executor='controlled_carry_and_checked_placement_plus_official_symbolic_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_official_symbolic_navigation',
+        result.update(executor='controlled_carry_and_checked_placement_plus_jinkai_gt_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_jinkai_gt_grid_navigation',
                       observation_mode=self.mode,image_size=self.image_size,demo_motion=getattr(self,'demo_motion',False),
                       grounding='direct_pixel_depth_backprojection_private_executor_only',
                       model_visible_truth=False)
         result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
-            'depth_consistency_check':False, 'navigation_object_lookup':True,
+            'depth_consistency_check':False, 'navigation_object_lookup':False,
             'pixel_sample':'renderer_pixel_center_index_plus_half',
             'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
@@ -1015,15 +1011,21 @@ class RGBBackend(SymbolicNavigation, DemoMotion, CheckedMaterialActions, Control
             'base_anchor':'control_and_sampler_physics_steps',
             'failure_policy':'restore_pre_action_state','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
-        result['base_execution'] = 'official_symbolic_navigation_endpoint; bounded in-place look; ideal grasp/place pose changes'
-        result['navigation'] = {'strategy':'official_symbolic',
-            'target_scope':'RGB-selected object; not exact clicked floor XY',
-            'candidate_sampling':'native', 'collision_and_ik':'native_with_frame_compatibility',
-            'path_executed':False,'path_connectivity_checked':False,'online_mapping':False,
-            'custom_gt_fallback':False,'model_visible_gt':False,
-            'controlled_contents_follow':self.ideal_carry,
-            'payload_collision_scope':'native attached held root; not whole transitive contents',
-            'attempts':self._navigation_attempts,'compatibility':self._navigation_compat}
+        result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
+        result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
+            'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
+            'geometry':'GT floor support and live height-matched collision hulls',
+            'map_input':'GT floor support plus current PhysX overlaps; selected-pixel depth supplies the target',
+            'localization':'private simulator pose',
+            'precomputed_walkability':True,'static_map_loader_disabled':False,'online_mapping':False,
+            'habitat_native_navmesh':False,'dynamic_collision_check':True,
+            'erosion':{'implementation':'height-matched robot collision footprint',
+                'map_resolution_m':0.05},
+            'segment_validation':'exact_grid_supercover_for_planner_and_follower',
+            'approach_visibility':'four-camera frusta and scene rays for all elevated goals, rechecked on arrival',
+            'goal_selection':'jinkai candidate geometry with path-length-aware approach ranking',
+            'pixel_grounding':'pixel-center backprojection; no neighboring-pixel substitution',
+            'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
         result['private_grounding_provider']='selected-pixel depth point to nearest visible mesh surface; no segmentation annotator'
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'

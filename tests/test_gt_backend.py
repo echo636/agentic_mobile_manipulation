@@ -129,7 +129,7 @@ class GTBackendTests(unittest.TestCase):
     def test_static_grid_plans_through_doorway_and_records_private_provenance(self):
         b = self.backend()
         target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 1.]), None))
-        result = b._navigate_gt(target, 700)
+        result = b._navigate(target, 700)
         grid, plan, limit = b._execute_gt_plan.call_args.args
         self.assertFalse(grid.segment_free((-1., 0.), plan.goal))
         self.assertGreater(plan.geodesic_m, 1.5)
@@ -148,45 +148,28 @@ class GTBackendTests(unittest.TestCase):
         target=SimpleNamespace(get_position_orientation=lambda:(Tensor([1.,0.,1.]),None))
         seen=[]
         b._approach_visible=lambda xy,point,selected,**kw:(seen.append(xy) or xy[0]>=.5)
-        b._navigate_gt(target,700)
+        b._navigate(target,700)
         self.assertTrue(seen)
         seen.clear()
-        b._navigate_gt(target,700,for_manipulation=True)
+        b._navigate(target,700,for_manipulation=True)
         self.assertTrue(seen)
 
     def test_disconnected_static_grid_fails_before_any_actuator_or_mapper(self):
         b = self.backend(blocked=True)
         target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 1.]), None))
         with self.assertRaises(SkillError) as error:
-            b._navigate_gt(target, 700)
+            b._navigate(target, 700)
         self.assertEqual(error.exception.code, 'navigation_search_exhausted')
         b._execute_gt_plan.assert_not_called()
         b._update_online_map.assert_not_called()
         self.assertEqual(b.steps, 0)
 
-    def test_symbolic_action_keeps_initialize_four_rgb_and_private_boundary(self):
+    def test_default_gt_action_keeps_initialize_four_rgb_and_private_boundary(self):
         recorder = Recorder(self.output, {'backend': 'cpu_gt_fixture', 'observation_mode': 'rgb_only'})
         b = self.backend()
-        obj = SimpleNamespace(name='PRIVATE_OBJECT')
-        b._ground.return_value = (obj, Tensor([1., 0., 0.]), {'object': obj.name})
-        b._navigation_attempts = 3
-        b._navigation_compat = {'validation': 'cpu_fixture'}
-        b._navigation_action = 'navigate_to'
-        b._navigation_error_group = type('NativeErrors', (Exception,), {})
-        b.sampling_physics_steps = 0
-        b.og.sim.step_physics = Mock()
-        b._carry_follow = Mock()
-        def native(action, selected):
-            self.assertIs(selected, obj)
-            b._position = Tensor([1., 0., 0.])
-            yield 'settle'
-        b._navigation_primitives = SimpleNamespace(apply_ref=native)
-        def step(action): b.steps += 1
-        b._step = step
         with patch.object(OmniGibsonBackend, 'provenance', return_value={}):
             h = VisionHarness(b, recorder)
-        self.assertEqual(recorder.run['backend']['navigation']['strategy'], 'official_symbolic')
-        self.assertFalse(recorder.run['backend']['navigation']['path_executed'])
+        self.assertTrue(recorder.run['backend']['navigation']['precomputed_walkability'])
         self.assertFalse(recorder.run['backend']['navigation']['model_visible_gt'])
         initial = h.call('initialize', {}, 'initial')
         self.assertTrue(initial['initialized'])
@@ -197,7 +180,7 @@ class GTBackendTests(unittest.TestCase):
         target = {'image_ref': first_image['image_ref'], 'point': [.5, .5]}
         action = h.call('act', {'primitive': 'navigate_to', 'target': target, 'revision': 0}, 'navigate')
         self.assertTrue(action['ok'], action)
-        b._ground.assert_called_once_with(target, require_object=True, reject_particles=False)
+        b._ground.assert_called_once_with(target, require_object=False, reject_particles=False)
         looked = h.call('look', {'yaw_degrees': 45, 'revision': 1}, 'look')
         self.assertTrue(looked['ok'], looked)
         for result, revision in [(initial, 0), (action, 1), (looked, 2)]:

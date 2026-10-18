@@ -1,7 +1,5 @@
 # Experimental online depth navigation
 
-> Historical implementation. The current RGB backend uses [official Symbolic navigation](symbolic_navigation.md), with endpoint teleportation and no path execution. Descriptions and results below belong to the earlier GT/online implementations.
-
 The default RGB executor now uses [private static GT-grid navigation](gt_navigation.md).
 It does not initialize, update or close a Cartographer mapper and does not need
 `MAS_CARTOGRAPHER_RUNTIME`. The online mapping/planning modules remain available

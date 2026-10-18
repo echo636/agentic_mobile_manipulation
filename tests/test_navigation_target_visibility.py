@@ -62,7 +62,7 @@ class TargetVisibilityTests(unittest.TestCase):
         return SimpleNamespace(get_position_orientation=lambda:(Tensor([2.3,1.,z]),None))
 
     def test_explicit_approach_rejects_reachable_wrong_side_and_records_arrival(self):
-        b=self.backend;result=b._navigate_gt(self.target(),1000)
+        b=self.backend;result=b._navigate(self.target(),1000)
         self.assertGreater(b.position.tolist()[0],2.)
         self.assertTrue(b._approach_visible.called)
         arrival=json.loads((b.output/'navigation_arrivals.jsonl').read_text())
@@ -72,7 +72,7 @@ class TargetVisibilityTests(unittest.TestCase):
     def test_target_occluded_after_motion_is_not_reported_success(self):
         b=self.backend
         b._approach_visible.side_effect=lambda xy,*_,**kw:not b.moved and xy[0]>2.
-        with self.assertRaises(SkillError) as failure:b._navigate_gt(self.target(),1000)
+        with self.assertRaises(SkillError) as failure:b._navigate(self.target(),1000)
         self.assertEqual(failure.exception.code,'navigation_unreachable')
         self.assertTrue(failure.exception.changed)
         self.assertFalse(json.loads((b.output/'navigation_arrivals.jsonl').read_text())['target_visible'])
@@ -84,7 +84,7 @@ class TargetVisibilityTests(unittest.TestCase):
         self.build_grid.return_value=(g,self.build_grid.return_value[1])
         b._approach_visible.side_effect=lambda *args,**kwargs:True
         target=SimpleNamespace(get_position_orientation=lambda:(Tensor([2.8,1.,1.5]),None))
-        result=b._navigate_gt(target,1000)
+        result=b._navigate(target,1000)
         self.assertLess(result['target_projection_distance_m'],1.4)
         self.headings.assert_not_called()
         self.assertTrue(all(call.kwargs['margin']>=.08 for call in b._approach_visible.call_args_list))
@@ -95,10 +95,10 @@ class TargetVisibilityTests(unittest.TestCase):
         g=GridMap(41,41,.1,(0.,0.),free.tobytes())
         self.build_grid.return_value=(g,self.build_grid.return_value[1])
         target=SimpleNamespace(get_position_orientation=lambda:(Tensor([3.8,1.,0.]),None))
-        first=b._navigate_gt(target,1000)
+        first=b._navigate(target,1000)
         self.assertEqual(first['nav_status'],'approached')
         self.assertGreater(first['target_projection_distance_m'],1.4)
-        self.assertEqual(b._navigate_gt(target,1000)['nav_status'],'already_at_closest_approach')
+        self.assertEqual(b._navigate(target,1000)['nav_status'],'already_at_closest_approach')
 
     def test_distant_initial_projection_does_not_disable_heading_fallback(self):
         b=self.backend
@@ -107,7 +107,7 @@ class TargetVisibilityTests(unittest.TestCase):
         rotated=GridMap(41,41,.1,(0.,0.),raw.tobytes())
         self.build_grid.return_value=(g,self.build_grid.return_value[1])
         self.headings.return_value=[(rotated,.5,rotated,[])]
-        result=b._navigate_gt(self.target(0.),1000)
+        result=b._navigate(self.target(0.),1000)
         self.assertEqual(result['nav_status'],'reached')
         self.assertAlmostEqual(b.position.tolist()[0],2.3)
         self.assertEqual(b._execute_gt_plan.call_count,2)
@@ -125,7 +125,7 @@ class TargetVisibilityTests(unittest.TestCase):
             return g,meta
         self.build_grid.side_effect=build
         with patch('manipulation_agent.executors.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True):
-            result=b._navigate_gt(SimpleNamespace(get_position_orientation=lambda:(Tensor([.1,1.,0.]),None)),1000)
+            result=b._navigate(SimpleNamespace(get_position_orientation=lambda:(Tensor([.1,1.,0.]),None)),1000)
         records=[json.loads(s) for s in (b.output/'navigation_recovery.jsonl').read_text().splitlines()]
         completed=[r for r in records if 'refreshed_start_navigable' in r]
         self.assertEqual([r['refreshed_start_navigable'] for r in completed],[False,True])
@@ -140,7 +140,7 @@ class TargetVisibilityTests(unittest.TestCase):
         b._live_gt_collision_cache={0:{'support':raw}}
         b._execute_gt_plan.side_effect=lambda *a:{'steps':3,'motion_steps':3,'actual_path_distance_m':.01}
         with patch('manipulation_agent.executors.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True):
-            with self.assertRaises(SkillError) as error:b._navigate_gt(self.target(0.),1000)
+            with self.assertRaises(SkillError) as error:b._navigate(self.target(0.),1000)
         self.assertEqual(error.exception.code,'navigation_invalid_start')
         self.assertTrue(error.exception.changed)
         self.assertEqual(b._execute_gt_plan.call_count,1)
@@ -149,7 +149,7 @@ class TargetVisibilityTests(unittest.TestCase):
 
     def test_floor_click_remains_point_navigation_without_camera_constraint(self):
         b=self.backend;b._approach_visible.side_effect=AssertionError('Ground must not use camera visibility')
-        result=b._navigate_gt(self.target(0.),1000)
+        result=b._navigate(self.target(0.),1000)
         self.assertEqual(result['goal_mode'],'point')
         self.assertAlmostEqual(b.position.tolist()[0],2.3)
         b._approach_visible.assert_not_called()
