@@ -4,7 +4,11 @@ This is a new project, not a fork of the source repositories. Keep simulator imp
 
 The maintained origin is https://github.com/echo636/agentic_mobile_manipulation.git, explicitly authorized by the user. Develop this repository; do not push to reference repositories. Keep generated runs, assets, credentials and environments outside Git. Current observation is four fixed RGB cameras (front/back/left/right); no wrist camera or robot rotation is used to collect surround views.
 
-Use `feat/harness-fastmcp` as the active development baseline and PR merge target. Do not create a separate integration branch solely to merge a PR. Resolve conflicts on the existing PR source branch, complete relevant validation, and merge directly into `feat/harness-fastmcp`.
+This worktree is dedicated to custom long-horizon task development, explicitly authorized by the user on 2026-10-19. Work in `/mnt/nas/home--xujingyi/agentic_mobile_manip/repos/manipulation-agentic-system-long-horizon` on `feat/long-horizon-tasks`, created from `feat/harness-fastmcp@924fa8c`. The original `repos/manipulation-agentic-system` worktree remains in use by other agents; make this task's source changes here.
+
+Use `feat/harness-fastmcp` as the PR merge target. Do not create a separate integration branch solely to merge a PR. Resolve conflicts on this feature branch and complete relevant validation before merging.
+
+Reuse environments and assets under the shared workspace root; keep new run outputs and operations records in separate long-horizon batches under `/mnt/nas/home--xujingyi/agentic_mobile_manip/operations/`. Historical custom task instances and evidence are in `operations/long_horizon_execution_20261015/`; preserve their frozen inputs and scores. The current task definitions are in `task_designs/runtime/`, with validation requirements in `docs/custom_long_horizon.md`.
 
 New brain-model experiments default to `gpt-6.1-sol` with reasoning effort `low` (user instruction, 2026-10-13). Preserve the model/effort recorded in historical runs. New BEHAVIOR100 batches default to 50 agent act/look attempts and no episode wall-time deadline; initialization and post-budget closure watchdogs are separate from task execution.
 
