@@ -133,7 +133,7 @@ class ReferenceTask:
         for i in range(1, 4):
             self.transfer_inside(f'can{i}', 'bin')
 
-    def lunch(self, order):
+    def lunch(self, order, *, deliver_box=True):
         if order == 'cleanup_first':
             self.lunch_cleanup()
         self.move('open', 'fridge')
@@ -157,9 +157,25 @@ class ReferenceTask:
         for item, point in [('plate1', [6.5, 3.5, .813]), ('plate2', [7.5, 3.5, .813]),
                             ('fork1', [6.5, 3.2, .813]), ('fork2', [7.5, 3.2, .813])]:
             self.transfer_top(item, 'table', point)
-        self.transfer_top('box', 'table', [8., 3.5, .813])
+        if deliver_box:
+            self.transfer_top('box', 'table', [8., 3.5, .813])
         self.transfer_top('board', 'storage', [5.2, -1.9, .88754])
         self.action('wait', seconds=1.)
+
+    def serve_meal(self):
+        for index in (1, 2):
+            plate = f'plate{index}'
+            for kind, fraction in (('hotdog', .3), ('apple', .7)):
+                self.transfer_top(f'{kind}{index}', plate, self.top(plate, fraction, .5))
+
+    def return_carrier(self):
+        self.transfer_top('box', 'storage', self.top('storage', .75, .5))
+        self.action('wait', seconds=1.)
+
+    def kitchen_service(self, order):
+        self.lunch(order)
+        self.serve_meal()
+        self.return_carrier()
 
     def movie_cleanup(self):
         from omnigibson.object_states import Open
@@ -209,15 +225,23 @@ class ReferenceTask:
             self.move('grasp', item)
             self.move('place_on_top', 'bookshelf', [x, -2.06, .92754])
 
-    def workshop(self, order):
+    def pack_kit(self, *, omit=None):
+        self.move('open', 'box')
+        for item in ('pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill'):
+            if item != omit:
+                self.transfer_inside(item, 'box')
+        self.move('close', 'box')
+
+    def return_kit(self):
+        self.transfer_top('box', 'source', [21.95, 1.2, .91574])
+        self.action('wait', seconds=1.)
+
+    def workshop(self, order, *, return_box=True):
         from omnigibson.object_states import Inside
         tools = ['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill']
         if order == 'cleanup_first':
             self.workshop_cleanup()
-        self.move('open', 'box')
-        for item in tools:
-            self.transfer_inside(item, 'box')
-        self.move('close', 'box')
+        self.pack_kit()
         if order == 'pack_first':
             self.workshop_cleanup()
         self.transfer_top('box', 'bench', [24.5, 1.5, .92754])
@@ -227,14 +251,23 @@ class ReferenceTask:
                 self.move('open', 'box')
             self.transfer_top(item, 'bench', [24.5, y, .92754])
         self.move('close', 'box')
-        self.transfer_top('box', 'source', [21.95, 1.2, .91574])
-        self.action('wait', seconds=1.)
+        if return_box:
+            self.return_kit()
+
+    def workshop_inventory(self, order):
+        self.workshop(order, return_box=False)
+        self.pack_kit()
+        self.return_kit()
 
     def run(self, order):
         task = self.backend.custom_spec
         if order not in task['acceptance_cases']['reference_orders']:
             raise ValueError('Undeclared reference order: ' + order)
-        if task['id'].startswith('warm_lunch'):
+        if task['id'] == 'workshop_inventory_roundtrip_v1':
+            self.workshop_inventory(order)
+        elif task['id'] == 'kitchen_service_and_reset_v1':
+            self.kitchen_service(order)
+        elif task['id'].startswith('warm_lunch'):
             self.lunch(order)
         elif task['id'].startswith('movie_night'):
             self.movie(order)
@@ -257,7 +290,53 @@ class ReferenceTask:
         expected = {}
         witness = {}
         fault = None
-        if case == 'unfinished_food':
+        if case == 'skip_inventory_unpack':
+            self.pack_kit()
+            self.transfer_top('box', 'bench', [24.5, 1.5, .92754])
+            self.return_kit()
+            witness = {'box_at_source': True, 'box_open': False,
+                       **{item+'_in_box': True for item in
+                          ('pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill')}}
+            expected = {'historical_conditions': {'loaded_box_delivered': True,
+                                                  'tools_unpacked': False,
+                                                  'loaded_box_returned': False}}
+        elif case in ('return_incomplete_kit', 'open_lid_return'):
+            self.workshop('cleanup_first', return_box=False)
+            self.pack_kit(omit='drill' if case == 'return_incomplete_kit' else None)
+            if case == 'return_incomplete_kit':
+                self.return_kit()
+                witness = {'box_at_source': True, 'box_open': False, 'drill_in_box': False}
+                expected = {'terminal_conditions': {'drill_packed': False},
+                            'historical_conditions': {'tools_unpacked': True,
+                                                      'repacked_at_bench': False}}
+            else:
+                self.move('open', 'box')
+                self.move('grasp', 'box')
+                self.floor(23., 1.1)
+                witness = {'box_open': True}
+                expected = {'historical_conditions': {'repacked_at_bench': True},
+                            'constraint_conditions': {'closed_return_transport': False}}
+        elif case == 'skip_meal_delivery':
+            self.lunch('cleanup_first', deliver_box=False)
+            self.serve_meal()
+            self.return_carrier()
+            witness = {'box_at_storage': True, 'lunch_delivered': False,
+                       'hotdog1_on_plate1': True, 'hotdog2_on_plate2': True,
+                       'apple1_on_plate1': True, 'apple2_on_plate2': True}
+            expected = {'historical_conditions': {'meal_delivered': False, 'meal_served': False}}
+        elif case == 'return_nonempty_box':
+            self.lunch('cleanup_first')
+            self.return_carrier()
+            witness = {'box_at_storage': True, 'hotdog1_packed': True}
+            expected = {'terminal_conditions': {'empty_carrier_returned': False},
+                        'historical_conditions': {'meal_delivered': True, 'meal_served': False}}
+        elif case == 'uncooked_plate':
+            self.move('open', 'fridge')
+            self.transfer_top('plate1', 'table', [6.5, 3.5, .813])
+            self.transfer_top('hotdog1', 'plate1', self.top('plate1', .3, .5))
+            witness = {'hotdog1_on_plate1': True, 'hotdog1_cooked': False}
+            expected = {'terminal_conditions': {'hotdog1_cooked': False}}
+        elif case == 'unfinished_food':
             self.move('open', 'fridge')
             self.transfer_inside('hotdog1', 'box')
             witness = {'hotdog1_packed': True, 'hotdog1_cooked': False}

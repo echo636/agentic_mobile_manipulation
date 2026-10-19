@@ -15,6 +15,9 @@ meaning. V2 scores must never be substituted into a v1 result. Candidate recipes
 are **not certified ready**: the release gate below is authoritative. Current
 validation is recorded in `operations/long_horizon_readiness_20261019/` under the
 shared workspace root, separately from the October 15 pilot.
+The follow-up repair batch is `operations/long_horizon_repair_20261020/`.
+Each attempt retains its own source and evidence; an earlier failure is not
+replaced by a later repair.
 
 ## Tasks and dependencies
 
@@ -123,6 +126,37 @@ The validator rejects hidden score conditions, unscored public requirements,
 duplicate constraint IDs and changed frozen scenes. Raw predicate names describe
 the measured state (`microwave_open`, `microwave_on`); terminal goal names describe
 the desired outcome (`microwave_closed`, `microwave_off`).
+
+## Additional task candidates
+
+`task_designs/candidates/` contains two new contracts. Both reuse an existing
+pilot scene with new goals; they are not additional layouts or evidence of scene
+generalization. They remain `candidate_physics_unvalidated` until the same
+physical and policy acceptance gates pass. Logical tests only validate scoring.
+
+| Candidate | Required sequence | Terminal / history / constraints | Negative cases |
+| --- | --- | --- | --- |
+| `workshop_inventory_roundtrip_v1` | Pack at storage → deliver closed full kit → lay all five tools out together → repack at bench → return closed full kit | 11 / 5 / 2 | Skip unpacked inventory; return without drill; move return load with lid open |
+| `kitchen_service_and_reset_v1` | Cook and pack four food items at prep → deliver complete meal → serve one hotdog and one apple half on each plate → return empty carrier | 23 / 4 / 1 | Serve without loaded delivery; return nonempty carrier; plate uncooked food |
+
+The inventory task also requires the original book and trash cleanup. It ends
+with the tools in the returned box, unlike the workshop task that leaves tools
+on the bench. Taking out and immediately replacing each tool separately does
+not satisfy the simultaneous inventory milestone. Both outbound and return
+transport retain a permanent violation if the box is moved open or incomplete.
+
+The serving task also requires table settings, tea, leftovers, board storage,
+trash cleanup, cleared preparation space and restored appliances. Either
+hotdog and either apple half can go on either plate; private object identity
+does not impose an undisclosed serving assignment. All food on one plate is
+insufficient. The final empty carrier alone cannot replace the loaded-delivery
+and simultaneous-serving milestones.
+
+References use the same checked action interface and 200-attempt ceiling. The
+new references extend the original legal branch orders; they never set food,
+contact or container states to force success. Frozen candidate specifications
+bind to the parent scene hash without duplicating scene files. Their acceptance
+records remain separate from the original three-task release.
 
 ## Reproducible acceptance
 
