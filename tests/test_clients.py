@@ -273,7 +273,9 @@ wire_api = "responses"
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)
             code='import sys,time; print(\'{"unfinished":\',flush=True); time.sleep(60)'
-            project=PreparedProject([sys.executable,'-c',code],None,None)
+            # Site-package discovery on the shared filesystem can consume this
+            # deliberately tiny budget before the fixture writes its first byte.
+            project=PreparedProject([sys.executable,'-S','-c',code],None,None)
             result=run_process(project,output,0.2)
             self.assertTrue(result.timed_out)
             self.assertEqual(result.returncode,-signal.SIGTERM)

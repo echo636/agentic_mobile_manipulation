@@ -37,6 +37,10 @@ class ClosureInterruptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'episode'
             ready=threading.Event();entered=threading.Event();state={};failures=[]
+            # Source hashing/copying may be slow on NAS. Prepare the archive
+            # before timing server readiness; simulator ownership remains on
+            # the owner thread whose scoring behavior this test exercises.
+            recorder=Recorder(output,{'backend':'mock','observation_mode':'rgb_only'})
 
             class ReadyServer(bridge.ThreadingHTTPServer):
                 def __init__(self,*args,**kwargs):
@@ -45,7 +49,6 @@ class ClosureInterruptTests(unittest.TestCase):
 
             def owner():
                 try:
-                    recorder=Recorder(output,{'backend':'mock','observation_mode':'rgb_only'})
                     backend=MockRGBBackend(output)
                     backend.deadline=EpisodeDeadline(time.time()+60)
                     harness=VisionHarness(backend,recorder,profile='minimal')
