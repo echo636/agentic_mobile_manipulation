@@ -18,10 +18,11 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
             def clone(self):
                 return self
 
-        clock = {'elapsed': 0., 'unix': 1000., 'physics': 0}
+        clock = {'elapsed': 0., 'unix': 1000., 'physics': 0, 'records': []}
         def physics():
             clock['physics'] += 1
-        sim = SimpleNamespace(step_physics=physics)
+        sim = SimpleNamespace(step_physics=physics, scenes=[],
+                              dump_state=lambda **kwargs: {}, load_state=lambda *args, **kwargs: None)
         def sample(target, wanted):
             clock['elapsed'] = elapsed
             for tick in range(ticks):
@@ -30,6 +31,7 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
                 sim.step_physics()
             return True
         state = SimpleNamespace(set_value=sample, get_value=lambda target: True)
+        sim.sample = sample
         held = SimpleNamespace(states={Inside: state}, get_position_orientation=lambda: (Pose(), Pose()))
         target = SimpleNamespace(fixed_base=True, links={
             'volume': SimpleNamespace(is_meta_link=True, meta_link_type='fillable')})
@@ -48,6 +50,7 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
         backend._step = lambda action: None
         backend._verify_container_payload = lambda container, contents: None
         backend._verify_payload = lambda dependencies: None
+        backend._placement_record = clock['records'].append
         states = ModuleType('omnigibson.object_states')
         states.Inside = Inside
         usd = ModuleType('omnigibson.utils.usd_utils')
@@ -56,8 +59,10 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
         return backend, target, sim, physics, clock, modules
 
     def run_sampler(self, fixture, max_steps):
-        backend, target, _, _, clock, modules = fixture
+        backend, target, sim, _, clock, modules = fixture
         with patch.dict('sys.modules', modules), \
+                patch('manipulation_agent.executors.inside_sampling.sample_assembly_inside',
+                      side_effect=lambda *args, **kwargs: sim.sample(target, True)), \
                 patch('manipulation_agent.executors.placement.time.monotonic',
                       side_effect=lambda: clock['elapsed']), \
                 patch('manipulation_agent.deadline.time.time', side_effect=lambda: clock['unix']):
@@ -71,6 +76,8 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
         self.assertEqual(clock['physics'], 6001)
         self.assertEqual(backend.sampling_physics_steps, 6001)
         self.assertIs(sim.step_physics, physics)
+        self.assertEqual(clock['records'][0]['status'], 'native_sampling_exhausted')
+        self.assertEqual(result['implementation'], 'transactional_Inside_with_geometric_fallback')
 
     def test_managed_sampler_stops_at_actual_episode_deadline_and_restores_physics(self):
         fixture = self.fixture(EpisodeDeadline(2800.), 6001, elapsed=181., expire_at=10)
