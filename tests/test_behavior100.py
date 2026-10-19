@@ -17,6 +17,15 @@ spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolv
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_local_manipulation_protocol_is_explicit_and_validated(self):
+        config={'workers':[{'id':'local','gpu':0,'ssh':['ssh','fixture'],'base_port':36000}]}
+        for value in ('0','1'):
+            config['simulator_env']={'MAS_LOCAL_MANIPULATION':value}
+            self.assertEqual(batch.worker_configs(config)[0]['simulator_env']['MAS_LOCAL_MANIPULATION'],value)
+        for env in ({'MAS_LOCAL_MANIPULATION':'true'},{'MAS_LOCAL_MANIPULATION':1},{'UNREVIEWED_OPTION':'1'}):
+            config['simulator_env']=env
+            with self.assertRaises(ValueError):batch.worker_configs(config)
+
     def test_fresh_batch_publish_only_creates_journal_and_preserves_existing_history(self):
         for history in (None, '# Existing experiment\n\n- Original failure evidence.\n'):
             with self.subTest(existing_journal=history is not None), tempfile.TemporaryDirectory() as folder:
