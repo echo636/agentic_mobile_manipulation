@@ -85,7 +85,17 @@ class ReferenceTask:
             elif task.startswith('movie') and target[1] < 0 and 5.6 < target[0] < 6.6:
                 self.floor(6.1, .35)
             else:
-                self.action('navigate_to', role, point)
+                try:
+                    self.action('navigate_to', role, point)
+                except Exception as exc:
+                    if (getattr(exc, 'code', None) != 'navigation_search_exhausted'
+                            or not task.startswith(('warm_lunch', 'kitchen_service'))):
+                        raise
+                    # Split a long kitchen/dining-room approach into ordinary
+                    # checked floor goals. Failure still counts against the
+                    # same 200-action budget; no collision check is bypassed.
+                    self.floor(6.2, 1.2)
+                    self.action('navigate_to', role, point)
         return self.action(primitive, role, point, **kwargs)
 
     def top(self, role, fx=.5, fy=.5):
@@ -190,7 +200,14 @@ class ReferenceTask:
         for i in (1, 2, 3):
             self.transfer_inside(f'can{i}', 'bin')
         for i, x in ((1, 23.45), (2, 23.98)):
-            self.transfer_top(f'book{i}', 'bookshelf', [x, -2.06, .92754])
+            item = f'book{i}'
+            self.move('grasp', item)
+            # Regrasp at the near edge before crossing the narrow aisle. The
+            # original remote grasp preserves a >1 m carry offset and can
+            # leave no collision-free turning route with the book attached.
+            self.move('place_on_top', 'bench', [24.1, 1.25 if i == 1 else -.9, .92754])
+            self.move('grasp', item)
+            self.move('place_on_top', 'bookshelf', [x, -2.06, .92754])
 
     def workshop(self, order):
         from omnigibson.object_states import Inside

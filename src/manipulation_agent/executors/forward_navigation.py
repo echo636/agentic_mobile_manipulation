@@ -185,8 +185,10 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
         attempts.append(row)
     collision.check_cancelled=check_cancelled
     if best is None:
-        raise NavigationError('No checked complete route among bounded endpoint candidates',
-                              'navigation_search_exhausted' if any(a.get('error_code')=='navigation_search_exhausted' for a in attempts) else 'navigation_unreachable')
+        error = NavigationError('No checked complete route among bounded endpoint candidates',
+                                'navigation_search_exhausted' if any(a.get('error_code')=='navigation_search_exhausted' for a in attempts) else 'navigation_unreachable')
+        error.route_attempts = attempts
+        raise error
     return best[1],best[2],{'target_slack_m':target_slack,'closest_candidate_m':closest,
                            'max_candidates':max_candidates,'attempts':attempts,
                            'objective':'translation_seconds_plus_rotation_seconds',

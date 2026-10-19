@@ -764,6 +764,18 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     details['arrival_heading_refinement_budget_exhausted']=True
             details['arrival_heading_refinement']=heading_attempts
             endpoint_collision.check_cancelled=self.deadline.check
+            # Preserve the actual collision substrate even when no complete
+            # route is found. A failure must be reproducible without another
+            # simulator startup or reconstructing geometry from a screenshot.
+            details['endpoint_options']=[asdict(candidate) for candidate in options]
+            np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+                raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
+                origin=grid.origin,resolution=grid.resolution,
+                footprint=map_details['chassis_footprint_world_offsets'],start=position.cpu().numpy(),
+                target=point.cpu().numpy(),travel_yaw=plan.travel_yaw,initial_layer_yaw=travel_yaw,
+                raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+                support=self._navigation_support,
+                layer_footprints_json=json.dumps(map_details['collision_layers']))
             with component(self,'navigation_route_selection'):
                 plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
                     target_slack=.1 if mode=='point' else 0.,check_cancelled=self.deadline.check)
@@ -785,6 +797,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     layer_footprints_json=json.dumps(map_details['collision_layers']))
         except NavigationError as exc:
             details.update(status='failed',error_code=exc.code,error=str(exc))
+            if hasattr(exc, 'route_attempts'):
+                details['forward_candidate_selection']={'attempts':exc.route_attempts,'status':'failed'}
             raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
