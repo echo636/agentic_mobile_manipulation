@@ -222,7 +222,10 @@ class ReferenceTask:
         # Live navigation, reach, containment and counted actions still apply.
         self.floor(2.8, 5.1)
         for i in (1, 2, 3):
-            self.transfer_inside(f'can{i}', 'bin')
+            # Retain the certified stance. The ordinary 1.4 m reach check
+            # allows grid snapping without the helper reapproaching at 1.2 m.
+            self.action('grasp', f'can{i}')
+            self.inside('bin')
         self.move('grasp', 'brush')
         for _ in range(4):
             self.move('wipe', 'table', self.top('table'))
