@@ -64,6 +64,10 @@ each `act` / `look` supplies the next one.
    approaches also consider a final heading aligned with arrival, if entry
    and exit clearance still hold. Elevated targets must remain visible at
    that new heading with the same camera margin and occlusion checks. The
+   elevated refinement also tests headings 15 and 30 degrees to either side
+   of arrival, plus a target-facing heading, to cover gaps between the four
+   cameras' margin-cropped frusta without a full return turn. These proposals
+   share the same two-second refinement budget and clearance checks. The
    original validated heading stays available; neither mode requires restoring
    the departure yaw. Complete-route motion time chooses among these options.
    Bounded collision-checked shortcuts remove detours only when combined

@@ -33,6 +33,29 @@ def motion_seconds(poses):
                for a, b in zip(poses, poses[1:]))
 
 
+def arrival_heading_options(plan, actual, *, approach=False):
+    """Bounded terminal headings; callers must certify geometry and visibility.
+
+    Four outward cameras can have gaps after applying their image-edge margin.
+    Nearby headings let a visible object enter a camera without restoring the
+    departure yaw. A target-facing heading supplies a wider fallback.
+    """
+    last=next((xy for xy in reversed(plan.points) if math.dist(xy,plan.goal)>.002),actual[:2])
+    bearing=(math.atan2(plan.goal[1]-last[1],plan.goal[0]-last[0])
+             if math.dist(last,plan.goal)>.002 else actual[2])
+    proposals=[(bearing,'arrival_aligned')]
+    if approach:
+        proposals.extend((bearing+math.radians(offset),'near_arrival') for offset in (-15,15,-30,30))
+        if math.dist(plan.target,plan.goal)>.002:
+            proposals.append((math.atan2(plan.target[1]-plan.goal[1],plan.target[0]-plan.goal[0]),'target_facing'))
+    result=[]
+    for yaw,kind in proposals:
+        yaw=angle(yaw)
+        if abs(angle(yaw-plan.final_yaw))<1e-8 or any(abs(angle(yaw-a))<1e-8 for a,_ in result):continue
+        result.append((yaw,kind))
+    return result
+
+
 def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: None):
     """Checked turn / forward / turn, with bounded numeric pose correction."""
     poses = [start]

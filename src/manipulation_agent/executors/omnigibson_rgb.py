@@ -634,7 +634,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     planning_xy=position[:2].cpu().tolist()
                     budget=PlanningBudget(self.deadline.check)
                     from .heading_collision import HeadingCollisionChecker
-                    from .forward_navigation import local_exit_certificate, select_forward_route
+                    from .forward_navigation import local_exit_certificate, select_forward_route, arrival_heading_options
                     endpoint_collision=HeadingCollisionChecker(grid,self._navigation_layers,
                         self._navigation_layer_yaw,self._navigation_support,check_cancelled=budget.check)
                     entries={};exits={};exit_rejections=0;options=[]
@@ -734,34 +734,30 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                         refinement.check()
                         slack=.1 if mode=='point' else 0.
                         if candidate.score>plan.score+slack+1e-9:continue
-                        last=next((xy for xy in reversed(candidate.points)
-                                   if math.dist(xy,candidate.goal)>.002),initial_xy)
-                        yaw=(math.atan2(candidate.goal[1]-last[1],candidate.goal[0]-last[0])
-                             if math.dist(last,candidate.goal)>.002 else travel_yaw)
-                        if abs(math.atan2(math.sin(yaw-candidate.final_yaw),
-                                          math.cos(yaw-candidate.final_yaw)))<1e-8:continue
-                        pose=(*candidate.goal,yaw)
-                        attempt={'goal':candidate.goal,'original_yaw':candidate.final_yaw,
-                                 'arrival_yaw':yaw,'status':'checking'}
-                        heading_attempts.append(attempt)
-                        if not endpoint_collision.motion_free(pose,pose):
-                            attempt.update(status='rejected',reason='endpoint_collision');continue
-                        if mode=='approach':
-                            refinement.visibility()
-                            if not self._approach_visible(candidate.goal,point,getattr(target,'selected_object',None),
-                                                          margin=margin,base_yaw=yaw):
-                                attempt.update(status='rejected',reason='target_not_visible');continue
-                        if pose not in entries:
-                            entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
-                                                                check_cancelled=refinement.check)
-                        if entries[pose] is None:
-                            attempt.update(status='rejected',reason='no_local_entry');continue
-                        if pose not in exits:
-                            exits[pose]=local_exit_certificate(pose,endpoint_collision,check_cancelled=refinement.check)
-                        if exits[pose] is None:
-                            attempt.update(status='rejected',reason='no_local_exit');continue
-                        options.append(replace(candidate,final_yaw=yaw,travel_yaw=yaw))
-                        attempt['status']='accepted'
+                        for yaw,kind in arrival_heading_options(candidate,(*initial_xy,travel_yaw),approach=mode=='approach'):
+                            refinement.check()
+                            pose=(*candidate.goal,yaw)
+                            attempt={'goal':candidate.goal,'original_yaw':candidate.final_yaw,
+                                     'arrival_yaw':yaw,'kind':kind,'status':'checking'}
+                            heading_attempts.append(attempt)
+                            if not endpoint_collision.motion_free(pose,pose):
+                                attempt.update(status='rejected',reason='endpoint_collision');continue
+                            if mode=='approach':
+                                refinement.visibility()
+                                if not self._approach_visible(candidate.goal,point,getattr(target,'selected_object',None),
+                                                              margin=margin,base_yaw=yaw):
+                                    attempt.update(status='rejected',reason='target_not_visible');continue
+                            if pose not in entries:
+                                entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
+                                                                    check_cancelled=refinement.check)
+                            if entries[pose] is None:
+                                attempt.update(status='rejected',reason='no_local_entry');continue
+                            if pose not in exits:
+                                exits[pose]=local_exit_certificate(pose,endpoint_collision,check_cancelled=refinement.check)
+                            if exits[pose] is None:
+                                attempt.update(status='rejected',reason='no_local_exit');continue
+                            options.append(replace(candidate,final_yaw=yaw,travel_yaw=yaw))
+                            attempt['status']='accepted'
                 except SearchBudgetExhausted:
                     if heading_attempts and heading_attempts[-1]['status']=='checking':
                         heading_attempts[-1].update(status='incomplete',reason='refinement_budget_exhausted')

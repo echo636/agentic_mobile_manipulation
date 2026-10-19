@@ -101,6 +101,35 @@ class TargetVisibilityTests(unittest.TestCase):
         saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
         self.assertEqual(saved['arrival_heading_refinement'][0]['reason'],'target_not_visible')
 
+    def test_radio_camera_gap_uses_small_view_turn_instead_of_departure_yaw(self):
+        from manipulation_agent.executors.gt_navigation import NavigationPlan
+        from manipulation_agent.observations.rig import visible_rig_rays
+        b=self.backend;self.open_side_target()
+        # Recorded radio stance: the straight-arrival yaw has safe geometry
+        # but the selected surface falls between the margin-cropped cameras.
+        b.position=Tensor([4.901851654,3.832315445,.005285129]);b.yaw=.858423037
+        original_yaw=b.yaw;goal=(4.35,5.);point=(3.69466424,5.203101158,.582581937)
+        grid=GridMap(81,81,.1,(0.,0.),bytes([1])*81**2)
+        self.build_grid.return_value=(grid,self.build_grid.return_value[1]);self.collision.return_value.grid=grid
+        b._navigation_clearance=(grid.free,np.zeros((81,81)),.35)
+        b._navigation_layers=[(np.ones((81,81),dtype='uint8'),np.zeros((4,2)))]
+        b._navigation_support=np.ones((81,81),dtype='uint8')
+        def visible(xy,selected,*_,base_yaw,margin,**kw):
+            return bool(visible_rig_rays(xy,base_yaw,.005285129,1.528794232,selected.tolist(),
+                                        margin=margin,radius=.35,pitch_degrees=35.))
+        b._approach_visible.side_effect=visible
+        proposed=NavigationPlan((tuple(b.position.tolist()[:2]),goal),goal,point[:2],original_yaw,
+                               1.291521,math.dist(goal,point[:2]),1,1,0.,0,travel_yaw=original_yaw)
+        target=SimpleNamespace(get_position_orientation=lambda:(Tensor(point),None))
+        with patch('manipulation_agent.executors.gt_navigation.plan_navigation',return_value=proposed):
+            b._navigate(target,1000)
+        self.assertGreater(abs(b.yaw-original_yaw),.1)
+        route=b._execute_gt_plan.call_args.kwargs['prepared_route']
+        self.assertLess(math.degrees(route.turn_radians),82.)
+        saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
+        self.assertEqual(saved['arrival_heading_refinement'][0]['reason'],'target_not_visible')
+        self.assertTrue(json.loads((b.output/'navigation_arrivals.jsonl').read_text())['target_visible'])
+
     def test_arrival_heading_requires_both_entry_and_exit(self):
         b=self.backend;target=self.open_side_target()
         for reject_incoming in (True,False):
