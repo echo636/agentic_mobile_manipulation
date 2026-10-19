@@ -117,7 +117,9 @@ class Harness:
             for parent in objects[target].get("relations", {}).get("inside", []):
                 if objects.get(parent, {}).get("states", {}).get("open") is False:
                     raise SkillError("container_closed", "Open the containing object before grasping its contents")
-        if skill in {"place_inside", "place_on_top", "release"} and held is None:
+        if skill in {"place_inside", "place_on_top", "place_under", "place_next_to", "attach", "hang",
+                     "pour", "place_near_heating_element", "wipe", "sweep", "vacuum", "spray", "spread",
+                     "soak", "cut", "release"} and held is None:
             raise SkillError("empty_hand", "No object is being held")
         if skill in {"open", "close", "toggle_on", "toggle_off"} and held is not None:
             raise SkillError("hand_occupied", "This executor requires an empty default hand")

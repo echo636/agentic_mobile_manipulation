@@ -26,7 +26,7 @@ Use the latest returned revision and image references for the next action. Older
 
 The default `skills` profile exposes six MCP tools: `initialize`, `look`, `act`, `finish`, `list_skills`, and `read_skill`. `minimal` exposes the first four. The legacy `workflow` profile retains `observe` and asynchronous observation jobs for compatibility; they are absent from the default tool catalog.
 
-Four readable workflow skills are available: `visual-manipulation`, `visual-exploration`, `pick-and-place`, and `failure-recovery`. Explicit planning stacks and memory are currently deferred. Skills provide guidance; the LLM selects actions through tools.
+Four basic workflow skills are available: `visual-manipulation`, `visual-exploration`, `pick-and-place`, and `failure-recovery`. The opt-in `planning` profile adds the unified `long-horizon-planning` skill, `update_plan` and episode-local memory; every planning-profile tool call includes a public decision record. Skills provide guidance; the LLM selects actions through tools.
 
 ## Installation and execution
 
@@ -38,6 +38,8 @@ PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
 The recorded simulator environment uses OmniGibson 3.9.2, Isaac Sim 5.1.0, torch 2.7.0+cu128, and BDDL 3.7.0. BEHAVIOR assets must be installed under their official license and are not included in this repository. Default navigation uses the scene's private static traversability grid and does not require Cartographer or `MAS_CARTOGRAPHER_RUNTIME`. The retained [online mapping experiment](docs/online_navigation.md) has a separate native runtime dependency.
+
+The partner handoff for the custom long-horizon hot-drink task is in [tasks/prepare_and_serve_hot_drink](tasks/prepare_and_serve_hot_drink/README.md). It includes the BDDL/scene-instance package, installer, short human instruction, and a separate optional partial-order evaluator. The [long-horizon task workflow](docs/long_horizon_task_workflow.md) traces the task package, atomic actions, planning skill, run protocol, audit, and publication.
 
 ```bash
 PYTHONPATH=src python -m manipulation_agent.vision_cli \
@@ -58,7 +60,7 @@ The default Codex controller is preserved. A common `prepare_project -> run -> p
 interface also provides OpenCode and Kimi adapters; their live RGB integration is
 not yet validated. The native Responses loop has configurable turn/token budgets,
 verified image attachments and optional historical-image retention, with replay
-records for each tool call. Explicit planning and memory remain deferred.
+records for each tool call. The opt-in `planning` profile maintains an episode-local DAG and notes through tools.
 
 See [harness architecture and transport usage](docs/architecture.md) and
 [client capabilities and validation limits](src/manipulation_agent/clients/README.md).

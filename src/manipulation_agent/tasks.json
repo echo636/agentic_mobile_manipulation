@@ -92,6 +92,11 @@
       "instruction": "Retrieve the two bottles from the refrigerator in the kitchen, bring them to the living room, and place both on the coffee table. Make sure the refrigerator is closed when you finish.",
       "scene_model": "house_single_floor"
     },
+    "prepare_and_serve_hot_drink": {
+      "name": "Prepare and Serve a Hot Drink",
+      "instruction": "请准备一份热饮和点心：把冰箱里的水烧开，橱柜里有水壶、杯子、餐巾、餐垫、盘子、茶匙、托盘、糖饼干和蜂蜜；将饮品、餐具和点心布置在客厅茶几上。",
+      "scene_model": "house_single_floor"
+    },
     "tidying_bedroom": {
       "name": "Tidying Bedroom",
       "instruction": "In the bedroom, move the book from the bed onto either nightstand, and place the two sandals side by side next to the bed.",

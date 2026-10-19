@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from manipulation_agent import bridge
-from manipulation_agent.contracts import SkillError
+from manipulation_agent.contracts import Budget, SkillError
 from manipulation_agent.deadline import EpisodeDeadline
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
@@ -16,6 +16,76 @@ from manipulation_agent.vision_harness import VisionHarness
 
 
 class FinishResponseTests(unittest.TestCase):
+    def test_hot_drink_rejects_early_blocked_without_stopping_recovery(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)/'episode'
+            backend=MockRGBBackend(output)
+            backend.high_level_harness=True
+            backend.deadline=EpisodeDeadline(time.time()+3600)
+            harness=VisionHarness(backend,Recorder(output,{}),budget=Budget(max_actions=80),profile='minimal')
+            arguments={'outcome':'blocked','reason':'Selected surface was invalid twice'}
+            harness._last_action_error='invalid_visual_target'
+            harness.actions=5
+            harness.request_finish(arguments,'finish-early')
+            self.assertFalse(harness.deadline.stop_requested)
+            rejected=harness.call('finish',arguments,'finish-early')
+            self.assertFalse(rejected['ok'])
+            self.assertEqual(rejected['error']['code'],'premature_finish')
+            self.assertFalse(harness.closed)
+            observation=harness.snapshot
+            target={'image_ref':observation['images'][0]['image_ref'],'point':[.5,.5]}
+            continued=harness.call('act',{'primitive':'toggle_on','target':target,
+                                          'revision':observation['revision']},'continue')
+            self.assertTrue(continued['ok'])
+            self.assertEqual(continued['actions_used'],6)
+
+    def test_hot_drink_accepts_blocked_after_action_budget_or_fatal_error(self):
+        for exhausted in (True,False):
+            with self.subTest(exhausted=exhausted),tempfile.TemporaryDirectory() as folder:
+                output=Path(folder)/'episode'
+                backend=MockRGBBackend(output)
+                backend.high_level_harness=True
+                backend.deadline=EpisodeDeadline(time.time()+3600)
+                harness=VisionHarness(backend,Recorder(output,{}),budget=Budget(max_actions=80),profile='minimal')
+                if exhausted:
+                    harness.actions=80
+                else:
+                    harness._last_action_error='navigation_invalid_start'
+                arguments={'outcome':'blocked','reason':'Cannot proceed'}
+                harness.request_finish(arguments,'finish')
+                self.assertTrue(harness.deadline.stop_requested)
+                result=harness.call('finish',arguments,'finish')
+                self.assertTrue(result['ok'])
+                self.assertTrue(result['closed'])
+
+    def test_hot_drink_cannot_escape_early_blocked_gate_by_changing_outcome(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)/'episode'
+            backend=MockRGBBackend(output)
+            backend.high_level_harness=True
+            backend.deadline=EpisodeDeadline(time.time()+3600)
+            harness=VisionHarness(backend,Recorder(output,{}),profile='minimal')
+            for outcome in ('aborted','achieved'):
+                arguments={'outcome':outcome,'reason':'Cannot complete'}
+                harness.request_finish(arguments,f'early-{outcome}')
+                self.assertFalse(harness.deadline.stop_requested)
+                result=harness.call('finish',arguments,f'early-{outcome}')
+                self.assertFalse(result['ok'])
+                self.assertEqual(result['error']['code'],
+                                 'supervisor_only' if outcome=='aborted' else 'premature_finish')
+                self.assertFalse(harness.closed)
+            observation=harness.snapshot
+            target={'image_ref':observation['images'][0]['image_ref'],'point':[.5,.5]}
+            result=harness.call('act',{'primitive':'toggle_on','target':target,
+                                       'revision':observation['revision']},'continue')
+            self.assertTrue(result['ok'])
+            achieved={'outcome':'achieved','reason':'Completed'}
+            harness.request_finish(achieved,'achieved-after-work')
+            self.assertFalse(harness.deadline.stop_requested)
+            result=harness.call('finish',achieved,'achieved-after-work')
+            self.assertTrue(result['ok'])
+            self.assertTrue(result['closed'])
+
     def test_demo_rejects_false_time_exhaustion_without_cancelling_episode(self):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'episode'

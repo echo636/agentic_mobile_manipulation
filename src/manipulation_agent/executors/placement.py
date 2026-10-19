@@ -65,6 +65,33 @@ class CheckedPlacement:
         with (self.output / 'placement_diagnostics.jsonl').open('a') as stream:
             stream.write(json.dumps({'env_step': self.steps, **data}) + '\n')
 
+    def _checked_place_near_heating_element(self, target, max_steps, point):
+        """Place the carried object on the selected heat source and verify proximity."""
+        from omnigibson.object_states import HeatSourceOrSink
+        heat_source = target.states.get(HeatSourceOrSink)
+        if heat_source is None or heat_source.requires_inside:
+            raise SkillError('pre_condition_error',
+                             'The selected object has no accessible heating element')
+        held = self._get_held()
+        if held is None:
+            raise SkillError('empty_hand', 'No object is held')
+        heat_positions = [link.get_position_orientation()[0].tolist()
+                          for link in heat_source.links.values()]
+        if not heat_positions:
+            raise SkillError('pre_condition_error', 'The heat source has no heating element links')
+        placed = self._checked_place_on_top(target, max_steps, point)
+        lower, upper = (corner.tolist() for corner in held.aabb)
+        distance = min(math.dist(position,
+                                [max(lo, min(value, hi)) for value, lo, hi
+                                 in zip(position, lower, upper)])
+                       for position in heat_positions)
+        if distance > heat_source.distance_threshold:
+            raise SkillError('postcondition_error',
+                             'Object was released outside the heating element range', changed=True)
+        return {**placed, 'primitive': 'place_near_heating_element',
+                'implementation': 'controlled_carry_selected_heating_surface',
+                'heating_element_distance_m': distance}
+
     def _checked_place_under(self, target, max_steps):
         """Place the carried item under the model-selected parent using OG's Under sampler."""
         from omnigibson.object_states import OnTop, Under
@@ -270,6 +297,9 @@ class CheckedPlacement:
         from omnigibson.object_states import OnTop
         torch = self.torch
         _, _, extents, bb_pos = held.get_base_aligned_bbox()
+        if point is not None:
+            reference_position = held.get_position_orientation()[0]
+            point = point.to(device=reference_position.device, dtype=reference_position.dtype)
         if yaw_degrees is not None:
             extents=rotated_footprint_extents(extents,yaw_degrees)
         if point is not None:
@@ -290,11 +320,26 @@ class CheckedPlacement:
                     if samples[0][0] is None:
                         continue
                     center, _, orientation = samples[0][:3]
+                    pose_device = center.device
+                    pose_dtype = center.dtype
                     if yaw_degrees is not None:
                         import math
-                        orientation=T.quat_multiply(T.euler2quat(torch.tensor([0.,0.,math.radians(yaw_degrees)])),held.get_position_orientation()[1])
-                    matrix = T.pose2mat((center + torch.tensor([0.,0.,.02]), orientation)) @ T.pose_inv(
-                        T.pose2mat((bb_pos, torch.tensor([0.,0.,0.,1.]))))
+                        yaw = torch.tensor(
+                            [0., 0., math.radians(yaw_degrees)],
+                            device=pose_device,
+                            dtype=pose_dtype,
+                        )
+                        held_orientation = held.get_position_orientation()[1].to(
+                            device=pose_device, dtype=pose_dtype
+                        )
+                        orientation = T.quat_multiply(T.euler2quat(yaw), held_orientation)
+                    pose_offset = torch.tensor([0., 0., .02], device=pose_device, dtype=pose_dtype)
+                    identity_orientation = torch.tensor(
+                        [0., 0., 0., 1.], device=pose_device, dtype=pose_dtype
+                    )
+                    bbox_position = bb_pos.to(device=pose_device, dtype=pose_dtype)
+                    matrix = T.pose2mat((center + pose_offset, orientation)) @ T.pose_inv(
+                        T.pose2mat((bbox_position, identity_orientation)))
                     pose=T.mat2pose(matrix)
                     if not verify_empty:
                         original=held.get_position_orientation()
@@ -346,6 +391,22 @@ class CheckedPlacement:
                 pose = self._surface_pose(held, target, point, yaw_degrees)
             except ActionPrimitiveError as exc:
                 raise SkillError('sampling_error',str(exc)) from exc
+            if point is None and getattr(self, 'semantic_magic', False):
+                # Named magic actions use the official object-wide sampler.
+                # Its returned pose supplies the chosen patch for the same
+                # seating and support checks used by a selected RGB pixel.
+                from omnigibson.utils.sampling_utils import raytest
+                point = pose[0].clone()
+                lower, upper = target.aabb
+                start = point.clone(); start[2] = max(float(point[2]), float(upper[2])) + .2
+                end = point.clone(); end[2] = float(lower[2]) - .3
+                ignored = [link.prim_path for obj in (held, self.robot)
+                           for link in obj.links.values()]
+                hit = raytest(start, end, ignore_bodies=ignored)
+                target_paths = {link.prim_path for link in target.links.values()}
+                point[2] = (hit['position'][2] if hit['hit'] and
+                            hit.get('rigidBody') in target_paths and
+                            float(hit['normal'][2]) >= .9 else upper[2])
             # Do not call upstream _release(): it runs physics while the object
             # is still next to the hand, BEFORE teleporting to the destination.
             contents=list(self._carry_contents) if self.ideal_carry else []
@@ -454,6 +515,7 @@ class CheckedPlacement:
         if point is None:
             return False, {'available':False,'reason':'No selected surface point'}
         lo,hi=held.aabb;center=(lo+hi)/2
+        point = point.to(device=center.device, dtype=center.dtype)
         end=center.clone();end[2]=lo[2]-probe_below
         # A shallow plate's AABB center can lie inside its food's collision
         # proxy. The ray checks the support UNDER the entire carried assembly;
@@ -670,7 +732,8 @@ class CheckedPlacement:
             def preserve_payload_poses():
                 if residents:self._relocate_container_payload(residents)
                 if settling_payload:self._relocate_container_payload(settling_payload)
-                if contents:self._relocate_contents(held,contents)
+                if contents or getattr(self,'_carry_particle_contents',[]):
+                    self._relocate_contents(held,contents)
             def preserve_residents(*args,**kwargs):
                 # The near-bin arm can push an earlier item out while the
                 # official sampler or the settling steps advance physics.

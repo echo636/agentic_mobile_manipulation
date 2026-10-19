@@ -91,7 +91,10 @@ def build(run_dir, controller_dir=None, speed=2):
             if source_count!=markers[step['request_id']]:raise RuntimeError('Non-monotonic source markers')
             end=markers[steps[i+1]['request_id']] if i+1<len(steps) else raw['frame_count']
             texts=step.get('model_messages',[])+step.get('model_reasoning_summaries',[])
-            segment(step,'decision',hold=min(6,max(2,sum(len(t['text']) for t in texts)/60)) if texts else .2)
+            decision=step.get('decision')
+            decision_length=sum(len(str(value)) for value in decision.values()) if isinstance(decision,dict) else 0
+            readable_length=sum(len(t['text']) for t in texts)+decision_length
+            segment(step,'decision',hold=min(6,max(2,readable_length/60)) if readable_length else .2)
             segment(step,'execution',end,motor=step['is_motor_action'])
             segment(step,'result',hold=.8 if step['status']!='passed' else .3)
         if data.get('model_final_messages'):segment(None,'final',hold=3)

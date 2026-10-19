@@ -1,6 +1,7 @@
 """Freeze human-authored workflow documents; expose only an explicit resource allowlist."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -16,6 +17,8 @@ class SkillLibrary:
         digest = hashlib.sha256()
         for main in sorted(root.glob("*/SKILL.md")):
             name = main.parent.name
+            if name == 'long-horizon-planning' and os.environ.get('MAS_LONG_HORIZON_PLANNING_SKILL') != '1':
+                continue
             files = [main, *sorted((main.parent / "references").glob("*.md"))]
             text = main.read_text()
             desc = next((line.split(":",1)[1].strip() for line in text.splitlines() if line.startswith("description:")), "")

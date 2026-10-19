@@ -1,13 +1,29 @@
 import math
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
 from manipulation_agent.vision_harness import VisionHarness
 from manipulation_agent.executors.base_motion import trajectory
+from manipulation_agent.skill_runtime import SkillLibrary
+from manipulation_agent.vision_policy import system_prompt
 
 class SkillsLoopTests(unittest.TestCase):
+    def test_unified_planning_skill_is_the_only_decomposition_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {'MAS_LONG_HORIZON_PLANNING_SKILL': '1'}):
+                library = SkillLibrary(Path(tmp))
+                names = {entry['name'] for entry in library.catalog()}
+                self.assertNotIn('task-decomposition', names)
+                self.assertIn('long-horizon-planning', names)
+                self.assertIn('pick-and-place', names)
+                self.assertNotIn('task-decomposition/SKILL.md', system_prompt('skills'))
+                bddl = library.read('long-horizon-planning','references/bddl-goals.md')
+                self.assertIn('forpairs', bddl['text'])
+
     def test_skills_without_forced_summary_plan_or_memory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/'run';r=Recorder(root,{'backend':'mock','observation_mode':'rgb_only'})

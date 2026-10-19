@@ -8,7 +8,16 @@ IMAGE_KEYS = {"image_ref", "view", "width", "height", "mime_type", "sha256"}
 CAPTURE_KEYS = {'capture_id','captured_at','sim_step','sim_time_seconds'}
 
 def public_observation(value: dict, revision: int) -> dict:
-    if set(value) not in (OBS_KEYS, OBS_KEYS | {'capture'}) or value["observation_mode"] != "rgb_only":
+    mode = value.get('observation_mode')
+    if mode == 'rgb_semantic_magic':
+        required = OBS_KEYS | {'semantic_targets', 'held_target'}
+        if set(value) not in (required, required | {'capture'}):
+            raise RuntimeError('Semantic observation boundary violation')
+        if (not isinstance(value['semantic_targets'], list)
+                or any(not isinstance(name, str) for name in value['semantic_targets'])
+                or value['held_target'] is not None and value['held_target'] not in value['semantic_targets']):
+            raise RuntimeError('Invalid semantic target catalog')
+    elif set(value) not in (OBS_KEYS, OBS_KEYS | {'capture'}) or mode != 'rgb_only':
         raise RuntimeError("RGB observation boundary violation")
     if not value["images"]:
         raise RuntimeError("RGB observer returned no image")
@@ -22,6 +31,8 @@ def public_observation(value: dict, revision: int) -> dict:
     return {**copy.deepcopy(value), "revision":revision}
 
 ERROR_MESSAGES = {
+    "unknown_semantic_target":"Choose a name from initialize.semantic_targets.",
+    "semantic_mode_required":"Named actions are unavailable in this episode.",
     "stale_image_ref":"Select a point in the latest returned image.",
     "no_surface_at_point":"The selected pixel could not be grounded to a surface. Inspect RGB and choose another point.",
     "invalid_visual_target":"The selected surface cannot be used for this action. Inspect RGB and select a different visible point.",
@@ -69,4 +80,6 @@ def public_action_effect(primitive: str, details: dict) -> dict:
             and re.fullmatch(r'[a-z][a-z0-9_]*', category)
             and not re.search(r'_[0-9]+$', category)):
         effect['grasped_category'] = category
+    if primitive == 'boil' and isinstance(details, dict) and details.get('water_boiled') is True:
+        effect['water_boiled'] = True
     return effect

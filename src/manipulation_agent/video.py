@@ -20,6 +20,11 @@ from .records import now, write_json
 ENCODER_STALL_SECONDS = 90
 
 
+def env_flag(name):
+    """Read a boolean environment switch without treating the string '0' as true."""
+    return os.environ.get(name, '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
 def ffmpeg_executable():
     """Use the system encoder or the pinned imageio package's bundled binary."""
     executable = shutil.which('ffmpeg')
@@ -42,6 +47,7 @@ class EpisodeVideo:
             raise ValueError('Unsupported recording layout')
         self.size = size; self.fps = float(fps)
         self.demo_motion = bool(demo_motion)
+        self.sparse_diagnostic = env_flag("OG_SKIP_PHYSICS_STEPS")
         self.rows = (len(self.views)+1)//2
         self.width = 2 * size; self.height = self.rows * size + 80
         self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
@@ -63,6 +69,12 @@ class EpisodeVideo:
                          'time_basis':'simulation control steps; model wait time omitted; boundary captures add one frame',
                          'excluded':'physics substeps and private volume-sampler candidate-search ticks',
                          'views':list(self.views),'markers':self.markers}
+        if self.sparse_diagnostic:
+            self.manifest.update(
+                scope='observation_boundaries_only_diagnostic',
+                every_env_step_recorded=False,
+                diagnostic='OG_SKIP_PHYSICS_STEPS',
+            )
         write_json(output/'video.json', self.manifest)
 
     def mark(self, name, arguments, request_id):
@@ -232,7 +244,7 @@ class EpisodeVideo:
                 self.log.close()
         else: code = None
         complete = self.env_steps == list(range(1,final_env_step+1))
-        valid = code == 0 and self.count > 0 and complete
+        valid = code == 0 and self.count > 0 and (complete or self.sparse_diagnostic)
         self.manifest.update(status='passed' if valid else 'failed',finished_at=now(),frame_count=self.count,
                              duration_seconds=self.count/self.fps,final_env_step=final_env_step,
                              recorded_env_steps=len(self.env_steps),every_env_step_recorded=complete,

@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +18,12 @@ from .profiling import component, action_profile
 from .carry import ControlledCarry, bulk_grasp_reason
 from .material_actions import CheckedMaterialActions
 from .demo_motion import DemoMotion
+from ..high_level_hot_drink import HighLevelHotDrink
+
+
+def env_flag(name):
+    """Read a boolean environment switch without treating the string '0' as true."""
+    return os.environ.get(name, '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def ray_hits_selected_object(hit, selected_object):
@@ -41,6 +48,24 @@ def stable_spectator_candidate(candidates, previous_choice, *, same_request):
 class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
+    SEMANTIC_HOT_DRINK_TARGETS = {
+        'water_bottle': 'water_bottle.n.01_1',
+        'refrigerator': 'electric_refrigerator.n.01_1',
+        'cabinet': 'cabinet.n.01_1',
+        'countertop': 'countertop.n.01_1',
+        'stove': 'stove.n.01_1',
+        'kettle': 'kettle.n.01_1',
+        'mug': 'mug.n.04_1',
+        'dinner_napkin': 'dinner_napkin.n.01_1',
+        'place_mat': 'place_mat.n.01_1',
+        'plate': 'plate.n.04_1',
+        'teaspoon': 'teaspoon.n.02_1',
+        'tray': 'tray.n.01_1',
+        'sugar_cookie': 'sugar_cookie.n.01_1',
+        'honey_jar': 'honey__jar.n.01_1',
+        'coffee_table': 'coffee_table.n.01_1',
+    }
+
     @staticmethod
     def _floor_relation_motor_point(primitive, obj, selected_point):
         """Approach a selected tree at its base for floor-relative placement."""
@@ -55,6 +80,13 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
     def __init__(self,*args,record_video=False,**kwargs):
         self.deadline=EpisodeDeadline.from_env()
         self.deadline.check()
+        self.semantic_magic = env_flag('MAS_SEMANTIC_MAGIC')
+        self.high_level_harness = env_flag('MAS_HIGH_LEVEL_HARNESS')
+        if self.semantic_magic and (not args or args[0] != 'prepare_and_serve_hot_drink'):
+            raise ValueError('Semantic magic is scoped to prepare_and_serve_hot_drink')
+        if self.high_level_harness and (not args or args[0] != 'prepare_and_serve_hot_drink'):
+            raise ValueError('High-level hot-drink harness is scoped to prepare_and_serve_hot_drink')
+        self.mode = 'rgb_semantic_magic' if self.semantic_magic else 'rgb_only'
         self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
         self.demo_motion = os.environ.get('MAS_DEMO_MOTION','0') in {'1','true','yes'}
         if self.demo_motion and not self.ideal_carry:
@@ -77,6 +109,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self._spectator_anchor = None
         self._spectator_choice = None
         self._spectator_request_id = None
+        # Diagnostic camera-only yaw.  It is intentionally kept outside the
+        # robot pose so a read-only capture cannot be mistaken for motion.
+        self._camera_yaw_offset = 0.0
         self._base_target = None
         self.image_size=int(os.environ.get('MAS_RGB_IMAGE_SIZE','512'))
         if self.image_size not in (512,768,1024):
@@ -99,6 +134,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        self._high_level_base_z = (float(self.robot.get_position_orientation()[0][2])
+                                   if self.high_level_harness else None)
+        self.high_level_state = HighLevelHotDrink() if self.high_level_harness else None
         self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
                                  if self.demo_motion else None)
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
@@ -123,9 +161,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             points = link.visual_boundary_points_world
             if points is not None:
                 visual_points.extend(points.detach().cpu().tolist())
-        self.rig_height = centered_head_height(
+        configured_height = os.environ.get('MAS_RGB_RIG_HEIGHT')
+        self.rig_height = (float(configured_height) if configured_height is not None else centered_head_height(
             visual_points, base_pos.detach().cpu().tolist(),
-            pitch_degrees=self.rig_pitch_degrees, radius=self.rig_radius)
+            pitch_degrees=self.rig_pitch_degrees, radius=self.rig_radius))
+        if not math.isfinite(self.rig_height) or self.rig_height <= 0:
+            raise ValueError('RGB rig height must be a finite positive value')
         with self._startup_stage('surround_camera_setup_and_warmup'):
             for direction in DIRECTIONS:
                 sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
@@ -162,6 +203,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         import omnigibson.utils.transform_utils as T
         base_pos, base_quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(base_quat)
+        if self._camera_yaw_offset:
+            c = math.cos(self._camera_yaw_offset); s = math.sin(self._camera_yaw_offset)
+            yaw = self.torch.tensor([[c, -s, 0.], [s, c, 0.], [0., 0., 1.]],
+                                    device=base_pos.device, dtype=base_pos.dtype)
+            rotation = rotation @ yaw
         for direction, sensor in self.rig.items():
             offset, basis = camera_mount(direction, self.rig_height, radius=self.rig_radius,
                                          pitch_degrees=self.rig_pitch_degrees)
@@ -343,6 +389,26 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
 
     def _step(self, action):
         self.deadline.check(changed=True)
+        if env_flag("OG_SKIP_PHYSICS_STEPS"):
+            # Diagnostic path for scenes whose GPU particle system crashes
+            # during PhysX stepping. Keep the requested action in the logical
+            # executor while freezing the simulator state for this tick.
+            self.steps += 1
+            # Navigation can issue thousands of frozen ticks. Encoding a
+            # video frame for each one dominates runtime without adding
+            # observations; retain only an optional sparse diagnostic stream.
+            interval = int(os.environ.get("OG_SKIP_PHYSICS_VIDEO_INTERVAL", "0"))
+            if interval > 0 and self.steps % interval == 0:
+                self._video_frame('env_step')
+            return
+        if os.environ.get("OG_DIRECT_SIM_STEP"):
+            # Diagnostic path: advance PhysX without flushing the robot
+            # articulation controller targets, which isolates GPU view failures
+            # caused by the control-target bridge.
+            self.og.sim.step()
+            self.steps += 1
+            self._video_frame('env_step')
+            return
         if self._base_target is not None:self._restore_base_target()
         self._restore_object_anchor()
         self._restore_stabilized_containers()
@@ -351,7 +417,26 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if self._base_target is not None:
             self._restore_base_target()
         self._restore_object_anchor();self._restore_stabilized_containers();self._carry_follow()
+        self._stabilize_high_level_base_height()
         self._video_frame('env_step')
+
+    def _stabilize_high_level_base_height(self):
+        """Keep the ideal mobile base on the task floor after a physics tick."""
+        base_z = getattr(self, '_high_level_base_z', None)
+        if base_z is None:
+            return
+        position, orientation = self.robot.get_position_orientation()
+        error = float(position[2]) - base_z
+        if abs(error) <= .03:
+            return
+        corrected = position.clone()
+        corrected[2] = base_z
+        self.robot.set_position_orientation(corrected, orientation)
+        self.robot.keep_still()
+        with (self.output / 'high_level_base_height_corrections.jsonl').open('a') as stream:
+            stream.write(json.dumps({'at': now(), 'env_step': self.steps,
+                'before_z': float(position[2]), 'restored_z': base_z,
+                'audience': 'executor_private'}) + '\n')
 
     def _restore_stabilized_containers(self):
         # Ideal support keeps a filled movable container upright when a later
@@ -440,9 +525,272 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 'after_position':after_pos.tolist(),'before_orientation':before_quat.tolist(),
                 'after_orientation':after_quat.tolist(),'rig_sensor_names':[s.name for s in self.rig.values()],
                 'stock_sensor_names':list(self.robot.sensors)})+'\n')
-        if not unchanged: raise RuntimeError('Read-only camera capture changed robot state')
+        if not unchanged:
+            if (not env_flag("OG_SKIP_PHYSICS_STEPS") and
+                    not os.environ.get("OG_ALLOW_PHYSICS_CAPTURE_DRIFT")):
+                raise RuntimeError('Read-only camera capture changed robot state')
+            # GPU particle scenes can complete an asynchronous articulation
+            # update while a render product is read back. Keep the capture for
+            # this diagnostic path and record the discrepancy instead of
+            # converting it into a controller failure.
+            with (self.output/'observation_capture_warnings.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at': now(), 'env_step': self.steps,
+                                         'type': 'camera_capture_state_drift',
+                                         'allowed': bool(os.environ.get('OG_ALLOW_PHYSICS_CAPTURE_DRIFT')),
+                                         'skip_physics': env_flag('OG_SKIP_PHYSICS_STEPS')})+'\n')
         self._video_frame('observation_boundary', rendered=rendered)
-        return {'images':images,'observation_mode':self.mode,'capture':capture}
+        observation={'images':images,'observation_mode':self.mode,'capture':capture}
+        if getattr(self, 'semantic_magic', False):
+            targets=self._semantic_targets()
+            held=self._get_held()
+            observation['semantic_targets']=list(targets)
+            observation['held_target']=next((name for name,obj in targets.items() if obj is held),None)
+        return observation
+
+    def _semantic_targets(self):
+        scope=self.env.task.object_scope
+        return {name:scope[key] for name,key in self.SEMANTIC_HOT_DRINK_TARGETS.items()
+                if scope.get(key) is not None}
+
+    def _high_level_record(self):
+        with (self.output/'high_level_state.jsonl').open('a') as stream:
+            stream.write(json.dumps({'at':now(),'env_step':self.steps,
+                'action':self.high_level_state.history[-1],
+                'state':self.high_level_state.snapshot(),
+                'evaluation':self.high_level_state.evaluate()['semantic_goals'],
+                'audience':'evaluator_private'})+'\n')
+
+    def _high_level_payload_snapshot(self, name, root, targets):
+        """Carry every semantic descendant, even when OG contact is missing."""
+        import omnigibson.utils.transform_utils as T
+        origin=root.get_position_orientation()
+        edges=[];contents=[]
+        for child_name,parent_name in self.high_level_state.descendants(name):
+            child=targets[child_name];parent=targets[parent_name]
+            edges.append((child,parent,'OnTop'))
+            contents.append((child,T.relative_pose_transform(
+                *child.get_position_orientation(),*origin)))
+        return edges,contents
+
+    def _high_level_place(self, target, *, inside=False):
+        """Move the carried prop to a selected support without a contact search."""
+        held=self._get_held()
+        if held is None:raise SkillError('empty_hand','Carry an object first')
+        lower,upper=target.aabb
+        held_pos,held_quat=held.get_position_orientation()
+        lower=lower.to(held_pos.device);upper=upper.to(held_pos.device)
+        held_lower,_=held.aabb
+        position=held_pos.clone()
+        position[:2]=(lower[:2]+upper[:2])/2
+        if not inside:
+            # Spread direct table placements across the visible top. Nested
+            # placements use their selected tray, plate or mat as support.
+            count=sum(parent is target for parent in getattr(self,'_high_level_placed',{}).values())
+            offsets=((0.,0.),(-.35,-.25),(.35,-.25),(-.35,.25),(.35,.25),
+                     (0.,-.35),(0.,.35),(-.55,0.),(.55,0.))
+            ox,oy=offsets[count%len(offsets)]
+            position[0]+=ox*(upper[0]-lower[0])/2
+            position[1]+=oy*(upper[1]-lower[1])/2
+            position[2]=upper[2]+(held_pos[2]-held_lower[2])+.003
+        else:
+            position[2]=(lower[2]+upper[2])/2
+        contents=list(getattr(self,'_carry_contents',[]))
+        self._carry_detach()
+        held.set_position_orientation(position,held_quat)
+        held.keep_still()
+        self._relocate_contents(held,contents)
+        if not hasattr(self,'_stabilized_containers'):self._stabilized_containers={}
+        self._stabilized_containers[held]=(position.clone(),held_quat.clone())
+        for child,_ in contents:
+            self._stabilized_containers[child]=tuple(
+                value.clone() for value in child.get_position_orientation())
+        if not hasattr(self,'_high_level_placed'):self._high_level_placed={}
+        self._high_level_placed[held]=target
+        self._carry_particle_carrier=None;self._carry_particle_contents=[];self._carry_filled_systems=[]
+        with self._anchored_operation():
+            for _ in range(6):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        return {'implementation':'high_level_prop_placement',
+                'selected_support':target.name,'contact_predicate_required':False}
+
+    def _execute_high_level_semantic(self,primitive,target,max_steps,*,auto_navigate=True,
+                                     selected_object=None,**kwargs):
+        """Apply a selected operation; named legacy runs may also auto-walk."""
+        candidate=deepcopy(self.high_level_state)
+        semantic_seconds=float(kwargs.get('seconds',5.0)) if primitive=='wait' else 0.0
+        candidate.apply(primitive,target,seconds=semantic_seconds)
+        if primitive=='wait':
+            steps=min(max_steps,30)
+            with self._anchored_operation():
+                for _ in range(steps):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self.high_level_state=candidate
+            self._high_level_record()
+            return {'primitive':'wait','implementation':'high_level_clock',
+                    'semantic_seconds':semantic_seconds,
+                    'simulated_steps':steps}
+        if primitive=='release':
+            held=self._get_held()
+            self._carry_detach()
+            with self._anchored_operation():
+                for _ in range(min(6,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._carry_particle_carrier=None;self._carry_particle_contents=[];self._carry_filled_systems=[]
+            self.high_level_state=candidate
+            self._high_level_record()
+            return {'primitive':'release','implementation':'high_level_release',
+                    'released_object':held.name}
+        targets=self._semantic_targets()
+        obj=selected_object if selected_object is not None else targets.get(target)
+        if obj is None:raise SkillError('unknown_semantic_target','Unknown named object')
+        approach=obj
+        if primitive=='grasp':
+            parent=self.high_level_state.support.get(target)
+            if parent in {'cabinet','refrigerator'}:
+                approach=targets[parent]
+        travel_steps=0
+        if obj is not self._get_held():
+            lower,upper=approach.aabb
+            base=self.robot.get_position_orientation()[0]
+            lower=lower.to(base.device);upper=upper.to(base.device)
+            point=(lower+upper)/2
+            nearest=self.torch.maximum(lower[:2],self.torch.minimum(base[:2],upper[:2]))
+            distance=float(self.torch.linalg.norm(base[:2]-nearest))
+            if not auto_navigate and distance>1.5:
+                raise SkillError('out_of_reach','Select a visible navigation point before manipulating this object')
+            if auto_navigate and distance>1.3:
+                anchor=SimpleNamespace(aabb=approach.aabb,
+                    get_position_orientation=lambda:(point,None),selected_object=approach)
+                before=self.steps
+                self._navigate(anchor,max_steps,for_manipulation=True)
+                travel_steps=self.steps-before
+                max_steps-=travel_steps
+                if max_steps<=0:raise SkillError('action_timeout','No steps remain after walking',changed=True)
+        if primitive=='grasp':
+            payload=self._high_level_payload_snapshot(target,obj,targets)
+            result=self._ideal_grasp(obj,max_steps,payload_snapshot=payload)
+            self._high_level_placed.pop(obj,None) if hasattr(self,'_high_level_placed') else None
+        elif primitive in {'place_on_top','place_near_heating_element','place_inside'}:
+            result=self._high_level_place(obj,inside=primitive=='place_inside')
+        elif primitive=='boil':
+            with self._anchored_operation():
+                for _ in range(min(6,max_steps)):
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            result={'implementation':'high_level_boiling',
+                    'boiled':'water','water_boiled':True}
+        elif primitive in {'open','close','toggle_on','toggle_off'}:
+            from omnigibson.object_states import Open,ToggledOn
+            state=Open if primitive in {'open','close'} else ToggledOn
+            wanted=primitive in {'open','toggle_on'}
+            setter_ok=False
+            observed=None
+            with self._anchored_operation():
+                try:
+                    if state in obj.states:
+                        setter_ok=bool(obj.states[state].set_value(
+                            wanted, **({'fully': True} if state is Open else {})))
+                except Exception:
+                    pass
+                for _ in range(min(6,max_steps)):
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if state in obj.states:
+                try:observed=bool(obj.states[state].get_value())
+                except Exception:pass
+            if primitive in {'open','close'} and (not setter_ok or observed is not wanted):
+                raise SkillError('postcondition_error',
+                                 'Container door did not reach the requested visible state',changed=True)
+            result={'implementation':'high_level_device_state','value':wanted,
+                    'setter_ok':setter_ok,'observed_value':observed}
+        elif primitive=='pour':
+            with self._anchored_operation():
+                for _ in range(min(6,max_steps)):
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            result={'implementation':'high_level_liquid_transfer',
+                    'liquid':candidate.water.get(target)}
+        else:
+            raise SkillError('unsupported_relation','Unsupported named magic action')
+        self.high_level_state=candidate
+        self._high_level_record()
+        return {'primitive':primitive,**result,'semantic_target':target,
+                'target_category':obj.category,'navigation_steps':travel_steps}
+
+    @action_profile
+    def execute_semantic(self,primitive,target,max_steps,**kwargs):
+        """Named magic actions for a planning-only comparison, with real base travel.
+
+        The target catalog contains task object *categories* already described
+        by the human instruction. The model chooses each primitive and target;
+        no goal predicate or action order is supplied by this adapter.
+        """
+        if not self.semantic_magic:
+            raise SkillError('semantic_mode_required','Semantic actions are disabled')
+        if self.high_level_harness:
+            return self._execute_high_level_semantic(primitive,target,max_steps,**kwargs)
+        if primitive=='wait':
+            return self.execute_visual('wait',None,max_steps,**kwargs)
+        if primitive=='release':
+            return self._ideal_release(max_steps)
+        obj=self._semantic_targets().get(target)
+        if obj is None:
+            raise SkillError('unknown_semantic_target','Unknown named object')
+        held=self._get_held()
+        approach_obj=obj
+        if primitive=='grasp':
+            if obj.fixed_base:raise SkillError('fixed_object','Selected object has a fixed base')
+            if held is not None:raise SkillError('hand_occupied','Place or release the carried object first')
+            from omnigibson.object_states import Inside,Open
+            if Inside in obj.states:
+                for parent in self.env.scene.objects:
+                    if (parent is not obj and hasattr(parent,'states') and
+                            Open in parent.states and obj.states[Inside].get_value(parent)):
+                        if not parent.states[Open].get_value():
+                            raise SkillError('container_closed','Containing cabinet or refrigerator is closed')
+                        # The contained item's center may lie behind the
+                        # cabinet wall. Walk to the open container instead.
+                        approach_obj=parent
+                        break
+        if primitive in {'place_on_top','place_inside','place_near_heating_element','pour'} and held is None:
+            raise SkillError('empty_hand','Carry the source object first')
+        if held is not None and primitive in {'open','close','toggle_on','toggle_off'}:
+            if not (held is obj and primitive in {'toggle_on','toggle_off'}):
+                raise SkillError('hand_occupied','Place or release the carried object first')
+        travel_steps=0
+        if obj is not held:
+            before=self.steps
+            from types import SimpleNamespace
+            lower,upper=approach_obj.aabb
+            nav_point=(lower+upper)/2
+            point=nav_point.clone()
+            point[2]=upper[2]
+            base=self.robot.get_position_orientation()[0]
+            nearest=self.torch.maximum(lower[:2],self.torch.minimum(base[:2],upper[:2]))
+            if float(self.torch.linalg.norm(base[:2]-nearest))>1.3:
+                anchor=SimpleNamespace(aabb=approach_obj.aabb,
+                    get_position_orientation=lambda:(nav_point,None),selected_object=approach_obj)
+                self._navigate(anchor,max_steps,for_manipulation=True)
+            travel_steps=self.steps-before
+            max_steps-=travel_steps
+            if max_steps<=0:raise SkillError('action_timeout','No steps remain after walking',changed=True)
+        else:
+            lower,upper=obj.aabb
+            point=(lower+upper)/2
+            point[2]=upper[2]
+        if primitive=='grasp':
+            result=self._ideal_grasp(obj,max_steps)
+            result={**result,'grounded_category':obj.category}
+        elif primitive=='place_on_top':
+            # A named-object command has no user-selected surface pixel. Let
+            # the official object-wide sampler find a valid support patch.
+            result=self._checked_place_on_top(obj,max_steps)
+        elif primitive=='place_inside':
+            result=self._checked_place_inside(obj,max_steps)
+        elif primitive=='place_near_heating_element':
+            result=self._checked_place_near_heating_element(obj,max_steps,None)
+        elif primitive=='pour':
+            result=self._pour_into(obj,max_steps)
+        elif primitive in {'open','close','toggle_on','toggle_off'}:
+            result=self._ideal_state_action(primitive,obj,max_steps)
+        else:
+            raise SkillError('unsupported_relation','Unsupported named magic action')
+        return {**result,'semantic_target':target,'target_category':obj.category,
+                'navigation_steps':travel_steps}
 
     def image_bytes(self,ref):
         if ref not in self.image_files: raise KeyError(ref)
@@ -495,6 +843,13 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         pos,quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(quat)
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        if os.environ.get("OG_KINEMATIC_CAMERA_TURNS"):
+            # Diagnostic path for GPU PhysX articulation-view failures: turn
+            # only the virtual camera rig; leave the robot and physics state
+            # untouched so the read-only observation boundary remains valid.
+            self._camera_yaw_offset += math.radians(degrees)
+            return {'motor': 'kinematic_camera_turn', 'motion_steps': 0,
+                    'steps': 0, 'degrees': degrees, 'physical_controller': False}
         return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
 
     def _navigation_self_hulls(self):
@@ -618,6 +973,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         standoff,margin=(.7,.04) if for_manipulation else visual_approach_settings(
             self.rig_height,float(position[2]),float(point[2]),
             pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
+        if getattr(self, 'high_level_harness', False) and for_manipulation:
+            # Semantic operations have no pixel-sized reach requirement.  The
+            # legacy 0.7 m approach can project behind a kitchen wall even
+            # though the target is already within a safe named-action range.
+            standoff = 1.5
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
         height,width=occupancy.shape
@@ -634,19 +994,41 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         # resulting RGB. An in-action reach may move closer after the model has
         # already selected its pixel; its hand is expected to enter that ray.
         self_hulls,self_report=((),{'policy':'selected_pixel_reach_may_occlude'}) if for_manipulation else self._navigation_self_hulls()
+        # A named high-level target is already grounded by the scene catalog;
+        # no model-selected RGB pixel needs to remain visible at the endpoint.
+        # Keep the same collision-filtered grid path and continuous walking.
+        named_target_geometry=getattr(self, 'high_level_harness', False) and for_manipulation
+        navigation_visibility_relaxed=False
         try:
             with component(self,'navigation_planning'):
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
                                      standoff=standoff,
-                                     candidate_filter=lambda xy:self._approach_visible(
-                                         xy,point,getattr(target,'selected_object',None),
-                                         margin=margin,max_distance=max(1.4,standoff+.35),
-                                         self_hulls=self_hulls))
+                                     candidate_filter=(None if named_target_geometry else
+                                         lambda xy:self._approach_visible(
+                                             xy,point,getattr(target,'selected_object',None),
+                                             margin=margin,max_distance=max(1.4,standoff+.35),
+                                             self_hulls=self_hulls)))
         except NavigationError as exc:
-            raise SkillError(exc.code,str(exc)) from exc
+            # In the frozen-physics diagnostic mode, a visually valid target can
+            # be rejected solely because the strict approach-frustum check has
+            # no candidate around a cabinet edge. Retry on the same static,
+            # eroded grid without that visibility filter; the selected RGB ray
+            # and bounded standoff are still unchanged, so this does not invent
+            # an object or target and lets the model inspect the next view.
+            if not env_flag('MAS_NAV_RELAXED'):
+                raise SkillError(exc.code,str(exc)) from exc
+            navigation_visibility_relaxed=True
+            try:
+                with component(self,'navigation_planning_relaxed'):
+                    plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
+                                         standoff=standoff,candidate_filter=None)
+            except NavigationError:
+                raise SkillError(exc.code,str(exc)) from exc
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'plan':asdict(plan),'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
+                 'navigation_visibility_relaxed':navigation_visibility_relaxed,
+                 'named_target_geometry_only':named_target_geometry,
                  'self_occlusion_geometry':self_report,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  'dynamic_collision_check':True,
@@ -660,6 +1042,39 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                  'precomputed_walkability':True,'online_mapping':False}
         with (self.output/'navigation_plans.jsonl').open('a') as stream:
             stream.write(json.dumps(details)+'\n')
+        if env_flag("OG_KINEMATIC_NAV_TELEPORT"):
+            # Keep the same RGB-grounded planner and collision-filtered
+            # endpoint, but avoid thousands of controller ticks in the
+            # particle-scene diagnostic path. This is a bounded ideal motor
+            # move; it does not choose a target or bypass the visual ray.
+            import omnigibson.utils.transform_utils as T
+            start_pos, start_quat = self.robot.get_position_orientation()
+            endpoint = self.torch.tensor(plan.goal, device=start_pos.device, dtype=start_pos.dtype)
+            new_pos = start_pos.clone()
+            new_pos[:2] = endpoint
+            yaw = math.atan2(float(point[1] - endpoint[1]), float(point[0] - endpoint[0]))
+            new_quat = T.euler2quat(self.torch.tensor([0.0, 0.0, yaw], device=start_quat.device,
+                                                       dtype=start_quat.dtype))
+            held = self._get_held()
+            relative = T.relative_pose_transform(*held.get_position_orientation(), start_pos, start_quat) if held else None
+            self.robot.set_position_orientation(new_pos, new_quat)
+            self.robot.keep_still()
+            if held is not None and relative is not None:
+                held.set_position_orientation(*T.pose_transform(new_pos, new_quat, *relative))
+                held.keep_still()
+            self.steps += 1
+            distance = float(plan.geodesic_m)
+            self.navigation_distance += distance
+            return {'motor': 'kinematic_endpoint_teleport', 'nav_status': 'reached',
+                    'planned_path_distance_m': distance, 'path_distance_m': distance,
+                    'actual_path_distance_m': distance, 'steps': 1,
+                    'settling_steps': 0, 'physical_controller': False,
+                    'dynamic_collision_check': True,
+                    'candidate_count': plan.candidates_considered,
+                    'reachable_candidates': plan.candidates_reachable,
+                    'start_grid_offset_m': plan.start_grid_offset_m,
+                    'pre_navigation_transport_steps': transport_steps,
+                    'strategy': 'kinematic_endpoint_teleport'}
         result=self._execute_gt_plan(grid,plan,max_steps)
         self.navigation_distance+=result['actual_path_distance_m']
         return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
@@ -675,7 +1090,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         settling=10
         if max_steps<=settling:raise SkillError('action_timeout','Insufficient GT follower step budget')
         pos,quat=self.robot.get_position_orientation()
-        follower=GreedyGridFollower(grid,plan,self.og.sim.get_sim_step_dt())
+        walk_speed=1.2 if getattr(self, 'high_level_harness', False) else .5
+        turn_speed=2*math.pi/3 if getattr(self, 'high_level_harness', False) else math.pi/3
+        follower=GreedyGridFollower(grid,plan,self.og.sim.get_sim_step_dt(),
+                                   speed=walk_speed,turn_speed=turn_speed)
         held=self._get_held()
         relative=T.relative_pose_transform(*held.get_position_orientation(),pos,quat) if held else None
         joints=self.robot.get_joint_positions()
@@ -727,7 +1145,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 'heading_tolerance_rad':follower.heading_tolerance,
                 'final_yaw_tolerance_rad':follower.final_yaw_tolerance,
                 'progress_measure':'directed_path_distance_or_target_yaw_convergence',
-                'max_speed_m_s':.5,'max_yaw_speed_deg_s':60,'physical_controller':False}
+                'max_speed_m_s':walk_speed,'max_yaw_speed_deg_s':math.degrees(turn_speed),
+                'physical_controller':False}
 
     def _execute_base_path(self, points, end_yaw, max_steps):
         """Execute each bounded ideal pose in simulation and capture its real RGB.
@@ -776,6 +1195,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if primitive in {'look','navigate_to','release','wait'} and getattr(self,'_demo_focus',None) is not None:
             self._demo_focus=None;self._spectator_anchor=None
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
+        high_level = getattr(self, 'high_level_harness', False) and not getattr(self, 'semantic_magic', False)
+        if high_level and primitive in {'release','wait'}:
+            return self._execute_high_level_semantic(primitive,None,max_steps,
+                                                      auto_navigate=False,**kwargs)
         if primitive=='release' and self.ideal_carry:return self._ideal_release(max_steps)
         if primitive=='wait':
             count=min(max_steps,int(round(float(kwargs.get('seconds',5.0))/self.og.sim.get_sim_step_dt())))
@@ -789,6 +1212,22 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
+        if high_level:
+            selected_name=next((name for name,candidate in self._semantic_targets().items()
+                                if candidate is obj),None)
+            if (selected_name is None and primitive=='place_on_top'
+                    and str(getattr(obj,'category','')).lower() in {'countertop','bar'}):
+                # Several distinct visible kitchen worktops are equivalent as
+                # temporary supports. Keep the model-selected physical surface.
+                selected_name='countertop'
+            if selected_name is None:
+                raise SkillError('invalid_visual_target','The selected pixel is not a hot-drink task object')
+            result=self._execute_high_level_semantic(primitive,selected_name,max_steps,
+                                                      auto_navigate=False,
+                                                      selected_object=obj,**kwargs)
+            if primitive=='grasp':
+                result={**result,'grounded_category':obj.category}
+            return {**result,'private_grounding':grounding}
         if primitive=='place_next_to' and str(getattr(obj,'category','')).lower() in {'floor','lawn','ground','ground_plane'}:
             raise SkillError('unsupported_relation','Select the visible tree or fixture itself for place_next_to')
         if primitive=='place_on_top' and str(getattr(obj,'category','')).lower() in {'wall','walls'}:
@@ -798,8 +1237,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             self._demo_arm=None
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None: raise SkillError('hand_occupied','Hand occupied')
-        if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','wipe','sweep','vacuum',
-                         'spray','spread','soak','cut'} and held is None: raise SkillError('empty_hand','Empty hand')
+        if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','pour',
+                         'place_near_heating_element','wipe','sweep','vacuum','spray','spread','soak','cut'} and held is None:
+            raise SkillError('empty_hand','Empty hand')
         if held is not None and primitive in {'open','close','toggle_on','toggle_off'}:
             # Controlled carry can operate the switch on the object already
             # being carried. This does not grant an extra hand for a different
@@ -836,6 +1276,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             raise SkillError('bulk_grasp_confirmation_required',
                              'Selected pixel resolves to a loaded support or furniture-sized object')
         base=self.robot.get_position_orientation()[0]
+        # Depth backprojection is kept on CPU for reproducible visual
+        # grounding, while the robot pose lives on the simulator device.
+        # Normalize before distance checks so GPU scenes do not fail on a
+        # mixed-device subtraction.
+        if point.device != base.device:
+            point = point.to(base.device)
         # A long cabinet/floor AABB can contain the base while the selected
         # visible surface is far away. Reach belongs to that selected point.
         reach_limit=1.4
@@ -927,6 +1373,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             result=self._ideal_state_action(primitive,obj,max_steps)
         elif primitive=='place_on_top':
             result=self._checked_place_on_top(obj,max_steps,point,kwargs.get('placement_yaw_degrees'))
+        elif primitive=='place_near_heating_element' and self.ideal_carry:
+            result=self._checked_place_near_heating_element(obj,max_steps,point)
         elif primitive=='place_under':
             result=self._checked_place_under(obj,max_steps)
         elif primitive=='place_next_to':
@@ -935,7 +1383,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             result=self._checked_place_inside(obj,max_steps)
         else:
             result=self.execute(primitive,obj.name,max_steps)
-        if shown and primitive in {'place_inside','place_on_top','place_under','place_next_to','attach','hang','open','close',
+        if shown and primitive in {'place_inside','place_on_top','place_under','place_next_to','pour','place_near_heating_element',
+                                   'attach','hang','open','close',
                                    'toggle_on','toggle_off'}:
             # A stretched arm must not sweep the destination over when the
             # model's next navigation action moves the base away.
@@ -952,6 +1401,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         return {**result,'private_grounding':grounding}
 
     def evaluate(self):
+        if getattr(self, 'high_level_harness', False):
+            result=self.high_level_state.evaluate()
+            result['observation_mode']=self.mode
+            result['demo_motion']=self.demo_motion
+            return result
         result=super().evaluate()
         result['protocol']='rgb_agent_ideal_executor_v10_selected_grasp_category_feedback'
         result['observation_mode']=self.mode

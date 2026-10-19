@@ -155,7 +155,9 @@ class OmniGibsonBackend:
         gm.HEADLESS = True
         gm.RENDER_VIEWER_CAMERA = bool(getattr(self,'private_viewer_grounding',False))
         gm.ENABLE_HQ_RENDERING = False
-        gm.USE_GPU_DYNAMICS = False
+        # The hot-drink task includes water particles; GPU dynamics is required
+        # for the water system to initialize on the selected RTX GPU.
+        gm.USE_GPU_DYNAMICS = True
         gm.ENABLE_TRANSITION_RULES = True
         self.og, self.torch = og, torch
         self.task_name, self.instance, self.seed, self.output = task, instance, seed, output
@@ -165,6 +167,18 @@ class OmniGibsonBackend:
         self.navigation_distance = 0.0
         self.frames_revision = -1
         self.frames = []
+        # Launch Kit before scene compatibility and wildcard BDDL compilation.
+        # Those preflight checks import native libraries that can destabilize
+        # SimulationApp startup if loaded first.
+        with self._startup_stage('launch_omnigibson_app'):
+            from omnigibson.simulator import _launch_app
+            if og.app is None:
+                # Isaac Sim 5.1 can SIGSEGV in subprocesses when Kit starts
+                # immediately after CUDA / OmniGibson imports. A 5-second
+                # settle passed the isolated red/green startup reproduction.
+                time.sleep(5)
+                og.app = _launch_app()
+
         with self._startup_stage('prepare_environment_config'):
             config = self._config(task, gpu, max_steps)
             write_json(output / "environment_config.json", config)
@@ -222,6 +236,104 @@ class OmniGibsonBackend:
         with self._startup_stage('instance_reset'):
             self.evaluator.reset()
         self.env, self.robot = self.evaluator.env, self.evaluator.robot
+        if task == 'prepare_and_serve_hot_drink' and os.environ.get('OG_SWITCH_TO_CPU_AFTER_WATER'):
+            # GPU startup omits the contact cache to avoid its direct-GPU
+            # articulation fault. After switching the scene to CPU, restore
+            # the cache: Touching and therefore official OnTop otherwise read
+            # false even for visibly supported objects.
+            if os.environ.pop('OG_DISABLE_CONTACT_CACHE', None):
+                from omnigibson.utils.usd_utils import RigidContactAPI
+                RigidContactAPI.initialize_view()
+                write_json(output / 'contact_cache_mode.json', {
+                    'startup': 'disabled_during_gpu_water_initialization',
+                    'runtime': 'enabled_after_cpu_switch',
+                })
+            # The source water is created while GPU dynamics is enabled, then
+            # this fixture switches to CPU to avoid a PhysX CUDA access fault
+            # during walking. The cooked-water system is created later by the
+            # heating transition. OmniGibson checks the macro at system init,
+            # even though this task uses state-level (magic) liquid actions.
+            # Satisfy that init check only for the future output system, while
+            # leaving the running rigid-body physics scene on CPU.
+            original_get_system = self.env.scene.get_system
+            def get_system_with_cooked_water_init(system_name, force_init=True):
+                if system_name == 'cooked__water' and force_init:
+                    system = original_get_system(system_name, force_init=False)
+                    if not system.initialized:
+                        with gm.unlocked():
+                            gm.USE_GPU_DYNAMICS = True
+                        try:
+                            return original_get_system(system_name, force_init=True)
+                        finally:
+                            with gm.unlocked():
+                                gm.USE_GPU_DYNAMICS = False
+                return original_get_system(system_name, force_init=force_init)
+            self.env.scene.get_system = get_system_with_cooked_water_init
+        if task == 'prepare_and_serve_hot_drink' and not os.environ.get('MAS_HIGH_LEVEL_HARNESS') == '1':
+            with self._startup_stage('validate_initial_liquid'):
+                from omnigibson.object_states import Contains, Filled
+                bottle = self.env.task.object_scope.get('water_bottle.n.01_1')
+                water = self.env.scene.get_system('water', force_init=False)
+                count = int(water.n_particles) if water is not None and water.initialized else 0
+                contains = bool(bottle.states[Contains].get_value(water)) if count and bottle is not None else False
+                filled = bool(bottle.states[Filled].get_value(water)) if count and bottle is not None else False
+                write_json(output / 'initial_liquid_validation.json', {
+                    'water_particle_count': count,
+                    'bottle_contains_water': contains,
+                    'bottle_filled_with_water': filled,
+                    'status': 'passed' if contains and filled else 'failed',
+                })
+                if not contains or not filled:
+                    raise ValueError('Initial water bottle is empty; this task cannot be solved')
+        # Hand-authored challenge instances may contain no robot pose metadata.
+        # Ensure the injected R1Pro actually starts at the task's sampled pose;
+        # otherwise Isaac's default articulation state is [-50, -50, -50], which
+        # leaves all calibrated cameras pointed at the sky outside the house.
+        if getattr(self, '_robot_start_position', None) is not None:
+            device = self.robot.get_position_orientation()[0].device
+            start_pos = torch.tensor(self._robot_start_position, dtype=torch.float32, device=device)
+            start_ori = torch.tensor(self._robot_start_orientation, dtype=torch.float32, device=device)
+            self.robot.set_position_orientation(start_pos, start_ori)
+            self.robot.keep_still()
+        # Some hand-authored task layouts place the requested inventory behind
+        # several visually identical lower-cabinet doors.  In the diagnostic
+        # layout mode, leave the task's named containers open at reset so the
+        # RGB policy can inspect the specified contents; this remains a normal
+        # BDDL state (the contents are still inside the containers) and does
+        # not reveal object IDs or goal truth to the model.
+        if os.environ.get('MAS_PREOPEN_TASK_CONTAINERS'):
+            from omnigibson import object_states as _object_states
+            opened = []
+            for key in ('cabinet.n.01_1', 'electric_refrigerator.n.01_1'):
+                obj = self.env.task.object_scope.get(key)
+                if obj is None:
+                    continue
+                state = obj.states.get(_object_states.Open)
+                if state is None:
+                    continue
+                setter_ok = bool(state.set_value(True, fully=True))
+                visual_sync = self._sync_diagnostic_articulation_visuals(obj)
+                opened.append({'bddl_key': key, 'name': obj.name, 'category': obj.category,
+                               'setter_ok': setter_ok,
+                               'visual_sync': visual_sync,
+                               'joint_positions': obj.get_joint_positions().detach().cpu().tolist()
+                               if getattr(obj, 'n_joints', 0) else []})
+            # JointPrim.set_pos synchronizes PhysX to Fabric, but the
+            # diagnostic path intentionally skips control steps. Explicit
+            # render flushes make the newly opened articulation visible to the
+            # RGB cameras without advancing the particle simulation.
+            if opened and os.environ.get('MAS_PREOPEN_RENDER_FLUSH'):
+                import omnigibson as _og
+                for _ in range(2):
+                    _og.sim.render()
+            write_json(output / 'initial_container_state_override.json', {
+                'enabled': True,
+                'policy': 'preopen_bddl_named_containers_for_rgb_diagnostic',
+                'containers': opened,
+                'render_flush': bool(os.environ.get('MAS_PREOPEN_RENDER_FLUSH')),
+                'contents_and_goal_unchanged': True,
+                'official_submission_eligible': False,
+            })
         from omnigibson.utils.asset_utils import get_task_instance_path
         import bddl
         scene = self.env.task.scene_name
@@ -243,6 +355,18 @@ class OmniGibsonBackend:
         self.task_metadata = {"task": task, "instance": instance, "split": "public_test",
                               "scene": self.env.task.scene_name, "seed": seed}
 
+    def _sync_diagnostic_articulation_visuals(self, obj):
+        """Copy current articulated link poses into USD for frozen RGB diagnostics."""
+        if not os.environ.get('MAS_SYNC_ARTICULATION_VISUALS'):
+            return {'enabled': False, 'links': 0}
+        from omnigibson.prims.xform_prim import XFormPrim
+        count = 0
+        for link in obj.links.values():
+            position, orientation = link.get_position_orientation()
+            XFormPrim.set_position_orientation(link, position=position, orientation=orientation)
+            count += 1
+        return {'enabled': True, 'links': count}
+
     def _config(self, task: str, gpu: int, max_steps: int) -> dict:
         import yaml
         from omnigibson.eval.utils.eval_utils import generate_basic_environment_config
@@ -250,11 +374,16 @@ class OmniGibsonBackend:
         instances = root / "2026-challenge-task-instances"
         manifest = instances / "metadata" / "available_tasks.yaml"
         task_cfg = yaml.safe_load(manifest.read_text())[task][0]
+        self._robot_start_position = task_cfg["robot_start_position"]
+        self._robot_start_orientation = task_cfg["robot_start_orientation"]
         config = generate_basic_environment_config(task, task_cfg)
         robot_cfg = yaml.safe_load((Path(self.og.__file__).parent / "eval" / "r1pro.yaml").read_text())
         robot_cfg.pop("eval", None)
         robot_cfg.update(grasping_mode="sticky", disable_grasp_handling=True,
-                         obs_modalities=["rgb", "depth_linear", "proprio"])
+                         # GPU dynamics in this Isaac/OmniGibson combination can
+                         # expose mixed-device proprio tensors during startup;
+                         # the vision controller does not consume proprioception.
+                         obs_modalities=["rgb", "depth_linear"])
         if getattr(self, 'fixed_surround_rgb', False):
             # A separate calibrated four-camera rig replaces the stock head/wrist sensors.
             robot_cfg['include_sensor_names'] = []
@@ -322,6 +451,13 @@ class OmniGibsonBackend:
                              "configured_scene": hashlib.sha256(encoded.encode()).hexdigest()}
         config["scene"].update(scene_file=str(patched), trav_map_resolution=0.05,
                               default_erosion_radius=0.57, waypoint_resolution=0.1)
+        if os.environ.get('MAS_HIGH_LEVEL_HARNESS') == '1':
+            # The task rooms look through their windows into the garden.
+            # Include its floor and exterior backdrop. Loading corridor and
+            # dining geometry here is unsafe: their walls intersect the pinned
+            # kitchen/living traversability route used by the mobile base.
+            config['scene']['load_room_instances'] = [
+                'kitchen_0', 'living_room_0', 'garden_0']
         config["env"].update(device=f"cuda:{gpu}", automatic_reset=False)
         if getattr(self,'private_viewer_grounding',False):
             # Set the initial product size; never resize it after rig creation.
@@ -505,6 +641,102 @@ class OmniGibsonBackend:
         return {"primitive": "place_inside", "implementation": "official_Inside_set_value_volume_sampler",
                 "postcondition": "Inside.get_value_after_settling", "sampling_physics_steps": self.sampling_physics_steps - before}
 
+    def _pour_into(self, target, max_steps: int) -> dict:
+        """Transfer the selected carried liquid into a selected fillable target.
+
+        BEHAVIOR represents liquids as particle systems rather than graspable
+        objects.  The stock symbolic primitive set has no pour operation, so a
+        bottle can be moved forever without ever satisfying a kettle's Filled
+        predicate.  This action keeps the source and destination selected by
+        the model, uses the official Filled / Contains state setters, and then
+        lets the simulator settle before checking the result.
+        """
+        from omnigibson.object_states import Contains, ContainedParticles, Filled
+
+        # RGBBackend's controlled-carry mode owns the held object outside the
+        # upstream symbolic gripper. Use the backend's active carry protocol.
+        source = self._get_held() if hasattr(self, "_get_held") else self.primitives._get_obj_in_hand()
+        if source is None:
+            raise SkillError("empty_hand", "Carry a liquid container before pouring")
+        if source is target:
+            raise SkillError("unsupported_relation", "A container cannot pour into itself")
+        if Filled not in target.states or Contains not in source.states:
+            raise SkillError("unsupported_relation", "Pour requires a fillable source and destination")
+
+        systems = []
+        for system in self.env.scene.system_registry.objects:
+            name = str(getattr(system, "name", "")).lower()
+            if "water" in name and Contains in source.states:
+                try:
+                    if source.states[Contains].get_value(system):
+                        systems.append(system)
+                except Exception:
+                    continue
+        if not systems:
+            raise SkillError("pre_condition_error", "The carried container has no transferable water")
+        system = systems[0]
+        # A larger, filled vessel can serve a smaller one without becoming
+        # empty.  The state setter samples a serving into the destination;
+        # preserving the source represents the water left in the larger vessel.
+        source_volume = (float(source.states[ContainedParticles].link.volume)
+                         if ContainedParticles in source.states else 0.0)
+        target_volume = (float(target.states[ContainedParticles].link.volume)
+                         if ContainedParticles in target.states else 0.0)
+        partial_pour = (source_volume > target_volume > 0.0
+                        and Filled in source.states)
+        source_restored_after_leak = False
+        if partial_pour and not source.states[Filled].get_value(system):
+            # CPU particle settling can spill a carried kettle below the
+            # Filled threshold even while it still Contains cooked water.
+            # Restore the liquid state before taking a serving from it.
+            if not source.states[Filled].set_value(system, True):
+                raise SkillError("execution_error", "Source could not retain its liquid", changed=True)
+            source_restored_after_leak = True
+        if partial_pour and hasattr(self, '_carry_filled_systems'):
+            if not any(entry is system for entry in self._carry_filled_systems):
+                self._carry_filled_systems.append(system)
+        if not partial_pour:
+            # Both containers share one particle system.  Clear the source
+            # before sampling the destination, or overlapping volumes may
+            # remove the newly generated destination particles as well.
+            if not source.states[Contains].set_value(system, False):
+                raise SkillError("execution_error", "Source container could not be emptied", changed=True)
+            if hasattr(self, '_carry_particle_contents'):
+                self._carry_particle_contents = [entry for entry in self._carry_particle_contents
+                                                 if entry[0] is not system]
+            if hasattr(self, '_carry_filled_systems'):
+                self._carry_filled_systems = [entry for entry in self._carry_filled_systems
+                                              if entry is not system]
+        if not target.states[Filled].set_value(system, True):
+            raise SkillError("execution_error", "Destination rejected the transferred liquid", changed=True)
+        before = self.steps
+        for _ in range(min(20, max_steps)):
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        if not target.states[Contains].get_value(system):
+            raise SkillError("postcondition_error", "Destination contains no liquid after settling", changed=True)
+        destination_refilled_after_settle = False
+        if target_volume >= source_volume > 0.0 and not target.states[Filled].get_value(system):
+            # Filling a larger cooking vessel is different from serving a
+            # small mug: the former must remain above the official threshold.
+            if not target.states[Filled].set_value(system, True):
+                raise SkillError("postcondition_error", "Destination could not be filled", changed=True)
+            destination_refilled_after_settle = True
+            for _ in range(min(10, max_steps)):
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if not target.states[Filled].get_value(system):
+                raise SkillError("postcondition_error", "Destination lost its fill after settling", changed=True)
+        if partial_pour and not source.states[Filled].get_value(system):
+            if not source.states[Filled].set_value(system, True):
+                raise SkillError("postcondition_error", "Source lost its remaining liquid", changed=True)
+            source_restored_after_leak = True
+            if not source.states[Filled].get_value(system):
+                raise SkillError("postcondition_error", "Source remains underfilled", changed=True)
+        return {"primitive": "pour", "implementation": "official_Filled_and_Contains_state_transfer",
+                "system": system.name, "steps": self.steps - before, "partial_pour": partial_pour,
+                "source_restored_after_leak": source_restored_after_leak,
+                "destination_refilled_after_settle": destination_refilled_after_settle,
+                "postcondition": "Contains.get_value_after_settling"}
+
     def execute(self, skill: str, target: str | None, max_steps: int) -> dict:
         from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitiveSet as Primitive
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveErrorGroup
@@ -514,6 +746,8 @@ class OmniGibsonBackend:
             return self._navigate(obj, max_steps)
         if skill == "place_inside" and self.inside_placement == "official_volume":
             return self._place_inside_volume(obj, max_steps)
+        if skill == "pour":
+            return self._pour_into(obj, max_steps)
         if skill == "wait":
             for _ in range(min(30, max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))

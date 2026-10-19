@@ -6,6 +6,12 @@ import unittest
 from unittest.mock import patch
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.observations.boundary import public_observation, public_action_effect
+
+
+def test_boiling_completion_is_visible_as_action_feedback():
+    effect = public_action_effect('boil', {'water_boiled': True, 'semantic_target': 'stove'})
+    assert effect['water_boiled'] is True
+    assert 'semantic_target' not in effect
 from manipulation_agent.observations.boundary import public_execution_error
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.records import Recorder

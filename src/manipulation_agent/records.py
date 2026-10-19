@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import math
 import os
 import platform
 import shutil
@@ -16,9 +17,22 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _json_safe(value):
+    """Convert non-finite numeric leaves to JSON null for durable run logs."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def write_json(path: Path, value: dict) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+    tmp.write_text(json.dumps(_json_safe(value), ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
     tmp.replace(path)
 
 
@@ -79,7 +93,7 @@ class Recorder:
     def event(self, kind: str, payload: dict) -> str:
         self.sequence += 1
         event_id = f"event-{self.sequence:05d}"
-        event = {"id": event_id, "at": now(), "kind": kind, **payload}
+        event = _json_safe({"id": event_id, "at": now(), "kind": kind, **payload})
         with (self.output / "events.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(event, ensure_ascii=False, allow_nan=False) + "\n")
             stream.flush()

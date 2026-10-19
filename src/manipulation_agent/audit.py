@@ -19,7 +19,8 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
     model_events = [json.loads(s) for s in event_path(controller_dir).read_text().splitlines()]
     sim_calls = [{'name': e['name'], 'arguments': e['arguments']} for e in sim_events if e['kind'] == 'tool_call']
     calls = []; unexpected = []; usage = {}; closed = False
-    rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
+    mode = run.get('config', {}).get('observation_mode')
+    rgb = mode in {'rgb_only', 'rgb_semantic_magic'}
     if rgb:
         from .tools import tool_specs as rgb_tool_specs
         catalog = {t['name'] for t in rgb_tool_specs(run.get('config', {}).get('agent_profile', 'workflow'))}
@@ -65,7 +66,11 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
             and bool(run['source'].get('source_sha256'))
             and run['source']['source_sha256'] == controller.get('source', {}).get('source_sha256'))
         profile = run.get('config', {}).get('agent_profile', 'workflow')
-        if profile in {'workflow','skills'}:
+        if profile == 'semantic':
+            checks['semantic_profile_on_both_sides'] = controller.get('agent_profile') == 'semantic'
+            checks['only_named_semantic_actions'] = all(
+                c['name'] != 'act' for c in calls)
+        elif profile in {'workflow','skills'}:
             manifest = run_dir / 'skill_manifest.json'
             checks['frozen_skill_manifest'] = manifest.exists() and bool(run.get('skill_bundle_sha256')) and (
                 json.loads(manifest.read_text()).get('bundle_sha256') == run.get('skill_bundle_sha256'))
@@ -106,8 +111,9 @@ def audit_rgb_transport(run_dir: Path, sim_events: list[dict], model_events: lis
     files = {i['image_ref']: i for c in captures for i in c['images']}
     checks = {'model_results_match_simulator': len(items) == len(results),
               'rgb_observation_allowlist': True, 'image_bytes_hashes_and_archive_match': True,
-              'pixel_actions_use_latest_images': True, 'actual_images_delivered': False}
-    count = 0; refs = set(); latest = set(); errors = []
+              'pixel_actions_use_latest_images': True,
+              'semantic_actions_use_named_targets': True, 'actual_images_delivered': False}
+    count = 0; refs = set(); latest = set(); named = set(); errors = []
     for item, event in zip(items, results):
         try:
             if item['tool'] == 'act' and item['arguments'].get('target') is not None:
@@ -116,6 +122,10 @@ def audit_rgb_transport(run_dir: Path, sim_events: list[dict], model_events: lis
                 valid = valid and target['image_ref'] in latest and isinstance(target['point'], list) and len(target['point']) == 2
                 valid = valid and all(type(v) in (int, float) and 0 <= v <= 1 for v in target['point'])
                 checks['pixel_actions_use_latest_images'] &= bool(valid)
+            if item['tool'] == 'act_semantic' and item['arguments'].get('target') is not None:
+                checks['semantic_actions_use_named_targets'] &= (
+                    isinstance(item['arguments']['target'], str) and
+                    item['arguments']['target'] in named)
             content = (item.get('result') or {}).get('content', [])
             if not content:
                 # The simulator can finish after the MCP client has timed out.
@@ -155,6 +165,7 @@ def audit_rgb_transport(run_dir: Path, sim_events: list[dict], model_events: lis
                     and image['mimeType'] == meta['mime_type'])
                 count += 1; refs.add(meta['image_ref'])
             latest = {m['image_ref'] for m in metadata}
+            named = set(observation.get('semantic_targets') or [])
         except (ValueError, KeyError, TypeError, IndexError, OSError) as exc:
             checks['image_bytes_hashes_and_archive_match'] = False
             errors.append({'event_id': event.get('id'), 'error_type': type(exc).__name__})

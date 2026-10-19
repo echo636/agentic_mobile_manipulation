@@ -100,6 +100,8 @@ class ControlledCarry:
                 accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
                 if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
                 if state is Open:
+                    self._sync_diagnostic_articulation_visuals(obj)
+                if state is Open:
                     if wanted:
                         stabilized.pop(obj,None)
                     else:
@@ -234,19 +236,90 @@ class ControlledCarry:
         if getattr(self,'_carry_orientation',None) is not None:
             pose=(pose[0],self._carry_orientation)
         self._ideal_held.set_position_orientation(*pose);self._ideal_held.keep_still()
-        for obj,relative in self._carry_contents:
-            obj.set_position_orientation(*T.pose_transform(*pose,*relative));obj.keep_still()
+        self._relocate_contents(self._ideal_held,self._carry_contents)
+
+    def _grasp_particle_payload(self, obj):
+        """Keep physical particles inside the selected container during ideal carry."""
+        if getattr(self, 'high_level_harness', False):
+            return []
+        scene = getattr(getattr(self, 'env', None), 'scene', None)
+        if getattr(scene, 'system_registry', None) is None:
+            return []
+        from omnigibson.object_states import ContainedParticles
+        from omnigibson.utils import transform_utils as T
+        if ContainedParticles not in obj.states:
+            return []
+        origin, orientation = obj.get_position_orientation()
+        payload = []
+        for system in self.env.scene.system_registry.objects:
+            if not system.n_particles or not self.env.scene.is_physical_particle_system(system_name=system.name):
+                continue
+            contained = obj.states[ContainedParticles].get_value(system)
+            indices = self.torch.where(contained.in_volume)[0]
+            if not len(indices):
+                continue
+            positions, _ = system.get_particles_position_orientation()
+            indices = indices.to(device=positions.device)
+            rotation = T.quat2mat(orientation).to(device=positions.device,dtype=positions.dtype)
+            local = (positions[indices] - origin.to(device=positions.device,dtype=positions.dtype)) @ rotation
+            payload.append((system,indices.clone(),local.clone()))
+        return payload
+
+    def _relocate_particle_contents(self, held):
+        if held is not getattr(self,'_carry_particle_carrier',None):
+            return
+        from omnigibson.utils import transform_utils as T
+        origin, orientation = held.get_position_orientation()
+        for system, indices, local in getattr(self,'_carry_particle_contents',[]):
+            if not system.initialized or not system.n_particles or int(indices.max()) >= system.n_particles:
+                continue
+            positions, _ = system.get_particles_position_orientation()
+            updated = positions.clone()
+            rotation = T.quat2mat(orientation).to(device=updated.device,dtype=updated.dtype)
+            updated[indices] = local @ rotation.T + origin.to(device=updated.device,dtype=updated.dtype)
+            system.set_particles_position_orientation(positions=updated)
 
     def _relocate_contents(self, held, contents):
         from omnigibson.utils import transform_utils as T
         for obj,relative in contents:
             obj.set_position_orientation(*T.pose_transform(*held.get_position_orientation(),*relative));obj.keep_still()
+        self._relocate_particle_contents(held)
 
     def _carry_detach(self):
         if not self.ideal_carry:
             for arm in self.robot.arm_names:self.robot.release_grasp_immediately(arm=arm)
         else:
             self._ideal_held=None;self._carry_relative=None;self._carry_orientation=None;self._carry_contents=[];self._carry_dependencies=[]
+            # A placement moves the released container after detaching it.
+            # Retain its particle transform until the placement commits.
+
+    def _restore_expected_fill(self, carrier, systems):
+        """Keep a vessel filled when unsupported CPU particles spill on release."""
+        if carrier is None or not systems:
+            return
+        from omnigibson.object_states import ContainedParticles, Filled
+        if Filled not in carrier.states:
+            return
+        for system in systems:
+            if carrier.states[Filled].get_value(system):
+                continue
+            accepted=carrier.states[Filled].set_value(system, True)
+            method='official_filled_setter'
+            if accepted and not carrier.states[Filled].get_value(system):
+                # Filled.set_value reports success even when contact filtering
+                # generated too few particles to cross its fill threshold.
+                # Semantic magic keeps the selected vessel's liquid state while
+                # the CPU particle system settles around nearby furniture.
+                if ContainedParticles in carrier.states:
+                    system.generate_particles_from_link(
+                        obj=carrier,link=carrier.states[ContainedParticles].link,
+                        check_contact=False)
+                    method='selected_vessel_volume_without_contact_filter'
+            if not accepted or not carrier.states[Filled].get_value(system):
+                raise SkillError('postcondition_error',
+                                 'Carried container lost its filled liquid state', changed=True)
+            self._carry_record(status='liquid_fill_restored_after_placement',
+                               object=carrier.name, system=system.name, method=method)
 
     @contextmanager
     def _placement_context(self,target=None):
@@ -254,13 +327,36 @@ class ControlledCarry:
         held=getattr(self,'_ideal_held',None);relative=getattr(self,'_carry_relative',None)
         orientation=getattr(self,'_carry_orientation',None);contents=list(getattr(self,'_carry_contents',[]))
         dependencies=list(getattr(self,'_carry_dependencies',[]))
+        particle_carrier=getattr(self,'_carry_particle_carrier',None)
+        particles=list(getattr(self,'_carry_particle_contents',[]))
+        filled_systems=list(getattr(self,'_carry_filled_systems',[]))
+        stabilized_containers=dict(getattr(self,'_stabilized_containers',{}))
+        stabilized_payloads={obj:list(records) for obj,records in
+                             getattr(self,'_stabilized_container_payloads',{}).items()}
         try:
-            with self._anchored_operation(target),placement_transaction(self.og.sim,self._placement_record):yield
+            with self._anchored_operation(target),placement_transaction(self.og.sim,self._placement_record):
+                yield
+                if particle_carrier is not None and particles:
+                    from omnigibson.object_states import Contains
+                    if Contains in particle_carrier.states and any(
+                            not particle_carrier.states[Contains].get_value(system)
+                            for system, _, _ in particles):
+                        raise SkillError('postcondition_error',
+                                         'Placement lost liquid from the carried container', changed=True)
+                self._restore_expected_fill(particle_carrier,filled_systems)
         except Exception:
             self._ideal_held=held;self._carry_relative=relative;self._carry_orientation=orientation
             self._carry_contents=contents;self._carry_dependencies=dependencies
+            self._carry_particle_carrier=particle_carrier;self._carry_particle_contents=particles
+            self._carry_filled_systems=filled_systems
+            self._stabilized_containers=stabilized_containers
+            self._stabilized_container_payloads=stabilized_payloads
             if held is not None:self._carry_follow()
             raise
+        else:
+            if self._ideal_held is None:
+                self._carry_particle_carrier=None;self._carry_particle_contents=[]
+                self._carry_filled_systems=[]
 
     def _grasp_payload_snapshot(self,obj):
         """Capture current rigid support before the visible hand can disturb it."""
@@ -327,6 +423,7 @@ class ControlledCarry:
         # Preserve both contained objects and supported objects (e.g. food on a
         # plate), including nested payloads. Fixed scene objects never follow.
         original=obj.get_position_orientation()
+        self._carry_particle_carrier=None;self._carry_particle_contents=[];self._carry_filled_systems=[]
         dependencies,contents=(payload_snapshot if payload_snapshot is not None else
                                self._grasp_payload_snapshot(obj))
         if payload_snapshot is not None:
@@ -358,7 +455,15 @@ class ControlledCarry:
         # wrist, making a later selected volume physically too small for them.
         self._carry_orientation=original[1].clone() if getattr(self,'demo_motion',False) else None
         self._carry_contents=contents;self._carry_dependencies=dependencies
+        self._carry_particle_carrier=obj
+        self._carry_particle_contents=self._grasp_particle_payload(obj)
+        self._carry_filled_systems=[]
+        if self._carry_particle_contents:
+            from omnigibson.object_states import Filled
+            self._carry_filled_systems=[system for system,_,_ in self._carry_particle_contents
+                                        if Filled in obj.states and obj.states[Filled].get_value(system)]
         self._carry_record(status='attached',object=obj.name,contained_objects=[c.name for c,_ in contents],
+                           contained_particles=sum(len(indices) for _,indices,_ in self._carry_particle_contents),
                            payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
                            implementation='pose_projection_no_fixed_joint',original_position=original[0].tolist())
         self._carry_follow()
@@ -390,7 +495,10 @@ class ControlledCarry:
         with self._anchored_operation():
             for _ in range(min(30,max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                if contents:self._relocate_contents(held,contents)
+                self._relocate_contents(held,contents)
+        self._carry_particle_carrier=None;self._carry_particle_contents=[]
+        self._restore_expected_fill(held,getattr(self,'_carry_filled_systems',[]))
+        self._carry_filled_systems=[]
         if dependencies:self._verify_payload(dependencies)
         return {'primitive':'release','implementation':'controlled_carry_detach_and_settle',
                 'physical_grasp':False,'preserved_carried_objects':len(contents)}

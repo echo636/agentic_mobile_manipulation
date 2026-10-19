@@ -26,9 +26,13 @@ def main():
     p.add_argument('--policy',choices=['serve','responses'],default='serve')
     p.add_argument('--task',default='turning_on_radio');p.add_argument('--instance',type=int,default=301)
     p.add_argument('--seed',type=int,default=0);p.add_argument('--output',type=Path,required=True)
-    p.add_argument('--instruction');p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
+    instruction = p.add_mutually_exclusive_group()
+    instruction.add_argument('--instruction')
+    instruction.add_argument('--instruction-file', type=Path,
+                             help='Read a long task specification without passing it in process argv')
+    p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
-    p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
+    p.add_argument('--agent-profile', choices=['minimal','skills','planning','workflow','semantic'], default='skills')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
@@ -39,6 +43,8 @@ def main():
     p.add_argument('--image-history-captures', type=int, default=0,
                    help='Native loop: keep the latest N RGB captures in requests; zero preserves all. Raw records are retained.')
     a=p.parse_args()
+    if a.instruction_file is not None:
+        a.instruction = a.instruction_file.read_text()
     if a.record_video is None: a.record_video = a.backend == 'omnigibson'
     if a.instruction is None:
         catalog=json.loads((Path(__file__).parent/'tasks.json').read_text())
@@ -50,8 +56,13 @@ def main():
         LoopConfig(max_turns=a.model_max_turns, max_tokens=a.model_max_tokens,
                    image_history_captures=a.image_history_captures)
         policy.max_turns, policy.max_tokens = a.model_max_turns, a.model_max_tokens
-    config=vars(a).copy();config['output']=str(a.output.resolve());config['observation_mode']='rgb_only'
-    config['validation_level']='cpu_rgb_contract_only' if a.backend=='mock' else 'rgb_simulator_requires_controller_image_evidence'
+    config=vars(a).copy();config['output']=str(a.output.resolve())
+    config['observation_mode']='rgb_semantic_magic' if a.agent_profile=='semantic' else 'rgb_only'
+    if a.instruction_file is not None:
+        config['instruction_file'] = str(a.instruction_file.resolve())
+    config['validation_level']='cpu_rgb_contract_only' if a.backend=='mock' else (
+        'semantic_magic_simulator_requires_controller_evidence' if a.agent_profile=='semantic'
+        else 'rgb_simulator_requires_controller_image_evidence')
     config['episode_deadline_unix']=deadline.unix
     config['execution_clock_path']=str(deadline.clock_path) if deadline.clock_path is not None else None
     recorder=Recorder(a.output,config);backend=None;harness=None

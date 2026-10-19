@@ -25,7 +25,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     events = lines(run_dir / 'events.jsonl')
     captures = lines(run_dir / 'captures.jsonl')
     images = {i['image_ref']: {**i, 'env_steps': c['env_steps']} for c in captures for i in c['images']}
-    rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
+    observation_mode = run.get('config', {}).get('observation_mode')
+    rgb = observation_mode in {'rgb_only', 'rgb_semantic_magic'}
     video_path = run_dir / 'video.json'
     video = json.loads(video_path.read_text()) if video_path.exists() else None
     explained_path = run_dir / 'explained_video.json'
@@ -87,6 +88,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             views.append(item)
         result = {'revision': value.get('revision'), 'images': views}
         if 'capture' in value: result['capture'] = copy.deepcopy(value['capture'])
+        if 'semantic_targets' in value: result['semantic_targets'] = copy.deepcopy(value['semantic_targets'])
+        if 'held_target' in value: result['held_target'] = value['held_target']
         return result
 
     # The constructor's episode_started image has NOT been returned to the agent.
@@ -123,7 +126,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                       **model_payloads.get(len(steps)+1,{}),
                       'at': call['at'], 'elapsed_seconds': (datetime.fromisoformat(call['at']) - start).total_seconds(),
                       'video_start_seconds': video_markers.get(call['request_id'],{}).get('seconds'),
-                      'tool_seconds': seconds, 'is_motor_action': name in {'act', 'look'},
+                      'tool_seconds': seconds, 'is_motor_action': name in {'act', 'act_semantic', 'look'},
                       'status': 'missing_result' if result is None else ('passed' if result.get('ok') else 'failed'),
                       'before': before, 'after': copy.deepcopy(last_observation), 'new_observation': new_obs is not None,
                       'decisions': copy.deepcopy(decisions[-4:]), 'plan': copy.deepcopy(plan), 'memory': copy.deepcopy(notes)})
@@ -134,7 +137,9 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                       if k not in {'goal_options', 'initial_goal_options'}}
     # Only provider-returned summaries, never opaque/encrypted internal reasoning.
     return {'schema_version': 1, 'generated_at': now(), 'kind': 'discrete_observation_action_replay',
-            'run_id': run['run_id'], 'status': run['status'], 'rgb_only': rgb,
+            'run_id': run['run_id'], 'status': run['status'],
+            'rgb_only': observation_mode == 'rgb_only',
+            'observation_mode': observation_mode,
             'instruction': run.get('config', {}).get('instruction'), 'config': run.get('config', {}),
             'source': run.get('source', {}), 'execution': {k: run.get(k) for k in
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},

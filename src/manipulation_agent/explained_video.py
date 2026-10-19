@@ -70,6 +70,12 @@ def make_panel(step,phase,run,total):
     if step:
         wrap(tool+'('+json.dumps(call,ensure_ascii=False,separators=(',',':'))+')',1052,186,size=21,color='#80c9ee',max_lines=4)
     y=315
+    decision=step.get('decision') if step else None
+    if isinstance(decision,dict):
+        y=wrap('Public tool decision',1052,y,size=22,color='#74c9bf')+8
+        for key,label in (('state','State'),('active_subgoal','Subgoal'),('reason','Why'),('expected','Expected')):
+            y=wrap(label+': '+str(decision.get(key,'')),1052,y,size=22,max_lines=2)+5
+        y+=10
     summaries=step.get('model_reasoning_summaries',[]) if step else []
     messages=step.get('model_messages',[]) if step else (run.get('_final_model_messages',[]) if phase=='final' else [])
     if summaries:
