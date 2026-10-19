@@ -198,6 +198,9 @@ def assets(manifest, data_root):
             row['files'][key] = {'path': str(path), 'exists': path.is_file(),
                                 'sha256': hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None}
         row['bddl_matches_manifest'] = row['files']['bddl']['sha256'] == task['bddl_sha256']
+        row['base_files_match_manifest'] = (custom is None or custom.get('schema_version') != 2 or
+            all(value['sha256'] == task.get('asset_sha256', {}).get(key)
+                for key, value in row['files'].items()))
         from manipulation_agent.asset_preflight import inspect_scene_assets
         try:
             row['runtime_assets'] = inspect_scene_assets(paths['scene_template'], paths['instance_state'],
@@ -212,7 +215,7 @@ def assets(manifest, data_root):
                 row['custom_scene_sha256'] = digest
         except (OSError, ValueError, KeyError) as exc:
             row['runtime_assets'] = {'status':'failed','error':str(exc)}
-        row['status'] = 'passed' if all(v['exists'] for v in row['files'].values()) and row['scene_matches_catalog'] and row['bddl_matches_manifest'] and row['runtime_assets']['status']=='passed' and row.get('custom_scene_assets',{'status':'passed'})['status']=='passed' else 'failed'
+        row['status'] = 'passed' if all(v['exists'] for v in row['files'].values()) and row['scene_matches_catalog'] and row['bddl_matches_manifest'] and row['base_files_match_manifest'] and row['runtime_assets']['status']=='passed' and row.get('custom_scene_assets',{'status':'passed'})['status']=='passed' else 'failed'
         rows.append(row)
     return {'status': 'passed' if all(r['status']=='passed' for r in rows) else 'failed',
             'available_tasks_sha256': hashlib.sha256(config.read_bytes()).hexdigest(), 'tasks': rows}

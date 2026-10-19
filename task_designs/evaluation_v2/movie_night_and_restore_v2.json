@@ -357,7 +357,14 @@
     "toybox_on_floor": "toybox_on_floor",
     "popcorn_raw": {
       "not": "cooked_popcorn"
-    }
+    },
+    "microwave_closed": {
+      "not": "microwave_open"
+    },
+    "microwave_off": {
+      "not": "microwave_on"
+    },
+    "raw_popcorn_present": "raw_popcorn_present"
   },
   "evaluation": {
     "predicates": {
@@ -470,7 +477,7 @@
         "state": "OnTop",
         "target": "prep"
       },
-      "microwave_closed": {
+      "microwave_open": {
         "object": "microwave",
         "state": "Open"
       },
@@ -504,7 +511,7 @@
       "fork2_set": "fork2_set",
       "brush_returned": "brush_returned",
       "microwave_closed": {
-        "not": "microwave_closed"
+        "not": "microwave_open"
       },
       "popcorn_served": {
         "all": [

@@ -27,6 +27,10 @@ class GoalReplayBrowserTests(unittest.TestCase):
                 self.assertIn('1/1',text);self.assertIn('未提供给模型',text)
                 self.assertIn('尚未达成',page.locator('#evidence ul').text_content())
                 self.assertNotIn('lid_open',page.locator('#evidence ul').text_content())
+                evaluation['score_type'] = 'custom_joint_terminal_and_public_history_v2'
+                render(5)
+                self.assertTrue(page.locator('#evidence').is_visible())
+                self.assertIn('1/1',page.locator('#evidence').inner_text())
                 render(25)
                 self.assertIn('0/1',page.locator('#evidence').inner_text())
                 self.assertIn('已达成',page.locator('#evidence ul').text_content())

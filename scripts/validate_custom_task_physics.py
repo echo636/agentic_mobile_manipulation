@@ -25,11 +25,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--spec', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--order', required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument('--order')
+    mode.add_argument('--negative-case')
     args = parser.parse_args()
     spec, contract = load_spec(args.spec, require_frozen=True)
-    if args.order not in spec['acceptance_cases']['reference_orders']:
+    if args.order and args.order not in spec['acceptance_cases']['reference_orders']:
         parser.error('Order is not in the frozen task contract')
+    if args.negative_case and args.negative_case not in spec['acceptance_cases']['physical_negative_cases']:
+        parser.error('Negative case is not in the frozen task contract')
     args.output.mkdir(parents=True, exist_ok=False)
     freeze = SOURCE / 'source_freeze.json'
     commit = (json.loads(freeze.read_text())['source_commit'] if freeze.is_file() else
@@ -40,12 +44,14 @@ def main():
         source_hash.update(str(path.relative_to(SOURCE)).encode() + b'\0' + path.read_bytes())
     record = {'status': 'running', 'started_at_unix': time.time(), 'task': spec['id'],
               'instance': spec['instance_id'], 'seed': spec['base']['seed'], 'order': args.order,
+              'negative_case': args.negative_case,
               'host': platform.node(), 'interpreter': sys.executable, 'pid': os.getpid(),
               'unit': os.environ.get('MAS_UNIT'), 'gpu_uuid': os.environ.get('MAS_GPU_UUID'),
               'source_commit': commit, 'source_sha256': source_hash.hexdigest(),
               'spec_sha256': sha256(args.spec), 'scene_sha256': spec['frozen_instance']['sha256'],
               'output_path': str(args.output.resolve()), 'model_used': False,
-              'validation_level': 'real_simulator_checked_executor_privileged_full_reference',
+              'validation_level': ('real_simulator_physical_negative_case' if args.negative_case else
+                                   'real_simulator_checked_executor_privileged_full_reference'),
               'contract_validation': contract}
     write_json(args.output / 'run_record.json', record)
     backend = None
@@ -60,11 +66,16 @@ def main():
         backend.observe()
         reference = ReferenceTask(backend, args.output,
                                   max_attempts=spec['acceptance_cases']['max_reference_action_attempts'])
-        reference.run(args.order)
+        if args.order:
+            reference.run(args.order)
+        else:
+            record['negative_result'] = reference.negative(args.negative_case)
         evaluation = backend.evaluate()
         backend.frames_revision = -1
         backend.observe()
-        record['status'] = 'passed' if evaluation['task_success'] else 'failed'
+        accepted = (evaluation['task_success'] if args.order else
+                    record['negative_result']['status'] == 'passed')
+        record['status'] = 'passed' if accepted else 'failed'
     except BaseException as exc:
         record.update(status='failed', error=str(exc), error_code=getattr(exc, 'code', None))
         (args.output / 'traceback.txt').write_text(traceback.format_exc())

@@ -62,7 +62,7 @@ window.renderTaskNotes = function(root, notes, options = {}) {
 /* Independent evidence is shown only in archived review, never policy input. */
 window.renderGoalEvidence = function(root, evaluation, envStep) {
   root.replaceChildren();
-  root.hidden=evaluation?.score_type!=='custom_joint_terminal_and_public_history_v1';
+  root.hidden=!['custom_joint_terminal_and_public_history_v1','custom_joint_terminal_and_public_history_v2'].includes(evaluation?.score_type);
   if(root.hidden)return;
   root.classList.add('goal-notes');
   const node=(tag,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=String(text);return e;};

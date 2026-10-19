@@ -67,7 +67,7 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         checks.pop('official_task_success')
         evaluation=run.get('evaluation') or {}
         checks['custom_evaluator_provenance'] = (
-            evaluation.get('score_type')=='custom_joint_terminal_and_public_history_v1'
+            evaluation.get('score_type') in ('custom_joint_terminal_and_public_history_v1', 'custom_joint_terminal_and_public_history_v2')
             and evaluation.get('official_submission_eligible') is False
             and evaluation.get('model_notes_used_for_scoring') is False
             and all(evaluation.get('input_hashes',{}).get(key) for key in

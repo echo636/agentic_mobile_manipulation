@@ -81,6 +81,12 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
             raise ValueError('Declare at least two distinct reference orders')
         if not negatives or len(negatives) != len(set(negatives)):
             raise ValueError('Declare unique physical negative cases')
+        restores = checks.get('fresh_restore_repetitions')
+        budget = checks.get('max_reference_action_attempts')
+        if type(restores) is not int or not 2 <= restores <= len(orders):
+            raise ValueError('Fresh restore count must be at least two and covered by reference orders')
+        if type(budget) is not int or not 1 <= budget <= 200:
+            raise ValueError('Reference budget must be a positive integer within the 200-attempt pilot budget')
     frozen = spec.get('frozen_instance')
     scene_path = None
     if frozen:

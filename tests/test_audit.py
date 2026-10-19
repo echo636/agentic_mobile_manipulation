@@ -35,11 +35,16 @@ class ModelEvidenceAudit(unittest.TestCase):
             'score_type':'custom_joint_terminal_and_public_history_v1',
             'official_submission_eligible':False,'model_notes_used_for_scoring':False,
             'input_hashes':{'custom_task_spec':'spec-hash','custom_initial_scene':'scene-hash'}}
-        result=self.audit()
-        self.assertEqual(result['status'],'passed')
-        self.assertNotIn('official_task_success',result['checks'])
+        for version in (1, 2):
+            self.run['evaluation']['score_type'] = f'custom_joint_terminal_and_public_history_v{version}'
+            result = self.audit()
+            self.assertEqual(result['status'], 'passed')
+            self.assertNotIn('official_task_success', result['checks'])
+        self.run['evaluation']['score_type'] = 'unknown_custom_score'
+        self.assertEqual(self.audit()['status'], 'failed')
+        self.run['evaluation']['score_type'] = 'custom_joint_terminal_and_public_history_v2'
         del self.run['evaluation']['input_hashes']['custom_initial_scene']
-        self.assertEqual(self.audit()['status'],'failed')
+        self.assertEqual(self.audit()['status'], 'failed')
 
     def test_successful_simulator_does_not_hide_controller_mismatch(self):
         self.item['arguments'] = {'outcome':'achieved','reason':'different trace'}

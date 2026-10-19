@@ -1,4 +1,4 @@
-# Custom long-horizon pilot
+# Custom long-horizon tasks and evaluation readiness
 
 This pilot uses BEHAVIOR assets in joint scenes with new goals. It is not a
 BEHAVIOR100 result or an official challenge submission. The user authorized
@@ -8,6 +8,13 @@ The runtime recipes in `task_designs/runtime/` are construction inputs. A recipe
 is not an executable benchmark instance until a frozen scene and its SHA-256
 are attached and the checks below pass. Generated scenes and experiment records
 live outside Git.
+
+The maintained evaluation candidates are now in `task_designs/evaluation_v2/`.
+Historical `runtime/*_v1.json`, scenes and pilot results retain their original
+meaning. V2 scores must never be substituted into a v1 result. Candidate recipes
+are **not certified ready**: the release gate below is authoritative. Current
+validation is recorded in `operations/long_horizon_readiness_20261019/` under the
+shared workspace root, separately from the October 15 pilot.
 
 ## Tasks and dependencies
 
@@ -74,3 +81,127 @@ omitting their goals.
 Report measured useful reference/model actions, navigation, recovery attempts,
 and dependency structure. Task length must not be inferred from the configured
 step cap or padded with redundant motion.
+
+## V2 task cards
+
+| Frozen task family | Simultaneous terminal goals | Historical goals | Permanent violation checks | Reference orders |
+| --- | ---: | ---: | ---: | --- |
+| `warm_lunch_and_restore_v2` | 22 | 0 | 0 | cleanup first; start cooking first |
+| `movie_night_and_restore_v2` | 16 | 6 | 2 | cleanup first; cooking overlaps cleanup |
+| `workshop_setup_and_return_v2` | 11 | 4 | 1 | cleanup first; pack first |
+
+**Lunch.** Cook both hotdogs; put the two hotdogs and two apple halves in the lunch
+box; deliver that box, tea, two plates and two forks to the dining table. Discard
+three cans, refrigerate the cookie and sandwich, store the board on the other
+counter, close the refrigerator, and switch off and close the microwave. The
+preparation counter must be clear of the specified lunch items, dishes, board and
+leftovers. Each final condition must hold at the same time. No exact place-setting
+arrangement is required. V2 directly checks preparation-counter clearance,
+including cases where overlapping support surfaces also satisfy a destination.
+
+**Movie night.** Put away two toys and three cans; clear and dust the coffee table
+before serving food or any of six dining items. Cook the bag's popcorn in the
+microwave, switch it off before actual removal, and serve the bag on the cleaned
+table. Return the brush to the preparation counter; finish with the microwave
+off and closed. V2 requires cooked popcorn with no raw popcorn remaining in the
+bag, records actual removal, and keeps the power-off guard active through removal.
+Turning the microwave off, turning it back on, and then removing the bag does not
+satisfy the safety requirement. Particle cooking and subsequent transport must
+be demonstrated in the simulator; a symbolic trace cannot establish feasibility.
+
+**Workshop.** At storage, pack all five tools (drill, pliers, flashlight, Allen
+wrench, screwdriver) into the box and close it. Transport the closed, fully loaded
+box to the workbench, unpack all five tools there, and return the empty closed box
+to storage. Store two books on the short counter and discard three cans. Exact
+positions on destination surfaces are unrestricted. A final photograph of five
+tools on the bench and an empty box at storage cannot replace the required loaded
+transport history. The reference approaches a moved object using its current
+position, including the box and tools after delivery.
+
+Every public context entry maps to one or more scored conditions in `requirements`.
+The validator rejects hidden score conditions, unscored public requirements,
+duplicate constraint IDs and changed frozen scenes. Raw predicate names describe
+the measured state (`microwave_open`, `microwave_on`); terminal goal names describe
+the desired outcome (`microwave_closed`, `microwave_off`).
+
+## Reproducible acceptance
+
+Use Python 3.11 or newer, and the pinned OmniGibson environment for physical runs.
+Do not change the editable install in a shared environment. Point `PYTHONPATH` at
+the frozen source checkout after sourcing the host's environment script.
+
+```bash
+python scripts/validate_custom_tasks.py --require-frozen /path/to/task.json
+python scripts/validate_custom_task_physics.py --spec /path/to/task.json \
+  --order cleanup_first --output /new/immutable/reference-output
+python scripts/validate_custom_task_physics.py --spec /path/to/task.json \
+  --negative-case skip_loaded_transport --output /new/immutable/negative-output
+python scripts/validate_custom_readiness.py /path/to/release.json \
+  --output /path/to/readiness.json
+```
+
+Physical commands run only through the shared resource coordinator after GPU,
+host/cgroup memory, disk, quota, dependency and asset admission. Record host,
+interpreter, GPU UUID, PID, unit, source commit/digest, spec/scene hashes and output.
+Each invocation restores a fresh simulator; output directories cannot be reused.
+References use privileged identity selection through the ordinary checked motor
+executor. They never count as autonomous visual-policy success. Failed attempts
+are retained; a continuation from a partly solved state is diagnostic evidence
+and cannot count as a full reference.
+
+Each task requires both declared legal orders, at least two fresh restores and
+all declared negative cases:
+
+| Task | Negative cases |
+| --- | --- |
+| Lunch | packed but uncooked food; an item returned to the preparation counter; removal of a required entity |
+| Movie night | serving before cleaning; off → on → removal; uncooked popcorn served |
+| Workshop | tools delivered without loaded-box transport; open-lid transport; one tool omitted from packing |
+
+Negatives must reach and record their specific witness and produce the expected
+independent rejection. A setup error is a failed diagnostic. Required-entity
+removal is explicitly labeled simulator fault injection; all other negatives use
+the checked action interface. Neither is a model trial.
+
+A release manifest pins evidence files by path and SHA-256. Each task has `spec`,
+`references`, `negatives`, and `policy_acceptance`. Each physical bundle binds
+`validation`, `launch`, `initial`, `admission`, and `assets`; policy acceptance
+binds `run`, `controller`, `observation`, `video_validation`, and `video`.
+All records must match the release's exact source and frozen instance. The gate
+recomputes the RGB/MCP audit from simulator and controller traces and verifies
+video bytes. Interface acceptance requires real model interaction, formal finish,
+aligned calls, observations and recording; a policy's task failure remains a valid
+measured outcome and is reported separately. Missing evidence always leaves
+`benchmark_ready=false`.
+
+After all gates pass, create matched evaluation manifests:
+
+```bash
+python scripts/prepare_custom_evaluation.py --release /path/to/release.json \
+  --asset-manifest /path/to/assets-manifest.json --tag long_v2_eval \
+  --output /new/paired-batch
+```
+
+This creates separate `hierarchical/manifest.json` and `unguided/manifest.json`
+for the existing batch runner. Both use `gpt-6.1-sol`, low effort, skills profile,
+mandatory generic notes, 200 counted act/look attempts, zero policy retries and
+no episode wall deadline. Resource waiting, initialization and closure are
+recorded separately. The generator refuses to produce a formal evaluation batch
+from an unready release; exploratory acceptance runs remain explicitly separate.
+
+## Reporting scope and limitations
+
+The current fixtures are three hand-built task instances, each based on instance
+301 with seed 0. Two valid reference orders demonstrate feasibility of those
+instances, not robustness across layouts or seeds. Additional seeds/layouts need
+new frozen scenes and their own acceptance records. Report results per task and
+arm; do not infer statistical superiority from three paired instances. Publish
+whole-task success alongside terminal/history/constraint breakdown, action and
+recovery counts, model finish, infrastructure failures and evidence quality.
+Unknown scores remain unknown. The partial fraction is a custom diagnostic with
+equal weight per declared condition, not official Q and not directly comparable
+across tasks with different condition sets.
+
+The executor uses private ground truth and idealized carrying/navigation. These
+tasks evaluate agent decisions and long-range ordering under that executor. They
+do not establish end-to-end learned motor control or physical-robot performance.

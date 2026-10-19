@@ -4,6 +4,11 @@ An independent research system for **RGB observation -> LLM action and target se
 
 Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/agentic_mobile_manipulation). Reference repositories and existing navigation environments remain separate from this project.
 
+The three custom long-horizon task candidates—lunch, movie night, and workshop—
+have versioned public/scoring contracts, full-reference and negative-case runners,
+and an evidence-based evaluation gate. See [task cards and the readiness protocol](docs/custom_long_horizon.md).
+Recipes and CPU tests alone do not certify an instance for evaluation.
+
 ## Observation: four fixed cameras
 
 - Four 512 x 512 RGB views: **front, back, left, and right**, relative to the robot heading.

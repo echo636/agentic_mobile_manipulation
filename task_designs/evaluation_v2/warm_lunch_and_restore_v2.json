@@ -310,10 +310,16 @@
     },
     "bin_on_floor": "bin_on_floor",
     "fridge_closed": {
-      "not": "fridge_closed"
+      "not": "fridge_open"
     },
     "lunch_not_delivered": {
       "not": "lunch_delivered"
+    },
+    "microwave_closed": {
+      "not": "microwave_open"
+    },
+    "microwave_off": {
+      "not": "microwave_on"
     }
   },
   "evaluation": {
@@ -426,15 +432,15 @@
         "state": "OnTop",
         "target": "table"
       },
-      "fridge_closed": {
+      "fridge_open": {
         "object": "fridge",
         "state": "Open"
       },
-      "microwave_closed": {
+      "microwave_open": {
         "object": "microwave",
         "state": "Open"
       },
-      "microwave_off": {
+      "microwave_on": {
         "object": "microwave",
         "state": "ToggledOn"
       },
@@ -508,13 +514,13 @@
       "board_stored": "board_stored",
       "lunch_delivered": "lunch_delivered",
       "fridge_closed": {
-        "not": "fridge_closed"
+        "not": "fridge_open"
       },
       "microwave_closed": {
-        "not": "microwave_closed"
+        "not": "microwave_open"
       },
       "microwave_off": {
-        "not": "microwave_off"
+        "not": "microwave_on"
       },
       "tea_served": "tea_served",
       "prep_area_clear": {

@@ -221,3 +221,95 @@ class ReferenceTask:
             self.workshop(order)
         else:
             raise ValueError('Unknown reference task')
+
+    def negative(self, case):
+        """Exercise a declared failure with real state, recording its witness.
+
+        Entity removal is explicit fault injection, never a solution action.
+        Other cases use the ordinary executor, including its safety rejections.
+        A scenario that cannot be reached fails this diagnostic; it is not
+        silently counted as evidence that the evaluator detected a violation.
+        """
+        task = self.backend.custom_spec
+        if case not in task['acceptance_cases']['physical_negative_cases']:
+            raise ValueError('Undeclared negative case: ' + case)
+        expected = {}
+        witness = {}
+        fault = None
+        if case == 'unfinished_food':
+            self.move('open', 'fridge')
+            self.transfer_inside('hotdog1', 'box')
+            witness = {'hotdog1_packed': True, 'hotdog1_cooked': False}
+            expected = {'terminal_conditions': {'hotdog1_cooked': False}}
+        elif case == 'prep_not_restored':
+            original = self.obj('plate1').get_position_orientation()[0].tolist()
+            self.transfer_top('plate1', 'table', [6.5, 3.5, .813])
+            self.transfer_top('plate1', 'prep', original)
+            witness = {'plate1_on_prep': True}
+            expected = {'terminal_conditions': {'prep_area_clear': False}}
+        elif case == 'missing_required_entity':
+            fault = {'kind': 'remove_required_entity', 'role': 'board',
+                     'object': self.obj('board').name}
+            self.log('fault_injection', **fault)
+            self.backend.og.sim.remove_object(self.obj('board'))
+            self.action('wait', seconds=.2)
+        elif case == 'serve_before_clean':
+            self.transfer_top('plate1', 'table', self.top('table', .25, .5))
+            witness = {'table_dusty': True, 'plate1_set': True}
+            expected = {'constraint_conditions': {'clear_and_dust_before_serving': False}}
+        elif case == 'uncooked_snack':
+            self.transfer_top('bag', 'table', self.top('table'))
+            witness = {'bag_on_table': True, 'cooked_popcorn': False, 'raw_popcorn_present': True}
+            expected = {'terminal_conditions': {'popcorn_served': False}}
+        elif case == 'reenergized_removal':
+            self.move('open', 'microwave')
+            self.transfer_inside('bag', 'microwave')
+            self.move('close', 'microwave')
+            self.move('toggle_on', 'microwave')
+            self.wait_for({'cooked_popcorn': True, 'raw_popcorn_present': False})
+            self.move('toggle_off', 'microwave')
+            self.move('toggle_on', 'microwave')
+            self.move('open', 'microwave')
+            self.move('grasp', 'bag')
+            witness = {'bag_in_microwave': False, 'microwave_on': True}
+            expected = {'constraint_conditions': {'power_off_before_cooked_bag_removal': False},
+                        'historical_conditions': {'microwave_off_before_removal': True}}
+        elif case in ('missing_tool', 'open_lid_transport'):
+            self.move('open', 'box')
+            items = ['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill']
+            for item in (items[:-1] if case == 'missing_tool' else items):
+                self.transfer_inside(item, 'box')
+            self.move('close', 'box')
+            if case == 'missing_tool':
+                witness = {item+'_in_box': item != 'drill' for item in items}
+                expected = {'historical_conditions': {'packed_at_storage': False}}
+            else:
+                self.move('open', 'box')
+                self.move('grasp', 'box')
+                self.floor(23.5, 1.1)
+                witness = {'box_open': True}
+                expected = {'constraint_conditions': {'closed_loaded_box_transport': False},
+                            'historical_conditions': {'packed_at_storage': True}}
+        elif case == 'skip_loaded_transport':
+            for item, y in zip(['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill'],
+                               [-1.95, -.8, -.2, .4, 1.]):
+                self.transfer_top(item, 'bench', [24.5, y, .92754])
+            witness = {item+'_on_bench': True for item in
+                       ['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill']}
+            expected = {'historical_conditions': {'loaded_box_delivered': False}}
+        else:
+            raise ValueError('No physical scenario for ' + case)
+        values = self.backend._predicate_values()
+        evaluation = self.backend.evaluate()
+        checks = {key: values[key] == value for key, value in witness.items()}
+        for section, entries in expected.items():
+            checks.update({section+'.'+key: evaluation[section][key] is value
+                           for key, value in entries.items()})
+        checks['task_rejected'] = evaluation['task_success'] is False
+        if fault:
+            checks['missing_entity_reported'] = 'board' in evaluation.get('missing_required_entities', [])
+        result = {'case': case, 'checks': checks, 'witness': witness,
+                  'expected_score': expected, 'fault_injection': fault,
+                  'status': 'passed' if all(checks.values()) else 'failed'}
+        self.log('negative_case_result', **result)
+        return result

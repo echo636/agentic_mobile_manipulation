@@ -61,6 +61,16 @@ class PublicContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unique'):
             validate_spec(task)
 
+    def test_acceptance_must_have_real_restore_and_action_budgets(self):
+        task = spec('warm_lunch_and_restore')
+        task['acceptance_cases']['fresh_restore_repetitions'] = 1
+        with self.assertRaisesRegex(ValueError, 'restore count'):
+            validate_spec(task)
+        task['acceptance_cases']['fresh_restore_repetitions'] = 2
+        task['acceptance_cases']['max_reference_action_attempts'] = True
+        with self.assertRaisesRegex(ValueError, 'budget'):
+            validate_spec(task)
+
 
 class RealTaskScoringTests(unittest.TestCase):
     def movie(self):

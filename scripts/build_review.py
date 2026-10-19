@@ -181,7 +181,7 @@ def main():
     evaluation = run_record.get("evaluation") or {}
     score = ((evaluation.get("official_metrics") or {}).get("q_score") or {}).get("final", "未评分")
     score_label = '本地官方指标 Q'
-    if evaluation.get('score_type')=='custom_joint_terminal_and_public_history_v1':
+    if evaluation.get('score_type') in ('custom_joint_terminal_and_public_history_v1', 'custom_joint_terminal_and_public_history_v2'):
         score=evaluation.get('goal_satisfaction_fraction','未评分')
         score_label='自定义目标满足比例（非官方 Q）'
     success = evaluation.get("official_task_success", run_record.get("task_success"))
