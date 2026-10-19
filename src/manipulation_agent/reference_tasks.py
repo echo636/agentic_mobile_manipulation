@@ -216,6 +216,11 @@ class ReferenceTask:
             self.move('open', 'toybox')
         for i in (1, 2):
             self.transfer_inside(f'toy{i}', 'toybox')
+        # The east-side grasp stance becomes trapped after picking up a can.
+        # Approach the west side empty-handed: the saved pre-grasp collision
+        # map admits this route, and all three cans and the bin are in reach.
+        # Live navigation, reach, containment and counted actions still apply.
+        self.floor(2.8, 5.1)
         for i in (1, 2, 3):
             self.transfer_inside(f'can{i}', 'bin')
         self.move('grasp', 'brush')
