@@ -1,5 +1,6 @@
 """An explicit elevated click cannot accept a reachable goal behind a wall."""
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -12,6 +13,7 @@ import numpy as np
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.deadline import EpisodeDeadline
 from manipulation_agent.executors.gt_navigation import GridMap, NavigationError
+from manipulation_agent.executors.forward_navigation import select_forward_route
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 
 
@@ -30,6 +32,7 @@ class TargetVisibilityTests(unittest.TestCase):
         temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup)
         b=self.backend=RGBBackend.__new__(RGBBackend)
         b.output=Path(temp.name);b.deadline=EpisodeDeadline();b.navigation_distance=0.
+        b.yaw=0.
         b.position=Tensor([.5,1.,0.]);b.robot=SimpleNamespace(
             get_position_orientation=lambda:(b.position,None))
         b.env=SimpleNamespace(scene=SimpleNamespace(trav_map=SimpleNamespace(floor_heights=[0.])))
@@ -42,21 +45,22 @@ class TargetVisibilityTests(unittest.TestCase):
         b._approach_visible=Mock(side_effect=lambda xy,*_,**kw:xy[0]>2.)
         b.moved=False
         def execute(grid,plan,limit,**kwargs):
-            b.moved=True;b.position=Tensor([*plan.goal,0.])
+            b.moved=True;b.position=Tensor([*plan.goal,0.]);b.yaw=plan.final_yaw
             return {'steps':3,'motion_steps':3,'actual_path_distance_m':plan.geodesic_m}
         b._execute_gt_plan=Mock(side_effect=execute)
         modules={name:ModuleType(name) for name in ['omnigibson','omnigibson.utils','omnigibson.utils.transform_utils']}
         modules['omnigibson'].utils=modules['omnigibson.utils']
         modules['omnigibson.utils'].transform_utils=modules['omnigibson.utils.transform_utils']
-        modules['omnigibson.utils.transform_utils'].quat2mat=lambda _:np.eye(3)
+        modules['omnigibson.utils.transform_utils'].quat2mat=lambda _:np.array([
+            [math.cos(b.yaw),-math.sin(b.yaw),0.],[math.sin(b.yaw),math.cos(b.yaw),0.],[0.,0.,1.]])
         p=patch.dict(sys.modules,modules);p.start();self.addCleanup(p.stop)
         p=patch('manipulation_agent.executors.heading_collision.HeadingCollisionChecker',
                 return_value=SimpleNamespace(motion_free=lambda a,b:True,
                                              grid_at_heading=lambda yaw:self.build_grid.return_value[0]))
-        p.start();self.addCleanup(p.stop)
+        self.collision=p.start();self.addCleanup(p.stop)
         p=patch('manipulation_agent.executors.forward_navigation.select_forward_route',
                 side_effect=lambda options,*a,**kw:(min(options,key=lambda p:p.score),None,{'fixture':True}))
-        p.start();self.addCleanup(p.stop)
+        self.route_selection=p.start();self.addCleanup(p.stop)
         p=patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(grid,
             {'chassis_footprint_world_offsets':[],'collision_layers':[],'dynamic_collision_check':True}))
         self.build_grid=p.start();self.addCleanup(p.stop)
@@ -67,6 +71,61 @@ class TargetVisibilityTests(unittest.TestCase):
 
     def target(self,z=1.):
         return SimpleNamespace(get_position_orientation=lambda:(Tensor([2.3,1.,z]),None))
+
+    def open_side_target(self):
+        """Exercise the real complete-route selector in an unobstructed scene."""
+        grid=GridMap(41,41,.1,(0.,0.),bytes([1])*41**2)
+        self.build_grid.return_value=(grid,self.build_grid.return_value[1])
+        self.collision.return_value.grid=grid
+        self.route_selection.side_effect=select_forward_route
+        self.backend._approach_visible.side_effect=lambda *a,**kw:True
+        return SimpleNamespace(get_position_orientation=lambda:(Tensor([.5,2.3,1.]),None))
+
+    def test_elevated_approach_keeps_arrival_heading_without_return_turn(self):
+        b=self.backend;b._navigate(self.open_side_target(),1000)
+        self.assertAlmostEqual(b.yaw,math.pi/2)
+        route=b._execute_gt_plan.call_args.kwargs['prepared_route']
+        self.assertAlmostEqual(route.turn_radians,math.pi/2)
+        self.assertGreater(route.phases[-1].geodesic_m,0.)
+        self.assertTrue(any(abs(c.kwargs['base_yaw']-math.pi/2)<1e-8
+                            for c in b._approach_visible.call_args_list))
+        arrival=json.loads((b.output/'navigation_arrivals.jsonl').read_text())
+        self.assertTrue(arrival['target_visible'])
+        self.assertIsNotNone(arrival['local_exit_certificate'])
+
+    def test_arrival_heading_that_loses_target_keeps_original_view(self):
+        b=self.backend;target=self.open_side_target()
+        b._approach_visible.side_effect=lambda *a,base_yaw,**kw:abs(base_yaw)<.01
+        b._navigate(target,1000)
+        self.assertAlmostEqual(b.yaw,0.)
+        saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
+        self.assertEqual(saved['arrival_heading_refinement'][0]['reason'],'target_not_visible')
+
+    def test_arrival_heading_requires_both_entry_and_exit(self):
+        b=self.backend;target=self.open_side_target()
+        for reject_incoming in (True,False):
+            with self.subTest(reject_incoming=reject_incoming):
+                b.position=Tensor([.5,1.,0.]);b.yaw=0.
+                def certificate(pose,*_,incoming=False,**kw):
+                    if abs(pose[2])>.01 and incoming==reject_incoming:return None
+                    return {'poses':[pose]}
+                with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',side_effect=certificate):
+                    b._navigate(target,1000)
+                self.assertAlmostEqual(b.yaw,0.)
+                selected=self.route_selection.call_args.args[0]
+                self.assertTrue(all(abs(p.final_yaw)<.01 for p in selected))
+
+    def test_arrival_heading_timeout_retains_validated_original(self):
+        from manipulation_agent.executors.gt_navigation import SearchBudgetExhausted
+        b=self.backend;target=self.open_side_target()
+        def certificate(pose,*_,**kw):
+            if abs(pose[2])>.01:raise SearchBudgetExhausted()
+            return {'poses':[pose]}
+        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',side_effect=certificate):
+            b._navigate(target,1000)
+        self.assertAlmostEqual(b.yaw,0.)
+        saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
+        self.assertTrue(saved['arrival_heading_refinement_budget_exhausted'])
 
     def test_explicit_approach_rejects_reachable_wrong_side_and_records_arrival(self):
         b=self.backend;result=b._navigate(self.target(),1000)

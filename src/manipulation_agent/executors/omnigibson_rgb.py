@@ -721,31 +721,56 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 details['planning_budget_exhausted']=True
                 details['planning_visibility_checks']=budget.visibility_checks
                 if plan is None:raise
-            # A ground click constrains position, not an arbitrary old viewing
-            # yaw. Also consider arriving aligned with the last path segment.
-            # Every added orientation must preserve entry and exit clearance.
+            # Neither a ground click nor an elevated visual target requires
+            # restoring the departure yaw. Consider arrival-aligned headings
+            # for both, rechecking elevated-target visibility at the new pose.
+            # Keep the validated original options if refinement is exhausted.
             refinement=PlanningBudget(self.deadline.check,seconds=2.)
             endpoint_collision.check_cancelled=refinement.check
-            if mode=='point':
+            heading_attempts=[]
+            with component(self,'navigation_heading_refinement'):
                 try:
                     for candidate in tuple(options):
                         refinement.check()
-                        if candidate.score>plan.score+.1+1e-9:continue
-                        last=candidate.points[-2] if len(candidate.points)>1 else initial_xy
-                        yaw=math.atan2(candidate.goal[1]-last[1],candidate.goal[0]-last[0])
+                        slack=.1 if mode=='point' else 0.
+                        if candidate.score>plan.score+slack+1e-9:continue
+                        last=next((xy for xy in reversed(candidate.points)
+                                   if math.dist(xy,candidate.goal)>.002),initial_xy)
+                        yaw=(math.atan2(candidate.goal[1]-last[1],candidate.goal[0]-last[0])
+                             if math.dist(last,candidate.goal)>.002 else travel_yaw)
+                        if abs(math.atan2(math.sin(yaw-candidate.final_yaw),
+                                          math.cos(yaw-candidate.final_yaw)))<1e-8:continue
                         pose=(*candidate.goal,yaw)
+                        attempt={'goal':candidate.goal,'original_yaw':candidate.final_yaw,
+                                 'arrival_yaw':yaw,'status':'checking'}
+                        heading_attempts.append(attempt)
+                        if not endpoint_collision.motion_free(pose,pose):
+                            attempt.update(status='rejected',reason='endpoint_collision');continue
+                        if mode=='approach':
+                            refinement.visibility()
+                            if not self._approach_visible(candidate.goal,point,getattr(target,'selected_object',None),
+                                                          margin=margin,base_yaw=yaw):
+                                attempt.update(status='rejected',reason='target_not_visible');continue
                         if pose not in entries:
                             entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
                                                                 check_cancelled=refinement.check)
-                        if entries[pose] is None:continue
+                        if entries[pose] is None:
+                            attempt.update(status='rejected',reason='no_local_entry');continue
                         if pose not in exits:
                             exits[pose]=local_exit_certificate(pose,endpoint_collision,check_cancelled=refinement.check)
-                        if exits[pose] is not None:
-                            options.append(replace(candidate,final_yaw=yaw,travel_yaw=yaw))
-                except SearchBudgetExhausted:pass
+                        if exits[pose] is None:
+                            attempt.update(status='rejected',reason='no_local_exit');continue
+                        options.append(replace(candidate,final_yaw=yaw,travel_yaw=yaw))
+                        attempt['status']='accepted'
+                except SearchBudgetExhausted:
+                    if heading_attempts and heading_attempts[-1]['status']=='checking':
+                        heading_attempts[-1].update(status='incomplete',reason='refinement_budget_exhausted')
+                    details['arrival_heading_refinement_budget_exhausted']=True
+            details['arrival_heading_refinement']=heading_attempts
             endpoint_collision.check_cancelled=self.deadline.check
-            plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
-                target_slack=.1 if mode=='point' else 0.,check_cancelled=self.deadline.check)
+            with component(self,'navigation_route_selection'):
+                plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
+                    target_slack=.1 if mode=='point' else 0.,check_cancelled=self.deadline.check)
             details['forward_candidate_selection']=selection
             grid=endpoint_collision.grid_at_heading(plan.final_yaw)
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())

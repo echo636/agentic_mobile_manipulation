@@ -52,15 +52,20 @@ each `act` / `look` supplies the next one.
 6. Execute bounded pose increments (at most 0.5 m/s and 60 degrees/s), read back
    the actual pose after each simulator step, and verify arrival. Normal motion
    first turns in place to face the path segment, then advances; it stops to
-   turn at corners and restores the selected viewing orientation at arrival.
+   turn at corners and only turns at arrival if the selected endpoint heading
+   differs from the last travel segment.
    Certify every segment and turn with orientation-aware height-layer collision
    geometry. If the existing polyline cannot be driven, use a bounded eight-heading
    position/heading search (forward steps and in-place turns, no strafing).
    Checked entry/exit legs retain the measured and final continuous headings
    where a narrow aisle requires driving straight before turning.
    Heading/staging proposals do not execute an independent pre-turn. One route
-   is planned from the measured initial pose. Ground clicks also consider a
-   final heading aligned with arrival, if entry and exit clearance still hold.
+   is planned from the measured initial pose. Ground clicks and elevated
+   approaches also consider a final heading aligned with arrival, if entry
+   and exit clearance still hold. Elevated targets must remain visible at
+   that new heading with the same camera margin and occlusion checks. The
+   original validated heading stays available; neither mode requires restoring
+   the departure yaw. Complete-route motion time chooses among these options.
    Bounded collision-checked shortcuts remove detours only when combined
    translation/rotation time decreases. Execution reuses the selected route
    when the measured start has not changed, and still checks every command.
@@ -87,7 +92,7 @@ budget across headings, with at most 64 candidate cells tested per elevated-targ
 heading. These limit work, not the geographical search domain or episode duration.
 An already visible approach within the executor's 1.4 m manipulation check stops
 heading refinement; it need not project onto the object's XY within one grid cell.
-Additional ground-heading certification is bounded by 2 seconds. Complete-route
+Additional arrival-heading certification is bounded by 2 seconds. Complete-route
 comparison tests at most six candidates, within a shared 10 seconds and up to
 2 seconds / 10,000 heading states per candidate. A validated incumbent may win
 when the refinement budget expires. Its objective uses 0.5 m/s translation and
