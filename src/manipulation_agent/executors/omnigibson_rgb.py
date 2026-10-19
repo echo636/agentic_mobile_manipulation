@@ -538,6 +538,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         mode='point' if ground_click else 'approach'
         standoff,margin=0.,(.08 if mode=='approach' else 0.)
         grid,map_details=build_navigation_grid(self,floor)
+        self._navigation_layer_yaw=travel_yaw
         recovery_results=[];recovery_states=set()
         while not grid.navigable(grid.cell(position[:2].cpu().tolist())):
             from .gt_navigation import plan_start_clearance_exit
@@ -571,7 +572,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 escape_grid,escape,escape_details=plan_start_clearance_exit(
                     grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius,
                     transition_allowed=guard,check_cancelled=self.deadline.check)
-                escape=replace(escape,travel_yaw=travel_yaw,final_yaw=travel_yaw)
+                # Existing overlap may forbid turning. This explicitly logged
+                # contact-shedding retreat is the only fixed-heading exception.
+                escape=replace(escape,travel_yaw=travel_yaw,final_yaw=travel_yaw,
+                               motion_mode='clearance_retreat')
                 record.update(status='planned',plan=asdict(escape),**escape_details)
                 with (self.output/'navigation_recovery.jsonl').open('a') as stream:
                     stream.write(json.dumps(record)+'\n')
@@ -583,6 +587,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 rotation=T.quat2mat(orientation)
                 travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
                 grid,map_details=build_navigation_grid(self,floor)
+                self._navigation_layer_yaw=travel_yaw
                 valid=grid.navigable(grid.cell(position[:2].cpu().tolist()))
                 record.update(status='passed' if valid else 'running',execution=recovery_result,
                               actual_position=position.cpu().tolist(),refreshed_start_navigable=valid,
@@ -609,6 +614,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             layer_footprints_json=json.dumps(map_details['collision_layers']))
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_results,
+                 'motion_policy':'turn_then_drive_forward_v1',
                  'grid_artifact':str(map_file.relative_to(self.output)),
                  'selected_world_point':point.cpu().tolist(),
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
@@ -626,15 +632,22 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     # a reachable cell across a wall is not a valid approach.
                     planning_xy=position[:2].cpu().tolist()
                     budget=PlanningBudget(self.deadline.check)
+                    from .heading_collision import HeadingCollisionChecker
+                    endpoint_collision=HeadingCollisionChecker(grid,self._navigation_layers,
+                        self._navigation_layer_yaw,self._navigation_support,check_cancelled=budget.check)
                     def visible(xy,yaw):
                         budget.visibility()
                         return self._approach_visible(xy,point,getattr(target,'selected_object',None),
                                                       margin=margin,base_yaw=yaw)
                     def make_plan(candidate_grid,yaw):
+                        def acceptable(xy):
+                            pose=(*xy,yaw)
+                            return (endpoint_collision.motion_free(pose,pose) and
+                                    (mode!='approach' or visible(xy,yaw)))
                         return replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
                             standoff=standoff,goal_mode=mode,max_snap=None,check_cancelled=budget.check,
                             max_candidate_checks=64 if mode=='approach' else None,
-                            candidate_filter=(lambda xy:visible(xy,yaw)) if mode=='approach' else None),
+                            candidate_filter=acceptable),
                             travel_yaw=yaw,final_yaw=yaw)
                     from .live_gt_map import feasible_heading_grids, rotation_staging_plan
                     from .gt_navigation import NavigationPlan
@@ -705,16 +718,19 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
                 stream.write(json.dumps(details)+'\n')
-        stage_result=None
-        if stage is not None:
-            stage_result=self._execute_gt_plan(*stage,max_steps)
-            max_steps-=stage_result['steps']
-        turn_result=None
-        if turn is not None:
-            turn_result=self._execute_gt_plan(*turn,max_steps)
-            max_steps-=turn_result['steps']
-            details['heading_change']['execution']=turn_result
-        result=self._execute_gt_plan(grid,plan,max_steps)
+        stage_result=turn_result=None
+        try:
+            if stage is not None:
+                stage_result=self._execute_gt_plan(*stage,max_steps)
+                max_steps-=stage_result['steps']
+            if turn is not None:
+                turn_result=self._execute_gt_plan(*turn,max_steps)
+                max_steps-=turn_result['steps']
+                details['heading_change']['execution']=turn_result
+            result=self._execute_gt_plan(grid,plan,max_steps)
+        except SkillError as exc:
+            raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results)
+                             or stage_result is not None or turn_result is not None) from exc
         self.navigation_distance+=result['actual_path_distance_m']+sum(p['actual_path_distance_m'] for p in (stage_result,turn_result) if p)
         phases=recovery_results+[phase for phase in (stage_result,turn_result) if phase is not None]
         for key in ('steps','motion_steps','actual_path_distance_m'):
@@ -744,46 +760,88 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 'dynamic_collision_check':map_details['dynamic_collision_check']}
 
     def _execute_gt_plan(self, grid, plan, max_steps):
-        """Follow the GT path using actual pose feedback and bounded commands."""
+        """Turn, drive forward, and turn at corners with swept-volume checks."""
         import omnigibson.utils.transform_utils as T
-        from .gt_navigation import GreedyGridFollower, NavigationError
+        from dataclasses import asdict
+        from .gt_navigation import GreedyGridFollower, NavigationError, PlanningBudget
+        from .forward_navigation import plan_forward_route
+        from .heading_collision import HeadingCollisionChecker
         settling=10
         if max_steps<=settling:raise SkillError('action_timeout','Insufficient GT follower step budget')
         pos,quat=self.robot.get_position_orientation()
-        follower=GreedyGridFollower(grid,plan,self.og.sim.get_sim_step_dt())
         held=self._get_held()
         relative=T.relative_pose_transform(*held.get_position_orientation(),pos,quat) if held else None
         joints=self.robot.get_joint_positions()
         indices=self.torch.tensor([i for i in range(len(joints)) if i not in self.robot.base_idx.tolist()],device=joints.device)
         posture=joints[indices].clone();before=self.steps;travelled=0.;previous=pos[:2].cpu().tolist()
+        forward=plan.motion_mode!='clearance_retreat'
+        collision=None;route=None
         try:
+            phases=(plan,)
+            if forward:
+                rotation=T.quat2mat(quat)
+                start_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+                budget=PlanningBudget(self.deadline.check,seconds=10.)
+                collision=HeadingCollisionChecker(grid,self._navigation_layers,self._navigation_layer_yaw,
+                    self._navigation_support,check_cancelled=budget.check)
+                record={'at':now(),'audience':'executor_private','motion_policy':'turn_then_drive_forward_v1',
+                        'navigation_plan_index':getattr(self,'_navigation_plan_index',None),
+                        'start':[*previous,start_yaw],'goal':list(plan.goal),'final_yaw':plan.final_yaw,
+                        'planning_seconds_limit':10.,'heading_state_limit':20000}
+                try:
+                    route=plan_forward_route(plan,(*previous,start_yaw),collision,check_cancelled=budget.check)
+                    phases=route.phases
+                    record.update(status='planned',route=asdict(route))
+                except Exception as exc:
+                    record.update(status='failed',error_code=getattr(exc,'code',None),
+                                  error_type=type(exc).__name__,error=str(exc))
+                    raise
+                finally:
+                    with (self.output/'navigation_forward_plans.jsonl').open('a') as stream:
+                        stream.write(json.dumps(record)+'\n')
+                # Planning has ended; motion checks still honor episode
+                # cancellation but must not reuse the expired search timer.
+                collision.check_cancelled=self.deadline.check
+            execution_grid=collision.grid if collision else grid
             with (self.output/'base_motion.jsonl').open('a') as stream:
-                while True:
-                    actual_pos,actual_quat=self.robot.get_position_orientation()
-                    rotation=T.quat2mat(actual_quat)
-                    actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
-                    command=follower.next_pose((*actual_pos[:2].cpu().tolist(),actual_yaw))
-                    if command is None:break
-                    if self.steps-before>=max_steps-settling:
-                        raise SkillError('action_timeout','GT follower exhausted its control-step budget',changed=self.steps>before)
-                    x,y,yaw=command
-                    new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
-                    orientation=T.euler2quat(self.torch.tensor([0.,0.,yaw],device=quat.device))
-                    self._base_target={'position':new_pos,'orientation':orientation,'indices':indices,
-                                       'posture':posture,'held':held,'relative':relative}
-                    self._restore_base_target()
-                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                    measured,measured_quat=self.robot.get_position_orientation()
-                    actual_xy=measured[:2].cpu().tolist();travelled+=math.dist(previous,actual_xy);previous=actual_xy
-                    stream.write(json.dumps({'at':now(),'env_step':self.steps,'commanded_position':new_pos.tolist(),
-                        'actual_position':measured.tolist(),'actual_orientation':measured_quat.tolist(),
-                        'commanded_yaw':yaw,'follower':'greedy_grid_pose_feedback','audience':'executor_private'})+'\n')
+                for phase_index,phase in enumerate(phases):
+                    follower=GreedyGridFollower(execution_grid,phase,self.og.sim.get_sim_step_dt(),
+                        forward_only=forward,motion_check=collision.motion_free if collision else None)
+                    while True:
+                        self.deadline.check()
+                        actual_pos,actual_quat=self.robot.get_position_orientation()
+                        rotation=T.quat2mat(actual_quat)
+                        actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+                        command=follower.next_pose((*actual_pos[:2].cpu().tolist(),actual_yaw))
+                        if command is None:break
+                        if self.steps-before>=max_steps-settling:
+                            raise SkillError('action_timeout','GT follower exhausted its control-step budget',changed=self.steps>before)
+                        x,y,yaw=command
+                        new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
+                        orientation=T.euler2quat(self.torch.tensor([0.,0.,yaw],device=quat.device))
+                        self._base_target={'position':new_pos,'orientation':orientation,'indices':indices,
+                                           'posture':posture,'held':held,'relative':relative}
+                        self._restore_base_target()
+                        self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                        measured,measured_quat=self.robot.get_position_orientation()
+                        actual_xy=measured[:2].cpu().tolist();travelled+=math.dist(previous,actual_xy);previous=actual_xy
+                        stream.write(json.dumps({'at':now(),'env_step':self.steps,'commanded_position':new_pos.tolist(),
+                            'actual_position':measured.tolist(),'actual_orientation':measured_quat.tolist(),
+                            'commanded_yaw':yaw,'phase_index':phase_index,'motion_mode':plan.motion_mode,
+                            'follower':'turn_then_drive_forward' if forward else 'clearance_retreat',
+                            'audience':'executor_private'})+'\n')
             motion_steps=self.steps-before
             if self._base_target is not None:
                 for _ in range(settling):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             actual_pos,actual_quat=self.robot.get_position_orientation()
             final_error=math.dist(actual_pos[:2].cpu().tolist(),plan.goal)
-            if final_error>follower.position_tolerance or not grid.navigable(grid.cell(actual_pos[:2].cpu().tolist())):
+            final_rotation=T.quat2mat(actual_quat)
+            final_yaw=math.atan2(float(final_rotation[1,0]),float(final_rotation[0,0]))
+            final_pose=(*actual_pos[:2].cpu().tolist(),final_yaw)
+            final_yaw_error=abs(follower.angle(final_yaw-plan.final_yaw))
+            safe=(collision.motion_free(final_pose,final_pose) if collision else
+                  grid.navigable(grid.cell(final_pose[:2])))
+            if final_error>follower.position_tolerance or final_yaw_error>follower.final_yaw_tolerance or not safe:
                 raise SkillError('navigation_unreachable','GT follower final pose verification failed',changed=self.steps>before)
         except NavigationError as exc:
             raise SkillError(exc.code,str(exc),changed=self.steps>before) from exc
@@ -791,6 +849,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             self._base_target=None
         return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
                 'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
+                'final_yaw_error_rad':final_yaw_error,'motion_policy':'turn_then_drive_forward_v1' if forward else 'clearance_retreat',
+                'forward_route_method':route.method if route else None,
+                'forward_planned_distance_m':route.distance_m if route else None,
+                'motion_phases':len(phases),
                 'heading_tolerance_rad':follower.heading_tolerance,
                 'final_yaw_tolerance_rad':follower.final_yaw_tolerance,
                 'progress_measure':'directed_path_distance_or_target_yaw_convergence',
@@ -1013,6 +1075,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
+            'motion_policy':'turn_then_drive_forward_v1',
+            'forward_route':'checked_polyline_or_eight_heading_lattice',
+            'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},
+            'fixed_heading_exception':'contact_shedding_clearance_retreat_only',
+            'carried_collision_footprint':True,'physical_controller':False,
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
             'geometry':'GT floor support and live height-matched collision hulls',
             'map_input':'GT floor support plus current PhysX overlaps; selected-pixel depth supplies the target',

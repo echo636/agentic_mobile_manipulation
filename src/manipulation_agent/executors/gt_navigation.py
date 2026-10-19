@@ -200,6 +200,7 @@ class NavigationPlan:
     start_grid_offset_m: float
     expanded_cells: int
     travel_yaw: float | None = None
+    motion_mode: str = 'forward'
 
 
 def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizon, check_cancelled,
@@ -377,10 +378,12 @@ class GreedyGridFollower:
     are bounded; stalled or displaced robots fail explicitly instead of
     consuming repeated model calls. GT geometry stays private to the executor.
     """
-    def __init__(self, grid, plan, dt, speed=.5, turn_speed=math.pi/3, stall_steps=20):
+    def __init__(self, grid, plan, dt, speed=.5, turn_speed=math.pi/3, stall_steps=20,
+                 *, forward_only=False, motion_check=None):
         if min(dt,speed,turn_speed)<=0 or not all(math.isfinite(x) for x in (dt,speed,turn_speed)):
             raise ValueError('Positive finite follower rates required')
         self.grid,self.plan=grid,plan
+        self.forward_only,self.motion_check=forward_only,motion_check
         self.distance_step,self.angle_step=speed*dt,turn_speed*dt
         self.index=1;self.last_actual=None;self.last_command=None;self.stall=0;self.stall_steps=stall_steps
         self.position_tolerance=.002
@@ -451,7 +454,8 @@ class GreedyGridFollower:
         else:
             goal=self.plan.points[self.index];distance=math.dist((x,y),goal)
             heading=(self.plan.travel_yaw if self.plan.travel_yaw is not None else math.atan2(goal[1]-y,goal[0]-x));delta=self.angle(heading-yaw)
-            if abs(delta)>self.heading_tolerance and distance>self.distance_step:
+            turn_gate=self.position_tolerance if self.forward_only else self.distance_step
+            if abs(delta)>self.heading_tolerance and distance>turn_gate:
                 phase='turn'
                 command=(x,y,yaw+max(-self.angle_step,min(self.angle_step,delta)))
             else:
@@ -464,6 +468,18 @@ class GreedyGridFollower:
                          yaw+max(-self.angle_step,min(self.angle_step,delta)))
         if math.dist((x,y),command[:2])>1e-12 and not self.grid.segment_free((x,y),command[:2]):
             raise NavigationError('Next movement crosses an occupied grid cell')
+        if self.forward_only:
+            dx,dy=command[0]-x,command[1]-y
+            distance=math.hypot(dx,dy)
+            # Permit only millimetre pose-setter corrections at waypoints;
+            # no sideways/backward shortcut even for a short last segment.
+            if distance>self.position_tolerance:
+                forward=dx*math.cos(yaw)+dy*math.sin(yaw)
+                sideways=abs(-dx*math.sin(yaw)+dy*math.cos(yaw))
+                if forward<0 or sideways>max(self.position_tolerance,distance*math.sin(self.heading_tolerance)):
+                    raise NavigationError('Forward follower would translate sideways or backwards')
+        if self.motion_check is not None and not self.motion_check((x,y,yaw),command):
+            raise NavigationError('Next motion fails orientation-aware swept collision validation')
         if phase=='advance' and self.advance_index!=self.index:
             self.advance_index=self.index;self.advance_best=self._remaining_on_segment((x,y),self.index)
             self.advance_stall=0

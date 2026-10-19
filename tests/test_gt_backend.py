@@ -71,13 +71,16 @@ class GTBackendTests(unittest.TestCase):
         from manipulation_agent.executors.gt_navigation import GridMap, NavigationError
         grid = GridMap(60, 60, .1, (-3., -3.), (occupancy > 0).astype('uint8').tobytes())
         b._navigation_clearance = (grid.free, np.zeros_like(occupancy), .35)
-        b._navigation_layers = [(occupancy > 0, None)]
+        b._navigation_layers = [(occupancy > 0, np.zeros((4,2)))]
+        b._navigation_support = np.ones_like(occupancy)
         modules = {name: ModuleType(name) for name in
                    ('omnigibson', 'omnigibson.utils', 'omnigibson.utils.transform_utils')}
         modules['omnigibson'].utils = modules['omnigibson.utils']
         modules['omnigibson.utils'].transform_utils = modules['omnigibson.utils.transform_utils']
         modules['omnigibson.utils.transform_utils'].quat2mat = lambda _: np.eye(3)
         patches = [patch.dict('sys.modules', modules),
+                   patch('manipulation_agent.executors.heading_collision.HeadingCollisionChecker',
+                         return_value=SimpleNamespace(motion_free=lambda a,b:True)),
                    patch('manipulation_agent.executors.live_gt_map.build_navigation_grid', return_value=(grid,
                        {'chassis_footprint_world_offsets': [], 'collision_layers': [],
                         'dynamic_collision_check': False, 'collision_substrate': 'static_fixture'})),

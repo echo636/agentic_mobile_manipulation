@@ -51,13 +51,26 @@ def build_navigation_grid(backend, floor):
     floor_z=float(trav.floor_heights[floor]);base=backend.robot.get_position_orientation()[0].cpu().numpy()
     # The base is wider than the torso. A single base-width column falsely
     # blocks motion beside desks/chair backs. Match occupancy by height band.
-    height=float(backend.robot.aabb[1][2])-floor_z
-    edges=[.03,.35,.8,1.25,max(1.26,height+.02)]
+    held=backend._get_held()
+    carried=[obj for obj in [held,*[o for o,_ in backend._carry_contents]] if obj is not None]
+    moving_objects=[backend.robot,*carried]
+    height=max(float(obj.aabb[1][2]) for obj in moving_objects)-floor_z
+    # Stable, conservative band edges avoid a full raster rebuild for every
+    # micrometre of pose-setter feedback after a navigation action.
+    edges=[.03,.35,.8,1.25,max(1.26,math.ceil((height+.02)*100)/100)]
     bodies=[]
-    for link in backend.robot.links.values():
-        if link.is_meta_link:continue
-        points=link.collision_boundary_points_world
-        if points is not None:bodies.append(points.cpu().numpy())
+    carried_hulls=0
+    for obj in moving_objects:
+        object_hulls=0
+        for link in obj.links.values():
+            if link.is_meta_link:continue
+            points=link.collision_boundary_points_world
+            if points is not None:
+                bodies.append(points.cpu().numpy())
+                object_hulls+=1
+                if obj is not backend.robot:carried_hulls+=1
+        if obj is not backend.robot and not object_hulls:
+            raise ValueError('Carried collision geometry unavailable for navigation')
     layers=[]
     for lo,hi in zip(edges,edges[1:]):
         chunks=[xy-base[:2] for p in bodies if (xy:=clipped_body_projection(p,floor_z+lo,floor_z+hi)) is not None]
@@ -69,15 +82,16 @@ def build_navigation_grid(backend, floor):
     source=Path(scene.scene_dir)/'layout'/f'floor_trav_no_obj_{floor}.png'
     cache=getattr(backend,'_live_gt_collision_cache',None)
     if cache is None:cache=backend._live_gt_collision_cache={}
-    if floor not in cache:
+    bands=[(lo,hi) for lo,hi,_ in layers]
+    if floor not in cache or cache[floor].get('bands')!=bands:
         if not source.is_file():raise ValueError('GT floor support map unavailable: '+str(source))
         raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE);h,w=trav.floor_map[floor].shape
         raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
-        cache[floor]={'support':raw,'free':np.repeat(raw[None],len(layers),axis=0),'objects':{},'height':None,
+        cache[floor]={'support':raw,'free':np.repeat(raw[None],len(layers),axis=0),'objects':{},'height':None,'bands':bands,
                       'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
     cached=cache[floor];support=cached['support'];free=cached['free'];h,w=support.shape
     origin=np.array([-w*resolution/2,-h*resolution/2])
-    held=backend._get_held();ignored_objects={backend.robot,held,*[o for o,_ in backend._carry_contents]}
+    ignored_objects={backend.robot,held,*[o for o,_ in backend._carry_contents]}
     ignored_links={link.prim_path for obj in ignored_objects if obj is not None for link in obj.links.values()}
     # Navigation must not collide with semantic helper/fill volumes which have
     # no physical surface. Actual ordinary collision shapes remain included.
@@ -134,17 +148,26 @@ def build_navigation_grid(backend, floor):
         navigable &= cv2.erode(raw,k,borderType=cv2.BORDER_CONSTANT,borderValue=0)
         overlap+=cv2.filter2D((1-raw).astype('float32'),-1,k.astype('float32'),borderType=cv2.BORDER_CONSTANT)
     grid=GridMap(w,h,resolution,tuple(origin),navigable.tobytes())
+    # Use the same subcell/yaw reserve as forward route certification. Without
+    # this, an old fixed-heading goal can sit on a boundary that the driving
+    # controller must reject, and initial recovery would not see the mismatch.
+    from .heading_collision import HeadingCollisionChecker
+    grid=HeadingCollisionChecker(grid,[(raw,footprint) for raw,(_,_,footprint) in zip(free,layers)],
+        0.,support,check_cancelled=backend.deadline.check).grid_at_heading(0.)
     combined=np.all(free,axis=0).astype('uint8')
     backend._navigation_clearance=(combined.tobytes(),overlap.ravel(),max(float(np.linalg.norm(p,axis=1).max()) for _,_,p in layers)+resolution)
     backend._navigation_layers=[(raw.copy(),footprint.copy()) for raw,(_,_,footprint) in zip(free,layers)]
+    backend._navigation_support=support.copy()
     return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
         'chassis_footprint_world_offsets':chassis.tolist(),'kernel_shape':list(kernel.shape),
         'footprint':'current_yaw_height_matched_collision_hulls',
+        'forward_clearance_reserve':'half_cell_translation_and_outward_quantized_yaw_sweep',
         'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist()} for lo,hi,p in layers],
         'query_height_m':height,'updated_cells':count,'query_seconds':time.monotonic()-started,
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
-        'held_object_footprint_included':False}
+        'held_object_footprint_included':bool(carried_hulls),
+        'carried_collision_hulls':carried_hulls}
 
 
 def clearance_transition_guard(grid, collision_layers, support):

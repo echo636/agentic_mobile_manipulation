@@ -38,7 +38,7 @@ class TargetVisibilityTests(unittest.TestCase):
         free=np.ones((41,41),dtype='uint8');free[:30,20]=0
         grid=GridMap(41,41,.1,(0.,0.),free.tobytes())
         b._navigation_clearance=(grid.free,np.zeros_like(free),.35)
-        b._navigation_layers=[(free,None)]
+        b._navigation_layers=[(free,np.zeros((4,2)))];b._navigation_support=np.ones_like(free)
         b._approach_visible=Mock(side_effect=lambda xy,*_,**kw:xy[0]>2.)
         b.moved=False
         def execute(grid,plan,limit):
@@ -50,6 +50,9 @@ class TargetVisibilityTests(unittest.TestCase):
         modules['omnigibson.utils'].transform_utils=modules['omnigibson.utils.transform_utils']
         modules['omnigibson.utils.transform_utils'].quat2mat=lambda _:np.eye(3)
         p=patch.dict(sys.modules,modules);p.start();self.addCleanup(p.stop)
+        p=patch('manipulation_agent.executors.heading_collision.HeadingCollisionChecker',
+                return_value=SimpleNamespace(motion_free=lambda a,b:True))
+        p.start();self.addCleanup(p.stop)
         p=patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(grid,
             {'chassis_footprint_world_offsets':[],'collision_layers':[],'dynamic_collision_check':True}))
         self.build_grid=p.start();self.addCleanup(p.stop)
@@ -131,6 +134,20 @@ class TargetVisibilityTests(unittest.TestCase):
         self.assertEqual([r['refreshed_start_navigable'] for r in completed],[False,True])
         self.assertEqual(result['steps'],9)
         self.assertEqual(b._execute_gt_plan.call_count,3)
+
+    def test_failed_forward_plan_after_turn_reports_changed_world(self):
+        b=self.backend
+        raw=np.ones((41,41),dtype='uint8');free=raw.copy();free[:,20]=0
+        grid=GridMap(41,41,.1,(0.,0.),free.tobytes())
+        rotated=GridMap(41,41,.1,(0.,0.),raw.tobytes())
+        self.build_grid.return_value=(grid,self.build_grid.return_value[1])
+        self.headings.return_value=[(rotated,.5,rotated,[])]
+        b._execute_gt_plan.side_effect=[{'steps':3,'motion_steps':3,'actual_path_distance_m':0.},
+                                        SkillError('navigation_unreachable','No forward route')]
+        with self.assertRaises(SkillError) as caught:
+            b._navigate(self.target(0.),1000)
+        self.assertTrue(caught.exception.changed)
+        self.assertEqual(caught.exception.code,'navigation_unreachable')
 
     def test_recovery_stops_cycle_and_marks_world_changed(self):
         b=self.backend;raw=np.ones((41,41),dtype='uint8');free=raw.copy();free[:,5]=0

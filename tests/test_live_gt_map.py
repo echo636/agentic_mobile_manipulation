@@ -84,6 +84,16 @@ class LiveGridTests(unittest.TestCase):
                 self.assertLess(updated['updated_cells'],meta['updated_cells'])
                 _,unchanged=build_navigation_grid(backend,0)
                 self.assertEqual(unchanged['updated_cells'],0)
+                carried=Obj('held',[-.75,.55,.5],[.1,.65,.6],[-.3,.6,.55])
+                carried.links={'bar':SimpleNamespace(is_meta_link=False,prim_path='/held/bar',
+                    collision_boundary_points_world=torch.tensor([
+                        [x,y,z] for x in (-.75,.1) for y in (.55,.65) for z in (.5,.6)]))}
+                backend._get_held=lambda:carried
+                carrying,carry_meta=build_navigation_grid(backend,0)
+                self.assertTrue(carry_meta['held_object_footprint_included'])
+                self.assertEqual(carry_meta['carried_collision_hulls'],1)
+                self.assertGreater(len(carry_meta['collision_layers']),len(meta['collision_layers']))
+                self.assertFalse(carrying.navigable(carrying.cell((-.7,0.))))
 
     def test_heading_fallback_checks_rotation_sweep(self):
         import numpy as np

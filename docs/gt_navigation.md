@@ -29,7 +29,8 @@ each `act` / `look` supplies the next one.
 4. Combine occupancy eroded by the measured oriented robot footprint in each height band. Plan a
    collision-free grid route without cutting corners. If the current heading
    cannot reach the nearest target region, compare alternative headings and the whole in-place turn's swept
-   footprint. Use a feasible turn followed by holonomic fixed-heading travel.
+   footprint. Endpoint selection uses the same footprint reserve as forward
+   execution, including the required final viewing orientation.
 5. If the starting footprint overlaps an obstacle, seek a short continuous
    retreat with non-increasing overlap for each connected 3D obstacle across
    height bands, no new obstacle regions, and continuous contact patches. Once
@@ -38,8 +39,19 @@ each `act` / `look` supplies the next one.
    each retreat and repeat if necessary, respecting the action/deadline budget
    and rejecting repeated blocked states. Without a verified exit, retain
    `navigation_invalid_start`. No start teleport or wall crossing is permitted.
+   This contact-shedding retreat is the explicit, logged exception to forward
+   driving: turning while already overlapping an obstacle may be unsafe.
 6. Execute bounded pose increments (at most 0.5 m/s and 60 degrees/s), read back
-   the actual pose after each simulator step, and verify arrival. Pruned paths
+   the actual pose after each simulator step, and verify arrival. Normal motion
+   first turns in place to face the path segment, then advances; it stops to
+   turn at corners and restores the selected viewing orientation at arrival.
+   Certify every segment and turn with orientation-aware height-layer collision
+   geometry. If the existing polyline cannot be driven, use a bounded eight-heading
+   position/heading search (forward steps and in-place turns, no strafing).
+   Checked entry/exit legs retain the measured and final continuous headings
+   where a narrow aisle requires driving straight before turning.
+   A relaxed XY geodesic guides that search around walls. All motion phases
+   share the caller's remaining simulation-step budget. Pruned paths
    reserve a 5 mm corridor against tiny feedback deviations at grid corners.
    Recheck elevated-target visibility at the actual final pose before reporting
    success; reaching a goal behind an occluder is a navigation failure.
@@ -71,18 +83,24 @@ agent act/look attempts without a wall-time deadline.
 
 ## Limits and evidence
 
-This remains ideal kinematic base actuation, not a wheel controller or a complete
-SE(2) / articulated-body motion planner. One fixed heading is used for each
-translation leg, with a checked turn at its start. When the start lacks room
-to turn, first follow a continuous route to a reachable clear turning position. Scene obstacles and robot collision hulls are matched in four height bands,
+This remains ideal kinematic base actuation, not a physical wheel controller or a
+complete continuous/articulated-body motion planner. Forward route certification
+and heading search have a separate cooperative 10-second / 20,000-state limit
+per execution leg. A blocked or exhausted search fails explicitly; it never
+falls back to sliding sideways. The discrete heading fallback can miss paths
+requiring finer orientations. Up to 2 mm of endpoint feedback correction is
+permitted to prevent pose-setter drift. Scene obstacles and robot collision hulls are matched in four height bands,
 avoiding a base-width column through the head. Convex hulls within each band
-remain conservative; carried-object and articulated motion planning remain
-incomplete. A disconnected point can yield only an explicitly reported partial
+remain conservative. The held object and supported carried contents contribute
+their collision hulls to the moving footprint, with arm posture held during
+travel. This does not model deformable loads, wheel dynamics or moving arm
+trajectories. Stricter turn clearance may reject a goal reachable by the old
+fixed-heading translation. A disconnected point can yield only an explicitly reported partial
 approach in the start-connected region; it never permits crossing a closed door. Floor raster and
 cell resolution also limit how closely a selected point can be reached.
 
 `navigation_plans.jsonl`, `navigation_grids/*.npz`, `navigation_recovery.jsonl`,
-`navigation_arrivals.jsonl` and `base_motion.jsonl` retain private geometry and
+`navigation_forward_plans.jsonl`, `navigation_arrivals.jsonl` and `base_motion.jsonl` retain private geometry and
 actual motion evidence. Arrivals record the selected target, planned goal,
 actual endpoint and final target visibility.
 `scripts/probe_navigation_regression.py` reproduces archived failed geometries
