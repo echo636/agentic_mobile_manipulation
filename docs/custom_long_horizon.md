@@ -159,6 +159,9 @@ with the tools in the returned box, unlike the workshop task that leaves tools
 on the bench. Taking out and immediately replacing each tool separately does
 not satisfy the simultaneous inventory milestone. Both outbound and return
 transport retain a permanent violation if the box is moved open or incomplete.
+The reference repacks from the same nearby stance used for unloading, so a
+tool within the executor's 1.4 m reach does not trigger unnecessary loaded
+navigation. This route change requires its own physical validation.
 
 The serving task also requires table settings, tea, leftovers, board storage,
 trash cleanup, cleared preparation space and restored appliances. Either

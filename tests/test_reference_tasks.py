@@ -43,6 +43,39 @@ class ApplianceApproachTests(unittest.TestCase):
 
 
 class ReferenceRecoveryTests(unittest.TestCase):
+    def test_inventory_repack_retains_reach_and_preserves_omitted_tool(self):
+        # Coordinates already exercised by the unload continuation. Repacking
+        # must not navigate with a tool held or silently restore an omitted tool.
+        tools = {'pliers': (24.2, .3), 'allen_wrench': (24.6, .3),
+                 'screwdriver': (24.4, .5), 'flashlight': (24.6, .7),
+                 'drill': (24.4, 1.)}
+        for omit in (None, 'drill'):
+            with self.subTest(omit=omit):
+                reference = ReferenceTask(None, None)
+                held = None
+                stance = None
+                packed = []
+                def action(primitive, role=None, point=None, **kwargs):
+                    nonlocal held, stance
+                    if primitive == 'navigate_to':
+                        self.assertIsNone(held)
+                        stance = point[:2]
+                    elif primitive == 'grasp':
+                        self.assertIsNone(held)
+                        self.assertLess(math.dist(stance, tools[role]), 1.4)
+                        held = role
+                    elif primitive == 'place_inside':
+                        self.assertEqual(role, 'box')
+                        self.assertIsNotNone(held)
+                        self.assertLess(math.dist(stance, (24.5, 1.5)), 1.4)
+                        packed.append(held)
+                        held = None
+                reference.action = action
+                reference.move = action
+                reference.pack_kit(delivered=True, omit=omit)
+                self.assertIsNone(held)
+                self.assertCountEqual(packed, [item for item in tools if item != omit])
+
     def test_unloading_preserves_reach_without_navigating_a_loaded_assembly(self):
         reference = ReferenceTask(None, None)
         held = None

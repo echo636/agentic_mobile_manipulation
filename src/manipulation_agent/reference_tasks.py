@@ -289,11 +289,21 @@ class ReferenceTask:
             self.move('grasp', item)
             self.move('place_on_top', 'bookshelf', [x, -2.06, .92754])
 
-    def pack_kit(self, *, omit=None):
+    def pack_kit(self, *, omit=None, delivered=False):
+        if delivered:
+            # All five unpacked tools and the delivered box are within the
+            # checked reach of this stance. Reposition empty-handed once;
+            # the general 1.2 m approach heuristic would otherwise move with
+            # the Allen wrench held, despite its valid 1.4 m action reach.
+            self.floor(23.5, 1.1)
         self.move('open', 'box')
         for item in ('pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill'):
             if item != omit:
-                self.transfer_inside(item, 'box')
+                if delivered:
+                    self.action('grasp', item)
+                    self.inside('box')
+                else:
+                    self.transfer_inside(item, 'box')
         self.move('close', 'box')
 
     def return_kit(self):
@@ -352,7 +362,7 @@ class ReferenceTask:
 
     def workshop_inventory(self, order):
         self.workshop(order, return_box=False)
-        self.pack_kit()
+        self.pack_kit(delivered=True)
         self.return_kit()
 
     def run(self, order):
@@ -398,7 +408,8 @@ class ReferenceTask:
                                                   'loaded_box_returned': False}}
         elif case in ('return_incomplete_kit', 'open_lid_return'):
             self.workshop('cleanup_first', return_box=False)
-            self.pack_kit(omit='drill' if case == 'return_incomplete_kit' else None)
+            self.pack_kit(omit='drill' if case == 'return_incomplete_kit' else None,
+                          delivered=True)
             if case == 'return_incomplete_kit':
                 self.return_kit()
                 witness = {'box_at_source': True, 'box_open': False, 'drill_in_box': False}
