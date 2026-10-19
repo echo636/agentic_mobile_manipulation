@@ -6,9 +6,17 @@ the ordinary checked executor. No task-state setter is used to solve a task.
 from __future__ import annotations
 
 import json
+import math
 import time
 
 from .contracts import SkillError
+
+
+def placement_yaw_delta(orientation, desired_world_degrees):
+    """Convert a fixture heading into the executor's relative placement yaw."""
+    x, y, z, w = map(float, orientation)
+    current = math.degrees(math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z)))
+    return (desired_world_degrees-current+180.) % 360. - 180.
 
 
 def appliance_approach_point(bounds, base, *, open_center=None):
@@ -92,7 +100,7 @@ class ReferenceTask:
     def floor(self, x, y):
         return self.action('navigate_to', 'floor', [x, y, 0.])
 
-    def move(self, primitive, role, point=None, **kwargs):
+    def move(self, primitive, role, point=None, *, placement_world_yaw=None, **kwargs):
         backend = self.backend
         target = point if point is not None else self.obj(role).get_position_orientation()[0].tolist()
         base = backend.robot.get_position_orientation()[0]
@@ -136,6 +144,14 @@ class ReferenceTask:
                         self.action('navigate_to', role, point)
                     else:
                         raise
+        if placement_world_yaw is not None:
+            if primitive != 'place_on_top' or 'placement_yaw_degrees' in kwargs:
+                raise ValueError('World placement yaw requires one place_on_top rotation request')
+            # Navigation may rotate the carried assembly. Resolve the relative
+            # placement option only after the final approach has completed.
+            held = backend._get_held()
+            kwargs['placement_yaw_degrees'] = placement_yaw_delta(
+                held.get_position_orientation()[1], placement_world_yaw)
         return self.action(primitive, role, point, **kwargs)
 
     def top(self, role, fx=.5, fy=.5):
@@ -155,9 +171,9 @@ class ReferenceTask:
         self.move('grasp', item)
         self.inside(destination)
 
-    def transfer_top(self, item, destination, point):
+    def transfer_top(self, item, destination, point, **kwargs):
         self.move('grasp', item)
-        self.move('place_on_top', destination, point)
+        self.move('place_on_top', destination, point, **kwargs)
 
     def wait_for(self, wanted, *, attempts=18):
         for _ in range(attempts + 1):
@@ -308,7 +324,9 @@ class ReferenceTask:
         self.pack_kit()
         if order == 'pack_first':
             self.workshop_cleanup()
-        self.transfer_top('box', 'bench', [24.5, 1.5, .92754])
+        # Keep the lid's opening side away from the wall for either branch
+        # order; transport may have left the assembly at a different yaw.
+        self.transfer_top('box', 'bench', [24.5, 1.5, .92754], placement_world_yaw=-45.)
         self.open_delivered_kit()
         for item, y in zip(tools, [-1.95, -.8, -.2, .4, 1.]):
             if (self.obj(item).states[Inside].get_value(self.obj('box'))

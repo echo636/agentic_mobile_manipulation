@@ -2,12 +2,13 @@
 from pathlib import Path
 from contextlib import redirect_stdout
 import io
+import math
 import tempfile
 from types import SimpleNamespace
 import unittest
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.reference_tasks import ReferenceTask, appliance_approach_point
+from manipulation_agent.reference_tasks import ReferenceTask, appliance_approach_point, placement_yaw_delta
 
 
 class ApplianceApproachTests(unittest.TestCase):
@@ -29,6 +30,16 @@ class ApplianceApproachTests(unittest.TestCase):
         point = appliance_approach_point(([4.025, .2, .8849], [4.755, 1.044, 1.1903]),
                                          [7.875, -.875, 0], open_center=center)
         self.assertEqual(point, center)
+
+    def test_world_placement_heading_is_independent_of_carry_arrival_yaw(self):
+        for arrival in (-170., -45., 0., 90., 135., 179.):
+            with self.subTest(arrival=arrival):
+                radians = math.radians(arrival)
+                quaternion = [0., 0., math.sin(radians/2), math.cos(radians/2)]
+                delta = placement_yaw_delta(quaternion, -45.)
+                actual = (arrival+delta+180.) % 360. - 180.
+                self.assertAlmostEqual(actual, -45.)
+                self.assertTrue(-180. <= delta <= 180.)
 
 
 class ReferenceRecoveryTests(unittest.TestCase):
