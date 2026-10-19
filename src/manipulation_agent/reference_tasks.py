@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import time
 
+from .contracts import SkillError
+
 
 def appliance_approach_point(bounds, base, *, open_center=None):
     """Select the near AABB face, then let the normal ray test verify visibility.
@@ -60,6 +62,7 @@ class ReferenceTask:
                     else obj.get_position_orientation()[0].clone() if obj is not None else None)
         row = {'index': len(self.calls) + 1, 'primitive': primitive, 'role': role,
                'point': selected.tolist() if selected is not None else None,
+               'options': dict(kwargs),
                'selection': 'privileged_fixture_identity', 'started_at': time.time()}
         original = backend._ground
         if obj is not None:
@@ -68,6 +71,11 @@ class ReferenceTask:
                                 'hit_position': selected.tolist()})
         self.log('action_started', **row)
         try:
+            allowed = {'wait': {'seconds'}, 'look': {'yaw_degrees'},
+                       'place_on_top': {'placement_yaw_degrees'}}.get(primitive, set())
+            if set(kwargs) - allowed:
+                raise SkillError('invalid_arguments',
+                    f'Unsupported reference options for {primitive}: {sorted(set(kwargs) - allowed)}')
             result = backend.execute_visual(primitive, {} if obj is not None else None, 100000, **kwargs)
             row.update(status='passed', result=result)
             return result

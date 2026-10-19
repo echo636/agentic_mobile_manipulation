@@ -52,6 +52,25 @@ class ReferenceRecoveryTests(unittest.TestCase):
     def displaced(self):
         return SkillError('postcondition_error', 'Operation displaced existing contents from the container')
 
+    def test_wrong_placement_rotation_option_cannot_silently_succeed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [])
+            with self.assertRaisesRegex(SkillError, 'Unsupported reference options'):
+                reference.action('place_on_top', yaw_degrees=180.)
+            self.assertEqual(reference.backend.steps, 0)
+            self.assertEqual(len(reference.calls), 1)
+            self.assertEqual(reference.calls[0]['status'], 'failed')
+            self.assertEqual(reference.calls[0]['options'], {'yaw_degrees': 180.})
+
+    def test_placement_rotation_is_forwarded_and_recorded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [])
+            received = []
+            reference.backend.execute_visual = lambda primitive, target, max_steps, **kwargs: received.append(kwargs)
+            reference.action('place_on_top', placement_yaw_degrees=180.)
+            self.assertEqual(received, [{'placement_yaw_degrees': 180.}])
+            self.assertEqual(reference.calls[0]['options'], received[0])
+
     def test_recovered_open_preserves_failed_attempt_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             reference = self.reference(directory, [self.displaced(), self.displaced()])
