@@ -3,7 +3,11 @@ import importlib.util
 import math
 import unittest
 
-from manipulation_agent.executors.forward_navigation import plan_forward_route, angle
+from manipulation_agent.executors.forward_navigation import (
+    plan_forward_route, angle, local_exit_certificate, checked_connection,
+    simplify_forward_poses, motion_seconds,
+    select_forward_route,
+)
 from manipulation_agent.executors.gt_navigation import GridMap, NavigationPlan, GreedyGridFollower, NavigationError
 
 
@@ -22,6 +26,81 @@ class PointCollision:
 
 
 class ForwardNavigationTests(unittest.TestCase):
+    def test_outward_facing_pocket_also_requires_a_forward_entry(self):
+        class Pocket(PointCollision):
+            def motion_free(self,a,b):
+                if max(a[0],b[0])>.01:return False
+                if max(a[0],b[0])>-.15:
+                    if abs(angle(b[2]-a[2]))>.05:return False
+                    if min(abs(angle(a[2])),abs(angle(a[2]-math.pi)))>.05:return False
+                return super().motion_free(a,b)
+        collision=Pocket();pose=(0.,0.,math.pi)
+        self.assertIsNotNone(local_exit_certificate(pose,collision))
+        self.assertIsNone(local_exit_certificate(pose,collision,incoming=True))
+
+    def test_complete_candidate_cost_avoids_unneeded_final_half_turn(self):
+        from dataclasses import replace
+        a=plan([(0.,0.),(1.,0.)],math.pi)
+        b=replace(a,final_yaw=0.)
+        selected,route,details=select_forward_route([a,b],(0.,0.,0.),PointCollision())
+        self.assertEqual(selected.final_yaw,0.)
+        self.assertAlmostEqual(route.turn_radians,0.)
+        self.assertFalse(details['globally_optimal'])
+
+    def test_local_exit_rejects_legal_but_forward_trapped_pose(self):
+        class Pocket(PointCollision):
+            def motion_free(self,a,b):
+                if max(a[0],b[0])>.01:return False
+                if max(a[0],b[0])>-.15 and max(abs(angle(a[2])),abs(angle(b[2])))>.05:return False
+                return super().motion_free(a,b)
+        collision=Pocket();pose=(0.,0.,0.)
+        self.assertTrue(collision.motion_free(pose,pose))
+        self.assertTrue(collision.motion_free(pose,(-.2,0.,0.)))
+        self.assertIsNone(local_exit_certificate(pose,collision))
+        certificate=local_exit_certificate((-.4,0.,0.),collision)
+        self.assertIsNotNone(certificate)
+        self.assertGreaterEqual(certificate['displacement_m'],.3-1e-9)
+
+    def test_exit_keeps_narrow_forward_corridor_and_checks_full_motion(self):
+        class Corridor(PointCollision):
+            def motion_free(self,a,b):
+                return abs(a[1])<.01 and abs(b[1])<.01 and abs(a[2])<.01 and abs(b[2])<.01 and super().motion_free(a,b)
+        collision=Corridor();result=local_exit_certificate((0.,0.,0.),collision)
+        self.assertIsNotNone(result)
+        for a,b in zip(result['poses'],result['poses'][1:]):
+            self.assertTrue(collision.motion_free(a,b))
+            self.assertGreaterEqual((b[0]-a[0])*math.cos(a[2])+(b[1]-a[1])*math.sin(a[2]),-1e-9)
+
+    def test_numeric_cell_correction_does_not_demand_a_turn(self):
+        class NoTurns(PointCollision):
+            def motion_free(self,a,b):
+                return abs(a[2])<.001 and abs(b[2])<.001 and super().motion_free(a,b)
+        connection=checked_connection((.0000002,.0000004,0.),(0.,0.),0.,NoTurns())
+        self.assertIsNotNone(connection)
+        self.assertTrue(all(p[2]==0. for p in connection))
+
+    def test_shortcuts_reduce_motion_time_and_preserve_final_pose(self):
+        poses=[(0.,0.,0.),(1.,0.,0.),(1.,0.,math.pi/2),(1.,1.,math.pi/2),
+               (1.,1.,math.pi),(0.,1.,math.pi),(0.,1.,math.pi/2)]
+        result,count=simplify_forward_poses(poses,PointCollision())
+        self.assertGreater(count,0)
+        self.assertLess(motion_seconds(result),motion_seconds(poses))
+        self.assertEqual(result[0],poses[0]);self.assertEqual(result[-1],poses[-1])
+
+    def test_shortcuts_never_cross_an_obstacle(self):
+        class Obstacle(PointCollision):
+            def motion_free(self,a,b):
+                for i in range(101):
+                    x=a[0]+(b[0]-a[0])*i/100;y=a[1]+(b[1]-a[1])*i/100
+                    if .35<x<.65 and -.2<y<.7:return False
+                return super().motion_free(a,b)
+        collision=Obstacle()
+        poses=[(0.,0.,math.pi/2),(0.,1.,math.pi/2),(0.,1.,0.),(1.,1.,0.),
+               (1.,1.,-math.pi/2),(1.,0.,-math.pi/2)]
+        result,_=simplify_forward_poses(poses,collision)
+        self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(result,result[1:])))
+        self.assertGreaterEqual(sum(math.dist(a[:2],b[:2]) for a,b in zip(result,result[1:])),1.4)
+
     def follow(self, route, start, collision, noisy=False):
         actual = start
         moves = []
@@ -57,12 +136,13 @@ class ForwardNavigationTests(unittest.TestCase):
                 self.assertEqual(moves[0][0][:2],moves[0][1][:2])
                 self.assertGreater(abs(moves[0][1][2]),0.)
 
-    def test_l_shaped_path_turns_at_corner_and_restores_final_view(self):
+    def test_open_l_shaped_path_shortcuts_and_restores_final_view(self):
         collision=PointCollision()
         route=plan_forward_route(plan([(0.,0.),(1.,0.),(1.,1.)],-.6),(0.,0.,math.pi),collision)
         self.assertEqual(route.method,'certified_polyline')
         self.follow(route,(0.,0.,math.pi),collision,noisy=True)
-        self.assertAlmostEqual(route.distance_m,2.)
+        self.assertAlmostEqual(route.distance_m,math.sqrt(2))
+        self.assertGreater(route.shortcuts,0)
 
     def test_narrow_stance_requires_forward_exit_before_turn(self):
         class Corridor(PointCollision):

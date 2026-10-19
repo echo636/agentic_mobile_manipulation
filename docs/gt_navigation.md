@@ -16,8 +16,10 @@ each `act` / `look` supplies the next one.
 1. Backproject the exact selected pixel using the capture's calibrated depth.
    There is no navigation object lookup or depth-to-mesh agreement gate.
 2. Both floor and elevated clicks search the entire start-connected component,
-   choosing the closest feasible point to the selected XY, then breaking ties
-   by travel distance. There is no 0.75 m projection radius, ring sampling, or
+   proposing the closest feasible points to the selected XY. Ground navigation
+   compares complete routes within 10 cm of the closest proposed point, using
+   translation time plus rotation time; elevated approaches retain the closest
+   target-distance tier. There is no 0.75 m projection radius, ring sampling, or
    1.4 m navigation cutoff. Elevated approaches must see the target through a
    camera frustum with an 8% image-edge margin and unobstructed scene ray; a floor point may be below the
    camera at arrival. This visibility difference does not change the search
@@ -30,7 +32,13 @@ each `act` / `look` supplies the next one.
    collision-free grid route without cutting corners. If the current heading
    cannot reach the nearest target region, compare alternative headings and the whole in-place turn's swept
    footprint. Endpoint selection uses the same footprint reserve as forward
-   execution, including the required final viewing orientation.
+   execution, including the required final viewing orientation. Each candidate
+   also requires checked local forward arrival and departure paths (at least
+   30 cm net displacement, optionally staged by 10 or 20 cm). A legal static
+   pose is insufficient: outward-facing poses that can only be entered by
+   reversing, and inward-facing poses that cannot leave, are both rejected.
+   These are local certificates under the current robot/load geometry, not a
+   guarantee that every later target remains reachable after manipulation.
 5. If the starting footprint overlaps an obstacle, seek a short continuous
    retreat with non-increasing overlap for each connected 3D obstacle across
    height bands, no new obstacle regions, and continuous contact patches. Once
@@ -50,11 +58,18 @@ each `act` / `look` supplies the next one.
    position/heading search (forward steps and in-place turns, no strafing).
    Checked entry/exit legs retain the measured and final continuous headings
    where a narrow aisle requires driving straight before turning.
+   Heading/staging proposals do not execute an independent pre-turn. One route
+   is planned from the measured initial pose. Ground clicks also consider a
+   final heading aligned with arrival, if entry and exit clearance still hold.
+   Bounded collision-checked shortcuts remove detours only when combined
+   translation/rotation time decreases. Execution reuses the selected route
+   when the measured start has not changed, and still checks every command.
    A relaxed XY geodesic guides that search around walls. All motion phases
    share the caller's remaining simulation-step budget. Pruned paths
    reserve a 5 mm corridor against tiny feedback deviations at grid corners.
    Recheck elevated-target visibility at the actual final pose before reporting
-   success; reaching a goal behind an occluder is a navigation failure.
+   success; reaching a goal behind an occluder is a navigation failure. The local
+   departure certificate is checked again at the measured arrival pose.
 
 `reached` means the selected XY was reached to grid/feedback precision.
 `approached` means the executor reached a feasible projected endpoint, which may
@@ -72,6 +87,11 @@ budget across headings, with at most 64 candidate cells tested per elevated-targ
 heading. These limit work, not the geographical search domain or episode duration.
 An already visible approach within the executor's 1.4 m manipulation check stops
 heading refinement; it need not project onto the object's XY within one grid cell.
+Additional ground-heading certification is bounded by 2 seconds. Complete-route
+comparison tests at most six candidates, within a shared 10 seconds and up to
+2 seconds / 10,000 heading states per candidate. A validated incumbent may win
+when the refinement budget expires. Its objective uses 0.5 m/s translation and
+60 degrees/s rotation; it is **not a globally shortest continuous route**.
 When the work budget expires, an existing validated plan can execute; otherwise
 `navigation_search_exhausted` returns fresh RGB for policy recovery. This is not
 proof that no path exists. Native calls are cooperatively checked between calls.
@@ -102,7 +122,9 @@ cell resolution also limit how closely a selected point can be reached.
 `navigation_plans.jsonl`, `navigation_grids/*.npz`, `navigation_recovery.jsonl`,
 `navigation_forward_plans.jsonl`, `navigation_arrivals.jsonl` and `base_motion.jsonl` retain private geometry and
 actual motion evidence. Arrivals record the selected target, planned goal,
-actual endpoint and final target visibility.
+actual endpoint, final target visibility and the local departure certificate.
+Plans include entry/exit rejection counts and complete-candidate comparisons;
+saved navigation maps also include the exact support raster.
 `scripts/probe_navigation_regression.py` reproduces archived failed geometries
 in the real simulator and checks closed-door negatives, arrival, four-camera
 capture, scoring and video closure. These are scripted component diagnostics,

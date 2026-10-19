@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 import heapq
 import math
 
-from .gt_navigation import NavigationError, NavigationPlan
+from .gt_navigation import NavigationError, NavigationPlan, PlanningBudget, SearchBudgetExhausted
 
 
 def angle(value):
@@ -21,6 +21,153 @@ class ForwardRoute:
     distance_m: float
     expanded_states: int
     method: str
+    shortcuts: int = 0
+    turn_radians: float = 0.
+    estimated_motion_seconds: float = 0.
+    start: tuple | None = None
+
+
+def motion_seconds(poses):
+    """Same linear/angular rate limits as the execution follower."""
+    return sum(math.dist(a[:2], b[:2])/.5 + abs(angle(b[2]-a[2]))/(math.pi/3)
+               for a, b in zip(poses, poses[1:]))
+
+
+def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: None):
+    """Checked turn / forward / turn, with bounded numeric pose correction."""
+    poses = [start]
+    distance = math.dist(start[:2], xy)
+    if distance > .002:
+        heading = math.atan2(xy[1]-start[1], xy[0]-start[0])
+        poses += [(*start[:2], heading), (*xy, heading)]
+    elif distance > 1e-10:
+        # Match the follower's 2 mm pose-feedback tolerance. A sub-micrometre
+        # grid snap must not require a large turn toward its numerical bearing.
+        poses.append((*xy, start[2]))
+    poses.append((*xy, final_yaw))
+    for a, b in zip(poses, poses[1:]):
+        check_cancelled()
+        if not collision.motion_free(a, b):
+            return None
+    return poses
+
+
+def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, check_cancelled=lambda: None):
+    """Certify a bounded forward departure from a candidate terminal pose.
+
+    This proves a local exit in current geometry, not reachability of every
+    future target. With incoming=True, certify an arrival ending at this pose
+    instead. Both certificates contain only forward translations and checked
+    turns. No reverse/sideways movement is assumed. Small forward
+    staging legs also permit leaving a narrow stance before turning.
+    """
+    pose = tuple(map(float, pose))
+    if not collision.motion_free(pose, pose):
+        return None
+    direction = -1 if incoming else 1
+    for staging in (0., .1, .2):
+        check_cancelled()
+        start = (pose[0]+direction*staging*math.cos(pose[2]), pose[1]+direction*staging*math.sin(pose[2]), pose[2])
+        if not collision.motion_free(pose, start):
+            break
+        for offset in (0., math.pi/4, -math.pi/4, math.pi/2, -math.pi/2,
+                       3*math.pi/4, -3*math.pi/4, math.pi, -math.pi):
+            check_cancelled()
+            heading = pose[2]+offset
+            turned = (*start[:2], heading)
+            if not collision.motion_free(start, turned):
+                continue
+            end = (start[0]+direction*(distance+staging)*math.cos(heading),
+                   start[1]+direction*(distance+staging)*math.sin(heading), heading)
+            if not collision.motion_free(turned, end):
+                continue
+            poses = [end, turned, start, pose] if incoming else [pose, start, turned, end]
+            if incoming and not all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])):
+                continue
+            return {'poses': poses,
+                    'displacement_m': math.dist(pose[:2], end[:2]),
+                    'distance_m': distance+2*staging, 'motion_mode': 'forward',
+                    'scope': ('local_arrival' if incoming else 'local_departure')+'_in_current_collision_geometry'}
+    return None
+
+
+def simplify_forward_poses(poses, collision, *, check_cancelled=lambda: None, max_checks=128):
+    """Remove checked detours only when full motion time decreases.
+
+    This is bounded shortcutting of an existing valid path, not a continuous
+    globally optimal planner. All retained/new turns preserve swept clearance.
+    """
+    compact = []
+    for p in poses:
+        if compact and math.dist(p[:2], compact[-1][:2]) < 1e-10 and abs(angle(p[2]-compact[-1][2])) < 1e-10:
+            continue
+        if len(compact) >= 2:
+            a, b = compact[-2:]
+            if (abs(angle(a[2]-b[2])) < 1e-8 and abs(angle(b[2]-p[2])) < 1e-8
+                    and abs(math.dist(a[:2], b[:2])+math.dist(b[:2], p[:2])-math.dist(a[:2], p[:2])) < 1e-8):
+                compact.pop()
+        compact.append(p)
+    result = [compact[0]]; index = checks = shortcuts = 0
+    while index < len(compact)-1:
+        best = None; saving = 1e-5
+        for end in range(min(len(compact)-1, index+32), index+1, -1):
+            if checks >= max_checks:
+                break
+            checks += 1
+            candidate = checked_connection(compact[index], compact[end][:2], compact[end][2],
+                                           collision, check_cancelled)
+            if candidate is None:
+                continue
+            gain = motion_seconds(compact[index:end+1])-motion_seconds(candidate)
+            if gain > saving:
+                saving = gain; best = (end, candidate)
+        if best is None:
+            index += 1; result.append(compact[index])
+        else:
+            index, candidate = best; result.extend(candidate[1:]); shortcuts += 1
+    return result, shortcuts
+
+
+def select_forward_route(options, actual, collision, *, target_slack=.1,
+                         check_cancelled=lambda: None, max_candidates=6):
+    """Compare bounded complete routes, allowing explicit endpoint slack.
+
+    Candidates already have local entry/exit and optional visibility proofs.
+    Optimize measured-start travel plus turn time among the tested candidates;
+    no continuous/global shortest-route guarantee is made.
+    """
+    closest=min(p.score for p in options)
+    candidates={(*p.goal, p.final_yaw):p for p in options if p.score<=closest+target_slack+1e-9}
+    def estimate(p):
+        bearing=math.atan2(p.goal[1]-actual[1],p.goal[0]-actual[0])
+        return (math.dist(actual[:2],p.goal)/.5+
+                (abs(angle(bearing-actual[2]))+abs(angle(p.final_yaw-bearing)))/(math.pi/3))
+    ordered=sorted(candidates.values(),key=lambda p:(estimate(p),p.score))[:max_candidates]
+    budget=PlanningBudget(check_cancelled,seconds=10.)
+    best=None;attempts=[]
+    for candidate in ordered:
+        try:budget.check()
+        except SearchBudgetExhausted:break
+        attempt=PlanningBudget(budget.check,seconds=2.)
+        collision.check_cancelled=attempt.check
+        row={'goal':candidate.goal,'final_yaw':candidate.final_yaw,'target_distance_m':candidate.score}
+        try:
+            route=plan_forward_route(candidate,actual,collision,check_cancelled=attempt.check,max_expansions=10000)
+            row.update(status='planned',motion_seconds=route.estimated_motion_seconds,
+                       turn_degrees=math.degrees(route.turn_radians),distance_m=route.distance_m)
+            key=(route.estimated_motion_seconds,candidate.score)
+            if best is None or key<best[0]:best=(key,candidate,route)
+        except NavigationError as exc:
+            row.update(status='failed',error_code=exc.code,error=str(exc))
+        attempts.append(row)
+    collision.check_cancelled=check_cancelled
+    if best is None:
+        raise NavigationError('No checked complete route among bounded endpoint candidates',
+                              'navigation_search_exhausted' if any(a.get('error_code')=='navigation_search_exhausted' for a in attempts) else 'navigation_unreachable')
+    return best[1],best[2],{'target_slack_m':target_slack,'closest_candidate_m':closest,
+                           'max_candidates':max_candidates,'attempts':attempts,
+                           'objective':'translation_seconds_plus_rotation_seconds',
+                           'globally_optimal':False}
 
 
 def plan_forward_route(plan, actual, collision, *, check_cancelled=lambda: None,
@@ -42,19 +189,10 @@ without requiring enough clearance to rotate at every point in that corridor.
 
     def connector(start, xy, final_yaw):
         """Return checked turn/forward/turn poses, or None."""
-        check_cancelled()
-        poses = [start]
-        if math.dist(start[:2], xy) > 1e-8:
-            heading = math.atan2(xy[1]-start[1], xy[0]-start[0])
-            poses += [(*start[:2], heading), (*xy, heading)]
-        poses.append((*xy, final_yaw))
-        for a, b in zip(poses, poses[1:]):
-            check_cancelled()
-            if not collision.motion_free(a, b):
-                return None
-        return poses
+        return checked_connection(start, xy, final_yaw, collision, check_cancelled)
 
     def finish(poses, expanded, method):
+        poses, shortcuts = simplify_forward_poses(poses, collision, check_cancelled=check_cancelled)
         phases = []
         distance = 0.
         for a, b in zip(poses, poses[1:]):
@@ -77,7 +215,9 @@ without requiring enough clearance to rotate at every point in that corridor.
             distance += length
         if not phases:
             phases.append(replace(plan, points=(plan.goal,), travel_yaw=plan.final_yaw))
-        return ForwardRoute(tuple(phases), distance, expanded, method)
+        turns = sum(abs(angle(b[2]-a[2])) for a, b in zip(poses, poses[1:]))
+        return ForwardRoute(tuple(phases), distance, expanded, method,
+                            shortcuts, turns, motion_seconds(poses),actual)
 
     # Replace the stale starting sample with the measured position.
     poses = [actual]

@@ -41,7 +41,7 @@ class TargetVisibilityTests(unittest.TestCase):
         b._navigation_layers=[(free,np.zeros((4,2)))];b._navigation_support=np.ones_like(free)
         b._approach_visible=Mock(side_effect=lambda xy,*_,**kw:xy[0]>2.)
         b.moved=False
-        def execute(grid,plan,limit):
+        def execute(grid,plan,limit,**kwargs):
             b.moved=True;b.position=Tensor([*plan.goal,0.])
             return {'steps':3,'motion_steps':3,'actual_path_distance_m':plan.geodesic_m}
         b._execute_gt_plan=Mock(side_effect=execute)
@@ -51,7 +51,11 @@ class TargetVisibilityTests(unittest.TestCase):
         modules['omnigibson.utils.transform_utils'].quat2mat=lambda _:np.eye(3)
         p=patch.dict(sys.modules,modules);p.start();self.addCleanup(p.stop)
         p=patch('manipulation_agent.executors.heading_collision.HeadingCollisionChecker',
-                return_value=SimpleNamespace(motion_free=lambda a,b:True))
+                return_value=SimpleNamespace(motion_free=lambda a,b:True,
+                                             grid_at_heading=lambda yaw:self.build_grid.return_value[0]))
+        p.start();self.addCleanup(p.stop)
+        p=patch('manipulation_agent.executors.forward_navigation.select_forward_route',
+                side_effect=lambda options,*a,**kw:(min(options,key=lambda p:p.score),None,{'fixture':True}))
         p.start();self.addCleanup(p.stop)
         p=patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(grid,
             {'chassis_footprint_world_offsets':[],'collision_layers':[],'dynamic_collision_check':True}))
@@ -113,7 +117,10 @@ class TargetVisibilityTests(unittest.TestCase):
         result=b._navigate(self.target(0.),1000)
         self.assertEqual(result['nav_status'],'reached')
         self.assertAlmostEqual(b.position.tolist()[0],2.3)
-        self.assertEqual(b._execute_gt_plan.call_count,2)
+        self.assertEqual(b._execute_gt_plan.call_count,1)
+        saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
+        self.assertFalse(saved['pre_turn_executed'])
+        self.assertIsNotNone(saved['local_exit_certificate'])
 
     def test_recovery_rechecks_changed_map_and_retreats_again(self):
         b=self.backend
@@ -135,19 +142,42 @@ class TargetVisibilityTests(unittest.TestCase):
         self.assertEqual(result['steps'],9)
         self.assertEqual(b._execute_gt_plan.call_count,3)
 
-    def test_failed_forward_plan_after_turn_reports_changed_world(self):
+    def test_failed_forward_plan_does_not_execute_an_obsolete_pre_turn(self):
         b=self.backend
         raw=np.ones((41,41),dtype='uint8');free=raw.copy();free[:,20]=0
         grid=GridMap(41,41,.1,(0.,0.),free.tobytes())
         rotated=GridMap(41,41,.1,(0.,0.),raw.tobytes())
         self.build_grid.return_value=(grid,self.build_grid.return_value[1])
         self.headings.return_value=[(rotated,.5,rotated,[])]
-        b._execute_gt_plan.side_effect=[{'steps':3,'motion_steps':3,'actual_path_distance_m':0.},
-                                        SkillError('navigation_unreachable','No forward route')]
+        b._execute_gt_plan.side_effect=SkillError('navigation_unreachable','No forward route')
         with self.assertRaises(SkillError) as caught:
             b._navigate(self.target(0.),1000)
-        self.assertTrue(caught.exception.changed)
+        self.assertFalse(caught.exception.changed)
         self.assertEqual(caught.exception.code,'navigation_unreachable')
+        self.assertEqual(b._execute_gt_plan.call_count,1)
+
+    def test_terminal_without_exit_is_reprojected_before_motion(self):
+        b=self.backend
+        target=self.target(0.)
+        def certificate(pose,*_,**kw):
+            if kw.get('incoming'):return {'poses':[pose], 'scope':'fixture'}
+            return {'poses':[pose], 'scope':'fixture'} if np.linalg.norm(np.array(pose[:2])-[2.3,1.])>.21 else None
+        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',side_effect=certificate):
+            result=b._navigate(target,1000)
+        self.assertGreater(result['target_projection_distance_m'],.21)
+        saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
+        self.assertGreater(saved['exit_candidates_rejected'],0)
+        self.assertIsNotNone(saved['local_exit_certificate'])
+
+    def test_arrival_revalidates_exit_instead_of_claiming_success(self):
+        b=self.backend
+        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
+                   side_effect=lambda pose,*_,**kw:None if b.moved else {'poses':[pose]}):
+            with self.assertRaises(SkillError) as caught:b._navigate(self.target(0.),1000)
+        self.assertTrue(caught.exception.changed)
+        arrival=json.loads((b.output/'navigation_arrivals.jsonl').read_text())
+        self.assertEqual(arrival['status'],'failed')
+        self.assertIsNone(arrival['local_exit_certificate'])
 
     def test_recovery_stops_cycle_and_marks_world_changed(self):
         b=self.backend;raw=np.ones((41,41),dtype='uint8');free=raw.copy();free[:,5]=0
@@ -155,7 +185,7 @@ class TargetVisibilityTests(unittest.TestCase):
         self.build_grid.return_value=(g,self.build_grid.return_value[1])
         b._navigation_clearance=(raw.tobytes(),1-free.ravel(),.35)
         b._live_gt_collision_cache={0:{'support':raw}}
-        b._execute_gt_plan.side_effect=lambda *a:{'steps':3,'motion_steps':3,'actual_path_distance_m':.01}
+        b._execute_gt_plan.side_effect=lambda *a,**kw:{'steps':3,'motion_steps':3,'actual_path_distance_m':.01}
         with patch('manipulation_agent.executors.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True):
             with self.assertRaises(SkillError) as error:b._navigate(self.target(0.),1000)
         self.assertEqual(error.exception.code,'navigation_invalid_start')

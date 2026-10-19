@@ -611,6 +611,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             footprint=map_details['chassis_footprint_world_offsets'],start=position.cpu().numpy(),
             target=point.cpu().numpy(),travel_yaw=travel_yaw,
             raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+            support=self._navigation_support,
             layer_footprints_json=json.dumps(map_details['collision_layers']))
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_results,
@@ -633,22 +634,36 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     planning_xy=position[:2].cpu().tolist()
                     budget=PlanningBudget(self.deadline.check)
                     from .heading_collision import HeadingCollisionChecker
+                    from .forward_navigation import local_exit_certificate, select_forward_route
                     endpoint_collision=HeadingCollisionChecker(grid,self._navigation_layers,
                         self._navigation_layer_yaw,self._navigation_support,check_cancelled=budget.check)
+                    entries={};exits={};exit_rejections=0;options=[]
                     def visible(xy,yaw):
                         budget.visibility()
                         return self._approach_visible(xy,point,getattr(target,'selected_object',None),
                                                       margin=margin,base_yaw=yaw)
                     def make_plan(candidate_grid,yaw):
                         def acceptable(xy):
+                            nonlocal exit_rejections
                             pose=(*xy,yaw)
-                            return (endpoint_collision.motion_free(pose,pose) and
-                                    (mode!='approach' or visible(xy,yaw)))
-                        return replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
+                            if not endpoint_collision.motion_free(pose,pose):return False
+                            if mode=='approach' and not visible(xy,yaw):return False
+                            if pose not in entries:
+                                entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
+                                                                    check_cancelled=budget.check)
+                            if entries[pose] is None:return False
+                            if pose not in exits:
+                                exits[pose]=local_exit_certificate(pose,endpoint_collision,
+                                                                  check_cancelled=budget.check)
+                                if exits[pose] is None:exit_rejections+=1
+                            return exits[pose] is not None
+                        proposed=replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
                             standoff=standoff,goal_mode=mode,max_snap=None,check_cancelled=budget.check,
                             max_candidate_checks=64 if mode=='approach' else None,
                             candidate_filter=acceptable),
                             travel_yaw=yaw,final_yaw=yaw)
+                        options.append(proposed)
+                        return proposed
                     from .live_gt_map import feasible_heading_grids, rotation_staging_plan
                     from .gt_navigation import NavigationPlan
                     initial_grid=grid;initial_xy=tuple(planning_xy)
@@ -698,19 +713,54 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                                 if adequate(plan):break
                             if adequate(plan):break
                     details['planning_visibility_checks']=budget.visibility_checks
+                    details['exit_candidates_checked']=len(exits)
+                    details['exit_candidates_rejected']=exit_rejections
+                    details['entry_candidates_rejected']=sum(value is None for value in entries.values())
                     if plan is None:raise original_error
             except SearchBudgetExhausted:
                 details['planning_budget_exhausted']=True
                 details['planning_visibility_checks']=budget.visibility_checks
                 if plan is None:raise
+            # A ground click constrains position, not an arbitrary old viewing
+            # yaw. Also consider arriving aligned with the last path segment.
+            # Every added orientation must preserve entry and exit clearance.
+            refinement=PlanningBudget(self.deadline.check,seconds=2.)
+            endpoint_collision.check_cancelled=refinement.check
+            if mode=='point':
+                try:
+                    for candidate in tuple(options):
+                        refinement.check()
+                        if candidate.score>plan.score+.1+1e-9:continue
+                        last=candidate.points[-2] if len(candidate.points)>1 else initial_xy
+                        yaw=math.atan2(candidate.goal[1]-last[1],candidate.goal[0]-last[0])
+                        pose=(*candidate.goal,yaw)
+                        if pose not in entries:
+                            entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
+                                                                check_cancelled=refinement.check)
+                        if entries[pose] is None:continue
+                        if pose not in exits:
+                            exits[pose]=local_exit_certificate(pose,endpoint_collision,check_cancelled=refinement.check)
+                        if exits[pose] is not None:
+                            options.append(replace(candidate,final_yaw=yaw,travel_yaw=yaw))
+                except SearchBudgetExhausted:pass
+            endpoint_collision.check_cancelled=self.deadline.check
+            plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
+                target_slack=.1 if mode=='point' else 0.,check_cancelled=self.deadline.check)
+            details['forward_candidate_selection']=selection
+            grid=endpoint_collision.grid_at_heading(plan.final_yaw)
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
-            if turn is not None:
+            details['local_exit_certificate']=exits.get((*plan.goal,plan.final_yaw))
+            details['local_entry_certificate']=entries.get((*plan.goal,plan.final_yaw))
+            details['heading_selection_only']=True
+            details['pre_turn_executed']=False
+            if plan is not None:
                 np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
                     raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
                     origin=grid.origin,resolution=grid.resolution,
-                    footprint=details['heading_change']['footprint'],start=position.cpu().numpy(),
+                    footprint=map_details['chassis_footprint_world_offsets'],start=position.cpu().numpy(),
                     target=point.cpu().numpy(),travel_yaw=plan.travel_yaw,initial_layer_yaw=travel_yaw,
                     raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+                    support=self._navigation_support,
                     layer_footprints_json=json.dumps(map_details['collision_layers']))
         except NavigationError as exc:
             details.update(status='failed',error_code=exc.code,error=str(exc))
@@ -718,26 +768,23 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
                 stream.write(json.dumps(details)+'\n')
-        stage_result=turn_result=None
         try:
-            if stage is not None:
-                stage_result=self._execute_gt_plan(*stage,max_steps)
-                max_steps-=stage_result['steps']
-            if turn is not None:
-                turn_result=self._execute_gt_plan(*turn,max_steps)
-                max_steps-=turn_result['steps']
-                details['heading_change']['execution']=turn_result
-            result=self._execute_gt_plan(grid,plan,max_steps)
+            # Fixed-heading staging/turn grids above propose endpoint headings
+            # only. The forward planner owns the complete measured-start route;
+            # executing an old pre-turn first creates redundant motion and can
+            # move the world before discovering that the actual route is blocked.
+            result=self._execute_gt_plan(grid,plan,max_steps,prepared_route=prepared_route)
         except SkillError as exc:
-            raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results)
-                             or stage_result is not None or turn_result is not None) from exc
-        self.navigation_distance+=result['actual_path_distance_m']+sum(p['actual_path_distance_m'] for p in (stage_result,turn_result) if p)
-        phases=recovery_results+[phase for phase in (stage_result,turn_result) if phase is not None]
+            raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results)) from exc
+        self.navigation_distance+=result['actual_path_distance_m']
         for key in ('steps','motion_steps','actual_path_distance_m'):
-            result[key]+=sum(phase.get(key,0) for phase in phases)
+            result[key]+=sum(phase.get(key,0) for phase in recovery_results)
         actual,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
         actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        endpoint_collision.check_cancelled=self.deadline.check
+        actual_exit=local_exit_certificate((*actual[:2].cpu().tolist(),actual_yaw),
+                                          endpoint_collision,check_cancelled=self.deadline.check)
         visible=(self._approach_visible(actual[:2].cpu().tolist(),point,
                     getattr(target,'selected_object',None),margin=margin,
                     base_yaw=actual_yaw) if mode=='approach' else None)
@@ -749,7 +796,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 'grid_artifact':details['grid_artifact'],'goal_mode':mode,
                 'selected_world_point':point.cpu().tolist(),'planned_goal':list(plan.goal),
                 'actual_position':actual.cpu().tolist(),'target_visible':visible,
-                'status':'failed' if visible is False else nav_status})+'\n')
+                'local_exit_certificate':actual_exit,
+                'status':'failed' if visible is False or actual_exit is None else nav_status})+'\n')
+        if actual_exit is None:
+            raise SkillError('navigation_unreachable',
+                'Reached pose no longer has its checked local departure',changed=True)
         if visible is False:
             raise SkillError('navigation_unreachable',
                 'The selected target is occluded from the reached approach; inspect updated RGB',changed=True)
@@ -759,7 +810,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 'goal_mode':mode,'target_projection_distance_m':math.dist(plan.goal,plan.target),
                 'dynamic_collision_check':map_details['dynamic_collision_check']}
 
-    def _execute_gt_plan(self, grid, plan, max_steps):
+    def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route=None):
         """Turn, drive forward, and turn at corners with swept-volume checks."""
         import omnigibson.utils.transform_utils as T
         from dataclasses import asdict
@@ -789,7 +840,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                         'start':[*previous,start_yaw],'goal':list(plan.goal),'final_yaw':plan.final_yaw,
                         'planning_seconds_limit':10.,'heading_state_limit':20000}
                 try:
-                    route=plan_forward_route(plan,(*previous,start_yaw),collision,check_cancelled=budget.check)
+                    if (prepared_route is not None and prepared_route.start is not None
+                            and math.dist(prepared_route.start[:2],previous)<1e-6
+                            and abs(GreedyGridFollower.angle(prepared_route.start[2]-start_yaw))<1e-6):
+                        route=prepared_route
+                    else:
+                        route=plan_forward_route(plan,(*previous,start_yaw),collision,check_cancelled=budget.check)
                     phases=route.phases
                     record.update(status='planned',route=asdict(route))
                 except Exception as exc:
@@ -852,6 +908,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 'final_yaw_error_rad':final_yaw_error,'motion_policy':'turn_then_drive_forward_v1' if forward else 'clearance_retreat',
                 'forward_route_method':route.method if route else None,
                 'forward_planned_distance_m':route.distance_m if route else None,
+                'forward_planned_turn_degrees':math.degrees(route.turn_radians) if route else None,
+                'forward_estimated_motion_seconds':route.estimated_motion_seconds if route else None,
+                'forward_route_shortcuts':route.shortcuts if route else None,
                 'motion_phases':len(phases),
                 'heading_tolerance_rad':follower.heading_tolerance,
                 'final_yaw_tolerance_rad':follower.final_yaw_tolerance,

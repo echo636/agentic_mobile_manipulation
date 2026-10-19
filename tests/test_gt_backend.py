@@ -80,7 +80,9 @@ class GTBackendTests(unittest.TestCase):
         modules['omnigibson.utils.transform_utils'].quat2mat = lambda _: np.eye(3)
         patches = [patch.dict('sys.modules', modules),
                    patch('manipulation_agent.executors.heading_collision.HeadingCollisionChecker',
-                         return_value=SimpleNamespace(motion_free=lambda a,b:True)),
+                         return_value=SimpleNamespace(motion_free=lambda a,b:True,grid_at_heading=lambda yaw:grid)),
+                   patch('manipulation_agent.executors.forward_navigation.select_forward_route',
+                         side_effect=lambda options,*a,**kw:(min(options,key=lambda p:p.score),None,{'fixture':True})),
                    patch('manipulation_agent.executors.live_gt_map.build_navigation_grid', return_value=(grid,
                        {'chassis_footprint_world_offsets': [], 'collision_layers': [],
                         'dynamic_collision_check': False, 'collision_substrate': 'static_fixture'})),
@@ -105,7 +107,7 @@ class GTBackendTests(unittest.TestCase):
         b._initialize_online_navigation = Mock(side_effect=AssertionError('mapper initialized'))
         b._update_online_map = Mock(side_effect=AssertionError('mapper updated'))
         b._close_online_navigation = Mock(side_effect=AssertionError('mapper closed'))
-        def execute(grid, plan, max_steps):
+        def execute(grid, plan, max_steps, **kwargs):
             self.assertTrue(all(grid.segment_free(a, c) for a, c in zip(plan.points, plan.points[1:])))
             b._position = Tensor([*plan.goal, 0.])
             b.steps += 3
