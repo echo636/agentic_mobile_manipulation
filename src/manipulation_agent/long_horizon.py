@@ -42,6 +42,9 @@ class TemporalGoalEvaluator:
                 expression(pending[key]['when'], predicates)
                 ordered.append(key); del pending[key]
         self.order = ordered
+        guards = [*spec.get('motion_guards', []), *spec.get('state_guards', [])]
+        if len({rule['id'] for rule in guards}) != len(guards):
+            raise ValueError('Constraint IDs must be unique')
         for rule in spec.get('motion_guards', []):
             if rule['since'] not in ordered or rule['until'] not in ordered:
                 raise ValueError('Motion guard references unknown milestones')
@@ -102,7 +105,7 @@ class TemporalGoalEvaluator:
                 'public_constraint_violations': copy.deepcopy(self.violations),
                 'milestone_events': copy.deepcopy(self.milestones),
                 'goal_events': copy.deepcopy(self.events),
-                'score_type': 'custom_joint_terminal_and_public_history_v1',
+                'score_type': self.spec.get('score_type', 'custom_joint_terminal_and_public_history_v1'),
                 'official_submission_eligible': False,
                 'protocol': 'custom_rgb_autonomous_partial_order_task',
                 'model_notes_used_for_scoring': False}

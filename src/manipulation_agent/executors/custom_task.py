@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .omnigibson_rgb import RGBBackend
 from ..long_horizon import TemporalGoalEvaluator
+from ..custom_tasks import validate_spec
 from ..records import write_json
 
 
@@ -23,7 +24,7 @@ class CustomTaskBackend(RGBBackend):
     def __init__(self, spec_path, output, *, build_instance=None, **kwargs):
         self.spec_path = Path(spec_path).resolve()
         self.custom_spec = json.loads(self.spec_path.read_text())
-        if self.custom_spec['schema_version'] != 1: raise ValueError('Unknown custom task schema')
+        validate_spec(self.custom_spec, spec_path=self.spec_path, require_frozen=build_instance is None)
         validate_system_references(self.custom_spec,
             Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/systems')
         self.custom_tracker = None; self.custom_sequence = 0
@@ -234,5 +235,6 @@ class CustomTaskBackend(RGBBackend):
     def provenance(self):
         result = super().provenance()
         result.update(task_instance=self.task_metadata,custom_task=True,
-                      evaluator='custom_joint_terminal_and_public_history_v1')
+                      evaluator=self.custom_spec['evaluation'].get(
+                          'score_type', 'custom_joint_terminal_and_public_history_v1'))
         return result

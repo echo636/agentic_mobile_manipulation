@@ -1,0 +1,643 @@
+{
+  "schema_version": 2,
+  "id": "workshop_setup_and_return_v2",
+  "instance_id": "pilot_001",
+  "status": "construction_recipe_validation_pending",
+  "official_submission_eligible": false,
+  "base": {
+    "task": "outfit_a_basic_toolbox",
+    "instance": 301,
+    "seed": 0
+  },
+  "public_instruction": "Set up the workshop for a repair job and put the storage area back in order.",
+  "public_context": [
+    "At the storage counter, pack the drill, pliers, flashlight, Allen wrench, and screwdriver together inside the toolbox and close its lid. Transport the complete kit together to the opposite workbench, keeping the lid closed and all five tools inside during transport.",
+    "After the loaded toolbox reaches the workbench, take all five tools out and put them on the workbench.",
+    "After all five tools are unpacked on the workbench, return the toolbox to its original storage counter with its lid closed and none of the five tools still inside. The exact position on the counter is unrestricted.",
+    "Move the two books from the workbench onto the short return counter beside the sink.",
+    "Put the three empty soda cans from the workbench inside the trash bin."
+  ],
+  "roles": {
+    "box": "toolbox_191",
+    "source": "countertop_fjkase_0",
+    "bench": "countertop_ikwqer_0",
+    "bookshelf": "countertop_sjxber_0",
+    "drill": "drill_193",
+    "pliers": "plier_192",
+    "flashlight": "flashlight_190",
+    "allen_wrench": "allen_wrench_189",
+    "screwdriver": "screwdriver_188",
+    "bin": "lh_trash_bin",
+    "book1": "lh_book1",
+    "book2": "lh_book2",
+    "can1": "lh_can1",
+    "can2": "lh_can2",
+    "can3": "lh_can3",
+    "floor": "floors_glwobe_0"
+  },
+  "asset_imports": [
+    {
+      "source_task": "picking_up_trash",
+      "source_object": "trash_can_116",
+      "name": "lh_trash_bin",
+      "in_rooms": [
+        "utility_room_0"
+      ],
+      "position": [
+        22.75,
+        1.9,
+        0.2
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "name": "lh_book1",
+      "in_rooms": [
+        "utility_room_0"
+      ],
+      "position": [
+        24.1,
+        0,
+        1.2
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_226",
+      "name": "lh_book2",
+      "in_rooms": [
+        "utility_room_0"
+      ],
+      "position": [
+        24.5,
+        0,
+        1.2
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "name": "lh_can1",
+      "in_rooms": [
+        "utility_room_0"
+      ],
+      "position": [
+        24,
+        0.3,
+        1.2
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "name": "lh_can2",
+      "in_rooms": [
+        "utility_room_0"
+      ],
+      "position": [
+        24,
+        0.6,
+        1.2
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "name": "lh_can3",
+      "in_rooms": [
+        "utility_room_0"
+      ],
+      "position": [
+        24,
+        0.8999999999999999,
+        1.2
+      ],
+      "orientation": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "box",
+      "position": [
+        21.950000762939453,
+        1.1999999284744263,
+        0.995514988899231
+      ],
+      "orientation": [
+        1.4898764888471305e-08,
+        -7.946594848817767e-08,
+        0.7071068286895752,
+        0.7071068286895752
+      ],
+      "settle_steps": 30
+    },
+    {
+      "object": "screwdriver",
+      "position": [
+        22.120012283325195,
+        0.30000025033950806,
+        0.9279304146766663
+      ],
+      "orientation": [
+        -5.915579095017165e-06,
+        5.2420664360397495e-06,
+        0.7056654095649719,
+        0.7085452675819397
+      ],
+      "settle_steps": 30
+    },
+    {
+      "object": "box",
+      "state": "Open",
+      "value": false,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "can1",
+      "state": "OnTop",
+      "target": "bench"
+    },
+    {
+      "object": "can2",
+      "state": "OnTop",
+      "target": "bench"
+    },
+    {
+      "object": "can3",
+      "state": "OnTop",
+      "target": "bench"
+    },
+    {
+      "object": "book1",
+      "state": "OnTop",
+      "target": "bench"
+    },
+    {
+      "object": "book2",
+      "state": "OnTop",
+      "target": "bench"
+    }
+  ],
+  "initial_assertions": {
+    "drill_starts_on_source": "drill_at_source",
+    "drill_not_packed": {
+      "not": "drill_in_box"
+    },
+    "pliers_starts_on_source": "pliers_at_source",
+    "pliers_not_packed": {
+      "not": "pliers_in_box"
+    },
+    "flashlight_starts_on_source": "flashlight_at_source",
+    "flashlight_not_packed": {
+      "not": "flashlight_in_box"
+    },
+    "allen_wrench_starts_on_source": "allen_wrench_at_source",
+    "allen_wrench_not_packed": {
+      "not": "allen_wrench_in_box"
+    },
+    "screwdriver_starts_on_source": "screwdriver_at_source",
+    "screwdriver_not_packed": {
+      "not": "screwdriver_in_box"
+    },
+    "can1_on_bench": "can1_on_bench",
+    "can2_on_bench": "can2_on_bench",
+    "can3_on_bench": "can3_on_bench",
+    "book1_on_bench": "book1_on_bench",
+    "book2_on_bench": "book2_on_bench",
+    "bin_visible_on_floor": "bin_on_floor",
+    "box_on_source": "box_at_source",
+    "box_closed": {
+      "not": "box_open"
+    }
+  },
+  "evaluation": {
+    "predicates": {
+      "drill_in_box": {
+        "object": "drill",
+        "state": "Inside",
+        "target": "box"
+      },
+      "drill_on_bench": {
+        "object": "drill",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "drill_at_source": {
+        "object": "drill",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "pliers_in_box": {
+        "object": "pliers",
+        "state": "Inside",
+        "target": "box"
+      },
+      "pliers_on_bench": {
+        "object": "pliers",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "pliers_at_source": {
+        "object": "pliers",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "flashlight_in_box": {
+        "object": "flashlight",
+        "state": "Inside",
+        "target": "box"
+      },
+      "flashlight_on_bench": {
+        "object": "flashlight",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "flashlight_at_source": {
+        "object": "flashlight",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "allen_wrench_in_box": {
+        "object": "allen_wrench",
+        "state": "Inside",
+        "target": "box"
+      },
+      "allen_wrench_on_bench": {
+        "object": "allen_wrench",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "allen_wrench_at_source": {
+        "object": "allen_wrench",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "screwdriver_in_box": {
+        "object": "screwdriver",
+        "state": "Inside",
+        "target": "box"
+      },
+      "screwdriver_on_bench": {
+        "object": "screwdriver",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "screwdriver_at_source": {
+        "object": "screwdriver",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "box_at_source": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "box_on_bench": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "box_open": {
+        "object": "box",
+        "state": "Open"
+      },
+      "can1_in_bin": {
+        "object": "can1",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "can1_on_bench": {
+        "object": "can1",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "can2_in_bin": {
+        "object": "can2",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "can2_on_bench": {
+        "object": "can2",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "can3_in_bin": {
+        "object": "can3",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "can3_on_bench": {
+        "object": "can3",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "book1_stored": {
+        "object": "book1",
+        "state": "OnTop",
+        "target": "bookshelf"
+      },
+      "book1_on_bench": {
+        "object": "book1",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "book2_stored": {
+        "object": "book2",
+        "state": "OnTop",
+        "target": "bookshelf"
+      },
+      "book2_on_bench": {
+        "object": "book2",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "bin_on_floor": {
+        "object": "bin",
+        "state": "OnTop",
+        "target": "floor"
+      }
+    },
+    "terminal": {
+      "drill_ready": "drill_on_bench",
+      "pliers_ready": "pliers_on_bench",
+      "flashlight_ready": "flashlight_on_bench",
+      "allen_wrench_ready": "allen_wrench_on_bench",
+      "screwdriver_ready": "screwdriver_on_bench",
+      "can1_stored": "can1_in_bin",
+      "can2_stored": "can2_in_bin",
+      "can3_stored": "can3_in_bin",
+      "book1_stored": "book1_stored",
+      "book2_stored": "book2_stored",
+      "box_returned_empty_closed": {
+        "all": [
+          "box_at_source",
+          {
+            "not": "box_open"
+          },
+          {
+            "all": [
+              {
+                "not": "drill_in_box"
+              },
+              {
+                "not": "pliers_in_box"
+              },
+              {
+                "not": "flashlight_in_box"
+              },
+              {
+                "not": "allen_wrench_in_box"
+              },
+              {
+                "not": "screwdriver_in_box"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "milestones": {
+      "packed_at_storage": {
+        "when": {
+          "all": [
+            "box_at_source",
+            {
+              "all": [
+                {
+                  "not": "box_open"
+                },
+                "drill_in_box",
+                "pliers_in_box",
+                "flashlight_in_box",
+                "allen_wrench_in_box",
+                "screwdriver_in_box"
+              ]
+            }
+          ]
+        }
+      },
+      "loaded_box_delivered": {
+        "after": [
+          "packed_at_storage"
+        ],
+        "when": {
+          "all": [
+            "box_on_bench",
+            {
+              "all": [
+                {
+                  "not": "box_open"
+                },
+                "drill_in_box",
+                "pliers_in_box",
+                "flashlight_in_box",
+                "allen_wrench_in_box",
+                "screwdriver_in_box"
+              ]
+            }
+          ]
+        }
+      },
+      "tools_unpacked": {
+        "after": [
+          "loaded_box_delivered"
+        ],
+        "when": {
+          "all": [
+            {
+              "all": [
+                {
+                  "not": "drill_in_box"
+                },
+                {
+                  "not": "pliers_in_box"
+                },
+                {
+                  "not": "flashlight_in_box"
+                },
+                {
+                  "not": "allen_wrench_in_box"
+                },
+                {
+                  "not": "screwdriver_in_box"
+                }
+              ]
+            },
+            "drill_on_bench",
+            "pliers_on_bench",
+            "flashlight_on_bench",
+            "allen_wrench_on_bench",
+            "screwdriver_on_bench"
+          ]
+        }
+      },
+      "empty_box_returned": {
+        "after": [
+          "tools_unpacked"
+        ],
+        "when": {
+          "all": [
+            "box_at_source",
+            {
+              "not": "box_open"
+            },
+            {
+              "all": [
+                {
+                  "not": "drill_in_box"
+                },
+                {
+                  "not": "pliers_in_box"
+                },
+                {
+                  "not": "flashlight_in_box"
+                },
+                {
+                  "not": "allen_wrench_in_box"
+                },
+                {
+                  "not": "screwdriver_in_box"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "motion_guards": [
+      {
+        "id": "closed_loaded_box_transport",
+        "object": "box",
+        "since": "packed_at_storage",
+        "until": "loaded_box_delivered",
+        "require": {
+          "all": [
+            {
+              "not": "box_open"
+            },
+            "drill_in_box",
+            "pliers_in_box",
+            "flashlight_in_box",
+            "allen_wrench_in_box",
+            "screwdriver_in_box"
+          ]
+        }
+      }
+    ],
+    "score_type": "custom_joint_terminal_and_public_history_v2"
+  },
+  "public_context_kind": "household_conventions_and_completion_criteria_not_reference_plan",
+  "supersedes": "workshop_setup_and_return_v1",
+  "requirements": [
+    {
+      "id": "transport",
+      "text": "At the storage counter, pack the drill, pliers, flashlight, Allen wrench, and screwdriver together inside the toolbox and close its lid. Transport the complete kit together to the opposite workbench, keeping the lid closed and all five tools inside during transport.",
+      "terminal": [],
+      "milestones": [
+        "packed_at_storage",
+        "loaded_box_delivered"
+      ],
+      "constraints": [
+        "closed_loaded_box_transport"
+      ]
+    },
+    {
+      "id": "tools",
+      "text": "After the loaded toolbox reaches the workbench, take all five tools out and put them on the workbench.",
+      "terminal": [
+        "drill_ready",
+        "pliers_ready",
+        "flashlight_ready",
+        "allen_wrench_ready",
+        "screwdriver_ready"
+      ],
+      "milestones": [
+        "tools_unpacked"
+      ],
+      "constraints": []
+    },
+    {
+      "id": "return",
+      "text": "After all five tools are unpacked on the workbench, return the toolbox to its original storage counter with its lid closed and none of the five tools still inside. The exact position on the counter is unrestricted.",
+      "terminal": [
+        "box_returned_empty_closed"
+      ],
+      "milestones": [
+        "empty_box_returned"
+      ],
+      "constraints": []
+    },
+    {
+      "id": "books",
+      "text": "Move the two books from the workbench onto the short return counter beside the sink.",
+      "terminal": [
+        "book1_stored",
+        "book2_stored"
+      ],
+      "milestones": [],
+      "constraints": []
+    },
+    {
+      "id": "trash",
+      "text": "Put the three empty soda cans from the workbench inside the trash bin.",
+      "terminal": [
+        "can1_stored",
+        "can2_stored",
+        "can3_stored"
+      ],
+      "milestones": [],
+      "constraints": []
+    }
+  ],
+  "acceptance_cases": {
+    "reference_orders": [
+      "cleanup_first",
+      "pack_first"
+    ],
+    "physical_negative_cases": [
+      "skip_loaded_transport",
+      "open_lid_transport",
+      "missing_tool"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 200
+  }
+}
