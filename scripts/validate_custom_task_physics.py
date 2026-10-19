@@ -19,6 +19,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / 'src'))
 from manipulation_agent.custom_tasks import load_spec, sha256
 from manipulation_agent.records import write_json
+from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
 
 
 def main():
@@ -28,7 +29,17 @@ def main():
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--order')
     mode.add_argument('--negative-case')
+    parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if not args.worker:
+        if args.output.exists():
+            parser.error('Output directory already exists; use a new immutable run directory')
+        # Native Isaac shutdown may call exit(0) before Python finally blocks
+        # return. Keep an independent parent to finalize the saved score only
+        # after observing process termination, including crashes and failures.
+        child = subprocess.run([sys.executable, '-B', '-u', str(Path(__file__).resolve()),
+                                *sys.argv[1:], '--worker'])
+        return 0 if complete_reference_exit(args.output, child.returncode) else 1
     spec, contract = load_spec(args.spec, require_frozen=True)
     if args.order and args.order not in spec['acceptance_cases']['reference_orders']:
         parser.error('Order is not in the frozen task contract')
@@ -87,17 +98,9 @@ def main():
             except Exception:
                 (args.output / 'evaluation_error.txt').write_text(traceback.format_exc())
     finally:
-        if backend is not None:
-            try:
-                backend.close()
-                record['cleanup_status'] = 'passed'
-            except BaseException as exc:
-                record.update(status='failed', cleanup_status='failed', cleanup_error=str(exc))
-                (args.output / 'cleanup_error.txt').write_text(traceback.format_exc())
         record.update(finished_at_unix=time.time(), action_attempts=len(reference.calls) if reference else 0,
                       evaluation=evaluation, autonomous_success_claimed=False)
-        write_json(args.output / 'validation.json', record)
-        write_json(args.output / 'run_record.json', record)
+        close_reference(backend, record, args.output)
     print(json.dumps({'status': record['status'], 'output': str(args.output),
                       'action_attempts': record['action_attempts']}), flush=True)
     return 0 if record['status'] == 'passed' else 1

@@ -69,7 +69,11 @@ class ReferenceTask:
             task = backend.custom_spec['id']
             if task.startswith('workshop'):
                 if role == 'bookshelf':
-                    self.floor(23.4, -1.25)
+                    # A fixed floor endpoint may be reachable without a load
+                    # but impossible with the book's swept collision hull.
+                    # Let the normal object-approach planner choose a visible,
+                    # reachable stance for the actual placement target.
+                    self.action('navigate_to', role, point)
                 elif role == 'bin':
                     self.floor(23.15, 1.1)
                 elif target[0] < 23.:
