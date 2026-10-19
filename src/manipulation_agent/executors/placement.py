@@ -405,6 +405,29 @@ class CheckedPlacement:
         self.sampling_physics_steps += 1
         self.og.sim.step_physics()
 
+    def _settle_surface_contacts(self, held, target, payload, max_steps):
+        """Finish free settling with live contacts and fresh native state reads.
+
+        Sampling can put a small object to sleep before its contact state has
+        been read. PhysX then omits current contacts, while OG's kinematic
+        cache can retain a false Touching/OnTop value at the unchanged pose.
+        Wake the released assembly during the final five ordinary steps;
+        gravity and contacts still determine every pose and predicate.
+        """
+        objects = (held, target, *payload)
+        steps = min(50, max_steps)
+        for index in range(steps):
+            if index == max(0, steps - 5):
+                for obj in (held, *payload):
+                    obj.wake()
+                for obj in objects:
+                    for state in obj.states.values():
+                        state.clear_cache()
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        for obj in objects:
+            for state in obj.states.values():
+                state.clear_cache()
+
     def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
@@ -465,8 +488,7 @@ class CheckedPlacement:
                     raise SkillError('sampling_error', 'No collision-free, stable pose on the selected surface', changed=True)
             # Only the accepted physical result advances environment metrics,
             # object-state transition rules and the recorded replay.
-            for _ in range(min(50, max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._settle_surface_contacts(held, target, payload, max_steps)
             adjacency = held.states[VerticalAdjacency].get_value()
             touching = bool(held.states[Touching].get_value(target))
             official_on_top = bool(held.states[OnTop].get_value(target))

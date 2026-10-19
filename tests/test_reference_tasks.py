@@ -43,6 +43,32 @@ class ApplianceApproachTests(unittest.TestCase):
 
 
 class ReferenceRecoveryTests(unittest.TestCase):
+    def test_unloading_preserves_reach_without_navigating_a_loaded_assembly(self):
+        reference = ReferenceTask(None, None)
+        held = None
+        stance = None
+        placed = []
+        def action(primitive, role=None, point=None, **kwargs):
+            nonlocal held, stance
+            if primitive == 'navigate_to':
+                self.assertIsNone(held, 'Container contents must not trigger loaded base travel')
+                stance = point[:2]
+            elif primitive == 'grasp':
+                self.assertIsNone(held)
+                if role == 'pliers':
+                    self.assertIn('flashlight', placed, 'Remove the supported flashlight first')
+                held = role
+            elif primitive == 'place_on_top':
+                self.assertIsNotNone(held)
+                self.assertEqual(role, 'bench')
+                self.assertLess(math.dist(stance, point[:2]), 1.4)
+                placed.append(held)
+                held = None
+        reference.action = action
+        reference.unpack_delivered_kit()
+        self.assertIsNone(held)
+        self.assertCountEqual(placed, ['drill', 'flashlight', 'screwdriver', 'allen_wrench', 'pliers'])
+
     def reference(self, directory, failures, *, max_attempts=200):
         self.enterContext(redirect_stdout(io.StringIO()))
         backend = SimpleNamespace(steps=0, _ground=lambda: None, _predicate_values=lambda: {})

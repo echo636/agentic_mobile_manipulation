@@ -316,9 +316,26 @@ class ReferenceTask:
                          reason='Checked opening rolled back; wait for free settling before retry')
                 self.action('wait', seconds=2.)
 
+    def unpack_delivered_kit(self):
+        # Reposition empty-handed and use nearby free bench space. The old
+        # far-end placement required a long-offset carried assembly to turn
+        # in the narrow aisle. Reverse packing order also removes the
+        # flashlight supported on the pliers before grasping the pliers.
+        self.floor(23.5, 1.1)
+        for item, point in [
+            ('drill', [24.4, 1., .92754]),
+            ('flashlight', [24.6, .7, .92754]),
+            ('screwdriver', [24.4, .5, .92754]),
+            ('allen_wrench', [24.6, .3, .92754]),
+            ('pliers', [24.2, .3, .92754]),
+        ]:
+            # Retain this stance. Ordinary reach, collision, payload and
+            # contact checks still apply to both counted actions.
+            self.action('grasp', item)
+            self.action('place_on_top', 'bench', point)
+        self.action('wait', seconds=2.)
+
     def workshop(self, order, *, return_box=True):
-        from omnigibson.object_states import Inside, Open
-        tools = ['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill']
         if order == 'cleanup_first':
             self.workshop_cleanup()
         self.pack_kit()
@@ -328,11 +345,7 @@ class ReferenceTask:
         # order; transport may have left the assembly at a different yaw.
         self.transfer_top('box', 'bench', [24.5, 1.5, .92754], placement_world_yaw=-45.)
         self.open_delivered_kit()
-        for item, y in zip(tools, [-1.95, -.8, -.2, .4, 1.]):
-            if (self.obj(item).states[Inside].get_value(self.obj('box'))
-                    and not self.obj('box').states[Open].get_value()):
-                self.open_delivered_kit()
-            self.transfer_top(item, 'bench', [24.5, y, .92754])
+        self.unpack_delivered_kit()
         self.move('close', 'box')
         if return_box:
             self.return_kit()
