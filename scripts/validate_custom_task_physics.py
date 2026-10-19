@@ -5,7 +5,6 @@ Every invocation creates a fresh simulator and an immutable output directory.
 The result explicitly distinguishes physical feasibility from model success.
 """
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,7 +17,7 @@ import traceback
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / 'src'))
 from manipulation_agent.custom_tasks import load_spec, sha256
-from manipulation_agent.records import write_json
+from manipulation_agent.records import write_json, release_source_digest
 from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
 
 
@@ -49,16 +48,12 @@ def main():
     freeze = SOURCE / 'source_freeze.json'
     commit = (json.loads(freeze.read_text())['source_commit'] if freeze.is_file() else
               subprocess.check_output(['git', '-C', str(SOURCE), 'rev-parse', 'HEAD'], text=True).strip())
-    source_files = [*sorted((SOURCE / 'src/manipulation_agent').rglob('*.py')), Path(__file__)]
-    source_hash = hashlib.sha256()
-    for path in source_files:
-        source_hash.update(str(path.relative_to(SOURCE)).encode() + b'\0' + path.read_bytes())
     record = {'status': 'running', 'started_at_unix': time.time(), 'task': spec['id'],
               'instance': spec['instance_id'], 'seed': spec['base']['seed'], 'order': args.order,
               'negative_case': args.negative_case,
               'host': platform.node(), 'interpreter': sys.executable, 'pid': os.getpid(),
               'unit': os.environ.get('MAS_UNIT'), 'gpu_uuid': os.environ.get('MAS_GPU_UUID'),
-              'source_commit': commit, 'source_sha256': source_hash.hexdigest(),
+              'source_commit': commit, 'source_sha256': release_source_digest(SOURCE),
               'spec_sha256': sha256(args.spec), 'scene_sha256': spec['frozen_instance']['sha256'],
               'output_path': str(args.output.resolve()), 'model_used': False,
               'validation_level': ('real_simulator_physical_negative_case' if args.negative_case else

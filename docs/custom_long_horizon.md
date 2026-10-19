@@ -208,6 +208,12 @@ aligned calls, observations and recording; a policy's task failure remains a val
 measured outcome and is reported separately. Missing evidence always leaves
 `benchmark_ready=false`.
 
+Archived source has no Git metadata. Its `source_freeze.json` must bind the commit
+and the executable-source digest used by the physical release. The model recorder
+recomputes that digest before recording the archive's identity; changed source
+bytes are rejected. Policy acceptance checks both the commit and this digest,
+separately from the recorder's historical `src/`-only hash.
+
 After all gates pass, create matched evaluation manifests:
 
 ```bash

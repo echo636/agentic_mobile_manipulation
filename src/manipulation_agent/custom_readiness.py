@@ -105,7 +105,7 @@ def _policy(root, bundle, spec, spec_hash, release):
     audit = audit_episode(run_dir, controller_dir)
     _require(audit['evidence_alignment'] == audit['model_finish'] == audit['controller_exit'] == 'passed',
              'Autonomous RGB/MCP/finish evidence did not pass')
-    _require(run['source']['commit'] == release['source_commit'], 'Policy used different source')
+    _policy_source_identity(run['source'], release)
     _runtime_identity(run['backend'], release)
     inputs = run['evaluation']['input_hashes']
     _require(inputs['custom_task_spec'] == spec_hash
@@ -128,6 +128,13 @@ def _policy(root, bundle, spec, spec_hash, release):
              'Video bytes no longer match validation')
     return {'run_id': run['run_id'], 'task_success': run.get('task_success'),
             'scope': 'autonomous interface acceptance; model success reported separately'}
+
+
+def _policy_source_identity(source, release):
+    _require(source.get('commit') == release['source_commit']
+             and source.get('release_source_sha256') == release['source_sha256']
+             and source.get('dirty') is False,
+             'Policy used different or unverified executable source')
 
 
 def validate_release(path):

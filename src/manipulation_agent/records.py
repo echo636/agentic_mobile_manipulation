@@ -66,8 +66,18 @@ def read_run(output: Path) -> dict:
     return run
 
 
-def source_version() -> dict:
-    root = Path(__file__).resolve().parents[2]
+def release_source_digest(root: Path) -> str:
+    """Hash the executable custom-task source with the release manifest format."""
+    files = [*sorted((root / 'src/manipulation_agent').rglob('*.py')),
+             root / 'scripts/validate_custom_task_physics.py']
+    digest = hashlib.sha256()
+    for path in files:
+        digest.update(str(path.relative_to(root)).encode() + b'\0' + path.read_bytes())
+    return digest.hexdigest()
+
+
+def source_version(root: Path | None = None) -> dict:
+    root = Path(root).resolve() if root is not None else Path(__file__).resolve().parents[2]
     def git(*args):
         result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
         return result.stdout.strip() if result.returncode == 0 else None
@@ -76,8 +86,26 @@ def source_version() -> dict:
     for path in files:
         digest.update(str(path.relative_to(root)).encode())
         digest.update(path.read_bytes())
-    return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain")),
-            "source_sha256": digest.hexdigest()}
+    freeze = root / 'source_freeze.json'
+    if freeze.is_file():
+        manifest = json.loads(freeze.read_text())
+        release_digest = release_source_digest(root)
+        commit = manifest.get('source_commit', '')
+        if (len(commit) != 40 or any(c not in '0123456789abcdef' for c in commit)
+                or manifest.get('source_sha256') != release_digest):
+            raise ValueError('Frozen executable source does not match source_freeze.json')
+        return {'commit': commit, 'dirty': False, 'source_sha256': digest.hexdigest(),
+                'release_source_sha256': release_digest, 'identity_method': 'verified_source_freeze'}
+    # An archive stored underneath some unrelated checkout must not inherit
+    # that checkout's commit through git's parent-directory discovery.
+    git_root = git('rev-parse', '--show-toplevel')
+    own_checkout = git_root is not None and Path(git_root).resolve() == root
+    return {'commit': git('rev-parse', 'HEAD') if own_checkout else None,
+            'dirty': bool(git('status', '--porcelain')) if own_checkout else None,
+            'source_sha256': digest.hexdigest(),
+            'release_source_sha256': (release_source_digest(root)
+                if (root / 'scripts/validate_custom_task_physics.py').is_file() else None),
+            'identity_method': 'git_checkout' if own_checkout else 'unversioned'}
 
 
 class Recorder:
