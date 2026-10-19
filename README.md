@@ -7,6 +7,8 @@ Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/a
 The three custom long-horizon task candidates—lunch, movie night, and workshop—
 have versioned public/scoring contracts, full-reference and negative-case runners,
 and an evidence-based evaluation gate. See [task cards and the readiness protocol](docs/custom_long_horizon.md).
+Two additional candidates extend these scenes with a loaded-toolbox inventory
+roundtrip and meal delivery, plating and empty-carrier return.
 Recipes and CPU tests alone do not certify an instance for evaluation.
 
 ## Observation: four fixed cameras

@@ -7,6 +7,7 @@ orientation required by the visual approach planner.
 from dataclasses import dataclass, replace
 import heapq
 import math
+import time
 
 from .gt_navigation import NavigationError, NavigationPlan, PlanningBudget, SearchBudgetExhausted
 
@@ -166,13 +167,19 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
         return (math.dist(actual[:2],p.goal)/.5+
                 (abs(angle(bearing-actual[2]))+abs(angle(p.final_yaw-bearing)))/(math.pi/3))
     ordered=sorted(candidates.values(),key=lambda p:(estimate(p),p.score))[:max_candidates]
-    budget=PlanningBudget(check_cancelled,seconds=10.)
+    # A saved real-scene route needs ~4.6 s and 6,253 heading states on the
+    # pinned CPU runtime. The former 2 s per candidate rejected both feasible
+    # approaches. Allow a bounded complete search without weakening geometry,
+    # cancellation, candidate count or the 10,000-state expansion ceiling.
+    total_seconds, candidate_seconds = 30., 8.
+    budget=PlanningBudget(check_cancelled,seconds=total_seconds)
     best=None;attempts=[]
     for candidate in ordered:
         try:budget.check()
         except SearchBudgetExhausted:break
-        attempt=PlanningBudget(budget.check,seconds=2.)
+        attempt=PlanningBudget(budget.check,seconds=candidate_seconds)
         collision.check_cancelled=attempt.check
+        started=time.monotonic()
         row={'goal':candidate.goal,'final_yaw':candidate.final_yaw,'target_distance_m':candidate.score}
         try:
             route=plan_forward_route(candidate,actual,collision,check_cancelled=attempt.check,max_expansions=10000)
@@ -182,6 +189,8 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
             if best is None or key<best[0]:best=(key,candidate,route)
         except NavigationError as exc:
             row.update(status='failed',error_code=exc.code,error=str(exc))
+        row.update(search_seconds=time.monotonic()-started,
+                   candidate_budget_seconds=candidate_seconds)
         attempts.append(row)
     collision.check_cancelled=check_cancelled
     if best is None:
@@ -191,6 +200,8 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
         raise error
     return best[1],best[2],{'target_slack_m':target_slack,'closest_candidate_m':closest,
                            'max_candidates':max_candidates,'attempts':attempts,
+                           'route_budget_seconds':total_seconds,
+                           'candidate_budget_seconds':candidate_seconds,
                            'objective':'translation_seconds_plus_rotation_seconds',
                            'globally_optimal':False}
 

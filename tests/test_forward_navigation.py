@@ -2,6 +2,7 @@
 import importlib.util
 import math
 import unittest
+from unittest.mock import patch
 
 from manipulation_agent.executors.forward_navigation import (
     plan_forward_route, angle, local_exit_certificate, checked_connection,
@@ -26,6 +27,41 @@ class PointCollision:
 
 
 class ForwardNavigationTests(unittest.TestCase):
+    def test_valid_complete_route_can_use_more_than_two_seconds(self):
+        clock = [100.]
+        original = plan_forward_route
+
+        def slower_search(*args, **kwargs):
+            result = original(*args, **kwargs)
+            clock[0] += 4.6
+            kwargs['check_cancelled']()
+            return result
+
+        with patch('manipulation_agent.executors.gt_navigation.time.monotonic', side_effect=lambda: clock[0]), \
+                patch('manipulation_agent.executors.forward_navigation.plan_forward_route', side_effect=slower_search):
+            _, route, details = select_forward_route(
+                [plan([(0., 0.), (1., 0.)])], (0., 0., 0.), PointCollision())
+        self.assertAlmostEqual(route.distance_m, 1.)
+        self.assertAlmostEqual(details['attempts'][0]['search_seconds'], 4.6)
+
+    def test_slow_candidates_still_share_a_bounded_total_budget(self):
+        from dataclasses import replace
+        clock = [100.]
+
+        def exhausted_search(*args, **kwargs):
+            clock[0] += 8.1
+            kwargs['check_cancelled']()
+            self.fail('Exhausted candidate must not return an unchecked route')
+
+        options = [replace(plan([(0., 0.), (1., 0.)]), final_yaw=i*.1) for i in range(6)]
+        with patch('manipulation_agent.executors.gt_navigation.time.monotonic', side_effect=lambda: clock[0]), \
+                patch('manipulation_agent.executors.forward_navigation.plan_forward_route', side_effect=exhausted_search):
+            with self.assertRaises(NavigationError) as caught:
+                select_forward_route(options, (0., 0., 0.), PointCollision())
+        self.assertEqual(caught.exception.code, 'navigation_search_exhausted')
+        self.assertEqual(len(caught.exception.route_attempts), 4)
+        self.assertTrue(all(row['status'] == 'failed' for row in caught.exception.route_attempts))
+
     def test_outward_facing_pocket_also_requires_a_forward_entry(self):
         class Pocket(PointCollision):
             def motion_free(self,a,b):
