@@ -24,6 +24,12 @@ class ApplianceApproachTests(unittest.TestCase):
         self.assertAlmostEqual(point[0], high[0])
         self.assertTrue(low[1] <= point[1] <= high[1])
 
+    def test_open_door_envelope_does_not_shift_target_outside_body(self):
+        center = [4.2130208, .7885105, 1.038383]
+        point = appliance_approach_point(([4.025, .2, .8849], [4.755, 1.044, 1.1903]),
+                                         [7.875, -.875, 0], open_center=center)
+        self.assertEqual(point, center)
+
 
 class ReferenceRecoveryTests(unittest.TestCase):
     def reference(self, directory, failures, *, max_attempts=200):

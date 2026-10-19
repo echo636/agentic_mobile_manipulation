@@ -9,12 +9,15 @@ import json
 import time
 
 
-def appliance_approach_point(bounds, base):
+def appliance_approach_point(bounds, base, *, open_center=None):
     """Select the near AABB face, then let the normal ray test verify visibility.
 
-    An appliance's interior center is occluded by its own door. This privileged
-    reference target does not change the visual policy or its visibility rules.
+    A closed appliance's center is occluded by its own door. Once open, use
+    the body center: its articulated AABB can include a door and empty space
+    outside the cabinet. All candidates still undergo normal visibility checks.
     """
+    if open_center is not None:
+        return [float(value) for value in open_center]
     low, high = bounds
     center = [(float(a)+float(b))/2 for a, b in zip(low, high)]
     direction = [float(base[i])-center[i] for i in (0, 1)]
@@ -49,7 +52,10 @@ class ReferenceTask:
         backend = self.backend
         obj = self.obj(role) if role else None
         if primitive == 'navigate_to' and point is None and role in ('fridge', 'microwave'):
-            point = appliance_approach_point(obj.aabb, backend.robot.get_position_orientation()[0])
+            from omnigibson.object_states import Open
+            opened = Open in obj.states and bool(obj.states[Open].get_value())
+            point = appliance_approach_point(obj.aabb, backend.robot.get_position_orientation()[0],
+                open_center=obj.get_position_orientation()[0] if opened else None)
         selected = (backend.torch.tensor(point, dtype=backend.torch.float32) if point is not None
                     else obj.get_position_orientation()[0].clone() if obj is not None else None)
         row = {'index': len(self.calls) + 1, 'primitive': primitive, 'role': role,
@@ -107,7 +113,7 @@ class ReferenceTask:
                 try:
                     self.action('navigate_to', role, point)
                 except Exception as exc:
-                    if getattr(exc, 'code', None) != 'navigation_search_exhausted':
+                    if getattr(exc, 'code', None) not in ('navigation_search_exhausted', 'navigation_unreachable'):
                         raise
                     if task.startswith('movie') and role == 'toybox':
                         # The closest stance can lack a complete turning route
