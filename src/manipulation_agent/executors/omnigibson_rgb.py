@@ -17,8 +17,10 @@ from .profiling import component, action_profile
 from .carry import ControlledCarry
 from .material_actions import CheckedMaterialActions
 from .demo_motion import DemoMotion
+from .local_rgb import LocalRGBManipulation
+from .local_manipulation import LocalLimits
 
-class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
@@ -28,6 +30,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self.demo_motion = os.environ.get('MAS_DEMO_MOTION','0') in {'1','true','yes'}
         if self.demo_motion and not self.ideal_carry:
             raise ValueError('Demo motion requires controlled carry')
+        self.local_manipulation = os.environ.get("MAS_LOCAL_MANIPULATION", "1") not in {"0", "false", "no"}
+        self.local_limits = LocalLimits()
+        self._local_operation = None
         self._demo_arm = None
         self._demo_focus = None
         self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
@@ -312,6 +317,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
 
     def _step(self, action):
         self.deadline.check(changed=True)
+        local=getattr(self,'_local_operation',None)
+        if local is not None:local.check()
         if self._base_target is not None:self._restore_base_target()
         self._restore_object_anchor()
         self._restore_stabilized_containers()
@@ -894,6 +901,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                         if self.steps-before>=max_steps-settling:
                             raise SkillError('action_timeout','GT follower exhausted its control-step budget',changed=self.steps>before)
                         x,y,yaw=command
+                        local=getattr(self,'_local_operation',None)
+                        if local is not None:local.admit_pose(command)
                         new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
                         orientation=T.euler2quat(self.torch.tensor([0.,0.,yaw],device=quat.device))
                         self._base_target={'position':new_pos,'orientation':orientation,'indices':indices,
@@ -998,6 +1007,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
+        self._manipulation_preconditions(primitive,obj)
+        if getattr(self,'local_manipulation',False):
+            return self._execute_local_manipulation(primitive,obj,point,grounding,max_steps,kwargs)
+        return self._execute_bound_manipulation(primitive,obj,point,grounding,max_steps,**kwargs)
+
+    def _manipulation_preconditions(self,primitive,obj):
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
         held=self._get_held()
@@ -1018,9 +1033,37 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             for parent in self.env.scene.objects:
                 if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
                     raise SkillError('container_closed','Grasp through closed container rejected')
-        # Manipulation never navigates implicitly. Reach belongs to the selected
-        # visible point, not an object's potentially room-sized bounding box.
-        # Reject before arm motion or physics, leaving repositioning to the agent.
+        if getattr(self,'local_manipulation',False):
+            from omnigibson.object_states import ToggledOn,AttachedTo,OnTop,Under,NextTo
+            state={'open':Open,'close':Open,'toggle_on':ToggledOn,'toggle_off':ToggledOn}.get(primitive)
+            if state is not None and state not in obj.states:
+                raise SkillError('pre_condition_error','Selected object does not support this operation')
+            if primitive in {'place_inside','place_on_top','place_under','place_next_to'}:
+                relation={'place_inside':Inside,'place_on_top':OnTop,'place_under':Under,'place_next_to':NextTo}[primitive]
+                if held is obj or relation not in held.states:
+                    raise SkillError('unsupported_relation','Selected carry/destination does not support this relation')
+                if primitive=='place_inside' and not any(link.is_meta_link and link.meta_link_type in {'fillable','openfillable'} for link in obj.links.values()):
+                    raise SkillError('unsupported_relation','Selected destination has no fillable volume')
+            if primitive in {'attach','hang'}:
+                if held is obj or AttachedTo not in held.states or AttachedTo not in obj.states:
+                    raise SkillError('unsupported_relation','Selected objects do not support attachment')
+                if primitive=='hang' and not any(word in str(obj.category).lower() for word in ('nail','hook','hanger')):
+                    raise SkillError('unsupported_relation','Selected object is not a hanging anchor')
+                if held.states[AttachedTo].parent is not obj:
+                    links=held.states[AttachedTo]._find_attachment_links(obj,bypass_alignment_checking=True)
+                    if any(link is None for link in links):raise SkillError('unsupported_relation','No compatible attachment link')
+            if primitive in {'wipe','sweep','vacuum','spray','spread'}:
+                self._surface_action_preconditions(primitive,obj)
+            if primitive=='soak':self._soak_preconditions(obj)
+            if primitive=='cut' and ('slicer' not in held._abilities or not {'sliceable','diceable'}.intersection(obj._abilities)):
+                raise SkillError('pre_condition_error','Selected tool or target cannot support cutting')
+
+    def _execute_bound_manipulation(self,primitive,obj,point,grounding,max_steps,**kwargs):
+        """Execute the same selected object/surface, without recursive act/grounding."""
+        self._manipulation_preconditions(primitive,obj)
+        held=self._get_held()
+        # This leaf executor never moves the base. The outer local controller
+        # owns positioning; this final gate still protects the physical effect.
         base=self.robot.get_position_orientation()[0]
         if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
             raise SkillError('out_of_reach',
@@ -1137,9 +1180,13 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
-        result['manipulation_navigation'] = {'implicit_navigation':False,
+        result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
+            'protocol':'target_locked_local_v1' if getattr(self,'local_manipulation',False) else 'explicit_navigation_v1',
+            'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
+            'target_lock':'private_selected_link_relative_surface',
+            'scope':'GT-assisted bounded local controller; no learned model or real-arm IK',
             'reach_check':'base_to_selected_point_xy', 'reach_limit_m':1.4,
-            'out_of_reach':'return_to_agent_for_explicit_navigate_to_and_fresh_pixel',
+            'out_of_reach':'local_stance_controller' if getattr(self,'local_manipulation',False) else 'return_to_agent_for_explicit_navigate_to_and_fresh_pixel',
             'demo_reach_navigation_retry':False}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,

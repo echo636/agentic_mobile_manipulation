@@ -219,6 +219,16 @@ class ForwardNavigationTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2'),'Requires OpenCV; no simulator is started')
 class HeadingCollisionTests(unittest.TestCase):
+    def test_long_sweep_contains_every_short_sweep_including_wraparound(self):
+        import numpy as np
+        checker=self.checker(np.ones((81,81),dtype='uint8'),
+                             [[-.4006,.0081],[-.1727,-.3071],[.3115,.2330],[.01,.3521]])
+        for lo,hi in ((-125.2,53.5),(170.,250.),(-20.,80.)):
+            full=checker._kernels(checker._key(math.radians(lo),math.radians(hi)))[0]
+            for angle in range(math.ceil(lo)+1,math.floor(hi)-2):
+                step=checker._kernels(checker._key(math.radians(angle),math.radians(angle+2)))[0]
+                self.assertFalse(np.any((step!=0)&(full==0)),(lo,hi,angle))
+
     def checker(self,raw,footprint,reference_yaw=0.):
         import numpy as np
         from manipulation_agent.executors.heading_collision import HeadingCollisionChecker

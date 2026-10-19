@@ -52,6 +52,8 @@ class ControlledCarry:
         if obj is not None:self._object_anchor=(obj,tuple(v.clone() for v in obj.get_position_orientation()))
         original_step=self.og.sim.step_physics
         def anchored_physics(*args,**kwargs):
+            local=getattr(self,'_local_operation',None)
+            if local is not None:local.check()
             self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
             try:return original_step(*args,**kwargs)
             finally:self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
@@ -255,6 +257,20 @@ class ControlledCarry:
                 self.frames_revision=-1
                 raise SkillError('target_changed','Placement object changed during simulation',changed=True)
 
+    def _grasp_dependencies(self,obj):
+        """Read-only closure shared by grasp and loaded-departure prediction."""
+        from omnigibson.object_states import Inside,OnTop,Touching
+        candidates=[child for child in self.env.scene.objects if child not in (obj,self.robot)
+                    and not getattr(child,'fixed_base',True) and hasattr(child,'states')]
+        def relation(child,parent):
+            lo,hi=parent.aabb;clo,chi=child.aabb;center=(clo+chi)/2
+            if Inside in child.states and bool(((center>=lo-.02)&(center<=hi+.02)).all()) and child.states[Inside].get_value(parent):return 'Inside'
+            overlap=bool(((chi[:2]>=lo[:2])&(clo[:2]<=hi[:2])).all())
+            if overlap and float(clo[2])>=float(lo[2])-.02 and float(clo[2])<=float(hi[2])+.08:
+                if OnTop in child.states and Touching in child.states and child.states[OnTop].get_value(parent) and child.states[Touching].get_value(parent):return 'OnTop'
+            return None
+        return support_closure(obj,candidates,relation)
+
     def _ideal_grasp(self,obj,max_steps):
         from omnigibson.utils import transform_utils as T
         from omnigibson.object_states import Inside,OnTop,Touching
@@ -265,16 +281,7 @@ class ControlledCarry:
         # Preserve both contained objects and supported objects (e.g. food on a
         # plate), including nested payloads. Fixed scene objects never follow.
         original=obj.get_position_orientation()
-        candidates=[child for child in self.env.scene.objects if child not in (obj,self.robot)
-                    and not getattr(child,'fixed_base',True) and hasattr(child,'states')]
-        def relation(child,parent):
-            lo,hi=parent.aabb;clo,chi=child.aabb;center=(clo+chi)/2
-            if Inside in child.states and bool(((center>=lo-.02)&(center<=hi+.02)).all()) and child.states[Inside].get_value(parent):return 'Inside'
-            overlap=bool(((chi[:2]>=lo[:2])&(clo[:2]<=hi[:2])).all())
-            if overlap and float(clo[2])>=float(lo[2])-.02 and float(clo[2])<=float(hi[2])+.08:
-                if OnTop in child.states and Touching in child.states and child.states[OnTop].get_value(parent) and child.states[Touching].get_value(parent):return 'OnTop'
-            return None
-        dependencies=support_closure(obj,candidates,relation)
+        dependencies=self._grasp_dependencies(obj)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
         particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in dependencies]],include_supported=True)
         # The entire selected assembly is leaving its old support. An outer

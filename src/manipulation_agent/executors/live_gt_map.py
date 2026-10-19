@@ -42,7 +42,7 @@ def clipped_body_projection(points, low, high):
     return np.asarray(clipped) if clipped else None
 
 
-def build_navigation_grid(backend, floor):
+def build_navigation_grid(backend, floor, *, prospective_carry=()):
     import cv2
     import numpy as np
     import omnigibson.lazy as lazy
@@ -53,8 +53,9 @@ def build_navigation_grid(backend, floor):
     # blocks motion beside desks/chair backs. Match occupancy by height band.
     held=backend._get_held()
     carried=[obj for obj in [held,*[o for o,_ in backend._carry_contents]] if obj is not None]
+    carried.extend(obj for obj in prospective_carry if obj not in carried)
     moving_objects=[backend.robot,*carried]
-    height=max(float(obj.aabb[1][2]) for obj in moving_objects)-floor_z
+    height=max(float(obj.aabb[1][2])+(.18 if obj in prospective_carry else 0.) for obj in moving_objects)-floor_z
     # Stable, conservative band edges avoid a full raster rebuild for every
     # micrometre of pose-setter feedback after a navigation action.
     edges=[.03,.35,.8,1.25,max(1.26,math.ceil((height+.02)*100)/100)]
@@ -66,7 +67,9 @@ def build_navigation_grid(backend, floor):
             if link.is_meta_link:continue
             points=link.collision_boundary_points_world
             if points is not None:
-                bodies.append(points.cpu().numpy())
+                vertices=points.cpu().numpy()
+                if obj in prospective_carry:vertices=vertices+np.array([0.,0.,.18])
+                bodies.append(vertices)
                 object_hulls+=1
                 if obj is not backend.robot:carried_hulls+=1
         if obj is not backend.robot and not object_hulls:
@@ -91,7 +94,7 @@ def build_navigation_grid(backend, floor):
                       'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
     cached=cache[floor];support=cached['support'];free=cached['free'];h,w=support.shape
     origin=np.array([-w*resolution/2,-h*resolution/2])
-    ignored_objects={backend.robot,held,*[o for o,_ in backend._carry_contents]}
+    ignored_objects={backend.robot,*carried}
     ignored_links={link.prim_path for obj in ignored_objects if obj is not None for link in obj.links.values()}
     # Navigation must not collide with semantic helper/fill volumes which have
     # no physical surface. Actual ordinary collision shapes remain included.

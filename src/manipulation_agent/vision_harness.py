@@ -88,6 +88,10 @@ class VisionHarness:
     def initialize(self):
         """Deliver the ready episode snapshot without reset, physics or rendering."""
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
+        if hasattr(self.backend,'local_manipulation'):
+            result['control']={'manipulation_protocol':
+                'target_locked_local_v1' if self.backend.local_manipulation else 'explicit_navigation_v1',
+                'local_base_adjustment':bool(self.backend.local_manipulation)}
         if 'task_notes' in self.catalog: result['notes']=self.task_notes.read()
         return result
 
@@ -193,7 +197,7 @@ class VisionHarness:
         # Large evaluator records must not delay closure or cached finish replies.
         return result
 
-    def perform(self,primitive,target,revision,**kwargs):
+    def perform(self,primitive,target,revision,*,_parent_request_id=None,**kwargs):
         self.deadline.check()
         if revision!=self.revision: raise SkillError('stale_observation','Use the latest observation revision')
         if self.legacy_limits_active and (
@@ -209,6 +213,7 @@ class VisionHarness:
         # but neither episode totals nor the legacy per-action limit end it early.
         limit=remaining if self.unrestricted_physics or self.deadline.managed else min(self.budget.max_steps_per_action,remaining)
         error=None
+        self.backend._active_request_id=_parent_request_id
         try:
             details=self.backend.execute_visual(primitive,target,limit,**kwargs)
             self.recorder.event('private_executor_result',{'primitive':primitive,'details':details})
@@ -216,12 +221,21 @@ class VisionHarness:
             self.recorder.event('private_executor_error',{'code':exc.code,'detail':str(exc)})
             error=public_execution_error(exc)
         finally:
+            self.backend._active_request_id=None
             self.revision+=1
             # A timed-out action may have changed the world. Invalidate its RGB,
             # but do not spend the expired task budget rendering another capture.
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
+        local=details.get('local_manipulation')
+        if local:
+            effect['local_adjustment']={'repositions':int(local['repositions']),
+                'primitive_attempts':int(local['primitive_attempts']),
+                'departure':local['departure'],
+                'message':('Operation completed. Local departure is blocked; do not repeat the completed operation.'
+                           if local['departure']=='blocked' else
+                           'Operation completed on the same selected target after bounded local preparation.')}
         if primitive=='navigate_to':
             # Only an action outcome crosses the RGB boundary, never private
             # coordinates, target distances, object identities or map geometry.

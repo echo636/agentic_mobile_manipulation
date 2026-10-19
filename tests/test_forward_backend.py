@@ -107,5 +107,48 @@ class ForwardBackendTests(unittest.TestCase):
         self.assertFalse(caught.exception.changed)
         self.assertEqual(self.restores,0)
 
+    def test_local_operation_drives_then_executes_once_without_macro_navigation(self):
+        from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
+        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        b=self.b;b.local_limits=LocalLimits();b.navigation_distance=0.
+        b.deadline=SimpleNamespace(check=lambda **kwargs:None)
+        b._carry_contents=[];b.demo_motion=False;b.ideal_carry=True
+        target=object();point=self.torch.tensor([1.55,0.,.8]);effects=[];captures=[]
+        binding=SimpleNamespace(grounding={},describe=lambda:{'scope':'cpu_fixture'})
+        b._resolve_local_target=lambda lock:(target,point)
+        b._manipulation_preconditions=lambda *args:None
+        def geometry(op):
+            checker=HeadingCollisionChecker(self.grid,b._navigation_layers,0.,b._navigation_support,
+                                             check_cancelled=op.check)
+            return self.grid,checker,{'held_object_footprint_included':False},(),0
+        b._local_geometry=geometry
+        b._approach_visible=lambda *a,**kw:True
+        b._local_reobserve=lambda lock:captures.append(lock)
+        b._navigate=lambda *a,**kw:self.fail('Micropositioning called macro navigation')
+        def execute(primitive,obj,selected,grounding,max_steps,**kwargs):
+            self.assertIs(obj,target)
+            self.assertLessEqual(float(self.torch.linalg.norm(self.position[:2]-selected[:2])),1.4)
+            effects.append(obj)
+            return {'postcondition':'fixture_verified'}
+        b._execute_bound_manipulation=execute
+        op=LocalOperation(b,'open',binding,600,{})
+        b._local_operation=op
+        result=op.run()
+        self.assertEqual(effects,[target]);self.assertEqual(captures,[binding])
+        self.assertEqual(result['local_manipulation']['repositions'],1)
+        self.assertLessEqual(result['local_manipulation']['path_m'],2.)
+        self.assertGreater(float(self.position[0]),.29)
+        self.assertIsNone(b._base_target)
+
+    def test_local_budget_prevents_outside_pose_before_setter(self):
+        from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
+        b=self.b;b.local_limits=LocalLimits(radius_m=.1)
+        b.deadline=SimpleNamespace(check=lambda **kwargs:None)
+        op=LocalOperation(b,'open',None,600,{})
+        b._local_operation=op
+        with self.assertRaises(SkillError) as caught:b._execute_gt_plan(self.grid,self.plan(),500)
+        self.assertEqual(caught.exception.code,'local_adjustment_exhausted')
+        self.assertLessEqual(float(self.torch.linalg.norm(self.position[:2])),.100001)
+
 
 if __name__=='__main__':unittest.main()

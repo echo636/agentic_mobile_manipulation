@@ -20,6 +20,7 @@ class HeadingCollisionChecker:
         self.reference_yaw = reference_yaw
         self.check_cancelled = check_cancelled
         self.kernels = OrderedDict()
+        self.angular_bins = OrderedDict()
         self.grids = OrderedDict()
 
     @staticmethod
@@ -47,21 +48,40 @@ class HeadingCollisionChecker:
             return self.kernels[key]
         self.check_cancelled()
         low, span = key
-        angles = np.linspace(low, low+span, max(2, math.ceil(span/2)+1))
-        result = []
-        # Cover subcell placement and the arc between angular samples.
-        for _, points in self.layers:
-            radius = float(np.linalg.norm(points, axis=1).max())
-            margin = self.grid.resolution/2 + radius*(1-math.cos(math.radians(1)))
-            offsets = np.array([[-margin,-margin], [-margin,margin],
-                                [margin,-margin], [margin,margin]])
-            swept = []
-            for degrees in angles:
-                yaw = math.radians(degrees)-self.reference_yaw
-                c, s = math.cos(yaw), math.sin(yaw)
-                rotated = points @ np.array([[c,s], [-s,c]])
-                swept.append((rotated[:,None,:]+offsets).reshape(-1,2))
-            result.append(footprint_kernel(np.concatenate(swept), self.grid.resolution))
+        # Compose every sweep from the SAME integer-degree bins. Rasterizing
+        # one convex hull for a long turn and another for a small command is
+        # not monotone: OpenCV edge rounding can add a cell to the small hull
+        # that is absent from the large one (archived trash episode, step 10).
+        # Union of canonical bins guarantees every contained sub-sweep is a
+        # subset, without weakening collision checking at execution time.
+        result = None
+        for degrees in range(low, low+span):
+            self.check_cancelled()
+            angle_key = degrees % 360
+            bins = self.angular_bins.get(angle_key)
+            if bins is None:
+                bins = []
+                for _, points in self.layers:
+                    radius = float(np.linalg.norm(points, axis=1).max())
+                    margin = self.grid.resolution/2 + radius*(1-math.cos(math.radians(1)))
+                    offsets = np.array([[-margin,-margin], [-margin,margin],
+                                        [margin,-margin], [margin,margin]])
+                    swept = []
+                    for a in (angle_key, angle_key+.5, angle_key+1):
+                        yaw = math.radians(a)-self.reference_yaw
+                        c, s = math.cos(yaw), math.sin(yaw)
+                        rotated = points @ np.array([[c,s], [-s,c]])
+                        swept.append((rotated[:,None,:]+offsets).reshape(-1,2))
+                    kernel = footprint_kernel(np.concatenate(swept), self.grid.resolution)
+                    half = math.ceil((radius+math.sqrt(2)*margin)/self.grid.resolution)+1
+                    pad = half-kernel.shape[0]//2
+                    bins.append(np.pad(kernel, pad))
+                self._put(self.angular_bins, angle_key, bins, 360)
+            if result is None:
+                result = [k.copy() for k in bins]
+            else:
+                for total, k in zip(result, bins):
+                    total |= k
         return self._put(self.kernels, key, result, 256)
 
     def _sweep_grid(self, key):

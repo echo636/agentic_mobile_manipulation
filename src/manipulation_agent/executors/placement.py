@@ -402,6 +402,8 @@ class CheckedPlacement:
         deadline = getattr(self, 'deadline', None)
         if deadline is not None:
             deadline.check(changed=True)
+        local=getattr(self,'_local_operation',None)
+        if local is not None:local.check()
         self.sampling_physics_steps += 1
         self.og.sim.step_physics()
 
