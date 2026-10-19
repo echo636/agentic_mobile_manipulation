@@ -236,8 +236,24 @@ class ReferenceTask:
         self.transfer_top('box', 'source', [21.95, 1.2, .91574])
         self.action('wait', seconds=1.)
 
+    def open_delivered_kit(self):
+        # Carry/placement temporarily controls the rigid contents. Allow them
+        # to settle after releasing the delivered box before articulating its
+        # lid. A rejected opening is still a counted action, never success.
+        self.action('wait', seconds=2.)
+        for attempt in range(3):
+            try:
+                return self.move('open', 'box')
+            except Exception as exc:
+                if (getattr(exc, 'code', None) != 'postcondition_error'
+                        or 'displaced existing contents' not in str(exc) or attempt == 2):
+                    raise
+                self.log('container_open_recovery', failed_attempt=attempt+1,
+                         reason='Checked opening rolled back; wait for free settling before retry')
+                self.action('wait', seconds=2.)
+
     def workshop(self, order, *, return_box=True):
-        from omnigibson.object_states import Inside
+        from omnigibson.object_states import Inside, Open
         tools = ['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill']
         if order == 'cleanup_first':
             self.workshop_cleanup()
@@ -245,10 +261,11 @@ class ReferenceTask:
         if order == 'pack_first':
             self.workshop_cleanup()
         self.transfer_top('box', 'bench', [24.5, 1.5, .92754])
-        self.move('open', 'box')
+        self.open_delivered_kit()
         for item, y in zip(tools, [-1.95, -.8, -.2, .4, 1.]):
-            if self.obj(item).states[Inside].get_value(self.obj('box')):
-                self.move('open', 'box')
+            if (self.obj(item).states[Inside].get_value(self.obj('box'))
+                    and not self.obj('box').states[Open].get_value()):
+                self.open_delivered_kit()
             self.transfer_top(item, 'bench', [24.5, y, .92754])
         self.move('close', 'box')
         if return_box:

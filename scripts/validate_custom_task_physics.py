@@ -91,6 +91,15 @@ def main():
         record.update(status='failed', error=str(exc), error_code=getattr(exc, 'code', None))
         (args.output / 'traceback.txt').write_text(traceback.format_exc())
         if backend is not None:
+            # Keep a post-failure scene for focused diagnostics. Restoring it
+            # is a continuation, never a fresh full-reference acceptance run.
+            try:
+                scene = args.output / 'failure_scene.json'
+                backend.env.scene.save(json_path=str(scene))
+                record['failure_scene'] = {'path':scene.name,'sha256':sha256(scene),
+                    'scope':'post-failure diagnostic continuation only; action may have rolled back'}
+            except Exception:
+                (args.output / 'failure_scene_error.txt').write_text(traceback.format_exc())
             try:
                 evaluation = backend.evaluate()
                 backend.frames_revision = -1

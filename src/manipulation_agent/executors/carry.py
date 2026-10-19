@@ -166,7 +166,22 @@ class ControlledCarry:
 
     def _verify_container_payload(self,container,payload):
         from omnigibson.object_states import Inside
-        if any(not child.states[Inside].get_value(container) for child,_,_ in payload):
+        escaped=[record for record in payload if not record[0].states[Inside].get_value(container)]
+        if escaped:
+            if hasattr(self, 'output'):
+                from omnigibson.utils import transform_utils as T
+                details=[]
+                for child,link,relative in escaped:
+                    position=child.get_position_orientation()[0]
+                    expected=T.pose_transform(*link.get_position_orientation(),*relative)[0]
+                    lo,hi=child.aabb;center=(lo+hi)/2
+                    details.append({'object':child.name,'fillable_link':link.prim_path,
+                        'position':position.tolist(),'expected_link_relative_position':expected.tolist(),
+                        'displacement_m':float(self.torch.linalg.vector_norm(position-expected)),
+                        'aabb_center_in_fillable_link':bool(link.check_points_in_volume(center.unsqueeze(0)).item()),
+                        'linear_velocity':child.get_linear_velocity().tolist()})
+                self._carry_record(event='container_payload_violation',container=container.name,
+                                   escaped_contents=details)
             raise SkillError('postcondition_error','Operation displaced existing contents from the container',changed=True)
 
     def _get_held(self):
