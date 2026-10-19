@@ -42,6 +42,28 @@ def clipped_body_projection(points, low, high):
     return np.asarray(clipped) if clipped else None
 
 
+def navigation_height_edges(height, payload_bounds=()):
+    """Separate a raised payload from lower supports without losing geometry.
+
+    Combining a countertop and a raised food item's XY projection in the same
+    broad slab invents an overlap even when their Z ranges are disjoint. Add
+    conservative, quantized bounds around the whole carried assembly. This
+    adds at most two slabs and keeps the empty-handed map unchanged.
+    """
+    top = max(1.26, math.ceil((height + .02) * 100) / 100)
+    edges = [.03, .35, .8, 1.25, top]
+    if payload_bounds:
+        low = min(bounds[0] for bounds in payload_bounds)
+        high = max(bounds[1] for bounds in payload_bounds)
+        # Expand outward before quantizing; never truncate a lower child or
+        # admit a collision by rounding a moving collider out of its slab.
+        for edge in (math.floor((low - .01) / .02) * .02,
+                     math.ceil((high + .01) / .02) * .02):
+            if edges[0] < edge < top:
+                edges.append(round(edge, 8))
+    return sorted(set(edges))
+
+
 def build_navigation_grid(backend, floor):
     import cv2
     import numpy as np
@@ -57,8 +79,8 @@ def build_navigation_grid(backend, floor):
     height=max(float(obj.aabb[1][2]) for obj in moving_objects)-floor_z
     # Stable, conservative band edges avoid a full raster rebuild for every
     # micrometre of pose-setter feedback after a navigation action.
-    edges=[.03,.35,.8,1.25,max(1.26,math.ceil((height+.02)*100)/100)]
     bodies=[]
+    payload_bounds=[]
     carried_hulls=0
     for obj in moving_objects:
         object_hulls=0
@@ -66,11 +88,16 @@ def build_navigation_grid(backend, floor):
             if link.is_meta_link:continue
             points=link.collision_boundary_points_world
             if points is not None:
-                bodies.append(points.cpu().numpy())
+                vertices=points.cpu().numpy()
+                bodies.append(vertices)
                 object_hulls+=1
-                if obj is not backend.robot:carried_hulls+=1
+                if obj is not backend.robot:
+                    carried_hulls+=1
+                    payload_bounds.append((float(vertices[:,2].min())-floor_z,
+                                           float(vertices[:,2].max())-floor_z))
         if obj is not backend.robot and not object_hulls:
             raise ValueError('Carried collision geometry unavailable for navigation')
+    edges=navigation_height_edges(height,payload_bounds)
     layers=[]
     for lo,hi in zip(edges,edges[1:]):
         chunks=[xy-base[:2] for p in bodies if (xy:=clipped_body_projection(p,floor_z+lo,floor_z+hi)) is not None]
@@ -163,6 +190,9 @@ def build_navigation_grid(backend, floor):
         'footprint':'current_yaw_height_matched_collision_hulls',
         'forward_clearance_reserve':'half_cell_translation_and_outward_quantized_yaw_sweep',
         'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist()} for lo,hi,p in layers],
+        'height_band_policy':'carried_assembly_bounds_v1',
+        'payload_height_bounds_m':payload_bounds,
+        'height_edges_m':edges,
         'query_height_m':height,'updated_cells':count,'query_seconds':time.monotonic()-started,
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',

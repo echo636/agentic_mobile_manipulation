@@ -122,6 +122,7 @@ class CustomTaskBackend(RGBBackend):
             entry = copy.deepcopy(data['objects_info']['init_info'][old])
             entry['args']['name'] = name; entry['args'].pop('bddl_object_scope', None)
             if 'in_rooms' in item: entry['args']['in_rooms'] = item['in_rooms']
+            if 'scale' in item: entry['args']['scale'] = list(item['scale'])
             state = copy.deepcopy(data['state']['registry']['object_registry'][old])
             if 'position' in item: state['root_link']['pos'] = item['position']
             if 'orientation' in item: state['root_link']['ori'] = item['orientation']

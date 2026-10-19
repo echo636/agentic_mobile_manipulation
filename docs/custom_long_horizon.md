@@ -34,6 +34,14 @@ the controller object IDs, private predicates, the evaluator DAG, or a reference
 action sequence. Context must be evaluated as part of the input, rather than
 claiming the controller inferred an undisclosed preference from a short phrase.
 
+The shared executor uses ideal navigation and controlled object carrying with
+reach and collision checks; these references do not establish feasibility for a
+physical robot controller. Navigation adds conservative height boundaries around the carried
+assembly so a raised object does not inherit obstacles on a lower countertop. Surface placement finishes with five awake physics
+steps within its existing settling budget and clears native state caches before
+checking contacts. This prevents sleeping objects from retaining stale false
+contact readings; it does not assign goal predicates or relax scoring.
+
 ## Independent evaluation
 
 `CustomTaskBackend` reads actual OmniGibson object states.
@@ -111,6 +119,13 @@ bag, records actual removal, and keeps the power-off guard active through remova
 Turning the microwave off, turning it back on, and then removing the bag does not
 satisfy the safety requirement. Particle cooking and subsequent transport must
 be demonstrated in the simulator; a symbolic trace cannot establish feasibility.
+
+The current movie-night construction recipe uses a 1.5× scale trash bin
+(about 35 cm wide and 42 cm tall). The original 23 cm × 28 cm bin
+failed the third-can insertion after the first two cans occupied its center.
+This is a new fixture revision (`pilot_002_larger_bin`), not a change to
+scoring or a capacity guarantee. Its scene hash and fresh physical references
+must be validated separately; historical pilot_001 evidence is retained.
 
 **Workshop.** At storage, pack all five tools (drill, pliers, flashlight, Allen
 wrench, screwdriver) into the box and close it. Transport the closed, fully loaded

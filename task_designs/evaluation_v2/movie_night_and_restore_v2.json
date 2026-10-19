@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "id": "movie_night_and_restore_v2",
-  "instance_id": "pilot_001",
+  "instance_id": "pilot_002_larger_bin",
   "status": "construction_recipe_validation_pending",
   "official_submission_eligible": false,
   "base": {
@@ -52,13 +52,18 @@
       "position": [
         2.25,
         4.6,
-        0.2
+        0.3
       ],
       "orientation": [
         0,
         0,
         0,
         1
+      ],
+      "scale": [
+        1.5,
+        1.5,
+        1.5
       ]
     },
     {

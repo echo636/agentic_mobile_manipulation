@@ -16,6 +16,18 @@ def spec(name):
 
 
 class PublicContractTests(unittest.TestCase):
+    def test_imported_fixture_scale_is_explicit_and_physically_valid(self):
+        task = spec('movie_night_and_restore')
+        item = next(row for row in task['asset_imports'] if row['name'] == 'lh_bin')
+        item['scale'] = [1.5, 1.5, 1.5]
+        self.assertEqual(validate_spec(task)['status'], 'passed')
+        for scale in (1.5, [], [1, 1], [1, 1, 1, 1], [True, 1, 1],
+                      [0, 1, 1], [-1, 1, 1], [float('nan'), 1, 1], [1, float('inf'), 1]):
+            with self.subTest(scale=scale):
+                item['scale'] = scale
+                with self.assertRaisesRegex(ValueError, 'asset scale'):
+                    validate_spec(task)
+
     def test_all_published_v2_requirements_cover_exact_scoring_contract(self):
         for path in sorted((ROOT / 'task_designs/evaluation_v2').glob('*.json')):
             with self.subTest(path=path):

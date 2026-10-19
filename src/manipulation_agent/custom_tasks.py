@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from .long_horizon import TemporalGoalEvaluator, expression
@@ -36,6 +37,13 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
     roles = spec.get('roles', {})
     if not roles or len(set(roles.values())) != len(roles):
         raise ValueError('Custom roles need distinct entity bindings')
+    for item in spec.get('asset_imports', []):
+        if 'scale' in item:
+            scale = item['scale']
+            if (not isinstance(scale, list) or len(scale) != 3
+                    or any(type(v) not in (int, float) or not math.isfinite(v) or v <= 0
+                           for v in scale)):
+                raise ValueError('Imported asset scale must contain three finite positive numbers')
     evaluation = spec['evaluation']
     TemporalGoalEvaluator(evaluation)
     for key, row in evaluation['predicates'].items():
