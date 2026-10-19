@@ -7,7 +7,22 @@ from types import SimpleNamespace
 import unittest
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.reference_tasks import ReferenceTask
+from manipulation_agent.reference_tasks import ReferenceTask, appliance_approach_point
+
+
+class ApplianceApproachTests(unittest.TestCase):
+    def test_lunch_fridge_target_is_on_near_face_at_body_height(self):
+        low, high = [7.5326, -2.2074, .1192], [8.1056, -1.5822, 1.8268]
+        point = appliance_approach_point((low, high), [6.175, 1.625, .0053])
+        self.assertAlmostEqual(point[1], high[1])
+        self.assertTrue(low[0] <= point[0] <= high[0])
+        self.assertAlmostEqual(point[2], (low[2]+high[2])/2)
+
+    def test_microwave_from_right_selects_right_face(self):
+        low, high = [4.0254, .5523, .8849], [4.4494, 1.0439, 1.1903]
+        point = appliance_approach_point((low, high), [6.2, .8, 0])
+        self.assertAlmostEqual(point[0], high[0])
+        self.assertTrue(low[1] <= point[1] <= high[1])
 
 
 class ReferenceRecoveryTests(unittest.TestCase):

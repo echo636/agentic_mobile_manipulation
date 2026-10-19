@@ -9,6 +9,23 @@ import json
 import time
 
 
+def appliance_approach_point(bounds, base):
+    """Select the near AABB face, then let the normal ray test verify visibility.
+
+    An appliance's interior center is occluded by its own door. This privileged
+    reference target does not change the visual policy or its visibility rules.
+    """
+    low, high = bounds
+    center = [(float(a)+float(b))/2 for a, b in zip(low, high)]
+    direction = [float(base[i])-center[i] for i in (0, 1)]
+    scales = [(float(high[i])-center[i])/abs(direction[i])
+              for i in (0, 1) if abs(direction[i]) > 1e-8]
+    if not scales:
+        return center
+    scale = min(scales)
+    return [center[0]+scale*direction[0], center[1]+scale*direction[1], center[2]]
+
+
 class ReferenceTask:
     def __init__(self, backend, output, *, max_attempts=200):
         self.backend = backend
@@ -31,6 +48,8 @@ class ReferenceTask:
             raise RuntimeError('Reference action budget exhausted')
         backend = self.backend
         obj = self.obj(role) if role else None
+        if primitive == 'navigate_to' and point is None and role in ('fridge', 'microwave'):
+            point = appliance_approach_point(obj.aabb, backend.robot.get_position_orientation()[0])
         selected = (backend.torch.tensor(point, dtype=backend.torch.float32) if point is not None
                     else obj.get_position_orientation()[0].clone() if obj is not None else None)
         row = {'index': len(self.calls) + 1, 'primitive': primitive, 'role': role,
@@ -88,14 +107,21 @@ class ReferenceTask:
                 try:
                     self.action('navigate_to', role, point)
                 except Exception as exc:
-                    if (getattr(exc, 'code', None) != 'navigation_search_exhausted'
-                            or not task.startswith(('warm_lunch', 'kitchen_service'))):
+                    if getattr(exc, 'code', None) != 'navigation_search_exhausted':
                         raise
-                    # Split a long kitchen/dining-room approach into ordinary
-                    # checked floor goals. Failure still counts against the
-                    # same 200-action budget; no collision check is bypassed.
-                    self.floor(6.2, 1.2)
-                    self.action('navigate_to', role, point)
+                    if task.startswith('movie') and role == 'toybox':
+                        # The closest stance can lack a complete turning route
+                        # with the second toy held. A preserved failure map
+                        # certifies this wider stance ~1.19 m from the box.
+                        # The live planner and ordinary reach check still apply.
+                        self.floor(5.5, 6.3)
+                    elif task.startswith(('warm_lunch', 'kitchen_service')):
+                        # Split a long kitchen/dining-room approach into ordinary
+                        # checked floor goals. Failed calls retain their budget.
+                        self.floor(6.2, 1.2)
+                        self.action('navigate_to', role, point)
+                    else:
+                        raise
         return self.action(primitive, role, point, **kwargs)
 
     def top(self, role, fx=.5, fy=.5):
