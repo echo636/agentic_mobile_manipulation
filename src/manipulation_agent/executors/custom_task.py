@@ -28,6 +28,7 @@ class CustomTaskBackend(RGBBackend):
         validate_system_references(self.custom_spec,
             Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/systems')
         self.custom_tracker = None; self.custom_sequence = 0
+        self._initial_entity_names = None
         self.build_instance = Path(build_instance) if build_instance else None
         self._custom_motion_positions = {}; self._custom_state_errors = []
         base = self.custom_spec['base']
@@ -51,8 +52,7 @@ class CustomTaskBackend(RGBBackend):
         write_json(self.output/'custom_initial_contact_refresh.json',{
             'status':'failed' if failed else 'passed','physics_steps':5,
             'before':before_refresh,'after':initial,'failed_assertions':failed,
-            'role_poses':{role:[v.tolist() for v in self.custom_objects[name].get_position_orientation()]
-                          for role,name in self.custom_spec['roles'].items()}})
+            'role_poses':self._role_poses()})
         if failed:
             raise RuntimeError('Policy-ready initial state assertion failed: '+', '.join(failed))
         self.custom_tracker=TemporalGoalEvaluator(self.custom_spec['evaluation'])
@@ -81,7 +81,8 @@ class CustomTaskBackend(RGBBackend):
             self.env.scene.restore(str(instance_path))
         self.custom_objects = {o.name: o for o in self.env.scene.objects}
         for role, name in spec['roles'].items():
-            if name not in self.custom_objects: raise ValueError('Missing custom role: ' + role)
+            if name not in self.custom_objects and role not in spec.get('future_roles', []):
+                raise ValueError('Missing custom role: ' + role)
         self.custom_tracker = TemporalGoalEvaluator(spec['evaluation'])
         initial = self._predicate_values()
         self.custom_tracker.observe(initial, 0, env_step=0, initial=True)
@@ -95,10 +96,14 @@ class CustomTaskBackend(RGBBackend):
             'status':'passed', 'validation_level':'scene loaded and all private predicates evaluated; feasibility separate',
             'task':self.task_metadata, 'input_hashes':self.input_hashes,
             'initial_predicates':initial, 'initial_evaluation':self.custom_tracker.result(initial),
-            'role_poses':{role:[v.tolist() for v in self.custom_objects[name].get_position_orientation()]
-                          for role,name in spec['roles'].items()}})
+            'role_poses':self._role_poses()})
         # Construction is outside policy time and outside the agent/video trace.
         self.steps = 0; self.frames_revision = -1
+
+    def _role_poses(self):
+        live = {o.name:o for o in self.env.scene.objects}
+        return {role:([v.tolist() for v in live[name].get_position_orientation()] if name in live else None)
+                for role,name in self.custom_spec['roles'].items()}
 
     def _construct_instance(self):
         """Import pinned asset definitions, then sample one joint initial layout.
@@ -118,11 +123,17 @@ class CustomTaskBackend(RGBBackend):
             task = item['source_task']; source_scene = catalog[task][0]['scene_model']
             template = root/'scene_test/public'/source_scene/'json'/f'{source_scene}_task_{task}_0_0_template.json'
             data = json.loads(template.read_text()); old = item['source_object']; name = item.get('name', old)
+            digest = hashlib.sha256(template.read_bytes()).hexdigest()
+            if item.get('source_sha256') and item['source_sha256'] != digest:
+                raise ValueError('Construction source template changed: '+task)
+            if name in scene['objects_info']['init_info'] and item.get('if_missing'):
+                continue
             if name in scene['objects_info']['init_info']: raise ValueError('Duplicate imported object: '+name)
             entry = copy.deepcopy(data['objects_info']['init_info'][old])
             entry['args']['name'] = name; entry['args'].pop('bddl_object_scope', None)
             if 'in_rooms' in item: entry['args']['in_rooms'] = item['in_rooms']
             if 'scale' in item: entry['args']['scale'] = list(item['scale'])
+            if 'fixed_base' in item: entry['args']['fixed_base'] = item['fixed_base']
             state = copy.deepcopy(data['state']['registry']['object_registry'][old])
             if 'position' in item: state['root_link']['pos'] = item['position']
             if 'orientation' in item: state['root_link']['ori'] = item['orientation']
@@ -132,11 +143,34 @@ class CustomTaskBackend(RGBBackend):
                 'source_sha256':hashlib.sha256(template.read_bytes()).hexdigest(),
                 'asset':entry['args']})
         self.env.scene.restore(scene)
+        if spec.get('fixtures'):
+            from omnigibson.objects.primitive_object import PrimitiveObject
+            with self.og.sim.stopped():
+                for fixture in spec['fixtures']:
+                    obj = PrimitiveObject(name=fixture['name'], primitive_type='Cube', size=1.,
+                                          scale=fixture['size'], fixed_base=True,
+                                          rgba=fixture['rgba'], category='work_surface')
+                    self.env.scene.add_object(obj)
+                    obj.set_position_orientation(self.torch.tensor(fixture['position']),
+                                                 self.torch.tensor([0.,0.,0.,1.]))
+            for _ in range(5): self.og.sim.step()
         objects = {o.name:o for o in self.env.scene.objects}
-        roles = {k:objects[v] for k,v in spec['roles'].items()}
+        roles = {k:objects.get(v) for k,v in spec['roles'].items()}
         for operation in spec.get('initial_layout', []):
             obj = roles[operation['object']]
-            if 'position' in operation:
+            if operation.get('place_on_support'):
+                support = roles[operation['target']]
+                pos, ori = obj.get_position_orientation()
+                if 'orientation' in operation:
+                    ori = self.torch.tensor(operation['orientation'],dtype=pos.dtype,device=pos.device)
+                    obj.set_position_orientation(pos,ori)
+                low, high = obj.aabb
+                xy = self.torch.tensor(operation['xy'],dtype=pos.dtype,device=pos.device)
+                pos = pos.clone()
+                pos[:2] += xy-(low[:2]+high[:2])/2
+                pos[2] += support.aabb[1][2]-low[2]+.004
+                obj.set_position_orientation(pos,ori);obj.keep_still()
+            elif 'position' in operation:
                 pos = self.torch.tensor(operation['position'], dtype=self.torch.float32)
                 ori = self.torch.tensor(operation.get('orientation',[0,0,0,1]), dtype=self.torch.float32)
                 obj.set_position_orientation(pos,ori);obj.keep_still()
@@ -159,12 +193,30 @@ class CustomTaskBackend(RGBBackend):
     def _predicate_values(self):
         from omnigibson import object_states
         live = {obj.name:obj for obj in self.env.scene.objects}
+        if self._initial_entity_names is None:
+            self._initial_entity_names = set(live)
         roles = {key:live.get(name) for key,name in self.custom_spec['roles'].items()}
         result = {}
         for key, row in self.custom_spec['evaluation']['predicates'].items():
             obj = roles[row['object']]
+            if row['state'] == 'Exists':
+                result[key] = obj is not None; continue
+            if row['state'] == 'Replaced':
+                from ..diverse_task_contract import replacement_complete
+                rule = next(r for r in self.custom_spec['replacements'] if r['parent'] == row['object'])
+                result[key] = replacement_complete(rule,self.custom_spec['roles'],live,self._initial_entity_names)
+                continue
+            if row['state'] == 'HandEmpty':
+                result[key] = self._get_held() is None; continue
             if obj is None or (row.get('target') and roles[row['target']] is None):
                 result[key] = False; continue
+            if row['state'] == 'PairedOnTop':
+                members = [roles[m] for m in row['members'] if roles[m] is not None]
+                supported = [m for m in members if object_states.OnTop in m.states
+                             and m.states[object_states.OnTop].get_value(obj)]
+                result[key] = (len(supported)==2 and object_states.NextTo in supported[0].states
+                               and bool(supported[0].states[object_states.NextTo].get_value(supported[1])))
+                continue
             cls = getattr(object_states,row['state'])
             if cls not in obj.states: raise ValueError('Unsupported custom predicate '+key)
             args = [roles[row['target']]] if row.get('target') else []
@@ -217,6 +269,11 @@ class CustomTaskBackend(RGBBackend):
                 self._custom_motion_positions = current
             raise
         finally:
+            if primitive == 'grasp' and self._get_held() is not None and self._carry_contents:
+                for rule in self.custom_spec['evaluation'].get('carry_guards', []):
+                    if not any(v['id']==rule['id'] for v in self.custom_tracker.violations):
+                        self.custom_tracker.violations.append({'id':rule['id'],'kind':'aggregate_carry',
+                            'env_step':self.steps,'carried_count':1+len(self._carry_contents)})
             self._check_custom_motion()
             self.custom_sequence += 1
             self.custom_tracker.observe(self._predicate_values(),self.custom_sequence,env_step=self.steps)
@@ -224,9 +281,12 @@ class CustomTaskBackend(RGBBackend):
         return result
 
     def evaluate(self):
-        result = self.custom_tracker.result(self._predicate_values())
+        values = self._predicate_values()
+        result = self.custom_tracker.result(values)
         live = {obj.name for obj in self.env.scene.objects}
-        missing = [role for role,name in self.custom_spec['roles'].items() if name not in live]
+        replaced = {r['parent'] for r in self.custom_spec.get('replacements', [])
+                    if values.get(r['parent']+'_replaced',False)}
+        missing = [role for role,name in self.custom_spec['roles'].items() if name not in live and role not in replaced]
         result['missing_required_entities'] = missing
         result['task_success'] = result['task_success'] and not missing
         result.update(task_instance=self.task_metadata,input_hashes=self.input_hashes,

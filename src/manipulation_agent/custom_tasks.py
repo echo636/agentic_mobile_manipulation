@@ -24,7 +24,7 @@ def sha256(path):
 
 def validate_spec(spec, *, spec_path=None, require_frozen=False):
     """Reject ambiguous/partly mapped v2 contracts before simulator startup."""
-    if spec.get('schema_version') not in (1, 2):
+    if spec.get('schema_version') not in (1, 2, 3):
         raise ValueError('Unknown custom task schema')
     for key in ('id', 'instance_id', 'public_instruction'):
         if not isinstance(spec.get(key), str) or not spec[key].strip():
@@ -62,10 +62,10 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
     counted = {
         'terminal': set(evaluation['terminal']),
         'milestones': set(evaluation.get('milestones', {})),
-        'constraints': {row['id'] for kind in ('motion_guards', 'state_guards')
+        'constraints': {row['id'] for kind in ('motion_guards', 'state_guards', 'carry_guards')
                         for row in evaluation.get(kind, [])},
     }
-    if spec['schema_version'] == 2:
+    if spec['schema_version'] >= 2:
         requirements = spec.get('requirements', [])
         if not requirements or len({r['id'] for r in requirements}) != len(requirements):
             raise ValueError('Public requirements need unique IDs')
@@ -93,8 +93,12 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
         budget = checks.get('max_reference_action_attempts')
         if type(restores) is not int or not 2 <= restores <= len(orders):
             raise ValueError('Fresh restore count must be at least two and covered by reference orders')
-        if type(budget) is not int or not 1 <= budget <= 200:
-            raise ValueError('Reference budget must be a positive integer within the 200-attempt pilot budget')
+        limit = 1000 if spec['schema_version'] == 3 else 200
+        if type(budget) is not int or not 1 <= budget <= limit:
+            raise ValueError(f'Reference budget must be a positive integer within the {limit}-attempt budget')
+    if spec['schema_version'] == 3:
+        from .diverse_task_contract import validate_construction
+        validate_construction(spec)
     frozen = spec.get('frozen_instance')
     scene_path = None
     if frozen:

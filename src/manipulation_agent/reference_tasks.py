@@ -562,6 +562,9 @@ class ReferenceTask:
         self.return_kit()
 
     def run(self, order):
+        if self.backend.custom_spec.get('schema_version') == 3:
+            from .diverse_reference import DiverseReference
+            return DiverseReference(self).run(order)
         task = self.backend.custom_spec
         if order not in task['acceptance_cases']['reference_orders']:
             raise ValueError('Undeclared reference order: ' + order)
@@ -579,6 +582,9 @@ class ReferenceTask:
             raise ValueError('Unknown reference task')
 
     def negative(self, case):
+        if self.backend.custom_spec.get('schema_version') == 3:
+            from .diverse_reference import DiverseReference
+            return DiverseReference(self).negative(case)
         """Exercise a declared failure with real state, recording its witness.
 
         Entity removal is explicit fault injection, never a solution action.

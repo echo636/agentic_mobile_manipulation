@@ -1,0 +1,61 @@
+"""CPU validation of explicit construction extensions; no simulator setters."""
+import math
+
+
+def validate_construction(spec):
+    roles = spec['roles']
+    future = set(spec.get('future_roles', []))
+    if not future <= roles.keys():
+        raise ValueError('Unknown future entity')
+    produced = []
+    for rule in spec.get('replacements', []):
+        parent, children = rule['parent'], rule['children']
+        if parent not in roles or parent in future or not children:
+            raise ValueError('Invalid replacement parent')
+        for i, child in enumerate(children):
+            role = child['role']
+            if role not in future or roles[role] != f'half_{roles[parent]}_{i}':
+                raise ValueError('Replacement binding must match native slicing names')
+            if not child.get('category') or not child.get('model'):
+                raise ValueError('Replacement needs pinned category/model')
+            produced.append(role)
+    if set(produced) != future or len(produced) != len(set(produced)):
+        raise ValueError('Future entities must have exactly one declared producer')
+    names = []
+    for fixture in spec.get('fixtures', []):
+        names.append(fixture['name'])
+        if fixture['fixed_base'] is not True:
+            raise ValueError('Construction supports must be fixed')
+        for key in ('position','size'):
+            values = fixture[key]
+            if (len(values) != 3 or any(type(v) not in (int,float) or not math.isfinite(v) for v in values)
+                    or (key == 'size' and min(values) <= 0)):
+                raise ValueError('Invalid fixture geometry')
+    if len(names) != len(set(names)):
+        raise ValueError('Duplicate fixture names')
+    for row in spec['evaluation']['predicates'].values():
+        if row['state'] == 'PairedOnTop':
+            if not row.get('members') or not set(row['members']) <= roles.keys():
+                raise ValueError('Pair predicate requires known member roles')
+    for move in spec.get('initial_layout', []):
+        if move['object'] not in roles or move['object'] in future:
+            raise ValueError('Initial layout cannot manipulate a future/unknown entity')
+        if move.get('target') and move['target'] not in roles:
+            raise ValueError('Unknown layout target')
+    if len(spec['acceptance_cases']['physical_negative_cases']) < 3:
+        raise ValueError('100+ candidates require at least three physical negatives')
+
+
+def replacement_complete(rule, roles, live, initially_real):
+    """Conserve native slicing identity; same-looking unrelated parts never count."""
+    parent = roles[rule['parent']]
+    if parent not in initially_real or parent in live:
+        return False
+    for child in rule['children']:
+        name = roles[child['role']]
+        obj = live.get(name)
+        if name in initially_real or obj is None:
+            return False
+        if (obj.category, obj.model) != (child['category'], child['model']):
+            return False
+    return True

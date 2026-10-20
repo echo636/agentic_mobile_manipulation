@@ -1,0 +1,2055 @@
+{
+  "schema_version": 3,
+  "id": "bedroom_vacuum_reset_close_102_v1",
+  "instance_id": "bedroom_vacuum_reset_close_102_v1_seed0_r1",
+  "status": "candidate_physics_unvalidated",
+  "official_submission_eligible": false,
+  "benchmark_ready": false,
+  "base": {
+    "task": "vacuuming_floors",
+    "instance": 301,
+    "seed": 0
+  },
+  "roles": {
+    "floor": "floors_nlswvt_0",
+    "floor_b": "floors_zrhxwn_0",
+    "tool_home": "lh_tool_home",
+    "tool": "lh_tool",
+    "a_stage": "lh_a_stage",
+    "a_destination": "lh_a_destination",
+    "a_item00": "lh_a_item00",
+    "a_item01": "lh_a_item01",
+    "a_item02": "lh_a_item02",
+    "a_item03": "lh_a_item03",
+    "a_item04": "lh_a_item04",
+    "a_item05": "lh_a_item05",
+    "a_item06": "lh_a_item06",
+    "a_item07": "lh_a_item07",
+    "a_item08": "lh_a_item08",
+    "a_item09": "lh_a_item09",
+    "a_item10": "lh_a_item10",
+    "a_item11": "lh_a_item11",
+    "a_lamp0": "lh_a_lamp0",
+    "a_lamp0_stand": "lh_a_lamp0_stand",
+    "a_lamp1": "lh_a_lamp1",
+    "a_lamp1_stand": "lh_a_lamp1_stand",
+    "b_stage": "lh_b_stage",
+    "b_destination": "lh_b_destination",
+    "b_item00": "lh_b_item00",
+    "b_item01": "lh_b_item01",
+    "b_item02": "lh_b_item02",
+    "b_item03": "lh_b_item03",
+    "b_item04": "lh_b_item04",
+    "b_item05": "lh_b_item05",
+    "b_item06": "lh_b_item06",
+    "b_item07": "lh_b_item07",
+    "b_item08": "lh_b_item08",
+    "b_item09": "lh_b_item09",
+    "b_item10": "lh_b_item10",
+    "b_item11": "lh_b_item11",
+    "b_lamp0": "lh_b_lamp0",
+    "b_lamp0_stand": "lh_b_lamp0_stand",
+    "b_lamp1": "lh_b_lamp1",
+    "b_lamp1_stand": "lh_b_lamp1_stand"
+  },
+  "asset_imports": [
+    {
+      "name": "lh_tool",
+      "source_task": "vacuuming_floors",
+      "source_object": "vacuum_89",
+      "source_sha256": "3aa56342cc02f704725cdd268ce94e15fa7015dfa8c88fadf01b3f5890772b36",
+      "position": [
+        -3.0,
+        0.2,
+        1.0
+      ]
+    },
+    {
+      "name": "lh_a_item00",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.46,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "lh_a_item01",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.46,
+        1.0,
+        1.25
+      ]
+    },
+    {
+      "name": "lh_a_item02",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.46,
+        1.0,
+        1.5
+      ]
+    },
+    {
+      "name": "lh_a_item03",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.46,
+        1.0,
+        1.75
+      ]
+    },
+    {
+      "name": "lh_a_item04",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.46,
+        1.0,
+        2.0
+      ]
+    },
+    {
+      "name": "lh_a_item05",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.46,
+        1.0,
+        2.25
+      ]
+    },
+    {
+      "name": "lh_a_item06",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.46,
+        1.0,
+        2.5
+      ]
+    },
+    {
+      "name": "lh_a_item07",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.46,
+        1.0,
+        2.75
+      ]
+    },
+    {
+      "name": "lh_a_item08",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.46,
+        1.0,
+        3.0
+      ]
+    },
+    {
+      "name": "lh_a_item09",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.46,
+        1.0,
+        3.25
+      ]
+    },
+    {
+      "name": "lh_a_item10",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.46,
+        1.0,
+        3.5
+      ]
+    },
+    {
+      "name": "lh_a_item11",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.46,
+        1.0,
+        3.75
+      ]
+    },
+    {
+      "name": "lh_a_lamp0",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        -3.31,
+        0.1,
+        1.0
+      ]
+    },
+    {
+      "name": "lh_a_lamp1",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        -3.31,
+        0.1,
+        1.3
+      ]
+    },
+    {
+      "name": "lh_b_item00",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.47,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "lh_b_item01",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.47,
+        1.0,
+        1.25
+      ]
+    },
+    {
+      "name": "lh_b_item02",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.47,
+        1.0,
+        1.5
+      ]
+    },
+    {
+      "name": "lh_b_item03",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.47,
+        1.0,
+        1.75
+      ]
+    },
+    {
+      "name": "lh_b_item04",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.47,
+        1.0,
+        2.0
+      ]
+    },
+    {
+      "name": "lh_b_item05",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.47,
+        1.0,
+        2.25
+      ]
+    },
+    {
+      "name": "lh_b_item06",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.47,
+        1.0,
+        2.5
+      ]
+    },
+    {
+      "name": "lh_b_item07",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.47,
+        1.0,
+        2.75
+      ]
+    },
+    {
+      "name": "lh_b_item08",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.47,
+        1.0,
+        3.0
+      ]
+    },
+    {
+      "name": "lh_b_item09",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.47,
+        1.0,
+        3.25
+      ]
+    },
+    {
+      "name": "lh_b_item10",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.47,
+        1.0,
+        3.5
+      ]
+    },
+    {
+      "name": "lh_b_item11",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.47,
+        1.0,
+        3.75
+      ]
+    },
+    {
+      "name": "lh_b_lamp0",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        5.619999999999999,
+        0.1,
+        1.0
+      ]
+    },
+    {
+      "name": "lh_b_lamp1",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        5.619999999999999,
+        0.1,
+        1.3
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "lh_tool_home",
+      "position": [
+        -3.0,
+        0.2,
+        0.225
+      ],
+      "size": [
+        0.8,
+        0.7,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_a_stage",
+      "position": [
+        -5.609999999999999,
+        0.1,
+        0.225
+      ],
+      "size": [
+        1.5,
+        1.0,
+        0.45
+      ],
+      "rgba": [
+        0.95,
+        0.65,
+        0.08,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_a_destination",
+      "position": [
+        -3.31,
+        0.1,
+        0.225
+      ],
+      "size": [
+        1.5,
+        1.0,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_a_lamp0_stand",
+      "position": [
+        -5.06,
+        3.9,
+        0.225
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_a_lamp1_stand",
+      "position": [
+        -3.86,
+        3.9,
+        0.225
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_b_stage",
+      "position": [
+        3.32,
+        0.1,
+        0.225
+      ],
+      "size": [
+        1.5,
+        1.0,
+        0.45
+      ],
+      "rgba": [
+        0.95,
+        0.65,
+        0.08,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_b_destination",
+      "position": [
+        5.619999999999999,
+        0.1,
+        0.225
+      ],
+      "size": [
+        1.5,
+        1.0,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_b_lamp0_stand",
+      "position": [
+        3.8699999999999997,
+        3.9,
+        0.225
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_b_lamp1_stand",
+      "position": [
+        5.069999999999999,
+        3.9,
+        0.225
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "tool",
+      "target": "tool_home",
+      "place_on_support": true,
+      "xy": [
+        -3.0,
+        0.2
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "tool",
+      "state": "ToggledOn",
+      "value": false,
+      "settle_steps": 1
+    },
+    {
+      "object": "a_item00",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.9399999999999995,
+        0.85
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item01",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.62,
+        0.85
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item02",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.3,
+        0.85
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item03",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -3.98,
+        0.85
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item04",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.9399999999999995,
+        1.17
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item05",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.62,
+        1.17
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item06",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.3,
+        1.17
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item07",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -3.98,
+        1.17
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item08",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.9399999999999995,
+        1.49
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item09",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.62,
+        1.49
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item10",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.3,
+        1.49
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_item11",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -3.98,
+        1.49
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "floor",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "a_lamp0",
+      "target": "a_lamp0_stand",
+      "place_on_support": true,
+      "xy": [
+        -5.06,
+        3.9
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_lamp0",
+      "state": "ToggledOn",
+      "value": true,
+      "settle_steps": 1
+    },
+    {
+      "object": "a_lamp1",
+      "target": "a_lamp1_stand",
+      "place_on_support": true,
+      "xy": [
+        -3.86,
+        3.9
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "a_lamp1",
+      "state": "ToggledOn",
+      "value": true,
+      "settle_steps": 1
+    },
+    {
+      "object": "b_item00",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        3.9899999999999998,
+        0.85
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item01",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.31,
+        0.85
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item02",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.63,
+        0.85
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item03",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.949999999999999,
+        0.85
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item04",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        3.9899999999999998,
+        1.17
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item05",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.31,
+        1.17
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item06",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.63,
+        1.17
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item07",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.949999999999999,
+        1.17
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item08",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        3.9899999999999998,
+        1.49
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item09",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.31,
+        1.49
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item10",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.63,
+        1.49
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_item11",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.949999999999999,
+        1.49
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "floor_b",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "b_lamp0",
+      "target": "b_lamp0_stand",
+      "place_on_support": true,
+      "xy": [
+        3.8699999999999997,
+        3.9
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_lamp0",
+      "state": "ToggledOn",
+      "value": true,
+      "settle_steps": 1
+    },
+    {
+      "object": "b_lamp1",
+      "target": "b_lamp1_stand",
+      "place_on_support": true,
+      "xy": [
+        5.069999999999999,
+        3.9
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "b_lamp1",
+      "state": "ToggledOn",
+      "value": true,
+      "settle_steps": 1
+    }
+  ],
+  "initial_assertions": {
+    "tool_starts_on_tool_home": "tool_on_tool_home",
+    "tool_ToggledOn": {
+      "not": "tool_ToggledOn"
+    },
+    "a_item00_starts_on_floor": "a_item00_on_floor",
+    "a_item01_starts_on_floor": "a_item01_on_floor",
+    "a_item02_starts_on_floor": "a_item02_on_floor",
+    "a_item03_starts_on_floor": "a_item03_on_floor",
+    "a_item04_starts_on_floor": "a_item04_on_floor",
+    "a_item05_starts_on_floor": "a_item05_on_floor",
+    "a_item06_starts_on_floor": "a_item06_on_floor",
+    "a_item07_starts_on_floor": "a_item07_on_floor",
+    "a_item08_starts_on_floor": "a_item08_on_floor",
+    "a_item09_starts_on_floor": "a_item09_on_floor",
+    "a_item10_starts_on_floor": "a_item10_on_floor",
+    "a_item11_starts_on_floor": "a_item11_on_floor",
+    "floor_Covered_dust": "floor_Covered_dust",
+    "a_lamp0_starts_on_a_lamp0_stand": "a_lamp0_on_a_lamp0_stand",
+    "a_lamp0_ToggledOn": "a_lamp0_ToggledOn",
+    "a_lamp1_starts_on_a_lamp1_stand": "a_lamp1_on_a_lamp1_stand",
+    "a_lamp1_ToggledOn": "a_lamp1_ToggledOn",
+    "b_item00_starts_on_floor_b": "b_item00_on_floor_b",
+    "b_item01_starts_on_floor_b": "b_item01_on_floor_b",
+    "b_item02_starts_on_floor_b": "b_item02_on_floor_b",
+    "b_item03_starts_on_floor_b": "b_item03_on_floor_b",
+    "b_item04_starts_on_floor_b": "b_item04_on_floor_b",
+    "b_item05_starts_on_floor_b": "b_item05_on_floor_b",
+    "b_item06_starts_on_floor_b": "b_item06_on_floor_b",
+    "b_item07_starts_on_floor_b": "b_item07_on_floor_b",
+    "b_item08_starts_on_floor_b": "b_item08_on_floor_b",
+    "b_item09_starts_on_floor_b": "b_item09_on_floor_b",
+    "b_item10_starts_on_floor_b": "b_item10_on_floor_b",
+    "b_item11_starts_on_floor_b": "b_item11_on_floor_b",
+    "floor_b_Covered_dust": "floor_b_Covered_dust",
+    "b_lamp0_starts_on_b_lamp0_stand": "b_lamp0_on_b_lamp0_stand",
+    "b_lamp0_ToggledOn": "b_lamp0_ToggledOn",
+    "b_lamp1_starts_on_b_lamp1_stand": "b_lamp1_on_b_lamp1_stand",
+    "b_lamp1_ToggledOn": "b_lamp1_ToggledOn"
+  },
+  "public_instruction": "清理两间卧室：每间把 12 件散放书和玩具移到固定暂存台，地面腾空后吸尘，再按公开位置归位。两间完成后关闭 4 盏初始亮着的灯，吸尘器关闭并归还。",
+  "public_context": [
+    "两间卧室各 12 件杂物必须全部暂存在本房黄台后才吸尘，地面干净后再将本房物品放到绿台。",
+    "两间都完成后才关闭四盏台灯；最终吸尘器关闭并归还灰台。",
+    "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。"
+  ],
+  "requirements": [
+    {
+      "id": "rooms",
+      "text": "两间卧室各 12 件杂物必须全部暂存在本房黄台后才吸尘，地面干净后再将本房物品放到绿台。",
+      "terminal": [
+        "a_clean",
+        "a_item00_returned",
+        "a_item01_returned",
+        "a_item02_returned",
+        "a_item03_returned",
+        "a_item04_returned",
+        "a_item05_returned",
+        "a_item06_returned",
+        "a_item07_returned",
+        "a_item08_returned",
+        "a_item09_returned",
+        "a_item10_returned",
+        "a_item11_returned",
+        "b_clean",
+        "b_item00_returned",
+        "b_item01_returned",
+        "b_item02_returned",
+        "b_item03_returned",
+        "b_item04_returned",
+        "b_item05_returned",
+        "b_item06_returned",
+        "b_item07_returned",
+        "b_item08_returned",
+        "b_item09_returned",
+        "b_item10_returned",
+        "b_item11_returned"
+      ],
+      "milestones": [
+        "a_cleared",
+        "a_cleaned",
+        "b_cleared",
+        "b_cleaned",
+        "rooms_complete"
+      ],
+      "constraints": [
+        "a_clear_before_vacuum",
+        "a_clean_before_reset",
+        "b_clear_before_vacuum",
+        "b_clean_before_reset"
+      ]
+    },
+    {
+      "id": "close",
+      "text": "两间都完成后才关闭四盏台灯；最终吸尘器关闭并归还灰台。",
+      "terminal": [
+        "tool_off",
+        "tool_home",
+        "a_lamp0_off",
+        "a_lamp1_off",
+        "b_lamp0_off",
+        "b_lamp1_off"
+      ],
+      "constraints": [
+        "a_lamp0_last",
+        "a_lamp1_last",
+        "b_lamp0_last",
+        "b_lamp1_last"
+      ]
+    },
+    {
+      "id": "protocol",
+      "text": "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。",
+      "terminal": [
+        "hand_empty"
+      ],
+      "milestones": [],
+      "constraints": [
+        "individual_handling"
+      ]
+    }
+  ],
+  "evaluation": {
+    "predicates": {
+      "tool_on_tool_home": {
+        "object": "tool",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "tool_ToggledOn": {
+        "object": "tool",
+        "state": "ToggledOn"
+      },
+      "a_item00_on_floor": {
+        "object": "a_item00",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item00_on_a_stage": {
+        "object": "a_item00",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item00_on_a_destination": {
+        "object": "a_item00",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item01_on_floor": {
+        "object": "a_item01",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item01_on_a_stage": {
+        "object": "a_item01",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item01_on_a_destination": {
+        "object": "a_item01",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item02_on_floor": {
+        "object": "a_item02",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item02_on_a_stage": {
+        "object": "a_item02",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item02_on_a_destination": {
+        "object": "a_item02",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item03_on_floor": {
+        "object": "a_item03",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item03_on_a_stage": {
+        "object": "a_item03",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item03_on_a_destination": {
+        "object": "a_item03",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item04_on_floor": {
+        "object": "a_item04",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item04_on_a_stage": {
+        "object": "a_item04",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item04_on_a_destination": {
+        "object": "a_item04",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item05_on_floor": {
+        "object": "a_item05",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item05_on_a_stage": {
+        "object": "a_item05",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item05_on_a_destination": {
+        "object": "a_item05",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item06_on_floor": {
+        "object": "a_item06",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item06_on_a_stage": {
+        "object": "a_item06",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item06_on_a_destination": {
+        "object": "a_item06",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item07_on_floor": {
+        "object": "a_item07",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item07_on_a_stage": {
+        "object": "a_item07",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item07_on_a_destination": {
+        "object": "a_item07",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item08_on_floor": {
+        "object": "a_item08",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item08_on_a_stage": {
+        "object": "a_item08",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item08_on_a_destination": {
+        "object": "a_item08",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item09_on_floor": {
+        "object": "a_item09",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item09_on_a_stage": {
+        "object": "a_item09",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item09_on_a_destination": {
+        "object": "a_item09",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item10_on_floor": {
+        "object": "a_item10",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item10_on_a_stage": {
+        "object": "a_item10",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item10_on_a_destination": {
+        "object": "a_item10",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item11_on_floor": {
+        "object": "a_item11",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item11_on_a_stage": {
+        "object": "a_item11",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item11_on_a_destination": {
+        "object": "a_item11",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "floor_Covered_dust": {
+        "object": "floor",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "a_lamp0_on_a_lamp0_stand": {
+        "object": "a_lamp0",
+        "state": "OnTop",
+        "target": "a_lamp0_stand"
+      },
+      "a_lamp0_ToggledOn": {
+        "object": "a_lamp0",
+        "state": "ToggledOn"
+      },
+      "a_lamp1_on_a_lamp1_stand": {
+        "object": "a_lamp1",
+        "state": "OnTop",
+        "target": "a_lamp1_stand"
+      },
+      "a_lamp1_ToggledOn": {
+        "object": "a_lamp1",
+        "state": "ToggledOn"
+      },
+      "b_item00_on_floor_b": {
+        "object": "b_item00",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item00_on_b_stage": {
+        "object": "b_item00",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item00_on_b_destination": {
+        "object": "b_item00",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item01_on_floor_b": {
+        "object": "b_item01",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item01_on_b_stage": {
+        "object": "b_item01",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item01_on_b_destination": {
+        "object": "b_item01",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item02_on_floor_b": {
+        "object": "b_item02",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item02_on_b_stage": {
+        "object": "b_item02",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item02_on_b_destination": {
+        "object": "b_item02",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item03_on_floor_b": {
+        "object": "b_item03",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item03_on_b_stage": {
+        "object": "b_item03",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item03_on_b_destination": {
+        "object": "b_item03",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item04_on_floor_b": {
+        "object": "b_item04",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item04_on_b_stage": {
+        "object": "b_item04",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item04_on_b_destination": {
+        "object": "b_item04",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item05_on_floor_b": {
+        "object": "b_item05",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item05_on_b_stage": {
+        "object": "b_item05",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item05_on_b_destination": {
+        "object": "b_item05",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item06_on_floor_b": {
+        "object": "b_item06",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item06_on_b_stage": {
+        "object": "b_item06",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item06_on_b_destination": {
+        "object": "b_item06",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item07_on_floor_b": {
+        "object": "b_item07",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item07_on_b_stage": {
+        "object": "b_item07",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item07_on_b_destination": {
+        "object": "b_item07",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item08_on_floor_b": {
+        "object": "b_item08",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item08_on_b_stage": {
+        "object": "b_item08",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item08_on_b_destination": {
+        "object": "b_item08",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item09_on_floor_b": {
+        "object": "b_item09",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item09_on_b_stage": {
+        "object": "b_item09",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item09_on_b_destination": {
+        "object": "b_item09",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item10_on_floor_b": {
+        "object": "b_item10",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item10_on_b_stage": {
+        "object": "b_item10",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item10_on_b_destination": {
+        "object": "b_item10",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item11_on_floor_b": {
+        "object": "b_item11",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item11_on_b_stage": {
+        "object": "b_item11",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item11_on_b_destination": {
+        "object": "b_item11",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "floor_b_Covered_dust": {
+        "object": "floor_b",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "b_lamp0_on_b_lamp0_stand": {
+        "object": "b_lamp0",
+        "state": "OnTop",
+        "target": "b_lamp0_stand"
+      },
+      "b_lamp0_ToggledOn": {
+        "object": "b_lamp0",
+        "state": "ToggledOn"
+      },
+      "b_lamp1_on_b_lamp1_stand": {
+        "object": "b_lamp1",
+        "state": "OnTop",
+        "target": "b_lamp1_stand"
+      },
+      "b_lamp1_ToggledOn": {
+        "object": "b_lamp1",
+        "state": "ToggledOn"
+      },
+      "hand_empty": {
+        "object": "tool",
+        "state": "HandEmpty"
+      }
+    },
+    "terminal": {
+      "tool_off": {
+        "not": "tool_ToggledOn"
+      },
+      "tool_home": "tool_on_tool_home",
+      "a_clean": {
+        "not": "floor_Covered_dust"
+      },
+      "a_item00_returned": "a_item00_on_a_destination",
+      "a_item01_returned": "a_item01_on_a_destination",
+      "a_item02_returned": "a_item02_on_a_destination",
+      "a_item03_returned": "a_item03_on_a_destination",
+      "a_item04_returned": "a_item04_on_a_destination",
+      "a_item05_returned": "a_item05_on_a_destination",
+      "a_item06_returned": "a_item06_on_a_destination",
+      "a_item07_returned": "a_item07_on_a_destination",
+      "a_item08_returned": "a_item08_on_a_destination",
+      "a_item09_returned": "a_item09_on_a_destination",
+      "a_item10_returned": "a_item10_on_a_destination",
+      "a_item11_returned": "a_item11_on_a_destination",
+      "a_lamp0_off": {
+        "not": "a_lamp0_ToggledOn"
+      },
+      "a_lamp1_off": {
+        "not": "a_lamp1_ToggledOn"
+      },
+      "b_clean": {
+        "not": "floor_b_Covered_dust"
+      },
+      "b_item00_returned": "b_item00_on_b_destination",
+      "b_item01_returned": "b_item01_on_b_destination",
+      "b_item02_returned": "b_item02_on_b_destination",
+      "b_item03_returned": "b_item03_on_b_destination",
+      "b_item04_returned": "b_item04_on_b_destination",
+      "b_item05_returned": "b_item05_on_b_destination",
+      "b_item06_returned": "b_item06_on_b_destination",
+      "b_item07_returned": "b_item07_on_b_destination",
+      "b_item08_returned": "b_item08_on_b_destination",
+      "b_item09_returned": "b_item09_on_b_destination",
+      "b_item10_returned": "b_item10_on_b_destination",
+      "b_item11_returned": "b_item11_on_b_destination",
+      "b_lamp0_off": {
+        "not": "b_lamp0_ToggledOn"
+      },
+      "b_lamp1_off": {
+        "not": "b_lamp1_ToggledOn"
+      },
+      "hand_empty": "hand_empty"
+    },
+    "milestones": {
+      "a_cleared": {
+        "when": {
+          "all": [
+            "a_item00_on_a_stage",
+            "a_item01_on_a_stage",
+            "a_item02_on_a_stage",
+            "a_item03_on_a_stage",
+            "a_item04_on_a_stage",
+            "a_item05_on_a_stage",
+            "a_item06_on_a_stage",
+            "a_item07_on_a_stage",
+            "a_item08_on_a_stage",
+            "a_item09_on_a_stage",
+            "a_item10_on_a_stage",
+            "a_item11_on_a_stage"
+          ]
+        },
+        "after": []
+      },
+      "a_cleaned": {
+        "when": {
+          "not": "floor_Covered_dust"
+        },
+        "after": [
+          "a_cleared"
+        ]
+      },
+      "b_cleared": {
+        "when": {
+          "all": [
+            "b_item00_on_b_stage",
+            "b_item01_on_b_stage",
+            "b_item02_on_b_stage",
+            "b_item03_on_b_stage",
+            "b_item04_on_b_stage",
+            "b_item05_on_b_stage",
+            "b_item06_on_b_stage",
+            "b_item07_on_b_stage",
+            "b_item08_on_b_stage",
+            "b_item09_on_b_stage",
+            "b_item10_on_b_stage",
+            "b_item11_on_b_stage"
+          ]
+        },
+        "after": []
+      },
+      "b_cleaned": {
+        "when": {
+          "not": "floor_b_Covered_dust"
+        },
+        "after": [
+          "b_cleared"
+        ]
+      },
+      "rooms_complete": {
+        "when": {
+          "all": [
+            {
+              "not": "floor_Covered_dust"
+            },
+            "a_item00_on_a_destination",
+            "a_item01_on_a_destination",
+            "a_item02_on_a_destination",
+            "a_item03_on_a_destination",
+            "a_item04_on_a_destination",
+            "a_item05_on_a_destination",
+            "a_item06_on_a_destination",
+            "a_item07_on_a_destination",
+            "a_item08_on_a_destination",
+            "a_item09_on_a_destination",
+            "a_item10_on_a_destination",
+            "a_item11_on_a_destination",
+            {
+              "not": "floor_b_Covered_dust"
+            },
+            "b_item00_on_b_destination",
+            "b_item01_on_b_destination",
+            "b_item02_on_b_destination",
+            "b_item03_on_b_destination",
+            "b_item04_on_b_destination",
+            "b_item05_on_b_destination",
+            "b_item06_on_b_destination",
+            "b_item07_on_b_destination",
+            "b_item08_on_b_destination",
+            "b_item09_on_b_destination",
+            "b_item10_on_b_destination",
+            "b_item11_on_b_destination"
+          ]
+        },
+        "after": [
+          "a_cleaned",
+          "b_cleaned"
+        ]
+      }
+    },
+    "state_guards": [
+      {
+        "id": "a_clear_before_vacuum",
+        "require": "floor_Covered_dust",
+        "until": "a_cleared"
+      },
+      {
+        "id": "a_clean_before_reset",
+        "require": {
+          "not": {
+            "any": [
+              "a_item00_on_a_destination",
+              "a_item01_on_a_destination",
+              "a_item02_on_a_destination",
+              "a_item03_on_a_destination",
+              "a_item04_on_a_destination",
+              "a_item05_on_a_destination",
+              "a_item06_on_a_destination",
+              "a_item07_on_a_destination",
+              "a_item08_on_a_destination",
+              "a_item09_on_a_destination",
+              "a_item10_on_a_destination",
+              "a_item11_on_a_destination"
+            ]
+          }
+        },
+        "until": "a_cleaned"
+      },
+      {
+        "id": "b_clear_before_vacuum",
+        "require": "floor_b_Covered_dust",
+        "until": "b_cleared"
+      },
+      {
+        "id": "b_clean_before_reset",
+        "require": {
+          "not": {
+            "any": [
+              "b_item00_on_b_destination",
+              "b_item01_on_b_destination",
+              "b_item02_on_b_destination",
+              "b_item03_on_b_destination",
+              "b_item04_on_b_destination",
+              "b_item05_on_b_destination",
+              "b_item06_on_b_destination",
+              "b_item07_on_b_destination",
+              "b_item08_on_b_destination",
+              "b_item09_on_b_destination",
+              "b_item10_on_b_destination",
+              "b_item11_on_b_destination"
+            ]
+          }
+        },
+        "until": "b_cleaned"
+      },
+      {
+        "id": "a_lamp0_last",
+        "require": "a_lamp0_ToggledOn",
+        "until": "rooms_complete"
+      },
+      {
+        "id": "a_lamp1_last",
+        "require": "a_lamp1_ToggledOn",
+        "until": "rooms_complete"
+      },
+      {
+        "id": "b_lamp0_last",
+        "require": "b_lamp0_ToggledOn",
+        "until": "rooms_complete"
+      },
+      {
+        "id": "b_lamp1_last",
+        "require": "b_lamp1_ToggledOn",
+        "until": "rooms_complete"
+      }
+    ],
+    "motion_guards": [],
+    "carry_guards": [
+      {
+        "id": "individual_handling",
+        "mode": "single_object"
+      }
+    ],
+    "score_type": "custom_100plus_terminal_history_and_handling_v1"
+  },
+  "acceptance_cases": {
+    "reference_orders": [
+      "forward",
+      "reverse"
+    ],
+    "physical_negative_cases": [
+      "skip_work",
+      "skip_stage",
+      "missing_delivery"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 1000
+  },
+  "settle_steps": 45,
+  "reference_plan": {
+    "kind": "clear_clean_restore",
+    "rooms": [
+      {
+        "id": "a",
+        "floor": "floor",
+        "work": [
+          {
+            "item": "a_item00",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -6.09,
+              -0.19999999999999998
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.79,
+              -0.19999999999999998
+            ]
+          },
+          {
+            "item": "a_item01",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.77,
+              -0.19999999999999998
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.47,
+              -0.19999999999999998
+            ]
+          },
+          {
+            "item": "a_item02",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.449999999999999,
+              -0.19999999999999998
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.15,
+              -0.19999999999999998
+            ]
+          },
+          {
+            "item": "a_item03",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.129999999999999,
+              -0.19999999999999998
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -2.83,
+              -0.19999999999999998
+            ]
+          },
+          {
+            "item": "a_item04",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -6.09,
+              0.1
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.79,
+              0.1
+            ]
+          },
+          {
+            "item": "a_item05",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.77,
+              0.1
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.47,
+              0.1
+            ]
+          },
+          {
+            "item": "a_item06",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.449999999999999,
+              0.1
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.15,
+              0.1
+            ]
+          },
+          {
+            "item": "a_item07",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.129999999999999,
+              0.1
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -2.83,
+              0.1
+            ]
+          },
+          {
+            "item": "a_item08",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -6.09,
+              0.4
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.79,
+              0.4
+            ]
+          },
+          {
+            "item": "a_item09",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.77,
+              0.4
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.47,
+              0.4
+            ]
+          },
+          {
+            "item": "a_item10",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.449999999999999,
+              0.4
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.15,
+              0.4
+            ]
+          },
+          {
+            "item": "a_item11",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.129999999999999,
+              0.4
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -2.83,
+              0.4
+            ]
+          }
+        ]
+      },
+      {
+        "id": "b",
+        "floor": "floor_b",
+        "work": [
+          {
+            "item": "b_item00",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              2.84,
+              -0.19999999999999998
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.139999999999999,
+              -0.19999999999999998
+            ]
+          },
+          {
+            "item": "b_item01",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.1599999999999997,
+              -0.19999999999999998
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.459999999999999,
+              -0.19999999999999998
+            ]
+          },
+          {
+            "item": "b_item02",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.48,
+              -0.19999999999999998
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.779999999999999,
+              -0.19999999999999998
+            ]
+          },
+          {
+            "item": "b_item03",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.8,
+              -0.19999999999999998
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              6.1,
+              -0.19999999999999998
+            ]
+          },
+          {
+            "item": "b_item04",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              2.84,
+              0.1
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.139999999999999,
+              0.1
+            ]
+          },
+          {
+            "item": "b_item05",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.1599999999999997,
+              0.1
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.459999999999999,
+              0.1
+            ]
+          },
+          {
+            "item": "b_item06",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.48,
+              0.1
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.779999999999999,
+              0.1
+            ]
+          },
+          {
+            "item": "b_item07",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.8,
+              0.1
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              6.1,
+              0.1
+            ]
+          },
+          {
+            "item": "b_item08",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              2.84,
+              0.4
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.139999999999999,
+              0.4
+            ]
+          },
+          {
+            "item": "b_item09",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.1599999999999997,
+              0.4
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.459999999999999,
+              0.4
+            ]
+          },
+          {
+            "item": "b_item10",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.48,
+              0.4
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.779999999999999,
+              0.4
+            ]
+          },
+          {
+            "item": "b_item11",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.8,
+              0.4
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              6.1,
+              0.4
+            ]
+          }
+        ]
+      }
+    ],
+    "lights": [
+      "a_lamp0",
+      "a_lamp1",
+      "b_lamp0",
+      "b_lamp1"
+    ],
+    "tool": "tool",
+    "tool_home": "tool_home",
+    "tool_xy": [
+      -3.0,
+      0.2
+    ],
+    "toggle": true
+  },
+  "construction_source": "inspected_native_public_templates",
+  "design_ledger": {
+    "conditional_useful_calls": 102,
+    "measured_useful_calls": null,
+    "reference_attempt_budget": 1000,
+    "proposed_model_act_look_budget": 600
+  }
+}

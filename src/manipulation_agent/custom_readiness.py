@@ -86,7 +86,7 @@ def _physical(root, bundle, spec, spec_hash, release, *, negative=False):
     else:
         expected = {'terminal_conditions': set(spec['evaluation']['terminal']),
                     'historical_conditions': set(spec['evaluation'].get('milestones', {})),
-                    'constraint_conditions': {r['id'] for kind in ('state_guards', 'motion_guards')
+                    'constraint_conditions': {r['id'] for kind in ('state_guards', 'motion_guards', 'carry_guards')
                                               for r in spec['evaluation'].get(kind, [])}}
         _require(result['task_success'] is True and not result.get('missing_required_entities')
                  and not result['public_constraint_violations'], 'Reference did not solve the whole task')

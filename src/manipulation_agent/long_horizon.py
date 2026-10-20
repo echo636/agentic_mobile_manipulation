@@ -42,7 +42,7 @@ class TemporalGoalEvaluator:
                 expression(pending[key]['when'], predicates)
                 ordered.append(key); del pending[key]
         self.order = ordered
-        guards = [*spec.get('motion_guards', []), *spec.get('state_guards', [])]
+        guards = [*spec.get('motion_guards', []), *spec.get('state_guards', []), *spec.get('carry_guards', [])]
         if len({rule['id'] for rule in guards}) != len(guards):
             raise ValueError('Constraint IDs must be unique')
         for rule in spec.get('motion_guards', []):
@@ -50,7 +50,7 @@ class TemporalGoalEvaluator:
                 raise ValueError('Motion guard references unknown milestones')
             expression(rule['require'], predicates)
         for rule in spec.get('state_guards', []):
-            if rule['until'] not in ordered:
+            if rule['until'] is not None and rule['until'] not in ordered:
                 raise ValueError('State guard references unknown milestone')
             expression(rule['require'], predicates)
 
@@ -94,7 +94,8 @@ class TemporalGoalEvaluator:
         history = {key: key in self.milestones for key in self.order}
         violations = {v['id'] for v in self.violations}
         constraints = {rule['id']:rule['id'] not in violations for rule in
-                       [*self.spec.get('motion_guards',[]),*self.spec.get('state_guards',[])]}
+                       [*self.spec.get('motion_guards',[]),*self.spec.get('state_guards',[]),
+                        *self.spec.get('carry_guards',[])]}
         satisfied = sum(terminal.values()) + sum(history.values()) + sum(constraints.values())
         total = len(terminal) + len(history) + len(constraints)
         return {'task_success': all(terminal.values()) and all(history.values()) and not self.violations,

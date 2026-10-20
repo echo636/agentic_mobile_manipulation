@@ -1,0 +1,3121 @@
+{
+  "schema_version": 3,
+  "id": "garden_treatment_and_distribution_100_v1",
+  "instance_id": "garden_treatment_and_distribution_100_v1_seed0_r1",
+  "status": "candidate_physics_unvalidated",
+  "official_submission_eligible": false,
+  "benchmark_ready": false,
+  "base": {
+    "task": "spraying_for_bugs",
+    "instance": 301,
+    "seed": 0
+  },
+  "roles": {
+    "floor": "floors_ghetev_0",
+    "source0": "lh_source0",
+    "source1": "lh_source1",
+    "stage": "lh_stage",
+    "destination0": "lh_destination0",
+    "destination1": "lh_destination1",
+    "controls": "lh_controls",
+    "tool_home": "lh_tool_home",
+    "tool": "lh_tool",
+    "plant00": "lh_plant00",
+    "plant01": "lh_plant01",
+    "plant02": "lh_plant02",
+    "plant03": "lh_plant03",
+    "plant04": "lh_plant04",
+    "plant05": "lh_plant05",
+    "plant06": "lh_plant06",
+    "plant07": "lh_plant07",
+    "plant08": "lh_plant08",
+    "plant09": "lh_plant09",
+    "plant10": "lh_plant10",
+    "plant11": "lh_plant11",
+    "plant12": "lh_plant12",
+    "plant13": "lh_plant13",
+    "plant14": "lh_plant14",
+    "plant15": "lh_plant15",
+    "plant16": "lh_plant16",
+    "plant17": "lh_plant17",
+    "plant18": "lh_plant18",
+    "plant19": "lh_plant19",
+    "control0": "lh_control0",
+    "control1": "lh_control1",
+    "control2": "lh_control2",
+    "control3": "lh_control3"
+  },
+  "asset_imports": [
+    {
+      "name": "lh_tool",
+      "source_task": "spraying_for_bugs",
+      "source_object": "insectifuge_atomizer_174",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        15.5,
+        8.4,
+        0.8
+      ]
+    },
+    {
+      "name": "lh_plant00",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        1.0
+      ]
+    },
+    {
+      "name": "lh_plant01",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        1.5
+      ]
+    },
+    {
+      "name": "lh_plant02",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        2.0
+      ]
+    },
+    {
+      "name": "lh_plant03",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        2.5
+      ]
+    },
+    {
+      "name": "lh_plant04",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        3.0
+      ]
+    },
+    {
+      "name": "lh_plant05",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        3.5
+      ]
+    },
+    {
+      "name": "lh_plant06",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        4.0
+      ]
+    },
+    {
+      "name": "lh_plant07",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        4.5
+      ]
+    },
+    {
+      "name": "lh_plant08",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        5.0
+      ]
+    },
+    {
+      "name": "lh_plant09",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        12.4,
+        12.5,
+        5.5
+      ]
+    },
+    {
+      "name": "lh_plant10",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        6.0
+      ]
+    },
+    {
+      "name": "lh_plant11",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        6.5
+      ]
+    },
+    {
+      "name": "lh_plant12",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        7.0
+      ]
+    },
+    {
+      "name": "lh_plant13",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        7.5
+      ]
+    },
+    {
+      "name": "lh_plant14",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        8.0
+      ]
+    },
+    {
+      "name": "lh_plant15",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        8.5
+      ]
+    },
+    {
+      "name": "lh_plant16",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        9.0
+      ]
+    },
+    {
+      "name": "lh_plant17",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        9.5
+      ]
+    },
+    {
+      "name": "lh_plant18",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        10.0
+      ]
+    },
+    {
+      "name": "lh_plant19",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        14.600000000000001,
+        12.5,
+        10.5
+      ]
+    },
+    {
+      "name": "lh_control0",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_173",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        16.0,
+        10.7,
+        1.0
+      ]
+    },
+    {
+      "name": "lh_control1",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_173",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        16.0,
+        10.7,
+        1.5
+      ]
+    },
+    {
+      "name": "lh_control2",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_173",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        16.0,
+        10.7,
+        2.0
+      ]
+    },
+    {
+      "name": "lh_control3",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_173",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        16.0,
+        10.7,
+        2.5
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "lh_source0",
+      "position": [
+        12.4,
+        12.5,
+        0.225
+      ],
+      "size": [
+        1.8,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.32,
+        0.85,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_source1",
+      "position": [
+        14.6,
+        12.5,
+        0.225
+      ],
+      "size": [
+        1.8,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.32,
+        0.85,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_stage",
+      "position": [
+        13.2,
+        8.4,
+        0.225
+      ],
+      "size": [
+        1.8,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.95,
+        0.65,
+        0.08,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_destination0",
+      "position": [
+        12.4,
+        4.5,
+        0.225
+      ],
+      "size": [
+        1.8,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_destination1",
+      "position": [
+        14.6,
+        4.5,
+        0.225
+      ],
+      "size": [
+        1.8,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_controls",
+      "position": [
+        16.0,
+        10.7,
+        0.225
+      ],
+      "size": [
+        1.4,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.85,
+        0.14,
+        0.18,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_tool_home",
+      "position": [
+        15.5,
+        8.4,
+        0.225
+      ],
+      "size": [
+        0.6,
+        0.6,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "tool",
+      "target": "tool_home",
+      "place_on_support": true,
+      "xy": [
+        15.5,
+        8.4
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "tool",
+      "state": "ToggledOn",
+      "value": false,
+      "settle_steps": 1
+    },
+    {
+      "object": "plant00",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        11.72,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant00",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant01",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        12.06,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant01",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant02",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        12.4,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant02",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant03",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        12.74,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant03",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant04",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        13.08,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant04",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant05",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        11.72,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant05",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant06",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        12.06,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant06",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant07",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        12.4,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant07",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant08",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        12.74,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant08",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant09",
+      "target": "source0",
+      "place_on_support": true,
+      "xy": [
+        13.08,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant09",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant10",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        13.920000000000002,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant10",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant11",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        14.260000000000002,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant11",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant12",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        14.600000000000001,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant12",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant13",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        14.940000000000001,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant13",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant14",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        15.280000000000001,
+        12.22
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant14",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant15",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        13.920000000000002,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant15",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant16",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        14.260000000000002,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant16",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant17",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        14.600000000000001,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant17",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant18",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        14.940000000000001,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant18",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant19",
+      "target": "source1",
+      "place_on_support": true,
+      "xy": [
+        15.280000000000001,
+        12.78
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "plant19",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "control0",
+      "target": "controls",
+      "place_on_support": true,
+      "xy": [
+        15.7,
+        10.399999999999999
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "control0",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "control1",
+      "target": "controls",
+      "place_on_support": true,
+      "xy": [
+        16.3,
+        10.399999999999999
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "control1",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "control2",
+      "target": "controls",
+      "place_on_support": true,
+      "xy": [
+        15.7,
+        11.0
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "control2",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    },
+    {
+      "object": "control3",
+      "target": "controls",
+      "place_on_support": true,
+      "xy": [
+        16.3,
+        11.0
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "control3",
+      "state": "Covered",
+      "value": false,
+      "settle_steps": 1,
+      "system": "insectifuge"
+    }
+  ],
+  "initial_assertions": {
+    "tool_starts_on_tool_home": "tool_on_tool_home",
+    "tool_ToggledOn": {
+      "not": "tool_ToggledOn"
+    },
+    "plant00_starts_on_source0": "plant00_on_source0",
+    "plant00_Covered_insectifuge": {
+      "not": "plant00_Covered_insectifuge"
+    },
+    "plant01_starts_on_source0": "plant01_on_source0",
+    "plant01_Covered_insectifuge": {
+      "not": "plant01_Covered_insectifuge"
+    },
+    "plant02_starts_on_source0": "plant02_on_source0",
+    "plant02_Covered_insectifuge": {
+      "not": "plant02_Covered_insectifuge"
+    },
+    "plant03_starts_on_source0": "plant03_on_source0",
+    "plant03_Covered_insectifuge": {
+      "not": "plant03_Covered_insectifuge"
+    },
+    "plant04_starts_on_source0": "plant04_on_source0",
+    "plant04_Covered_insectifuge": {
+      "not": "plant04_Covered_insectifuge"
+    },
+    "plant05_starts_on_source0": "plant05_on_source0",
+    "plant05_Covered_insectifuge": {
+      "not": "plant05_Covered_insectifuge"
+    },
+    "plant06_starts_on_source0": "plant06_on_source0",
+    "plant06_Covered_insectifuge": {
+      "not": "plant06_Covered_insectifuge"
+    },
+    "plant07_starts_on_source0": "plant07_on_source0",
+    "plant07_Covered_insectifuge": {
+      "not": "plant07_Covered_insectifuge"
+    },
+    "plant08_starts_on_source0": "plant08_on_source0",
+    "plant08_Covered_insectifuge": {
+      "not": "plant08_Covered_insectifuge"
+    },
+    "plant09_starts_on_source0": "plant09_on_source0",
+    "plant09_Covered_insectifuge": {
+      "not": "plant09_Covered_insectifuge"
+    },
+    "plant10_starts_on_source1": "plant10_on_source1",
+    "plant10_Covered_insectifuge": {
+      "not": "plant10_Covered_insectifuge"
+    },
+    "plant11_starts_on_source1": "plant11_on_source1",
+    "plant11_Covered_insectifuge": {
+      "not": "plant11_Covered_insectifuge"
+    },
+    "plant12_starts_on_source1": "plant12_on_source1",
+    "plant12_Covered_insectifuge": {
+      "not": "plant12_Covered_insectifuge"
+    },
+    "plant13_starts_on_source1": "plant13_on_source1",
+    "plant13_Covered_insectifuge": {
+      "not": "plant13_Covered_insectifuge"
+    },
+    "plant14_starts_on_source1": "plant14_on_source1",
+    "plant14_Covered_insectifuge": {
+      "not": "plant14_Covered_insectifuge"
+    },
+    "plant15_starts_on_source1": "plant15_on_source1",
+    "plant15_Covered_insectifuge": {
+      "not": "plant15_Covered_insectifuge"
+    },
+    "plant16_starts_on_source1": "plant16_on_source1",
+    "plant16_Covered_insectifuge": {
+      "not": "plant16_Covered_insectifuge"
+    },
+    "plant17_starts_on_source1": "plant17_on_source1",
+    "plant17_Covered_insectifuge": {
+      "not": "plant17_Covered_insectifuge"
+    },
+    "plant18_starts_on_source1": "plant18_on_source1",
+    "plant18_Covered_insectifuge": {
+      "not": "plant18_Covered_insectifuge"
+    },
+    "plant19_starts_on_source1": "plant19_on_source1",
+    "plant19_Covered_insectifuge": {
+      "not": "plant19_Covered_insectifuge"
+    },
+    "control0_starts_on_controls": "control0_on_controls",
+    "control0_Covered_insectifuge": {
+      "not": "control0_Covered_insectifuge"
+    },
+    "control1_starts_on_controls": "control1_on_controls",
+    "control1_Covered_insectifuge": {
+      "not": "control1_Covered_insectifuge"
+    },
+    "control2_starts_on_controls": "control2_on_controls",
+    "control2_Covered_insectifuge": {
+      "not": "control2_Covered_insectifuge"
+    },
+    "control3_starts_on_controls": "control3_on_controls",
+    "control3_Covered_insectifuge": {
+      "not": "control3_Covered_insectifuge"
+    }
+  },
+  "public_instruction": "把待处理区的 20 盆植物逐件送到处理台，用指定喷雾处理后送到两处展示区。旁边 4 盆带公开“对照／勿喷”标识的盆栽保持不动且不沾本次材料。最后关闭并归还喷壶。",
+  "public_context": [
+    "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后送到绿色展示台，同款植物在两张绿台间可互换。",
+    "红台四盆对照必须留在红台，整个过程中都不能沾上本次喷雾材料。",
+    "完成后喷壶关闭并归还灰色工具台。",
+    "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。"
+  ],
+  "requirements": [
+    {
+      "id": "treatment",
+      "text": "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后送到绿色展示台，同款植物在两张绿台间可互换。",
+      "terminal": [
+        "plant00_delivered",
+        "plant01_delivered",
+        "plant02_delivered",
+        "plant03_delivered",
+        "plant04_delivered",
+        "plant05_delivered",
+        "plant06_delivered",
+        "plant07_delivered",
+        "plant08_delivered",
+        "plant09_delivered",
+        "plant10_delivered",
+        "plant11_delivered",
+        "plant12_delivered",
+        "plant13_delivered",
+        "plant14_delivered",
+        "plant15_delivered",
+        "plant16_delivered",
+        "plant17_delivered",
+        "plant18_delivered",
+        "plant19_delivered"
+      ],
+      "milestones": [
+        "plant00_staged",
+        "plant00_treated",
+        "plant01_staged",
+        "plant01_treated",
+        "plant02_staged",
+        "plant02_treated",
+        "plant03_staged",
+        "plant03_treated",
+        "plant04_staged",
+        "plant04_treated",
+        "plant05_staged",
+        "plant05_treated",
+        "plant06_staged",
+        "plant06_treated",
+        "plant07_staged",
+        "plant07_treated",
+        "plant08_staged",
+        "plant08_treated",
+        "plant09_staged",
+        "plant09_treated",
+        "plant10_staged",
+        "plant10_treated",
+        "plant11_staged",
+        "plant11_treated",
+        "plant12_staged",
+        "plant12_treated",
+        "plant13_staged",
+        "plant13_treated",
+        "plant14_staged",
+        "plant14_treated",
+        "plant15_staged",
+        "plant15_treated",
+        "plant16_staged",
+        "plant16_treated",
+        "plant17_staged",
+        "plant17_treated",
+        "plant18_staged",
+        "plant18_treated",
+        "plant19_staged",
+        "plant19_treated"
+      ],
+      "constraints": [
+        "plant00_treat_at_stage",
+        "plant00_treat_before_delivery",
+        "plant01_treat_at_stage",
+        "plant01_treat_before_delivery",
+        "plant02_treat_at_stage",
+        "plant02_treat_before_delivery",
+        "plant03_treat_at_stage",
+        "plant03_treat_before_delivery",
+        "plant04_treat_at_stage",
+        "plant04_treat_before_delivery",
+        "plant05_treat_at_stage",
+        "plant05_treat_before_delivery",
+        "plant06_treat_at_stage",
+        "plant06_treat_before_delivery",
+        "plant07_treat_at_stage",
+        "plant07_treat_before_delivery",
+        "plant08_treat_at_stage",
+        "plant08_treat_before_delivery",
+        "plant09_treat_at_stage",
+        "plant09_treat_before_delivery",
+        "plant10_treat_at_stage",
+        "plant10_treat_before_delivery",
+        "plant11_treat_at_stage",
+        "plant11_treat_before_delivery",
+        "plant12_treat_at_stage",
+        "plant12_treat_before_delivery",
+        "plant13_treat_at_stage",
+        "plant13_treat_before_delivery",
+        "plant14_treat_at_stage",
+        "plant14_treat_before_delivery",
+        "plant15_treat_at_stage",
+        "plant15_treat_before_delivery",
+        "plant16_treat_at_stage",
+        "plant16_treat_before_delivery",
+        "plant17_treat_at_stage",
+        "plant17_treat_before_delivery",
+        "plant18_treat_at_stage",
+        "plant18_treat_before_delivery",
+        "plant19_treat_at_stage",
+        "plant19_treat_before_delivery"
+      ]
+    },
+    {
+      "id": "controls",
+      "text": "红台四盆对照必须留在红台，整个过程中都不能沾上本次喷雾材料。",
+      "terminal": [
+        "control0_unchanged",
+        "control1_unchanged",
+        "control2_unchanged",
+        "control3_unchanged"
+      ],
+      "constraints": [
+        "control0_never_spray",
+        "control1_never_spray",
+        "control2_never_spray",
+        "control3_never_spray"
+      ]
+    },
+    {
+      "id": "tool",
+      "text": "完成后喷壶关闭并归还灰色工具台。",
+      "terminal": [
+        "tool_off",
+        "tool_home"
+      ]
+    },
+    {
+      "id": "protocol",
+      "text": "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。",
+      "terminal": [
+        "hand_empty"
+      ],
+      "milestones": [],
+      "constraints": [
+        "individual_handling"
+      ]
+    }
+  ],
+  "evaluation": {
+    "predicates": {
+      "tool_on_tool_home": {
+        "object": "tool",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "tool_ToggledOn": {
+        "object": "tool",
+        "state": "ToggledOn"
+      },
+      "plant00_on_source0": {
+        "object": "plant00",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant00_Covered_insectifuge": {
+        "object": "plant00",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant00_on_stage": {
+        "object": "plant00",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant00_on_destination0": {
+        "object": "plant00",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant00_on_destination1": {
+        "object": "plant00",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant01_on_source0": {
+        "object": "plant01",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant01_Covered_insectifuge": {
+        "object": "plant01",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant01_on_stage": {
+        "object": "plant01",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant01_on_destination0": {
+        "object": "plant01",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant01_on_destination1": {
+        "object": "plant01",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant02_on_source0": {
+        "object": "plant02",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant02_Covered_insectifuge": {
+        "object": "plant02",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant02_on_stage": {
+        "object": "plant02",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant02_on_destination0": {
+        "object": "plant02",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant02_on_destination1": {
+        "object": "plant02",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant03_on_source0": {
+        "object": "plant03",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant03_Covered_insectifuge": {
+        "object": "plant03",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant03_on_stage": {
+        "object": "plant03",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant03_on_destination0": {
+        "object": "plant03",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant03_on_destination1": {
+        "object": "plant03",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant04_on_source0": {
+        "object": "plant04",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant04_Covered_insectifuge": {
+        "object": "plant04",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant04_on_stage": {
+        "object": "plant04",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant04_on_destination0": {
+        "object": "plant04",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant04_on_destination1": {
+        "object": "plant04",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant05_on_source0": {
+        "object": "plant05",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant05_Covered_insectifuge": {
+        "object": "plant05",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant05_on_stage": {
+        "object": "plant05",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant05_on_destination0": {
+        "object": "plant05",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant05_on_destination1": {
+        "object": "plant05",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant06_on_source0": {
+        "object": "plant06",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant06_Covered_insectifuge": {
+        "object": "plant06",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant06_on_stage": {
+        "object": "plant06",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant06_on_destination0": {
+        "object": "plant06",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant06_on_destination1": {
+        "object": "plant06",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant07_on_source0": {
+        "object": "plant07",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant07_Covered_insectifuge": {
+        "object": "plant07",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant07_on_stage": {
+        "object": "plant07",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant07_on_destination0": {
+        "object": "plant07",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant07_on_destination1": {
+        "object": "plant07",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant08_on_source0": {
+        "object": "plant08",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant08_Covered_insectifuge": {
+        "object": "plant08",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant08_on_stage": {
+        "object": "plant08",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant08_on_destination0": {
+        "object": "plant08",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant08_on_destination1": {
+        "object": "plant08",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant09_on_source0": {
+        "object": "plant09",
+        "state": "OnTop",
+        "target": "source0"
+      },
+      "plant09_Covered_insectifuge": {
+        "object": "plant09",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant09_on_stage": {
+        "object": "plant09",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant09_on_destination0": {
+        "object": "plant09",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant09_on_destination1": {
+        "object": "plant09",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant10_on_source1": {
+        "object": "plant10",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant10_Covered_insectifuge": {
+        "object": "plant10",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant10_on_stage": {
+        "object": "plant10",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant10_on_destination0": {
+        "object": "plant10",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant10_on_destination1": {
+        "object": "plant10",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant11_on_source1": {
+        "object": "plant11",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant11_Covered_insectifuge": {
+        "object": "plant11",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant11_on_stage": {
+        "object": "plant11",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant11_on_destination0": {
+        "object": "plant11",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant11_on_destination1": {
+        "object": "plant11",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant12_on_source1": {
+        "object": "plant12",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant12_Covered_insectifuge": {
+        "object": "plant12",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant12_on_stage": {
+        "object": "plant12",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant12_on_destination0": {
+        "object": "plant12",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant12_on_destination1": {
+        "object": "plant12",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant13_on_source1": {
+        "object": "plant13",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant13_Covered_insectifuge": {
+        "object": "plant13",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant13_on_stage": {
+        "object": "plant13",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant13_on_destination0": {
+        "object": "plant13",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant13_on_destination1": {
+        "object": "plant13",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant14_on_source1": {
+        "object": "plant14",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant14_Covered_insectifuge": {
+        "object": "plant14",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant14_on_stage": {
+        "object": "plant14",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant14_on_destination0": {
+        "object": "plant14",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant14_on_destination1": {
+        "object": "plant14",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant15_on_source1": {
+        "object": "plant15",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant15_Covered_insectifuge": {
+        "object": "plant15",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant15_on_stage": {
+        "object": "plant15",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant15_on_destination0": {
+        "object": "plant15",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant15_on_destination1": {
+        "object": "plant15",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant16_on_source1": {
+        "object": "plant16",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant16_Covered_insectifuge": {
+        "object": "plant16",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant16_on_stage": {
+        "object": "plant16",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant16_on_destination0": {
+        "object": "plant16",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant16_on_destination1": {
+        "object": "plant16",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant17_on_source1": {
+        "object": "plant17",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant17_Covered_insectifuge": {
+        "object": "plant17",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant17_on_stage": {
+        "object": "plant17",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant17_on_destination0": {
+        "object": "plant17",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant17_on_destination1": {
+        "object": "plant17",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant18_on_source1": {
+        "object": "plant18",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant18_Covered_insectifuge": {
+        "object": "plant18",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant18_on_stage": {
+        "object": "plant18",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant18_on_destination0": {
+        "object": "plant18",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant18_on_destination1": {
+        "object": "plant18",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "plant19_on_source1": {
+        "object": "plant19",
+        "state": "OnTop",
+        "target": "source1"
+      },
+      "plant19_Covered_insectifuge": {
+        "object": "plant19",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant19_on_stage": {
+        "object": "plant19",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "plant19_on_destination0": {
+        "object": "plant19",
+        "state": "OnTop",
+        "target": "destination0"
+      },
+      "plant19_on_destination1": {
+        "object": "plant19",
+        "state": "OnTop",
+        "target": "destination1"
+      },
+      "control0_on_controls": {
+        "object": "control0",
+        "state": "OnTop",
+        "target": "controls"
+      },
+      "control0_Covered_insectifuge": {
+        "object": "control0",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "control1_on_controls": {
+        "object": "control1",
+        "state": "OnTop",
+        "target": "controls"
+      },
+      "control1_Covered_insectifuge": {
+        "object": "control1",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "control2_on_controls": {
+        "object": "control2",
+        "state": "OnTop",
+        "target": "controls"
+      },
+      "control2_Covered_insectifuge": {
+        "object": "control2",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "control3_on_controls": {
+        "object": "control3",
+        "state": "OnTop",
+        "target": "controls"
+      },
+      "control3_Covered_insectifuge": {
+        "object": "control3",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "hand_empty": {
+        "object": "tool",
+        "state": "HandEmpty"
+      }
+    },
+    "terminal": {
+      "tool_off": {
+        "not": "tool_ToggledOn"
+      },
+      "tool_home": "tool_on_tool_home",
+      "plant00_delivered": {
+        "all": [
+          "plant00_Covered_insectifuge",
+          {
+            "any": [
+              "plant00_on_destination0",
+              "plant00_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant01_delivered": {
+        "all": [
+          "plant01_Covered_insectifuge",
+          {
+            "any": [
+              "plant01_on_destination0",
+              "plant01_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant02_delivered": {
+        "all": [
+          "plant02_Covered_insectifuge",
+          {
+            "any": [
+              "plant02_on_destination0",
+              "plant02_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant03_delivered": {
+        "all": [
+          "plant03_Covered_insectifuge",
+          {
+            "any": [
+              "plant03_on_destination0",
+              "plant03_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant04_delivered": {
+        "all": [
+          "plant04_Covered_insectifuge",
+          {
+            "any": [
+              "plant04_on_destination0",
+              "plant04_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant05_delivered": {
+        "all": [
+          "plant05_Covered_insectifuge",
+          {
+            "any": [
+              "plant05_on_destination0",
+              "plant05_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant06_delivered": {
+        "all": [
+          "plant06_Covered_insectifuge",
+          {
+            "any": [
+              "plant06_on_destination0",
+              "plant06_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant07_delivered": {
+        "all": [
+          "plant07_Covered_insectifuge",
+          {
+            "any": [
+              "plant07_on_destination0",
+              "plant07_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant08_delivered": {
+        "all": [
+          "plant08_Covered_insectifuge",
+          {
+            "any": [
+              "plant08_on_destination0",
+              "plant08_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant09_delivered": {
+        "all": [
+          "plant09_Covered_insectifuge",
+          {
+            "any": [
+              "plant09_on_destination0",
+              "plant09_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant10_delivered": {
+        "all": [
+          "plant10_Covered_insectifuge",
+          {
+            "any": [
+              "plant10_on_destination0",
+              "plant10_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant11_delivered": {
+        "all": [
+          "plant11_Covered_insectifuge",
+          {
+            "any": [
+              "plant11_on_destination0",
+              "plant11_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant12_delivered": {
+        "all": [
+          "plant12_Covered_insectifuge",
+          {
+            "any": [
+              "plant12_on_destination0",
+              "plant12_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant13_delivered": {
+        "all": [
+          "plant13_Covered_insectifuge",
+          {
+            "any": [
+              "plant13_on_destination0",
+              "plant13_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant14_delivered": {
+        "all": [
+          "plant14_Covered_insectifuge",
+          {
+            "any": [
+              "plant14_on_destination0",
+              "plant14_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant15_delivered": {
+        "all": [
+          "plant15_Covered_insectifuge",
+          {
+            "any": [
+              "plant15_on_destination0",
+              "plant15_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant16_delivered": {
+        "all": [
+          "plant16_Covered_insectifuge",
+          {
+            "any": [
+              "plant16_on_destination0",
+              "plant16_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant17_delivered": {
+        "all": [
+          "plant17_Covered_insectifuge",
+          {
+            "any": [
+              "plant17_on_destination0",
+              "plant17_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant18_delivered": {
+        "all": [
+          "plant18_Covered_insectifuge",
+          {
+            "any": [
+              "plant18_on_destination0",
+              "plant18_on_destination1"
+            ]
+          }
+        ]
+      },
+      "plant19_delivered": {
+        "all": [
+          "plant19_Covered_insectifuge",
+          {
+            "any": [
+              "plant19_on_destination0",
+              "plant19_on_destination1"
+            ]
+          }
+        ]
+      },
+      "control0_unchanged": {
+        "all": [
+          {
+            "not": "control0_Covered_insectifuge"
+          },
+          "control0_on_controls"
+        ]
+      },
+      "control1_unchanged": {
+        "all": [
+          {
+            "not": "control1_Covered_insectifuge"
+          },
+          "control1_on_controls"
+        ]
+      },
+      "control2_unchanged": {
+        "all": [
+          {
+            "not": "control2_Covered_insectifuge"
+          },
+          "control2_on_controls"
+        ]
+      },
+      "control3_unchanged": {
+        "all": [
+          {
+            "not": "control3_Covered_insectifuge"
+          },
+          "control3_on_controls"
+        ]
+      },
+      "hand_empty": "hand_empty"
+    },
+    "milestones": {
+      "plant00_staged": {
+        "when": "plant00_on_stage",
+        "after": []
+      },
+      "plant00_treated": {
+        "when": {
+          "all": [
+            "plant00_on_stage",
+            "plant00_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant00_staged"
+        ]
+      },
+      "plant01_staged": {
+        "when": "plant01_on_stage",
+        "after": []
+      },
+      "plant01_treated": {
+        "when": {
+          "all": [
+            "plant01_on_stage",
+            "plant01_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant01_staged"
+        ]
+      },
+      "plant02_staged": {
+        "when": "plant02_on_stage",
+        "after": []
+      },
+      "plant02_treated": {
+        "when": {
+          "all": [
+            "plant02_on_stage",
+            "plant02_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant02_staged"
+        ]
+      },
+      "plant03_staged": {
+        "when": "plant03_on_stage",
+        "after": []
+      },
+      "plant03_treated": {
+        "when": {
+          "all": [
+            "plant03_on_stage",
+            "plant03_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant03_staged"
+        ]
+      },
+      "plant04_staged": {
+        "when": "plant04_on_stage",
+        "after": []
+      },
+      "plant04_treated": {
+        "when": {
+          "all": [
+            "plant04_on_stage",
+            "plant04_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant04_staged"
+        ]
+      },
+      "plant05_staged": {
+        "when": "plant05_on_stage",
+        "after": []
+      },
+      "plant05_treated": {
+        "when": {
+          "all": [
+            "plant05_on_stage",
+            "plant05_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant05_staged"
+        ]
+      },
+      "plant06_staged": {
+        "when": "plant06_on_stage",
+        "after": []
+      },
+      "plant06_treated": {
+        "when": {
+          "all": [
+            "plant06_on_stage",
+            "plant06_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant06_staged"
+        ]
+      },
+      "plant07_staged": {
+        "when": "plant07_on_stage",
+        "after": []
+      },
+      "plant07_treated": {
+        "when": {
+          "all": [
+            "plant07_on_stage",
+            "plant07_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant07_staged"
+        ]
+      },
+      "plant08_staged": {
+        "when": "plant08_on_stage",
+        "after": []
+      },
+      "plant08_treated": {
+        "when": {
+          "all": [
+            "plant08_on_stage",
+            "plant08_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant08_staged"
+        ]
+      },
+      "plant09_staged": {
+        "when": "plant09_on_stage",
+        "after": []
+      },
+      "plant09_treated": {
+        "when": {
+          "all": [
+            "plant09_on_stage",
+            "plant09_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant09_staged"
+        ]
+      },
+      "plant10_staged": {
+        "when": "plant10_on_stage",
+        "after": []
+      },
+      "plant10_treated": {
+        "when": {
+          "all": [
+            "plant10_on_stage",
+            "plant10_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant10_staged"
+        ]
+      },
+      "plant11_staged": {
+        "when": "plant11_on_stage",
+        "after": []
+      },
+      "plant11_treated": {
+        "when": {
+          "all": [
+            "plant11_on_stage",
+            "plant11_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant11_staged"
+        ]
+      },
+      "plant12_staged": {
+        "when": "plant12_on_stage",
+        "after": []
+      },
+      "plant12_treated": {
+        "when": {
+          "all": [
+            "plant12_on_stage",
+            "plant12_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant12_staged"
+        ]
+      },
+      "plant13_staged": {
+        "when": "plant13_on_stage",
+        "after": []
+      },
+      "plant13_treated": {
+        "when": {
+          "all": [
+            "plant13_on_stage",
+            "plant13_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant13_staged"
+        ]
+      },
+      "plant14_staged": {
+        "when": "plant14_on_stage",
+        "after": []
+      },
+      "plant14_treated": {
+        "when": {
+          "all": [
+            "plant14_on_stage",
+            "plant14_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant14_staged"
+        ]
+      },
+      "plant15_staged": {
+        "when": "plant15_on_stage",
+        "after": []
+      },
+      "plant15_treated": {
+        "when": {
+          "all": [
+            "plant15_on_stage",
+            "plant15_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant15_staged"
+        ]
+      },
+      "plant16_staged": {
+        "when": "plant16_on_stage",
+        "after": []
+      },
+      "plant16_treated": {
+        "when": {
+          "all": [
+            "plant16_on_stage",
+            "plant16_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant16_staged"
+        ]
+      },
+      "plant17_staged": {
+        "when": "plant17_on_stage",
+        "after": []
+      },
+      "plant17_treated": {
+        "when": {
+          "all": [
+            "plant17_on_stage",
+            "plant17_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant17_staged"
+        ]
+      },
+      "plant18_staged": {
+        "when": "plant18_on_stage",
+        "after": []
+      },
+      "plant18_treated": {
+        "when": {
+          "all": [
+            "plant18_on_stage",
+            "plant18_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant18_staged"
+        ]
+      },
+      "plant19_staged": {
+        "when": "plant19_on_stage",
+        "after": []
+      },
+      "plant19_treated": {
+        "when": {
+          "all": [
+            "plant19_on_stage",
+            "plant19_Covered_insectifuge"
+          ]
+        },
+        "after": [
+          "plant19_staged"
+        ]
+      }
+    },
+    "state_guards": [
+      {
+        "id": "plant00_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant00_Covered_insectifuge"
+            },
+            "plant00_on_stage"
+          ]
+        },
+        "until": "plant00_treated"
+      },
+      {
+        "id": "plant00_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant00_on_destination0",
+              "plant00_on_destination1"
+            ]
+          }
+        },
+        "until": "plant00_treated"
+      },
+      {
+        "id": "plant01_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant01_Covered_insectifuge"
+            },
+            "plant01_on_stage"
+          ]
+        },
+        "until": "plant01_treated"
+      },
+      {
+        "id": "plant01_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant01_on_destination0",
+              "plant01_on_destination1"
+            ]
+          }
+        },
+        "until": "plant01_treated"
+      },
+      {
+        "id": "plant02_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant02_Covered_insectifuge"
+            },
+            "plant02_on_stage"
+          ]
+        },
+        "until": "plant02_treated"
+      },
+      {
+        "id": "plant02_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant02_on_destination0",
+              "plant02_on_destination1"
+            ]
+          }
+        },
+        "until": "plant02_treated"
+      },
+      {
+        "id": "plant03_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant03_Covered_insectifuge"
+            },
+            "plant03_on_stage"
+          ]
+        },
+        "until": "plant03_treated"
+      },
+      {
+        "id": "plant03_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant03_on_destination0",
+              "plant03_on_destination1"
+            ]
+          }
+        },
+        "until": "plant03_treated"
+      },
+      {
+        "id": "plant04_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant04_Covered_insectifuge"
+            },
+            "plant04_on_stage"
+          ]
+        },
+        "until": "plant04_treated"
+      },
+      {
+        "id": "plant04_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant04_on_destination0",
+              "plant04_on_destination1"
+            ]
+          }
+        },
+        "until": "plant04_treated"
+      },
+      {
+        "id": "plant05_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant05_Covered_insectifuge"
+            },
+            "plant05_on_stage"
+          ]
+        },
+        "until": "plant05_treated"
+      },
+      {
+        "id": "plant05_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant05_on_destination0",
+              "plant05_on_destination1"
+            ]
+          }
+        },
+        "until": "plant05_treated"
+      },
+      {
+        "id": "plant06_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant06_Covered_insectifuge"
+            },
+            "plant06_on_stage"
+          ]
+        },
+        "until": "plant06_treated"
+      },
+      {
+        "id": "plant06_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant06_on_destination0",
+              "plant06_on_destination1"
+            ]
+          }
+        },
+        "until": "plant06_treated"
+      },
+      {
+        "id": "plant07_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant07_Covered_insectifuge"
+            },
+            "plant07_on_stage"
+          ]
+        },
+        "until": "plant07_treated"
+      },
+      {
+        "id": "plant07_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant07_on_destination0",
+              "plant07_on_destination1"
+            ]
+          }
+        },
+        "until": "plant07_treated"
+      },
+      {
+        "id": "plant08_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant08_Covered_insectifuge"
+            },
+            "plant08_on_stage"
+          ]
+        },
+        "until": "plant08_treated"
+      },
+      {
+        "id": "plant08_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant08_on_destination0",
+              "plant08_on_destination1"
+            ]
+          }
+        },
+        "until": "plant08_treated"
+      },
+      {
+        "id": "plant09_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant09_Covered_insectifuge"
+            },
+            "plant09_on_stage"
+          ]
+        },
+        "until": "plant09_treated"
+      },
+      {
+        "id": "plant09_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant09_on_destination0",
+              "plant09_on_destination1"
+            ]
+          }
+        },
+        "until": "plant09_treated"
+      },
+      {
+        "id": "plant10_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant10_Covered_insectifuge"
+            },
+            "plant10_on_stage"
+          ]
+        },
+        "until": "plant10_treated"
+      },
+      {
+        "id": "plant10_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant10_on_destination0",
+              "plant10_on_destination1"
+            ]
+          }
+        },
+        "until": "plant10_treated"
+      },
+      {
+        "id": "plant11_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant11_Covered_insectifuge"
+            },
+            "plant11_on_stage"
+          ]
+        },
+        "until": "plant11_treated"
+      },
+      {
+        "id": "plant11_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant11_on_destination0",
+              "plant11_on_destination1"
+            ]
+          }
+        },
+        "until": "plant11_treated"
+      },
+      {
+        "id": "plant12_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant12_Covered_insectifuge"
+            },
+            "plant12_on_stage"
+          ]
+        },
+        "until": "plant12_treated"
+      },
+      {
+        "id": "plant12_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant12_on_destination0",
+              "plant12_on_destination1"
+            ]
+          }
+        },
+        "until": "plant12_treated"
+      },
+      {
+        "id": "plant13_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant13_Covered_insectifuge"
+            },
+            "plant13_on_stage"
+          ]
+        },
+        "until": "plant13_treated"
+      },
+      {
+        "id": "plant13_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant13_on_destination0",
+              "plant13_on_destination1"
+            ]
+          }
+        },
+        "until": "plant13_treated"
+      },
+      {
+        "id": "plant14_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant14_Covered_insectifuge"
+            },
+            "plant14_on_stage"
+          ]
+        },
+        "until": "plant14_treated"
+      },
+      {
+        "id": "plant14_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant14_on_destination0",
+              "plant14_on_destination1"
+            ]
+          }
+        },
+        "until": "plant14_treated"
+      },
+      {
+        "id": "plant15_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant15_Covered_insectifuge"
+            },
+            "plant15_on_stage"
+          ]
+        },
+        "until": "plant15_treated"
+      },
+      {
+        "id": "plant15_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant15_on_destination0",
+              "plant15_on_destination1"
+            ]
+          }
+        },
+        "until": "plant15_treated"
+      },
+      {
+        "id": "plant16_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant16_Covered_insectifuge"
+            },
+            "plant16_on_stage"
+          ]
+        },
+        "until": "plant16_treated"
+      },
+      {
+        "id": "plant16_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant16_on_destination0",
+              "plant16_on_destination1"
+            ]
+          }
+        },
+        "until": "plant16_treated"
+      },
+      {
+        "id": "plant17_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant17_Covered_insectifuge"
+            },
+            "plant17_on_stage"
+          ]
+        },
+        "until": "plant17_treated"
+      },
+      {
+        "id": "plant17_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant17_on_destination0",
+              "plant17_on_destination1"
+            ]
+          }
+        },
+        "until": "plant17_treated"
+      },
+      {
+        "id": "plant18_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant18_Covered_insectifuge"
+            },
+            "plant18_on_stage"
+          ]
+        },
+        "until": "plant18_treated"
+      },
+      {
+        "id": "plant18_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant18_on_destination0",
+              "plant18_on_destination1"
+            ]
+          }
+        },
+        "until": "plant18_treated"
+      },
+      {
+        "id": "plant19_treat_at_stage",
+        "require": {
+          "any": [
+            {
+              "not": "plant19_Covered_insectifuge"
+            },
+            "plant19_on_stage"
+          ]
+        },
+        "until": "plant19_treated"
+      },
+      {
+        "id": "plant19_treat_before_delivery",
+        "require": {
+          "not": {
+            "any": [
+              "plant19_on_destination0",
+              "plant19_on_destination1"
+            ]
+          }
+        },
+        "until": "plant19_treated"
+      },
+      {
+        "id": "control0_never_spray",
+        "require": {
+          "not": "control0_Covered_insectifuge"
+        },
+        "until": null
+      },
+      {
+        "id": "control1_never_spray",
+        "require": {
+          "not": "control1_Covered_insectifuge"
+        },
+        "until": null
+      },
+      {
+        "id": "control2_never_spray",
+        "require": {
+          "not": "control2_Covered_insectifuge"
+        },
+        "until": null
+      },
+      {
+        "id": "control3_never_spray",
+        "require": {
+          "not": "control3_Covered_insectifuge"
+        },
+        "until": null
+      }
+    ],
+    "motion_guards": [],
+    "carry_guards": [
+      {
+        "id": "individual_handling",
+        "mode": "single_object"
+      }
+    ],
+    "score_type": "custom_100plus_terminal_history_and_handling_v1"
+  },
+  "acceptance_cases": {
+    "reference_orders": [
+      "forward",
+      "reverse"
+    ],
+    "physical_negative_cases": [
+      "skip_work",
+      "skip_stage",
+      "missing_delivery"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 1000
+  },
+  "settle_steps": 45,
+  "reference_plan": {
+    "kind": "service_items",
+    "work": [
+      {
+        "item": "plant00",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          11.72,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant01",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          12.06,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant02",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          12.4,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant03",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          12.74,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant04",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          13.08,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant05",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          11.72,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant06",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          12.06,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant07",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          12.4,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant08",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          12.74,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant09",
+        "source": "source0",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination0",
+        "destination_xy": [
+          13.08,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant10",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          13.920000000000002,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant11",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          14.260000000000002,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant12",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          14.600000000000001,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant13",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          14.940000000000001,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant14",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          15.280000000000001,
+          4.220000000000001
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant15",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          13.920000000000002,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant16",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          14.260000000000002,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant17",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          14.600000000000001,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant18",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          14.940000000000001,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      },
+      {
+        "item": "plant19",
+        "source": "source1",
+        "stage": "stage",
+        "stage_xy": [
+          13.2,
+          8.4
+        ],
+        "destination": "destination1",
+        "destination_xy": [
+          15.280000000000001,
+          4.779999999999999
+        ],
+        "primitive": "spray"
+      }
+    ],
+    "tool": "tool",
+    "tool_home": "tool_home",
+    "tool_xy": [
+      15.5,
+      8.4
+    ],
+    "toggle": true
+  },
+  "construction_source": "inspected_native_public_templates",
+  "design_ledger": {
+    "conditional_useful_calls": 100,
+    "measured_useful_calls": null,
+    "reference_attempt_budget": 1000,
+    "proposed_model_act_look_budget": 600
+  },
+  "design_deviations": [
+    "All treated pots may use either green display table: identical pots are interchangeable; no hidden visual category assignment."
+  ]
+}
