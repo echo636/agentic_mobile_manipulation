@@ -13,6 +13,19 @@ from ..custom_tasks import validate_spec
 from ..records import write_json
 
 
+def imported_state_with_velocities(source_state):
+    """Complete legacy fixed-asset poses for the runtime rigid-body loader.
+
+    Native public templates omit velocity for some fixed furniture. Imported
+    DatasetObjects can still use RigidDynamicPrim, which requires both keys.
+    Preserve supplied velocities and never mutate the pinned template data.
+    """
+    state = copy.deepcopy(source_state)
+    for key in ('lin_vel', 'ang_vel'):
+        state['root_link'].setdefault(key, [0., 0., 0.])
+    return state
+
+
 def validate_system_references(spec, system_root):
     names={row['system'] for row in [*spec['evaluation']['predicates'].values(),
                                    *spec.get('initial_layout',[])] if row.get('system')}
@@ -162,7 +175,7 @@ class CustomTaskBackend(RGBBackend):
             if 'in_rooms' in item: entry['args']['in_rooms'] = item['in_rooms']
             if 'scale' in item: entry['args']['scale'] = list(item['scale'])
             if 'fixed_base' in item: entry['args']['fixed_base'] = item['fixed_base']
-            state = copy.deepcopy(data['state']['registry']['object_registry'][old])
+            state = imported_state_with_velocities(data['state']['registry']['object_registry'][old])
             if 'position' in item: state['root_link']['pos'] = item['position']
             if 'orientation' in item: state['root_link']['ori'] = item['orientation']
             scene['objects_info']['init_info'][name] = entry

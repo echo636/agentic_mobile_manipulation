@@ -63,6 +63,16 @@ class Trace:
 
 
 class BranchingLibraryTests(unittest.TestCase):
+    def test_legacy_fixed_furniture_import_without_velocity(self):
+        from manipulation_agent.executors.custom_task import imported_state_with_velocities
+        source = dict(root_link=dict(pos=[1., 2., .4], ori=[0., 0., 0., 1.]), non_kin={})
+        state = imported_state_with_velocities(source)
+        self.assertEqual(state['root_link']['lin_vel'], [0., 0., 0.])
+        self.assertEqual(state['root_link']['ang_vel'], [0., 0., 0.])
+        self.assertNotIn('lin_vel', source['root_link'])
+        source['root_link']['lin_vel'] = [0., .1, 0.]
+        self.assertEqual(imported_state_with_velocities(source)['root_link']['lin_vel'], [0., .1, 0.])
+
     def test_contract_and_branch_shape(self):
         spec = json.loads(RECIPE.read_text())
         self.assertEqual(validate_spec(spec)['status'], 'passed')

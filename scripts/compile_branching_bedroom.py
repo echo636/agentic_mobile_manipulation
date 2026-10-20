@@ -9,14 +9,15 @@ ROOT = Path(__file__).resolve().parents[1]
 def compile_recipe():
     s = json.loads((ROOT / 'task_designs/constructed_100plus/bedroom_vacuum_reset_close_102_v1.json').read_text())
     s.update(id='bedroom_shared_library_branching_v2',
-             instance_id='bedroom_shared_library_branching_v2_seed0_r1',
+             instance_id='bedroom_shared_library_branching_v2_seed0_r2',
              public_instruction='整理两间卧室及共用书柜：分房暂存、吸尘，清空并擦净公共书柜后归书，玩具回各房绿台，清洁暂存台，最后关灯并归还工具。')
     # Exclude this unbound movable footstool in this new instance only: its
     # measured footprint overlaps the old B-room floor-item grid.
     s['scene_exclusions'] = ['ottoman_qsnawv_0']
     s['roles'].update(shared_shelf='lh_shared_shelf', clutter_home='lh_clutter_home',
                       wipe_tool='lh_wipe_tool', wipe_home='lh_wipe_home',
-                      common_floor='floors_rfqizg_0')
+                      common_floor='floors_rfqizg_0',
+                      a_door='door_pxhbim_1', b_door='door_pxhbim_2')
     s['asset_imports'] += [
         dict(name='lh_shared_shelf', source_task='vacuuming_floors', source_object='bookcase_kmuacd_0',
              source_sha256='3aa56342cc02f704725cdd268ce94e15fa7015dfa8c88fadf01b3f5890772b36',
@@ -52,6 +53,14 @@ def compile_recipe():
     def place(obj, target, xy):
         s['initial_layout'].append(dict(object=obj, target=target, xy=xy, place_on_support=True))
         s['initial_assertions'][obj + '_initial_support'] = on(obj, target)
+
+    # The base vacuuming task leaves both doors closed. This task explicitly
+    # connects the bedrooms with the shared common area, so author open doors
+    # as part of the initial instance and verify them after settling/restore.
+    for door in ['a_door', 'b_door']:
+        p[door + '_open'] = dict(object=door, state='Open')
+        s['initial_layout'].append(dict(object=door, state='Open', value=True, max_sampling_attempts=3))
+        s['initial_assertions'][door + '_starts_open'] = door + '_open'
 
     place('wipe_tool', 'wipe_home', [-5.7, -2.4])
     clutter = []
@@ -135,6 +144,7 @@ def compile_recipe():
         'Six native pencil cases instantiate the designated shelf clutter; their destination is the blue storage stand.',
         'Yellow stages, green toy destinations and tool/storage stands remain explicit fixed primitive task fixtures.',
         'Initial stage dust is authored independently of object movement; no motion-induced dust is assumed.',
+        'Both bedroom doors start open, verified by native Open state; route feasibility still requires checked navigation.',
         'Remove only the unbound B-bedroom ottoman that overlapped the prior floor-item grid.']
     # Exhaustive, verbatim public coverage; preserve meaningful groups in audits.
     s['requirements'] = []

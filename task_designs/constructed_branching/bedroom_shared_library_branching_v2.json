@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "bedroom_shared_library_branching_v2",
-  "instance_id": "bedroom_shared_library_branching_v2_seed0_r1",
+  "instance_id": "bedroom_shared_library_branching_v2_seed0_r2",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -57,6 +57,8 @@
     "wipe_tool": "lh_wipe_tool",
     "wipe_home": "lh_wipe_home",
     "common_floor": "floors_rfqizg_0",
+    "a_door": "door_pxhbim_1",
+    "b_door": "door_pxhbim_2",
     "clutter0": "lh_clutter0",
     "clutter1": "lh_clutter1",
     "clutter2": "lh_clutter2",
@@ -1247,6 +1249,18 @@
       "settle_steps": 1
     },
     {
+      "object": "a_door",
+      "state": "Open",
+      "value": true,
+      "max_sampling_attempts": 3
+    },
+    {
+      "object": "b_door",
+      "state": "Open",
+      "value": true,
+      "max_sampling_attempts": 3
+    },
+    {
       "object": "wipe_tool",
       "target": "wipe_home",
       "xy": [
@@ -1371,6 +1385,8 @@
     "b_lamp0_ToggledOn": "b_lamp0_ToggledOn",
     "b_lamp1_starts_on_b_lamp1_stand": "b_lamp1_on_b_lamp1_stand",
     "b_lamp1_ToggledOn": "b_lamp1_ToggledOn",
+    "a_door_starts_open": "a_door_open",
+    "b_door_starts_open": "b_door_open",
     "wipe_tool_initial_support": "wipe_tool_on_wipe_home",
     "clutter0_initial_support": "clutter0_on_shared_shelf",
     "clutter1_initial_support": "clutter1_on_shared_shelf",
@@ -1944,6 +1960,14 @@
       "hand_empty": {
         "object": "tool",
         "state": "HandEmpty"
+      },
+      "a_door_open": {
+        "object": "a_door",
+        "state": "Open"
+      },
+      "b_door_open": {
+        "object": "b_door",
+        "state": "Open"
       },
       "wipe_tool_on_wipe_home": {
         "object": "wipe_tool",
@@ -3704,6 +3728,7 @@
     "Six native pencil cases instantiate the designated shelf clutter; their destination is the blue storage stand.",
     "Yellow stages, green toy destinations and tool/storage stands remain explicit fixed primitive task fixtures.",
     "Initial stage dust is authored independently of object movement; no motion-induced dust is assumed.",
+    "Both bedroom doors start open, verified by native Open state; route feasibility still requires checked navigation.",
     "Remove only the unbound B-bedroom ottoman that overlapped the prior floor-item grid."
   ]
 }
