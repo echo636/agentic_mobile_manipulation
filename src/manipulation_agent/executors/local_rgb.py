@@ -39,51 +39,53 @@ class LocalRGBManipulation:
         return grid,collision,details,hulls,floor
 
     def _local_grasp_preview(self,obj,operation,geometry):
-        """Predict ideal grasp's +18 cm lift and the WHOLE rigid payload.
-
-        No simulator setter or grasp is executed. Candidate-specific geometry
-        rotates the robot but leaves the not-yet-grasped target in world space.
-        """
-        import numpy as np
-        import cv2
-        from .live_gt_map import build_navigation_grid, clipped_body_projection
+        """Plan the same lift/packing route used by actual ideal grasp."""
+        from .live_gt_map import build_navigation_grid
         from .heading_collision import HeadingCollisionChecker
+        from .carry_geometry import PayloadSweep, LoadedCollision, plan_lift_and_compact
         payload=[obj,*[child for child,_,_ in self._grasp_dependencies(obj)]]
-        names=('_navigation_layers','_navigation_support','_navigation_clearance','_navigation_layer_yaw')
+        names=('_navigation_layers','_navigation_support','_navigation_clearance','_navigation_layer_yaw','_navigation_layer_heights')
         saved={name:getattr(self,name) for name in names}
         try:
-            grid,details=build_navigation_grid(self,geometry[4],prospective_carry=payload)
-            raw=[layer[0] for layer in self._navigation_layers]
-            support=self._navigation_support
+            grid,_=build_navigation_grid(self,geometry[4],prospective_carry=payload,robot_only=True)
+            robot_collision=HeadingCollisionChecker(grid,self._navigation_layers,self._local_pose()[2],
+                self._navigation_support,check_cancelled=operation.check)
         finally:
             for name,value in saved.items():setattr(self,name,value)
-        robot_vertices=[link.collision_boundary_points_world.cpu().numpy()
-                        for link in self.robot.links.values()
-                        if not link.is_meta_link and link.collision_boundary_points_world is not None]
-        payload_vertices=[[link.collision_boundary_points_world.cpu().numpy()+np.array([0.,0.,.18])
-                          for link in item.links.values()
-                          if not link.is_meta_link and link.collision_boundary_points_world is not None]
-                          for item in payload]
-        base=self._local_pose()
-        floor_z=float(self.env.scene.trav_map.floor_heights[geometry[4]])
+        base_z=float(self.robot.get_position_orientation()[0][2])
+        cache={}
         def checker_at(pose):
-            operation.check()
-            delta=pose[2]-base[2];c,s=math.cos(delta),math.sin(delta)
-            bodies=[]
-            for vertices in robot_vertices:
-                moved=vertices.copy()
-                moved[:,:2]=(moved[:,:2]-base[:2])@np.array([[c,s],[-s,c]])+pose[:2]
-                bodies.append(moved)
-            layers=[]
-            for occupancy,band in zip(raw,details['collision_layers']):
-                group=[bodies,*payload_vertices][band['body_group']]
-                chunks=[xy-np.asarray(pose[:2]) for vertices in group
-                        if (xy:=clipped_body_projection(vertices,floor_z+band['z_min'],floor_z+band['z_max'])) is not None]
-                if chunks:
-                    footprint=cv2.convexHull(np.concatenate(chunks).astype('float32')).reshape(-1,2)
-                    layers.append((occupancy,footprint))
-            return HeadingCollisionChecker(grid,layers,pose[2],support,check_cancelled=operation.check)
+            check=getattr(operation,'preview_check',operation.check)
+            check()
+            key=tuple(round(float(v),6) for v in pose)
+            if key in cache:return cache[key]
+            sweep=PayloadSweep(self,obj,payload,pose,check=check)
+            route,status=plan_lift_and_compact(sweep.origin,(*pose[:2],base_z,pose[2]),
+                                              sweep.bounds,sweep.clear,check=check)
+            if route is None:
+                operation.preview_failure={'reason':status,**(sweep.last_failure or {})}
+                return None
+            checker=LoadedCollision(robot_collision,sweep,pose,route)
+            checker.carry_status=status
+            cache[key]=checker
+            return checker
         return checker_at
+
+    def _admit_loaded_departure(self,pose,preview,operation,check):
+        from .forward_navigation import local_exit_certificate
+        operation.preview_check=check
+        loaded=preview(pose)
+        if loaded is None:return False
+        loaded.check_cancelled=check
+        if hasattr(loaded,'sweep'):loaded.sweep.check=check
+        if hasattr(loaded,'robot_collision'):loaded.robot_collision.check_cancelled=check
+        if local_exit_certificate(pose,loaded,check_cancelled=check) is None:
+            if hasattr(loaded,'sweep'):
+                operation.preview_failure=loaded.sweep.last_failure or {'stage':'loaded_departure'}
+            return False
+        if hasattr(loaded,'route'):
+            operation.carry_plan={'pose':tuple(pose),'route':loaded.route,'status':loaded.carry_status}
+        return True
 
     def _local_ready(self,primitive,obj,point,operation):
         from .forward_navigation import local_exit_certificate
@@ -94,9 +96,11 @@ class LocalRGBManipulation:
         operation.geometry=geometry
         if not geometry[1].motion_free(pose,pose):return False
         if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=geometry[3],base_yaw=pose[2]):return False
+        if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
+            if not self._admit_articulation(primitive,obj,pose,operation,operation.check):return False
         if primitive=='grasp' and self.ideal_carry and not self.demo_motion:
             operation.grasp_preview=self._local_grasp_preview(obj,operation,geometry)
-            if local_exit_certificate(pose,operation.grasp_preview(pose),check_cancelled=operation.check) is None:
+            if not self._admit_loaded_departure(pose,operation.grasp_preview,operation,operation.check):
                 operation.record('check_departure',status='rejected',reason='no_loaded_departure')
                 return False
         return True
@@ -109,10 +113,15 @@ class LocalRGBManipulation:
         grid,collision,details,hulls,_=geometry
         actual=self._local_pose()
         if not collision.motion_free(actual,actual):
-            raise SkillError('local_adjustment_blocked','Current body/carry footprint has no collision clearance')
+            self._local_clearance_recovery(operation,geometry)
+            return
         preview=getattr(operation,'grasp_preview',None)
         if primitive=='grasp' and self.ideal_carry and not self.demo_motion and preview is None:
             preview=self._local_grasp_preview(obj,operation,geometry)
+        if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
+            if getattr(operation,'articulation_preview',None) is None:
+                from .local_articulation import prepare_articulation
+                operation.articulation_preview=prepare_articulation(self,obj,primitive,operation)
         local=LocalCollision(collision,operation.origin,operation.limits.radius_m)
         budget=PlanningBudget(operation.check,seconds=operation.limits.planning_seconds)
         collision.check_cancelled=budget.check
@@ -126,10 +135,13 @@ class LocalRGBManipulation:
                     row.update(status='rejected',reason='target_not_visible');continue
                 if local_exit_certificate(pose,collision,check_cancelled=budget.check) is None:
                     row.update(status='rejected',reason='no_departure');continue
+                if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
+                    if not self._admit_articulation(primitive,obj,pose,operation,budget.check):
+                        row.update(status='rejected',reason='articulation_clearance');continue
                 if preview is not None:
-                    loaded=preview(pose);loaded.check_cancelled=budget.check
-                    if local_exit_certificate(pose,loaded,check_cancelled=budget.check) is None:
-                        row.update(status='rejected',reason='no_loaded_departure');continue
+                    if not self._admit_loaded_departure(pose,preview,operation,budget.check):
+                        row.update(status='rejected',reason='no_loaded_departure',
+                                   diagnostic=getattr(operation,'preview_failure',None));continue
                 plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],tuple(map(float,point[:2])),pose[2],
                     math.dist(actual[:2],pose[:2]),math.dist(pose[:2],point[:2]),len(attempts),1,0.,0,pose[2],'forward')
                 per_route=PlanningBudget(budget.check,seconds=2.)
@@ -170,6 +182,48 @@ class LocalRGBManipulation:
         # route was certified before executing it.
         operation.geometry=None
         operation.grasp_preview=None
+        operation.articulation_preview=None
+        operation.articulation_plan=None
+
+    def _local_clearance_recovery(self,operation,geometry):
+        from dataclasses import replace
+        from .gt_navigation import plan_start_clearance_exit,NavigationError,PlanningBudget
+        from .live_gt_map import clearance_transition_guard
+        grid,_,details,_,_=geometry;actual=self._local_pose()
+        raw,overlap,radius=self._navigation_clearance
+        budget=PlanningBudget(operation.check,seconds=6.)
+        guard=clearance_transition_guard(grid,self._navigation_layers,self._navigation_support,
+            [(layer['z_min'],layer['z_max']) for layer in details['collision_layers']]
+            if 'collision_layers' in details else None)
+        def allowed(a,b):
+            return (math.dist(grid.world(b),operation.origin[:2])<=operation.limits.radius_m and guard(a,b))
+        try:
+            corridor,plan,report=plan_start_clearance_exit(grid,raw,overlap,actual[:2],
+                radius=min(radius,.75),transition_allowed=allowed,check_cancelled=budget.check)
+        except NavigationError as exc:
+            raise SkillError('local_adjustment_blocked','No guarded local clearance recovery: '+str(exc)) from exc
+        if plan.geodesic_m+operation.path>operation.limits.path_m:
+            raise SkillError('local_adjustment_exhausted','Clearance recovery exceeds local path budget')
+        plan=replace(plan,travel_yaw=actual[2],final_yaw=actual[2],motion_mode='clearance_retreat')
+        operation.record('clearance_recovery',plan=asdict(plan),**report)
+        result=self._execute_gt_plan(corridor,plan,operation.step_limit-(self.steps-operation.start_steps))
+        self.navigation_distance+=result['actual_path_distance_m']
+        operation.geometry=None;operation.grasp_preview=None
+        operation.articulation_preview=None;operation.articulation_plan=None
+
+    def _admit_articulation(self,primitive,obj,pose,operation,check):
+        from .local_articulation import prepare_articulation
+        from .forward_navigation import local_exit_certificate
+        preview=getattr(operation,'articulation_preview',None)
+        if preview is None:
+            preview=prepare_articulation(self,obj,primitive,operation)
+            operation.articulation_preview=preview
+        swept,future,plan=preview
+        swept.check_cancelled=future.check_cancelled=check
+        if not swept.motion_free(pose,pose):return False
+        if local_exit_certificate(pose,future,check_cancelled=check) is None:return False
+        operation.articulation_plan=plan
+        return True
 
     def _local_reobserve(self,binding):
         self._render_rgb_views(require_calibration=True)
@@ -183,7 +237,45 @@ class LocalRGBManipulation:
             operation.check()
             geometry=self._local_geometry(operation)
             certificate=local_exit_certificate(self._local_pose(),geometry[1],check_cancelled=operation.check)
-            return 'checked' if certificate is not None else 'blocked'
+            if certificate is not None:return 'checked'
+            if operation.repositions>=operation.limits.max_repositions:return 'blocked'
+            if not geometry[1].motion_free(self._local_pose(),self._local_pose()):
+                self._local_clearance_recovery(operation,geometry)
+                operation.repositions+=1
+                geometry=self._local_geometry(operation)
+                if local_exit_certificate(self._local_pose(),geometry[1],check_cancelled=operation.check) is not None:
+                    operation.record('departure_recovered',kind='clearance_retreat')
+                    return 'checked'
+                if operation.repositions>=operation.limits.max_repositions:return 'blocked'
+            # A free pose may still lack a short exit certificate. Try a
+            # checked forward route to a nearby pose with a certified exit.
+            from .gt_navigation import NavigationPlan,NavigationError,PlanningBudget
+            from .forward_navigation import plan_forward_route
+            from .local_manipulation import LocalCollision
+            actual=self._local_pose();grid,collision,_,_,_=geometry
+            budget=PlanningBudget(operation.check,seconds=6.)
+            collision.check_cancelled=budget.check
+            bounded=LocalCollision(collision,operation.origin,operation.limits.radius_m)
+            try:
+                for pose in stance_candidates(actual,operation.origin,(*actual[:2],0.),operation.limits):
+                    budget.check()
+                    if math.dist(actual[:2],pose[:2])>.75:continue
+                    if not bounded.motion_free(pose,pose):continue
+                    if local_exit_certificate(pose,collision,check_cancelled=budget.check) is None:continue
+                    plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],pose[:2],pose[2],
+                        math.dist(actual[:2],pose[:2]),0.,1,1,0.,0,pose[2],'forward')
+                    try:route=plan_forward_route(plan,actual,bounded,check_cancelled=budget.check,max_expansions=2000)
+                    except NavigationError:continue
+                    if operation.path+route.distance_m>operation.limits.path_m:continue
+                    operation.record('departure_recovery',route=asdict(route))
+                    result=self._execute_gt_plan(grid,plan,operation.step_limit-(self.steps-operation.start_steps),prepared_route=route)
+                    self.navigation_distance+=result['actual_path_distance_m'];operation.repositions+=1
+                    fresh=self._local_geometry(operation)
+                    return ('checked' if local_exit_certificate(self._local_pose(),fresh[1],check_cancelled=operation.check)
+                            is not None else 'blocked')
+            except NavigationError:return 'blocked'
+            finally:collision.check_cancelled=operation.check
+            return 'blocked'
         except SkillError as exc:
             if exc.code in {'episode_cancelled','episode_timeout'}:return 'not_checked_cancelled'
             return 'not_checked_budget' if exc.code=='local_adjustment_exhausted' else 'blocked'

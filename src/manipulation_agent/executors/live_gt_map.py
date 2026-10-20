@@ -42,7 +42,7 @@ def clipped_body_projection(points, low, high):
     return np.asarray(clipped) if clipped else None
 
 
-def build_navigation_grid(backend, floor, *, prospective_carry=()):
+def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=False):
     import cv2
     import numpy as np
     import omnigibson.lazy as lazy
@@ -54,7 +54,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
     held=backend._get_held()
     carried=[obj for obj in [held,*[o for o,_ in backend._carry_contents]] if obj is not None]
     carried.extend(obj for obj in prospective_carry if obj not in carried)
-    moving_objects=[backend.robot,*carried]
+    moving_objects=[backend.robot,*([] if robot_only else carried)]
     height=max(float(obj.aabb[1][2])+(.18 if obj in prospective_carry else 0.) for obj in moving_objects)-floor_z
     # Stable, conservative band edges avoid a full raster rebuild for every
     # micrometre of pose-setter feedback after a navigation action.
@@ -75,10 +75,19 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
         if obj is not backend.robot and not object_hulls:
             raise ValueError('Carried collision geometry unavailable for navigation')
     layers=[]
-    for lo,hi in zip(edges,edges[1:]):
-        # Keep disjoint robot / payload bodies disjoint. A convex hull across
-        # them invents a solid bridge in the air between the base and payload.
-        for group in range(len(moving_objects)):
+    for group in range(len(moving_objects)):
+        body_edges=edges
+        if group:
+            # Carry clearance uses the payload's actual Z extent. A plate
+            # lifted above a counter must not inherit the counter's entire
+            # 0.8--1.25 m occupancy slab. Quantization is outward, not inward.
+            vertices=[p for g,p in bodies if g==group]
+            low=max(.03,math.floor((min(float(p[:,2].min()) for p in vertices)-floor_z-.002)*100)/100)
+            high=math.ceil((max(float(p[:,2].max()) for p in vertices)-floor_z+.002)*100)/100
+            body_edges=[low,*[round(low+.1*i,8) for i in range(1,math.ceil((high-low)/.1))],high]
+        for lo,hi in zip(body_edges,body_edges[1:]):
+            # Keep disjoint robot / payload bodies disjoint. A convex hull across
+            # them invents a solid bridge in the air between the base and payload.
             chunks=[xy-base[:2] for g,p in bodies if g==group and
                     (xy:=clipped_body_projection(p,floor_z+lo,floor_z+hi)) is not None]
             if not chunks:continue
@@ -94,13 +103,13 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
     # because the payload adds another footprint at an existing height.
     bands=list(dict.fromkeys((lo,hi) for lo,hi,_,_ in layers))
     band_indices=[bands.index((lo,hi)) for lo,hi,_,_ in layers]
-    if floor not in cache or cache[floor].get('bands')!=bands:
+    if floor not in cache:
         if not source.is_file():raise ValueError('GT floor support map unavailable: '+str(source))
         raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE);h,w=trav.floor_map[floor].shape
         raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
-        cache[floor]={'support':raw,'free':np.repeat(raw[None],len(bands),axis=0),'objects':{},'height':None,'bands':bands,
+        cache[floor]={'support':raw,'band_cache':{},'objects':{},'height':None,'bands':bands,
                       'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
-    cached=cache[floor];support=cached['support'];free=cached['free'];h,w=support.shape
+    cached=cache[floor];support=cached['support'];h,w=support.shape
     origin=np.array([-w*resolution/2,-h*resolution/2])
     ignored_objects={backend.robot,*carried}
     ignored_links={link.prim_path for obj in ignored_objects if obj is not None for link in obj.links.values()}
@@ -117,9 +126,16 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
         joints=obj.get_joint_positions() if obj.n_joints else ()
         signature=tuple(round(float(v),3) for tensor in (position,quat,joints) for v in tensor)
         current[obj.name]={'signature':signature,'lo':lo[:2],'hi':hi[:2]}
-    dirty=support.astype(bool) if cached['height'] is None or abs(cached['height']-height)>.01 else np.zeros_like(support,dtype=bool)
-    previous=cached['objects']
-    if not dirty.any():
+    query=lazy.omni.physx.get_physx_scene_query_interface()
+    started=time.monotonic();count=0;updated_queries=0
+    updated=np.zeros_like(support,dtype=bool);raw_bands=[]
+    band_cache=cached.setdefault('band_cache',{})
+    for low,high in bands:
+        key=(low,high)
+        entry=band_cache.get(key)
+        dirty=support.astype(bool) if entry is None else np.zeros_like(support,dtype=bool)
+        previous={} if entry is None else entry['objects']
+        raw=support.copy() if entry is None else entry['free']
         for name in set(current)|set(previous):
             old,new=previous.get(name),current.get(name)
             if old is not None and new is not None and old['signature']==new['signature']:continue
@@ -128,16 +144,13 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
                 lo=np.floor((record['lo']-origin)/resolution).astype(int)-1
                 hi=np.ceil((record['hi']-origin)/resolution).astype(int)+2
                 dirty[max(0,lo[1]):min(h,hi[1]),max(0,lo[0]):min(w,hi[0])]=True
-        dirty &= support.astype(bool)
-    query=lazy.omni.physx.get_physx_scene_query_interface()
-    started=time.monotonic();count=0
-    for row,col in np.argwhere(dirty):
-        if count%2048==0:
-            backend.deadline.check()
-            local=getattr(backend,'_local_operation',None)
-            if local is not None:local.check()
-        xy=origin+np.array([col,row])*resolution
-        for layer_index,(low,high) in enumerate(bands):
+        dirty &= support.astype(bool);updated |= dirty
+        for row,col in np.argwhere(dirty):
+            if updated_queries%2048==0:
+                backend.deadline.check()
+                local=getattr(backend,'_local_operation',None)
+                if local is not None:local.check()
+            xy=origin+np.array([col,row])*resolution
             blocked=False;query_error=None
             def hit_callback(hit):
                 nonlocal blocked,query_error
@@ -153,9 +166,17 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
                               (float(xy[0]),float(xy[1]),floor_z+(high+low)/2),
                               (0.,0.,0.,1.),hit_callback,False)
             if query_error is not None:raise RuntimeError('PhysX overlap callback failed') from query_error
-            free[layer_index,row,col]=0 if blocked else 1
-        count+=1
-    cached.update(objects=current,height=height)
+            raw[row,col]=0 if blocked else 1
+            updated_queries+=1
+        band_cache[key]={'free':raw,'objects':current}
+        raw_bands.append(raw)
+    # Bound memory without throwing away unchanged robot-height bands whenever
+    # grasping/releasing changes the set of payload layers.
+    for key in list(band_cache):
+        if len(band_cache)<=32:break
+        if key not in bands:del band_cache[key]
+    free=np.stack(raw_bands);count=int(updated.sum())
+    cached.update(objects=current,height=height,bands=bands,free=free)
     collision_raw=[free[index] for index in band_indices]
     navigable=support.copy();overlap=np.zeros_like(support,dtype='float32')
     for raw,(_,_,footprint,_) in zip(collision_raw,layers):
@@ -172,6 +193,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
     combined=np.all(free,axis=0).astype('uint8')
     backend._navigation_clearance=(combined.tobytes(),overlap.ravel(),max(float(np.linalg.norm(p,axis=1).max()) for _,_,p,_ in layers)+resolution)
     backend._navigation_layers=[(raw.copy(),footprint.copy()) for raw,(_,_,footprint,_) in zip(collision_raw,layers)]
+    backend._navigation_layer_heights=[(lo,hi) for lo,hi,_,_ in layers]
     backend._navigation_support=support.copy()
     return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
         'chassis_footprint_world_offsets':chassis.tolist(),'kernel_shape':list(kernel.shape),
@@ -180,14 +202,14 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
         'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist(),'body_group':group} for lo,hi,p,group in layers],
         'disjoint_payload_footprints':True,
         'occupancy_height_bands':len(bands),
-        'query_height_m':height,'updated_cells':count,'query_seconds':time.monotonic()-started,
+        'query_height_m':height,'updated_cells':count,'updated_queries':updated_queries,'query_seconds':time.monotonic()-started,
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
         'held_object_footprint_included':bool(carried_hulls),
         'carried_collision_hulls':carried_hulls}
 
 
-def clearance_transition_guard(grid, collision_layers, support):
+def clearance_transition_guard(grid, collision_layers, support, heights=None):
     """Shed existing contacts without entering a new obstacle region.
 
     A non-increasing overlap count alone can exchange an old contact for a new
@@ -200,10 +222,32 @@ def clearance_transition_guard(grid, collision_layers, support):
     """
     import numpy as np
     from scipy.ndimage import label
-    # Join the height bands before counting contacts. A slanted door can shift
-    # one raster contact from the torso to the base while total overlap falls;
-    # requiring every height band's count to fall would trap the robot there.
-    labels=label(np.stack([raw==0 for raw,_ in collision_layers]),structure=np.ones((3,3,3)))[0]
+    # Link components only across physically touching height intervals. Payload
+    # bands may overlap robot bands or be far from their array neighbours.
+    if heights is None:heights=[(i,i+1) for i in range(len(collision_layers))]
+    adjacent=[[j for j,(c,d) in enumerate(heights) if max(a,c)<=min(b,d)+1e-8]
+              for a,b in heights]
+    labels=[];total=0
+    for raw,_ in collision_layers:
+        ids,n=label(raw==0,structure=np.ones((3,3)))
+        labels.append(np.where(ids,ids+total,0));total+=n
+    parent=list(range(total+1))
+    def root(i):
+        while parent[i]!=i:
+            parent[i]=parent[parent[i]];i=parent[i]
+        return i
+    for i,neighbours in enumerate(adjacent):
+        for j in neighbours:
+            if j>=i:continue
+            padded=np.pad(labels[j],1)
+            for dr in range(3):
+                for dc in range(3):
+                    other=padded[dr:dr+grid.height,dc:dc+grid.width]
+                    mask=(labels[i]>0)&(other>0)
+                    pairs=np.unique(np.stack([labels[i][mask],other[mask]],axis=1),axis=0)
+                    for a,b in pairs:parent[root(int(a))]=root(int(b))
+    roots=np.asarray([root(i) for i in range(total+1)])
+    labels=[roots[ids] for ids in labels]
     layers=[]
     for index,(raw,footprint) in enumerate(collision_layers):
         kernel=footprint_kernel(footprint,grid.resolution)
@@ -232,8 +276,8 @@ def clearance_transition_guard(grid, collision_layers, support):
         old,old_counts=before;new,new_counts=after
         if any(count>old_counts.get(key,0) for key,count in new_counts.items()):return False
         # No new, spatially separate contact patch on a connected wall/table.
-        return all(any((layer+dz,r+dr,c+dc) in old
-                       for dz in (-1,0,1) for dr in (-1,0,1) for dc in (-1,0,1))
+        return all(any((other,r+dr,c+dc) in old
+                       for other in adjacent[layer] for dr in (-1,0,1) for dc in (-1,0,1))
                    for layer,r,c in new-old)
     return allowed
 

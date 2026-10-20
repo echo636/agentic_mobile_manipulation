@@ -149,7 +149,7 @@ def stance_candidates(actual, origin, point, limits, visited=()):
             points.append((actual[0]+distance*math.cos(yaw), actual[1]+distance*math.sin(yaw)))
     for xy in points:
         if (math.dist(xy, origin[:2]) > limits.radius_m+1e-9 or
-                math.dist(xy, point[:2]) > limits.preferred_reach_m):
+                math.dist(xy, point[:2]) > limits.reach_m):
             continue
         bearing = math.atan2(point[1]-xy[1], point[0]-xy[0])
         travel = math.atan2(xy[1]-actual[1], xy[0]-actual[0]) if math.dist(xy,actual[:2])>.01 else actual[2]
@@ -162,8 +162,24 @@ def stance_candidates(actual, origin, point, limits, visited=()):
     def score(p):
         angle = lambda a: abs(math.atan2(math.sin(a), math.cos(a)))
         travel = math.atan2(p[1]-actual[1],p[0]-actual[0]) if math.dist(p[:2],actual[:2])>.01 else actual[2]
-        return math.dist(p[:2],actual[:2])/.5 + (angle(travel-actual[2])+angle(p[2]-travel))/(math.pi/3)
-    return sorted(candidates,key=score)
+        preference = max(0., math.dist(p[:2],point[:2])-limits.preferred_reach_m)
+        return math.dist(p[:2],actual[:2])/.5 + (angle(travel-actual[2])+angle(p[2]-travel))/(math.pi/3) + preference
+    # Round-robin distance/side buckets retain cheap nearby adjustments while
+    # giving the outer disk and both sides a chance before the shared timer
+    # expires. Preferred reach is a ranking preference, never an admission cap.
+    buckets = {}
+    for pose in sorted(candidates,key=score):
+        dx,dy=pose[0]-actual[0],pose[1]-actual[1]
+        distance=math.hypot(dx,dy)
+        side=round(math.atan2(math.sin(math.atan2(dy,dx)-toward),
+                              math.cos(math.atan2(dy,dx)-toward))/(math.pi/2)) if distance>.01 else 0
+        band=0 if distance<=.5+1e-8 else 1 if distance<=1.+1e-8 else 2
+        buckets.setdefault((band,side),[]).append(pose)
+    ordered=[]
+    while any(buckets.values()):
+        for group in buckets.values():
+            if group:ordered.append(group.pop(0))
+    return ordered
 
 
 class LocalCollision:

@@ -611,7 +611,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                 recovery_states.add(state)
                 if max_steps<=10:raise SkillError('action_timeout','Clearance recovery exhausted its control-step budget')
                 support=self._live_gt_collision_cache[floor]['support']
-                guard=clearance_transition_guard(grid,self._navigation_layers,support)
+                guard=clearance_transition_guard(grid,self._navigation_layers,support,
+                    [(layer['z_min'],layer['z_max']) for layer in map_details['collision_layers']])
                 escape_grid,escape,escape_details=plan_start_clearance_exit(
                     grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius,
                     transition_allowed=guard,check_cancelled=self.deadline.check)

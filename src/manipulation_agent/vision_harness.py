@@ -233,8 +233,10 @@ class VisionHarness:
             effect['local_adjustment']={'repositions':int(local['repositions']),
                 'primitive_attempts':int(local['primitive_attempts']),
                 'departure':local['departure'],
-                'message':('Operation completed. Local departure is blocked; do not repeat the completed operation.'
-                           if local['departure']=='blocked' else
+                'operation_committed':True,
+                'recovery_required':local['departure']!='checked',
+                'message':('Operation completed. Local departure is not certified after bounded recovery; inspect RGB and select a different navigation approach. Do not repeat the completed operation.'
+                           if local['departure']!='checked' else
                            'Operation completed on the same selected target after bounded local preparation.')}
         if primitive=='navigate_to':
             # Only an action outcome crosses the RGB boundary, never private

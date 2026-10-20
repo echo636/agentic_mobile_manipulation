@@ -139,6 +139,7 @@ class ForwardBackendTests(unittest.TestCase):
         from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
         from manipulation_agent.executors.gt_navigation import NavigationError
         b=self.b;b.local_limits=LocalLimits();b.deadline=SimpleNamespace(check=lambda **kw:None)
+        b.ideal_carry=False;b.demo_motion=False
         b._approach_visible=lambda *a,**kw:True
         records=[];b._local_record=lambda **kw:records.append(kw)
         def geometry(op):
@@ -161,7 +162,7 @@ class ForwardBackendTests(unittest.TestCase):
         from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
         b=self.b;b.local_limits=LocalLimits();b.navigation_distance=0.
         b.deadline=SimpleNamespace(check=lambda **kwargs:None)
-        b._carry_contents=[];b.demo_motion=False;b.ideal_carry=True
+        b._carry_contents=[];b.demo_motion=False;b.ideal_carry=False
         target=object();point=self.torch.tensor([1.55,0.,.8]);effects=[];captures=[]
         binding=SimpleNamespace(grounding={},describe=lambda:{'scope':'cpu_fixture'})
         b._resolve_local_target=lambda lock:(target,point)
@@ -186,7 +187,7 @@ class ForwardBackendTests(unittest.TestCase):
         self.assertEqual(effects,[target]);self.assertEqual(captures,[binding])
         self.assertEqual(result['local_manipulation']['repositions'],1)
         self.assertLessEqual(result['local_manipulation']['path_m'],2.)
-        self.assertGreater(float(self.position[0]),.29)
+        self.assertGreater(float(self.position[0]),.14)
         self.assertIsNone(b._base_target)
 
     def test_local_budget_prevents_outside_pose_before_setter(self):

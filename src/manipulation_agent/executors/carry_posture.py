@@ -44,6 +44,43 @@ def translation_samples(route, step_m):
 
 
 class CompactCarry:
+    def _execute_prepared_carry(self, obj, plan, max_steps):
+        """Execute precisely the admitted route, checking actual geometry anew."""
+        from omnigibson.utils import transform_utils as T
+        from .carry_geometry import PayloadSweep
+        route=plan['route'];before=self.steps
+        step=.5*self.og.sim.get_sim_step_dt()
+        samples=sum(max(1,math.ceil(math.dist(a,b)/step)) for a,b in zip(route,route[1:]))
+        if samples+6>max_steps:
+            raise SkillError('local_adjustment_exhausted','Prepared carry route exceeds remaining step budget',changed=True)
+        local=getattr(self,'_local_operation',None)
+        check=local.check if local is not None else self.deadline.check
+        payload=[obj,*[child for child,_ in self._carry_contents]]
+        sweep=PayloadSweep(self,obj,payload,self._local_pose(),check=check)
+        position,orientation=obj.get_position_orientation()
+        if math.dist(position.cpu().tolist(),route[0])>.01:
+            raise SkillError('target_changed','Payload moved after carry preparation',changed=True)
+        base_pos,base_quat=self.robot.get_position_orientation()
+        with self._anchored_operation():
+            for number,(a,b) in enumerate(zip(route,route[1:])):
+                previous=a
+                for xyz in translation_samples((a,b),step):
+                    check()
+                    if not sweep.clear(previous,xyz,extraction=number==0,
+                                       require_clear=number!=0 or math.dist(xyz,b)<1e-8):
+                        self._carry_record(status='prepared_carry_blocked',diagnostic=sweep.last_failure)
+                        raise SkillError('local_adjustment_blocked','Prepared payload route changed during execution',changed=True)
+                    new=position.clone();new[:]=self.torch.tensor(xyz,dtype=new.dtype,device=new.device)
+                    self._carry_relative=T.relative_pose_transform(new,orientation,base_pos,base_quat)
+                    self._carry_follow()
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                    previous=xyz
+            for _ in range(6):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        report={'status':plan['status'],'shared_prediction_and_execution':True,
+                'steps':self.steps-before,'planned_route':route,'collision_queries':sweep.queries}
+        self._carry_record(status='carry_posture',object=obj.name,posture=report)
+        return report
+
     def _compact_carry(self, max_steps):
         import numpy as np
         import omnigibson.lazy as lazy

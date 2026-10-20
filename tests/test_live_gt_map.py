@@ -49,16 +49,43 @@ class LiveGridTests(unittest.TestCase):
             grid,meta=build_navigation_grid(b,0)
             self.assertTrue(grid.navigable(grid.cell((0.,0.))))
             self.assertEqual({r['body_group'] for r in meta['collision_layers']},{0,1})
-            self.assertEqual(meta['occupancy_height_bands'],empty['occupancy_height_bands'])
-            self.assertLess(meta['updated_cells'],empty['updated_cells'])
+            self.assertGreater(meta['occupancy_height_bands'],empty['occupancy_height_bands'])
+            self.assertLess(meta['updated_queries'],empty['updated_queries'])
             self.assertGreater(meta['updated_cells'],0)
-            self.assertEqual(len(queries),meta['updated_cells']*meta['occupancy_height_bands'])
-            self.assertGreater(len(meta['collision_layers']),meta['occupancy_height_bands'])
+            self.assertEqual(len(queries),meta['updated_queries'])
+            self.assertEqual(len(meta['collision_layers']),meta['occupancy_height_bands'])
             # Keep actual carried geometry checked, even though the gap is free.
             obstacle.aabb=tuple(a+torch.tensor([.5,0.,0.]) for a in obstacle.aabb)
             obstacle.position+=torch.tensor([.5,0.,0.])
             grid,_=build_navigation_grid(b,0)
             self.assertFalse(grid.navigable(grid.cell((0.,0.))))
+            # The same XY footprint is free when lifted above a table. This
+            # specifically exercises the real-height bands and their cache.
+            obstacle.aabb=(torch.tensor([.8,-.2,0.]),torch.tensor([1.2,.2,.9]))
+            obstacle.position=torch.tensor([1.,0.,.45])
+            payload.links['body'].collision_boundary_points_world+=torch.tensor([0.,0.,.65])
+            payload.aabb=tuple(a+torch.tensor([0.,0.,.65]) for a in payload.aabb)
+            payload.position+=torch.tensor([0.,0.,.65])
+            grid,raised=build_navigation_grid(b,0)
+            self.assertTrue(grid.navigable(grid.cell((0.,0.))))
+            self.assertGreater(min(layer['z_min'] for layer in raised['collision_layers'] if layer['body_group']==1),.9)
+            obstacle.aabb=(obstacle.aabb[0],torch.tensor([1.2,.2,1.3]))
+            obstacle.position=torch.tensor([1.,0.,.65])
+            grid,_=build_navigation_grid(b,0)
+            self.assertFalse(grid.navigable(grid.cell((0.,0.))))
+
+    def test_retreat_cannot_trade_contact_between_separate_heights(self):
+        import numpy as np
+        from manipulation_agent.executors.gt_navigation import GridMap
+        from manipulation_agent.executors.live_gt_map import clearance_transition_guard
+        lower=np.ones((9,9),dtype='uint8');upper=lower.copy()
+        lower[4,4]=0;upper[4,5]=0
+        point=np.array([[0.,0.]])
+        grid=GridMap(9,9,.1,(0.,0.),np.ones_like(lower).tobytes())
+        guard=clearance_transition_guard(grid,[(lower,point),(upper,point)],np.ones_like(lower),
+                                         [(0.,.1),(1.,1.1)])
+        self.assertFalse(guard((4,4),(4,5)))
+        self.assertTrue(guard((4,4),(4,3)))
 
     def test_occupied_centre_can_shed_contacts_but_cannot_enter_new_obstacles(self):
         import cv2

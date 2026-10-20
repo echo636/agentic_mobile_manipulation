@@ -110,6 +110,7 @@ class CoordinationTests(unittest.TestCase):
         b._approach_visible=lambda *args,**kwargs:True
         b._local_grasp_preview=lambda *args:lambda pose:collision
         b._local_reposition=LocalRGBManipulation._local_reposition.__get__(b)
+        b._admit_loaded_departure=LocalRGBManipulation._admit_loaded_departure.__get__(b)
         # The unloaded stance is admitted, then the loaded departure search
         # exhausts its shared planning budget, as in the real plates episode.
         with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
@@ -143,6 +144,25 @@ class CoordinationTests(unittest.TestCase):
         self.assertLessEqual(result['path_m'],2.)
         self.assertEqual(len(b.executions),1)
         self.assertIs(b.executions[0][0],b.target)
+
+    def test_allowed_reach_is_not_clipped_to_preferred_distance(self):
+        b=Motor();b.point=(3.3,0.,1.)
+        def reposition(primitive,obj,point,op):
+            candidates=stance_candidates(b.pose,op.origin,point,op.limits)
+            self.assertTrue(candidates)
+            pose=candidates[0];op.admit_pose(pose);b.pose=pose;b.steps+=1
+        b._local_reposition=reposition
+        result=b.run()['local_manipulation']
+        self.assertEqual(result['primitive_attempts'],1)
+        self.assertLessEqual(math.dist(b.pose[:2],b.point[:2]),1.4)
+        self.assertGreater(math.dist(b.pose[:2],b.point[:2]),1.25)
+
+    def test_candidate_prefix_covers_outer_disk_and_both_sides(self):
+        candidates=stance_candidates((0.,0.,0.),(0.,0.,0.),(1.3,0.,1.),LocalLimits())
+        prefix=candidates[:12]
+        self.assertTrue(any(math.hypot(*p[:2])>1. for p in prefix))
+        self.assertTrue(any(p[1]>.1 for p in prefix))
+        self.assertTrue(any(p[1]<-.1 for p in prefix))
     def test_expanded_candidates_still_use_original_action_center(self):
         origin=(0.,0.,0.);actual=(1.5,0.,0.);point=(3.,0.,.7)
         candidates=stance_candidates(actual,origin,point,LocalLimits())
@@ -177,13 +197,30 @@ class CoordinationTests(unittest.TestCase):
         b=Motor();b._local_departure=lambda *args:'blocked'
         r=b.run()
         self.assertEqual(r['local_manipulation']['departure'],'blocked');self.assertEqual(len(b.executions),1)
+
+    def test_committed_operation_recovers_clearance_without_repeating_effect(self):
+        from manipulation_agent.executors.local_rgb import LocalRGBManipulation
+        b=Motor();b.point=(1.,0.,.7)
+        free=[False];recoveries=[]
+        collision=SimpleNamespace(motion_free=lambda *args:free[0])
+        b._local_geometry=lambda op:(None,collision,None,None,None)
+        def recovery(op,geometry):
+            recoveries.append(op);free[0]=True;b.steps+=1
+        b._local_clearance_recovery=recovery
+        b._local_departure=LocalRGBManipulation._local_departure.__get__(b)
+        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
+                   side_effect=[None,{'poses':[]} ]):
+            result=b.run()['local_manipulation']
+        self.assertEqual(result['departure'],'checked')
+        self.assertEqual(result['repositions'],1)
+        self.assertEqual(len(recoveries),1);self.assertEqual(len(b.executions),1)
     def test_candidate_search_stays_local_and_avoids_old_pose(self):
         limits=LocalLimits();actual=(0.,0.,0.);point=(1.6,0.,1.)
         candidates=stance_candidates(actual,actual,point,limits,[(.3,0.,0.)])
         self.assertTrue(candidates)
         for p in candidates:
             self.assertLessEqual(math.dist(p[:2],actual[:2]),limits.radius_m+1e-8)
-            self.assertLessEqual(math.dist(p[:2],point[:2]),limits.preferred_reach_m)
+            self.assertLessEqual(math.dist(p[:2],point[:2]),limits.reach_m)
         self.assertNotIn((.3,0.,0.),candidates)
 
 

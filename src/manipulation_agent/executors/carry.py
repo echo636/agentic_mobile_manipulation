@@ -6,6 +6,7 @@ and gravity remain enabled; held poses are projected around each control step.
 """
 from contextlib import contextmanager, nullcontext
 import json
+import math
 from ..contracts import SkillError
 from ..records import now
 from .particle_payload import snapshot_particles, relocate_particles, verify_particles, particle_count
@@ -88,7 +89,17 @@ class ControlledCarry(CompactCarry):
         with edit,self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
             # Upstream symbolic OPEN samples a random opening and returns early
             # when already ajar. Fully open/close all annotated joints instead.
-            accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
+            prepared=getattr(getattr(self,'_local_operation',None),'articulation_plan',None) if state is Open else None
+            if prepared is not None:
+                current=obj.get_joint_positions()
+                start=self.torch.as_tensor(prepared['start_joints'],dtype=current.dtype,device=current.device)
+                if str(obj.prim_path)!=prepared['object_prim'] or prepared['primitive']!=primitive or not self.torch.allclose(current,start,atol=.02,rtol=0.):
+                    raise SkillError('target_changed','Articulation changed after safe-stance preparation')
+                obj.set_joint_positions(self.torch.as_tensor(prepared['goal_joints'],dtype=current.dtype,device=current.device))
+                obj.states[state].clear_cache();obj.state_updated()
+                accepted=bool(obj.states[state].get_value())==wanted
+            else:
+                accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
             if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
             self._relocate_container_payload(payload)
             relocate_particles(self.env.scene,particles)
@@ -282,6 +293,17 @@ class ControlledCarry(CompactCarry):
         # Preserve both contained objects and supported objects (e.g. food on a
         # plate), including nested payloads. Fixed scene objects never follow.
         original=obj.get_position_orientation()
+        local=getattr(self,'_local_operation',None)
+        prepared=getattr(local,'carry_plan',None)
+        if prepared is not None:
+            from .carry_posture import translation_samples
+            pose=self._local_pose()
+            if (math.dist(pose[:2],prepared['pose'][:2])>.01 or
+                    abs(math.atan2(math.sin(pose[2]-prepared['pose'][2]),math.cos(pose[2]-prepared['pose'][2])))>.02):
+                raise SkillError('local_adjustment_blocked','Base moved after carry preparation')
+            samples=list(translation_samples(prepared['route'],.5*self.og.sim.get_sim_step_dt()))
+            if len(samples)+6>max_steps:
+                raise SkillError('local_adjustment_exhausted','Prepared carry route exceeds remaining step budget')
         dependencies=self._grasp_dependencies(obj)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
         particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in dependencies]],include_supported=True)
@@ -299,7 +321,9 @@ class ControlledCarry(CompactCarry):
         base_pos,base_quat=self.robot.get_position_orientation()
         # In demo mode the carried pose follows the visible hand. The object is
         # lifted over recorded control steps after the carry relation is made.
-        if getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None):
+        if prepared is not None:
+            relative=T.relative_pose_transform(*original,base_pos,base_quat)
+        elif getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None):
             relative=T.relative_pose_transform(*original,
                 *self.robot.eef_links[self._demo_arm].get_position_orientation())
         else:
@@ -317,11 +341,14 @@ class ControlledCarry(CompactCarry):
                            preserved_articulated_objects=[body.name for body in self._carry_joint_positions],
                            implementation='pose_projection_no_fixed_joint',original_position=original[0].tolist())
         self._carry_follow()
-        with self._anchored_operation():
-            for _ in range(min(6,max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-        packing=(self._compact_carry(max(0,max_steps-6)) if getattr(self,'local_manipulation',False)
-                 and not getattr(self,'demo_motion',False) else {'status':'disabled'})
+        if prepared is not None:
+            packing=self._execute_prepared_carry(obj,prepared,max_steps)
+        else:
+            with self._anchored_operation():
+                for _ in range(min(6,max_steps)):
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            packing=(self._compact_carry(max(0,max_steps-6)) if getattr(self,'local_manipulation',False)
+                     and not getattr(self,'demo_motion',False) else {'status':'disabled'})
         pos,quat=obj.get_position_orientation()
         if not bool(torch.isfinite(pos).all() and torch.isfinite(quat).all()):
             raise SkillError('physics_instability','Non-finite held pose',changed=True)

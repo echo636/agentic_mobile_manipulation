@@ -32,7 +32,7 @@ class CarryRouteTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Pinned tensor dependency required')
 class CarryAdapterTests(unittest.TestCase):
-    def run_adapter(self,*,blocked=False,step_limit=180):
+    def run_adapter(self,*,blocked=False,step_limit=180,prepared=False):
         import numpy as np
         import torch
         b=CompactCarry();b.torch=torch;b.steps=0;b._carry_contents=[];b.demo_motion=False
@@ -40,13 +40,15 @@ class CarryAdapterTests(unittest.TestCase):
         points=torch.tensor([[x,y,z] for x in (1.25,1.35) for y in (-.05,.05) for z in (.15,.25)])
         held=SimpleNamespace(name='can',get_position_orientation=lambda:tuple(pose),links={
             'body':SimpleNamespace(is_meta_link=False,prim_path='/can',collision_boundary_points_world=points)})
-        robot_link=SimpleNamespace(is_meta_link=False,prim_path='/robot')
+        robot_link=SimpleNamespace(is_meta_link=False,prim_path='/robot',
+            collision_boundary_points_world=torch.tensor([[x,y,z] for x in (-.2,.2) for y in (-.2,.2) for z in (.03,1.5)]))
         b.robot=SimpleNamespace(links={'base':robot_link},get_position_orientation=lambda:(torch.zeros(3),pose[1]),
                                get_joint_positions=lambda:torch.zeros(1),q_to_action=lambda q:q)
         b.env=SimpleNamespace(scene=SimpleNamespace(objects=[held,b.robot]))
         b.og=SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda:1/30))
         b.deadline=SimpleNamespace(check=lambda **kw:None)
         b._get_held=lambda:held;b._anchored_operation=nullcontext
+        b._local_pose=lambda:(0.,0.,0.)
         b._carry_follow=lambda:pose.__setitem__(0,b._carry_relative[0].clone())
         b._step=lambda a:setattr(b,'steps',b.steps+1)
         records=[];b._carry_record=lambda **kw:records.append(kw)
@@ -62,7 +64,11 @@ class CarryAdapterTests(unittest.TestCase):
         transforms=modules['omnigibson.utils.transform_utils']
         transforms.quat2mat=lambda q:torch.eye(3)
         transforms.relative_pose_transform=lambda pos,ori,*_: (pos,ori)
-        with patch.dict(sys.modules,modules):report=b._compact_carry(step_limit)
+        with patch.dict(sys.modules,modules):
+            if prepared:
+                route=((1.3,0.,.2),(1.3,0.,.38),(.65,0.,.7))
+                report=b._execute_prepared_carry(held,{'route':route,'status':'compact'},step_limit)
+            else:report=b._compact_carry(step_limit)
         self.assertEqual(len(records),1)
         self.assertIs(b._get_held(),held)
         return b,report,pose
@@ -72,6 +78,12 @@ class CarryAdapterTests(unittest.TestCase):
         self.assertEqual(report['status'],'packed')
         self.assertGreater(b.steps,0);self.assertLessEqual(b.steps,180)
         self.assertLess(report['offset_after_m'],.7)
+
+    def test_prepared_route_is_executed_over_steps_and_keeps_attachment(self):
+        b,report,pose=self.run_adapter(prepared=True)
+        self.assertTrue(report['shared_prediction_and_execution'])
+        self.assertGreater(b.steps,6)
+        self.assertLess(math.dist(pose[0].tolist(),(.65,0.,.7)),1e-6)
 
     def test_collision_or_insufficient_steps_never_moves_or_drops(self):
         for options,status in [({'blocked':True},'blocked'),({'step_limit':1},'not_moved_step_budget')]:
