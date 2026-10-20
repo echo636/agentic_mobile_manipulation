@@ -221,15 +221,19 @@ def clearance_transition_guard(grid, collision_layers, support, heights=None):
     support is mandatory even if the robot starts overlapped by a door.
     """
     import numpy as np
-    from scipy.ndimage import label
+    from scipy.ndimage import label,find_objects
     # Link components only across physically touching height intervals. Payload
     # bands may overlap robot bands or be far from their array neighbours.
     if heights is None:heights=[(i,i+1) for i in range(len(collision_layers))]
     adjacent=[[j for j,(c,d) in enumerate(heights) if max(a,c)<=min(b,d)+1e-8]
               for a,b in heights]
-    labels=[];total=0
+    labels=[];representatives=[];total=0
     for raw,_ in collision_layers:
         ids,n=label(raw==0,structure=np.ones((3,3)))
+        # One occupied pixel represents each already-connected 2-D component.
+        representatives.append([(box[0].start,box[1].start+int(np.argmax(
+            ids[box[0].start,box[1]]==k)),total+k)
+            for k,box in enumerate(find_objects(ids),1)])
         labels.append(np.where(ids,ids+total,0));total+=n
     parent=list(range(total+1))
     def root(i):
@@ -239,22 +243,16 @@ def clearance_transition_guard(grid, collision_layers, support, heights=None):
     for i,neighbours in enumerate(adjacent):
         for j in neighbours:
             if j>=i:continue
-            padded=np.pad(labels[j],1)
-            for dr in range(3):
-                for dc in range(3):
-                    other=padded[dr:dr+grid.height,dc:dc+grid.width]
-                    mask=(labels[i]>0)&(other>0)
-                    # Sorting structured two-column rows scales poorly on a
-                    # full-floor raster. Encode the same label pairs as scalar
-                    # integers; decoding preserves exactly the same unions.
-                    stride=total+1
-                    pairs=labels[i][mask].astype(np.int64)*stride+other[mask]
-                    # Most floor pixels repeat the same component pair over
-                    # long raster runs. Remove adjacent repeats before sorting.
-                    if pairs.size:pairs=pairs[np.r_[True,pairs[1:]!=pairs[:-1]]]
-                    pairs=np.unique(pairs)
-                    for pair in pairs:
-                        a,b=divmod(int(pair),stride);parent[root(a)]=root(b)
+            # Label the union once instead of sorting every touching pixel
+            # pair at nine offsets. Every 2-D component remains wholly inside
+            # one union component, so its representative suffices. This gives
+            # exactly the same cross-height connectivity in linear raster time.
+            joined,_=label((labels[i]>0)|(labels[j]>0),structure=np.ones((3,3)))
+            owners={}
+            for row,col,component in (*representatives[i],*representatives[j]):
+                group=int(joined[row,col])
+                if group in owners:parent[root(component)]=root(owners[group])
+                else:owners[group]=component
     roots=np.asarray([root(i) for i in range(total+1)])
     labels=[roots[ids] for ids in labels]
     layers=[]

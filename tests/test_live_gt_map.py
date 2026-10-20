@@ -86,6 +86,11 @@ class LiveGridTests(unittest.TestCase):
                                          [(0.,.1),(1.,1.1)])
         self.assertFalse(guard((4,4),(4,5)))
         self.assertTrue(guard((4,4),(4,3)))
+        # A slanted surface may shed contact from one touching height band
+        # into the next; this is one connected obstacle, not a new obstacle.
+        adjacent=clearance_transition_guard(grid,[(lower,point),(upper,point)],np.ones_like(lower),
+                                            [(0.,.1),(.1,.2)])
+        self.assertTrue(adjacent((4,4),(4,5)))
 
     def test_occupied_centre_can_shed_contacts_but_cannot_enter_new_obstacles(self):
         import cv2
