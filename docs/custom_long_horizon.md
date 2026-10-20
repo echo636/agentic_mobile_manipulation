@@ -177,6 +177,12 @@ the desired outcome (`microwave_closed`, `microwave_off`).
 
 ## Additional task candidates
 
+The workshop and inventory recipes use a 1.5-times-scale trash bin. The original
+bin could block a second can despite earlier full-reference passes; that is a
+fixture-capacity failure before the negative scenario, not evaluator evidence.
+The revised bin changes no requested cleanup or scoring condition. Its frozen
+scene and both complete branch orders require new physical validation.
+
 `task_designs/candidates/` contains two new contracts. Both reuse an existing
 pilot scene with new goals; they are not additional layouts or evidence of scene
 generalization. They remain `candidate_physics_unvalidated` until the same

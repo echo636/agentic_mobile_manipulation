@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "id": "workshop_setup_and_return_v2",
-  "instance_id": "pilot_001",
+  "instance_id": "pilot_002_larger_bin",
   "status": "construction_recipe_validation_pending",
   "official_submission_eligible": false,
   "base": {
@@ -53,6 +53,11 @@
         0,
         0,
         1
+      ],
+      "scale": [
+        1.5,
+        1.5,
+        1.5
       ]
     },
     {
