@@ -108,6 +108,33 @@ class ParticlePayloadTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 'target_changed')
         self.torch.testing.assert_close(self.raw, before)
 
+    def test_current_owned_contacts_can_recertify_missed_saved_probes(self):
+        self.surface_scene()
+        payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
+        before = self.raw.clone()
+        # A different support chain can be valid, but must still reach the
+        # captured board. Neither new identities nor pose writes are allowed.
+        self.supports.update({'/particle/0': '/particle/1', '/particle/1': '/board/base'})
+        with patch('manipulation_agent.executors.particle_payload._support_at', return_value=None):
+            verify_particles(self.scene, payload)
+        self.torch.testing.assert_close(self.raw, before)
+
+    def test_current_support_cannot_escape_through_foreign_or_uncaptured_particles(self):
+        self.surface_scene()
+        payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
+        for foreign in ('/table/base', '/particle/2', '/particle/new', None):
+            with self.subTest(foreign=foreign):
+                self.supports['/particle/0'] = foreign
+                with self.assertRaises(SkillError):
+                    verify_particles(self.scene, payload)
+
+    def test_current_support_cycle_has_no_valid_rigid_anchor(self):
+        self.surface_scene()
+        payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
+        self.supports.update({'/particle/0': '/particle/1', '/particle/1': '/particle/0'})
+        with self.assertRaises(SkillError):
+            verify_particles(self.scene, payload)
+
     def test_surface_stack_can_span_material_systems_without_duplicate_container_claim(self):
         self.surface_scene()
         # This grain is above the existing pile, but belongs to another system.

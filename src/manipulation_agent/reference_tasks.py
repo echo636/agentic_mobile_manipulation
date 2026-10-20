@@ -330,6 +330,21 @@ class ReferenceTask:
             self.move('grasp', item)
         self.move('place_on_top', 'table', self.top('table', x, y))
 
+    def grasp_cooked_popcorn(self):
+        # Residual raw grains supported on the hot bag can enter its volume
+        # during pickup and be replaced by the native cooking rule. Preserve
+        # the executor's identity-change failure; settle and select the actual
+        # bag again instead of restoring old particles or changing its state.
+        for attempt in range(3):
+            try:
+                return self.move('grasp', 'bag')
+            except Exception as exc:
+                if (getattr(exc, 'code', None) != 'target_changed'
+                        or 'Carried particles changed' not in str(exc) or attempt == 2):
+                    raise
+                self.log('native_particle_transition_recovery', failed_attempt=attempt+1, error=str(exc))
+                self.action('wait', seconds=2.)
+
     def movie(self, order):
         if order == 'cleanup_first':
             self.movie_cleanup()
@@ -343,7 +358,8 @@ class ReferenceTask:
         self.wait_for({'cooked_popcorn': True, 'raw_popcorn_present': False})
         self.move('toggle_off', 'microwave')
         self.move('open', 'microwave')
-        self.transfer_top('bag', 'table', self.top('table'))
+        self.grasp_cooked_popcorn()
+        self.move('place_on_top', 'table', self.top('table'))
         self.move('close', 'microwave')
         self.action('wait', seconds=1.)
 
@@ -596,7 +612,7 @@ class ReferenceTask:
             self.move('toggle_off', 'microwave')
             self.move('toggle_on', 'microwave')
             self.move('open', 'microwave')
-            self.move('grasp', 'bag')
+            self.grasp_cooked_popcorn()
             witness = {'bag_in_microwave': False, 'microwave_on': True}
             expected = {'constraint_conditions': {'power_off_before_cooked_bag_removal': False},
                         'historical_conditions': {'microwave_off_before_removal': True}}

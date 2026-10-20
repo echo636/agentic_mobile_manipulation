@@ -221,13 +221,13 @@ class ReferenceRecoveryTests(unittest.TestCase):
             if omit is None:
                 self.assertEqual(inserted[0], 'drill')
 
-    def reference(self, directory, failures, *, max_attempts=200):
+    def reference(self, directory, failures, *, max_attempts=200, fail_primitives=('open', 'close')):
         self.enterContext(redirect_stdout(io.StringIO()))
         backend = SimpleNamespace(steps=0, _ground=lambda: None, _predicate_values=lambda: {})
 
         def execute(primitive, target, max_steps, **kwargs):
             backend.steps += 1
-            if primitive in ('open', 'close') and failures:
+            if primitive in fail_primitives and failures:
                 raise failures.pop(0)
             return {'primitive': primitive}
 
@@ -240,6 +240,27 @@ class ReferenceRecoveryTests(unittest.TestCase):
 
     def displaced(self):
         return SkillError('postcondition_error', 'Operation displaced existing contents from the container')
+
+    def test_material_transition_regrasp_keeps_failures_and_budget(self):
+        def changed():
+            return SkillError('target_changed', 'Carried particles changed; old particles cannot be restored')
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [changed()], fail_primitives=('grasp',))
+            reference.grasp_cooked_popcorn()
+            self.assertEqual([r['primitive'] for r in reference.calls], ['grasp', 'wait', 'grasp'])
+            self.assertEqual([r['status'] for r in reference.calls], ['failed', 'passed', 'passed'])
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [changed()], fail_primitives=('grasp',), max_attempts=2)
+            with self.assertRaisesRegex(RuntimeError, 'budget exhausted'):
+                reference.grasp_cooked_popcorn()
+            self.assertEqual(len(reference.calls), 2)
+
+    def test_regrasp_does_not_ignore_a_surface_support_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [SkillError('postcondition_error', 'Carried particles lost their surface support')], fail_primitives=('grasp',))
+            with self.assertRaises(SkillError):
+                reference.grasp_cooked_popcorn()
+            self.assertEqual(len(reference.calls), 1)
 
     def test_unstable_close_retries_preserve_failures_and_action_budget(self):
         def unstable():

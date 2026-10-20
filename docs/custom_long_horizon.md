@@ -46,6 +46,12 @@ stabilization so those rigid objects can settle under gravity. Container roots
 retain their ideal support. Subsequent stabilization captures the actual new
 containment and poses; escaped objects are not moved back. This repair requires
 fresh physical validation and does not certify any task by itself.
+Particle support verification keeps the original rotated contact probes and can
+recheck current native support if a probe misses after settling. Each captured
+particle must still connect to an owned rigid link or a particle whose native
+containment passed; foreign surfaces and unsupported cycles are rejected.
+Identity changes and containment loss remain failures. This check never adds
+particles, restores spills, or changes the task score.
 
 ## Independent evaluation
 

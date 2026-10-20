@@ -185,19 +185,49 @@ def relocate_particles(scene, payload):
 
 
 def verify_particles(scene, payload):
+    # Validate every captured identity before accepting any support chain.
+    # Contained particles remain subject to their original volume check.
+    verified = set()
+    supported = {}
     for record in payload:
         indices = _indices(scene, record)
         centers, _ = record.system.get_particles_position_orientation()
+        verified.update(link.prim_path for link in getattr(record.container, 'links', {}).values()
+                        if not link.is_meta_link)
         if record.relation == 'supported':
             import omnigibson.utils.transform_utils as T
             rotation = T.quat2mat(record.link.get_position_orientation()[1])
-            # Rotate the original contact probes with the assembly. Re-sampling
-            # a world-aligned grid after a yaw can miss a valid corner contact.
-            if any(_support_at(path, centers[index] + offset @ rotation.T, vector @ rotation.T) != parent
-                   for path, index, (parent, offset, vector) in zip(record.paths, indices, record.supports)):
-                raise SkillError('postcondition_error', 'Carried particles lost their surface support', changed=True)
-        elif not bool(record.link.check_points_in_volume(centers[indices]).all()):
-            raise SkillError('postcondition_error', 'Contained particles left the carried container', changed=True)
+            for path, index, (parent, offset, vector) in zip(record.paths, indices, record.supports):
+                # Keep rotated saved probes: a world-aligned resampling can
+                # miss an existing corner contact after an arbitrary yaw.
+                hit = _support_at(path, centers[index] + offset @ rotation.T, vector @ rotation.T)
+                supported[path] = (record.system, centers[index], parent if hit == parent else None)
+        else:
+            if not bool(record.link.check_points_in_volume(centers[indices]).all()):
+                raise SkillError('postcondition_error', 'Contained particles left the carried container', changed=True)
+            verified.update(record.paths)
+
+    # A grain can settle onto a different grain in the same carried assembly,
+    # or lose one saved ray while retaining another real contact. Re-certify
+    # current support, without importing new particles or moving anything.
+    # Every chain must end at an owned rigid link or a verified contained
+    # particle. Foreign surfaces, missing contacts and unanchored cycles fail.
+    alternatives = {}
+    while supported:
+        resolved = []
+        for path, (system, center, parent) in supported.items():
+            if parent in verified:
+                resolved.append(path)
+                continue
+            if path not in alternatives:
+                alternatives[path] = {support[0] for support in _particle_supports(system, path, center)}
+            if alternatives[path] & verified:
+                resolved.append(path)
+        if not resolved:
+            raise SkillError('postcondition_error', 'Carried particles lost their surface support', changed=True)
+        for path in resolved:
+            verified.add(path)
+            supported.pop(path)
 
 
 def particle_count(payload, relation=None):
