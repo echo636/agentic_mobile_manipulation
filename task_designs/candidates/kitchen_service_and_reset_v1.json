@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "id": "kitchen_service_and_reset_v1",
-  "instance_id": "pilot_001",
+  "instance_id": "pilot_002_larger_bin",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "base": {
@@ -66,6 +66,11 @@
         0,
         0,
         1
+      ],
+      "scale": [
+        1.5,
+        1.5,
+        1.5
       ]
     },
     {

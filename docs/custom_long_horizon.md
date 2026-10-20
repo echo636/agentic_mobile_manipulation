@@ -120,6 +120,11 @@ preparation counter must be clear of the specified lunch items, dishes, board an
 leftovers. Each final condition must hold at the same time. No exact place-setting
 arrangement is required. V2 directly checks preparation-counter clearance,
 including cases where overlapping support surfaces also satisfy a destination.
+The lunch and serving-task construction recipes now use a 1.5× trash bin
+(`pilot_002_larger_bin`). In the smaller fixture, all four foods were cooked or
+packed as required, but the third-can insertion exhausted three checked searches
+against the two resident cans. The larger fixture keeps the same scoring and
+public request; fresh restores, full references and negatives remain required.
 
 **Movie night.** Put away two toys and three cans; clear and dust the coffee table
 before serving food or any of six dining items. Cook the bag's popcorn in the
