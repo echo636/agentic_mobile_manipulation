@@ -1252,7 +1252,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
             'motion_policy':'turn_then_drive_forward_v1',
-            'forward_route':'checked_polyline_or_eight_heading_lattice',
+            'forward_route':'checked_polyline_or_bidirectional_continuous_pose_astar',
+            'forward_candidate_budget':{'seconds_per_candidate':4.,'shared_seconds':10.,'expanded_poses':10000},
             'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},
             'fixed_heading_exception':'contact_shedding_clearance_retreat_only',
             'carried_collision_footprint':True,'physical_controller':False,
