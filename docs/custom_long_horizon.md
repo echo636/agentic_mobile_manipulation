@@ -24,6 +24,11 @@ with at least 100 useful tool calls. The [100+ task design catalog](long_horizon
 proposes five tasks with conditional individual-transfer ledgers of 102–192
 grasp/place calls. These are design-only proposals, separate from the five
 runtime candidates below; they have no frozen scenes or physical acceptance.
+The subsequent [diverse task designs](long_horizon_diverse_designs.md) add ten
+proposals covering cooking, cutting, spraying, attachment, item/floor cleaning,
+shutdown, laundry and material transfer. Their mixed-action ledgers contain
+100–113 conditional useful calls. All fifteen proposals remain design-only;
+the new source/arithmetic audit does not certify executable tasks.
 
 ## Tasks and dependencies
 
