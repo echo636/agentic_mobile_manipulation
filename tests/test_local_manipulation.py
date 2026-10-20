@@ -125,10 +125,40 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(b.events[-1]['error_code'],'local_adjustment_exhausted')
     def test_limits_apply_before_pose_command(self):
         b=Motor();op=LocalOperation(b,'grasp',b.binding,100,{})
-        with self.assertRaises(SkillError):op.admit_pose((1.01,0.,0.))
+        with self.assertRaises(SkillError):op.admit_pose((2.01,0.,0.))
         self.assertEqual(op.path,0.)
-        for x in (.8,0.):op.admit_pose((x,0.,0.))
+        for x in (1.8,0.):op.admit_pose((x,0.,0.))
         with self.assertRaises(SkillError):op.admit_pose((.5,0.,0.))
+    def test_outer_local_target_can_execute_with_one_internal_reposition(self):
+        b=Motor();b.point=(2.8,0.,.7)
+        old=replace(b.local_limits,radius_m=1.,path_m=2.)
+        self.assertEqual(stance_candidates(b.pose,b.pose,b.point,old),[])
+        def reposition(primitive,obj,point,op):
+            pose=stance_candidates(b.pose,op.origin,point,op.limits)[0]
+            op.admit_pose(pose);b.pose=pose;b.steps+=1
+        b._local_reposition=reposition
+        result=b.run()['local_manipulation']
+        self.assertEqual(result['repositions'],1)
+        self.assertGreater(result['path_m'],1.)
+        self.assertLessEqual(result['path_m'],2.)
+        self.assertEqual(len(b.executions),1)
+        self.assertIs(b.executions[0][0],b.target)
+    def test_expanded_candidates_still_use_original_action_center(self):
+        origin=(0.,0.,0.);actual=(1.5,0.,0.);point=(3.,0.,.7)
+        candidates=stance_candidates(actual,origin,point,LocalLimits())
+        self.assertTrue(candidates)
+        self.assertTrue(all(math.dist(p[:2],origin[:2])<=2.+1e-8 for p in candidates))
+    def test_local_collision_grid_and_connectors_enforce_two_meter_disk(self):
+        from manipulation_agent.executors.gt_navigation import GridMap
+        from manipulation_agent.executors.local_manipulation import LocalCollision
+        grid=GridMap(61,61,.1,(-3.,-3.),bytes([1])*61**2)
+        collision=SimpleNamespace(grid=grid,motion_free=lambda *args:True,optimistic_grid=lambda:grid)
+        local=LocalCollision(collision,(0.,0.,0.),LocalLimits().radius_m)
+        for restricted in (local.grid,local.optimistic_grid()):
+            self.assertTrue(restricted.navigable(restricted.cell((1.8,0.))))
+            self.assertFalse(restricted.navigable(restricted.cell((2.1,0.))))
+        self.assertTrue(local.motion_free((0.,0.,0.),(1.8,0.,0.)))
+        self.assertFalse(local.motion_free((1.8,0.,0.),(2.01,0.,0.)))
     def test_time_steps_and_sampling_are_bounded(self):
         for cause in ('time','steps','sampling'):
             b=Motor();clock=[0.];op=LocalOperation(b,'grasp',b.binding,100,{},clock=lambda:clock[0])

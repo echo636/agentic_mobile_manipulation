@@ -11,8 +11,8 @@ from ..contracts import SkillError
 
 @dataclass(frozen=True)
 class LocalLimits:
-    radius_m: float = 1.0
-    path_m: float = 2.0
+    radius_m: float = 2.0
+    path_m: float = 4.0
     reach_m: float = 1.4
     preferred_reach_m: float = 1.25
     max_repositions: int = 3
@@ -139,7 +139,11 @@ def stance_candidates(actual, origin, point, limits, visited=()):
     candidates = []
     points = [tuple(actual[:2])]
     toward = math.atan2(point[1]-actual[1], point[0]-actual[0])
-    for distance in (.15, .3, .5, .75, 1.0):
+    # Sample the configured disk, retaining the denser small adjustments.
+    distances = [.15, .3, .5, .75]
+    distances.extend(i*.25 for i in range(4, math.ceil(limits.radius_m/.25)))
+    distances.append(limits.radius_m)
+    for distance in sorted({d for d in distances if d <= limits.radius_m}):
         for offset in (0, 45, -45, 90, -90, 135, -135, 180):
             yaw = toward+math.radians(offset)
             points.append((actual[0]+distance*math.cos(yaw), actual[1]+distance*math.sin(yaw)))
