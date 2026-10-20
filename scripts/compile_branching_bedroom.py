@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def compile_recipe():
     s = json.loads((ROOT / 'task_designs/constructed_100plus/bedroom_vacuum_reset_close_102_v1.json').read_text())
     s.update(id='bedroom_shared_library_branching_v2',
-             instance_id='bedroom_shared_library_branching_v2_seed0_r2',
+             instance_id='bedroom_shared_library_branching_v2_seed0_r3',
              public_instruction='整理两间卧室及共用书柜：分房暂存、吸尘，清空并擦净公共书柜后归书，玩具回各房绿台，清洁暂存台，最后关灯并归还工具。')
     # Exclude this unbound movable footstool in this new instance only: its
     # measured footprint overlaps the old B-room floor-item grid.
@@ -59,7 +59,8 @@ def compile_recipe():
     # as part of the initial instance and verify them after settling/restore.
     for door in ['a_door', 'b_door']:
         p[door + '_open'] = dict(object=door, state='Open')
-        s['initial_layout'].append(dict(object=door, state='Open', value=True, max_sampling_attempts=3))
+        s['initial_layout'].append(dict(object=door, state='Open', value=True,
+                                        kwargs={'fully': True}, max_sampling_attempts=3))
         s['initial_assertions'][door + '_starts_open'] = door + '_open'
 
     place('wipe_tool', 'wipe_home', [-5.7, -2.4])
@@ -144,7 +145,7 @@ def compile_recipe():
         'Six native pencil cases instantiate the designated shelf clutter; their destination is the blue storage stand.',
         'Yellow stages, green toy destinations and tool/storage stands remain explicit fixed primitive task fixtures.',
         'Initial stage dust is authored independently of object movement; no motion-induced dust is assumed.',
-        'Both bedroom doors start open, verified by native Open state; route feasibility still requires checked navigation.',
+        'Both bedroom doors are initialized with native Open(fully=True); Open state and measured joint angles are recorded, while route feasibility still requires checked navigation.',
         'Remove only the unbound B-bedroom ottoman that overlapped the prior floor-item grid.']
     # Exhaustive, verbatim public coverage; preserve meaningful groups in audits.
     s['requirements'] = []

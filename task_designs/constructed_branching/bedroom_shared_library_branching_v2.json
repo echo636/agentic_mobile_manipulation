@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "bedroom_shared_library_branching_v2",
-  "instance_id": "bedroom_shared_library_branching_v2_seed0_r2",
+  "instance_id": "bedroom_shared_library_branching_v2_seed0_r3",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -1252,12 +1252,18 @@
       "object": "a_door",
       "state": "Open",
       "value": true,
+      "kwargs": {
+        "fully": true
+      },
       "max_sampling_attempts": 3
     },
     {
       "object": "b_door",
       "state": "Open",
       "value": true,
+      "kwargs": {
+        "fully": true
+      },
       "max_sampling_attempts": 3
     },
     {
@@ -3728,7 +3734,7 @@
     "Six native pencil cases instantiate the designated shelf clutter; their destination is the blue storage stand.",
     "Yellow stages, green toy destinations and tool/storage stands remain explicit fixed primitive task fixtures.",
     "Initial stage dust is authored independently of object movement; no motion-induced dust is assumed.",
-    "Both bedroom doors start open, verified by native Open state; route feasibility still requires checked navigation.",
+    "Both bedroom doors are initialized with native Open(fully=True); Open state and measured joint angles are recorded, while route feasibility still requires checked navigation.",
     "Remove only the unbound B-bedroom ottoman that overlapped the prior floor-item grid."
   ]
 }
