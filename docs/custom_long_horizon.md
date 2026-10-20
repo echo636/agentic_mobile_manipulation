@@ -30,6 +30,14 @@ shutdown, laundry and material transfer. Their mixed-action ledgers contain
 100–113 conditional useful calls. All fifteen proposals remain design-only;
 the new source/arithmetic audit does not certify executable tasks.
 
+The user's subsequent October 20 request adds dependency complexity as a separate
+design objective. The [dependency audit and branching candidate](long_horizon_dependency_design.md)
+find that the four constructed 100+ tasks mostly repeat shallow chains; the
+bedroom task has one explicit cross-room milestone join. A new bedroom/shared
+library proposal adds cross-branch prerequisites and repeated joins/forks. It is
+design-only, with no new frozen scene or physical validation, and leaves the
+existing task contracts unchanged.
+
 ## Tasks and dependencies
 
 | Task | Coupled work | Independent work |

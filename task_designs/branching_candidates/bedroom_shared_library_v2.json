@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "kind": "dependency_design_candidate_not_runtime_recipe",
+  "id": "bedroom_shared_library_branching_v2",
+  "status": "design_only",
+  "benchmark_ready": false,
+  "official_submission_eligible": false,
+  "based_on": "bedroom_vacuum_reset_close_102_v1",
+  "intent_zh": "将两房整理、共用书架准备与工作台复原组合成多次分叉和汇合的任务。此文件尚无资产绑定、冻结初态或可运行评分契约。",
+  "public_request_draft_zh": "整理两间卧室和共用书架。每房的六本书、六件玩具先全部暂存，再吸净本房地面。书架原来的六件杂物收进指定存放区，腾空擦净后才能上书。本房地面清洁后，六本书送到共用书架、六件玩具送回本房收纳台。各房暂存台用完要擦净。两房物品与工作区都恢复后再关闭四盏任务灯，最后清洁工具归位、手空。全程逐件操作，固定家具不移动。",
+  "dependency_semantics": {
+    "after_all": "All predecessor milestones must have occurred; branch order is otherwise free. Independent branches may be interleaved by one robot.",
+    "witness_zh": "节点中的文字是拟实现的物理证据要求，不是已存在的谓词或任务成功记录。每条先后约束还须编译成早做即违规的状态/事件检查；只有 after_all 不足以证明动作发生顺序。",
+    "current_vs_history_zh": "历史阶段可以锁存，放书时书架仍须干净且可用，收尾时所有终态须同时成立。历史 clean 事件不能永久替代当前 clean 状态。",
+    "tool_return_zh": "允许中途归还工具；tools_home 是最终收尾检查，不要求额外取出再放回，不因此增加动作账本。",
+    "conditional_branches": "none in this first candidate; all listed branches are mandatory"
+  },
+  "nodes": [
+    {"id":"a_staged","branch":"room_a","kind":"work","label_zh":"A 房 12 件同时暂存","after_all":[],"witness_zh":"A 房六书六玩具真实同时在 A 暂存台。"},
+    {"id":"a_floor_clean","branch":"room_a","kind":"work","label_zh":"A 房吸尘完成","after_all":["a_staged"],"witness_zh":"本房全量暂存之后，通过吸尘使 A 房地面无 dust。"},
+    {"id":"b_staged","branch":"room_b","kind":"work","label_zh":"B 房 12 件同时暂存","after_all":[],"witness_zh":"B 房六书六玩具真实同时在 B 暂存台。"},
+    {"id":"b_floor_clean","branch":"room_b","kind":"work","label_zh":"B 房吸尘完成","after_all":["b_staged"],"witness_zh":"本房全量暂存之后，通过吸尘使 B 房地面无 dust。"},
+    {"id":"shelf_cleared","branch":"shared_library","kind":"work","label_zh":"书架杂物收走","after_all":[],"witness_zh":"书架上的六件指定杂物逐件送入其公开存放区，目标书架层已腾空。"},
+    {"id":"shelf_clean","branch":"shared_library","kind":"work","label_zh":"空书架擦净","after_all":["shelf_cleared"],"witness_zh":"目标书架层腾空后真实去除初始 dust；可用容量和当前清洁状态仍需持续检查。"},
+    {"id":"a_restored","branch":"room_a","kind":"work_join","label_zh":"A 房书与玩具归位","after_all":["a_floor_clean","shelf_clean"],"witness_zh":"六本 A 书在共用书架、六件 A 玩具在 A 收纳台；任一归位不得早于本房吸尘完成，书上架时书架须已清洁且当前仍干净。"},
+    {"id":"b_restored","branch":"room_b","kind":"work_join","label_zh":"B 房书与玩具归位","after_all":["b_floor_clean","shelf_clean"],"witness_zh":"六本 B 书在共用书架、六件 B 玩具在 B 收纳台；任一归位不得早于本房吸尘完成，书上架时书架须已清洁且当前仍干净。"},
+    {"id":"a_stage_clean","branch":"room_a","kind":"work","label_zh":"A 暂存台复原","after_all":["a_restored"],"witness_zh":"A 物品均归位、暂存台腾空后，将其初始存在的 dust 擦净。不宣称搬物自动产生灰尘。"},
+    {"id":"b_stage_clean","branch":"room_b","kind":"work","label_zh":"B 暂存台复原","after_all":["b_restored"],"witness_zh":"B 物品均归位、暂存台腾空后，将其初始存在的 dust 擦净。不宣称搬物自动产生灰尘。"},
+    {"id":"rooms_ready","branch":"joint_closure","kind":"readiness_join","label_zh":"两房和工作区都复原","after_all":["a_stage_clean","b_stage_clean"],"witness_zh":"两房地面和暂存台当前干净，24 件物品当前都在正确去处，书架清洁且原杂物已存放；这个汇合点解锁最后关灯。"},
+    {"id":"a_lights_off","branch":"lighting","kind":"work","label_zh":"关 A 房两灯","after_all":["rooms_ready"],"witness_zh":"两房及工作区均复原之后，A 房两盏任务灯从开变关。"},
+    {"id":"b_lights_off","branch":"lighting","kind":"work","label_zh":"关 B 房两灯","after_all":["rooms_ready"],"witness_zh":"两房及工作区均复原之后，B 房两盏任务灯从开变关。"},
+    {"id":"tools_home","branch":"tool_closure","kind":"closure","label_zh":"清洁工具归位","after_all":["rooms_ready"],"witness_zh":"吸尘器关闭归位、擦拭工具归位、机器人手空；此前可以多次归还工具，已经归位无需再搬。"},
+    {"id":"complete","branch":"final","kind":"terminal_join","label_zh":"全部完成","after_all":["a_lights_off","b_lights_off","tools_home"],"witness_zh":"所有房间、物体、书架、工作台、灯和工具终态同时成立，所有必需历史成立，无永久过程违规。"}
+  ],
+  "resources": [
+    {"id":"vacuum","capacity":1,"users":["a_floor_clean","b_floor_clean"],"status":"shared asset proposed; reach and navigation unvalidated"},
+    {"id":"wiping_tool","capacity":1,"users":["shelf_clean","a_stage_clean","b_stage_clean"],"status":"native dust removal compatibility unvalidated"},
+    {"id":"shared_shelf","required_book_capacity":12,"users":["a_restored","b_restored"],"status":"reachable support geometry and capacity must be measured; no capacity guarantee"},
+    {"id":"robot_hand","capacity":1,"status":"individual handling constraint must be public and independently scored"}
+  ],
+  "useful_action_ledger": {
+    "status":"conditional_design_only",
+    "measured_minimum":null,
+    "terms":[
+      {"work":"24 件地面物品进本房暂存台","objects":24,"calls_per_object":2,"calls":48},
+      {"work":"24 件物品从暂存台到书架或本房收纳台","objects":24,"calls_per_object":2,"calls":48},
+      {"work":"书架原有六件杂物单次归置","objects":6,"calls_per_object":2,"calls":12},
+      {"work":"两块独立房间地面吸尘","objects":2,"calls_per_object":1,"calls":2},
+      {"work":"书架层与两张暂存台分别擦拭","objects":3,"calls_per_object":1,"calls":3},
+      {"work":"关闭四盏任务灯","objects":4,"calls_per_object":1,"calls":4}
+    ],
+    "declared_total":117,
+    "excluded":["navigation","look","wait","tool handoff","failures","retries","notes","redundant rehandling"],
+    "assumptions_zh":"每次有效去尘可完成一个独立目标、30 件可搬物体均可单独搬运，禁止批量运输的公开协议得到执行。实际必要动作和物理可解性未测，不能以调用数决定成功。"
+  },
+  "legal_macro_orders": [
+    {"id":"library_then_a_then_b","nodes":["shelf_cleared","shelf_clean","a_staged","a_floor_clean","a_restored","a_stage_clean","b_staged","b_floor_clean","b_restored","b_stage_clean","rooms_ready","a_lights_off","b_lights_off","tools_home","complete"]},
+    {"id":"b_then_library_then_a","nodes":["b_staged","b_floor_clean","shelf_cleared","shelf_clean","b_restored","b_stage_clean","a_staged","a_floor_clean","a_restored","a_stage_clean","rooms_ready","tools_home","b_lights_off","a_lights_off","complete"]},
+    {"id":"interleave_both_rooms","nodes":["a_staged","b_staged","shelf_cleared","a_floor_clean","shelf_clean","a_restored","b_floor_clean","b_restored","b_stage_clean","a_stage_clean","rooms_ready","b_lights_off","tools_home","a_lights_off","complete"]}
+  ],
+  "negative_cases_planned": [
+    "未腾空本房就吸尘，之后补齐终态。",
+    "本房吸尘完成但书架尚脏，就提前把一本书上架，之后再清洁。",
+    "书架历史清洁通过后被再次污染，仍继续上书。",
+    "A 房完成但 B 房尚未完成，就关闭 A 房任务灯，之后补齐其他工作。",
+    "物品尚未归位就提前清洁暂存台，最后照片看起来正确。",
+    "漏收书架原杂物、把一房玩具放到另一房，或漏关一盏灯。"
+  ],
+  "implementation_gates": [
+    {"id":"assets_and_visible_context","status":"planned","requirement":"同一可达联合场景内增加共用书架、六件杂物及擦拭工具；按可见类型区分书/玩具，房间来源公开且可追踪。"},
+    {"id":"native_surface_cleaning","status":"planned","requirement":"验证书架目标层、暂存台 Covered(dust) 的真实添加/清除、物品在台时的状态关系和擦拭兼容性。"},
+    {"id":"runtime_scoring","status":"planned","requirement":"编译物体级历史、各类提前动作的永久违规、当前状态约束和全终态；不能仅按该宏观图是否遍历评分。"},
+    {"id":"physics_and_release","status":"planned","requirement":"新版本独立冻结，至少三种实质不同分支顺序和逐条缺前提负例验证；当前不重启已暂缓的执行器修复。"}
+  ]
+}
