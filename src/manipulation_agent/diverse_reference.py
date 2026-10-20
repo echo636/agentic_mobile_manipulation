@@ -26,6 +26,9 @@ class DiverseReference:
         self.ref.move('place_on_top',home,[*(xy or self.plan['tool_xy']),float(self.ref.obj(home).aabb[1][2])])
 
     def run(self,order,negative=None):
+        if self.plan['kind']=='branching_library':
+            from .branching_reference import BranchingLibraryReference
+            return BranchingLibraryReference(self.ref).run(order,negative)
         if order not in self.backend.custom_spec['acceptance_cases']['reference_orders']:
             raise ValueError('Unknown constructed-task reference order')
         plan=self.plan
@@ -73,6 +76,9 @@ class DiverseReference:
         else:raise ValueError('Unknown constructed-task reference kind')
 
     def negative(self,case):
+        if self.plan['kind']=='branching_library':
+            from .branching_reference import BranchingLibraryReference
+            return BranchingLibraryReference(self.ref).negative(case)
         if case not in self.backend.custom_spec['acceptance_cases']['physical_negative_cases']:
             raise ValueError('Unknown physical negative case')
         self.run('forward',negative=case)
