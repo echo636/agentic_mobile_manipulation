@@ -246,6 +246,13 @@ class VisionHarness:
             }
             status=details.get('nav_status')
             if status in messages:effect.update(navigation_status=status,message=messages[status])
+            handoff=details.get('manipulation_handoff')
+            handoffs={
+                'travel_only':'Ground-point travel completed. Select the intended object in the updated RGB for local manipulation.',
+                'selected_surface_nearby':'The selected surface is visible and nearby. Request the intended operation on the updated RGB; its local controller checks the actual manipulation stance.',
+                'needs_closer_approach':'The selected surface is still outside immediate reach. Local manipulation may approach within its bounded range; a distant target needs a closer general approach.',
+            }
+            if handoff in handoffs:effect.update(manipulation_handoff=handoff,message=handoffs[handoff])
         return {'effect':effect,
                 'observation':self.snapshot,'actions_used':self.actions}
 

@@ -471,10 +471,41 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
 
     def _turn(self,degrees,max_steps):
         import omnigibson.utils.transform_utils as T
+        from .gt_navigation import NavigationPlan, NavigationError, PlanningBudget
+        from .forward_navigation import ForwardRoute, angle
+        from .heading_collision import HeadingCollisionChecker
+        from .live_gt_map import build_navigation_grid
         pos,quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(quat)
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
-        return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
+        xy=tuple(pos[:2].cpu().tolist());end=yaw+math.radians(degrees)
+        floor=min(range(len(self.env.scene.trav_map.floor_heights)),
+                  key=lambda i:abs(float(pos[2])-self.env.scene.trav_map.floor_heights[i]))
+        grid,_=build_navigation_grid(self,floor)
+        self._navigation_layer_yaw=yaw
+        budget=PlanningBudget(self.deadline.check,seconds=8.)
+        checker=HeadingCollisionChecker(grid,self._navigation_layers,yaw,
+                                        self._navigation_support,check_cancelled=budget.check)
+        record={'at':now(),'parent_request_id':getattr(self,'_active_request_id',None),
+                'audience':'executor_private','requested_degrees':degrees,'start':[*xy,yaw]}
+        try:
+            if not checker.motion_free((*xy,yaw),(*xy,end)):
+                raise SkillError('look_rotation_blocked','Body or payload blocks the requested rotation')
+            plan=NavigationPlan((xy,),xy,xy,end,0.,0.,1,1,0.,0,end,'forward')
+            route=ForwardRoute((plan,),0.,0,'checked_in_place_look',
+                turn_radians=abs(angle(end-yaw)),estimated_motion_seconds=abs(angle(end-yaw))/(math.pi/3),
+                start=(*xy,yaw))
+            result=self._execute_gt_plan(grid,plan,max_steps,prepared_route=route,require_prepared_route=True)
+            record.update(status='passed',execution=result)
+            return result
+        except NavigationError as exc:
+            record.update(status='failed',error_code=exc.code,error_type=type(exc).__name__)
+            raise SkillError(exc.code,str(exc)) from exc
+        except Exception as exc:
+            record.update(status='failed',error_code=getattr(exc,'code',None),error_type=type(exc).__name__)
+            raise
+        finally:
+            with (self.output/'look_motion.jsonl').open('a') as stream:stream.write(json.dumps(record)+'\n')
 
     def _navigation_self_hulls(self):
         """Current visible robot and carried geometry in yaw-local base coordinates."""
@@ -792,6 +823,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                     layer_footprints_json=json.dumps(map_details['collision_layers']))
         except NavigationError as exc:
             details.update(status='failed',error_code=exc.code,error=str(exc))
+            if hasattr(exc,'attempts'):details['forward_candidate_attempts']=exc.attempts
             raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
@@ -832,13 +864,17 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         if visible is False:
             raise SkillError('navigation_unreachable',
                 'The selected target is occluded from the reached approach; inspect updated RGB',changed=True)
-        return {**result,'nav_status':nav_status,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
+        reach=getattr(getattr(self,'local_limits',None),'reach_m',1.4)
+        handoff=('travel_only' if mode=='point' else
+                 'selected_surface_nearby' if projection<=reach else 'needs_closer_approach')
+        return {**result,'nav_status':nav_status,'manipulation_handoff':handoff,
+                'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
                 'start_grid_offset_m':plan.start_grid_offset_m,
                 'goal_mode':mode,'target_projection_distance_m':math.dist(plan.goal,plan.target),
                 'dynamic_collision_check':map_details['dynamic_collision_check']}
 
-    def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route=None):
+    def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route=None, require_prepared_route=False):
         """Turn, drive forward, and turn at corners with swept-volume checks."""
         import omnigibson.utils.transform_utils as T
         from dataclasses import asdict
@@ -873,6 +909,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                             and abs(GreedyGridFollower.angle(prepared_route.start[2]-start_yaw))<1e-6):
                         route=prepared_route
                     else:
+                        if require_prepared_route:
+                            raise SkillError('look_rotation_blocked','Measured start changed before checked rotation')
                         route=plan_forward_route(plan,(*previous,start_yaw),collision,check_cancelled=budget.check)
                     phases=route.phases
                     record.update(status='planned',route=asdict(route))

@@ -10,6 +10,45 @@ from unittest.mock import patch
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('torch'),
                      'Run with the pinned simulator Python; simulator itself is not started')
 class LiveGridTests(unittest.TestCase):
+    def test_gap_between_robot_and_carried_body_is_not_a_solid_bridge(self):
+        import cv2
+        import numpy as np
+        import torch
+        from manipulation_agent.executors.live_gt_map import build_navigation_grid
+        class Body:
+            n_joints=0
+            def __init__(self,name,lo,hi):
+                self.name=name;self.aabb=(torch.tensor(lo),torch.tensor(hi))
+                self.position=(self.aabb[0]+self.aabb[1])/2
+                points=torch.tensor([[x,y,z] for x in (lo[0],hi[0]) for y in (lo[1],hi[1]) for z in (lo[2],hi[2])])
+                self.links={'body':SimpleNamespace(is_meta_link=False,prim_path='/'+name,collision_boundary_points_world=points)}
+            def get_position_orientation(self):return self.position,torch.tensor([0.,0.,0.,1.])
+        robot=Body('robot',[-.2,-.2,.04],[.2,.2,1.2]);robot.position=torch.zeros(3)
+        payload=Body('payload',[.95,-.05,.45],[1.05,.05,.55])
+        obstacle=Body('obstacle',[.46,-.04,.45],[.54,.04,.55])
+        def overlap(half,center,rotation,callback,any_hit):
+            low=np.asarray(center)-half;high=np.asarray(center)+half
+            if np.all(high>=obstacle.aabb[0].numpy()) and np.all(low<=obstacle.aabb[1].numpy()):
+                callback(SimpleNamespace(rigid_body='/obstacle'))
+        modules={name:ModuleType(name) for name in ('omnigibson','omnigibson.lazy')}
+        modules['omnigibson'].lazy=modules['omnigibson.lazy']
+        modules['omnigibson.lazy'].omni=SimpleNamespace(physx=SimpleNamespace(
+            get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap)))
+        with tempfile.TemporaryDirectory() as temp,patch.dict(sys.modules,modules):
+            layout=Path(temp)/'layout';layout.mkdir()
+            cv2.imwrite(str(layout/'floor_trav_no_obj_0.png'),np.full((80,80),255,dtype='uint8'))
+            trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((80,80))])
+            b=SimpleNamespace(robot=robot,_get_held=lambda:payload,_carry_contents=[],deadline=SimpleNamespace(check=lambda:None),
+                env=SimpleNamespace(scene=SimpleNamespace(scene_dir=temp,trav_map=trav,objects=[robot,payload,obstacle])))
+            grid,meta=build_navigation_grid(b,0)
+            self.assertTrue(grid.navigable(grid.cell((0.,0.))))
+            self.assertEqual({r['body_group'] for r in meta['collision_layers']},{0,1})
+            # Keep actual carried geometry checked, even though the gap is free.
+            obstacle.aabb=tuple(a+torch.tensor([.5,0.,0.]) for a in obstacle.aabb)
+            obstacle.position+=torch.tensor([.5,0.,0.])
+            grid,_=build_navigation_grid(b,0)
+            self.assertFalse(grid.navigable(grid.cell((0.,0.))))
+
     def test_occupied_centre_can_shed_contacts_but_cannot_enter_new_obstacles(self):
         import cv2
         import numpy as np

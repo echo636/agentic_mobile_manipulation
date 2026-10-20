@@ -21,6 +21,7 @@ def public_observation(value: dict, revision: int) -> dict:
     return {**copy.deepcopy(value), "revision":revision}
 
 ERROR_MESSAGES = {
+    'look_rotation_blocked':'The requested turn has no checked clearance for the robot and carried item. Use the current four views; choose a different general approach if needed instead of repeating this turn.',
     'needs_macro_navigation':'The selected target is outside local adjustment range. Use navigate_to for a closer general approach, then select the target in the returned RGB.',
     'local_adjustment_blocked':'The executor could not find a safe, visible, reachable local stance for this selected target. Inspect the returned RGB and choose a different general approach or report blocked; do not repeat the same operation or make tiny navigation corrections.',
     'local_adjustment_exhausted':'The executor reached its bounded local motion or operation budget. Inspect the current RGB before choosing a different general approach; do not blindly repeat the same action.',

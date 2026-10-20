@@ -61,7 +61,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
     edges=[.03,.35,.8,1.25,max(1.26,math.ceil((height+.02)*100)/100)]
     bodies=[]
     carried_hulls=0
-    for obj in moving_objects:
+    for group,obj in enumerate(moving_objects):
         object_hulls=0
         for link in obj.links.values():
             if link.is_meta_link:continue
@@ -69,23 +69,27 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
             if points is not None:
                 vertices=points.cpu().numpy()
                 if obj in prospective_carry:vertices=vertices+np.array([0.,0.,.18])
-                bodies.append(vertices)
+                bodies.append((group,vertices))
                 object_hulls+=1
                 if obj is not backend.robot:carried_hulls+=1
         if obj is not backend.robot and not object_hulls:
             raise ValueError('Carried collision geometry unavailable for navigation')
     layers=[]
     for lo,hi in zip(edges,edges[1:]):
-        chunks=[xy-base[:2] for p in bodies if (xy:=clipped_body_projection(p,floor_z+lo,floor_z+hi)) is not None]
-        if not chunks:continue
-        hull=cv2.convexHull(np.concatenate(chunks).astype('float32')).reshape(-1,2)
-        layers.append((lo,hi,hull))
+        # Keep disjoint robot / payload bodies disjoint. A convex hull across
+        # them invents a solid bridge in the air between the base and payload.
+        for group in range(len(moving_objects)):
+            chunks=[xy-base[:2] for g,p in bodies if g==group and
+                    (xy:=clipped_body_projection(p,floor_z+lo,floor_z+hi)) is not None]
+            if not chunks:continue
+            hull=cv2.convexHull(np.concatenate(chunks).astype('float32')).reshape(-1,2)
+            layers.append((lo,hi,hull,group))
     if not layers:raise ValueError('Robot collision geometry unavailable')
     chassis=layers[0][2];kernel=footprint_kernel(chassis,resolution)
     source=Path(scene.scene_dir)/'layout'/f'floor_trav_no_obj_{floor}.png'
     cache=getattr(backend,'_live_gt_collision_cache',None)
     if cache is None:cache=backend._live_gt_collision_cache={}
-    bands=[(lo,hi) for lo,hi,_ in layers]
+    bands=[(lo,hi) for lo,hi,_,_ in layers]
     if floor not in cache or cache[floor].get('bands')!=bands:
         if not source.is_file():raise ValueError('GT floor support map unavailable: '+str(source))
         raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE);h,w=trav.floor_map[floor].shape
@@ -124,9 +128,12 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
     query=lazy.omni.physx.get_physx_scene_query_interface()
     started=time.monotonic();count=0
     for row,col in np.argwhere(dirty):
-        if count%2048==0:backend.deadline.check()
+        if count%2048==0:
+            backend.deadline.check()
+            local=getattr(backend,'_local_operation',None)
+            if local is not None:local.check()
         xy=origin+np.array([col,row])*resolution
-        for layer_index,(low,high,_) in enumerate(layers):
+        for layer_index,(low,high,_,_) in enumerate(layers):
             blocked=False;query_error=None
             def hit_callback(hit):
                 nonlocal blocked,query_error
@@ -146,7 +153,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
         count+=1
     cached.update(objects=current,height=height)
     navigable=support.copy();overlap=np.zeros_like(support,dtype='float32')
-    for raw,(_,_,footprint) in zip(free,layers):
+    for raw,(_,_,footprint,_) in zip(free,layers):
         k=footprint_kernel(footprint,resolution)
         navigable &= cv2.erode(raw,k,borderType=cv2.BORDER_CONSTANT,borderValue=0)
         overlap+=cv2.filter2D((1-raw).astype('float32'),-1,k.astype('float32'),borderType=cv2.BORDER_CONSTANT)
@@ -155,17 +162,18 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
     # this, an old fixed-heading goal can sit on a boundary that the driving
     # controller must reject, and initial recovery would not see the mismatch.
     from .heading_collision import HeadingCollisionChecker
-    grid=HeadingCollisionChecker(grid,[(raw,footprint) for raw,(_,_,footprint) in zip(free,layers)],
+    grid=HeadingCollisionChecker(grid,[(raw,footprint) for raw,(_,_,footprint,_) in zip(free,layers)],
         0.,support,check_cancelled=backend.deadline.check).grid_at_heading(0.)
     combined=np.all(free,axis=0).astype('uint8')
-    backend._navigation_clearance=(combined.tobytes(),overlap.ravel(),max(float(np.linalg.norm(p,axis=1).max()) for _,_,p in layers)+resolution)
-    backend._navigation_layers=[(raw.copy(),footprint.copy()) for raw,(_,_,footprint) in zip(free,layers)]
+    backend._navigation_clearance=(combined.tobytes(),overlap.ravel(),max(float(np.linalg.norm(p,axis=1).max()) for _,_,p,_ in layers)+resolution)
+    backend._navigation_layers=[(raw.copy(),footprint.copy()) for raw,(_,_,footprint,_) in zip(free,layers)]
     backend._navigation_support=support.copy()
     return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
         'chassis_footprint_world_offsets':chassis.tolist(),'kernel_shape':list(kernel.shape),
         'footprint':'current_yaw_height_matched_collision_hulls',
         'forward_clearance_reserve':'half_cell_translation_and_outward_quantized_yaw_sweep',
-        'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist()} for lo,hi,p in layers],
+        'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist(),'body_group':group} for lo,hi,p,group in layers],
+        'disjoint_payload_footprints':True,
         'query_height_m':height,'updated_cells':count,'query_seconds':time.monotonic()-started,
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',

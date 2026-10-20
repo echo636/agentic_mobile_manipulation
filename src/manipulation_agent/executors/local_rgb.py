@@ -60,9 +60,10 @@ class LocalRGBManipulation:
         robot_vertices=[link.collision_boundary_points_world.cpu().numpy()
                         for link in self.robot.links.values()
                         if not link.is_meta_link and link.collision_boundary_points_world is not None]
-        payload_vertices=[link.collision_boundary_points_world.cpu().numpy()+np.array([0.,0.,.18])
-                          for item in payload for link in item.links.values()
+        payload_vertices=[[link.collision_boundary_points_world.cpu().numpy()+np.array([0.,0.,.18])
+                          for link in item.links.values()
                           if not link.is_meta_link and link.collision_boundary_points_world is not None]
+                          for item in payload]
         base=self._local_pose()
         floor_z=float(self.env.scene.trav_map.floor_heights[geometry[4]])
         def checker_at(pose):
@@ -75,7 +76,8 @@ class LocalRGBManipulation:
                 bodies.append(moved)
             layers=[]
             for occupancy,band in zip(raw,details['collision_layers']):
-                chunks=[xy-np.asarray(pose[:2]) for vertices in [*bodies,*payload_vertices]
+                group=[bodies,*payload_vertices][band['body_group']]
+                chunks=[xy-np.asarray(pose[:2]) for vertices in group
                         if (xy:=clipped_body_projection(vertices,floor_z+band['z_min'],floor_z+band['z_max'])) is not None]
                 if chunks:
                     footprint=cv2.convexHull(np.concatenate(chunks).astype('float32')).reshape(-1,2)
@@ -114,7 +116,7 @@ class LocalRGBManipulation:
         local=LocalCollision(collision,operation.origin,operation.limits.radius_m)
         budget=PlanningBudget(operation.check,seconds=operation.limits.planning_seconds)
         collision.check_cancelled=budget.check
-        selected=None;attempts=[]
+        selected=None;attempts=[];exhausted=False;extended=False
         try:
             for pose in stance_candidates(actual,operation.origin,point,operation.limits,operation.visited):
                 budget.check()
@@ -134,17 +136,31 @@ class LocalRGBManipulation:
                 collision.check_cancelled=per_route.check
                 try:route=plan_forward_route(plan,actual,local,check_cancelled=per_route.check,max_expansions=3000)
                 except NavigationError as exc:
-                    row.update(status='rejected',reason=exc.code);continue
+                    row.update(status='rejected',reason=exc.code,detail=str(exc))
+                    if exc.code!='navigation_search_exhausted':continue
+                    exhausted=True
+                    # One promising, geometrically admitted stance gets a
+                    # larger retry; all work still shares the outer budget.
+                    if extended:continue
+                    extended=True;row['extended_route_search']=True
+                    per_route=PlanningBudget(budget.check,seconds=4.)
+                    collision.check_cancelled=per_route.check
+                    try:route=plan_forward_route(plan,actual,local,check_cancelled=per_route.check,max_expansions=10000)
+                    except NavigationError as retry:
+                        row.update(reason=retry.code,detail=str(retry));continue
                 finally:collision.check_cancelled=budget.check
                 if route.distance_m+operation.path>operation.limits.path_m:
                     row.update(status='rejected',reason='path_budget');continue
                 row['status']='selected';selected=(plan,route);break
         except SearchBudgetExhausted:
+            exhausted=True
             operation.record('planning_limit',attempts=len(attempts))
         finally:
             collision.check_cancelled=operation.check
             operation.record('candidates',candidates=attempts,held_footprint=details['held_object_footprint_included'])
         if selected is None:
+            if exhausted:
+                raise SkillError('local_adjustment_exhausted','Local route search incomplete within planning budget')
             raise SkillError('local_adjustment_blocked','No reachable visible manipulation stance within local limits')
         plan,route=selected
         operation.record('move',route=asdict(route))

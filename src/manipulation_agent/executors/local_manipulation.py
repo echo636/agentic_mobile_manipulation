@@ -20,7 +20,7 @@ class LocalLimits:
     max_env_steps: int = 600
     max_sampling_steps: int = 1200
     wall_seconds: float = 300.0
-    planning_seconds: float = 8.0
+    planning_seconds: float = 12.0
     max_target_drift_m: float = .25
 
     def __post_init__(self):

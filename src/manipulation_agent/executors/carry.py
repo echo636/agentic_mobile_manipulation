@@ -9,6 +9,7 @@ import json
 from ..contracts import SkillError
 from ..records import now
 from .particle_payload import snapshot_particles, relocate_particles, verify_particles, particle_count
+from .carry_posture import CompactCarry
 
 
 def support_closure(root, objects, relation):
@@ -23,7 +24,7 @@ def support_closure(root, objects, relation):
     return edges
 
 
-class ControlledCarry:
+class ControlledCarry(CompactCarry):
     def _restore_carry_joints(self):
         # Pose carry represents the selected assembly as a controlled body.
         # Preserve the captured articulation too; root projection alone can
@@ -319,12 +320,14 @@ class ControlledCarry:
         with self._anchored_operation():
             for _ in range(min(6,max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        packing=(self._compact_carry(max(0,max_steps-6)) if getattr(self,'local_manipulation',False)
+                 and not getattr(self,'demo_motion',False) else {'status':'disabled'})
         pos,quat=obj.get_position_orientation()
         if not bool(torch.isfinite(pos).all() and torch.isfinite(quat).all()):
             raise SkillError('physics_instability','Non-finite held pose',changed=True)
         verify_particles(self.env.scene,particles)
         return {'primitive':'grasp','implementation':'controlled_pose_carry','postcondition':'selected_object_held_and_finite',
-                'physical_grasp':False,'fixed_joint_created':False,'contained_rigid_objects':len(contents),
+                'physical_grasp':False,'fixed_joint_created':False,'carry_posture':packing,'contained_rigid_objects':len(contents),
                 'contained_particles':particle_count(particles,'contained'),
                 'supported_particles':particle_count(particles,'supported')}
 

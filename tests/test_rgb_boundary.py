@@ -73,6 +73,14 @@ class RGBBoundary(unittest.TestCase):
             {'path': ['details','private_grounding','visual_triangle_position',0], 'value': 'inf'},
             {'path': ['details','private_grounding','visual_triangle_position',1], 'value': '-inf'}])
         self.assertTrue(any(e['kind'] == 'independent_evaluation' for e in events))
+
+    def test_handoff_exposes_only_approved_readiness_category(self):
+        for handoff in ('travel_only','selected_surface_nearby','needs_closer_approach','PRIVATE_OBJECT'):
+            self.backend.execute_visual=lambda *a,**kw:{'nav_status':'approached','manipulation_handoff':handoff}
+            result=self.act('navigate_to')
+            if handoff=='PRIVATE_OBJECT':
+                self.assertNotIn(handoff,json.dumps(result))
+            else:self.assertEqual(result['effect']['manipulation_handoff'],handoff)
     def test_nonfinite_evaluator_values_are_not_silently_sanitized(self):
         with self.assertRaises(ValueError):
             self.recorder.event('independent_evaluation', {'q_score': float('nan')})

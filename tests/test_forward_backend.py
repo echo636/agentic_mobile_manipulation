@@ -107,6 +107,55 @@ class ForwardBackendTests(unittest.TestCase):
         self.assertFalse(caught.exception.changed)
         self.assertEqual(self.restores,0)
 
+    def test_look_checks_swept_payload_and_never_translates(self):
+        import numpy as np
+        b=self.b
+        b.env=SimpleNamespace(scene=SimpleNamespace(trav_map=SimpleNamespace(floor_heights=[0.])))
+        raw=b._navigation_layers[0][0]
+        # Long carried item clears both end orientations but clips the diagonal.
+        b._navigation_layers=[(raw,np.array([[-.4,-.03],[.4,-.03],[.4,.03],[-.4,.03]]))]
+        raw[45,45]=0
+        with patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(self.grid,{})):
+            with self.assertRaises(SkillError) as caught:b._turn(90,200)
+            self.assertEqual(caught.exception.code,'look_rotation_blocked')
+            self.assertFalse(caught.exception.changed)
+            self.assertEqual(self.restores,0)
+            raw[45,45]=1
+            result=b._turn(90,200)
+        self.assertEqual(result['forward_route_method'],'checked_in_place_look')
+        self.assertEqual(result['actual_path_distance_m'],0.)
+        self.assertLess(result['final_yaw_error_rad'],.001)
+
+    def test_look_certificate_start_mismatch_does_not_plan_a_detour(self):
+        from manipulation_agent.executors.forward_navigation import ForwardRoute
+        route=ForwardRoute((self.plan(),),0.,0,'fixture',start=(.1,0.,0.))
+        with self.assertRaises(SkillError) as caught:
+            self.b._execute_gt_plan(self.grid,self.plan(),100,prepared_route=route,require_prepared_route=True)
+        self.assertEqual(caught.exception.code,'look_rotation_blocked')
+        self.assertEqual(self.restores,0)
+
+    def test_local_search_exhaustion_is_distinct_from_geometric_rejection(self):
+        from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
+        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.gt_navigation import NavigationError
+        b=self.b;b.local_limits=LocalLimits();b.deadline=SimpleNamespace(check=lambda **kw:None)
+        b._approach_visible=lambda *a,**kw:True
+        records=[];b._local_record=lambda **kw:records.append(kw)
+        def geometry(op):
+            return (self.grid,HeadingCollisionChecker(self.grid,b._navigation_layers,0.,b._navigation_support),
+                    {'held_object_footprint_included':False},(),0)
+        b._local_geometry=geometry
+        for reason,expected in [('navigation_search_exhausted','local_adjustment_exhausted'),
+                                ('navigation_unreachable','local_adjustment_blocked')]:
+            op=LocalOperation(b,'open',None,600,{})
+            with patch('manipulation_agent.executors.forward_navigation.plan_forward_route',
+                       side_effect=NavigationError('fixture incomplete search',reason)):
+                with self.assertRaises(SkillError) as caught:
+                    b._local_reposition('open',object(),self.torch.tensor([1.55,0.,.8]),op)
+            self.assertEqual(caught.exception.code,expected)
+            self.assertEqual(self.restores,0)
+        self.assertTrue(any(c.get('extended_route_search') for r in records for c in r.get('candidates',[])))
+
     def test_local_operation_drives_then_executes_once_without_macro_navigation(self):
         from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
         from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
