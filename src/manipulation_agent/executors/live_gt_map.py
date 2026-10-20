@@ -244,8 +244,17 @@ def clearance_transition_guard(grid, collision_layers, support, heights=None):
                 for dc in range(3):
                     other=padded[dr:dr+grid.height,dc:dc+grid.width]
                     mask=(labels[i]>0)&(other>0)
-                    pairs=np.unique(np.stack([labels[i][mask],other[mask]],axis=1),axis=0)
-                    for a,b in pairs:parent[root(int(a))]=root(int(b))
+                    # Sorting structured two-column rows scales poorly on a
+                    # full-floor raster. Encode the same label pairs as scalar
+                    # integers; decoding preserves exactly the same unions.
+                    stride=total+1
+                    pairs=labels[i][mask].astype(np.int64)*stride+other[mask]
+                    # Most floor pixels repeat the same component pair over
+                    # long raster runs. Remove adjacent repeats before sorting.
+                    if pairs.size:pairs=pairs[np.r_[True,pairs[1:]!=pairs[:-1]]]
+                    pairs=np.unique(pairs)
+                    for pair in pairs:
+                        a,b=divmod(int(pair),stride);parent[root(a)]=root(b)
     roots=np.asarray([root(i) for i in range(total+1)])
     labels=[roots[ids] for ids in labels]
     layers=[]
