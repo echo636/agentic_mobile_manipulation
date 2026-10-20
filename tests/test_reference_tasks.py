@@ -111,7 +111,7 @@ class ReferenceRecoveryTests(unittest.TestCase):
 
         def execute(primitive, target, max_steps, **kwargs):
             backend.steps += 1
-            if primitive == 'open' and failures:
+            if primitive in ('open', 'close') and failures:
                 raise failures.pop(0)
             return {'primitive': primitive}
 
@@ -124,6 +124,27 @@ class ReferenceRecoveryTests(unittest.TestCase):
 
     def displaced(self):
         return SkillError('postcondition_error', 'Operation displaced existing contents from the container')
+
+    def test_unstable_close_retries_preserve_failures_and_action_budget(self):
+        def unstable():
+            return SkillError('postcondition_error', 'Requested object operation did not remain stable')
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [unstable(), unstable()])
+            reference.close_packed_kit()
+            self.assertEqual([row['primitive'] for row in reference.calls], ['wait', 'close']*3)
+            self.assertEqual(sum(row['status']=='failed' for row in reference.calls), 2)
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [unstable()], max_attempts=3)
+            with self.assertRaisesRegex(RuntimeError, 'budget exhausted'):
+                reference.close_packed_kit()
+            self.assertEqual(len(reference.calls), 3)
+
+    def test_unrelated_close_error_is_not_retried(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [self.displaced()])
+            with self.assertRaises(SkillError):
+                reference.close_packed_kit()
+            self.assertEqual(len(reference.calls), 2)
 
     def test_wrong_placement_rotation_option_cannot_silently_succeed(self):
         with tempfile.TemporaryDirectory() as directory:

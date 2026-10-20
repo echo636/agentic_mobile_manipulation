@@ -311,7 +311,22 @@ class ReferenceTask:
                     self.inside('box')
                 else:
                     self.transfer_inside(item, 'box')
-        self.move('close', 'box')
+        self.close_packed_kit()
+
+    def close_packed_kit(self):
+        # A newly packed kit can spring the lid back before its contents have
+        # settled. Preserve each failed checked close and wait before retrying.
+        for attempt in range(3):
+            self.action('wait', seconds=2.)
+            try:
+                return self.move('close', 'box')
+            except Exception as exc:
+                if (getattr(exc, 'code', None) != 'postcondition_error'
+                        or 'Requested object operation did not remain stable' not in str(exc)
+                        or attempt == 2):
+                    raise
+                self.log('container_close_recovery', failed_attempt=attempt+1,
+                         reason='Checked close rolled back; wait for free settling before retry')
 
     def return_kit(self):
         self.transfer_top('box', 'source', [21.95, 1.2, .91574])
@@ -493,7 +508,7 @@ class ReferenceTask:
             items = ['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill']
             for item in (items[:-1] if case == 'missing_tool' else items):
                 self.transfer_inside(item, 'box')
-            self.move('close', 'box')
+            self.close_packed_kit()
             if case == 'missing_tool':
                 witness = {item+'_in_box': item != 'drill' for item in items}
                 expected = {'historical_conditions': {'packed_at_storage': False}}
