@@ -250,6 +250,7 @@ class VisionHarness:
             handoffs={
                 'travel_only':'Ground-point travel completed. Select the intended object in the updated RGB for local manipulation.',
                 'selected_surface_nearby':'The selected surface is visible and nearby. Request the intended operation on the updated RGB; its local controller checks the actual manipulation stance.',
+                'within_local_range':'Reached a general approach within local adjustment range. Select the intended operation in the updated RGB; its local controller will check and adjust the stance as needed.',
                 'needs_closer_approach':'The selected surface is still outside immediate reach. Local manipulation may approach within its bounded range; a distant target needs a closer general approach.',
             }
             if handoff in handoffs:effect.update(manipulation_handoff=handoff,message=handoffs[handoff])

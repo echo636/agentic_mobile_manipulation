@@ -26,10 +26,13 @@ class LiveGridTests(unittest.TestCase):
         robot=Body('robot',[-.2,-.2,.04],[.2,.2,1.2]);robot.position=torch.zeros(3)
         payload=Body('payload',[.95,-.05,.45],[1.05,.05,.55])
         obstacle=Body('obstacle',[.46,-.04,.45],[.54,.04,.55])
+        queries=[]
         def overlap(half,center,rotation,callback,any_hit):
+            queries.append((half,center))
             low=np.asarray(center)-half;high=np.asarray(center)+half
-            if np.all(high>=obstacle.aabb[0].numpy()) and np.all(low<=obstacle.aabb[1].numpy()):
-                callback(SimpleNamespace(rigid_body='/obstacle'))
+            for body in (obstacle,payload):
+                if np.all(high>=body.aabb[0].numpy()) and np.all(low<=body.aabb[1].numpy()):
+                    if callback(SimpleNamespace(rigid_body='/'+body.name)) is False:break
         modules={name:ModuleType(name) for name in ('omnigibson','omnigibson.lazy')}
         modules['omnigibson'].lazy=modules['omnigibson.lazy']
         modules['omnigibson.lazy'].omni=SimpleNamespace(physx=SimpleNamespace(
@@ -38,11 +41,19 @@ class LiveGridTests(unittest.TestCase):
             layout=Path(temp)/'layout';layout.mkdir()
             cv2.imwrite(str(layout/'floor_trav_no_obj_0.png'),np.full((80,80),255,dtype='uint8'))
             trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((80,80))])
-            b=SimpleNamespace(robot=robot,_get_held=lambda:payload,_carry_contents=[],deadline=SimpleNamespace(check=lambda:None),
+            b=SimpleNamespace(robot=robot,_get_held=lambda:None,_carry_contents=[],deadline=SimpleNamespace(check=lambda:None),
                 env=SimpleNamespace(scene=SimpleNamespace(scene_dir=temp,trav_map=trav,objects=[robot,payload,obstacle])))
+            _,empty=build_navigation_grid(b,0)
+            b._get_held=lambda:payload
+            queries.clear()
             grid,meta=build_navigation_grid(b,0)
             self.assertTrue(grid.navigable(grid.cell((0.,0.))))
             self.assertEqual({r['body_group'] for r in meta['collision_layers']},{0,1})
+            self.assertEqual(meta['occupancy_height_bands'],empty['occupancy_height_bands'])
+            self.assertLess(meta['updated_cells'],empty['updated_cells'])
+            self.assertGreater(meta['updated_cells'],0)
+            self.assertEqual(len(queries),meta['updated_cells']*meta['occupancy_height_bands'])
+            self.assertGreater(len(meta['collision_layers']),meta['occupancy_height_bands'])
             # Keep actual carried geometry checked, even though the gap is free.
             obstacle.aabb=tuple(a+torch.tensor([.5,0.,0.]) for a in obstacle.aabb)
             obstacle.position+=torch.tensor([.5,0.,0.])

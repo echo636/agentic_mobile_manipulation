@@ -17,6 +17,23 @@ def grid(width=81, height=81, resolution=.05, blocked=()):
 
 
 class GTNavigationTests(unittest.TestCase):
+    def test_approach_annulus_reaches_low_target_frustum_with_bounded_checks(self):
+        g=grid();target=(2.,2.);current=(.2,2.)
+        def visible(xy):
+            return bool(visible_rig_rays(xy,0.,0.,1.83,(*target,.24),margin=.08,radius=.35))
+        with self.assertRaises(NavigationError) as cm:
+            plan_navigation(g,current,target,max_snap=None,max_candidate_checks=64,candidate_filter=visible)
+        self.assertEqual(cm.exception.code,'navigation_search_exhausted')
+        args=dict(max_snap=None,max_candidate_checks=64,candidate_filter=visible,preferred_distance=1.8)
+        fast=plan_navigation(g,current,target,**args)
+        self.assertTrue(visible(fast.goal))
+        self.assertLessEqual(abs(math.dist(fast.goal,target)-1.8),.050001)
+        self.assertLessEqual(fast.candidates_considered,64)
+        with patch.dict(sys.modules,{'scipy.ndimage':None}):
+            plain=plan_navigation(g,current,target,**args)
+        self.assertEqual(fast.goal,plain.goal)
+        self.assertEqual(fast.points,plain.points)
+
     def test_unbounded_projection_uses_nearest_connected_cell_for_both_modes(self):
         g=grid(101,101,blocked=[(r,40) for r in range(101)])
         for mode in ('point','approach'):

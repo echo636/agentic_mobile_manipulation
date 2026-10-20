@@ -89,12 +89,16 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
     source=Path(scene.scene_dir)/'layout'/f'floor_trav_no_obj_{floor}.png'
     cache=getattr(backend,'_live_gt_collision_cache',None)
     if cache is None:cache=backend._live_gt_collision_cache={}
-    bands=[(lo,hi) for lo,hi,_,_ in layers]
+    # Occupancy depends on height, not on which moving body uses that band.
+    # Grasp preview / detach must not invalidate a whole-room raster merely
+    # because the payload adds another footprint at an existing height.
+    bands=list(dict.fromkeys((lo,hi) for lo,hi,_,_ in layers))
+    band_indices=[bands.index((lo,hi)) for lo,hi,_,_ in layers]
     if floor not in cache or cache[floor].get('bands')!=bands:
         if not source.is_file():raise ValueError('GT floor support map unavailable: '+str(source))
         raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE);h,w=trav.floor_map[floor].shape
         raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
-        cache[floor]={'support':raw,'free':np.repeat(raw[None],len(layers),axis=0),'objects':{},'height':None,'bands':bands,
+        cache[floor]={'support':raw,'free':np.repeat(raw[None],len(bands),axis=0),'objects':{},'height':None,'bands':bands,
                       'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
     cached=cache[floor];support=cached['support'];free=cached['free'];h,w=support.shape
     origin=np.array([-w*resolution/2,-h*resolution/2])
@@ -133,7 +137,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
             local=getattr(backend,'_local_operation',None)
             if local is not None:local.check()
         xy=origin+np.array([col,row])*resolution
-        for layer_index,(low,high,_,_) in enumerate(layers):
+        for layer_index,(low,high) in enumerate(bands):
             blocked=False;query_error=None
             def hit_callback(hit):
                 nonlocal blocked,query_error
@@ -152,8 +156,9 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
             free[layer_index,row,col]=0 if blocked else 1
         count+=1
     cached.update(objects=current,height=height)
+    collision_raw=[free[index] for index in band_indices]
     navigable=support.copy();overlap=np.zeros_like(support,dtype='float32')
-    for raw,(_,_,footprint,_) in zip(free,layers):
+    for raw,(_,_,footprint,_) in zip(collision_raw,layers):
         k=footprint_kernel(footprint,resolution)
         navigable &= cv2.erode(raw,k,borderType=cv2.BORDER_CONSTANT,borderValue=0)
         overlap+=cv2.filter2D((1-raw).astype('float32'),-1,k.astype('float32'),borderType=cv2.BORDER_CONSTANT)
@@ -162,11 +167,11 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
     # this, an old fixed-heading goal can sit on a boundary that the driving
     # controller must reject, and initial recovery would not see the mismatch.
     from .heading_collision import HeadingCollisionChecker
-    grid=HeadingCollisionChecker(grid,[(raw,footprint) for raw,(_,_,footprint,_) in zip(free,layers)],
+    grid=HeadingCollisionChecker(grid,[(raw,footprint) for raw,(_,_,footprint,_) in zip(collision_raw,layers)],
         0.,support,check_cancelled=backend.deadline.check).grid_at_heading(0.)
     combined=np.all(free,axis=0).astype('uint8')
     backend._navigation_clearance=(combined.tobytes(),overlap.ravel(),max(float(np.linalg.norm(p,axis=1).max()) for _,_,p,_ in layers)+resolution)
-    backend._navigation_layers=[(raw.copy(),footprint.copy()) for raw,(_,_,footprint,_) in zip(free,layers)]
+    backend._navigation_layers=[(raw.copy(),footprint.copy()) for raw,(_,_,footprint,_) in zip(collision_raw,layers)]
     backend._navigation_support=support.copy()
     return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
         'chassis_footprint_world_offsets':chassis.tolist(),'kernel_shape':list(kernel.shape),
@@ -174,6 +179,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=()):
         'forward_clearance_reserve':'half_cell_translation_and_outward_quantized_yaw_sweep',
         'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist(),'body_group':group} for lo,hi,p,group in layers],
         'disjoint_payload_footprints':True,
+        'occupancy_height_bands':len(bands),
         'query_height_m':height,'updated_cells':count,'query_seconds':time.monotonic()-started,
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',

@@ -575,6 +575,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         ground_click=not for_manipulation and float(point[2])-float(trav.floor_heights[floor]) <= .15
         mode='point' if ground_click else 'approach'
         standoff,margin=0.,(.08 if mode=='approach' else 0.)
+        if mode=='approach' and getattr(self,'local_manipulation',False):
+            from .gt_navigation import visual_approach_settings
+            suggested,_=visual_approach_settings(self.rig_height,float(position[2]),float(point[2]),
+                pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
+            standoff=max(1.25,suggested)
         grid,map_details=build_navigation_grid(self,floor)
         self._navigation_layer_yaw=travel_yaw
         recovery_results=[];recovery_states=set()
@@ -659,7 +664,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
                  'approach_visibility_required':mode=='approach',
-                 'candidate_ranking':'nearest_feasible_connected_cell_then_travel','target_search_radius_m':None,
+                 'candidate_ranking':('visible_approach_annulus_then_near_start' if standoff else
+                                      'nearest_feasible_connected_cell_then_travel'),'target_search_radius_m':None,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  **map_details,'precomputed_walkability':True,'online_mapping':False}
         try:
@@ -698,6 +704,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                         proposed=replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
                             standoff=standoff,goal_mode=mode,max_snap=None,check_cancelled=budget.check,
                             max_candidate_checks=64 if mode=='approach' else None,
+                            preferred_distance=standoff,
                             candidate_filter=acceptable),
                             travel_yaw=yaw,final_yaw=yaw)
                         options.append(proposed)
@@ -710,7 +717,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                     def adequate(candidate):
                         if candidate is None:return False
                         distance=math.dist(candidate.goal,candidate.target)
-                        return distance <= (1.4 if mode=='approach' else exact_tolerance)
+                        return distance <= (max(1.4,standoff+grid.resolution+.002) if mode=='approach' else exact_tolerance)
                     try:
                         plan=make_plan(grid,travel_yaw)
                         best_key=(round(plan.score,9),plan.geodesic_m)
@@ -770,7 +777,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                 try:
                     for candidate in tuple(options):
                         refinement.check()
-                        slack=.1 if mode=='point' else 0.
+                        slack=.1 if mode=='point' or standoff else 0.
                         if candidate.score>plan.score+slack+1e-9:continue
                         for yaw,kind in arrival_heading_options(candidate,(*initial_xy,travel_yaw),approach=mode=='approach'):
                             refinement.check()
@@ -804,7 +811,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             endpoint_collision.check_cancelled=self.deadline.check
             with component(self,'navigation_route_selection'):
                 plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
-                    target_slack=.1 if mode=='point' else 0.,check_cancelled=self.deadline.check)
+                    target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check)
             details['forward_candidate_selection']=selection
             grid=endpoint_collision.grid_at_heading(plan.final_yaw)
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
@@ -865,8 +872,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             raise SkillError('navigation_unreachable',
                 'The selected target is occluded from the reached approach; inspect updated RGB',changed=True)
         reach=getattr(getattr(self,'local_limits',None),'reach_m',1.4)
+        local_radius=(getattr(getattr(self,'local_limits',None),'radius_m',1.)
+                      if getattr(self,'local_manipulation',False) else 0.)
         handoff=('travel_only' if mode=='point' else
-                 'selected_surface_nearby' if projection<=reach else 'needs_closer_approach')
+                 'selected_surface_nearby' if projection<=reach else
+                 'within_local_range' if projection<=reach+local_radius else 'needs_closer_approach')
         return {**result,'nav_status':nav_status,'manipulation_handoff':handoff,
                 'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,

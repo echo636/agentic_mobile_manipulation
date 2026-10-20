@@ -75,7 +75,7 @@ class RGBBoundary(unittest.TestCase):
         self.assertTrue(any(e['kind'] == 'independent_evaluation' for e in events))
 
     def test_handoff_exposes_only_approved_readiness_category(self):
-        for handoff in ('travel_only','selected_surface_nearby','needs_closer_approach','PRIVATE_OBJECT'):
+        for handoff in ('travel_only','selected_surface_nearby','within_local_range','needs_closer_approach','PRIVATE_OBJECT'):
             self.backend.execute_visual=lambda *a,**kw:{'nav_status':'approached','manipulation_handoff':handoff}
             result=self.act('navigate_to')
             if handoff=='PRIVATE_OBJECT':
