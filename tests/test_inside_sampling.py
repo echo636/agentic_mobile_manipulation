@@ -232,5 +232,59 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertEqual(records[-1]['attempted'],0)
         self.assertEqual(float(held.position[0]),5.)
 
+    def test_carrier_fits_but_captured_particle_extent_is_too_large(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        b.env=SimpleNamespace(scene=object())
+        b._placement_particle_payload=(held,[object()])
+        def oversized(*args):
+            return [(held.position-b.torch.tensor([.6,.1,.1]),
+                     held.position+b.torch.tensor([.6,.1,.1]))]
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.particle_payload.particle_bounds', side_effect=oversized):
+            self.assertFalse(sample_assembly_inside(b,held,target,contents))
+        self.assertEqual(state['steps'],0)
+        self.assertEqual(records[-1]['attempted'],0)
+        self.assertIn('assembly_extent_exceeds_volume',records[-1]['rejections'])
+
+    def test_destination_and_actual_particle_support_are_both_required(self):
+        for outside in (True,False):
+            with self.subTest(outside=outside):
+                b,held,target,contents,state,records,modules=self.fixture(collide=False)
+                b.env=SimpleNamespace(scene=object())
+                b._placement_particle_payload=(held,[object()])
+                with patch.dict('sys.modules',modules), \
+                     patch('manipulation_agent.executors.particle_payload.particle_bounds',return_value=[]), \
+                     patch('manipulation_agent.executors.particle_payload.particles_in_volumes',return_value=not outside), \
+                     patch('manipulation_agent.executors.particle_payload.verify_particles',
+                           side_effect=SkillError('postcondition_error','foreign support')) as check:
+                    self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+                self.assertEqual(float(held.position[0]),5.)
+                reason='particles_outside_destination' if outside else 'particle_payload_postcondition'
+                self.assertEqual(records[-1]['rejections'][reason],1)
+                self.assertEqual(check.call_count,0 if outside else 1)
+
+    def test_particle_identity_change_aborts_search_instead_of_trying_another_pose(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        b.env=SimpleNamespace(scene=object());b._placement_particle_payload=(held,[object()])
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.particle_payload.particle_bounds',return_value=[]), \
+             patch('manipulation_agent.executors.particle_payload.particles_in_volumes',return_value=True), \
+             patch('manipulation_agent.executors.particle_payload.verify_particles',
+                   side_effect=SkillError('target_changed','cooking replaced captured particle')):
+            with self.assertRaises(SkillError) as error:
+                sample_assembly_inside(b,held,target,contents,max_candidates=10)
+        self.assertEqual(error.exception.code,'target_changed')
+        self.assertEqual(records[-1]['attempted'],1)
+        self.assertEqual(state['loads'],0)
+
+    def test_rejected_candidate_cannot_restore_particles_replaced_by_physics(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide='all')
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.particle_payload.particle_state_unchanged',return_value=False):
+            with self.assertRaises(SkillError) as error:
+                sample_assembly_inside(b,held,target,contents,max_candidates=2)
+        self.assertEqual(error.exception.code,'target_changed')
+        self.assertEqual(state['loads'],0)
+
 
 if __name__=='__main__':unittest.main()

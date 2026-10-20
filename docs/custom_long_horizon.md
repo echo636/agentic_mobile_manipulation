@@ -59,6 +59,12 @@ attachment does not certify extraction: normal checked placement or navigation
 must still move the assembly out. Demo hand motion is unchanged. This motor
 repair requires fresh physical validation; existing task passes retain their
 original source identity.
+Inside placement treats captured particles as part of the assembly envelope and
+checks their destination volume as well as their original containment/support.
+The geometric sampler rejects a candidate with lost particle support and may
+try another pose within its existing budget; changed identities still abort.
+This prevents a root-only placement from accepting a bag whose grains extend
+beyond an appliance interior. Physical validation of this repair is pending.
 
 ## Independent evaluation
 

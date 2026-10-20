@@ -562,7 +562,8 @@ class CheckedPlacement:
         stabilized_payload=None
         with self._placement_context(target):
             contents=list(self._carry_contents) if self.ideal_carry else []
-            assembly_search=bool(contents)
+            particle_payload=getattr(self,'_placement_particle_payload',(None,[]))[1]
+            assembly_search=bool(contents or particle_payload)
             dependencies=list(getattr(self,'_carry_dependencies',[]))
             orientation=held.get_position_orientation()[1].clone()
             self._carry_detach()
@@ -658,6 +659,10 @@ class CheckedPlacement:
                 raise SkillError('postcondition_error','Object did not remain inside after settling; try another placement',changed=True)
             self._verify_container_payload(target,residents)
             self._verify_payload(dependencies)
+            if particle_payload:
+                from .particle_payload import particles_in_volumes
+                if not particles_in_volumes(self.env.scene,particle_payload,fillable):
+                    raise SkillError('postcondition_error','Carried particles extend outside the destination volume',changed=True)
             if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
                 raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
             if not getattr(target,'fixed_base',True):

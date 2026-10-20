@@ -79,13 +79,19 @@ Rejected candidate poses never become committed actions or task evidence.
     from omnigibson.object_states import Inside, Open
     from omnigibson.utils import transform_utils as T
     from omnigibson.utils.usd_utils import RigidContactAPI
+    from .particle_payload import particle_bounds, particles_in_volumes, verify_particles
+    from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
+    from .placement import scene_object_identities
     torch, sim = backend.torch, backend.og.sim
     start = time.monotonic()
     initial = sim.dump_state(serialized=False)
+    initial_objects = scene_object_identities(sim)
+    initial_particles = snapshot_particle_state(sim)
     root_pos, root_quat = (v.clone() for v in held.get_position_orientation())
     target_pos, target_quat = (v.clone() for v in target.get_position_orientation())
     was_open = bool(target.states[Open].get_value()) if Open in target.states else None
     assembly = [held, *[obj for obj, _ in contents]]
+    particles = getattr(backend, '_placement_particle_payload', (None, []))[1]
     volumes = [link for link in target.links.values() if link.is_meta_link and
                link.meta_link_type in {'fillable', 'openfillable'}]
     volume_poses={link.prim_path:tuple(v.clone() for v in link.get_position_orientation()) for link in volumes}
@@ -99,6 +105,13 @@ Rejected candidate poses never become committed actions or task evidence.
     attempted = 0
     dirty = False
     accepted = False
+    identity_changed = False
+
+    def restore():
+        if scene_object_identities(sim) != initial_objects or not particle_state_unchanged(initial_particles):
+            raise SkillError('target_changed', 'Scene identities changed during assembly sampling', changed=True)
+        sim.load_state(initial, serialized=False)
+        restore_particle_state(initial_particles)
 
     def check():
         backend.deadline.check(changed=dirty)
@@ -123,6 +136,8 @@ Rejected candidate poses never become committed actions or task evidence.
             held.set_position_orientation(root_pos, quat)
             backend._relocate_contents(held, contents)
             bounds = [obj.aabb for obj in assembly]
+            if particles:
+                bounds.extend(particle_bounds(backend.env.scene, particles))
             low = torch.stack([a for a, _ in bounds]).amin(dim=0)
             high = torch.stack([b for _, b in bounds]).amax(dim=0)
             center_offset = (low+high)/2-root_pos
@@ -159,7 +174,7 @@ Rejected candidate poses never become committed actions or task evidence.
                 reject('outside_fillable_volume', candidate)
                 continue
             if dirty:
-                sim.load_state(initial, serialized=False)
+                restore()
             dirty = True
             held.set_position_orientation(center-offset, quat)
             held.keep_still()
@@ -206,17 +221,35 @@ Rejected candidate poses never become committed actions or task evidence.
             if any(not obj.states[Inside].get_value(target) for obj in assembly[1:]):
                 reject('payload_outside_destination', candidate)
                 continue
+            if particles:
+                if not particles_in_volumes(backend.env.scene, particles, [volume]):
+                    reject('particles_outside_destination', candidate)
+                    continue
+                try:
+                    verify_particles(backend.env.scene, particles)
+                except SkillError as exc:
+                    if exc.code != 'postcondition_error':
+                        raise
+                    reject('particle_payload_postcondition', candidate, error=str(exc))
+                    continue
             accepted = True
             backend._placement_record({'status':'inside_candidate_accepted', 'held':held.name,
                                        'target':target.name, **candidate})
             return True
         return False
+    except SkillError as exc:
+        identity_changed = exc.code == 'target_changed'
+        raise
     finally:
-        if not accepted:
-            if dirty: sim.load_state(initial, serialized=False)
-            else:
-                held.set_position_orientation(root_pos, root_quat)
-                backend._relocate_contents(held, contents)
-        backend._placement_record({'status':'inside_sampling_summary', 'method':'assembly_volume_search',
-                                   'accepted':accepted, 'attempted':attempted, 'rejections':counts,
-                                   'seconds':time.monotonic()-start, 'held':held.name, 'target':target.name})
+        try:
+            if not accepted and not identity_changed:
+                if dirty:
+                    restore()
+                else:
+                    held.set_position_orientation(root_pos, root_quat)
+                    backend._relocate_contents(held, contents)
+        finally:
+            backend._placement_record({'status':'inside_sampling_summary', 'method':'assembly_volume_search',
+                                       'accepted':accepted, 'attempted':attempted, 'rejections':counts,
+                                       'seconds':time.monotonic()-start, 'held':held.name, 'target':target.name,
+                                       'identity_changed':identity_changed})

@@ -184,6 +184,37 @@ def relocate_particles(scene, payload):
         view.set_velocities(velocities, indices=all_indices)
 
 
+def particle_bounds(scene, payload):
+    """World envelopes of captured collision spheres, with identity checks."""
+    result = []
+    for record in payload:
+        indices = _indices(scene, record)
+        centers = record.system.get_particles_position_orientation()[0][indices]
+        radius = float(record.system.particle_contact_radius)
+        if not math.isfinite(radius) or radius <= 0:
+            raise ValueError('Invalid carried particle collision radius')
+        result.append((centers.amin(dim=0)-radius, centers.amax(dim=0)+radius))
+    return result
+
+
+def particles_in_volumes(scene, payload, volumes):
+    """Each captured center must belong to a destination fillable volume.
+
+    This is additional to original containment/support checks: a grain can
+    remain on its bag while protruding beyond the selected appliance interior.
+    """
+    import torch
+    for record in payload:
+        indices = _indices(scene, record)
+        centers = record.system.get_particles_position_orientation()[0][indices]
+        inside = centers.new_zeros(len(indices), dtype=torch.bool)
+        for volume in volumes:
+            inside |= volume.check_points_in_volume(centers)
+        if not bool(inside.all()):
+            return False
+    return True
+
+
 def verify_particles(scene, payload):
     # Validate every captured identity before accepting any support chain.
     # Contained particles remain subject to their original volume check.

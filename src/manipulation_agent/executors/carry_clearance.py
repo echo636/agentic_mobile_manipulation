@@ -36,20 +36,15 @@ def choose_lift(bounds, blocked):
 def assembly_lift(backend, obj, contents, particles):
     """Use live PhysX overlap queries for rigid and captured particle bounds."""
     import omnigibson.lazy as lazy
-    from .particle_payload import _indices
+    from .particle_payload import particle_bounds
 
     assembly = (obj, *(child for child, _ in contents))
     bounds = [(low.tolist(), high.tolist()) for body in assembly for low, high in [body.aabb]]
     ignored = {link.prim_path for body in assembly for link in body.links.values()}
     ignored.update(link.prim_path for body in backend.env.scene.objects
                    for link in body.links.values() if link.is_meta_link)
+    bounds.extend((low.tolist(), high.tolist()) for low, high in particle_bounds(backend.env.scene, particles))
     for record in particles:
-        indices = _indices(backend.env.scene, record)
-        centers = record.system.get_particles_position_orientation()[0][indices]
-        radius = float(record.system.particle_contact_radius)
-        if not math.isfinite(radius) or radius <= 0:
-            raise ValueError('Invalid carried particle collision radius')
-        bounds.append(((centers.amin(dim=0)-radius).tolist(), (centers.amax(dim=0)+radius).tolist()))
         ignored.update(record.paths)
     query = lazy.omni.physx.get_physx_scene_query_interface()
     rejected = []
