@@ -75,6 +75,28 @@ def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: 
     return poses
 
 
+def shallow_forward_connections(start, collision, check_cancelled=lambda: None):
+    """Bounded forward links out of a lattice dead end, with full sweeps.
+
+    A narrow exit can permit a six-degree turn while rejecting a 45-degree
+    lattice turn. Shift one cell sideways over a longer forward leg, then
+    restore the lattice heading. This is forward driving, never strafing.
+    """
+    grid=collision.grid
+    row,col=grid.cell(start[:2])
+    dr,dc=round(math.sin(start[2])),round(math.cos(start[2]))
+    for length in (3,4,6,9,12):
+        for side in (-1,1):
+            check_cancelled()
+            cell=(row+length*dr+side*dc,col+length*dc-side*dr)
+            xy=grid.world(cell)
+            if math.dist(start[:2],xy)>.65 or not grid.navigable(cell):
+                continue
+            poses=checked_connection(start,xy,start[2],collision,check_cancelled)
+            if poses is not None:
+                yield cell,poses
+
+
 def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, check_cancelled=lambda: None):
     """Certify a bounded forward departure from a candidate terminal pose.
 
@@ -296,6 +318,7 @@ without requiring enough clearance to rotate at every point in that corridor.
         return reverse_costs.get(cell,math.inf)
 
     queue, costs, parents, seeds = [], {}, {}, {}
+    connections = {}
     # The measured heading is not generally a multiple of 45 degrees. In a
     # narrow aisle the robot may have to drive along that exact heading before
     # it can turn onto the lattice; a nearest-cell snap would miss that route.
@@ -374,20 +397,43 @@ without requiring enough clearance to rotate at every point in that corridor.
                 while states[-1] in parents:
                     states.append(parents[states[-1]])
                 states.reverse()
-                route = seeds[states[0]] + [pose(s) for s in states[1:]] + terminal[1:]
+                route = list(seeds[states[0]])
+                for previous,following in zip(states,states[1:]):
+                    route.extend(connections.get((previous,following),[pose(following)]))
+                route.extend(terminal[1:])
                 return finish(route, len(closed), 'heading_lattice')
         r, c, h = state
         dr, dc = directions[h]
-        for nxt in ((r, c, (h+1)%8), (r, c, (h-1)%8), (r+dr, c+dc, h)):
+        neighbors=((r, c, (h+1)%8), (r, c, (h-1)%8), (r+dr, c+dc, h))
+        allowed={}
+        for nxt in neighbors:
             if nxt in closed or not grid.navigable(nxt[:2]):
                 continue
             destination = pose(nxt)
             updated = cost+edge_cost(current, destination)
             if updated >= costs.get(nxt, math.inf):
                 continue
-            if not collision.motion_free(current, destination):
+            allowed[nxt]=collision.motion_free(current, destination)
+            if not allowed[nxt]:
                 continue
             costs[nxt] = updated
             parents[nxt] = state
+            connections.pop((state,nxt),None)
             heapq.heappush(queue, (updated+heuristic(nxt), updated, nxt))
+        # Only refine a geometric dead end. Already visited or higher-cost
+        # neighbors still count as exits; they must not trigger extra work.
+        def free_neighbor(nxt):
+            if not grid.navigable(nxt[:2]):return False
+            if nxt not in allowed:allowed[nxt]=collision.motion_free(current,pose(nxt))
+            return allowed[nxt]
+        if any(free_neighbor(nxt) for nxt in neighbors):
+            continue
+        for cell,connection in shallow_forward_connections(current,collision,check_cancelled):
+            nxt=(*cell,h)
+            if nxt in closed:continue
+            updated=cost+sum(edge_cost(a,b) for a,b in zip(connection,connection[1:]))
+            if updated>=costs.get(nxt,math.inf):continue
+            costs[nxt]=updated;parents[nxt]=state
+            connections[(state,nxt)]=connection[1:]
+            heapq.heappush(queue,(updated+heuristic(nxt),updated,nxt))
     raise NavigationError('No collision-free forward route to the selected approach')

@@ -134,7 +134,9 @@ class HeadingCollisionChecker:
             return False
         key = self._key(start[2], end[2])
         if math.dist(start[:2], end[:2]) > 1e-10:
-            return self._sweep_grid(key).segment_free(start[:2], end[:2])
+            if key in self.grids:
+                return self._sweep_grid(key).segment_free(start[:2], end[:2])
+            return self._translation_free(key,start,end)
         # In-place turns need only a small local occupancy window, not a new
         # full-floor erosion on every angular command or A* expansion.
         row, col = self.grid.cell(start[:2])
@@ -148,6 +150,35 @@ class HeadingCollisionChecker:
             if np.any((window == 0) & (kernel != 0)):
                 return False
         return True
+
+    def _translation_free(self,key,start,end):
+        """Erode only the segment's cells, reading the full obstacle halo.
+
+        Rare continuous headings need no full-floor grid. The kernel and
+        supercover are identical to the full-map check, including neighboring
+        cells when the segment lies on a cell edge.
+        """
+        import cv2
+        import numpy as np
+        a,b=self.grid.cell(start[:2]),self.grid.cell(end[:2])
+        if not self.grid.contains(a) or not self.grid.contains(b):return False
+        r0,r1=max(0,min(a[0],b[0])-1),min(self.grid.height,max(a[0],b[0])+2)
+        c0,c1=max(0,min(a[1],b[1])-1),min(self.grid.width,max(a[1],b[1])+2)
+        support=np.frombuffer(self.grid.free,dtype='uint8').reshape(self.grid.height,self.grid.width)
+        free=support[r0:r1,c0:c1].copy()
+        if self.window is not None:
+            ra,rb,ca,cb=self.window
+            free[(np.arange(r0,r1)<ra)|(np.arange(r0,r1)>=rb),:]=0
+            free[:,(np.arange(c0,c1)<ca)|(np.arange(c0,c1)>=cb)]=0
+        for (raw,_),kernel in zip(self.layers,self._kernels(key)):
+            self.check_cancelled()
+            half=kernel.shape[0]//2
+            ra,rb=max(0,r0-half),min(self.grid.height,r1+half)
+            ca,cb=max(0,c0-half),min(self.grid.width,c1+half)
+            eroded=cv2.erode(raw[ra:rb,ca:cb],kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+            free &= eroded[r0-ra:r1-ra,c0-ca:c1-ca]
+        segment=GridMap(c1-c0,r1-r0,self.grid.resolution,self.grid.world((r0,c0)),free.tobytes())
+        return segment.segment_free(start[:2],end[:2])
 
     def grid_at_heading(self, yaw):
         return self._sweep_grid(self._key(yaw, yaw))

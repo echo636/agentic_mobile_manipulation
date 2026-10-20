@@ -26,6 +26,33 @@ class PointCollision:
 
 
 class ForwardNavigationTests(unittest.TestCase):
+    def test_shallow_forward_exit_from_coarse_heading_dead_end(self):
+        class BentSlot(PointCollision):
+            def __init__(self,barrier=False):
+                self.grid=GridMap(61,61,.05,(-1.,-1.),bytes([1])*61**2)
+                self.barrier=barrier
+            def motion_free(self,a,b):
+                for i in range(101):
+                    x=a[0]+(b[0]-a[0])*i/100
+                    y=a[1]+(b[1]-a[1])*i/100
+                    yaw=angle(a[2]+angle(b[2]-a[2])*i/100)
+                    if x<-.001:return False
+                    if self.barrier and .5<x<.55:return False
+                    if x<.85:
+                        if not -.025<y<.075 or not -.001<=yaw<=.15:return False
+                        if x<.4 and abs(y)>=.025:return False
+                        if x>=.4 and y<.025 and yaw<.05:return False
+                return super().motion_free(a,b)
+        start=(0.,0.,0.);target=(1.,.4)
+        collision=BentSlot()
+        route=plan_forward_route(plan([start[:2],target],math.pi/2),start,collision,max_expansions=500)
+        self.assertEqual(route.method,'heading_lattice')
+        self.assertTrue(any(.01<abs(angle(p.final_yaw))<.15 for p in route.phases))
+        self.follow(route,start,collision)
+        # Legal endpoints do not allow a long connection through an obstacle.
+        with self.assertRaises(NavigationError):
+            plan_forward_route(plan([start[:2],target],math.pi/2),start,BentSlot(True),max_expansions=500)
+
     def test_outward_facing_pocket_also_requires_a_forward_entry(self):
         class Pocket(PointCollision):
             def motion_free(self,a,b):
@@ -219,6 +246,25 @@ class ForwardNavigationTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2'),'Requires OpenCV; no simulator is started')
 class HeadingCollisionTests(unittest.TestCase):
+    def test_segment_region_matches_full_map_at_edges_and_obstacle_halos(self):
+        import numpy as np
+        raw=np.ones((81,81),dtype='uint8')
+        raw[30:45,30]=0;raw[55,20:60]=0;raw[15:18,48:52]=0
+        footprint=[[-.12,-.08],[.23,-.08],[.23,.08],[-.12,.08]]
+        checker=self.checker(raw,footprint)
+        points=[((.4,.4),(.4,1.4)),((.425,.425),(.425,1.425)),
+                ((.05,.05),(.45,.45)),((-.95,-.95),(-.8,-.8)),
+                ((.2,.5),(.2,1.1)),((1.,1.),(1.8,1.8))]
+        for bounded in (False,True):
+            subject=checker.local_window((.5,.5),.7) if bounded else checker
+            for yaw in (0.,.113,-.37,math.pi/2):
+                for a,b in points:
+                    with self.subTest(bounded=bounded,yaw=yaw,a=a,b=b):
+                        subject.grids.clear()
+                        got=subject.motion_free((*a,yaw),(*b,yaw))
+                        reference=subject._sweep_grid(subject._key(yaw,yaw)).segment_free(a,b)
+                        self.assertEqual(got,reference)
+
     def test_long_sweep_contains_every_short_sweep_including_wraparound(self):
         import numpy as np
         checker=self.checker(np.ones((81,81),dtype='uint8'),
