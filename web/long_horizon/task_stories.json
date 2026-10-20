@@ -1,0 +1,466 @@
+{
+  "garden": {
+    "title": "给 20 盆植物喷药，再分到两张展示台",
+    "intro": "每盆先送到黄台处理，再送到绿台。红台的 4 盆对照植物要始终保持原样。",
+    "before_title": "20 盆还未处理",
+    "after_title": "20 盆处理好，10 + 10 分台摆放",
+    "before": [
+      {
+        "label": "蓝色来源台 A · 10 盆",
+        "kind": "plant",
+        "count": 10,
+        "color": "blue"
+      },
+      {
+        "label": "蓝色来源台 B · 10 盆",
+        "kind": "plant",
+        "count": 10,
+        "color": "blue"
+      }
+    ],
+    "after": [
+      {
+        "label": "绿色展示台 A · 10 盆",
+        "kind": "plant",
+        "count": 10,
+        "color": "green"
+      },
+      {
+        "label": "绿色展示台 B · 10 盆",
+        "kind": "plant",
+        "count": 10,
+        "color": "green"
+      }
+    ],
+    "invariant": "红台 4 盆对照：全程留在原台，不能沾上药剂。",
+    "steps": [
+      "逐盆搬到黄台",
+      "在黄台喷洒驱虫剂",
+      "直立摆到绿台",
+      "关喷壶、归还工具"
+    ],
+    "loop": "前 3 步逐盆重复，共 20 盆；可自行选择处理顺序。",
+    "rules": [
+      {
+        "kind": "result",
+        "title": "20 盆全部处理到位",
+        "text": "每盆都覆盖指定驱虫剂 insectifuge，保持直立，倾角不超过 15°。",
+        "requirements": [
+          "treatment"
+        ]
+      },
+      {
+        "kind": "result",
+        "title": "两张绿台各 10 盆",
+        "text": "所有待处理盆栽都在绿台上；同款植物可互换。",
+        "requirements": [
+          "treatment"
+        ]
+      },
+      {
+        "kind": "history",
+        "title": "每盆先在黄台处理，再送达",
+        "text": "仅最终摆对位置不够，还要有该盆在黄台完成处理的记录。",
+        "requirements": [
+          "treatment"
+        ]
+      },
+      {
+        "kind": "always",
+        "title": "4 盆对照全程不动、不沾药",
+        "text": "不能先移走再放回，也不能误喷后再清除。",
+        "requirements": [
+          "controls"
+        ]
+      },
+      {
+        "kind": "finish",
+        "title": "喷壶关机归灰台，手空",
+        "text": "工具归位后，机器人不再拿着物体。",
+        "requirements": [
+          "tool",
+          "protocol"
+        ]
+      },
+      {
+        "kind": "always",
+        "title": "全程逐件搬运，工作台不移动",
+        "text": "不堆叠、不套叠，也不一次携带多个任务对象。",
+        "requirements": [
+          "protocol"
+        ]
+      }
+    ],
+    "examples": [
+      {
+        "label": "少一盆",
+        "text": "只送达 19 盆，或两台摆成 9 + 11，即使都喷过药也不算成功。",
+        "rule": 1
+      },
+      {
+        "label": "跳过黄台",
+        "text": "直接在蓝台喷药，再送往绿台，缺少规定的处理过程。",
+        "rule": 2
+      },
+      {
+        "label": "误喷对照",
+        "text": "20 盆全部摆好，但红台有一盆沾药，仍判失败。",
+        "rule": 3
+      }
+    ],
+    "spec_sha256": "e69e0bb3c461910078986470358497dd8564f09c8050e79359c9d58d95f3e329"
+  },
+  "hotel": {
+    "title": "把 20 只脏鞋清洁好，两只一组摆满 10 个鞋位",
+    "intro": "每只鞋先到黄色护理台去尘，再放到绿色鞋位。看每个鞋位的数量与邻近关系，同款鞋可互换。",
+    "before_title": "蓝台上有 20 只积尘鞋",
+    "after_title": "10 个鞋位，每位两只干净鞋",
+    "before": [
+      {
+        "label": "蓝色来源台 · 20 只",
+        "kind": "shoe",
+        "count": 20,
+        "color": "blue"
+      }
+    ],
+    "after": [
+      {
+        "label": "鞋位 01",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 02",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 03",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 04",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 05",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 06",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 07",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 08",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 09",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      },
+      {
+        "label": "鞋位 10",
+        "kind": "shoe",
+        "count": 2,
+        "color": "green"
+      }
+    ],
+    "invariant": "同款鞋可互换；不要求匹配隐藏的主人编号。",
+    "steps": [
+      "逐只搬到黄台",
+      "用护理刷去尘",
+      "两只相邻摆到鞋位",
+      "归还护理刷"
+    ],
+    "loop": "前 3 步逐只重复，共 20 只，填满 10 个鞋位。",
+    "rules": [
+      {
+        "kind": "result",
+        "title": "20 只鞋都没有灰尘",
+        "text": "摆放正确，但还有一只没清洁，也不能通过。",
+        "requirements": [
+          "care"
+        ]
+      },
+      {
+        "kind": "result",
+        "title": "10 个鞋位，每位恰好两只",
+        "text": "两只鞋必须相邻；不能一个鞋位放 3 只、另一个只放 1 只。",
+        "requirements": [
+          "care"
+        ]
+      },
+      {
+        "kind": "history",
+        "title": "每只先在黄台去尘，再入鞋位",
+        "text": "需要保留上护理台、去尘、归位的先后记录。",
+        "requirements": [
+          "care"
+        ]
+      },
+      {
+        "kind": "finish",
+        "title": "护理刷归灰台，机器人手空",
+        "text": "完成收尾后再结束任务。",
+        "requirements": [
+          "protocol"
+        ]
+      },
+      {
+        "kind": "always",
+        "title": "全程逐件搬运，工作台不移动",
+        "text": "不堆叠、不套叠，也不一次携带多个任务对象。",
+        "requirements": [
+          "protocol"
+        ]
+      }
+    ],
+    "examples": [
+      {
+        "label": "数量不对",
+        "text": "鞋都干净，但两个鞋位分别是 3 只和 1 只，仍不算完成。",
+        "rule": 1
+      },
+      {
+        "label": "跳过护理台",
+        "text": "直接在蓝台擦干净再归位，最终看着对，也缺少规定的护理过程。",
+        "rule": 2
+      },
+      {
+        "label": "漏清洁",
+        "text": "10 个鞋位都放满，但有一只鞋仍积尘，判定失败。",
+        "rule": 0
+      }
+    ],
+    "spec_sha256": "8eda2bf829d566c34c758185924b529b46d3764cec3e9d31e1f71a58c377fe9c"
+  },
+  "bedroom": {
+    "title": "整理两间卧室，吸尘归位后再关灯",
+    "intro": "每间各 12 件书和玩具，先全部移到本房黄台，吸尘后再送到本房绿台。两间都完成才关 4 盏任务灯。",
+    "before_title": "两间各有 12 件杂物，地面有尘",
+    "after_title": "各 12 件归本房绿台，地面干净",
+    "before": [
+      {
+        "label": "卧室 A · 12 件杂物",
+        "kind": "item",
+        "count": 12,
+        "color": "floor"
+      },
+      {
+        "label": "卧室 B · 12 件杂物",
+        "kind": "item",
+        "count": 12,
+        "color": "floor"
+      }
+    ],
+    "after": [
+      {
+        "label": "A 室绿色归位台 · 12 件",
+        "kind": "item",
+        "count": 12,
+        "color": "green"
+      },
+      {
+        "label": "B 室绿色归位台 · 12 件",
+        "kind": "item",
+        "count": 12,
+        "color": "green"
+      }
+    ],
+    "invariant": "“归位”是送到本房绿台；4 盏任务灯位于独立灰台上。",
+    "steps": [
+      "本房 12 件全移到黄台",
+      "吸净本房地面",
+      "12 件送到本房绿台",
+      "两房完成后关 4 盏灯"
+    ],
+    "loop": "前 3 步每间房各做一遍；两间都完成后才进入关灯收尾。",
+    "rules": [
+      {
+        "kind": "result",
+        "title": "两间地面都无灰尘",
+        "text": "每个房间的地面分别检查，不能只清理其中一间。",
+        "requirements": [
+          "rooms"
+        ]
+      },
+      {
+        "kind": "result",
+        "title": "24 件物品全部归到对应房间",
+        "text": "A 室 12 件在 A 室绿台，B 室 12 件在 B 室绿台。",
+        "requirements": [
+          "rooms"
+        ]
+      },
+      {
+        "kind": "history",
+        "title": "本房全部暂存 → 吸尘 → 归位",
+        "text": "同一房间的 12 件必须曾同时在黄台；地面干净后才可往绿台放。",
+        "requirements": [
+          "rooms"
+        ]
+      },
+      {
+        "kind": "history",
+        "title": "两房完成后才关 4 盏任务灯",
+        "text": "提前关灯，即使最终都是关闭状态也不满足过程要求。",
+        "requirements": [
+          "close"
+        ]
+      },
+      {
+        "kind": "finish",
+        "title": "吸尘器关机归灰台，手空",
+        "text": "4 盏任务灯最终也都要关闭。",
+        "requirements": [
+          "close",
+          "protocol"
+        ]
+      },
+      {
+        "kind": "always",
+        "title": "全程逐件搬运，工作台不移动",
+        "text": "不堆叠、不套叠，也不一次携带多个任务对象。",
+        "requirements": [
+          "protocol"
+        ]
+      }
+    ],
+    "examples": [
+      {
+        "label": "少搬一件",
+        "text": "地面干净，但一件玩具没有回到本房绿台，仍不算完成。",
+        "rule": 1
+      },
+      {
+        "label": "提前吸尘",
+        "text": "还没把本房 12 件同时移到黄台就吸尘，违反腾空顺序。",
+        "rule": 2
+      },
+      {
+        "label": "提前关灯",
+        "text": "先关灯再整理，即使最终房间看着整洁，也违反收尾顺序。",
+        "rule": 3
+      }
+    ],
+    "spec_sha256": "5e896ab91ab7bb6a55efc6fafe48fdb851a16d6a0fe693ae907955aeb97f882a"
+  },
+  "garage": {
+    "title": "先扫地，再把 16 根木料劈成 32 半并收好",
+    "intro": "每根整木从蓝台搬到黄底座上的劈木墩，劈开后把它生成的两半都送到绿台。",
+    "before_title": "蓝台上 16 根整木，地面有砂尘",
+    "after_title": "32 块半木全部收好，地面干净",
+    "before": [
+      {
+        "label": "蓝色来源台 · 16 根整木",
+        "kind": "log",
+        "count": 16,
+        "color": "blue"
+      }
+    ],
+    "after": [
+      {
+        "label": "绿色收纳台 · 32 块真实切割产物",
+        "kind": "half",
+        "count": 32,
+        "color": "green"
+      }
+    ],
+    "invariant": "每根原木都要真实切成对应的两半；随便凑够 32 块不算。",
+    "steps": [
+      "先扫净指定地面的砂尘",
+      "逐根搬到劈木墩",
+      "用斧头劈成两半",
+      "两半都送到绿台"
+    ],
+    "loop": "清扫完成后，第 2–4 步逐根重复 16 次，最后归还斧头和扫帚。",
+    "rules": [
+      {
+        "kind": "result",
+        "title": "指定地面既无砂，也无尘",
+        "text": "只去掉其中一种材料仍不满足清扫要求。",
+        "requirements": [
+          "cut"
+        ]
+      },
+      {
+        "kind": "result",
+        "title": "16 根整木各自被替换为两半",
+        "text": "逐根检查切割关系，确认是这根木料产生的两块半木。",
+        "requirements": [
+          "cut"
+        ]
+      },
+      {
+        "kind": "result",
+        "title": "32 块半木全部在绿台上",
+        "text": "不能遗漏任何一根木料的任意一半。",
+        "requirements": [
+          "cut"
+        ]
+      },
+      {
+        "kind": "history",
+        "title": "先扫地，再上墩、切割、收纳",
+        "text": "每根都需要上劈木墩后再切开，生成产物后才能归台。",
+        "requirements": [
+          "cut"
+        ]
+      },
+      {
+        "kind": "finish",
+        "title": "斧头和扫帚归灰台，手空",
+        "text": "所有加工与工具收尾都完成才算成功。",
+        "requirements": [
+          "protocol"
+        ]
+      },
+      {
+        "kind": "always",
+        "title": "全程逐件搬运，工作台不移动",
+        "text": "不堆叠、不套叠，也不一次携带多个任务对象。",
+        "requirements": [
+          "protocol"
+        ]
+      }
+    ],
+    "examples": [
+      {
+        "label": "少一半",
+        "text": "16 根都劈开了，但只收好 31 块半木，判定失败。",
+        "rule": 2
+      },
+      {
+        "label": "切错木料",
+        "text": "用其他木块凑到 32 块，不能替代指定原木的真实产物。",
+        "rule": 1
+      },
+      {
+        "label": "顺序错误",
+        "text": "尚未扫净地面就上墩劈木，最终补扫也不满足规定过程。",
+        "rule": 3
+      }
+    ],
+    "spec_sha256": "95143c464c2155216c50986bcce1f47303595d7c02e54cb8c7004230616f44f9"
+  }
+}

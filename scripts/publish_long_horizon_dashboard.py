@@ -82,6 +82,7 @@ def publish(batch, output):
     validation=read(batch/'validation.json')
     catalog=read(REPO/'task_designs/proposals_100plus/diverse_catalog.json')['tasks']
     frozen={t['task']:t for t in read(batch/'frozen_tasks.json')['tasks']}
+    stories=read(REPO/'web/long_horizon/task_stories.json')
     rows={t['task']:t for t in validation['tasks']}
     tasks=[]; inputs={}
     output.mkdir(parents=True,exist_ok=True)
@@ -92,6 +93,13 @@ def publish(batch, output):
             raise ValueError('Refresh the frozen artifact index before publishing a newer construction')
         spec_path=checked_path(batch,f['spec']); spec=read(spec_path)
         if sha(spec_path)!=f['spec_sha256']:raise ValueError('Frozen spec hash mismatch')
+        story=stories[family]
+        if story['spec_sha256']!=f['spec_sha256']:
+            raise ValueError('Review the task explanation against the new frozen scoring contract')
+        requirement_ids={r['id'] for r in spec['requirements']}
+        explained={r for rule in story['rules'] for r in rule['requirements']}
+        if explained!=requirement_ids:
+            raise ValueError('Task explanation must cover every public requirement')
         inputs[str(spec_path.relative_to(batch))]=sha(spec_path)
         geometry=read(root/'geometry.json'); world=read(root/'scene_geometry.json')
         build=read(root/'validation.json'); obs=read(root/'initial_observation.json')
@@ -144,6 +152,7 @@ def publish(batch, output):
         if sum(p['calls'] or 0 for p in phases)!=spec['design_ledger']['conditional_useful_calls']:
             raise ValueError('Displayed design ledger disagrees with frozen recipe')
         tasks.append(dict(id=task_id,family=family,**{k:v for k,v in presentation.items() if k!='phases'},
+            story=story,
             instruction=spec['public_instruction'],requirements=[r['text'] for r in spec['requirements']],
             phases=phases,declared_calls=spec['design_ledger']['conditional_useful_calls'],
             model_budget=spec['design_ledger']['proposed_model_act_look_budget'],frames=frames,
