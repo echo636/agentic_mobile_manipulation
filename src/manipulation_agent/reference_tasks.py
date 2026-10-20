@@ -123,10 +123,10 @@ class ReferenceTask:
         base = backend.robot.get_position_orientation()[0]
         distance = float(backend.torch.linalg.vector_norm(
             base[:2] - backend.torch.tensor(target[:2], device=base.device)))
-        # An appliance already in the executor's checked 1.4 m reach needs
-        # no extra approach. In particular, a valid microwave-loading stance
-        # must remain usable for closing and toggling it after release.
-        approach_distance = 1.4 if role in ('fridge', 'microwave') else 1.2
+        # Prefer a nearer pickup to limit the carried assembly's offset.
+        # Placement and appliance operations can use the executor's full
+        # checked reach; unnecessary loaded travel can trap a valid transfer.
+        approach_distance = 1.2 if primitive == 'grasp' else 1.4
         if distance > approach_distance:
             task = backend.custom_spec['id']
             if task.startswith('workshop'):
@@ -246,6 +246,9 @@ class ReferenceTask:
         self.move('open', 'microwave')
         for item in ('hotdog1', 'hotdog2', 'apple1', 'apple2'):
             self.transfer_inside(item, 'box')
+        self.finish_lunch(deliver_box=deliver_box)
+
+    def finish_lunch(self, *, deliver_box=True):
         self.move('close', 'microwave')
         for item in ('cookie', 'sandwich'):
             self.transfer_inside(item, 'fridge')
@@ -322,10 +325,21 @@ class ReferenceTask:
         self.move('close', 'microwave')
 
     def serve_movie_dish(self, item, x, y):
-        if item == 'plate1':
+        if item in ('plate1', 'fork2'):
             self.floor(5.2, .5)
             self.action('grasp', item)
             self.floor(6.2, 1.2)
+            if item == 'fork2':
+                self.floor(4.4, 4.45)
+        elif item in ('cup1', 'cup2'):
+            self.floor(5.7, 1.2)
+            self.action('grasp', item)
+            if item == 'cup2':
+                self.floor(4.4, 4.45)
+        elif item == 'fork1':
+            self.floor(4.4, 3.2)
+            self.action('grasp', item)
+            self.floor(4.4, 4.45)
         else:
             self.move('grasp', item)
         self.move('place_on_top', 'table', self.top('table', x, y))
@@ -353,7 +367,7 @@ class ReferenceTask:
         if order == 'cook_overlap':
             self.movie_cleanup()
         for item, x, y in [('plate1', .25, .5), ('plate2', .75, .5), ('cup1', .25, .8),
-                           ('cup2', .75, .8), ('fork1', .25, .2), ('fork2', .75, .2)]:
+                           ('cup2', .75, .65), ('fork1', .25, .2), ('fork2', .75, .2)]:
             self.serve_movie_dish(item, x, y)
         self.wait_for({'cooked_popcorn': True, 'raw_popcorn_present': False})
         self.move('toggle_off', 'microwave')

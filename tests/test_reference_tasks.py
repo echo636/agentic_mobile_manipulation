@@ -84,6 +84,23 @@ class ReferenceRecoveryTests(unittest.TestCase):
         reference.move('close', 'microwave')
         self.assertEqual(calls, ['navigate_to', 'close'])
 
+    def test_placement_uses_checked_reach_without_extending_pickup_offset(self):
+        try:
+            import torch
+        except ImportError:
+            self.skipTest('The pinned geometry environment supplies torch')
+        backend = SimpleNamespace(torch=torch, custom_spec={'id': 'warm_lunch_and_restore_v2'})
+        backend.robot = SimpleNamespace(get_position_orientation=lambda: (torch.tensor([4.925, -1.125, 0.]), None))
+        reference = ReferenceTask(backend, None)
+        reference.obj = lambda role: SimpleNamespace(get_position_orientation=lambda: (torch.tensor([4.25588, .06032, .93634]), None))
+        calls = []
+        reference.action = lambda primitive, *args, **kwargs: calls.append(primitive)
+        reference.move('place_inside', 'box')
+        self.assertEqual(calls, ['place_inside'])
+        calls.clear()
+        reference.move('grasp', 'box')
+        self.assertEqual(calls, ['navigate_to', 'grasp'])
+
     def test_empty_return_keeps_both_endpoints_in_reach_without_loaded_navigation(self):
         reference = ReferenceTask(None, None)
         held = False
