@@ -3,6 +3,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 import math
 import unittest
+from unittest.mock import patch
 import tempfile
 from pathlib import Path
 from manipulation_agent.contracts import Budget, SkillError
@@ -99,6 +100,29 @@ class CoordinationTests(unittest.TestCase):
         b=Motor();b._local_reposition=lambda *args:None
         with self.assertRaises(SkillError) as cm:b.run()
         self.assertEqual(cm.exception.code,'local_adjustment_blocked');self.assertEqual(b.executions,[])
+    def test_loaded_departure_search_timeout_returns_bounded_failure(self):
+        from manipulation_agent.executors.gt_navigation import GridMap, SearchBudgetExhausted
+        from manipulation_agent.executors.local_rgb import LocalRGBManipulation
+        b=Motor();b.ideal_carry=True;b.demo_motion=False
+        grid=GridMap(41,41,.1,(-2.,-2.),bytes([1])*41**2)
+        collision=SimpleNamespace(grid=grid,motion_free=lambda *args:True)
+        b._local_geometry=lambda operation:(grid,collision,{'held_object_footprint_included':False},[],0)
+        b._approach_visible=lambda *args,**kwargs:True
+        b._local_grasp_preview=lambda *args:lambda pose:collision
+        b._local_reposition=LocalRGBManipulation._local_reposition.__get__(b)
+        # The unloaded stance is admitted, then the loaded departure search
+        # exhausts its shared planning budget, as in the real plates episode.
+        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
+                   side_effect=[True,SearchBudgetExhausted()]):
+            with self.assertRaises(SkillError) as caught:b.run()
+        self.assertEqual(caught.exception.code,'local_adjustment_exhausted')
+        self.assertFalse(caught.exception.changed)
+        self.assertEqual(b.steps,0);self.assertEqual(b.executions,[])
+        limit=next(e for e in b.events if e['phase']=='planning_limit')
+        self.assertEqual(limit['candidate_attempts'],1)
+        self.assertEqual(limit['attempts'],0)
+        self.assertEqual(b.events[-1]['phase'],'failed')
+        self.assertEqual(b.events[-1]['error_code'],'local_adjustment_exhausted')
     def test_limits_apply_before_pose_command(self):
         b=Motor();op=LocalOperation(b,'grasp',b.binding,100,{})
         with self.assertRaises(SkillError):op.admit_pose((1.01,0.,0.))

@@ -154,7 +154,7 @@ class LocalRGBManipulation:
                 row['status']='selected';selected=(plan,route);break
         except SearchBudgetExhausted:
             exhausted=True
-            operation.record('planning_limit',attempts=len(attempts))
+            operation.record('planning_limit',candidate_attempts=len(attempts))
         finally:
             collision.check_cancelled=operation.check
             operation.record('candidates',candidates=attempts,held_footprint=details['held_object_footprint_included'])
