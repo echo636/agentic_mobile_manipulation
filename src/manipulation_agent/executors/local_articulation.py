@@ -1,4 +1,5 @@
 """Transactional door-joint preview; no env.step, metrics or video frames."""
+import copy
 import math
 import random
 import numpy as np
@@ -60,6 +61,11 @@ def prepare_articulation(backend,obj,primitive,operation):
     rng=random.getstate();numpy_rng=np.random.get_state();torch_rng=backend.torch.random.get_rng_state()
     start=obj.get_joint_positions().clone();boxes=[]
     current_geometry=getattr(operation,'geometry',None) or backend._local_geometry(operation)
+    # Hypothetical joint poses must not publish occupancy/signature entries to
+    # the live cache. In particular, the later real operation can use the same
+    # joint goal, which would otherwise reuse a pre-physics preview raster.
+    missing=object()
+    live_cache=getattr(backend,'_live_gt_collision_cache',missing)
     names=('_navigation_layers','_navigation_support','_navigation_clearance','_navigation_layer_yaw','_navigation_layer_heights')
     saved={name:getattr(backend,name,None) for name in names}
     payload=backend._container_payload(obj)
@@ -68,13 +74,15 @@ def prepare_articulation(backend,obj,primitive,operation):
                 for item in [obj,*[record[0] for record in payload]] for link in item.links.values()
                 if not link.is_meta_link and link.collision_boundary_points_world is not None}
     try:
+        if live_cache is not missing:
+            backend._live_gt_collision_cache=copy.deepcopy(live_cache)
         if not obj.states[Open].set_value(primitive=='open',fully=True):
             raise SkillError('local_adjustment_blocked','No stable articulated target state')
         goal=obj.get_joint_positions().clone()
         count=max(1,math.ceil(float(abs(goal-start).max())/.025))
         if count>160:raise SkillError('local_adjustment_exhausted','Articulation preview exceeds bounded joint sweep')
         sim.load_state(state,serialized=False);restore_particle_state(particles)
-        previous=vertices()
+        previous=vertices();initial_vertices=previous
         with backend._editable_carry_joints(obj):
             for i in range(1,count+1):
                 operation.check()
@@ -85,7 +93,9 @@ def prepare_articulation(backend,obj,primitive,operation):
                 backend._relocate_container_payload(payload)
                 backend._carry_follow()
                 current=vertices();boxes.extend(swept_link_bounds(previous,current));previous=current
-            future_geometry=backend._local_geometry(operation)
+            moved_links={key:points for key,points in previous.items()
+                         if key not in initial_vertices or not np.allclose(points,initial_vertices[key],atol=1e-5,rtol=0.)}
+            future_geometry=backend._local_geometry(operation,occupancy_overrides=moved_links)
             plan={'primitive':primitive,'object_prim':str(obj.prim_path),
                   'start_joints':start.cpu().tolist(),'goal_joints':goal.cpu().tolist(),'samples':count}
             sim.load_state(state,serialized=False);restore_particle_state(particles)
@@ -93,8 +103,12 @@ def prepare_articulation(backend,obj,primitive,operation):
         sim.load_state(state,serialized=False);restore_particle_state(particles)
         random.setstate(rng);np.random.set_state(numpy_rng);backend.torch.random.set_rng_state(torch_rng)
         # Restore even on cancellation, without invoking an expired budget.
-        # The incremental cache sees the restored joint signature on its next
-        # rebuild; current checkers own copies of their occupancy arrays.
+        # Checkers own their occupancy arrays; the real operation must start
+        # from the cache of the actual pre-operation scene.
+        if live_cache is missing:
+            backend.__dict__.pop('_live_gt_collision_cache',None)
+        else:
+            backend._live_gt_collision_cache=live_cache
         for name,value in saved.items():setattr(backend,name,value)
         backend.frames_revision=-1
     operation.record('articulation_preview',samples=count,swept_link_intervals=len(boxes),

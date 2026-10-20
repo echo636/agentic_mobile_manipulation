@@ -123,6 +123,12 @@ class LiveGridTests(unittest.TestCase):
                 transition_allowed=clearance_transition_guard(g,[(raw,footprint)],blocked_support))
 
     def test_rigid_props_door_updates_and_robot_exclusion(self):
+        self.door_cache_fixture()
+
+    def test_hypothetical_door_replaces_stale_query_pose_and_keeps_other_obstacles(self):
+        self.door_cache_fixture(stale_queries=True)
+
+    def door_cache_fixture(self,stale_queries=False):
         import cv2
         import numpy as np
         import torch
@@ -143,12 +149,16 @@ class LiveGridTests(unittest.TestCase):
             robot.links={'base':link}
             wall=Obj('wall',[-.04,-1.,0.],[.04,1.,1.8],[0.,0.,0.])
             door=Obj('door',[-.04,-.4,0.],[.04,.4,1.8],[0.,0.,0.],1)
+            door.links={'leaf':SimpleNamespace(is_meta_link=False,prim_path='/door/leaf')}
+            physical_angle=[0.]
             def overlap(half_extent,origin,rotation,callback,any_hit):
                 # Robot geometry is always ignored, even when PhysX reports it
                 # before a real blocker. Walls remain and the door can open.
                 if callback(SimpleNamespace(rigid_body='/robot/base')):
                     x,y,z=origin
-                    if abs(x)<.049 and (abs(y)>.4 or door.angle==0):callback(SimpleNamespace(rigid_body='/door/leaf'))
+                    if abs(x)<.049 and abs(y)>.4:callback(SimpleNamespace(rigid_body='/wall/base'))
+                    elif abs(x)<.049 and physical_angle[0]==0:callback(SimpleNamespace(rigid_body='/door/leaf'))
+                    elif physical_angle[0]!=0 and abs(x)<=.4 and .35<=y<=.45:callback(SimpleNamespace(rigid_body='/door/leaf'))
             fake=ModuleType('omnigibson');lazy=ModuleType('omnigibson.lazy');fake.lazy=lazy
             lazy.omni=SimpleNamespace(physx=SimpleNamespace(get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap)))
             trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((40,40))])
@@ -159,6 +169,14 @@ class LiveGridTests(unittest.TestCase):
                 self.assertFalse(closed.navigable(closed.cell((0.,0.))))
                 self.assertTrue(closed.navigable(closed.cell((-.7,0.))))
                 door.angle=1.57
+                door.aabb=(torch.tensor([-.4,.35,0.]),torch.tensor([.4,.45,1.8]))
+                if stale_queries:
+                    points=np.array([[x,y,z] for x in (-.4,.4) for y in (.35,.45) for z in (0.,1.8)])
+                    preview,_=build_navigation_grid(backend,0,occupancy_overrides={'/door/leaf':points})
+                    self.assertTrue(preview.navigable(preview.cell((0.,0.))))
+                    self.assertFalse(preview.navigable(preview.cell((0.,.4))))
+                    self.assertFalse(preview.navigable(preview.cell((0.,.7))))
+                physical_angle[0]=1.57
                 opened,updated=build_navigation_grid(backend,0)
                 self.assertTrue(opened.navigable(opened.cell((0.,0.))))
                 self.assertFalse(opened.navigable(opened.cell((0.,.7))))

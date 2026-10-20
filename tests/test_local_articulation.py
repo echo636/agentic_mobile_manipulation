@@ -36,12 +36,23 @@ class ArticulationTests(unittest.TestCase):
             _carry_follow=lambda:None,_local_pose=lambda:(3.,0.,0.),_get_held=lambda:None,
             robot=SimpleNamespace(links={}),_navigation_layers='original')
         backend._placement_physics_step=lambda:self.fail('Hypothetical door must not push surrounding bodies')
-        def geometry(op):
+        cache={'free':np.zeros((2,2),dtype='uint8'),'joint_signature':0.}
+        backend._live_gt_collision_cache=cache
+        builds=[]
+        def geometry(op,*,occupancy_overrides=None):
             backend._navigation_layers='sample:'+str(float(q[0][0]))
+            builds.append(float(q[0][0]))
+            if len(builds)==2:
+                self.assertEqual(set(occupancy_overrides),{'/door/leaf'})
+                self.assertAlmostEqual(float(occupancy_overrides['/door/leaf'][:,0].min()),1.)
+            backend._live_gt_collision_cache['joint_signature']=float(q[0][0])
+            backend._live_gt_collision_cache['free'][:]=int(q[0][0])
+            if fail=='geometry' and len(builds)==2:
+                raise SkillError('local_adjustment_exhausted','cancelled after hypothetical raster update')
             return (None,SimpleNamespace(motion_free=lambda a,b:True),None,None,None)
         backend._local_geometry=geometry
         def check():
-            if fail and len(samples)==2:raise SkillError('local_adjustment_exhausted','probe limit')
+            if fail is True and len(samples)==2:raise SkillError('local_adjustment_exhausted','probe limit')
         operation=SimpleNamespace(check=check,record=lambda *args,**kw:records.append((args,kw)))
         module=ModuleType('omnigibson.object_states');module.Open=Open
         rng=random.getstate()
@@ -56,6 +67,9 @@ class ArticulationTests(unittest.TestCase):
         self.assertEqual(q[0].tolist(),[0.]);self.assertEqual(random.getstate(),rng)
         self.assertEqual(backend.steps,0);self.assertEqual(backend.frames_revision,-1)
         self.assertEqual(backend._navigation_layers,'sample:0.0')
+        self.assertIs(backend._live_gt_collision_cache,cache)
+        self.assertEqual(cache['joint_signature'],0.)
+        self.assertFalse(cache['free'].any())
         return samples
 
     def test_preview_restores_joints_rng_and_current_geometry(self):
@@ -63,6 +77,9 @@ class ArticulationTests(unittest.TestCase):
 
     def test_failed_preview_still_restores_scene(self):
         self.assertEqual(len(self.preview(fail=True)),2)
+
+    def test_cancellation_after_hypothetical_raster_update_restores_live_cache(self):
+        self.assertGreater(len(self.preview(fail='geometry')),2)
 
     def test_door_sweep_blocks_stance_even_when_endpoints_clear(self):
         import numpy as np

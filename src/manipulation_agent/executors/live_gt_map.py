@@ -42,11 +42,12 @@ def clipped_body_projection(points, low, high):
     return np.asarray(clipped) if clipped else None
 
 
-def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=False):
+def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=False, occupancy_overrides=None):
     import cv2
     import numpy as np
     import omnigibson.lazy as lazy
     from .gt_navigation import GridMap
+    occupancy_overrides=occupancy_overrides or {}
     scene=backend.env.scene;trav=scene.trav_map;resolution=float(trav.map_resolution)
     floor_z=float(trav.floor_heights[floor]);base=backend.robot.get_position_orientation()[0].cpu().numpy()
     # The base is wider than the torso. A single base-width column falsely
@@ -113,6 +114,12 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     origin=np.array([-w*resolution/2,-h*resolution/2])
     ignored_objects={backend.robot,*carried}
     ignored_links={link.prim_path for obj in ignored_objects if obj is not None for link in obj.links.values()}
+    # A joint preview changes Fabric transforms before PhysX scene queries are
+    # guaranteed to observe them. Replace ONLY those moving links with their
+    # conservative height-clipped geometry in the hypothetical raster.
+    projected={key:np.asarray(points,dtype=float) for key,points in occupancy_overrides.items()
+               if key not in ignored_links}
+    ignored_links.update(projected)
     # Navigation must not collide with semantic helper/fill volumes which have
     # no physical surface. Actual ordinary collision shapes remain included.
     ignored_links.update(link.prim_path for obj in scene.objects for link in obj.links.values() if link.is_meta_link)
@@ -125,6 +132,8 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         position,quat=obj.get_position_orientation()
         joints=obj.get_joint_positions() if obj.n_joints else ()
         signature=tuple(round(float(v),3) for tensor in (position,quat,joints) for v in tensor)
+        if any(str(link.prim_path) in projected for link in obj.links.values()):
+            signature+=('hypothetical_projection',)
         current[obj.name]={'signature':signature,'lo':lo[:2],'hi':hi[:2]}
     query=lazy.omni.physx.get_physx_scene_query_interface()
     started=time.monotonic();count=0;updated_queries=0
@@ -168,6 +177,16 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
             if query_error is not None:raise RuntimeError('PhysX overlap callback failed') from query_error
             raw[row,col]=0 if blocked else 1
             updated_queries+=1
+        for points in projected.values():
+            xy=clipped_body_projection(points,floor_z+low,floor_z+high)
+            if xy is None:continue
+            # A query column occupies a full cell, not just its centre. Expand
+            # the projected shape by the same half-cell in both XY axes.
+            margin=resolution/2+1e-7
+            offsets=np.array([[-margin,-margin],[-margin,margin],[margin,-margin],[margin,margin]])
+            pixels=((xy[:,None,:]+offsets-origin)/resolution).reshape(-1,2)
+            hull=cv2.convexHull(np.round(pixels*256).astype('int32'))
+            cv2.fillConvexPoly(raw,hull,0,shift=8)
         band_cache[key]={'free':raw,'objects':current}
         raw_bands.append(raw)
     # Bound memory without throwing away unchanged robot-height bands whenever
@@ -201,6 +220,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         'forward_clearance_reserve':'half_cell_translation_and_outward_quantized_yaw_sweep',
         'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist(),'body_group':group} for lo,hi,p,group in layers],
         'disjoint_payload_footprints':True,
+        'hypothetical_projected_links':list(projected),
         'occupancy_height_bands':len(bands),
         'query_height_m':height,'updated_cells':count,'updated_queries':updated_queries,'query_seconds':time.monotonic()-started,
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',

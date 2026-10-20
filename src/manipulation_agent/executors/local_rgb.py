@@ -25,13 +25,13 @@ class LocalRGBManipulation:
         base=self.robot.get_position_orientation()[0]
         return obj,self.torch.tensor(point,dtype=base.dtype,device=base.device)
 
-    def _local_geometry(self,operation):
+    def _local_geometry(self,operation,*,occupancy_overrides=None):
         from .live_gt_map import build_navigation_grid
         from .heading_collision import HeadingCollisionChecker
         position=self.robot.get_position_orientation()[0]
         trav=self.env.scene.trav_map
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
-        grid,details=build_navigation_grid(self,floor)
+        grid,details=build_navigation_grid(self,floor,occupancy_overrides=occupancy_overrides)
         self._navigation_layer_yaw=self._local_pose()[2]
         collision=HeadingCollisionChecker(grid,self._navigation_layers,self._navigation_layer_yaw,
                                           self._navigation_support,check_cancelled=operation.check)
