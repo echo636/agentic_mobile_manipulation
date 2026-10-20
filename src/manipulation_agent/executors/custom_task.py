@@ -170,22 +170,22 @@ class CustomTaskBackend(RGBBackend):
             provenance.append({'name':name,'source_template':str(template),
                 'source_sha256':hashlib.sha256(template.read_bytes()).hexdigest(),
                 'asset':entry['args']})
-        with self._startup_stage("custom_imported_scene_restore"):
+        # Restore supports together with imported assets. A second stop/play
+        # would rewind newly imported bodies to their creation poses at origin
+        # and trigger physical contacts/transitions before layout is applied.
+        for fixture in spec.get('fixtures', []):
+            name=fixture['name']
+            if name in scene['objects_info']['init_info']:
+                raise ValueError('Duplicate construction support: '+name)
+            scene['objects_info']['init_info'][name]={
+                'class_module':'omnigibson.objects.primitive_object', 'class_name':'PrimitiveObject',
+                'args':dict(name=name,primitive_type='Cube',size=1.,scale=fixture['size'],
+                            fixed_base=True,rgba=fixture['rgba'],category='work_surface')}
+            scene['state']['registry']['object_registry'][name]={
+                'is_asleep':False,'root_link':{'pos':fixture['position'],'ori':[0.,0.,0.,1.]},
+                'non_kin':{},'radius':-1,'height':-1,'size':1.}
+        with self._startup_stage('custom_imported_scene_restore'):
             self._restore_custom_scene(scene)
-        if spec.get('fixtures'):
-            from omnigibson.objects.primitive_object import PrimitiveObject
-            self.og.sim.stop()
-            try:
-                for fixture in spec['fixtures']:
-                    obj = PrimitiveObject(name=fixture['name'], primitive_type='Cube', size=1.,
-                                          scale=fixture['size'], fixed_base=True,
-                                          rgba=fixture['rgba'], category='work_surface')
-                    self.env.scene.add_object(obj)
-                    obj.set_position_orientation(self.torch.tensor(fixture['position']),
-                                                 self.torch.tensor([0.,0.,0.,1.]))
-            finally:
-                self.og.sim.play()
-            for _ in range(5): self.og.sim.step()
         objects = {o.name:o for o in self.env.scene.objects}
         roles = {k:objects.get(v) for k,v in spec['roles'].items()}
         missing=[role for role,obj in roles.items() if obj is None and role not in spec.get('future_roles',[])]
@@ -195,10 +195,19 @@ class CustomTaskBackend(RGBBackend):
                 self._apply_initial_operation(operation,roles)
         for _ in range(spec.get('settle_steps',30)): self.og.sim.step()
         self.custom_objects = objects
+        before_refresh = self._predicate_values()
+        self.env.scene.wake_scene_objects()
+        for _ in range(5):self.og.sim.step()
+        for obj in self.env.scene.objects:
+            for state in obj.states.values():state.clear_cache()
         initial_values = self._predicate_values()
         from ..long_horizon import expression
-        for label,condition in spec.get('initial_assertions',{}).items():
-            if not expression(condition,initial_values): raise RuntimeError('Initial state assertion failed: '+label)
+        failed=[label for label,condition in spec.get('initial_assertions',{}).items()
+                if not expression(condition,initial_values)]
+        write_json(self.output/'custom_construction_contact_refresh.json',{
+            'status':'failed' if failed else 'passed','physics_steps':5,'before':before_refresh,
+            'after':initial_values,'failed_assertions':failed})
+        if failed:raise RuntimeError('Initial state assertion failed: '+', '.join(failed))
         write_json(self.output/'custom_scene_build.json', {'status':'passed','asset_imports':provenance,
             'excluded_background_entities':spec.get('scene_exclusions',[]),
             'initial_predicates':initial_values,'scope':'joint initial scene only; independent trajectory feasibility pending'})
