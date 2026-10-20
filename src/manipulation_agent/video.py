@@ -179,9 +179,18 @@ class EpisodeVideo:
                        '-an','-c:v','libx264','-threads','2','-preset','fast','-crf','20',
                        '-pix_fmt','yuv420p','-g',str(max(1,round(self.fps))),
                        '-movflags','+frag_keyframe+empty_moov+default_base_moof',str(self.output/'episode.mp4')]
+            # OpenCV can leave an empty LD_LIBRARY_PATH entry, making ld.so
+            # search the episode's cwd. On NAS this can stall encoder startup.
+            # Keep explicit library paths and the simulator environment intact.
+            encoder_env = os.environ.copy()
+            library_paths = [p for p in encoder_env.get('LD_LIBRARY_PATH', '').split(os.pathsep) if p]
+            if library_paths:
+                encoder_env['LD_LIBRARY_PATH'] = os.pathsep.join(library_paths)
+            else:
+                encoder_env.pop('LD_LIBRARY_PATH', None)
             try:
                 self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-                                                stderr=self.log, bufsize=0)
+                                                stderr=self.log, bufsize=0, env=encoder_env)
                 os.set_blocking(self.process.stdin.fileno(), False)
             except OSError as exc:
                 self._disable_encoder(exc)
