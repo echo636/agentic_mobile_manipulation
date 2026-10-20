@@ -22,6 +22,26 @@ class HeadingCollisionChecker:
         self.kernels = OrderedDict()
         self.angular_bins = OrderedDict()
         self.grids = OrderedDict()
+        self.window = None
+
+    def local_window(self, origin, radius):
+        """Compute heading grids only near a bounded search's possible centres.
+
+        Retain the global raster coordinates and all raw obstacle geometry.
+        Erosion also reads the full footprint halo OUTSIDE the centre window.
+        Other users of this checker keep their full-floor grid caches.
+        """
+        import numpy as np
+        support=np.frombuffer(self.grid.free,dtype='uint8').reshape(self.grid.height,self.grid.width)
+        result=HeadingCollisionChecker(self.grid,self.layers,self.reference_yaw,support,
+                                       check_cancelled=lambda:self.check_cancelled())
+        row,col=self.grid.cell(origin[:2])
+        cells=math.ceil(radius/self.grid.resolution)+2
+        result.window=(max(0,row-cells),min(self.grid.height,row+cells+1),
+                       max(0,col-cells),min(self.grid.width,col+cells+1))
+        # Footprint kernels are independent of the spatial window.
+        result.kernels=self.kernels;result.angular_bins=self.angular_bins
+        return result
 
     @staticmethod
     def _key(a, b):
@@ -91,10 +111,17 @@ class HeadingCollisionChecker:
             self.grids.move_to_end(key)
             return self.grids[key]
         self.check_cancelled()
-        free = np.frombuffer(self.grid.free, dtype='uint8').reshape(
-            self.grid.height, self.grid.width).copy()
+        support = np.frombuffer(self.grid.free, dtype='uint8').reshape(self.grid.height,self.grid.width)
+        r0,r1,c0,c1=self.window or (0,self.grid.height,0,self.grid.width)
+        free=np.zeros_like(support)
+        region=free[r0:r1,c0:c1];region[:]=support[r0:r1,c0:c1]
         for (raw, _), kernel in zip(self.layers, self._kernels(key)):
-            free &= cv2.erode(raw, kernel, borderType=cv2.BORDER_CONSTANT, borderValue=0)
+            self.check_cancelled()
+            half=kernel.shape[0]//2
+            a,b=max(0,r0-half),min(self.grid.height,r1+half)
+            c,d=max(0,c0-half),min(self.grid.width,c1+half)
+            eroded=cv2.erode(raw[a:b,c:d],kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+            region &= eroded[r0-a:r1-a,c0-c:c1-c]
         result = GridMap(self.grid.width, self.grid.height, self.grid.resolution,
                          self.grid.origin, free.tobytes())
         return self._put(self.grids, key, result, 16)

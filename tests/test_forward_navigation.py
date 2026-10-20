@@ -260,5 +260,45 @@ class HeadingCollisionTests(unittest.TestCase):
         self.assertTrue(checker.motion_free((-.3,0.,0.),(.3,0.,0.)))
         self.assertFalse(checker.motion_free((-.3,0.,math.pi/2),(.3,0.,math.pi/2)))
 
+    def test_local_window_preserves_collision_halo_and_global_grid_coordinates(self):
+        import numpy as np
+        from manipulation_agent.executors.local_manipulation import LocalCollision
+        raw=np.ones((241,241),dtype='uint8')
+        # Obstacle beyond the allowed base-centre disk still intersects a long
+        # payload near its boundary; cropping must retain this outside halo.
+        raw[80:123,131]=0
+        checker=self.checker(raw,[[-.7,-.08],[.7,-.08],[.7,.08],[-.7,.08]])
+        origin=(4.,4.,0.);local=LocalCollision(checker,origin,1.)
+        self.assertEqual(local.grid.origin,checker.grid.origin)
+        for x,y in [(4.,4.),(4.95,4.),(4.,4.9),(3.1,4.)]:
+            for yaw in (0.,.12,math.pi/4,math.pi/2):
+                a=(4.,4.,yaw);b=(x,y,yaw)
+                self.assertEqual(local.motion_free(a,b),checker.motion_free(a,b),(a,b))
+                self.assertEqual(local.motion_free(b,(*b[:2],yaw+.3)),
+                                 checker.motion_free(b,(*b[:2],yaw+.3)))
+        self.assertFalse(local.motion_free((4.95,4.,0.),(4.95,4.,0.)))
+        self.assertTrue(local.motion_free((4.95,4.,math.pi/2),(4.95,4.,math.pi/2)))
+        # A local grid cache must never restrict later macro navigation.
+        self.assertTrue(checker.motion_free((8.,8.,0.),(9.,8.,0.)))
+
+    def test_local_heading_erosion_is_bounded_and_cancellation_stays_live(self):
+        import cv2
+        import numpy as np
+        from unittest.mock import patch
+        from manipulation_agent.executors.local_manipulation import LocalCollision
+        checker=self.checker(np.ones((401,401),dtype='uint8'),
+                             [[-.35,-.1],[.35,-.1],[.35,.1],[-.35,.1]])
+        local=LocalCollision(checker,(5.,5.,0.),2.)
+        sizes=[];erode=cv2.erode
+        def measured(raw,*args,**kwargs):
+            sizes.append(raw.shape);return erode(raw,*args,**kwargs)
+        with patch.object(cv2,'erode',measured):
+            self.assertTrue(local.optimistic_grid().navigable(local.grid.cell((5.,5.))))
+        self.assertTrue(sizes);self.assertTrue(all(max(shape)<120 for shape in sizes))
+        def cancelled():raise RuntimeError('cancelled')
+        checker.check_cancelled=cancelled
+        with self.assertRaisesRegex(RuntimeError,'cancelled'):
+            local.motion_free((5.,5.,0.),(5.1,5.,0.))
+
 
 if __name__=='__main__':unittest.main()

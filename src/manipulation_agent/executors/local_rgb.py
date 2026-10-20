@@ -163,7 +163,8 @@ class LocalRGBManipulation:
                 finally:collision.check_cancelled=budget.check
                 if route.distance_m+operation.path>operation.limits.path_m:
                     row.update(status='rejected',reason='path_budget');continue
-                row['status']='selected';selected=(plan,route);break
+                row.update(status='selected');row.pop('reason',None);row.pop('detail',None)
+                selected=(plan,route);break
         except SearchBudgetExhausted:
             exhausted=True
             operation.record('planning_limit',candidate_attempts=len(attempts))

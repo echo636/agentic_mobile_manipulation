@@ -185,6 +185,7 @@ def stance_candidates(actual, origin, point, limits, visited=()):
 class LocalCollision:
     """Restrict all search states and connectors to the same local disk."""
     def __init__(self,collision,origin,radius):
+        if hasattr(collision,'local_window'):collision=collision.local_window(origin,radius)
         self.collision,self.origin,self.radius=collision,origin,radius
         self.grid=self._restrict(collision.grid)
 
