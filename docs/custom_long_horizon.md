@@ -34,9 +34,10 @@ The user's subsequent October 20 request adds dependency complexity as a separat
 design objective. The [dependency audit and branching candidate](long_horizon_dependency_design.md)
 find that the four constructed 100+ tasks mostly repeat shallow chains; the
 bedroom task has one explicit cross-room milestone join. A new bedroom/shared
-library proposal adds cross-branch prerequisites and repeated joins/forks. It is
-design-only, with no new frozen scene or physical validation, and leaves the
-existing task contracts unchanged.
+library proposal adds cross-branch prerequisites and repeated joins/forks. It now
+has a separate [construction recipe and simulator evidence](branching_library_construction.md).
+Its scene construction has passed, while full physical-reference acceptance is
+incomplete. The existing task contracts remain unchanged.
 
 ## Tasks and dependencies
 

@@ -41,7 +41,9 @@
 
 [结构化候选](../task_designs/branching_candidates/bedroom_shared_library_v2.json) 为 `design_only`，
 包含节点、公开要求草稿、资源、动作账本、三种合法宏观顺序与物理负例计划。
-它不属于可直接构建的 runtime recipe。
+该设计文件本身不属于 runtime recipe。用户随后要求实际尝试构建，新增了
+[独立的可构建配方与验证记录](branching_library_construction.md)，已通过场景构建，
+尚未通过完整物理参考验收；原四个任务保持不变。
 
 静态检查得到 15 个宏观节点、17 条依赖边、2 个出度大于一的分叉节点、
 3 个非最终 AND 汇合和 1 个最终汇合；最长路径为 7 个节点（含最终检查）。
