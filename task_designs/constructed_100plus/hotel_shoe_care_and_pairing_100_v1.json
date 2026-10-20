@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "hotel_shoe_care_and_pairing_100_v1",
-  "instance_id": "hotel_shoe_care_and_pairing_100_v1_seed0_r3",
+  "instance_id": "hotel_shoe_care_and_pairing_100_v1_seed0_r5",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -574,7 +574,13 @@
         2.02,
         1.5
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0022537107579410076,
+        0.000608413596637547,
+        0.9194222092628479,
+        0.3932650685310364
+      ]
     },
     {
       "object": "shoe00",
@@ -584,13 +590,20 @@
         -0.8,
         1.17
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe00",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -601,13 +614,20 @@
         -0.3,
         1.17
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe01",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -618,13 +638,20 @@
         0.2,
         1.17
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe02",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -635,13 +662,20 @@
         0.7,
         1.17
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe03",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -652,13 +686,20 @@
         1.2,
         1.17
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe04",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -669,13 +710,20 @@
         -0.8,
         1.39
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe05",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -686,13 +734,20 @@
         -0.3,
         1.39
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe06",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -703,13 +758,20 @@
         0.2,
         1.39
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe07",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -720,13 +782,20 @@
         0.7,
         1.39
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe08",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -737,13 +806,20 @@
         1.2,
         1.39
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe09",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -754,13 +830,20 @@
         -0.8,
         1.61
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe10",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -771,13 +854,20 @@
         -0.3,
         1.61
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe11",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -788,13 +878,20 @@
         0.2,
         1.61
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe12",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -805,13 +902,20 @@
         0.7,
         1.61
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe13",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -822,13 +926,20 @@
         1.2,
         1.61
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe14",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -839,13 +950,20 @@
         -0.8,
         1.83
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe15",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -856,13 +974,20 @@
         -0.3,
         1.83
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe16",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -873,13 +998,20 @@
         0.2,
         1.83
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe17",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -890,13 +1022,20 @@
         0.7,
         1.83
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
     },
     {
       "object": "shoe18",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     },
     {
@@ -907,13 +1046,20 @@
         1.2,
         1.83
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
     },
     {
       "object": "shoe19",
       "state": "Covered",
       "value": true,
       "settle_steps": 1,
+      "max_sampling_attempts": 3,
       "system": "dust"
     }
   ],

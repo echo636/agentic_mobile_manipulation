@@ -11,8 +11,21 @@ def robot_spawn_supports(position, floor_bounds):
             and high[2]-.1<=position[2]<=high[2]+1.5]
 
 
+def upright_orientation(quaternion, max_tilt_degrees=15.):
+    x,y,z,w=map(float,quaternion)
+    norm=x*x+y*y+z*z+w*w
+    return math.isfinite(norm) and norm>0 and 1.-2.*(x*x+y*y)/norm>=math.cos(math.radians(max_tilt_degrees))
+
+
 def validate_construction(spec):
     roles = spec['roles']
+    if spec.get('robot_start'):
+        pose=spec['robot_start']
+        for key,length in [('position',3),('orientation',4)]:
+            if len(pose[key])!=length or not all(math.isfinite(float(v)) for v in pose[key]):
+                raise ValueError('Invalid construction robot pose')
+        if sum(float(v)**2 for v in pose['orientation'])<=0:
+            raise ValueError('Invalid construction robot orientation')
     excluded=spec.get('scene_exclusions',[])
     if len(excluded)!=len(set(excluded)) or set(excluded)&set(roles.values()):
         raise ValueError('Scene exclusions must be distinct background entities outside task roles')
@@ -46,6 +59,8 @@ def validate_construction(spec):
     if len(names) != len(set(names)):
         raise ValueError('Duplicate fixture names')
     for row in spec['evaluation']['predicates'].values():
+        if row['state']=='Upright' and not 0<float(row.get('max_tilt_degrees',15.))<=45:
+            raise ValueError('Invalid upright tilt tolerance')
         if row['state'] in ('PairedOnTop','CountOnTop'):
             if not row.get('members') or not set(row['members']) <= roles.keys():
                 raise ValueError('Pair predicate requires known member roles')
@@ -58,6 +73,9 @@ def validate_construction(spec):
         if rule.get('mode')!='single_object':
             raise ValueError('Unknown handling protocol')
     for move in spec.get('initial_layout', []):
+        attempts=move.get('max_sampling_attempts',1)
+        if type(attempts) is not int or not 1<=attempts<=3:
+            raise ValueError('Construction state sampling needs a bounded positive attempt count')
         if move['object'] not in roles or move['object'] in future:
             raise ValueError('Initial layout cannot manipulate a future/unknown entity')
         if move.get('target') and move['target'] not in roles:

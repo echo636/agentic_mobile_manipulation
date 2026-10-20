@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "garden_treatment_and_distribution_100_v1",
-  "instance_id": "garden_treatment_and_distribution_100_v1_seed0_r3",
+  "instance_id": "garden_treatment_and_distribution_100_v1_seed0_r5",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -484,7 +484,13 @@
         15.5,
         8.4
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0004210309707559645,
+        0.0011650205124169588,
+        0.3260757029056549,
+        0.9453433156013489
+      ]
     },
     {
       "object": "tool",
@@ -500,7 +506,13 @@
         11.36,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant00",
@@ -517,7 +529,13 @@
         11.88,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant01",
@@ -534,7 +552,13 @@
         12.4,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant02",
@@ -551,7 +575,13 @@
         12.92,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant03",
@@ -568,7 +598,13 @@
         13.440000000000001,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant04",
@@ -585,7 +621,13 @@
         11.36,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant05",
@@ -602,7 +644,13 @@
         11.88,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant06",
@@ -619,7 +667,13 @@
         12.4,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant07",
@@ -636,7 +690,13 @@
         12.92,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant08",
@@ -653,7 +713,13 @@
         13.440000000000001,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant09",
@@ -670,7 +736,13 @@
         15.16,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant10",
@@ -687,7 +759,13 @@
         15.68,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant11",
@@ -704,7 +782,13 @@
         16.2,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant12",
@@ -721,7 +805,13 @@
         16.72,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant13",
@@ -738,7 +828,13 @@
         17.24,
         12.399999999999999
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant14",
@@ -755,7 +851,13 @@
         15.16,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant15",
@@ -772,7 +874,13 @@
         15.68,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant16",
@@ -789,7 +897,13 @@
         16.2,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant17",
@@ -806,7 +920,13 @@
         16.72,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant18",
@@ -823,7 +943,13 @@
         17.24,
         13.0
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        -0.003820447251200676,
+        -0.0023630382493138313,
+        0.9953145980834961,
+        -0.09658661484718323
+      ]
     },
     {
       "object": "plant19",
@@ -840,7 +966,13 @@
         17.67,
         10.37
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002452288754284382,
+        0.004363507032394409,
+        -0.6224734783172607,
+        0.7826290130615234
+      ]
     },
     {
       "object": "control0",
@@ -857,7 +989,13 @@
         18.33,
         10.37
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002452288754284382,
+        0.004363507032394409,
+        -0.6224734783172607,
+        0.7826290130615234
+      ]
     },
     {
       "object": "control1",
@@ -874,7 +1012,13 @@
         17.67,
         11.03
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002452288754284382,
+        0.004363507032394409,
+        -0.6224734783172607,
+        0.7826290130615234
+      ]
     },
     {
       "object": "control2",
@@ -891,7 +1035,13 @@
         18.33,
         11.03
       ],
-      "settle_steps": 10
+      "settle_steps": 10,
+      "orientation": [
+        0.0002452288754284382,
+        0.004363507032394409,
+        -0.6224734783172607,
+        0.7826290130615234
+      ]
     },
     {
       "object": "control3",
@@ -911,102 +1061,126 @@
     "plant00_Covered_insectifuge": {
       "not": "plant00_Covered_insectifuge"
     },
+    "plant00_upright": "plant00_upright",
     "plant01_starts_on_source0": "plant01_on_source0",
     "plant01_Covered_insectifuge": {
       "not": "plant01_Covered_insectifuge"
     },
+    "plant01_upright": "plant01_upright",
     "plant02_starts_on_source0": "plant02_on_source0",
     "plant02_Covered_insectifuge": {
       "not": "plant02_Covered_insectifuge"
     },
+    "plant02_upright": "plant02_upright",
     "plant03_starts_on_source0": "plant03_on_source0",
     "plant03_Covered_insectifuge": {
       "not": "plant03_Covered_insectifuge"
     },
+    "plant03_upright": "plant03_upright",
     "plant04_starts_on_source0": "plant04_on_source0",
     "plant04_Covered_insectifuge": {
       "not": "plant04_Covered_insectifuge"
     },
+    "plant04_upright": "plant04_upright",
     "plant05_starts_on_source0": "plant05_on_source0",
     "plant05_Covered_insectifuge": {
       "not": "plant05_Covered_insectifuge"
     },
+    "plant05_upright": "plant05_upright",
     "plant06_starts_on_source0": "plant06_on_source0",
     "plant06_Covered_insectifuge": {
       "not": "plant06_Covered_insectifuge"
     },
+    "plant06_upright": "plant06_upright",
     "plant07_starts_on_source0": "plant07_on_source0",
     "plant07_Covered_insectifuge": {
       "not": "plant07_Covered_insectifuge"
     },
+    "plant07_upright": "plant07_upright",
     "plant08_starts_on_source0": "plant08_on_source0",
     "plant08_Covered_insectifuge": {
       "not": "plant08_Covered_insectifuge"
     },
+    "plant08_upright": "plant08_upright",
     "plant09_starts_on_source0": "plant09_on_source0",
     "plant09_Covered_insectifuge": {
       "not": "plant09_Covered_insectifuge"
     },
+    "plant09_upright": "plant09_upright",
     "plant10_starts_on_source1": "plant10_on_source1",
     "plant10_Covered_insectifuge": {
       "not": "plant10_Covered_insectifuge"
     },
+    "plant10_upright": "plant10_upright",
     "plant11_starts_on_source1": "plant11_on_source1",
     "plant11_Covered_insectifuge": {
       "not": "plant11_Covered_insectifuge"
     },
+    "plant11_upright": "plant11_upright",
     "plant12_starts_on_source1": "plant12_on_source1",
     "plant12_Covered_insectifuge": {
       "not": "plant12_Covered_insectifuge"
     },
+    "plant12_upright": "plant12_upright",
     "plant13_starts_on_source1": "plant13_on_source1",
     "plant13_Covered_insectifuge": {
       "not": "plant13_Covered_insectifuge"
     },
+    "plant13_upright": "plant13_upright",
     "plant14_starts_on_source1": "plant14_on_source1",
     "plant14_Covered_insectifuge": {
       "not": "plant14_Covered_insectifuge"
     },
+    "plant14_upright": "plant14_upright",
     "plant15_starts_on_source1": "plant15_on_source1",
     "plant15_Covered_insectifuge": {
       "not": "plant15_Covered_insectifuge"
     },
+    "plant15_upright": "plant15_upright",
     "plant16_starts_on_source1": "plant16_on_source1",
     "plant16_Covered_insectifuge": {
       "not": "plant16_Covered_insectifuge"
     },
+    "plant16_upright": "plant16_upright",
     "plant17_starts_on_source1": "plant17_on_source1",
     "plant17_Covered_insectifuge": {
       "not": "plant17_Covered_insectifuge"
     },
+    "plant17_upright": "plant17_upright",
     "plant18_starts_on_source1": "plant18_on_source1",
     "plant18_Covered_insectifuge": {
       "not": "plant18_Covered_insectifuge"
     },
+    "plant18_upright": "plant18_upright",
     "plant19_starts_on_source1": "plant19_on_source1",
     "plant19_Covered_insectifuge": {
       "not": "plant19_Covered_insectifuge"
     },
+    "plant19_upright": "plant19_upright",
     "control0_starts_on_controls": "control0_on_controls",
+    "control0_upright": "control0_upright",
     "control0_Covered_insectifuge": {
       "not": "control0_Covered_insectifuge"
     },
     "control1_starts_on_controls": "control1_on_controls",
+    "control1_upright": "control1_upright",
     "control1_Covered_insectifuge": {
       "not": "control1_Covered_insectifuge"
     },
     "control2_starts_on_controls": "control2_on_controls",
+    "control2_upright": "control2_upright",
     "control2_Covered_insectifuge": {
       "not": "control2_Covered_insectifuge"
     },
     "control3_starts_on_controls": "control3_on_controls",
+    "control3_upright": "control3_upright",
     "control3_Covered_insectifuge": {
       "not": "control3_Covered_insectifuge"
     }
   },
-  "public_instruction": "把蓝台的 20 盆植物逐件送到黄色处理台喷洒指定材料，再送到两张绿色展示台，每张恰好 10 盆。红台四盆对照全过程不得离开红台，也不能沾上本次材料。最后关闭并归还喷壶。",
+  "public_instruction": "把蓝台的 20 盆植物逐件送到黄色处理台喷洒指定材料，再直立摆到两张绿色展示台，每张恰好 10 盆。红台四盆对照全过程不得离开红台，也不能沾上本次材料。最后关闭并归还喷壶。",
   "public_context": [
-    "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后送到绿色展示台，两张绿台各放 10 盆，同款植物可互换。",
+    "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后直立摆到绿色展示台，两张绿台各放 10 盆，同款植物可互换；直立按相对竖直轴倾角不超过 15 度判定。",
     "红台四盆对照必须留在红台，整个过程中都不能沾上本次喷雾材料。",
     "完成后喷壶关闭并归还灰色工具台。",
     "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。"
@@ -1014,7 +1188,7 @@
   "requirements": [
     {
       "id": "treatment",
-      "text": "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后送到绿色展示台，两张绿台各放 10 盆，同款植物可互换。",
+      "text": "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后直立摆到绿色展示台，两张绿台各放 10 盆，同款植物可互换；直立按相对竖直轴倾角不超过 15 度判定。",
       "terminal": [
         "plant00_delivered",
         "plant01_delivered",
@@ -1190,6 +1364,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant00_upright": {
+        "object": "plant00",
+        "state": "Upright"
+      },
       "plant00_on_stage": {
         "object": "plant00",
         "state": "OnTop",
@@ -1214,6 +1392,10 @@
         "object": "plant01",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant01_upright": {
+        "object": "plant01",
+        "state": "Upright"
       },
       "plant01_on_stage": {
         "object": "plant01",
@@ -1240,6 +1422,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant02_upright": {
+        "object": "plant02",
+        "state": "Upright"
+      },
       "plant02_on_stage": {
         "object": "plant02",
         "state": "OnTop",
@@ -1264,6 +1450,10 @@
         "object": "plant03",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant03_upright": {
+        "object": "plant03",
+        "state": "Upright"
       },
       "plant03_on_stage": {
         "object": "plant03",
@@ -1290,6 +1480,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant04_upright": {
+        "object": "plant04",
+        "state": "Upright"
+      },
       "plant04_on_stage": {
         "object": "plant04",
         "state": "OnTop",
@@ -1314,6 +1508,10 @@
         "object": "plant05",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant05_upright": {
+        "object": "plant05",
+        "state": "Upright"
       },
       "plant05_on_stage": {
         "object": "plant05",
@@ -1340,6 +1538,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant06_upright": {
+        "object": "plant06",
+        "state": "Upright"
+      },
       "plant06_on_stage": {
         "object": "plant06",
         "state": "OnTop",
@@ -1364,6 +1566,10 @@
         "object": "plant07",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant07_upright": {
+        "object": "plant07",
+        "state": "Upright"
       },
       "plant07_on_stage": {
         "object": "plant07",
@@ -1390,6 +1596,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant08_upright": {
+        "object": "plant08",
+        "state": "Upright"
+      },
       "plant08_on_stage": {
         "object": "plant08",
         "state": "OnTop",
@@ -1414,6 +1624,10 @@
         "object": "plant09",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant09_upright": {
+        "object": "plant09",
+        "state": "Upright"
       },
       "plant09_on_stage": {
         "object": "plant09",
@@ -1440,6 +1654,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant10_upright": {
+        "object": "plant10",
+        "state": "Upright"
+      },
       "plant10_on_stage": {
         "object": "plant10",
         "state": "OnTop",
@@ -1464,6 +1682,10 @@
         "object": "plant11",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant11_upright": {
+        "object": "plant11",
+        "state": "Upright"
       },
       "plant11_on_stage": {
         "object": "plant11",
@@ -1490,6 +1712,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant12_upright": {
+        "object": "plant12",
+        "state": "Upright"
+      },
       "plant12_on_stage": {
         "object": "plant12",
         "state": "OnTop",
@@ -1514,6 +1740,10 @@
         "object": "plant13",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant13_upright": {
+        "object": "plant13",
+        "state": "Upright"
       },
       "plant13_on_stage": {
         "object": "plant13",
@@ -1540,6 +1770,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant14_upright": {
+        "object": "plant14",
+        "state": "Upright"
+      },
       "plant14_on_stage": {
         "object": "plant14",
         "state": "OnTop",
@@ -1564,6 +1798,10 @@
         "object": "plant15",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant15_upright": {
+        "object": "plant15",
+        "state": "Upright"
       },
       "plant15_on_stage": {
         "object": "plant15",
@@ -1590,6 +1828,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant16_upright": {
+        "object": "plant16",
+        "state": "Upright"
+      },
       "plant16_on_stage": {
         "object": "plant16",
         "state": "OnTop",
@@ -1614,6 +1856,10 @@
         "object": "plant17",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant17_upright": {
+        "object": "plant17",
+        "state": "Upright"
       },
       "plant17_on_stage": {
         "object": "plant17",
@@ -1640,6 +1886,10 @@
         "state": "Covered",
         "system": "insectifuge"
       },
+      "plant18_upright": {
+        "object": "plant18",
+        "state": "Upright"
+      },
       "plant18_on_stage": {
         "object": "plant18",
         "state": "OnTop",
@@ -1664,6 +1914,10 @@
         "object": "plant19",
         "state": "Covered",
         "system": "insectifuge"
+      },
+      "plant19_upright": {
+        "object": "plant19",
+        "state": "Upright"
       },
       "plant19_on_stage": {
         "object": "plant19",
@@ -1739,6 +1993,10 @@
         "state": "OnTop",
         "target": "controls"
       },
+      "control0_upright": {
+        "object": "control0",
+        "state": "Upright"
+      },
       "control0_Covered_insectifuge": {
         "object": "control0",
         "state": "Covered",
@@ -1748,6 +2006,10 @@
         "object": "control1",
         "state": "OnTop",
         "target": "controls"
+      },
+      "control1_upright": {
+        "object": "control1",
+        "state": "Upright"
       },
       "control1_Covered_insectifuge": {
         "object": "control1",
@@ -1759,6 +2021,10 @@
         "state": "OnTop",
         "target": "controls"
       },
+      "control2_upright": {
+        "object": "control2",
+        "state": "Upright"
+      },
       "control2_Covered_insectifuge": {
         "object": "control2",
         "state": "Covered",
@@ -1768,6 +2034,10 @@
         "object": "control3",
         "state": "OnTop",
         "target": "controls"
+      },
+      "control3_upright": {
+        "object": "control3",
+        "state": "Upright"
       },
       "control3_Covered_insectifuge": {
         "object": "control3",
@@ -1792,7 +2062,8 @@
               "plant00_on_destination0",
               "plant00_on_destination1"
             ]
-          }
+          },
+          "plant00_upright"
         ]
       },
       "plant01_delivered": {
@@ -1803,7 +2074,8 @@
               "plant01_on_destination0",
               "plant01_on_destination1"
             ]
-          }
+          },
+          "plant01_upright"
         ]
       },
       "plant02_delivered": {
@@ -1814,7 +2086,8 @@
               "plant02_on_destination0",
               "plant02_on_destination1"
             ]
-          }
+          },
+          "plant02_upright"
         ]
       },
       "plant03_delivered": {
@@ -1825,7 +2098,8 @@
               "plant03_on_destination0",
               "plant03_on_destination1"
             ]
-          }
+          },
+          "plant03_upright"
         ]
       },
       "plant04_delivered": {
@@ -1836,7 +2110,8 @@
               "plant04_on_destination0",
               "plant04_on_destination1"
             ]
-          }
+          },
+          "plant04_upright"
         ]
       },
       "plant05_delivered": {
@@ -1847,7 +2122,8 @@
               "plant05_on_destination0",
               "plant05_on_destination1"
             ]
-          }
+          },
+          "plant05_upright"
         ]
       },
       "plant06_delivered": {
@@ -1858,7 +2134,8 @@
               "plant06_on_destination0",
               "plant06_on_destination1"
             ]
-          }
+          },
+          "plant06_upright"
         ]
       },
       "plant07_delivered": {
@@ -1869,7 +2146,8 @@
               "plant07_on_destination0",
               "plant07_on_destination1"
             ]
-          }
+          },
+          "plant07_upright"
         ]
       },
       "plant08_delivered": {
@@ -1880,7 +2158,8 @@
               "plant08_on_destination0",
               "plant08_on_destination1"
             ]
-          }
+          },
+          "plant08_upright"
         ]
       },
       "plant09_delivered": {
@@ -1891,7 +2170,8 @@
               "plant09_on_destination0",
               "plant09_on_destination1"
             ]
-          }
+          },
+          "plant09_upright"
         ]
       },
       "plant10_delivered": {
@@ -1902,7 +2182,8 @@
               "plant10_on_destination0",
               "plant10_on_destination1"
             ]
-          }
+          },
+          "plant10_upright"
         ]
       },
       "plant11_delivered": {
@@ -1913,7 +2194,8 @@
               "plant11_on_destination0",
               "plant11_on_destination1"
             ]
-          }
+          },
+          "plant11_upright"
         ]
       },
       "plant12_delivered": {
@@ -1924,7 +2206,8 @@
               "plant12_on_destination0",
               "plant12_on_destination1"
             ]
-          }
+          },
+          "plant12_upright"
         ]
       },
       "plant13_delivered": {
@@ -1935,7 +2218,8 @@
               "plant13_on_destination0",
               "plant13_on_destination1"
             ]
-          }
+          },
+          "plant13_upright"
         ]
       },
       "plant14_delivered": {
@@ -1946,7 +2230,8 @@
               "plant14_on_destination0",
               "plant14_on_destination1"
             ]
-          }
+          },
+          "plant14_upright"
         ]
       },
       "plant15_delivered": {
@@ -1957,7 +2242,8 @@
               "plant15_on_destination0",
               "plant15_on_destination1"
             ]
-          }
+          },
+          "plant15_upright"
         ]
       },
       "plant16_delivered": {
@@ -1968,7 +2254,8 @@
               "plant16_on_destination0",
               "plant16_on_destination1"
             ]
-          }
+          },
+          "plant16_upright"
         ]
       },
       "plant17_delivered": {
@@ -1979,7 +2266,8 @@
               "plant17_on_destination0",
               "plant17_on_destination1"
             ]
-          }
+          },
+          "plant17_upright"
         ]
       },
       "plant18_delivered": {
@@ -1990,7 +2278,8 @@
               "plant18_on_destination0",
               "plant18_on_destination1"
             ]
-          }
+          },
+          "plant18_upright"
         ]
       },
       "plant19_delivered": {
@@ -2001,7 +2290,8 @@
               "plant19_on_destination0",
               "plant19_on_destination1"
             ]
-          }
+          },
+          "plant19_upright"
         ]
       },
       "destination0_count": "destination0_count",
@@ -3213,6 +3503,19 @@
     "measured_useful_calls": null,
     "reference_attempt_budget": 1000,
     "proposed_model_act_look_budget": 600
+  },
+  "robot_start": {
+    "position": [
+      14.7,
+      9.3,
+      0.02
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
   },
   "scene_exclusions": [
     "tree_rrhqpw_1",

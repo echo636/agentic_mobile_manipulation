@@ -8,7 +8,7 @@ from contextlib import nullcontext
 from unittest.mock import Mock, patch
 
 from manipulation_agent.custom_tasks import load_spec, validate_spec
-from manipulation_agent.diverse_task_contract import replacement_complete, robot_spawn_supports
+from manipulation_agent.diverse_task_contract import replacement_complete, robot_spawn_supports, upright_orientation
 from manipulation_agent.long_horizon import TemporalGoalEvaluator
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -17,6 +17,11 @@ def recipe(prefix):
 
 
 class ConstructionContracts(unittest.TestCase):
+    def test_upright_accepts_yaw_but_rejects_sideways_and_inverted_pots(self):
+        self.assertTrue(upright_orientation([0,0,0,1]))
+        self.assertTrue(upright_orientation([0,0,1,0]))
+        self.assertFalse(upright_orientation([1,0,0,1]))
+        self.assertFalse(upright_orientation([1,0,0,0]))
     def test_parked_and_fallen_robot_cannot_pass_construction(self):
         bounds={'floor':([0.,0.,-.3],[10.,10.,0.])}
         self.assertEqual(robot_spawn_supports([2.,2.,0.],bounds),['floor'])
@@ -98,7 +103,7 @@ class ConstructionContracts(unittest.TestCase):
     def test_correct_garden_terminal_cannot_replace_treatment_history(self):
         spec=recipe('garden');e=TemporalGoalEvaluator(spec['evaluation'])
         v=dict.fromkeys(spec['evaluation']['predicates'],False)
-        for i in range(20):v.update({f'plant{i:02d}_Covered_insectifuge':True,f'plant{i:02d}_on_destination0':True})
+        for i in range(20):v.update({f'plant{i:02d}_Covered_insectifuge':True,f'plant{i:02d}_on_destination0':True,f'plant{i:02d}_upright':True})
         for i in range(4):v[f'control{i}_on_controls']=True
         v.update(tool_on_tool_home=True,hand_empty=True)
         v.update(destination0_count=True,destination1_count=True)
@@ -118,6 +123,7 @@ class ConstructionContracts(unittest.TestCase):
     def test_per_item_treatment_accepts_both_processing_orders(self):
         for sequence in [list(range(20)),list(reversed(range(20)))]:
             e=TemporalGoalEvaluator(recipe('garden')['evaluation']);v=dict.fromkeys(e.spec['predicates'],False)
+            for i in range(20):v[f'plant{i:02d}_upright']=True
             for i in range(4):v[f'control{i}_on_controls']=True
             v.update(tool_on_tool_home=True,hand_empty=True)
             v.update(destination0_count=True,destination1_count=True)

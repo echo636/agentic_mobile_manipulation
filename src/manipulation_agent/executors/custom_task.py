@@ -188,9 +188,25 @@ class CustomTaskBackend(RGBBackend):
             self._restore_custom_scene(scene)
         objects = {o.name:o for o in self.env.scene.objects}
         roles = {k:objects.get(v) for k,v in spec['roles'].items()}
+        if spec.get('robot_start'):
+            pose=spec['robot_start']
+            self.robot.set_position_orientation(self.torch.tensor(pose['position']),
+                                                self.torch.tensor(pose['orientation']))
+            self.robot.keep_still()
+            self.robot.apply_action(self.robot.q_to_action(self.robot.get_joint_positions()))
         missing=[role for role,obj in roles.items() if obj is None and role not in spec.get('future_roles',[])]
         if missing:raise RuntimeError('Required construction roles disappeared before layout: '+', '.join(missing))
-        for index,operation in enumerate(spec.get('initial_layout', [])):
+        layout=spec.get('initial_layout', [])
+        if spec.get('schema_version')==3:
+            poses=[op for op in layout if op.get('place_on_support') or 'position' in op]
+            layout=[op for op in layout if op not in poses]
+            # Author every pose before advancing physics; unplaced objects
+            # must not fall or tip while earlier items are being processed.
+            for index,operation in enumerate(poses):
+                with self._startup_stage(f'custom_pose_{index:03d}_{operation["object"]}'):
+                    self._apply_initial_operation(operation,roles,settle=False)
+            for _ in range(spec.get('settle_steps',30)):self.og.sim.step()
+        for index,operation in enumerate(layout):
             with self._startup_stage(f'custom_layout_{index:03d}_{operation["object"]}'):
                 self._apply_initial_operation(operation,roles)
         for _ in range(spec.get('settle_steps',30)): self.og.sim.step()
@@ -212,7 +228,7 @@ class CustomTaskBackend(RGBBackend):
             'excluded_background_entities':spec.get('scene_exclusions',[]),
             'initial_predicates':initial_values,'scope':'joint initial scene only; independent trajectory feasibility pending'})
 
-    def _apply_initial_operation(self, operation, roles):
+    def _apply_initial_operation(self, operation, roles, *, settle=True):
         from omnigibson import object_states
         obj = roles[operation['object']]
         if operation.get('place_on_support'):
@@ -235,9 +251,19 @@ class CustomTaskBackend(RGBBackend):
             cls = getattr(object_states, operation['state'])
             args = [roles[operation['target']]] if operation.get('target') else []
             if operation.get('system'): args.append(self.env.scene.get_system(operation['system'],force_init=True))
-            if not obj.states[cls].set_value(*args, operation.get('value',True), **operation.get('kwargs',{})):
+            successes=[]
+            for attempt in range(operation.get('max_sampling_attempts',1)):
+                success=bool(obj.states[cls].set_value(*args, operation.get('value',True), **operation.get('kwargs',{})))
+                successes.append(success)
+                if success:break
+                self.og.sim.step()
+                for state in obj.states.values():state.clear_cache()
+            with (self.output/'construction_state_sampling.jsonl').open('a') as stream:
+                stream.write(json.dumps({'operation':operation,'attempt_results':successes})+'\n')
+            if not successes[-1]:
                 raise RuntimeError('Custom layout setter failed: '+str(operation))
-        for _ in range(operation.get('settle_steps',5)): self.og.sim.step()
+        if settle:
+            for _ in range(operation.get('settle_steps',5)): self.og.sim.step()
 
     def _predicate_values(self):
         from omnigibson import object_states
@@ -259,6 +285,10 @@ class CustomTaskBackend(RGBBackend):
                 result[key] = self._get_held() is None; continue
             if obj is None or (row.get('target') and roles[row['target']] is None):
                 result[key] = False; continue
+            if row['state']=='Upright':
+                from ..diverse_task_contract import upright_orientation
+                result[key]=upright_orientation(obj.get_position_orientation()[1],row.get('max_tilt_degrees',15.))
+                continue
             if row['state'] in ('PairedOnTop','CountOnTop'):
                 members = [roles[m] for m in row['members'] if roles[m] is not None]
                 supported = [m for m in members if object_states.OnTop in m.states
