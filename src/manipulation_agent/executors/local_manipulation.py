@@ -204,3 +204,7 @@ class LocalCollision:
                 and self.collision.motion_free(a,b))
 
     def optimistic_grid(self):return self._restrict(self.collision.optimistic_grid())
+
+    def guidance_grid(self):
+        method = getattr(self.collision,'guidance_grid',self.collision.optimistic_grid)
+        return self._restrict(method())

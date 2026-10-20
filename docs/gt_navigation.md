@@ -55,19 +55,32 @@ each `act` / `look` supplies the next one.
    turn at corners and only turns at arrival if the selected endpoint heading
    differs from the last travel segment.
    Certify every segment and turn with orientation-aware height-layer collision
-   geometry. If the existing polyline cannot be driven, use a bounded eight-heading
-   position/heading search (forward steps and in-place turns, no strafing).
-   When forward motion is blocked or neither lattice turn fits, also try bounded shallow-angle
-   forward connections: one cell of lateral offset over several forward
-   cells, with at most 65 cm of translation. Each connection checks its
-   initial turn, complete translation and final turn. Intermediate poses are
-   retained for execution, so a narrow exit requiring a small turn is not
-   reconstructed as sideways motion. Refine while forward travel is still
-   possible if both coarse turns are blocked: a long front payload may need
-   to align before entering a narrower throat. The existing time/state limits remain.
+   geometry. If the existing polyline cannot be driven, use bounded Hybrid A*
+   with bidirectional continuous XY and heading search. States preserve their actual floating
+   coordinates and orientations; 7.5-degree and one-cell buckets only suppress
+   duplicate search states. Forward edges travel along the stored heading, and
+   turn proposals include exact goal/path bearings and relative angular samples
+   down to 3.75 degrees. Relative 45-degree proposals accelerate open-space search;
+   they are not a restriction on the stored orientation. Shallow checked forward
+   links shift laterally over a longer forward leg before restoring the previous
+   heading. No motion or endpoint is snapped to eight fixed headings.
+   The reverse search checks every edge in its original forward direction;
+   joining the two trees never authorizes reverse driving.
+   Each turn and complete forward translation passes the same swept collision
+   checks as execution. Immutable parent nodes retain the exact checked path
+   even if another pose later replaces a search bucket. The queue uses a 1.25
+   heuristic weight to seek feasible routes within the existing work budget.
+   A sampled-heading XY guide orders the search where it has coverage; missing
+   cells fall back to Euclidean distance and never exclude continuous poses.
+   The separate optimistic grid uses orientation-independent discs inscribed
+   in body footprints, retaining passages between coarse headings. Offset
+   payload layers without a base-centred inscribed disc are omitted only from
+   that relaxation; all actual edge checks include the full payload.
    Uncached continuous-heading translations erode only the crossed raster
    region with the full obstacle halo, using the same kernels and supercover
-   checks as full-floor erosion.
+   checks as full-floor erosion. Bounded caches reuse in-place turn results on
+   the same static map and dyadic unions of canonical one-degree swept kernels;
+   these unions preserve the original collision margins and swept cells.
    Checked entry/exit legs retain the measured and final continuous headings
    where a narrow aisle requires driving straight before turning.
    Heading/staging proposals do not execute an independent pre-turn. One route
@@ -109,7 +122,10 @@ An already visible approach within the executor's 1.4 m manipulation check stops
 heading refinement; it need not project onto the object's XY within one grid cell.
 Additional arrival-heading certification is bounded by 2 seconds. Complete-route
 comparison tests at most six candidates, within a shared 10 seconds and up to
-2 seconds / 10,000 heading states per candidate. A validated incumbent may win
+4 seconds / 10,000 expanded poses per candidate. Continuous branching can take
+more work than the former eight-heading graph: the candidate cap increased from
+2 to 4 seconds while the shared 10-second cap stays fixed, so fewer candidates
+may be compared in difficult scenes. A validated incumbent may win
 when the refinement budget expires. Its objective uses 0.5 m/s translation and
 60 degrees/s rotation; it is **not a globally shortest continuous route**.
 When the work budget expires, an existing validated plan can execute; otherwise
@@ -127,8 +143,8 @@ This remains ideal kinematic base actuation, not a physical wheel controller or 
 complete continuous/articulated-body motion planner. Forward route certification
 and heading search have a separate cooperative 10-second / 20,000-state limit
 per execution leg. A blocked or exhausted search fails explicitly; it never
-falls back to sliding sideways. The discrete heading fallback can miss paths
-requiring finer orientations. Up to 2 mm of endpoint feedback correction is
+falls back to sliding sideways. Continuous poses remove the eight-heading constraint, but finite angular/step
+sampling, duplicate buckets and work budgets can still miss feasible paths. Up to 2 mm of endpoint feedback correction is
 permitted to prevent pose-setter drift. Scene obstacles and robot collision hulls are matched in four height bands,
 avoiding a base-width column through the head. Convex hulls within each band
 remain conservative. The held object and supported carried contents contribute
