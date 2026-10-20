@@ -17,18 +17,30 @@ def compact_translation(origin, base, bounds, clear, *, check=lambda: None):
     if reach > .95:
         return None, 'payload_too_large'
     distance = math.dist(origin[:2], base[:2])
-    if distance <= reach+.05:
+    direction = math.atan2(origin[1]-base[1], origin[0]-base[0])
+    front_delta = math.atan2(math.sin(base[3]-direction), math.cos(base[3]-direction))
+    if distance <= reach+.05 and abs(front_delta) <= math.radians(10):
         return (), 'already_compact'
     bottom = min(lo[2]-origin[2] for lo,hi in bounds)
-    direction = math.atan2(origin[1]-base[1], origin[0]-base[0])
-    # Preserve current side first; a front pose must not pull through the body.
-    for height in (.65, .95):
-        for angle in (direction, base[3], base[3]+math.pi/2, base[3]-math.pi/2):
+    # A short side offset can still make a loaded robot too wide for a door.
+    # Prefer a front pose, including a checked polygonal route around the
+    # body when a direct pull crosses it. The assembly never rotates here.
+    for angle in (base[3], direction, base[3]+math.pi/2, base[3]-math.pi/2):
+        if angle == direction and distance <= reach+.05:
+            return (), 'already_compact'
+        for height in (.65, .95):
             check()
             end = (base[0]+reach*math.cos(angle), base[1]+reach*math.sin(angle),
                    max(origin[2], base[2]+height-bottom))
             raised = (origin[0],origin[1],end[2])
-            for route in ((origin,end),(origin,raised,end)):
+            routes = [(origin,end),(origin,raised,end)]
+            if angle == base[3] and abs(front_delta) > math.radians(10):
+                count = math.ceil(abs(front_delta)/math.radians(15))
+                arc = tuple((base[0]+reach*math.cos(direction+front_delta*i/count),
+                             base[1]+reach*math.sin(direction+front_delta*i/count),end[2])
+                            for i in range(count+1))
+                routes.append((origin,raised,*arc))
+            for route in routes:
                 if sum(math.dist(a,b) for a,b in zip(route,route[1:])) > 2.:
                     continue
                 if all(clear(a,b) for a,b in zip(route,route[1:])):
