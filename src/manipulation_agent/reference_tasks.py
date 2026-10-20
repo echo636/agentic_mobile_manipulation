@@ -401,6 +401,11 @@ class ReferenceTask:
         self.extract_cooked_popcorn()
         self.floor(7.3, .65)
         self.action('grasp', 'bag')
+        self.serve_held_popcorn()
+
+    def serve_held_popcorn(self):
+        # Raw and cooked serving cases use the same reachable table stance.
+        # The negative changes food state, not the navigation approach.
         self.floor(4.4, 4.45)
         self.move('place_on_top', 'table', self.top('table'))
 
@@ -660,7 +665,7 @@ class ReferenceTask:
             expected = {'constraint_conditions': {'clear_and_dust_before_serving': False}}
         elif case == 'uncooked_snack':
             self.pickup_popcorn_bag()
-            self.move('place_on_top', 'table', self.top('table'))
+            self.serve_held_popcorn()
             witness = {'bag_on_table': True, 'cooked_popcorn': False, 'raw_popcorn_present': True}
             expected = {'terminal_conditions': {'popcorn_served': False}}
         elif case == 'reenergized_removal':
