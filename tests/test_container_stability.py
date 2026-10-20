@@ -172,7 +172,8 @@ class NestedStabilizationTests(unittest.TestCase):
         states=types.ModuleType('omnigibson.object_states')
         states.Inside,states.OnTop,states.Touching=Inside,OnTop,Touching
         utils=types.ModuleType('omnigibson.utils');utils.transform_utils=transforms
-        with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.utils':utils}):
+        with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.utils':utils}), \
+             patch('manipulation_agent.executors.carry.assembly_lift', return_value=0.):
             b._ideal_grasp(inner,1)
             self.assertEqual([obj for obj,_ in b._carry_contents],[child])
             self.assertNotIn(inner,b._stabilized_containers)

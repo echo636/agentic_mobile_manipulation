@@ -52,6 +52,13 @@ particle must still connect to an owned rigid link or a particle whose native
 containment passed; foreign surfaces and unsupported cycles are rejected.
 Identity changes and containment loss remain failures. This check never adds
 particles, restores spills, or changes the task score.
+Ideal carry queries live conservative swept bounds before its optional initial
+lift, including rigid contents and captured particle extents. A low ceiling can
+reduce the lift or keep the attachment at its original pose. An in-place
+attachment does not certify extraction: normal checked placement or navigation
+must still move the assembly out. Demo hand motion is unchanged. This motor
+repair requires fresh physical validation; existing task passes retain their
+original source identity.
 
 ## Independent evaluation
 

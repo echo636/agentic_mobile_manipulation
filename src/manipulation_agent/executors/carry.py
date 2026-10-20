@@ -9,6 +9,7 @@ import json
 from ..contracts import SkillError
 from ..records import now
 from .particle_payload import snapshot_particles, relocate_particles, verify_particles, particle_count
+from .carry_clearance import assembly_lift
 
 
 def support_closure(root, objects, relation):
@@ -319,6 +320,10 @@ class ControlledCarry:
         dependencies=support_closure(obj,candidates,relation)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
         particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in dependencies]],include_supported=True)
+        # Decide before modifying carry/stabilization state. A fixed lift can
+        # move a bag through an appliance ceiling and invalidate real support.
+        demo = getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None)
+        lift = None if demo else assembly_lift(self,obj,contents,particles)
         # The entire selected assembly is leaving its old support. An outer
         # container can have recorded nested children as well as this root;
         # retaining those records would pull the children back after release.
@@ -333,12 +338,11 @@ class ControlledCarry:
         base_pos,base_quat=self.robot.get_position_orientation()
         # In demo mode the carried pose follows the visible hand. The object is
         # lifted over recorded control steps after the carry relation is made.
-        if getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None):
+        if demo:
             relative=T.relative_pose_transform(*original,
                 *self.robot.eef_links[self._demo_arm].get_position_orientation())
         else:
-            # Legacy ideal carry starts at a safe elevated pose.
-            lifted=original[0].clone();lifted[2]+=.18
+            lifted=original[0].clone();lifted[2]+=lift
             relative=T.relative_pose_transform(lifted,original[1],base_pos,base_quat)
         self._ideal_held=obj;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
         self._carry_particles=particles
@@ -349,7 +353,8 @@ class ControlledCarry:
                            contained_particles=particle_count(particles,'contained'),
                            supported_particles=particle_count(particles,'supported'),
                            preserved_articulated_objects=[body.name for body in self._carry_joint_positions],
-                           implementation='pose_projection_no_fixed_joint',original_position=original[0].tolist())
+                           implementation='pose_projection_no_fixed_joint',initial_lift_m=lift,
+                           original_position=original[0].tolist())
         self._carry_follow()
         with self._anchored_operation():
             for _ in range(min(6,max_steps)):
