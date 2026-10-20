@@ -1,8 +1,9 @@
 """Read-only whole-payload translation checks, shared by prediction and motion.
 
 PhysX queries stay in the adapter. No hypothetical object or robot setters are
-used. Existing support contacts may only shrink during vertical extraction;
-new contacts are forbidden and the end of extraction must be clear.
+used. During vertical extraction, PhysX must find no obstacle in the newly
+entered top slab of each payload box. Existing support contact can therefore
+only shrink, and the end of extraction must be clear.
 """
 import math
 import numpy as np
@@ -50,26 +51,23 @@ class PayloadSweep:
         self.query=lazy.omni.physx.get_physx_scene_query_interface()
         self.last_failure=None;self.queries=0
 
-    def contacts(self, bounds):
+    def contacts(self, bounds, *, padding=.002):
         result={}
         for lo,hi in bounds:
             self.check();self.queries+=1
             # Small numeric reserve; Z comes from the actual payload collider,
             # not from a broad robot-height slab containing the table below.
-            low=lo-.002;high=hi+.002
+            low=lo-padding;high=hi+padding
             error=None
             def hit(hit):
                 nonlocal error
                 path=str(hit.rigid_body)
                 if path in self.ignored:return True
                 try:
-                    link=self.links.get(path)
-                    if link is None:
-                        result[path]=math.inf
-                    else:
-                        a,b=link.aabb
-                        box=(a.cpu().numpy(),b.cpu().numpy())
-                        result[path]=result.get(path,0.)+max(1e-12,overlap_volume((low,high),box))
+                    # A concave rigid body's AABB (e.g. a car chassis) can
+                    # surround empty space. Use the actual PhysX query hit,
+                    # never its AABB overlap as a penetration metric.
+                    result[path]=result.get(path,0)+1
                 except Exception as exc:error=exc;return False
                 return True
             self.query.overlap_box(tuple((high-low)/2),tuple((high+low)/2),(0.,0.,0.,1.),hit,False)
@@ -81,20 +79,31 @@ class PayloadSweep:
 
     def clear(self, a, b, *, extraction=False, require_clear=True):
         a=np.asarray(a);b=np.asarray(b)
-        initial=self.contacts(translated_bounds(self.bounds,a-self.origin)) if extraction else {}
+        if extraction and (np.any(np.abs(b[:2]-a[:2])>1e-9) or b[2]<a[2]):
+            raise ValueError('Support extraction must translate vertically upward')
         previous=a
         for point in translation_samples((a,b),.025):
             point=np.asarray(point)
-            swept=[(np.minimum(lo+previous-self.origin,lo+point-self.origin),
-                    np.maximum(hi+previous-self.origin,hi+point-self.origin)) for lo,hi in self.bounds]
-            contacts=self.contacts(swept)
-            if any(key not in initial or not math.isfinite(value) or value>initial[key]+1e-9
-                   for key,value in contacts.items()):
-                self.last_failure={'stage':'translation_sweep','blockers':sorted(contacts),'extraction':extraction}
-                return False
             if extraction:
-                # The next segment cannot re-acquire a contact already shed.
-                initial=self.contacts(translated_bounds(self.bounds,point-self.origin))
+                # Swept box minus its previous box is exactly this top slab.
+                # If it is empty, contact with static geometry is a subset of
+                # the previous contact, even for concave/multi-shape supports.
+                # Keep the usual margin, without padding back into the old box.
+                entered=[]
+                for lo,hi in self.bounds:
+                    low=lo+previous-self.origin-.002
+                    low[2]=hi[2]+previous[2]-self.origin[2]+.002
+                    high=hi+point-self.origin+.002
+                    if high[2]>low[2]:entered.append((low,high))
+                contacts=self.contacts(entered,padding=0.)
+            else:
+                swept=[(np.minimum(lo+previous-self.origin,lo+point-self.origin),
+                        np.maximum(hi+previous-self.origin,hi+point-self.origin)) for lo,hi in self.bounds]
+                contacts=self.contacts(swept)
+            if contacts:
+                self.last_failure={'stage':'extraction_entering_slab' if extraction else 'translation_sweep',
+                                   'blockers':sorted(contacts),'extraction':extraction}
+                return False
             previous=point
         remaining=self.contacts(translated_bounds(self.bounds,b-self.origin))
         if remaining and require_clear:
