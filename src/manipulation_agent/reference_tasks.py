@@ -146,6 +146,14 @@ class ReferenceTask:
                     self.floor(23.5, max(-1.25, min(1.45, target[1])))
             elif task.startswith('movie') and target[1] < 0 and 5.6 < target[0] < 6.6:
                 self.floor(6.1, .35)
+            elif (task.startswith(('warm_lunch', 'kitchen_service'))
+                  and primitive == 'place_inside' and role == 'bin'):
+                # The low bin center is hidden behind the dining table from
+                # the kitchen. This checked floor approach reaches its open
+                # side without asking visibility search to see that center.
+                # It passed all three insertions in the enlarged fixture.
+                self.floor(6.2, 1.2)
+                self.floor(6.2, 2.5)
             else:
                 try:
                     self.action('navigate_to', role, point)

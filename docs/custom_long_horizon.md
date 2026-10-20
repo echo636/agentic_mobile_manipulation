@@ -144,6 +144,9 @@ The lunch and serving-task construction recipes now use a 1.5× trash bin
 packed as required, but the third-can insertion exhausted three checked searches
 against the two resident cans. The larger fixture keeps the same scoring and
 public request; fresh restores, full references and negatives remain required.
+The measured floor approach to the bin passed three-can cleanup in a physical
+continuation. That continuation subsequently failed while approaching the open
+microwave; it does not establish a complete lunch reference.
 
 **Movie night.** Put away two toys and three cans; clear and dust the coffee table
 before serving food or any of six dining items. Cook the bag's popcorn in the
