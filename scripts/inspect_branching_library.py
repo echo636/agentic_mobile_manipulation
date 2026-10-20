@@ -19,8 +19,8 @@ from manipulation_agent.records import write_json, release_source_digest
 from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
 
 SHOTS = [
-    ('library', '公共书柜、6 个笔袋及工具与收纳台', [-4.5, -3.5, 2.2], [-4.5, -1.25, .5]),
-    ('shelf', '原生矮书柜顶面的笔袋与初始灰尘', [-4.6, -2.25, 1.8], [-4.6, -1.05, .85]),
+    ('library', '公共书柜、6 个笔袋及工具与收纳台', [-6.0, -3.2, 2.2], [-4.5, -1.25, .5]),
+    ('shelf', '原生矮书柜顶面的笔袋与初始灰尘', [-4.6, -1.9, 2.1], [-4.6, -1.05, .85]),
     ('a_overview', 'A 卧室地面物品及暂存台', [-4.45, -.15, 2.1], [-4.45, 1.8, .4]),
     ('a_stage', 'A 房间积尘暂存台', [-4.6, 1.0, 1.6], [-5.61, 1.05, .45]),
     ('b_overview', 'B 卧室地面物品及暂存台', [4.45, -.15, 2.1], [4.45, 1.8, .4]),
@@ -89,6 +89,9 @@ def inspect(backend, reference, output):
     record = dict(status='passed' if tool_check['ready_for_dust'] and all(s['inside_shelf_envelope'] for s in slots)
                   and not overlaps else 'failed', tool=tool_check, surfaces=surfaces,
                   shelf_aabb=[lo, hi], book_slots=slots, slot_overlaps=overlaps,
+                  door_joint_positions={r: reference.obj(r).get_joint_positions().tolist()
+                                        for r in ['a_door', 'b_door']},
+                  robot_position=backend.robot.get_position_orientation()[0].tolist(),
                   validation_level='native state compatibility and AABB slot screen; actual placement and routing separate')
     write_json(output / 'library_geometry_validation.json', record)
     return record
