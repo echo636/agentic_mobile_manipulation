@@ -23,6 +23,20 @@
 车库首次参考在导航到扫帚时耗尽搜索预算；对应状态、轨迹和诊断保存在该批次，
 不能把这两次参考算作通过。各次重试及其余任务的实时状态以批次 `validation.json` 为准。
 
+可视化入口：[长程任务工作台](http://10.76.5.241:8765/long_horizon_build_20261020/)（实验室 / 校园网或 VPN）。
+页面包含 16 张真实初态 RGB、实测俯视布局、交互阶段说明、实际参考动作及分层验证状态。
+流程图是设计说明，俯视图是包围盒投影，都不代表成功执行轨迹。展示数据只含显式选择的字段。
+更新批次 `validation.json` 和 `frozen_tasks.json` 后，用下列命令重新发布同一汇总页：
+
+```sh
+python -B scripts/publish_long_horizon_dashboard.py \
+  --batch /absolute/workspace/operations/long_horizon_build_20261020 \
+  --output /absolute/workspace/reports/long_horizon_build_20261020
+```
+
+发布器校验冻结任务及每张原始 RGB 的哈希，并拒绝混用过期冻结实例索引与新构建状态。
+页面是发布时的证据快照，顶部标明证据更新时间；数据更新后需重新生成。
+
 ## 构建与运行
 
 在已配置项目 OmniGibson 环境的机器执行。每次使用新的输出目录，保留失败记录；

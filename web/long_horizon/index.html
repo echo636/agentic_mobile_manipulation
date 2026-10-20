@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="四个 OmniGibson 长程任务的真实初态、流程、物体布局与验证记录。">
+  <title>长程任务工作台 · Mobile Manipulation</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+<a class="skip" href="#workspace">跳转到任务详情</a>
+<header class="sitebar">
+  <a class="brand" href="./" aria-label="长程任务工作台首页"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 9 16 3l11 6v14l-11 6-11-6Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m5 9 11 7 11-7M16 16v13" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="16" cy="16" r="3" fill="currentColor"/></svg><span>Mobile Manipulation <b>任务实验室</b></span></a>
+  <nav aria-label="站点导航"><a href="/long_horizon_execution_20261015/">实验总览 ↗</a><a href="data.json" download>展示数据 ↓</a></nav>
+</header>
+<main>
+  <section class="intro">
+    <div><p class="eyebrow"><span class="live-dot"></span> TASK COLLECTION <span class="slash">/</span> 2026.10.20</p><h1>长程任务工作台<span>100+</span></h1><p class="lead">从逐件操作到多阶段协作，探索机器人在真实仿真场景中的长程任务。</p></div>
+    <div class="intro-note"><span class="tag neutral">构建验证批次</span><p>初态已冻结 · 完整可解性验证中</p><small id="updated"></small></div>
+  </section>
+  <section class="metrics" aria-label="批次状态">
+    <div><span class="metric-label">已构建场景</span><strong id="built-count">—</strong><small>初态、几何与出生位置检查</small></div>
+    <div><span class="metric-label">完整参考通过</span><strong id="reference-count">—</strong><small>特权参考流程，独立评分</small></div>
+    <div><span class="metric-label">设计有效动作</span><strong>100<span>–</span>113</strong><small>条件设计账本 · 尚非实测长度</small></div>
+    <div><span class="metric-label">待能力验证</span><strong id="pending-count">—</strong><small>另有场景设计等待构建</small></div>
+  </section>
+  <div class="section-heading"><h2>选择一个任务</h2><span>真实初态 · 每个场景 4 个视角</span></div>
+  <div id="task-cards" class="task-cards" role="group" aria-label="选择任务"></div>
+  <section id="workspace" class="workspace" aria-label="任务详情">
+    <header class="task-heading"><div><p class="eyebrow" id="task-kicker"></p><h2 id="task-name"></h2></div><div id="task-badges" class="badges"></div></header>
+    <p id="instruction" class="instruction"></p>
+    <div class="tabs" role="tablist" aria-label="任务详情视图">
+      <button id="tab-scene" role="tab" aria-selected="true" aria-controls="panel-scene" data-tab="scene">场景与流程</button>
+      <button id="tab-validation" role="tab" aria-selected="false" aria-controls="panel-validation" data-tab="validation" tabindex="-1">验证与动作记录 <span class="tab-dot"></span></button>
+      <button id="tab-contract" role="tab" aria-selected="false" aria-controls="panel-contract" data-tab="contract" tabindex="-1">任务约束与来源</button>
+    </div>
+    <section id="panel-scene" role="tabpanel" aria-labelledby="tab-scene">
+      <div class="scene-layout">
+        <div class="camera-panel">
+          <div class="panel-heading"><h3>机器人视角</h3><div id="camera-tabs" class="segmented" role="group" aria-label="相机视角"></div></div>
+          <button id="camera-open" class="camera-stage" aria-label="放大当前真实相机画面"><img id="camera-image" width="512" height="512" alt=""><span class="camera-overlay"><span id="camera-caption"></span><span>查看原图 ↗</span></span></button>
+          <p class="caption">冻结场景的真实初态 RGB。图像未按任务流程合成或修改。</p>
+        </div>
+        <div class="map-panel">
+          <div class="panel-heading"><h3>物体布局</h3><div class="map-controls"><button id="map-minus" aria-label="缩小布局">−</button><button id="map-reset" aria-label="重置布局">重置</button><button id="map-plus" aria-label="放大布局">＋</button></div></div>
+          <div class="map-wrap"><svg id="layout-map" viewBox="0 0 640 490" role="group" aria-label="初态物体俯视布局"></svg></div>
+          <div class="map-legend"><span><i class="blue"></i>来源</span><span><i class="yellow"></i>处理 / 暂存</span><span><i class="green"></i>终点</span><span><i class="red"></i>对照</span><span><i class="gray"></i>工具</span><span><i class="dot"></i>物体</span></div>
+          <p id="map-selection" class="map-info" aria-live="polite">点击台面或物体查看位置。</p>
+          <p class="caption">实测包围盒的俯视示意；浅灰为背景物体，不表示已验证通路。</p>
+        </div>
+      </div>
+      <div class="flow-heading"><div><h3>任务如何展开</h3><p>点击阶段查看要求，并高亮对应区域。逐件循环的设计流程。</p></div><span class="tag neutral">流程示意 · 非执行回放</span></div>
+      <div id="phase-buttons" class="phase-buttons" role="group" aria-label="任务阶段"></div>
+      <div class="phase-detail" aria-live="polite"><div><p id="phase-label" class="eyebrow"></p><h4 id="phase-title"></h4><p id="phase-description"></p></div><div class="phase-number"><strong id="phase-count"></strong><span id="phase-count-label"></span></div></div>
+      <p class="ledger-note">动作账本仅统计指定搬运与处理动作。导航、观察、等待、重试和工具交接另计；完整成功轨迹与最短解均未验证。模型测试预留 <b id="model-budget"></b> 次 act/look 尝试。</p>
+    </section>
+    <section id="panel-validation" role="tabpanel" aria-labelledby="tab-validation" hidden>
+      <div class="validation-notice"><span class="notice-mark">!</span><div><strong>尚未达到正式测评放行条件</strong><p>场景构建通过不代表整条任务可执行。以下为使用私有角色绑定、经现有 checked executor 执行的参考流程，未使用自主模型。</p></div></div>
+      <div id="gate-list" class="gate-list"></div>
+      <div class="trace-heading"><div><h3>实际参考动作</h3><p>只展示真实记录到的调用，不补齐未执行的步骤。</p></div><label>实验记录 <select id="reference-select" aria-label="选择参考实验"></select></label></div>
+      <div id="trace-summary" class="trace-summary"></div>
+      <p id="trace-error" class="trace-error"></p>
+      <div class="trace-layout"><ol id="trace-list" class="trace-list" aria-label="实际动作时间线"></ol><aside id="action-detail" class="action-detail" aria-live="polite"></aside></div>
+      <p class="caption">调用返回成功仍须由独立任务评分确认。这里的调用数包含导航、工具交接等，不等同于设计账本中的必要有效动作。</p>
+    </section>
+    <section id="panel-contract" role="tabpanel" aria-labelledby="tab-contract" hidden>
+      <div class="contract-layout"><div><h3>完成任务需要满足什么</h3><ul id="requirements" class="requirements"></ul><div class="protocol-note"><strong>逐件搬运</strong><p>禁止堆叠、套叠或一次携带多个任务对象。评分同时检查终态、阶段历史及过程约束。</p></div></div><div><h3>冻结实例与证据</h3><dl id="provenance" class="provenance"></dl><p id="cpu-note" class="caption"></p></div></div>
+    </section>
+  </section>
+  <section class="pending-section"><div class="section-heading"><h2>下一批场景</h2><span>设计已形成 · 尚未构建验证</span></div><div id="pending-list" class="pending-list"></div><p class="caption">尚未在已检查目录中定位模板，不等于底层资产不存在；这些设计不计入已构建场景。</p></section>
+  <footer><span>Mobile Manipulation · OmniGibson</span><span id="batch-label"></span><a href="data.json" download>下载展示数据 ↗</a></footer>
+</main>
+<dialog id="image-dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title"></h2><button id="dialog-close" aria-label="关闭大图">关闭 ×</button></div><img id="dialog-image" width="512" height="512" alt=""><div class="dialog-foot"><button id="image-prev" aria-label="上一个视角">← 上一视角</button><span id="dialog-view"></span><button id="image-next" aria-label="下一个视角">下一视角 →</button></div></dialog>
+<noscript><p>请启用 JavaScript 浏览交互场景。也可下载 <a href="data.json">展示数据 JSON</a>。</p></noscript>
+<script type="application/json" id="task-data">@@DATA@@</script>
+</body></html>
