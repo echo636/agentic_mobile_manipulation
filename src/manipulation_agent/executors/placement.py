@@ -470,7 +470,8 @@ class CheckedPlacement:
                         self._placement_physics_step()
                     contacts = self._placement_contacts(held, payload)
                     touching = any(path in contacts for path in (link.prim_path for link in target.links.values()))
-                    supported, support = self._selected_surface_support(held, target, point, touching, payload)
+                    supported, support = self._selected_surface_support(
+                        held, target, point, touching, payload, require_contact=False)
                     if not supported:
                         self._placement_record({'status': 'candidate_rejected', 'stage': 'free_settling',
                             'candidate': candidate['index'], 'target': target.name, 'held': held.name,
@@ -504,7 +505,7 @@ class CheckedPlacement:
             self._verify_payload(dependencies)
         return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
-    def _selected_surface_support(self, held, target, point, touching, payload=()):
+    def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=True):
         """Check the actual lower collider patch after gravity, including lower shelves.
 
         No whole-box footprint, goal predicate mutation, or held-pose projection
@@ -522,6 +523,7 @@ class CheckedPlacement:
         hit = raytest(start, end, ignore_bodies=ignored)
         target_paths = {link.prim_path for link in target.links.values()}
         contacts = self._placement_contacts(held, payload)
+        selected_contact = bool(target_paths.intersection(contacts))
         robot_paths = {link.prim_path for link in self.robot.links.values()}
         speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
         angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
@@ -531,6 +533,13 @@ class CheckedPlacement:
         selected_xy_distance = float(self.torch.linalg.norm(anchor[:2] - point[:2]))
         checks = {'released': self._get_held() is None,
                   'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
+                  # Overlapping surfaces can return the requested object in a
+                  # ray while another counter carries the actual load. During
+                  # candidate sampling sleeping bodies may omit contacts, but
+                  # known foreign-only contacts are never sufficient. The
+                  # final check follows contact refresh and requires a real
+                  # contact with the selected object.
+                  'selected_contact_consistent': selected_contact or (not require_contact and not contacts),
                   'upward_support': normal_z is not None and normal_z >= .9,
                   'bottom_near_support': gap is not None and -.01 <= gap <= .015,
                   'selected_shelf_height': height_error is not None and height_error <= .05,
@@ -538,6 +547,7 @@ class CheckedPlacement:
                   'settled': speed <= .10 and angular_speed <= .5,
                   'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
         return all(checks.values()), {'checks': checks, 'touching_selected_object': touching,
+            'selected_contact': selected_contact, 'contact_required': require_contact,
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),

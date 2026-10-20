@@ -41,6 +41,12 @@ assembly so a raised object does not inherit obstacles on a lower countertop. Su
 steps within its existing settling budget and clears native state caches before
 checking contacts. This prevents sleeping objects from retaining stale false
 contact readings; it does not assign goal predicates or relax scoring.
+Selected-surface placement also requires actual contact with that surface after
+the final refresh. A ray can hit a requested counter while an overlapping
+neighbor supports the object; foreign-only contacts reject the candidate.
+Missing sleeping-body contacts may defer a candidate decision, but cannot pass
+the final check. This addresses a measured brush-return false positive and
+requires fresh physical validation; native task predicates remain unchanged.
 Explicit waits and lid/drawer operations release resident-content pose
 stabilization so those rigid objects can settle under gravity. Container roots
 retain their ideal support. Subsequent stabilization captures the actual new
