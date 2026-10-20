@@ -150,6 +150,38 @@ class ReadinessTests(unittest.TestCase):
             bundle[name] = {'path': path.name, 'sha256': sha256(path)}
         return spec, records, bundle
 
+    def test_constructed_cohort_preserves_600_call_budget_and_schema(self):
+        import importlib.util
+        from unittest.mock import patch
+        repo = Path(__file__).resolve().parents[1]
+        definition = importlib.util.spec_from_file_location(
+            'prepare_constructed_evaluation', repo/'scripts/prepare_custom_evaluation.py')
+        module = importlib.util.module_from_spec(definition)
+        definition.loader.exec_module(module)
+        spec = json.loads((repo/'task_designs/constructed_100plus/'
+                           'garden_treatment_and_distribution_100_v1.json').read_text())
+        spec['frozen_instance'] = {'path': 'scene.json', 'sha256': sha256(self.root/'scene.json')}
+        self.spec.write_text(json.dumps(spec))
+        self.release['tasks'][0].update(task=spec['id'],
+            spec={'path': 'task.json', 'sha256': sha256(self.spec)})
+        self.release['required_task_ids'] = [spec['id']]
+        self.manifest.write_text(json.dumps(self.release))
+        assets = self.root/'assets.json'
+        assets.write_text(json.dumps({'tasks': [{'task': spec['id'], 'scene': 'cpu_fixture',
+            'custom_task_spec_sha256': sha256(self.spec),
+            'custom_instance_sha256': sha256(self.root/'scene.json'),
+            'bddl_sha256': 'fixture', 'asset_sha256': {}}]}))
+        # Only manifest construction is tested; CPU fixtures remain non-physical.
+        with patch.object(module, 'validate_release', return_value={'benchmark_ready': True, 'tasks': []}):
+            module.prepare(self.manifest, assets, self.root/'batch', 'constructed_fixture')
+        for arm in ('hierarchical', 'unguided'):
+            manifest = json.loads((self.root/'batch'/arm/'manifest.json').read_text())
+            self.assertEqual(manifest['max_agent_steps'], 600)
+            self.assertEqual(manifest['max_actions'], 600)
+            self.assertEqual(manifest['benchmark'], 'custom_long_horizon_v3')
+            self.assertEqual(manifest['tasks'][0]['split'], 'custom_long_horizon_v3_controlled')
+            self.assertEqual(manifest['scope'], '1 frozen custom instances; no generalization claim')
+
     def test_reference_identity_and_complete_score_are_required(self):
         spec, records, bundle = self.physical_fixture()
         accepted = _physical(self.root, bundle, spec, sha256(self.spec), self.release)
