@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "bedroom_shared_library_branching_v2",
-  "instance_id": "bedroom_shared_library_branching_v2_seed0_r3",
+  "instance_id": "bedroom_shared_library_branching_v2_seed0_r4",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -3729,12 +3729,26 @@
   "scene_exclusions": [
     "ottoman_qsnawv_0"
   ],
+  "robot_start": {
+    "position": [
+      -4.65,
+      -2.15,
+      0.02
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      0.70710678,
+      0.70710678
+    ]
+  },
   "design_deviations": [
     "Native kmuacd bookcase is scaled to about 1.93 x 0.62 x 0.86 m; books occupy its accessible top, not interior compartments.",
     "Six native pencil cases instantiate the designated shelf clutter; their destination is the blue storage stand.",
     "Yellow stages, green toy destinations and tool/storage stands remain explicit fixed primitive task fixtures.",
     "Initial stage dust is authored independently of object movement; no motion-induced dust is assumed.",
     "Both bedroom doors are initialized with native Open(fully=True); Open state and measured joint angles are recorded, while route feasibility still requires checked navigation.",
+    "Robot starts on unoccupied common-area floor; the inherited vacuuming spawn overlapped the A-room item grid in r2.",
     "Remove only the unbound B-bedroom ottoman that overlapped the prior floor-item grid."
   ]
 }
