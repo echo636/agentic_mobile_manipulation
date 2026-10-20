@@ -37,6 +37,21 @@ class ConstructionContracts(unittest.TestCase):
         spec['initial_layout'].append({'object':child,'position':[0,0,0]})
         with self.assertRaisesRegex(ValueError,'future'):validate_spec(spec)
 
+    def test_destination_count_cannot_double_count_one_member(self):
+        spec=recipe('garden')
+        row=spec['evaluation']['predicates']['destination0_count']
+        row['members'][1]=row['members'][0]
+        with self.assertRaisesRegex(ValueError,'distinct'):validate_spec(spec)
+
+    def test_returning_a_moved_control_does_not_erase_the_violation(self):
+        e=TemporalGoalEvaluator(recipe('garden')['evaluation'])
+        v=dict.fromkeys(e.spec['predicates'],False)
+        for i in range(4):v[f'control{i}_on_controls']=True
+        e.observe(v,0,env_step=0,initial=True)
+        v['control0_on_controls']=False;e.observe(v,1,env_step=1)
+        v['control0_on_controls']=True;e.observe(v,2,env_step=2)
+        self.assertFalse(e.result(v)['constraint_conditions']['control0_stays'])
+
     def test_same_looking_parts_do_not_excuse_lost_parent(self):
         spec=recipe('garage');rule=spec['replacements'][0];roles=spec['roles']
         initially={roles[rule['parent']]}
@@ -55,6 +70,7 @@ class ConstructionContracts(unittest.TestCase):
         for i in range(20):v.update({f'plant{i:02d}_Covered_insectifuge':True,f'plant{i:02d}_on_destination0':True})
         for i in range(4):v[f'control{i}_on_controls']=True
         v.update(tool_on_tool_home=True,hand_empty=True)
+        v.update(destination0_count=True,destination1_count=True)
         e.observe(v,0,env_step=0,initial=True);e.observe(v,1,env_step=1)
         result=e.result(v)
         self.assertTrue(all(result['terminal_conditions'].values()))
@@ -73,6 +89,7 @@ class ConstructionContracts(unittest.TestCase):
             e=TemporalGoalEvaluator(recipe('garden')['evaluation']);v=dict.fromkeys(e.spec['predicates'],False)
             for i in range(4):v[f'control{i}_on_controls']=True
             v.update(tool_on_tool_home=True,hand_empty=True)
+            v.update(destination0_count=True,destination1_count=True)
             e.observe(v,0,env_step=0,initial=True)
             def observe():e.observe(v,e.last_sequence+1,env_step=e.last_sequence+1)
             for i in sequence:

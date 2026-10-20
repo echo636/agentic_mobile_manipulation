@@ -145,7 +145,8 @@ class CustomTaskBackend(RGBBackend):
         self.env.scene.restore(scene)
         if spec.get('fixtures'):
             from omnigibson.objects.primitive_object import PrimitiveObject
-            with self.og.sim.stopped():
+            self.og.sim.stop()
+            try:
                 for fixture in spec['fixtures']:
                     obj = PrimitiveObject(name=fixture['name'], primitive_type='Cube', size=1.,
                                           scale=fixture['size'], fixed_base=True,
@@ -153,6 +154,8 @@ class CustomTaskBackend(RGBBackend):
                     self.env.scene.add_object(obj)
                     obj.set_position_orientation(self.torch.tensor(fixture['position']),
                                                  self.torch.tensor([0.,0.,0.,1.]))
+            finally:
+                self.og.sim.play()
             for _ in range(5): self.og.sim.step()
         objects = {o.name:o for o in self.env.scene.objects}
         roles = {k:objects.get(v) for k,v in spec['roles'].items()}
@@ -210,12 +213,15 @@ class CustomTaskBackend(RGBBackend):
                 result[key] = self._get_held() is None; continue
             if obj is None or (row.get('target') and roles[row['target']] is None):
                 result[key] = False; continue
-            if row['state'] == 'PairedOnTop':
+            if row['state'] in ('PairedOnTop','CountOnTop'):
                 members = [roles[m] for m in row['members'] if roles[m] is not None]
                 supported = [m for m in members if object_states.OnTop in m.states
                              and m.states[object_states.OnTop].get_value(obj)]
-                result[key] = (len(supported)==2 and object_states.NextTo in supported[0].states
-                               and bool(supported[0].states[object_states.NextTo].get_value(supported[1])))
+                if row['state']=='CountOnTop':
+                    result[key] = len(supported)==row['count']
+                else:
+                    result[key] = (len(supported)==2 and object_states.NextTo in supported[0].states
+                                   and bool(supported[0].states[object_states.NextTo].get_value(supported[1])))
                 continue
             cls = getattr(object_states,row['state'])
             if cls not in obj.states: raise ValueError('Unsupported custom predicate '+key)

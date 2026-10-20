@@ -34,9 +34,17 @@ def validate_construction(spec):
     if len(names) != len(set(names)):
         raise ValueError('Duplicate fixture names')
     for row in spec['evaluation']['predicates'].values():
-        if row['state'] == 'PairedOnTop':
+        if row['state'] in ('PairedOnTop','CountOnTop'):
             if not row.get('members') or not set(row['members']) <= roles.keys():
                 raise ValueError('Pair predicate requires known member roles')
+            if len(set(row['members'])) != len(row['members']):
+                raise ValueError('Counted members must be distinct')
+            if row['state']=='CountOnTop' and (type(row.get('count')) is not int
+                                              or not 1<=row['count']<=len(row['members'])):
+                raise ValueError('Invalid target object count')
+    for rule in spec['evaluation'].get('carry_guards',[]):
+        if rule.get('mode')!='single_object':
+            raise ValueError('Unknown handling protocol')
     for move in spec.get('initial_layout', []):
         if move['object'] not in roles or move['object'] in future:
             raise ValueError('Initial layout cannot manipulate a future/unknown entity')

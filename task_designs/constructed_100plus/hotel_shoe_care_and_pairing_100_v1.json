@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "hotel_shoe_care_and_pairing_100_v1",
-  "instance_id": "hotel_shoe_care_and_pairing_100_v1_seed0_r1",
+  "instance_id": "hotel_shoe_care_and_pairing_100_v1_seed0_r2",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -54,9 +54,9 @@
       "source_object": "scrub_brush_42",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        1.5,
-        0.4,
-        0.7
+        1.75,
+        0.45,
+        0.85
       ]
     },
     {
@@ -65,9 +65,9 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        1.0
+        -0.8,
+        1.17,
+        0.85
       ]
     },
     {
@@ -76,9 +76,9 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        1.3
+        -0.3,
+        1.17,
+        0.85
       ]
     },
     {
@@ -88,8 +88,8 @@
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
         0.2,
-        1.3,
-        1.6
+        1.17,
+        0.85
       ]
     },
     {
@@ -98,9 +98,9 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        1.9
+        0.7,
+        1.17,
+        0.85
       ]
     },
     {
@@ -109,9 +109,9 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        2.2
+        1.2,
+        1.17,
+        0.85
       ]
     },
     {
@@ -120,9 +120,9 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        2.5
+        -0.8,
+        1.39,
+        0.85
       ]
     },
     {
@@ -131,9 +131,9 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        2.8
+        -0.3,
+        1.39,
+        0.85
       ]
     },
     {
@@ -143,8 +143,8 @@
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
         0.2,
-        1.3,
-        3.1
+        1.39,
+        0.85
       ]
     },
     {
@@ -153,9 +153,9 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        3.4
+        0.7,
+        1.39,
+        0.85
       ]
     },
     {
@@ -164,9 +164,9 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        3.6999999999999997
+        1.2,
+        1.39,
+        0.85
       ]
     },
     {
@@ -175,9 +175,9 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        4.0
+        -0.8,
+        1.61,
+        0.85
       ]
     },
     {
@@ -186,9 +186,9 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        4.3
+        -0.3,
+        1.61,
+        0.85
       ]
     },
     {
@@ -198,8 +198,8 @@
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
         0.2,
-        1.3,
-        4.6
+        1.61,
+        0.85
       ]
     },
     {
@@ -208,9 +208,9 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        4.9
+        0.7,
+        1.61,
+        0.85
       ]
     },
     {
@@ -219,9 +219,9 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        5.2
+        1.2,
+        1.61,
+        0.85
       ]
     },
     {
@@ -230,9 +230,9 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        5.5
+        -0.8,
+        1.83,
+        0.85
       ]
     },
     {
@@ -241,9 +241,9 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        5.8
+        -0.3,
+        1.83,
+        0.85
       ]
     },
     {
@@ -253,8 +253,8 @@
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
         0.2,
-        1.3,
-        6.1
+        1.83,
+        0.85
       ]
     },
     {
@@ -263,9 +263,9 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        6.3999999999999995
+        0.7,
+        1.83,
+        0.85
       ]
     },
     {
@@ -274,9 +274,9 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.3,
-        6.7
+        1.2,
+        1.83,
+        0.85
       ]
     }
   ],
@@ -285,12 +285,12 @@
       "name": "lh_source",
       "position": [
         0.2,
-        1.3,
+        1.5,
         0.225
       ],
       "size": [
         2.8,
-        1.3,
+        1.1,
         0.45
       ],
       "rgba": [
@@ -304,13 +304,13 @@
     {
       "name": "lh_stage",
       "position": [
-        1.6,
-        -0.6,
+        0.65,
+        0.25,
         0.225
       ],
       "size": [
-        0.8,
-        0.8,
+        0.65,
+        0.65,
         0.45
       ],
       "rgba": [
@@ -324,13 +324,13 @@
     {
       "name": "lh_tool_home",
       "position": [
-        1.5,
-        0.4,
+        1.75,
+        0.45,
         0.225
       ],
       "size": [
-        0.6,
-        0.6,
+        0.5,
+        0.5,
         0.45
       ],
       "rgba": [
@@ -344,13 +344,13 @@
     {
       "name": "lh_pair00",
       "position": [
-        -1.0,
-        -3.1,
+        0.65,
+        -4.5,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -364,13 +364,13 @@
     {
       "name": "lh_pair01",
       "position": [
-        -0.48,
-        -3.1,
+        0.65,
+        -3.65,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -384,13 +384,13 @@
     {
       "name": "lh_pair02",
       "position": [
-        0.040000000000000036,
-        -3.1,
+        0.65,
+        -2.8,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -404,13 +404,13 @@
     {
       "name": "lh_pair03",
       "position": [
-        0.56,
-        -3.1,
+        0.65,
+        -1.9500000000000002,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -424,13 +424,13 @@
     {
       "name": "lh_pair04",
       "position": [
-        1.08,
-        -3.1,
+        0.65,
+        -1.1,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -444,13 +444,13 @@
     {
       "name": "lh_pair05",
       "position": [
-        -1.0,
-        -2.4000000000000004,
+        1.75,
+        -4.5,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -464,13 +464,13 @@
     {
       "name": "lh_pair06",
       "position": [
-        -0.48,
-        -2.4000000000000004,
+        1.75,
+        -3.65,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -484,13 +484,13 @@
     {
       "name": "lh_pair07",
       "position": [
-        0.040000000000000036,
-        -2.4000000000000004,
+        1.75,
+        -2.8,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -504,13 +504,13 @@
     {
       "name": "lh_pair08",
       "position": [
-        0.56,
-        -2.4000000000000004,
+        1.75,
+        -1.9500000000000002,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -524,13 +524,13 @@
     {
       "name": "lh_pair09",
       "position": [
-        1.08,
-        -2.4000000000000004,
+        1.75,
+        -1.1,
         0.09
       ],
       "size": [
         0.49,
-        0.6,
+        0.4,
         0.18
       ],
       "rgba": [
@@ -548,8 +548,8 @@
       "target": "tool_home",
       "place_on_support": true,
       "xy": [
-        1.5,
-        0.4
+        1.75,
+        0.45
       ],
       "settle_steps": 10
     },
@@ -559,7 +559,7 @@
       "place_on_support": true,
       "xy": [
         -0.8,
-        0.8500000000000001
+        1.17
       ],
       "settle_steps": 10
     },
@@ -576,7 +576,7 @@
       "place_on_support": true,
       "xy": [
         -0.3,
-        0.8500000000000001
+        1.17
       ],
       "settle_steps": 10
     },
@@ -593,7 +593,7 @@
       "place_on_support": true,
       "xy": [
         0.2,
-        0.8500000000000001
+        1.17
       ],
       "settle_steps": 10
     },
@@ -610,7 +610,7 @@
       "place_on_support": true,
       "xy": [
         0.7,
-        0.8500000000000001
+        1.17
       ],
       "settle_steps": 10
     },
@@ -627,7 +627,7 @@
       "place_on_support": true,
       "xy": [
         1.2,
-        0.8500000000000001
+        1.17
       ],
       "settle_steps": 10
     },
@@ -644,7 +644,7 @@
       "place_on_support": true,
       "xy": [
         -0.8,
-        1.1500000000000001
+        1.39
       ],
       "settle_steps": 10
     },
@@ -661,7 +661,7 @@
       "place_on_support": true,
       "xy": [
         -0.3,
-        1.1500000000000001
+        1.39
       ],
       "settle_steps": 10
     },
@@ -678,7 +678,7 @@
       "place_on_support": true,
       "xy": [
         0.2,
-        1.1500000000000001
+        1.39
       ],
       "settle_steps": 10
     },
@@ -695,7 +695,7 @@
       "place_on_support": true,
       "xy": [
         0.7,
-        1.1500000000000001
+        1.39
       ],
       "settle_steps": 10
     },
@@ -712,7 +712,7 @@
       "place_on_support": true,
       "xy": [
         1.2,
-        1.1500000000000001
+        1.39
       ],
       "settle_steps": 10
     },
@@ -729,7 +729,7 @@
       "place_on_support": true,
       "xy": [
         -0.8,
-        1.45
+        1.61
       ],
       "settle_steps": 10
     },
@@ -746,7 +746,7 @@
       "place_on_support": true,
       "xy": [
         -0.3,
-        1.45
+        1.61
       ],
       "settle_steps": 10
     },
@@ -763,7 +763,7 @@
       "place_on_support": true,
       "xy": [
         0.2,
-        1.45
+        1.61
       ],
       "settle_steps": 10
     },
@@ -780,7 +780,7 @@
       "place_on_support": true,
       "xy": [
         0.7,
-        1.45
+        1.61
       ],
       "settle_steps": 10
     },
@@ -797,7 +797,7 @@
       "place_on_support": true,
       "xy": [
         1.2,
-        1.45
+        1.61
       ],
       "settle_steps": 10
     },
@@ -814,7 +814,7 @@
       "place_on_support": true,
       "xy": [
         -0.8,
-        1.75
+        1.83
       ],
       "settle_steps": 10
     },
@@ -831,7 +831,7 @@
       "place_on_support": true,
       "xy": [
         -0.3,
-        1.75
+        1.83
       ],
       "settle_steps": 10
     },
@@ -848,7 +848,7 @@
       "place_on_support": true,
       "xy": [
         0.2,
-        1.75
+        1.83
       ],
       "settle_steps": 10
     },
@@ -865,7 +865,7 @@
       "place_on_support": true,
       "xy": [
         0.7,
-        1.75
+        1.83
       ],
       "settle_steps": 10
     },
@@ -882,7 +882,7 @@
       "place_on_support": true,
       "xy": [
         1.2,
-        1.75
+        1.83
       ],
       "settle_steps": 10
     },
@@ -937,7 +937,7 @@
     "shoe19_starts_on_source": "shoe19_on_source",
     "shoe19_Covered_dust": "shoe19_Covered_dust"
   },
-  "public_instruction": "将 10 双共 20 只积尘鞋逐件放到护理台，清除尘土，再按公开可见的配对标识放回对应鞋位。每双两只应相邻，护理刷最后归位。",
+  "public_instruction": "把蓝台的 20 只积尘鞋逐件放到黄色护理台去尘，再两只一组摆到 10 个绿色鞋位。每个鞋位恰好两只且两只相邻，同款鞋可互换，最后护理刷归位。",
   "public_context": [
     "蓝台 20 只鞋逐件在黄台去尘后归位；10 个绿色鞋位每个恰好两只，两只相邻。同款鞋可互换，不按隐藏主人编号评分。",
     "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。"
@@ -3697,13 +3697,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair00",
         "destination_xy": [
-          -1.1,
-          -3.1
+          0.65,
+          -4.567
         ],
         "primitive": "wipe"
       },
@@ -3712,13 +3712,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair00",
         "destination_xy": [
-          -0.9,
-          -3.1
+          0.65,
+          -4.433
         ],
         "primitive": "wipe"
       },
@@ -3727,13 +3727,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair01",
         "destination_xy": [
-          -0.58,
-          -3.1
+          0.65,
+          -3.717
         ],
         "primitive": "wipe"
       },
@@ -3742,13 +3742,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair01",
         "destination_xy": [
-          -0.38,
-          -3.1
+          0.65,
+          -3.5829999999999997
         ],
         "primitive": "wipe"
       },
@@ -3757,13 +3757,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair02",
         "destination_xy": [
-          -0.05999999999999997,
-          -3.1
+          0.65,
+          -2.867
         ],
         "primitive": "wipe"
       },
@@ -3772,13 +3772,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair02",
         "destination_xy": [
-          0.14000000000000004,
-          -3.1
+          0.65,
+          -2.7329999999999997
         ],
         "primitive": "wipe"
       },
@@ -3787,13 +3787,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair03",
         "destination_xy": [
-          0.4600000000000001,
-          -3.1
+          0.65,
+          -2.0170000000000003
         ],
         "primitive": "wipe"
       },
@@ -3802,13 +3802,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair03",
         "destination_xy": [
-          0.66,
-          -3.1
+          0.65,
+          -1.8830000000000002
         ],
         "primitive": "wipe"
       },
@@ -3817,13 +3817,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair04",
         "destination_xy": [
-          0.9800000000000001,
-          -3.1
+          0.65,
+          -1.167
         ],
         "primitive": "wipe"
       },
@@ -3832,13 +3832,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair04",
         "destination_xy": [
-          1.1800000000000002,
-          -3.1
+          0.65,
+          -1.0330000000000001
         ],
         "primitive": "wipe"
       },
@@ -3847,13 +3847,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair05",
         "destination_xy": [
-          -1.1,
-          -2.4000000000000004
+          1.75,
+          -4.567
         ],
         "primitive": "wipe"
       },
@@ -3862,13 +3862,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair05",
         "destination_xy": [
-          -0.9,
-          -2.4000000000000004
+          1.75,
+          -4.433
         ],
         "primitive": "wipe"
       },
@@ -3877,13 +3877,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair06",
         "destination_xy": [
-          -0.58,
-          -2.4000000000000004
+          1.75,
+          -3.717
         ],
         "primitive": "wipe"
       },
@@ -3892,13 +3892,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair06",
         "destination_xy": [
-          -0.38,
-          -2.4000000000000004
+          1.75,
+          -3.5829999999999997
         ],
         "primitive": "wipe"
       },
@@ -3907,13 +3907,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair07",
         "destination_xy": [
-          -0.05999999999999997,
-          -2.4000000000000004
+          1.75,
+          -2.867
         ],
         "primitive": "wipe"
       },
@@ -3922,13 +3922,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair07",
         "destination_xy": [
-          0.14000000000000004,
-          -2.4000000000000004
+          1.75,
+          -2.7329999999999997
         ],
         "primitive": "wipe"
       },
@@ -3937,13 +3937,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair08",
         "destination_xy": [
-          0.4600000000000001,
-          -2.4000000000000004
+          1.75,
+          -2.0170000000000003
         ],
         "primitive": "wipe"
       },
@@ -3952,13 +3952,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair08",
         "destination_xy": [
-          0.66,
-          -2.4000000000000004
+          1.75,
+          -1.8830000000000002
         ],
         "primitive": "wipe"
       },
@@ -3967,13 +3967,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair09",
         "destination_xy": [
-          0.9800000000000001,
-          -2.4000000000000004
+          1.75,
+          -1.167
         ],
         "primitive": "wipe"
       },
@@ -3982,13 +3982,13 @@
         "source": "source",
         "stage": "stage",
         "stage_xy": [
-          1.6,
-          -0.6
+          0.65,
+          0.25
         ],
         "destination": "pair09",
         "destination_xy": [
-          1.1800000000000002,
-          -2.4000000000000004
+          1.75,
+          -1.0330000000000001
         ],
         "primitive": "wipe"
       }
@@ -3996,8 +3996,8 @@
     "tool": "tool",
     "tool_home": "tool_home",
     "tool_xy": [
-      1.5,
-      0.4
+      1.75,
+      0.45
     ],
     "toggle": false
   },

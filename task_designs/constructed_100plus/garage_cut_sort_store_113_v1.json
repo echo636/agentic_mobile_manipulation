@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "garage_cut_sort_store_113_v1",
-  "instance_id": "garage_cut_sort_store_113_v1_seed0_r1",
+  "instance_id": "garage_cut_sort_store_113_v1_seed0_r2",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -89,7 +89,7 @@
       "position": [
         -9.4,
         5.7,
-        0.8
+        0.85
       ]
     },
     {
@@ -100,7 +100,7 @@
       "position": [
         -9.4,
         5.9,
-        1.0
+        0.85
       ]
     },
     {
@@ -109,9 +109,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        1.0
+        -12.700000000000001,
+        2.72,
+        0.85
       ]
     },
     {
@@ -120,9 +120,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        1.2
+        -12.100000000000001,
+        2.72,
+        0.85
       ]
     },
     {
@@ -131,9 +131,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        1.4
+        -11.5,
+        2.72,
+        0.85
       ]
     },
     {
@@ -142,9 +142,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        1.6
+        -10.9,
+        2.72,
+        0.85
       ]
     },
     {
@@ -153,9 +153,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        1.8
+        -12.700000000000001,
+        3.04,
+        0.85
       ]
     },
     {
@@ -164,9 +164,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        2.0
+        -12.100000000000001,
+        3.04,
+        0.85
       ]
     },
     {
@@ -175,9 +175,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        2.2
+        -11.5,
+        3.04,
+        0.85
       ]
     },
     {
@@ -186,9 +186,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        2.4000000000000004
+        -10.9,
+        3.04,
+        0.85
       ]
     },
     {
@@ -197,9 +197,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        2.6
+        -12.700000000000001,
+        3.3600000000000003,
+        0.85
       ]
     },
     {
@@ -208,9 +208,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        2.8
+        -12.100000000000001,
+        3.3600000000000003,
+        0.85
       ]
     },
     {
@@ -219,9 +219,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        3.0
+        -11.5,
+        3.3600000000000003,
+        0.85
       ]
     },
     {
@@ -230,9 +230,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        3.2
+        -10.9,
+        3.3600000000000003,
+        0.85
       ]
     },
     {
@@ -241,9 +241,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        3.4000000000000004
+        -12.700000000000001,
+        3.68,
+        0.85
       ]
     },
     {
@@ -252,9 +252,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        3.6
+        -12.100000000000001,
+        3.68,
+        0.85
       ]
     },
     {
@@ -263,9 +263,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        3.8000000000000003
+        -11.5,
+        3.68,
+        0.85
       ]
     },
     {
@@ -274,9 +274,9 @@
       "source_object": "log_174",
       "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
       "position": [
-        -11.8,
-        3.2,
-        4.0
+        -10.9,
+        3.68,
+        0.85
       ]
     }
   ],

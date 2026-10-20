@@ -64,6 +64,9 @@ def main():
         if backend is not None and hasattr(backend,'env'):
             try:
                 live={o.name:o for o in backend.env.scene.objects}
+                write_json(a.output/'scene_geometry.json',{name:{'category':obj.category,
+                    'aabb':[v.tolist() for v in obj.aabb], 'fixed':obj.fixed_base}
+                    for name,obj in live.items()})
                 write_json(a.output/'geometry.json',{role:({'aabb':[v.tolist() for v in live[name].aabb],
                     'pose':[v.tolist() for v in live[name].get_position_orientation()],
                     'states':[s.__name__ for s in live[name].states],'fixed':live[name].fixed_base} if name in live else None)

@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "garden_treatment_and_distribution_100_v1",
-  "instance_id": "garden_treatment_and_distribution_100_v1_seed0_r1",
+  "instance_id": "garden_treatment_and_distribution_100_v1_seed0_r2",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -54,7 +54,7 @@
       "position": [
         15.5,
         8.4,
-        0.8
+        0.85
       ]
     },
     {
@@ -63,9 +63,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        12.4,
-        12.5,
-        1.0
+        11.36,
+        12.2,
+        0.85
       ]
     },
     {
@@ -74,9 +74,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        12.4,
-        12.5,
-        1.5
+        11.88,
+        12.2,
+        0.85
       ]
     },
     {
@@ -86,8 +86,8 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         12.4,
-        12.5,
-        2.0
+        12.2,
+        0.85
       ]
     },
     {
@@ -96,9 +96,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        12.4,
-        12.5,
-        2.5
+        12.92,
+        12.2,
+        0.85
       ]
     },
     {
@@ -107,9 +107,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        12.4,
-        12.5,
-        3.0
+        13.440000000000001,
+        12.2,
+        0.85
       ]
     },
     {
@@ -118,9 +118,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        12.4,
-        12.5,
-        3.5
+        11.36,
+        12.8,
+        0.85
       ]
     },
     {
@@ -129,9 +129,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        12.4,
-        12.5,
-        4.0
+        11.88,
+        12.8,
+        0.85
       ]
     },
     {
@@ -141,8 +141,8 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         12.4,
-        12.5,
-        4.5
+        12.8,
+        0.85
       ]
     },
     {
@@ -151,9 +151,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        12.4,
-        12.5,
-        5.0
+        12.92,
+        12.8,
+        0.85
       ]
     },
     {
@@ -162,9 +162,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        12.4,
-        12.5,
-        5.5
+        13.440000000000001,
+        12.8,
+        0.85
       ]
     },
     {
@@ -173,9 +173,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        6.0
+        15.16,
+        12.2,
+        0.85
       ]
     },
     {
@@ -184,9 +184,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        6.5
+        15.68,
+        12.2,
+        0.85
       ]
     },
     {
@@ -195,9 +195,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        7.0
+        16.2,
+        12.2,
+        0.85
       ]
     },
     {
@@ -206,9 +206,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        7.5
+        16.72,
+        12.2,
+        0.85
       ]
     },
     {
@@ -217,9 +217,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        8.0
+        17.24,
+        12.2,
+        0.85
       ]
     },
     {
@@ -228,9 +228,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        8.5
+        15.16,
+        12.8,
+        0.85
       ]
     },
     {
@@ -239,9 +239,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        9.0
+        15.68,
+        12.8,
+        0.85
       ]
     },
     {
@@ -250,9 +250,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        9.5
+        16.2,
+        12.8,
+        0.85
       ]
     },
     {
@@ -261,9 +261,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        10.0
+        16.72,
+        12.8,
+        0.85
       ]
     },
     {
@@ -272,9 +272,9 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        14.600000000000001,
-        12.5,
-        10.5
+        17.24,
+        12.8,
+        0.85
       ]
     },
     {
@@ -283,9 +283,9 @@
       "source_object": "pot_plant_173",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        16.0,
-        10.7,
-        1.0
+        17.67,
+        10.37,
+        0.85
       ]
     },
     {
@@ -294,9 +294,9 @@
       "source_object": "pot_plant_173",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        16.0,
-        10.7,
-        1.5
+        18.33,
+        10.37,
+        0.85
       ]
     },
     {
@@ -305,9 +305,9 @@
       "source_object": "pot_plant_173",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        16.0,
-        10.7,
-        2.0
+        17.67,
+        11.03,
+        0.85
       ]
     },
     {
@@ -316,9 +316,9 @@
       "source_object": "pot_plant_173",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        16.0,
-        10.7,
-        2.5
+        18.33,
+        11.03,
+        0.85
       ]
     }
   ],
@@ -331,8 +331,8 @@
         0.225
       ],
       "size": [
-        1.8,
-        1.2,
+        2.6,
+        1.3,
         0.45
       ],
       "rgba": [
@@ -346,13 +346,13 @@
     {
       "name": "lh_source1",
       "position": [
-        14.6,
+        16.2,
         12.5,
         0.225
       ],
       "size": [
-        1.8,
-        1.2,
+        2.6,
+        1.3,
         0.45
       ],
       "rgba": [
@@ -391,8 +391,8 @@
         0.225
       ],
       "size": [
-        1.8,
-        1.2,
+        2.6,
+        1.3,
         0.45
       ],
       "rgba": [
@@ -406,13 +406,13 @@
     {
       "name": "lh_destination1",
       "position": [
-        14.6,
+        16.2,
         4.5,
         0.225
       ],
       "size": [
-        1.8,
-        1.2,
+        2.6,
+        1.3,
         0.45
       ],
       "rgba": [
@@ -426,13 +426,13 @@
     {
       "name": "lh_controls",
       "position": [
-        16.0,
+        18.0,
         10.7,
         0.225
       ],
       "size": [
-        1.4,
-        1.2,
+        1.6,
+        1.6,
         0.45
       ],
       "rgba": [
@@ -486,8 +486,8 @@
       "target": "source0",
       "place_on_support": true,
       "xy": [
-        11.72,
-        12.22
+        11.36,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -503,8 +503,8 @@
       "target": "source0",
       "place_on_support": true,
       "xy": [
-        12.06,
-        12.22
+        11.88,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -521,7 +521,7 @@
       "place_on_support": true,
       "xy": [
         12.4,
-        12.22
+        12.2
       ],
       "settle_steps": 10
     },
@@ -537,8 +537,8 @@
       "target": "source0",
       "place_on_support": true,
       "xy": [
-        12.74,
-        12.22
+        12.92,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -554,8 +554,8 @@
       "target": "source0",
       "place_on_support": true,
       "xy": [
-        13.08,
-        12.22
+        13.440000000000001,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -571,8 +571,8 @@
       "target": "source0",
       "place_on_support": true,
       "xy": [
-        11.72,
-        12.78
+        11.36,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -588,8 +588,8 @@
       "target": "source0",
       "place_on_support": true,
       "xy": [
-        12.06,
-        12.78
+        11.88,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -606,7 +606,7 @@
       "place_on_support": true,
       "xy": [
         12.4,
-        12.78
+        12.8
       ],
       "settle_steps": 10
     },
@@ -622,8 +622,8 @@
       "target": "source0",
       "place_on_support": true,
       "xy": [
-        12.74,
-        12.78
+        12.92,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -639,8 +639,8 @@
       "target": "source0",
       "place_on_support": true,
       "xy": [
-        13.08,
-        12.78
+        13.440000000000001,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -656,8 +656,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        13.920000000000002,
-        12.22
+        15.16,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -673,8 +673,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        14.260000000000002,
-        12.22
+        15.68,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -690,8 +690,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        14.600000000000001,
-        12.22
+        16.2,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -707,8 +707,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        14.940000000000001,
-        12.22
+        16.72,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -724,8 +724,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        15.280000000000001,
-        12.22
+        17.24,
+        12.2
       ],
       "settle_steps": 10
     },
@@ -741,8 +741,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        13.920000000000002,
-        12.78
+        15.16,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -758,8 +758,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        14.260000000000002,
-        12.78
+        15.68,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -775,8 +775,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        14.600000000000001,
-        12.78
+        16.2,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -792,8 +792,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        14.940000000000001,
-        12.78
+        16.72,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -809,8 +809,8 @@
       "target": "source1",
       "place_on_support": true,
       "xy": [
-        15.280000000000001,
-        12.78
+        17.24,
+        12.8
       ],
       "settle_steps": 10
     },
@@ -826,8 +826,8 @@
       "target": "controls",
       "place_on_support": true,
       "xy": [
-        15.7,
-        10.399999999999999
+        17.67,
+        10.37
       ],
       "settle_steps": 10
     },
@@ -843,8 +843,8 @@
       "target": "controls",
       "place_on_support": true,
       "xy": [
-        16.3,
-        10.399999999999999
+        18.33,
+        10.37
       ],
       "settle_steps": 10
     },
@@ -860,8 +860,8 @@
       "target": "controls",
       "place_on_support": true,
       "xy": [
-        15.7,
-        11.0
+        17.67,
+        11.03
       ],
       "settle_steps": 10
     },
@@ -877,8 +877,8 @@
       "target": "controls",
       "place_on_support": true,
       "xy": [
-        16.3,
-        11.0
+        18.33,
+        11.03
       ],
       "settle_steps": 10
     },
@@ -994,7 +994,7 @@
   },
   "public_instruction": "把待处理区的 20 盆植物逐件送到处理台，用指定喷雾处理后送到两处展示区。旁边 4 盆带公开“对照／勿喷”标识的盆栽保持不动且不沾本次材料。最后关闭并归还喷壶。",
   "public_context": [
-    "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后送到绿色展示台，同款植物在两张绿台间可互换。",
+    "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后送到绿色展示台，两张绿台各放 10 盆，同款植物可互换。",
     "红台四盆对照必须留在红台，整个过程中都不能沾上本次喷雾材料。",
     "完成后喷壶关闭并归还灰色工具台。",
     "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。"
@@ -1002,7 +1002,7 @@
   "requirements": [
     {
       "id": "treatment",
-      "text": "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后送到绿色展示台，同款植物在两张绿台间可互换。",
+      "text": "20 盆待处理植物必须在黄色处理台喷洒 insectifuge 后送到绿色展示台，两张绿台各放 10 盆，同款植物可互换。",
       "terminal": [
         "plant00_delivered",
         "plant01_delivered",
@@ -1023,7 +1023,9 @@
         "plant16_delivered",
         "plant17_delivered",
         "plant18_delivered",
-        "plant19_delivered"
+        "plant19_delivered",
+        "destination0_count",
+        "destination1_count"
       ],
       "milestones": [
         "plant00_staged",
@@ -1121,9 +1123,13 @@
       ],
       "constraints": [
         "control0_never_spray",
+        "control0_stays",
         "control1_never_spray",
+        "control1_stays",
         "control2_never_spray",
-        "control3_never_spray"
+        "control2_stays",
+        "control3_never_spray",
+        "control3_stays"
       ]
     },
     {
@@ -1657,6 +1663,60 @@
         "state": "OnTop",
         "target": "destination1"
       },
+      "destination0_count": {
+        "object": "destination0",
+        "state": "CountOnTop",
+        "count": 10,
+        "members": [
+          "plant00",
+          "plant01",
+          "plant02",
+          "plant03",
+          "plant04",
+          "plant05",
+          "plant06",
+          "plant07",
+          "plant08",
+          "plant09",
+          "plant10",
+          "plant11",
+          "plant12",
+          "plant13",
+          "plant14",
+          "plant15",
+          "plant16",
+          "plant17",
+          "plant18",
+          "plant19"
+        ]
+      },
+      "destination1_count": {
+        "object": "destination1",
+        "state": "CountOnTop",
+        "count": 10,
+        "members": [
+          "plant00",
+          "plant01",
+          "plant02",
+          "plant03",
+          "plant04",
+          "plant05",
+          "plant06",
+          "plant07",
+          "plant08",
+          "plant09",
+          "plant10",
+          "plant11",
+          "plant12",
+          "plant13",
+          "plant14",
+          "plant15",
+          "plant16",
+          "plant17",
+          "plant18",
+          "plant19"
+        ]
+      },
       "control0_on_controls": {
         "object": "control0",
         "state": "OnTop",
@@ -1927,6 +1987,8 @@
           }
         ]
       },
+      "destination0_count": "destination0_count",
+      "destination1_count": "destination1_count",
       "control0_unchanged": {
         "all": [
           {
@@ -2752,10 +2814,20 @@
         "until": null
       },
       {
+        "id": "control0_stays",
+        "require": "control0_on_controls",
+        "until": null
+      },
+      {
         "id": "control1_never_spray",
         "require": {
           "not": "control1_Covered_insectifuge"
         },
+        "until": null
+      },
+      {
+        "id": "control1_stays",
+        "require": "control1_on_controls",
         "until": null
       },
       {
@@ -2766,10 +2838,20 @@
         "until": null
       },
       {
+        "id": "control2_stays",
+        "require": "control2_on_controls",
+        "until": null
+      },
+      {
         "id": "control3_never_spray",
         "require": {
           "not": "control3_Covered_insectifuge"
         },
+        "until": null
+      },
+      {
+        "id": "control3_stays",
+        "require": "control3_on_controls",
         "until": null
       }
     ],
@@ -2809,8 +2891,8 @@
         ],
         "destination": "destination0",
         "destination_xy": [
-          11.72,
-          4.220000000000001
+          11.36,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -2824,8 +2906,8 @@
         ],
         "destination": "destination0",
         "destination_xy": [
-          12.06,
-          4.220000000000001
+          11.88,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -2840,7 +2922,7 @@
         "destination": "destination0",
         "destination_xy": [
           12.4,
-          4.220000000000001
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -2854,8 +2936,8 @@
         ],
         "destination": "destination0",
         "destination_xy": [
-          12.74,
-          4.220000000000001
+          12.92,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -2869,8 +2951,8 @@
         ],
         "destination": "destination0",
         "destination_xy": [
-          13.08,
-          4.220000000000001
+          13.440000000000001,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -2884,8 +2966,8 @@
         ],
         "destination": "destination0",
         "destination_xy": [
-          11.72,
-          4.779999999999999
+          11.36,
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -2899,8 +2981,8 @@
         ],
         "destination": "destination0",
         "destination_xy": [
-          12.06,
-          4.779999999999999
+          11.88,
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -2915,7 +2997,7 @@
         "destination": "destination0",
         "destination_xy": [
           12.4,
-          4.779999999999999
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -2929,8 +3011,8 @@
         ],
         "destination": "destination0",
         "destination_xy": [
-          12.74,
-          4.779999999999999
+          12.92,
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -2944,8 +3026,8 @@
         ],
         "destination": "destination0",
         "destination_xy": [
-          13.08,
-          4.779999999999999
+          13.440000000000001,
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -2959,8 +3041,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          13.920000000000002,
-          4.220000000000001
+          15.16,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -2974,8 +3056,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          14.260000000000002,
-          4.220000000000001
+          15.68,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -2989,8 +3071,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          14.600000000000001,
-          4.220000000000001
+          16.2,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -3004,8 +3086,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          14.940000000000001,
-          4.220000000000001
+          16.72,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -3019,8 +3101,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          15.280000000000001,
-          4.220000000000001
+          17.24,
+          4.199999999999999
         ],
         "primitive": "spray"
       },
@@ -3034,8 +3116,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          13.920000000000002,
-          4.779999999999999
+          15.16,
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -3049,8 +3131,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          14.260000000000002,
-          4.779999999999999
+          15.68,
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -3064,8 +3146,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          14.600000000000001,
-          4.779999999999999
+          16.2,
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -3079,8 +3161,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          14.940000000000001,
-          4.779999999999999
+          16.72,
+          4.800000000000001
         ],
         "primitive": "spray"
       },
@@ -3094,8 +3176,8 @@
         ],
         "destination": "destination1",
         "destination_xy": [
-          15.280000000000001,
-          4.779999999999999
+          17.24,
+          4.800000000000001
         ],
         "primitive": "spray"
       }
@@ -3116,6 +3198,6 @@
     "proposed_model_act_look_budget": 600
   },
   "design_deviations": [
-    "All treated pots may use either green display table: identical pots are interchangeable; no hidden visual category assignment."
+    "Treated pots are interchangeable across green tables; exactly ten on each, without hidden category/identity assignment."
   ]
 }
