@@ -19,6 +19,12 @@ The follow-up repair batch is `operations/long_horizon_repair_20261020/`.
 Each attempt retains its own source and evidence; an earlier failure is not
 replaced by a later repair.
 
+On October 20 the user deferred executor repairs and requested additional tasks
+with at least 100 useful tool calls. The [100+ task design catalog](long_horizon_100plus_designs.md)
+proposes five tasks with conditional individual-transfer ledgers of 102–192
+grasp/place calls. These are design-only proposals, separate from the five
+runtime candidates below; they have no frozen scenes or physical acceptance.
+
 ## Tasks and dependencies
 
 | Task | Coupled work | Independent work |
