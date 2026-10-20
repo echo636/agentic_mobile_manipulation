@@ -60,6 +60,30 @@ class ApplianceApproachTests(unittest.TestCase):
 
 
 class ReferenceRecoveryTests(unittest.TestCase):
+    def test_appliance_operation_keeps_valid_loading_stance(self):
+        try:
+            import torch
+        except ImportError:
+            self.skipTest('The pinned geometry environment supplies torch')
+        backend = SimpleNamespace(torch=torch, custom_spec={'id': 'warm_lunch_and_restore_v2'})
+        backend.robot = SimpleNamespace(get_position_orientation=lambda: (torch.tensor([5.125, -.025, 0.]), None))
+        reference = ReferenceTask(backend, None)
+        reference.obj = lambda role: SimpleNamespace(get_position_orientation=lambda: (torch.tensor([4.213, .7885, 1.038]), None))
+        calls = []
+        def action(primitive, *args, **kwargs):
+            self.assertNotEqual(primitive, 'navigate_to', 'A checked loading stance must also allow appliance operations')
+            calls.append(primitive)
+        reference.action = action
+        for primitive in ('close', 'toggle_on', 'toggle_off', 'open'):
+            reference.move(primitive, 'microwave')
+        self.assertEqual(calls, ['close', 'toggle_on', 'toggle_off', 'open'])
+        # Crossing the real reach boundary must still require an approach.
+        backend.robot = SimpleNamespace(get_position_orientation=lambda: (torch.tensor([5.8, -.025, 0.]), None))
+        calls.clear()
+        reference.action = lambda primitive, *args, **kwargs: calls.append(primitive)
+        reference.move('close', 'microwave')
+        self.assertEqual(calls, ['navigate_to', 'close'])
+
     def test_empty_return_keeps_both_endpoints_in_reach_without_loaded_navigation(self):
         reference = ReferenceTask(None, None)
         held = False

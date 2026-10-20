@@ -123,7 +123,11 @@ class ReferenceTask:
         base = backend.robot.get_position_orientation()[0]
         distance = float(backend.torch.linalg.vector_norm(
             base[:2] - backend.torch.tensor(target[:2], device=base.device)))
-        if distance > 1.2:
+        # An appliance already in the executor's checked 1.4 m reach needs
+        # no extra approach. In particular, a valid microwave-loading stance
+        # must remain usable for closing and toggling it after release.
+        approach_distance = 1.4 if role in ('fridge', 'microwave') else 1.2
+        if distance > approach_distance:
             task = backend.custom_spec['id']
             if task.startswith('workshop'):
                 if role == 'bookshelf':
@@ -230,7 +234,9 @@ class ReferenceTask:
         self.move('open', 'fridge')
         for i in (1, 2):
             self.stage_fridge_food(f'hotdog{i}')
-            self.inside('microwave')
+            self.floor(5.5, -.9)
+            self.floor(5.2, 0.)
+            self.action('place_inside', 'microwave')
         self.move('close', 'microwave')
         self.move('toggle_on', 'microwave')
         if order == 'cook_first':
