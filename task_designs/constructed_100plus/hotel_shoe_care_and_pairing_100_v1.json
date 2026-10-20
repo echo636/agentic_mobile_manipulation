@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "hotel_shoe_care_and_pairing_100_v1",
-  "instance_id": "hotel_shoe_care_and_pairing_100_v1_seed0_r5",
+  "instance_id": "hotel_shoe_care_and_pairing_100_v1_seed0_r6",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -68,8 +68,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        -0.8,
-        1.17,
+        -0.36,
+        1.44,
         0.85
       ]
     },
@@ -79,8 +79,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        -0.3,
-        1.17,
+        0.020000000000000018,
+        1.44,
         0.85
       ]
     },
@@ -90,8 +90,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.17,
+        0.4,
+        1.44,
         0.85
       ]
     },
@@ -101,8 +101,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.7,
-        1.17,
+        0.78,
+        1.44,
         0.85
       ]
     },
@@ -112,8 +112,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        1.2,
-        1.17,
+        1.1600000000000001,
+        1.44,
         0.85
       ]
     },
@@ -123,8 +123,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        -0.8,
-        1.39,
+        -0.36,
+        1.5799999999999998,
         0.85
       ]
     },
@@ -134,8 +134,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        -0.3,
-        1.39,
+        0.020000000000000018,
+        1.5799999999999998,
         0.85
       ]
     },
@@ -145,8 +145,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.39,
+        0.4,
+        1.5799999999999998,
         0.85
       ]
     },
@@ -156,8 +156,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.7,
-        1.39,
+        0.78,
+        1.5799999999999998,
         0.85
       ]
     },
@@ -167,8 +167,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        1.2,
-        1.39,
+        1.1600000000000001,
+        1.5799999999999998,
         0.85
       ]
     },
@@ -178,8 +178,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        -0.8,
-        1.61,
+        -0.36,
+        1.72,
         0.85
       ]
     },
@@ -189,8 +189,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        -0.3,
-        1.61,
+        0.020000000000000018,
+        1.72,
         0.85
       ]
     },
@@ -200,8 +200,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.61,
+        0.4,
+        1.72,
         0.85
       ]
     },
@@ -211,8 +211,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.7,
-        1.61,
+        0.78,
+        1.72,
         0.85
       ]
     },
@@ -222,8 +222,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        1.2,
-        1.61,
+        1.1600000000000001,
+        1.72,
         0.85
       ]
     },
@@ -233,8 +233,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        -0.8,
-        1.83,
+        -0.36,
+        1.8599999999999999,
         0.85
       ]
     },
@@ -244,8 +244,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        -0.3,
-        1.83,
+        0.020000000000000018,
+        1.8599999999999999,
         0.85
       ]
     },
@@ -255,8 +255,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.2,
-        1.83,
+        0.4,
+        1.8599999999999999,
         0.85
       ]
     },
@@ -266,8 +266,8 @@
       "source_object": "walker_43",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        0.7,
-        1.83,
+        0.78,
+        1.8599999999999999,
         0.85
       ]
     },
@@ -277,8 +277,8 @@
       "source_object": "walker_44",
       "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
       "position": [
-        1.2,
-        1.83,
+        1.1600000000000001,
+        1.8599999999999999,
         0.85
       ]
     }
@@ -287,13 +287,13 @@
     {
       "name": "lh_source",
       "position": [
-        0.2,
-        1.5,
+        0.4,
+        1.65,
         0.225
       ],
       "size": [
-        2.8,
-        1.1,
+        2.2,
+        0.7,
         0.45
       ],
       "rgba": [
@@ -587,8 +587,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        -0.8,
-        1.17
+        -0.36,
+        1.44
       ],
       "settle_steps": 10,
       "orientation": [
@@ -611,8 +611,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        -0.3,
-        1.17
+        0.020000000000000018,
+        1.44
       ],
       "settle_steps": 10,
       "orientation": [
@@ -635,8 +635,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        0.2,
-        1.17
+        0.4,
+        1.44
       ],
       "settle_steps": 10,
       "orientation": [
@@ -659,8 +659,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        0.7,
-        1.17
+        0.78,
+        1.44
       ],
       "settle_steps": 10,
       "orientation": [
@@ -683,8 +683,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        1.2,
-        1.17
+        1.1600000000000001,
+        1.44
       ],
       "settle_steps": 10,
       "orientation": [
@@ -707,8 +707,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        -0.8,
-        1.39
+        -0.36,
+        1.5799999999999998
       ],
       "settle_steps": 10,
       "orientation": [
@@ -731,8 +731,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        -0.3,
-        1.39
+        0.020000000000000018,
+        1.5799999999999998
       ],
       "settle_steps": 10,
       "orientation": [
@@ -755,8 +755,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        0.2,
-        1.39
+        0.4,
+        1.5799999999999998
       ],
       "settle_steps": 10,
       "orientation": [
@@ -779,8 +779,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        0.7,
-        1.39
+        0.78,
+        1.5799999999999998
       ],
       "settle_steps": 10,
       "orientation": [
@@ -803,8 +803,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        1.2,
-        1.39
+        1.1600000000000001,
+        1.5799999999999998
       ],
       "settle_steps": 10,
       "orientation": [
@@ -827,8 +827,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        -0.8,
-        1.61
+        -0.36,
+        1.72
       ],
       "settle_steps": 10,
       "orientation": [
@@ -851,8 +851,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        -0.3,
-        1.61
+        0.020000000000000018,
+        1.72
       ],
       "settle_steps": 10,
       "orientation": [
@@ -875,8 +875,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        0.2,
-        1.61
+        0.4,
+        1.72
       ],
       "settle_steps": 10,
       "orientation": [
@@ -899,8 +899,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        0.7,
-        1.61
+        0.78,
+        1.72
       ],
       "settle_steps": 10,
       "orientation": [
@@ -923,8 +923,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        1.2,
-        1.61
+        1.1600000000000001,
+        1.72
       ],
       "settle_steps": 10,
       "orientation": [
@@ -947,8 +947,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        -0.8,
-        1.83
+        -0.36,
+        1.8599999999999999
       ],
       "settle_steps": 10,
       "orientation": [
@@ -971,8 +971,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        -0.3,
-        1.83
+        0.020000000000000018,
+        1.8599999999999999
       ],
       "settle_steps": 10,
       "orientation": [
@@ -995,8 +995,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        0.2,
-        1.83
+        0.4,
+        1.8599999999999999
       ],
       "settle_steps": 10,
       "orientation": [
@@ -1019,8 +1019,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        0.7,
-        1.83
+        0.78,
+        1.8599999999999999
       ],
       "settle_steps": 10,
       "orientation": [
@@ -1043,8 +1043,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        1.2,
-        1.83
+        1.1600000000000001,
+        1.8599999999999999
       ],
       "settle_steps": 10,
       "orientation": [
@@ -4188,6 +4188,19 @@
     "measured_useful_calls": null,
     "reference_attempt_budget": 1000,
     "proposed_model_act_look_budget": 600
+  },
+  "robot_start": {
+    "position": [
+      1.05,
+      -2.0,
+      0.02
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
   },
   "scene_exclusions": [
     "armchair_ybcnmu_0"
