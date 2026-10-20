@@ -140,6 +140,11 @@ positions on destination surfaces are unrestricted. A final photograph of five
 tools on the bench and an empty box at storage cannot replace the required loaded
 transport history. The reference approaches a moved object using its current
 position, including the box and tools after delivery.
+Packing now inserts the larger tools first and allows counted free settling
+between insertions. Unloading rechecks native support contacts after each
+removal and selects a tool with no other remaining tool resting on it. These
+are privileged reference heuristics, not instructions given to the model, and
+require fresh physical validation for both branch orders.
 
 Every public context entry maps to one or more scored conditions in `requirements`.
 The validator rejects hidden score conditions, unscored public requirements,

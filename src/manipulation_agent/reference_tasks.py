@@ -12,6 +12,23 @@ import time
 from .contracts import SkillError
 
 
+KIT_PACKING_ORDER = ('drill', 'pliers', 'flashlight', 'screwdriver', 'allen_wrench')
+
+
+def next_unstacked_tool(remaining, support_edges):
+    """Choose a tool that supports no other remaining tool (child, support).
+
+    The caller measures native contact again after every removal. A cycle is
+    ambiguous evidence and must not silently become a multi-object grasp.
+    """
+    supporting = {support for child, support in support_edges
+                  if child in remaining and support in remaining}
+    for tool in remaining:
+        if tool not in supporting:
+            return tool
+    raise SkillError('support_cycle', 'No independently removable tool in the measured support graph')
+
+
 def placement_yaw_delta(orientation, desired_world_degrees):
     """Convert a fixture heading into the executor's relative placement yaw."""
     x, y, z, w = map(float, orientation)
@@ -324,13 +341,18 @@ class ReferenceTask:
             # its settled grasp point is ~7 cm beyond its placement target.
             self.floor(23.55, .95)
         self.move('open', 'box')
-        for item in ('pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill'):
-            if item != omit:
-                if delivered:
-                    self.action('grasp', item)
-                    self.inside('box')
-                else:
-                    self.transfer_inside(item, 'box')
+        # Large tools need the lower space. Let each placement settle before
+        # sampling the next one so pose stabilization cannot preserve a high
+        # stack of small tools beneath the drill. The final wait is in close.
+        items = [item for item in KIT_PACKING_ORDER if item != omit]
+        for index, item in enumerate(items):
+            if delivered:
+                self.action('grasp', item)
+                self.inside('box')
+            else:
+                self.transfer_inside(item, 'box')
+            if index + 1 < len(items):
+                self.action('wait', seconds=2.)
         self.close_packed_kit()
 
     def close_packed_kit(self):
@@ -376,23 +398,39 @@ class ReferenceTask:
                          reason='Checked opening rolled back; wait for free settling before retry')
                 self.action('wait', seconds=2.)
 
+    def tool_support_edges(self, remaining):
+        from omnigibson.object_states import OnTop, Touching
+        objects = {role: self.obj(role) for role in remaining}
+        return [(child, support) for child, obj in objects.items()
+                for support, parent in objects.items() if child != support
+                and OnTop in obj.states and Touching in obj.states
+                and obj.states[OnTop].get_value(parent)
+                and obj.states[Touching].get_value(parent)]
+
     def unpack_delivered_kit(self):
         # Reposition empty-handed and use nearby free bench space. The old
         # far-end placement required a long-offset carried assembly to turn
-        # in the narrow aisle. Reverse packing order also removes the
-        # flashlight supported on the pliers before grasping the pliers.
+        # in the narrow aisle. Use current support contacts instead of a fixed
+        # removal order: packing and settling can change which tool is on top.
         self.floor(23.5, 1.1)
-        for item, point in [
+        destinations = dict([
             ('drill', [24.4, 1., .92754]),
             ('flashlight', [24.6, .7, .92754]),
             ('screwdriver', [24.4, .5, .92754]),
             ('allen_wrench', [24.6, .3, .92754]),
             ('pliers', [24.2, .3, .92754]),
-        ]:
+        ])
+        remaining = list(destinations)
+        while remaining:
+            edges = self.tool_support_edges(remaining)
+            item = next_unstacked_tool(remaining, edges)
+            self.log('tool_unload_selection', selected=item, support_edges=edges,
+                     selection='privileged_native_contact_diagnostic')
             # Retain this stance. Ordinary reach, collision, payload and
             # contact checks still apply to both counted actions.
             self.action('grasp', item)
-            self.action('place_on_top', 'bench', point)
+            self.action('place_on_top', 'bench', destinations[item])
+            remaining.remove(item)
         self.action('wait', seconds=2.)
 
     def workshop(self, order, *, return_box=True):
@@ -535,13 +573,9 @@ class ReferenceTask:
             expected = {'constraint_conditions': {'power_off_before_cooked_bag_removal': False},
                         'historical_conditions': {'microwave_off_before_removal': True}}
         elif case in ('missing_tool', 'open_lid_transport'):
-            self.move('open', 'box')
-            items = ['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill']
-            for item in (items[:-1] if case == 'missing_tool' else items):
-                self.transfer_inside(item, 'box')
-            self.close_packed_kit()
+            self.pack_kit(omit='drill' if case == 'missing_tool' else None)
             if case == 'missing_tool':
-                witness = {item+'_in_box': item != 'drill' for item in items}
+                witness = {item+'_in_box': item != 'drill' for item in KIT_PACKING_ORDER}
                 expected = {'historical_conditions': {'packed_at_storage': False}}
             else:
                 self.move('open', 'box')

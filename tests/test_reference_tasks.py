@@ -8,7 +8,24 @@ from types import SimpleNamespace
 import unittest
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.reference_tasks import ReferenceTask, appliance_approach_point, placement_yaw_delta
+from manipulation_agent.reference_tasks import ReferenceTask, appliance_approach_point, placement_yaw_delta, next_unstacked_tool
+
+
+class UnstackedToolTests(unittest.TestCase):
+    def test_dependency_chain_removes_upper_tool_first(self):
+        remaining = ['drill', 'pliers', 'flashlight']
+        edges = [('pliers', 'drill'), ('flashlight', 'pliers')]
+        self.assertEqual(next_unstacked_tool(remaining, edges), 'flashlight')
+        remaining.remove('flashlight')
+        self.assertEqual(next_unstacked_tool(remaining, edges), 'pliers')
+
+    def test_changed_support_graph_overrides_previous_removal_order(self):
+        self.assertEqual(next_unstacked_tool(['flashlight', 'pliers'],
+                         [('pliers', 'flashlight')]), 'pliers')
+
+    def test_ambiguous_cycle_fails_without_grasping_a_stack(self):
+        with self.assertRaisesRegex(SkillError, 'independently removable'):
+            next_unstacked_tool(['pliers', 'drill'], [('pliers', 'drill'), ('drill', 'pliers')])
 
 
 class ApplianceApproachTests(unittest.TestCase):
@@ -132,9 +149,53 @@ class ReferenceRecoveryTests(unittest.TestCase):
                 placed.append(held)
                 held = None
         reference.action = action
+        reference.tool_support_edges = lambda remaining: [('flashlight', 'pliers')]
+        reference.log = lambda *args, **kwargs: None
         reference.unpack_delivered_kit()
         self.assertIsNone(held)
         self.assertCountEqual(placed, ['drill', 'flashlight', 'screwdriver', 'allen_wrench', 'pliers'])
+
+    def test_unload_rechecks_contacts_after_each_removal(self):
+        reference = ReferenceTask(None, None)
+        placed = []
+        measured = []
+        def edges(remaining):
+            measured.append(tuple(remaining))
+            # After removing the drill, the pliers settle onto the flashlight.
+            return [('pliers', 'flashlight')] if placed else []
+        reference.tool_support_edges = edges
+        reference.log = lambda *args, **kwargs: None
+        reference.action = lambda primitive, role=None, *args, **kwargs: placed.append(role) if primitive == 'grasp' else None
+        reference.unpack_delivered_kit()
+        self.assertEqual(len(measured), 5)
+        self.assertLess(placed.index('pliers'), placed.index('flashlight'))
+        for index, remaining in enumerate(measured):
+            self.assertFalse(set(placed[:index]) & set(remaining))
+
+    def test_next_insertion_and_final_close_wait_for_prior_contents(self):
+        for omit in (None, 'drill'):
+            reference = ReferenceTask(None, None)
+            unsettled = False
+            inserted = []
+            def transfer(item, destination):
+                nonlocal unsettled
+                self.assertFalse(unsettled, 'Do not sample the next placement against pinned contents')
+                inserted.append(item)
+                unsettled = True
+            def action(primitive, role=None, **kwargs):
+                nonlocal unsettled
+                if primitive == 'wait':
+                    self.assertGreater(kwargs['seconds'], 0.)
+                    unsettled = False
+                elif primitive == 'close':
+                    self.assertFalse(unsettled)
+            reference.transfer_inside = transfer
+            reference.action = action
+            reference.move = action
+            reference.pack_kit(omit=omit)
+            self.assertEqual('drill' in inserted, omit is None)
+            if omit is None:
+                self.assertEqual(inserted[0], 'drill')
 
     def reference(self, directory, failures, *, max_attempts=200):
         self.enterContext(redirect_stdout(io.StringIO()))
