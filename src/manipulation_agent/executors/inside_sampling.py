@@ -108,7 +108,9 @@ Rejected candidate poses never become committed actions or task evidence.
     identity_changed = False
 
     def restore():
+        nonlocal identity_changed
         if scene_object_identities(sim) != initial_objects or not particle_state_unchanged(initial_particles):
+            identity_changed = True
             raise SkillError('target_changed', 'Scene identities changed during assembly sampling', changed=True)
         sim.load_state(initial, serialized=False)
         restore_particle_state(initial_particles)

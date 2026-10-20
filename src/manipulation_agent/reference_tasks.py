@@ -339,12 +339,16 @@ class ReferenceTask:
                          reason='Checked close rolled back; wait for actual loose particles to settle')
 
     def serve_movie_dish(self, item, x, y):
-        if item in ('plate1', 'fork2'):
+        if item == 'plate1':
             self.floor(5.2, .5)
             self.action('grasp', item)
             self.floor(6.2, 1.2)
-            if item == 'fork2':
-                self.floor(4.4, 4.45)
+        elif item == 'fork2':
+            # East-side pickup retains ordinary 1.4 m reach and permits the
+            # loaded departure that the nearer south-side stance blocked.
+            self.floor(5.55, 1.2)
+            self.action('grasp', item)
+            self.floor(4.4, 4.45)
         elif item in ('cup1', 'cup2'):
             self.floor(5.7, 1.2)
             self.action('grasp', item)

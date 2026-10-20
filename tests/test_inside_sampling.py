@@ -285,6 +285,7 @@ class AssemblySamplingTests(unittest.TestCase):
                 sample_assembly_inside(b,held,target,contents,max_candidates=2)
         self.assertEqual(error.exception.code,'target_changed')
         self.assertEqual(state['loads'],0)
+        self.assertTrue(records[-1]['identity_changed'])
 
 
 if __name__=='__main__':unittest.main()
