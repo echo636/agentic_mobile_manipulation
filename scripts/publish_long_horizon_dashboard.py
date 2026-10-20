@@ -77,6 +77,59 @@ def role_label(role, family):
     return role
 
 
+def scene_explainer(batch, output, family, frozen, spec, story, inputs):
+    """Publish only reviewed annotations bound to the exact rendered RGB."""
+    annotations_path=REPO/'web/long_horizon/scene_explainers.json'
+    explanation=read(annotations_path)[family]
+    if explanation['spec_sha256']!=frozen['spec_sha256']:
+        raise ValueError('Scene annotations refer to a different frozen task')
+    root=checked_path(batch,batch/'runs'/explanation['run_id'])
+    capture=read(root/'scene_views.json');record=read(root/'run_record.json')
+    if (capture['status']!='passed' or record['status']!='passed' or record.get('process_exit_code')!=0
+            or not capture['object_poses_unchanged'] or capture['task_actions']!=0
+            or capture['spec_sha256']!=frozen['spec_sha256']
+            or capture['scene_sha256']!=frozen['scene_sha256']
+            or record['script_sha256']!=explanation['capture_script_sha256']):
+        raise ValueError('Inspection capture identity or render-only validation failed')
+    for name in ['scene_views.json','run_record.json']:
+        path=root/name;inputs[str(path.relative_to(batch))]=sha(path)
+    frames={v['id']:v for v in capture['views']};published=[]
+    for view in explanation['views']:
+        frame=frames[view['id']]
+        source=checked_path(batch,root/frame['file'])
+        if (not view['visually_reviewed'] or sha(source)!=view['frame_sha256']
+                or view['frame_sha256']!=frame['sha256']):
+            raise ValueError('Inspection RGB changed or has not been visually reviewed')
+        if not view['pins'] or len({p['id'] for p in view['pins']})!=len(view['pins']):
+            raise ValueError('Each inspected view needs unique visible locations')
+        for pin in view['pins']:
+            if (not pin['roles'] or not set(pin['roles']).issubset(spec['roles'])
+                    or len(pin['point'])!=2 or not all(0<=v<=1 for v in pin['point'])
+                    or pin['color'] not in ['blue','yellow','green','red','gray','floor']):
+                raise ValueError('Invalid reviewed scene location')
+        target=output/'media'/family/('inspection-'+source.name)
+        if not target.exists() or sha(target)!=frame['sha256']:shutil.copyfile(source,target)
+        inputs[str(source.relative_to(batch))]=sha(source)
+        published.append(dict(id=view['id'],label=view['label'],caption=view['caption'],
+            step=view['step'],pins=view['pins'],url=str(target.relative_to(output)),
+            sha256=frame['sha256'],width=frame['width'],height=frame['height']))
+    if len(explanation['rules'])!=len(story['rules']) or len(explanation['steps'])!=4:
+        raise ValueError('Every task rule and process step needs a scene location')
+    if any(target['rule_title']!=rule['title'] for target,rule in zip(explanation['rules'],story['rules'])):
+        raise ValueError('Re-review scene links after changing or reordering success rules')
+    for target in explanation['steps']+explanation['rules']:
+        view=next((v for v in published if v['id']==target['view']),None)
+        if view is None or target['pin'] not in {p['id'] for p in view['pins']}:
+            raise ValueError('Task requirement does not resolve to a reviewed scene location')
+    if any(not 0<=x['step']<4 for x in published+explanation['rules']):
+        raise ValueError('Invalid scene step link')
+    return dict(views=published,steps=explanation['steps'],rules=explanation['rules'],
+        run_id=explanation['run_id'],spec_sha256=frozen['spec_sha256'],
+        annotation_sha256=sha(annotations_path),capture_script_sha256=record['script_sha256'],
+        source='Rendered frozen initial state; inspection camera only; no task actions',
+        object_poses_unchanged=True,task_actions=0)
+
+
 def publish(batch, output):
     batch=batch.resolve(); output=output.resolve()
     validation=read(batch/'validation.json')
@@ -151,8 +204,9 @@ def publish(batch, output):
         phases=[dict(title=title,description=description,calls=calls,roles=roles) for title,description,calls,roles in presentation['phases']]
         if sum(p['calls'] or 0 for p in phases)!=spec['design_ledger']['conditional_useful_calls']:
             raise ValueError('Displayed design ledger disagrees with frozen recipe')
+        explainer=scene_explainer(batch,output,family,f,spec,story,inputs)
         tasks.append(dict(id=task_id,family=family,**{k:v for k,v in presentation.items() if k!='phases'},
-            story=story,
+            story=story,explainer=explainer,
             instruction=spec['public_instruction'],requirements=[r['text'] for r in spec['requirements']],
             phases=phases,declared_calls=spec['design_ledger']['conditional_useful_calls'],
             model_budget=spec['design_ledger']['proposed_model_act_look_budget'],frames=frames,
@@ -176,15 +230,18 @@ def publish(batch, output):
     data=dict(batch=batch.name,updated_at=validation['at'],published_at=datetime.now(timezone.utc).isoformat(),
         tasks=tasks,pending=pending,benchmark_ready=False,source_commit=validation['source_commit'],
         cpu_tests=read(batch/'cpu_final_validation.json')['tests'],
-        evidence_scope='Frozen initial RGB and measured geometry; actual privileged reference calls. No autonomous success claimed.')
+        evidence_scope='Frozen initial RGB, reviewed inspection views and measured geometry; actual privileged reference calls. No autonomous success claimed.')
     # Only allowlisted display fields are published; no environment or full evaluator payload.
     payload=json.dumps(data,ensure_ascii=False,separators=(',',':'))
     (output/'data.json').write_text(payload+'\n')
     source=REPO/'web/long_horizon'
     html=(source/'index.html').read_text().replace('@@DATA@@',payload.replace('<','\\u003c'))
+    for name in ['style.css','app.js']:
+        shutil.copyfile(source/name,output/name)
+        html=html.replace('"'+name+'"','"'+name+'?v='+sha(source/name)[:12]+'"')
     temporary=output/'index.html.tmp';temporary.write_text(html);temporary.replace(output/'index.html')
-    for name in ['style.css','app.js']:shutil.copyfile(source/name,output/name)
     return dict(status='passed',output=str(output),tasks=len(tasks),images=sum(len(t['frames']) for t in tasks),
+                inspection_images=sum(len(t['explainer']['views']) for t in tasks),
                 published_data_sha256=sha(output/'data.json'),input_sha256=inputs,
                 validation_level='evidence binding and static publication; browser validation separate',benchmark_ready=False)
 

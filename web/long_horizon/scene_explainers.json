@@ -1,0 +1,1062 @@
+{
+  "bedroom": {
+    "run_id": "inspect_bedroom_r1",
+    "spec_sha256": "5e896ab91ab7bb6a55efc6fafe48fdb851a16d6a0fe693ae907955aeb97f882a",
+    "capture_script_sha256": "a8769e686915cc163ed0899efead5eaefa44ed43d89d28e4b467b0084a4c40ac",
+    "views": [
+      {
+        "id": "a_overview",
+        "label": "A 房间 · 全景",
+        "step": 0,
+        "caption": "真实初态。A 房间地面物品部分被机器人遮挡；右下方只露出任务吸尘器的底座及归位灰台。",
+        "pins": [
+          {
+            "id": "a_items",
+            "number": "01",
+            "color": "blue",
+            "roles": [
+              "a_item01"
+            ],
+            "label": "A 房间地面物品",
+            "note": "本房共 12 件，先逐件搬到左侧黄台；编号指向可见书本，其他物品有遮挡。",
+            "point": [
+              0.4591485459758425,
+              0.7449149440823559
+            ]
+          },
+          {
+            "id": "a_stage",
+            "number": "02",
+            "color": "yellow",
+            "roles": [
+              "a_stage"
+            ],
+            "label": "A 房间暂存黄台",
+            "note": "12 件必须曾同时在这里，之后才允许吸本房地面的灰尘。",
+            "point": [
+              0.20478759296774013,
+              0.639972149856069
+            ]
+          },
+          {
+            "id": "a_dest",
+            "number": "03",
+            "color": "green",
+            "roles": [
+              "a_destination"
+            ],
+            "label": "A 房间归位绿台",
+            "note": "本房地面干净以后，再把 A 房间的 12 件逐件放到这里。",
+            "point": [
+              0.7,
+              0.49
+            ]
+          },
+          {
+            "id": "vacuum",
+            "number": "06",
+            "color": "gray",
+            "roles": [
+              "tool_home"
+            ],
+            "label": "任务吸尘器归位灰台",
+            "note": "右侧灰台是任务吸尘器的归还处；旁边立在地上的吸尘器是背景物体。",
+            "point": [
+              0.94,
+              0.82
+            ]
+          }
+        ],
+        "frame_sha256": "ef3ee7044011672056e0921766a6f62f0c1c8a203eb7bcd24f4a60c2eec7792f",
+        "visually_reviewed": true
+      },
+      {
+        "id": "a_items",
+        "label": "A 房间 · 地面近景",
+        "step": 1,
+        "caption": "真实初态俯视。机器人挡住了部分物品；图中书本和小玩具只是可见部分，不能据此判断是否已凑齐 12 件。",
+        "pins": [
+          {
+            "id": "a_items",
+            "number": "01",
+            "color": "blue",
+            "roles": [
+              "a_item01"
+            ],
+            "label": "A 房间待搬物品",
+            "note": "地面的书本与小玩具属于本房任务对象。全部在黄台暂存后才开始吸尘。",
+            "point": [
+              0.43145165947298847,
+              0.6209677315731877
+            ]
+          },
+          {
+            "id": "a_floor",
+            "number": "12",
+            "color": "floor",
+            "roles": [
+              "floor"
+            ],
+            "label": "A 房间待吸尘地面",
+            "note": "本房地面要无灰尘；不能只整理物品而不吸尘。标记表示地面位置，不表示污渍范围。",
+            "point": [
+              0.35,
+              0.76
+            ]
+          }
+        ],
+        "frame_sha256": "e1fa46714aecb7e3f508516d7e6e82e93b2bcfd2145ef69b5c95dabf2f4df5d7",
+        "visually_reviewed": true
+      },
+      {
+        "id": "a_targets",
+        "label": "A 房间 · 绿台与灯",
+        "step": 3,
+        "caption": "真实初态。编号 04、05 是 A 房间的两盏任务灯，均在独立灰台上；B 房间不在此画面内。",
+        "pins": [
+          {
+            "id": "a_dest",
+            "number": "03",
+            "color": "green",
+            "roles": [
+              "a_destination"
+            ],
+            "label": "A 房间归位绿台",
+            "note": "只收回 A 房间的 12 件；本房地面必须先清洁完毕。",
+            "point": [
+              0.483626230423033,
+              0.5172593797748527
+            ]
+          },
+          {
+            "id": "a_lamp0",
+            "number": "04",
+            "color": "gray",
+            "roles": [
+              "a_lamp0"
+            ],
+            "label": "A 房间任务灯 1",
+            "note": "两个房间均完成暂存、吸尘和归位后，才可以关闭。",
+            "point": [
+              0.730724041010025,
+              0.432881370745359
+            ]
+          },
+          {
+            "id": "a_lamp1",
+            "number": "05",
+            "color": "gray",
+            "roles": [
+              "a_lamp1"
+            ],
+            "label": "A 房间任务灯 2",
+            "note": "这是另一盏要最后关闭的任务灯；不能只关其中一盏。",
+            "point": [
+              0.2797051276585473,
+              0.4295691966093825
+            ]
+          }
+        ],
+        "frame_sha256": "43809671255dd7488c53c7f0d5344a13672e7644d6da47662b386a8b6fdb0310",
+        "visually_reviewed": true
+      },
+      {
+        "id": "b_overview",
+        "label": "B 房间 · 全景",
+        "step": 0,
+        "caption": "真实初态。床尾方凳是背景家具，遮住部分地面物品；窗边后方的小灯是背景灯，任务灯是编号 10、11。",
+        "pins": [
+          {
+            "id": "b_items",
+            "number": "07",
+            "color": "blue",
+            "roles": [
+              "b_item01"
+            ],
+            "label": "B 房间地面物品",
+            "note": "本房也有 12 件，逐件进 B 房间黄台，不能混到 A 房间。",
+            "point": [
+              0.46635759124001386,
+              0.744914915630778
+            ]
+          },
+          {
+            "id": "b_stage",
+            "number": "08",
+            "color": "yellow",
+            "roles": [
+              "b_stage"
+            ],
+            "label": "B 房间暂存黄台",
+            "note": "B 房间的 12 件必须曾同时在本台，之后才可吸本房地面。",
+            "point": [
+              0.13150380241385806,
+              0.7906008257579366
+            ]
+          },
+          {
+            "id": "b_dest",
+            "number": "09",
+            "color": "green",
+            "roles": [
+              "b_destination"
+            ],
+            "label": "B 房间归位绿台",
+            "note": "本房清洁以后，B 房间的 12 件都归到这里。",
+            "point": [
+              0.8167255164238572,
+              0.6740740743595781
+            ]
+          },
+          {
+            "id": "b_lamp0",
+            "number": "10",
+            "color": "gray",
+            "roles": [
+              "b_lamp0"
+            ],
+            "label": "B 房间任务灯 1",
+            "note": "两个房间都完成以后再关闭，不能提前关。",
+            "point": [
+              0.24054497485701126,
+              0.39670253953732676
+            ]
+          },
+          {
+            "id": "b_lamp1",
+            "number": "11",
+            "color": "gray",
+            "roles": [
+              "b_lamp1"
+            ],
+            "label": "B 房间任务灯 2",
+            "note": "全任务共四盏指定灯；仅最终都关着还不够，关灯时机也要正确。",
+            "point": [
+              0.7594520604170332,
+              0.3967022066827108
+            ]
+          }
+        ],
+        "frame_sha256": "d3df4d00ed0b9963f54f44c9a079b82e1150648d1a700049dd9a73450f1f2c7d",
+        "visually_reviewed": true
+      },
+      {
+        "id": "b_items",
+        "label": "B 房间 · 地面近景",
+        "step": 1,
+        "caption": "真实初态俯视。方凳遮挡了部分物品；地面物品的完整数量由冻结任务记录，不能从本张截图完整清点。",
+        "pins": [
+          {
+            "id": "b_items",
+            "number": "07",
+            "color": "blue",
+            "roles": [
+              "b_item01"
+            ],
+            "label": "B 房间待搬物品",
+            "note": "编号指向可见书本；同一区域的小玩具也需要逐件暂存。",
+            "point": [
+              0.44354836450057245,
+              0.6209676832323617
+            ]
+          },
+          {
+            "id": "b_floor",
+            "number": "13",
+            "color": "floor",
+            "roles": [
+              "floor_b"
+            ],
+            "label": "B 房间待吸尘地面",
+            "note": "A、B 两房地面分别检查，A 房间干净不能代替 B 房间。",
+            "point": [
+              0.52,
+              0.86
+            ]
+          }
+        ],
+        "frame_sha256": "a763268d1c2b9581ca58173c3369b5b4c3763242e7d2c6ef9b2387da17683655",
+        "visually_reviewed": true
+      },
+      {
+        "id": "b_targets",
+        "label": "B 房间 · 黄台与绿台",
+        "step": 2,
+        "caption": "真实初态，从床侧朝向 B 房间操作区：黄台在右，绿台在左。绿色台面此时为空，是任务要送达的位置。",
+        "pins": [
+          {
+            "id": "b_stage",
+            "number": "08",
+            "color": "yellow",
+            "roles": [
+              "b_stage"
+            ],
+            "label": "B 房间暂存黄台",
+            "note": "先让本房 12 件全部在此暂存，再吸尘。",
+            "point": [
+              0.7083635922535088,
+              0.46326383747800026
+            ]
+          },
+          {
+            "id": "b_dest",
+            "number": "09",
+            "color": "green",
+            "roles": [
+              "b_destination"
+            ],
+            "label": "B 房间归位绿台",
+            "note": "地面干净后，12 件逐件从黄台送到这里。",
+            "point": [
+              0.2552072767365907,
+              0.5080160053316942
+            ]
+          }
+        ],
+        "frame_sha256": "810e638fce7fa7107cd3496d623488b4c00f938f6d2354926139347b4556e5e8",
+        "visually_reviewed": true
+      }
+    ],
+    "steps": [
+      {
+        "title": "本房 12 件先全上黄台",
+        "detail": "在 A、B 两间房分别进行：把本房地面的 12 件逐件搬到本房黄台。必须有全部 12 件同时暂存的时刻，不能边搬边吸尘。",
+        "view": "a_overview",
+        "pin": "a_stage"
+      },
+      {
+        "title": "再吸净本房地面",
+        "detail": "本房全部暂存以后，使用任务吸尘器清除本房地面灰尘。切换下方 A / B 房间近景查看各自地面，两间都需要清洁。",
+        "view": "a_items",
+        "pin": "a_floor"
+      },
+      {
+        "title": "送回本房绿台",
+        "detail": "本房地面清洁完毕后，12 件逐件送到本房绿台。图中 B 房间绿台在左；A 房间使用它自己的绿台，不能跨房混放。",
+        "view": "b_targets",
+        "pin": "b_dest"
+      },
+      {
+        "title": "两房完成，最后关灯",
+        "detail": "两间房都完成暂存、吸尘和归位之后，关闭两房灰台上的四盏任务灯。吸尘器关机归 A 房间工具灰台，机器人手空。",
+        "view": "a_targets",
+        "pin": "a_lamp0"
+      }
+    ],
+    "rules": [
+      {
+        "view": "b_items",
+        "pin": "b_floor",
+        "step": 1,
+        "rule_title": "两间地面都无灰尘"
+      },
+      {
+        "view": "b_targets",
+        "pin": "b_dest",
+        "step": 2,
+        "rule_title": "24 件物品全部归到对应房间"
+      },
+      {
+        "view": "a_overview",
+        "pin": "a_stage",
+        "step": 0,
+        "rule_title": "本房全部暂存 → 吸尘 → 归位"
+      },
+      {
+        "view": "a_targets",
+        "pin": "a_lamp0",
+        "step": 3,
+        "rule_title": "两房完成后才关 4 盏任务灯"
+      },
+      {
+        "view": "a_overview",
+        "pin": "vacuum",
+        "step": 3,
+        "rule_title": "吸尘器关机归灰台，手空"
+      },
+      {
+        "view": "a_items",
+        "pin": "a_items",
+        "step": 0,
+        "rule_title": "全程逐件搬运，工作台不移动"
+      }
+    ]
+  },
+  "hotel": {
+    "run_id": "inspect_hotel_r1",
+    "spec_sha256": "8eda2bf829d566c34c758185924b529b46d3764cec3e9d31e1f71a58c377fe9c",
+    "capture_script_sha256": "a8769e686915cc163ed0899efead5eaefa44ed43d89d28e4b467b0084a4c40ac",
+    "views": [
+      {
+        "id": "source",
+        "label": "蓝台 · 20 只鞋",
+        "step": 0,
+        "caption": "真实初态。前景蓝台是鞋的来源；后方镜子中的鞋、工具和台面是倒影，不计为额外任务对象。",
+        "pins": [
+          {
+            "id": "source",
+            "number": "01",
+            "color": "blue",
+            "roles": [
+              "source"
+            ],
+            "label": "蓝台的 20 只待清洁鞋",
+            "note": "逐只搬走。每只都必须先在黄色护理台去尘，再放入绿色鞋位。",
+            "point": [
+              0.4999999939828578,
+              0.49999999652429117
+            ]
+          }
+        ],
+        "frame_sha256": "19cdf6b5bbc861d3b80208bc83fb536b52a2fc2c728ee01d4cfa7075243cb082",
+        "visually_reviewed": true
+      },
+      {
+        "id": "care",
+        "label": "黄垫 · 护理刷",
+        "step": 1,
+        "caption": "真实初态。黄色是护理垫，旁边灰色是护理刷归位垫；最左侧镜子中的刷子是倒影。",
+        "pins": [
+          {
+            "id": "stage",
+            "number": "02",
+            "color": "yellow",
+            "roles": [
+              "stage"
+            ],
+            "label": "黄色护理垫",
+            "note": "每只鞋放在这里，用护理刷清除灰尘，完成后才送往绿色鞋位。",
+            "point": [
+              0.5902472013855528,
+              0.4877847185367673
+            ]
+          },
+          {
+            "id": "brush",
+            "number": "03",
+            "color": "gray",
+            "roles": [
+              "tool_home"
+            ],
+            "label": "灰垫与护理刷",
+            "note": "红色护理刷就在灰垫上；最终要归还这里，机器人手空。",
+            "point": [
+              0.2937207036248008,
+              0.4877847185367673
+            ]
+          },
+          {
+            "id": "near_slots",
+            "number": "04",
+            "color": "green",
+            "roles": [
+              "pair09"
+            ],
+            "label": "靠护理区的绿色鞋位",
+            "note": "每个独立绿垫最终恰好放两只相邻的干净鞋。",
+            "point": [
+              0.7965264854655478,
+              0.4877847185367673
+            ]
+          }
+        ],
+        "frame_sha256": "5bf544a407a2c3d12e55e58a58467deca7ba92f9351288ca726a68b8a11b03a9",
+        "visually_reviewed": true
+      },
+      {
+        "id": "destinations",
+        "label": "沿墙 · 绿色鞋位",
+        "step": 2,
+        "caption": "真实初态。绿色鞋位沿电视墙排列，机器人遮挡了中间几个；切换“窗侧”查看另一端。",
+        "pins": [
+          {
+            "id": "near_slots",
+            "number": "04",
+            "color": "green",
+            "roles": [
+              "pair09"
+            ],
+            "label": "护理区一端的鞋位",
+            "note": "每个绿色鞋位放两只相邻鞋；没有隐藏主人编号的配对要求。",
+            "point": [
+              0.10385105619390717,
+              0.5154401697053247
+            ]
+          },
+          {
+            "id": "middle_slots",
+            "number": "05",
+            "color": "green",
+            "roles": [
+              "pair02"
+            ],
+            "label": "沿墙的其他鞋位",
+            "note": "不能只摆满一部分；全场 10 个鞋位，每位恰好两只。",
+            "point": [
+              0.8481809333094166,
+              0.4672737498655357
+            ]
+          }
+        ],
+        "frame_sha256": "eebe8522c46e350757cab8ae756ca3f0aa50ac7d42561a0b6dbf40d47ab52ed0",
+        "visually_reviewed": true
+      },
+      {
+        "id": "far_slots",
+        "label": "窗侧 · 绿色鞋位",
+        "step": 2,
+        "caption": "真实初态。窗边是鞋位队列的另一端，绿垫当前为空；画面表达送达位置，并非已完成摆鞋。",
+        "pins": [
+          {
+            "id": "far_slot",
+            "number": "06",
+            "color": "green",
+            "roles": [
+              "pair00"
+            ],
+            "label": "窗边末端鞋位",
+            "note": "这一位也要恰好两只干净鞋，与其他 9 个鞋位一起检查。",
+            "point": [
+              0.674381893619391,
+              0.49426750024866845
+            ]
+          },
+          {
+            "id": "middle_slots",
+            "number": "05",
+            "color": "green",
+            "roles": [
+              "pair03"
+            ],
+            "label": "中段鞋位",
+            "note": "每只必须曾在黄垫完成去尘，再送到这里；不能直接从蓝台搬来。",
+            "point": [
+              0.3314922282688007,
+              0.483759891952929
+            ]
+          }
+        ],
+        "frame_sha256": "610c6a8c41cb7e2ea11cf4f8b72e57ed059c2d6319ffec5bf7cffa87edf9bf5b",
+        "visually_reviewed": true
+      }
+    ],
+    "steps": [
+      {
+        "title": "从蓝台逐只取鞋",
+        "detail": "要处理的是这张蓝台上的 20 只鞋。先逐只送到黄色护理垫；镜中倒影不增加任务数量。",
+        "view": "source",
+        "pin": "source"
+      },
+      {
+        "title": "在黄垫上刷净",
+        "detail": "把当前这只鞋放到黄色护理垫，用旁边灰垫上的护理刷去尘。每只都要留下“在黄垫清洁”的过程记录。",
+        "view": "care",
+        "pin": "stage"
+      },
+      {
+        "title": "每个绿垫放两只",
+        "detail": "沿墙共有 10 个独立绿色鞋位，每个最终恰好两只干净鞋，彼此相邻。切换窗侧视角查看队列另一端。",
+        "view": "destinations",
+        "pin": "near_slots"
+      },
+      {
+        "title": "归还护理刷",
+        "detail": "20 只鞋都按要求清洁并摆好后，护理刷放回灰垫，机器人手空；所有工作台和鞋位保持原位。",
+        "view": "care",
+        "pin": "brush"
+      }
+    ],
+    "rules": [
+      {
+        "view": "care",
+        "pin": "stage",
+        "step": 1,
+        "rule_title": "20 只鞋都没有灰尘"
+      },
+      {
+        "view": "far_slots",
+        "pin": "far_slot",
+        "step": 2,
+        "rule_title": "10 个鞋位，每位恰好两只"
+      },
+      {
+        "view": "care",
+        "pin": "stage",
+        "step": 1,
+        "rule_title": "每只先在黄台去尘，再入鞋位"
+      },
+      {
+        "view": "care",
+        "pin": "brush",
+        "step": 3,
+        "rule_title": "护理刷归灰台，机器人手空"
+      },
+      {
+        "view": "source",
+        "pin": "source",
+        "step": 0,
+        "rule_title": "全程逐件搬运，工作台不移动"
+      }
+    ]
+  },
+  "garage": {
+    "run_id": "inspect_garage_r1",
+    "spec_sha256": "95143c464c2155216c50986bcce1f47303595d7c02e54cb8c7004230616f44f9",
+    "capture_script_sha256": "a8769e686915cc163ed0899efead5eaefa44ed43d89d28e4b467b0084a4c40ac",
+    "views": [
+      {
+        "id": "source",
+        "label": "蓝台 · 16 根整木",
+        "step": 1,
+        "caption": "真实初态。蓝台上 4 × 4 排列的 16 根整木是任务对象；院落草地上的其他木料属于背景。",
+        "pins": [
+          {
+            "id": "source",
+            "number": "01",
+            "color": "blue",
+            "roles": [
+              "source"
+            ],
+            "label": "要加工的 16 根整木",
+            "note": "逐根从蓝台送到黄色基座上的指定劈木墩，不能用背景木料替代。",
+            "point": [
+              0.49999997079067954,
+              0.5000000251499233
+            ]
+          },
+          {
+            "id": "dest",
+            "number": "05",
+            "color": "green",
+            "roles": [
+              "destination"
+            ],
+            "label": "绿色半木收纳台",
+            "note": "16 根原木产生的 32 块半木，最终都要逐件放到这里。",
+            "point": [
+              0.1571903647253144,
+              0.3642288660456107
+            ]
+          },
+          {
+            "id": "block",
+            "number": "03",
+            "color": "yellow",
+            "roles": [
+              "block"
+            ],
+            "label": "黄色基座上的指定劈木墩",
+            "note": "每根原木必须上这个墩后才能劈开；旁边落地木墩不是规定的加工位置。",
+            "point": [
+              0.8815428590129559,
+              0.43867770556696106
+            ]
+          }
+        ],
+        "frame_sha256": "b293ec6d3ddfc620bc988d77e44944c9a53693e60f9f3cbee72368ddaabff00f",
+        "visually_reviewed": true
+      },
+      {
+        "id": "work",
+        "label": "车库 · 清扫区",
+        "step": 0,
+        "caption": "真实初态。编号 02 指向指定车库地面的一处可见位置，不是污渍分割或完整边界；编号 03 是黄基座上的指定木墩。",
+        "pins": [
+          {
+            "id": "floor",
+            "number": "02",
+            "color": "floor",
+            "roles": [
+              "sweep_floor"
+            ],
+            "label": "指定车库地面",
+            "note": "先清除这里的砂和灰尘，再开始原木加工；不能只清除一种材料。",
+            "point": [
+              0.5269601199172154,
+              0.4252268213522521
+            ]
+          },
+          {
+            "id": "block",
+            "number": "03",
+            "color": "yellow",
+            "roles": [
+              "block"
+            ],
+            "label": "指定劈木墩",
+            "note": "清扫完成后，16 根原木逐根上墩并用斧头劈开。",
+            "point": [
+              0.5829364485169855,
+              0.6371622295589604
+            ]
+          },
+          {
+            "id": "tools",
+            "number": "04",
+            "color": "gray",
+            "roles": [
+              "tool_home"
+            ],
+            "label": "灰台 · 扫帚和斧头",
+            "note": "先用扫帚清地面，再用斧头劈木；最后两件工具都回到此灰台。",
+            "point": [
+              0.4670633932099579,
+              0.5163891870642031
+            ]
+          }
+        ],
+        "frame_sha256": "091fc9e95e15a1a2a104753cd2f047261df083a5afc828b3aa7e5d72be2aaf32",
+        "visually_reviewed": true
+      },
+      {
+        "id": "block",
+        "label": "近景 · 指定劈木墩",
+        "step": 2,
+        "caption": "真实初态。任务木墩位于黄色基座上；左下角直接放地面的木墩是背景，不能当作任务指定木墩。",
+        "pins": [
+          {
+            "id": "block",
+            "number": "03",
+            "color": "yellow",
+            "roles": [
+              "block"
+            ],
+            "label": "上墩后再劈成两半",
+            "note": "每根都要真正发生原生切割：原木被替换为对应两块半木，不能只改变摆放位置。",
+            "point": [
+              0.5738260495085615,
+              0.6482094685327061
+            ]
+          },
+          {
+            "id": "tools",
+            "number": "04",
+            "color": "gray",
+            "roles": [
+              "tool_home"
+            ],
+            "label": "任务扫帚与斧头",
+            "note": "使用此灰台上的任务工具；加工完成后，斧头和扫帚都归还此处。",
+            "point": [
+              0.4482385717663242,
+              0.43862315885474185
+            ]
+          },
+          {
+            "id": "floor",
+            "number": "02",
+            "color": "floor",
+            "roles": [
+              "sweep_floor"
+            ],
+            "label": "先清扫的车库地面",
+            "note": "清扫历史必须在原木加工之前。编号标地面位置，不代表当前已清洁。",
+            "point": [
+              0.5783454665059952,
+              0.3443411095676959
+            ]
+          }
+        ],
+        "frame_sha256": "1bf1ddba99735b5bafe2aa1f29f4c6e737b47a8652aab5af54b758e980aa8ef6",
+        "visually_reviewed": true
+      },
+      {
+        "id": "destination",
+        "label": "绿台 · 收纳 32 半木",
+        "step": 3,
+        "caption": "真实初态。绿色台面当前为空，是未来半木的收纳位置。左下方草地木料是原场景背景，不是本任务切出的半木。",
+        "pins": [
+          {
+            "id": "dest",
+            "number": "05",
+            "color": "green",
+            "roles": [
+              "destination"
+            ],
+            "label": "32 块半木最终都在这里",
+            "note": "逐根追踪 16 根原木的两块产物，每一半都放到本台，不能遗漏或用背景木料充数。",
+            "point": [
+              0.49999985803165836,
+              0.5000000668514072
+            ]
+          }
+        ],
+        "frame_sha256": "0c9758e181a3f77b320ee2b527eaf4c2d2b2e1f176b2819c74ee73a6ae18bbf5",
+        "visually_reviewed": true
+      }
+    ],
+    "steps": [
+      {
+        "title": "先扫净车库地面",
+        "detail": "在图中的指定车库地面，用灰台上的扫帚清除砂和灰尘。清扫完成之后，才开始搬运、切割原木。",
+        "view": "work",
+        "pin": "floor"
+      },
+      {
+        "title": "蓝台整木逐根上墩",
+        "detail": "任务木料是蓝台上的 16 根整木。每次搬一根，到黄色基座上的指定劈木墩；直接落地的另一只木墩不是这个加工位置。",
+        "view": "source",
+        "pin": "source"
+      },
+      {
+        "title": "每根真的劈成两半",
+        "detail": "在指定木墩上用斧头切割。要确认当前原木消失，并生成属于它的两块原生半木，然后才能收纳产物。",
+        "view": "block",
+        "pin": "block"
+      },
+      {
+        "title": "32 半木都送上绿台",
+        "detail": "16 根原木各产生两半，共 32 块。逐件送到绿色台面，不能遗漏；斧头和扫帚最后回灰台，机器人手空。",
+        "view": "destination",
+        "pin": "dest"
+      }
+    ],
+    "rules": [
+      {
+        "view": "work",
+        "pin": "floor",
+        "step": 0,
+        "rule_title": "指定地面既无砂，也无尘"
+      },
+      {
+        "view": "block",
+        "pin": "block",
+        "step": 2,
+        "rule_title": "16 根整木各自被替换为两半"
+      },
+      {
+        "view": "destination",
+        "pin": "dest",
+        "step": 3,
+        "rule_title": "32 块半木全部在绿台上"
+      },
+      {
+        "view": "block",
+        "pin": "block",
+        "step": 2,
+        "rule_title": "先扫地，再上墩、切割、收纳"
+      },
+      {
+        "view": "block",
+        "pin": "tools",
+        "step": 3,
+        "rule_title": "斧头和扫帚归灰台，手空"
+      },
+      {
+        "view": "source",
+        "pin": "source",
+        "step": 1,
+        "rule_title": "全程逐件搬运，工作台不移动"
+      }
+    ]
+  },
+  "garden": {
+    "run_id": "inspect_garden_r1",
+    "spec_sha256": "e69e0bb3c461910078986470358497dd8564f09c8050e79359c9d58d95f3e329",
+    "capture_script_sha256": "a8769e686915cc163ed0899efead5eaefa44ed43d89d28e4b467b0084a4c40ac",
+    "views": [
+      {
+        "id": "sources",
+        "label": "蓝台 · 待处理盆栽",
+        "step": 0,
+        "caption": "真实初态。任务来源是两张蓝台上的 20 盆，右台部分被烧烤架遮挡；其他场景绿植不计入这 20 盆。",
+        "pins": [
+          {
+            "id": "source0",
+            "number": "01",
+            "color": "blue",
+            "roles": [
+              "source0"
+            ],
+            "label": "蓝台 A · 待处理植物",
+            "note": "两张蓝台合计 20 盆，逐盆先搬到黄色处理台。",
+            "point": [
+              0.25782801719693016,
+              0.49551970950876645
+            ]
+          },
+          {
+            "id": "source1",
+            "number": "02",
+            "color": "blue",
+            "roles": [
+              "source1"
+            ],
+            "label": "蓝台 B · 待处理植物",
+            "note": "这张台的植物同样需要逐盆处理，不能只做另一台。",
+            "point": [
+              0.7690800265126756,
+              0.49551970950876645
+            ]
+          }
+        ],
+        "frame_sha256": "34bd2429ee8f42b4af4195f9521c52c96ccc38a0236d44dac206167f8228e88e",
+        "visually_reviewed": true
+      },
+      {
+        "id": "treatment",
+        "label": "黄台 · 喷洒与工具",
+        "step": 1,
+        "caption": "真实初态。黄台当前为空，灰台上是任务喷壶；要处理的盆栽需从蓝台逐盆送到黄台。",
+        "pins": [
+          {
+            "id": "stage",
+            "number": "03",
+            "color": "yellow",
+            "roles": [
+              "stage"
+            ],
+            "label": "黄色处理台",
+            "note": "每盆必须在这张台上完成指定驱虫剂喷洒，再送去绿台。",
+            "point": [
+              0.39855257670703315,
+              0.45189537183835454
+            ]
+          },
+          {
+            "id": "sprayer",
+            "number": "06",
+            "color": "gray",
+            "roles": [
+              "tool_home"
+            ],
+            "label": "灰台 · 喷壶归位处",
+            "note": "使用这里的喷壶；收尾时关闭并放回灰台，机器人手空。",
+            "point": [
+              0.8002788161265186,
+              0.5952739467065861
+            ]
+          }
+        ],
+        "frame_sha256": "11a1c60d5ff48255e3b24628fd500507f6b6901dc3c1f41e6a920dfc3dc843da",
+        "visually_reviewed": true
+      },
+      {
+        "id": "destinations",
+        "label": "绿台 · 各放 10 盆",
+        "step": 2,
+        "caption": "真实初态。两张绿色台面目前为空；要求是未来各摆 10 盆已处理植物，此图不是处理后的结果。",
+        "pins": [
+          {
+            "id": "dest0",
+            "number": "04",
+            "color": "green",
+            "roles": [
+              "destination0"
+            ],
+            "label": "绿色展示台 A · 目标 10 盆",
+            "note": "10 盆都已喷洒指定驱虫剂，保持直立，倾角不超过 15°。",
+            "point": [
+              0.7423491668807966,
+              0.49515083262299775
+            ]
+          },
+          {
+            "id": "dest1",
+            "number": "05",
+            "color": "green",
+            "roles": [
+              "destination1"
+            ],
+            "label": "绿色展示台 B · 目标 10 盆",
+            "note": "这张也恰好 10 盆；不能 12 / 8 分配，同款植物可以互换。",
+            "point": [
+              0.2307231022564724,
+              0.49515083262299775
+            ]
+          }
+        ],
+        "frame_sha256": "03fc69f8e36a7f5de354ae7ec4a3ac1668ab644e3f0b8c6760419b96151baad0",
+        "visually_reviewed": true
+      },
+      {
+        "id": "controls",
+        "label": "红台 · 对照植物",
+        "step": 3,
+        "caption": "真实初态。红台的 4 盆是对照组，与旁边蓝台的待处理植物不同；它们必须始终留在原台且不沾驱虫剂。",
+        "pins": [
+          {
+            "id": "controls",
+            "number": "07",
+            "color": "red",
+            "roles": [
+              "controls"
+            ],
+            "label": "红台 4 盆 · 全程保护",
+            "note": "不能搬走再放回，也不能误喷后再清除；两个行为都会破坏全过程要求。",
+            "point": [
+              0.5000000093831746,
+              0.49353623008207803
+            ]
+          }
+        ],
+        "frame_sha256": "18135c565968a3524ce08eaffb02d6f5531d051ac74544ad5349287216bdbbed",
+        "visually_reviewed": true
+      }
+    ],
+    "steps": [
+      {
+        "title": "从蓝台逐盆取植物",
+        "detail": "任务来源是两张蓝台上的 20 盆。每次拿一盆，先送到黄色处理台；红台的四盆是对照组，始终保持原位且不沾药。",
+        "view": "sources",
+        "pin": "source0"
+      },
+      {
+        "title": "在黄台喷洒驱虫剂",
+        "detail": "每盆都要放在黄色处理台上，再用灰台上的喷壶覆盖指定材料 insectifuge。必须先在黄台处理，之后才能送达。",
+        "view": "treatment",
+        "pin": "stage"
+      },
+      {
+        "title": "两张绿台各摆 10 盆",
+        "detail": "把处理完成的盆栽逐盆送到两张绿色展示台，每张恰好 10 盆。所有盆栽保持直立，倾角不超过 15°。",
+        "view": "destinations",
+        "pin": "dest0"
+      },
+      {
+        "title": "保护对照，归还喷壶",
+        "detail": "红台四盆从头到尾不离台、不沾驱虫剂。20 盆处理与分配完成后，喷壶关闭并回灰台，机器人手空。",
+        "view": "controls",
+        "pin": "controls"
+      }
+    ],
+    "rules": [
+      {
+        "view": "treatment",
+        "pin": "stage",
+        "step": 1,
+        "rule_title": "20 盆全部处理到位"
+      },
+      {
+        "view": "destinations",
+        "pin": "dest0",
+        "step": 2,
+        "rule_title": "两张绿台各 10 盆"
+      },
+      {
+        "view": "treatment",
+        "pin": "stage",
+        "step": 1,
+        "rule_title": "每盆先在黄台处理，再送达"
+      },
+      {
+        "view": "controls",
+        "pin": "controls",
+        "step": 3,
+        "rule_title": "4 盆对照全程不动、不沾药"
+      },
+      {
+        "view": "treatment",
+        "pin": "sprayer",
+        "step": 3,
+        "rule_title": "喷壶关机归灰台，手空"
+      },
+      {
+        "view": "sources",
+        "pin": "source0",
+        "step": 0,
+        "rule_title": "全程逐件搬运，工作台不移动"
+      }
+    ]
+  }
+}

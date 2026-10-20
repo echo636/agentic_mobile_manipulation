@@ -18,3 +18,55 @@ main{padding-top:30px}.intro{margin-bottom:28px}.intro h1{font-size:32px;letter-
 :root[data-mas-theme="dark"] .object-group p{color:#e1e7d9}
 :root[data-mas-theme="dark"] .success-panel li.example-rule,:root[data-mas-theme="dark"] #example-buttons button[aria-pressed=true]{background:#443a28;color:#ead9ac}
 :root[data-mas-theme="dark"] .story-process li>span{background:#443c28;color:#ead9ac;border-color:#7c6e49}
+
+/* Human inspection cameras: labels remain separate from the untouched RGB. */
+.tabs{overflow-x:auto}
+.scene-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:24px}
+.scene-steps button{display:flex;align-items:center;gap:12px;text-align:left;padding:12px 14px}
+.scene-steps button>span{font-size:11px;color:var(--muted)}
+.scene-steps strong{font-size:12px;font-weight:600}
+.scene-steps button[aria-pressed=true]{background:var(--soft);border-color:var(--accent)}
+.inspection-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:30px}
+.inspection-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+.inspection-heading h3{font-size:14px}
+.inspection-heading>div{display:flex;gap:6px;flex-shrink:0}
+.inspection-heading button{font-size:11px;padding:5px 9px}
+.inspection-photo{position:relative;width:100%;max-width:600px;aspect-ratio:1;background:#151b17;border-radius:9px;overflow:hidden;margin:auto;isolation:isolate}
+.inspection-photo>img{display:block;width:100%;height:100%;object-fit:contain}
+#inspection-pins{position:absolute;inset:0}
+.scene-pin{position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;border:2px solid #fff;background:var(--pin-color);color:#fff;font-size:12px;font-weight:750;padding:0;box-shadow:0 1px 7px #0008;z-index:1}
+.scene-pin[aria-pressed=true]{outline:3px solid #fff;outline-offset:3px;z-index:2}
+.scene-pin:hover{filter:brightness(1.15)}
+.pin-blue{--pin-color:#215fbc}.pin-yellow{--pin-color:#93600d}.pin-green{--pin-color:#176c40}.pin-red{--pin-color:#b83032}.pin-gray{--pin-color:#505b68}.pin-floor{--pin-color:#7e5030}
+/* The report server themes all buttons; preserve semantic marker colors. */
+:root[data-mas-theme="dark"] #inspection-photo .scene-pin{background:var(--pin-color)!important;color:#fff!important;border:2px solid #fff!important}
+:root[data-mas-theme="dark"] #inspection-photo .scene-pin[aria-pressed=true]{outline-color:#fff!important}
+.inspection-views{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.inspection-views button{font-size:11px;padding:6px 10px;flex:1;white-space:nowrap}
+.inspection-views button[aria-pressed=true]{color:var(--accent);border-color:var(--accent);background:var(--soft)}
+.inspection-guide{padding:20px 23px;border:1px solid var(--line);border-radius:10px;align-self:start}
+.inspection-guide>h3{font-size:22px;line-height:1.5;letter-spacing:-.4px;margin:9px 0}
+#inspection-step-detail{font-size:13px;line-height:1.95;color:var(--muted)}
+.inspection-place-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;margin:24px 0 9px;align-items:center}
+.inspection-place-heading h4{font-size:12px;font-weight:550}
+.inspection-place-heading>span{font-size:10px;color:var(--muted)}
+#inspection-places{display:flex;flex-direction:column;gap:7px}
+.scene-place{display:flex;gap:12px;text-align:left;padding:12px 10px;border-color:transparent;background:transparent;width:100%;align-items:flex-start}
+.scene-place>span{display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--pin-color);color:#fff;font-size:11px;font-weight:700;width:25px;height:25px;flex-shrink:0;margin-top:1px}
+.scene-place[aria-pressed=true]{background:var(--soft);border-color:var(--line)}
+.scene-place strong{font-size:13px;font-weight:650}
+.scene-place p{font-size:12px;color:var(--muted);line-height:1.85;margin-top:3px}
+.inspection-focus{font-size:11px;color:var(--accent);border-top:1px solid var(--line);padding-top:14px;line-height:1.9;margin-top:17px}
+.scene-rules-heading{display:flex;justify-content:space-between;gap:16px;align-items:center;margin:27px 0 14px;padding-top:23px;border-top:1px solid var(--line)}
+.scene-rules-heading h3{font-size:15px}
+.scene-rules-heading p{font-size:11px;color:var(--muted)}
+.scene-rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.scene-rules>button{text-align:left;padding:15px 16px;display:flex;flex-wrap:wrap;gap:6px;align-content:start;align-items:center}
+.scene-rules strong{font-size:12px;font-weight:650}
+.scene-rules p{font-size:11px;color:var(--muted);line-height:1.9;width:100%}
+.scene-rules small{font-size:10px;color:var(--accent);margin-top:4px}
+.scene-rules>button[aria-pressed=true]{background:var(--soft);border-color:var(--accent)}
+.inspection-evidence{font-size:10px;color:var(--muted);line-height:1.9;margin-top:16px}
+@media(max-width:1100px){.inspection-layout{gap:20px;grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr)}.inspection-guide{padding:17px}.inspection-guide>h3{font-size:19px}.scene-rules-heading{align-items:flex-start;flex-direction:column;gap:5px}.scene-steps button{padding:10px;gap:8px}}
+@media(max-width:850px){.inspection-layout{grid-template-columns:1fr}.inspection-media{max-width:600px;width:100%;margin:auto}.scene-rules{grid-template-columns:repeat(2,minmax(0,1fr))}.inspection-guide{padding:20px}#inspection-places{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.scene-steps{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:18px}.scene-steps strong{font-size:11px}.inspection-heading{align-items:flex-start;flex-wrap:wrap}.inspection-heading h3{font-size:13px}.inspection-heading button{font-size:10px}.scene-pin{width:27px;height:27px;font-size:10px}.scene-pin[aria-pressed=true]{outline-width:2px;outline-offset:2px}.inspection-views{gap:6px}.inspection-views button{font-size:10px;padding:5px 7px}.inspection-guide{padding:17px 13px}.inspection-guide>h3{font-size:20px}#inspection-places{display:flex}.scene-rules{grid-template-columns:1fr}.scene-rules strong{font-size:13px}.scene-rules p{font-size:12px}.inspection-evidence{font-size:11px}.scene-place{padding:10px 7px}}

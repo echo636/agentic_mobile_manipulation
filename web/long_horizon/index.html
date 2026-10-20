@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="四个长程任务：起始状态、目标结果、成功条件和失败例子。">
+  <meta name="description" content="在 OmniGibson 真实场景中查看任务对象、操作位置、目标位置与成功要求。">
   <title>长程任务 · 做什么，怎样算成功</title>
   <link rel="stylesheet" href="style.css">
   <script defer src="app.js"></script>
@@ -16,21 +16,42 @@
 </header>
 <main>
   <section class="intro">
-    <div><p class="eyebrow"><span class="live-dot"></span> TASK COLLECTION <span class="slash">/</span> 2026.10.20</p><h1>这些任务要做什么？</h1><p class="lead">看起点与目标，读懂过程要求，再了解怎样才算完成。</p></div>
+    <div><p class="eyebrow"><span class="live-dot"></span> TASK COLLECTION <span class="slash">/</span> 2026.10.20</p><h1>到场景里看任务</h1><p class="lead">哪些东西要动，在哪里处理，最后放到哪里。</p></div>
     <div class="intro-note"><span class="tag neutral">构建验证批次</span><p>初态已冻结 · 完整可解性验证中</p><small id="updated"></small></div>
   </section>
-  <div class="section-heading"><h2>选择一个任务</h2><span>选择后查看目标与成功条件</span></div>
+  <div class="section-heading"><h2>选择一个任务</h2><span>实景位置与任务要求对应查看</span></div>
   <div id="task-cards" class="task-cards" role="group" aria-label="选择任务"></div>
   <section id="workspace" class="workspace" aria-label="任务详情">
     <header class="task-heading"><div><p class="eyebrow" id="task-kicker"></p><h2 id="task-name"></h2></div><div id="task-badges" class="badges"></div></header>
     <p id="mission-intro" class="mission-intro"></p>
     <div class="tabs" role="tablist" aria-label="任务详情视图">
-      <button id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" data-tab="overview">任务目标与成功条件</button>
-      <button id="tab-scene" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-scene" data-tab="scene">真实场景</button>
+      <button id="tab-mission" role="tab" aria-selected="true" aria-controls="panel-mission" data-tab="mission">实景里的任务要求</button>
+      <button id="tab-overview" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-overview" data-tab="overview">目标示意与例子</button>
+      <button id="tab-scene" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-scene" data-tab="scene">机器人视角与布局</button>
       <button id="tab-validation" role="tab" aria-selected="false" aria-controls="panel-validation" data-tab="validation" tabindex="-1">验证与动作记录 <span class="tab-dot"></span></button>
       <button id="tab-contract" role="tab" aria-selected="false" aria-controls="panel-contract" data-tab="contract" tabindex="-1">任务约束与来源</button>
     </div>
-    <section id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+    <section id="panel-mission" role="tabpanel" aria-labelledby="tab-mission">
+      <div id="scene-steps" class="scene-steps" role="group" aria-label="在实景中查看任务步骤"></div>
+      <div class="inspection-layout">
+        <div class="inspection-media">
+          <div class="inspection-heading"><h3 id="inspection-title"></h3><div><button id="inspection-labels" aria-pressed="true">隐藏标注</button><button id="inspection-open">放大原图 ↗</button></div></div>
+          <div class="inspection-photo" id="inspection-photo"><img id="inspection-image" width="512" height="512" alt=""><div id="inspection-pins" role="group" aria-label="图中任务位置"></div></div>
+          <div id="inspection-views" class="inspection-views" role="group" aria-label="选择实景位置"></div>
+          <p id="inspection-caption" class="caption"></p>
+        </div>
+        <aside class="inspection-guide" aria-label="画面中的任务要求">
+          <p class="eyebrow">这一步在场景中怎么做</p><h3 id="inspection-step-title"></h3><p id="inspection-step-detail"></p>
+          <div class="inspection-place-heading"><h4>图中编号对应的位置</h4><span>点击编号定位</span></div>
+          <div id="inspection-places"></div>
+          <p id="inspection-focus" class="inspection-focus" aria-live="polite"></p>
+        </aside>
+      </div>
+      <div class="scene-rules-heading"><h3>这些位置，最后要满足什么？</h3><p>点击要求回到对应实景。以下条件须全部满足，包括中间过程。</p></div>
+      <div id="scene-rules" class="scene-rules"></div>
+      <p class="inspection-evidence">画面来自冻结初态的 OmniGibson 渲染；补充观察视角仅供人查看。编号与文字解释任务要求，画面不代表任务已完成。完整参考流程仍通过 0 / 4。</p>
+    </section>
+    <section id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" hidden>
       <div class="overview-layout">
         <div class="storyboard">
           <div class="story-label"><h3>从起点到目标</h3><span>任务示意 · 非执行结果</span></div>

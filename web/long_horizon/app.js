@@ -11,12 +11,14 @@
     'No visible feasible destination in the start-connected region':'当前连通区域内没有可见、可达的目标落脚点。',
     'Navigation planning budget exhausted; select another visible approach':'导航规划耗尽搜索预算，需要验证其他接近方式。'
   };
-  let current = 0, phase = 0, camera = 'front', tab = 'overview', reference = 0, action = 0, zoom = 1;
+  let current = 0, phase = 0, camera = 'front', tab = 'mission', reference = 0, action = 0, zoom = 1;
+  let sceneStep=0, shot='', selectedPin='', selectedRule=-1, labelsVisible=true, dialogMode='robot';
   const task = () => data.tasks[current];
   const badge = (status, label) => `<span class="tag ${escape(status)}">${escape(label || statusText[status] || status)}</span>`;
   const hashState = () => new URLSearchParams(location.hash.slice(1));
   function setHash() {
     const params = new URLSearchParams({task:task().family,view:tab,camera,phase:String(phase+1)});
+    if(tab==='mission'){params.set('shot',shot);params.set('step',String(sceneStep+1));if(selectedRule>=0)params.set('rule',String(selectedRule+1));}
     history.replaceState(null,'','#'+params.toString());
   }
   $('updated').textContent = '证据更新 '+new Date(data.updated_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})+' CST';
@@ -25,7 +27,7 @@
   $('pending-count').textContent = data.pending.length;
   $('batch-label').textContent = '批次 '+data.batch;
   $('task-cards').innerHTML = data.tasks.map((t,i) => {
-    const frame=t.frames.find(f=>f.view===t.cover);
+    const frame=t.explainer.views[0];
     return `<button class="task-card" data-task="${i}" aria-pressed="false" aria-controls="workspace" aria-label="查看${escape(t.name)}"><div class="card-cover"><img src="${escape(frame.url)}" alt="${escape(t.name)}的真实初态" width="512" height="512"><span class="card-selected" aria-hidden="true">✓</span></div><div class="card-text"><h3>${escape(t.name)}</h3><p>${escape(t.scale)}</p></div></button>`;
   }).join('');
   $('pending-list').innerHTML = data.pending.map(t=>`<article class="pending-card"><div><h3>${escape(t.name)}</h3>${badge('planned',t.calls+' 步设计')}</div><p>${escape(t.note)}</p></article>`).join('');
@@ -46,6 +48,7 @@
     $('task-badges').innerHTML=badge(t.gates[1].status,'构建'+statusText[t.gates[1].status])+badge(t.reference_status,'完整参考'+statusText[t.reference_status]);
     $('instruction').textContent=t.instruction;
     renderStory();
+    renderMission(state);
     $('model-budget').textContent=t.model_budget;
     $('phase-buttons').innerHTML=t.phases.map((p,i)=>`<button class="phase-button" data-phase="${i}" aria-pressed="false"><span class="phase-index">${String(i+1).padStart(2,'0')}</span><span><strong>${escape(p.title)}</strong><small>${p.calls===null?'未计入有效动作账本':p.calls+' 次设计动作'}</small></span></button>`).join('');
     $('gate-list').innerHTML=t.gates.map(g=>`<div class="gate"><span>${escape(g.name)}</span>${badge(g.status)}</div>`).join('');
@@ -98,8 +101,58 @@
     document.querySelectorAll('[data-rule]').forEach(r=>r.classList.toggle('example-rule',Number(r.dataset.rule)===e.rule));
   }
   $('example-buttons').addEventListener('click',e=>{const b=e.target.closest('[data-example]');if(b)selectExample(Number(b.dataset.example));});
+  function renderMission(state) {
+    const e=task().explainer;
+    const requested=Number(state?.get('step')||1)-1;
+    sceneStep=Number.isInteger(requested)&&requested>=0&&requested<e.steps.length?requested:0;
+    const requestedRule=Number(state?.get('rule')||0)-1;
+    selectedRule=Number.isInteger(requestedRule)&&requestedRule>=0&&requestedRule<e.rules.length?requestedRule:-1;
+    const target=selectedRule>=0?e.rules[selectedRule]:e.steps[sceneStep];
+    if(selectedRule>=0)sceneStep=target.step;
+    shot=selectedRule<0&&e.views.some(v=>v.id===state?.get('shot'))?state.get('shot'):target.view;
+    const view=e.views.find(v=>v.id===shot);
+    selectedPin=view.pins.some(p=>p.id===target.pin)?target.pin:view.pins[0].id;
+    $('scene-steps').innerHTML=e.steps.map((s,i)=>`<button data-scene-step="${i}" aria-pressed="false"><span>${String(i+1).padStart(2,'0')}</span><strong>${escape(s.title)}</strong></button>`).join('');
+    const types={result:'最终',history:'过程',always:'全程',finish:'收尾'};
+    $('scene-rules').innerHTML=task().story.rules.map((r,i)=>`<button data-scene-rule="${i}" aria-pressed="false"><span class="rule-type">${types[r.kind]}</span><strong>${escape(r.title)}</strong><p>${escape(r.text)}</p><small>定位实景 ↗</small></button>`).join('');
+    updateInspection();
+  }
+  function updateInspection() {
+    const e=task().explainer,v=e.views.find(v=>v.id===shot),s=e.steps[sceneStep];
+    $('inspection-title').textContent=v.label;
+    $('inspection-step-title').textContent=s.title;
+    $('inspection-step-detail').textContent=s.detail;
+    $('inspection-image').src=v.url;
+    $('inspection-image').alt=task().name+' · '+v.label+' · 真实冻结初态';
+    $('inspection-caption').textContent=v.caption;
+    $('inspection-views').innerHTML=e.views.map(x=>`<button data-shot="${escape(x.id)}" aria-pressed="${x.id===shot}">${escape(x.label)}</button>`).join('');
+    $('inspection-pins').innerHTML=v.pins.map(p=>`<button class="scene-pin pin-${escape(p.color)}" data-pin="${escape(p.id)}" style="left:${p.point[0]*100}%;top:${p.point[1]*100}%" aria-pressed="${p.id===selectedPin}" aria-label="${escape(p.number+' · '+p.label)}">${escape(p.number)}</button>`).join('');
+    $('inspection-pins').hidden=!labelsVisible;
+    $('inspection-places').innerHTML=v.pins.map(p=>`<button class="scene-place pin-${escape(p.color)}" data-place="${escape(p.id)}" aria-pressed="${p.id===selectedPin}"><span>${escape(p.number)}</span><div><strong>${escape(p.label)}</strong><p>${escape(p.note)}</p></div></button>`).join('');
+    document.querySelectorAll('[data-scene-step]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.sceneStep)===sceneStep)));
+    document.querySelectorAll('[data-scene-rule]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.sceneRule)===selectedRule)));
+    updatePinFocus();
+  }
+  function updatePinFocus() {
+    const v=task().explainer.views.find(v=>v.id===shot),p=v.pins.find(p=>p.id===selectedPin);
+    document.querySelectorAll('[data-pin],[data-place]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.pin||b.dataset.place)===selectedPin)));
+    const rule=selectedRule>=0?task().story.rules[selectedRule]:null;
+    $('inspection-focus').textContent=rule?'对应要求：'+rule.title+'。'+rule.text:'已定位 '+p.number+' · '+p.label+'。'+p.note;
+  }
+  function chooseSceneTarget(target) {
+    shot=target.view;selectedPin=target.pin;selectedRule=-1;
+    updateInspection();setHash();
+  }
+  $('scene-steps').addEventListener('click',e=>{const b=e.target.closest('[data-scene-step]');if(b){sceneStep=Number(b.dataset.sceneStep);chooseSceneTarget(task().explainer.steps[sceneStep]);}});
+  $('inspection-views').addEventListener('click',e=>{const b=e.target.closest('[data-shot]');if(b){const v=task().explainer.views.find(v=>v.id===b.dataset.shot);sceneStep=v.step;chooseSceneTarget({view:v.id,pin:v.pins[0].id});document.querySelector(`[data-shot="${CSS.escape(shot)}"]`).focus({preventScroll:true});}});
+  $('scene-rules').addEventListener('click',e=>{const b=e.target.closest('[data-scene-rule]');if(!b)return;selectedRule=Number(b.dataset.sceneRule);const target=task().explainer.rules[selectedRule];sceneStep=target.step;shot=target.view;selectedPin=target.pin;updateInspection();setHash();$('inspection-photo').scrollIntoView({block:'center',behavior:'auto'});});
+  function pickPlace(e,key){const b=e.target.closest('[data-'+key+']');if(b){selectedPin=b.dataset[key];selectedRule=-1;document.querySelectorAll('[data-scene-rule]').forEach(b=>b.setAttribute('aria-pressed','false'));updatePinFocus();setHash();}}
+  $('inspection-pins').addEventListener('click',e=>pickPlace(e,'pin'));
+  $('inspection-places').addEventListener('click',e=>pickPlace(e,'place'));
+  $('inspection-labels').addEventListener('click',()=>{labelsVisible=!labelsVisible;$('inspection-pins').hidden=!labelsVisible;$('inspection-labels').setAttribute('aria-pressed',String(labelsVisible));$('inspection-labels').textContent=labelsVisible?'隐藏标注':'显示标注';});
+  $('inspection-open').addEventListener('click',()=>{dialogMode='inspection';updateDialog();$('image-dialog').showModal();});
   function setTab(name, save=true) {
-    tab=['overview','scene','validation','contract'].includes(name)?name:'overview';
+    tab=['mission','overview','scene','validation','contract'].includes(name)?name:'mission';
     document.querySelectorAll('[data-tab]').forEach(b=>{
       const active=b.dataset.tab===tab;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;
       $('panel-'+b.dataset.tab).hidden=!active;
@@ -119,14 +172,22 @@
     const alt=t.name+' · '+views[camera]+'视角 · 冻结初态';
     $('camera-image').src=frame.url;$('camera-image').alt=alt;
     $('camera-caption').textContent='初态 RGB / '+camera.toUpperCase();
-    $('dialog-image').src=frame.url;$('dialog-image').alt=alt;
-    $('dialog-title').textContent=t.name+' · 真实初态';$('dialog-view').textContent=views[camera]+'视角 / '+camera.toUpperCase();
+  }
+  function updateDialog(){
+    const t=task(),f=dialogMode==='inspection'?t.explainer.views.find(v=>v.id===shot):t.frames.find(v=>v.view===camera);
+    const label=dialogMode==='inspection'?f.label:views[camera]+'视角';
+    $('dialog-image').src=f.url;$('dialog-image').alt=t.name+' · '+label+' · 原始 RGB';
+    $('dialog-title').textContent=t.name+' · 真实初态原图';$('dialog-view').textContent=label;
   }
   $('camera-tabs').addEventListener('click',e=>{const b=e.target.closest('[data-camera]');if(b){camera=b.dataset.camera;updateCamera();setHash();}});
-  $('camera-open').addEventListener('click',()=>{updateCamera();$('image-dialog').showModal();});
+  $('camera-open').addEventListener('click',()=>{dialogMode='robot';updateDialog();$('image-dialog').showModal();});
   $('dialog-close').addEventListener('click',()=>$('image-dialog').close());
   $('image-dialog').addEventListener('click',e=>{if(e.target===$('image-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
-  function nextCamera(delta){const frames=task().frames,i=frames.findIndex(f=>f.view===camera);camera=frames[(i+delta+frames.length)%frames.length].view;updateCamera();setHash();}
+  function nextCamera(delta){
+    if(dialogMode==='inspection'){const frames=task().explainer.views,i=frames.findIndex(f=>f.id===shot),v=frames[(i+delta+frames.length)%frames.length];shot=v.id;sceneStep=v.step;selectedPin=v.pins[0].id;selectedRule=-1;updateInspection();}
+    else{const frames=task().frames,i=frames.findIndex(f=>f.view===camera);camera=frames[(i+delta+frames.length)%frames.length].view;updateCamera();}
+    updateDialog();setHash();
+  }
   $('image-prev').addEventListener('click',()=>nextCamera(-1));$('image-next').addEventListener('click',()=>nextCamera(1));
   $('image-dialog').addEventListener('keydown',e=>{if(e.key==='ArrowLeft'){e.preventDefault();nextCamera(-1);}if(e.key==='ArrowRight'){e.preventDefault();nextCamera(1);}});
   $('phase-buttons').addEventListener('click',e=>{const b=e.target.closest('[data-phase]');if(b){selectPhase(Number(b.dataset.phase));setHash();}});
