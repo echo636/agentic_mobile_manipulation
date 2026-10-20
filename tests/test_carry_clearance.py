@@ -1,5 +1,6 @@
 """Ceiling, payload and failed-query regressions for optional carry lifting."""
 from copy import deepcopy
+from contextlib import nullcontext
 import importlib.util
 import sys
 from types import ModuleType, SimpleNamespace
@@ -7,6 +8,8 @@ import unittest
 from unittest.mock import patch
 
 from manipulation_agent.executors.carry_clearance import choose_lift, assembly_lift
+from manipulation_agent.executors.carry import ControlledCarry
+from manipulation_agent.contracts import SkillError
 
 
 class LiftClearanceTests(unittest.TestCase):
@@ -64,6 +67,64 @@ class LiftClearanceTests(unittest.TestCase):
         self.assertTrue(records[-1]['rejected_sweeps'])
         self.assertEqual(records[-1]['rejected_sweeps'][0]['bodies'], ['/oven/ceiling'])
         self.assertFalse(records[-1]['extraction_path_certified'])
+
+
+@unittest.skipUnless(importlib.util.find_spec('torch'), 'Requires geometry environment')
+class FailedGraspTests(unittest.TestCase):
+    def fixture(self):
+        import torch
+        class Body:
+            fixed_base=False
+            n_joints=0
+            states={}
+            def __init__(self,name):
+                self.name=name;self.position=torch.tensor([0.,0.,1.])
+            def get_position_orientation(self):
+                return self.position.clone(),torch.tensor([0.,0.,0.,1.])
+            def set_position_orientation(self,p,q):
+                self.position=p.clone()
+            def keep_still(self):pass
+            def get_joint_positions(self):return torch.zeros(1)
+            def q_to_action(self,q):return q
+        obj,robot=Body('bag'),Body('robot')
+        b=ControlledCarry();b.torch=torch;b.robot=robot;b.ideal_carry=True
+        b._ideal_held=None;b._carry_contents=[];b._carry_particles=[];b.frames_revision=0
+        b.env=SimpleNamespace(scene=SimpleNamespace(objects=[obj,robot]))
+        b._anchored_operation=lambda:nullcontext();b._carry_record=lambda **kwargs:None
+        b._step=lambda action:obj.position.add_(torch.tensor([0.,0.,.03]))
+        states=ModuleType('omnigibson.object_states')
+        for name in ['Inside','OnTop','Touching']:setattr(states,name,type(name,(),{}))
+        utils=ModuleType('omnigibson.utils')
+        utils.transform_utils=SimpleNamespace(relative_pose_transform=lambda p,q,b,bq:(p-b,q),
+                                             pose_transform=lambda b,bq,p,q:(b+p,q))
+        return b,obj,{'omnigibson.object_states':states,'omnigibson.utils':utils}
+
+    def test_failed_support_check_drops_only_control_relationship(self):
+        b,obj,modules=self.fixture()
+        with patch.dict(sys.modules,modules), \
+             patch('manipulation_agent.executors.carry.snapshot_particles',return_value=[]), \
+             patch('manipulation_agent.executors.carry.assembly_lift',return_value=.02), \
+             patch('manipulation_agent.executors.carry.verify_particles',
+                   side_effect=SkillError('postcondition_error','foreign support')):
+            with self.assertRaises(SkillError):b._ideal_grasp(obj,1)
+        self.assertIsNone(b._ideal_held)
+        self.assertEqual(b._carry_particles,[])
+        self.assertEqual(b.frames_revision,-1)
+        self.assertAlmostEqual(float(obj.position[2]),1.05,places=5)
+
+    def test_already_held_cannot_bypass_particle_postconditions(self):
+        b,obj,modules=self.fixture();b._ideal_held=obj
+        with patch.dict(sys.modules,modules), \
+             patch('manipulation_agent.executors.carry.verify_particles',
+                   side_effect=SkillError('postcondition_error','foreign support')) as verify:
+            with self.assertRaises(SkillError):b._ideal_grasp(obj,1)
+        verify.assert_called_once();self.assertIsNone(b._ideal_held)
+
+    def test_occupied_hand_rejection_retains_previous_valid_grasp(self):
+        b,obj,modules=self.fixture();previous=object();b._ideal_held=previous
+        with patch.dict(sys.modules,modules):
+            with self.assertRaises(SkillError) as raised:b._ideal_grasp(obj,1)
+        self.assertEqual(raised.exception.code,'hand_occupied');self.assertIs(b._ideal_held,previous)
 
 
 if __name__ == '__main__':

@@ -302,7 +302,13 @@ class ControlledCarry:
         from omnigibson.utils import transform_utils as T
         from omnigibson.object_states import Inside,OnTop,Touching
         torch=self.torch
-        if self._ideal_held is obj:return {'primitive':'grasp','postcondition':'selected_object_already_held'}
+        if self._ideal_held is obj:
+            try:
+                verify_particles(self.env.scene,getattr(self,'_carry_particles',[]))
+            except Exception:
+                self._carry_detach();self.frames_revision=-1
+                raise
+            return {'primitive':'grasp','postcondition':'selected_object_already_held'}
         if self._ideal_held is not None:raise SkillError('hand_occupied','A carry relationship already exists')
         if obj.fixed_base:raise SkillError('fixed_object','The selected object has a fixed base')
         # Preserve both contained objects and supported objects (e.g. food on a
@@ -355,14 +361,21 @@ class ControlledCarry:
                            preserved_articulated_objects=[body.name for body in self._carry_joint_positions],
                            implementation='pose_projection_no_fixed_joint',initial_lift_m=lift,
                            original_position=original[0].tolist())
-        self._carry_follow()
-        with self._anchored_operation():
-            for _ in range(min(6,max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-        pos,quat=obj.get_position_orientation()
-        if not bool(torch.isfinite(pos).all() and torch.isfinite(quat).all()):
-            raise SkillError('physics_instability','Non-finite held pose',changed=True)
-        verify_particles(self.env.scene,particles)
+        try:
+            self._carry_follow()
+            with self._anchored_operation():
+                for _ in range(min(6,max_steps)):
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            pos,quat=obj.get_position_orientation()
+            if not bool(torch.isfinite(pos).all() and torch.isfinite(quat).all()):
+                raise SkillError('physics_instability','Non-finite held pose',changed=True)
+            verify_particles(self.env.scene,particles)
+        except Exception:
+            # A failed attachment must not become an unchecked "already held"
+            # success on retry. Keep actual physics/particle outcomes; discard
+            # only the failed control relationship, without restoring matter.
+            self._carry_detach();self.frames_revision=-1
+            raise
         return {'primitive':'grasp','implementation':'controlled_pose_carry','postcondition':'selected_object_held_and_finite',
                 'physical_grasp':False,'fixed_joint_created':False,'contained_rigid_objects':len(contents),
                 'contained_particles':particle_count(particles,'contained'),
