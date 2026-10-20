@@ -47,6 +47,15 @@ def main():
         backend=CustomTaskBackend.__new__(CustomTaskBackend)
         backend.__init__(a.spec,a.output,build_instance=a.output/'initial_scene.json',record_video=False,
                          inside_placement='official_volume',max_steps=1000000)
+        from manipulation_agent.diverse_task_contract import robot_spawn_supports
+        position=backend.robot.get_position_orientation()[0].tolist()
+        floors={obj.name:[v.tolist() for v in obj.aabb] for obj in backend.env.scene.objects
+                if obj.category in ('floors','lawn','driveway')}
+        matches=robot_spawn_supports(position,floors)
+        spawn=dict(status='passed' if matches else 'failed',position=position,matched_floors=matches,
+                   validation_level='coarse initial robot floor envelope; collision and navigation separate')
+        write_json(a.output/'robot_spawn_validation.json',spawn)
+        if not matches:raise RuntimeError('Robot spawn is outside native floor bounds or height')
         record['backend']=backend.provenance()
         record['evaluation']=backend.evaluate()
         if record['evaluation']['task_success']:

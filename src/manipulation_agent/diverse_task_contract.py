@@ -2,6 +2,15 @@
 import math
 
 
+def robot_spawn_supports(position, floor_bounds):
+    """Reject parked/fallen robots; this coarse screen does not prove a route."""
+    if len(position)!=3 or not all(math.isfinite(float(v)) for v in position):
+        return []
+    return [name for name,(low,high) in floor_bounds.items()
+            if all(low[i]-.05<=position[i]<=high[i]+.05 for i in (0,1))
+            and high[2]-.1<=position[2]<=high[2]+1.5]
+
+
 def validate_construction(spec):
     roles = spec['roles']
     excluded=spec.get('scene_exclusions',[])

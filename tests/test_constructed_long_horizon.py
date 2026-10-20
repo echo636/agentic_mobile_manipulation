@@ -8,7 +8,7 @@ from contextlib import nullcontext
 from unittest.mock import Mock, patch
 
 from manipulation_agent.custom_tasks import load_spec, validate_spec
-from manipulation_agent.diverse_task_contract import replacement_complete
+from manipulation_agent.diverse_task_contract import replacement_complete, robot_spawn_supports
 from manipulation_agent.long_horizon import TemporalGoalEvaluator
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -17,6 +17,12 @@ def recipe(prefix):
 
 
 class ConstructionContracts(unittest.TestCase):
+    def test_parked_and_fallen_robot_cannot_pass_construction(self):
+        bounds={'floor':([0.,0.,-.3],[10.,10.,0.])}
+        self.assertEqual(robot_spawn_supports([2.,2.,0.],bounds),['floor'])
+        for pos in ([300.,300.,0.],[2.,2.,-40.],[float('nan'),2.,0.]):
+            self.assertEqual(robot_spawn_supports(pos,bounds),[])
+
     def test_restore_reenables_native_transitions_even_on_error(self):
         from manipulation_agent.executors.custom_task import CustomTaskBackend
         for fail in (False,True):
