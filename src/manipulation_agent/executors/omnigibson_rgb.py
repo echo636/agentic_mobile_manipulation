@@ -1002,7 +1002,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if primitive=='release' and self.ideal_carry:return self._ideal_release(max_steps)
         if primitive=='wait':
             count=min(max_steps,int(round(float(kwargs.get('seconds',5.0))/self.og.sim.get_sim_step_dt())))
-            with self._anchored_operation():
+            with self._settling_container_contents(),self._anchored_operation():
                 for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
         if primitive=='release':

@@ -41,6 +41,11 @@ assembly so a raised object does not inherit obstacles on a lower countertop. Su
 steps within its existing settling budget and clears native state caches before
 checking contacts. This prevents sleeping objects from retaining stale false
 contact readings; it does not assign goal predicates or relax scoring.
+Explicit waits and lid/drawer operations release resident-content pose
+stabilization so those rigid objects can settle under gravity. Container roots
+retain their ideal support. Subsequent stabilization captures the actual new
+containment and poses; escaped objects are not moved back. This repair requires
+fresh physical validation and does not certify any task by itself.
 
 ## Independent evaluation
 

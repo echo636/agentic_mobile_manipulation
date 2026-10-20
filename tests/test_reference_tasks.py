@@ -43,6 +43,37 @@ class ApplianceApproachTests(unittest.TestCase):
 
 
 class ReferenceRecoveryTests(unittest.TestCase):
+    def test_empty_return_keeps_both_endpoints_in_reach_without_loaded_navigation(self):
+        reference = ReferenceTask(None, None)
+        held = False
+        stance = None
+        placed = False
+        def action(primitive, role=None, point=None, **kwargs):
+            nonlocal held, stance, placed
+            if primitive == 'navigate_to':
+                self.assertFalse(held)
+                stance = point[:2]
+            elif primitive == 'grasp':
+                self.assertEqual(role, 'box')
+                self.assertFalse(held)
+                # Actual settled box origin, including a full grid snap margin.
+                targets = ((24.502464, 1.497293), (21.95, 1.2))
+                for dx in (-.025, .025):
+                    for dy in (-.025, .025):
+                        for target in targets:
+                            self.assertLess(math.dist((stance[0]+dx, stance[1]+dy), target), 1.4)
+                held = True
+            elif primitive == 'place_on_top':
+                self.assertTrue(held)
+                self.assertEqual(role, 'source')
+                self.assertLess(math.dist(stance, point[:2]), 1.4)
+                held = False
+                placed = True
+        reference.action = action
+        reference.return_kit(empty=True)
+        self.assertTrue(placed)
+        self.assertFalse(held)
+
     def test_inventory_repack_retains_reach_and_preserves_omitted_tool(self):
         # Coordinates already exercised by the unload continuation. Repacking
         # must not navigate with a tool held or silently restore an omitted tool.

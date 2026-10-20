@@ -24,6 +24,32 @@ def support_closure(root, objects, relation):
 
 
 class ControlledCarry:
+    @contextmanager
+    def _settling_container_contents(self):
+        """Let resident rigid contents settle, then retain their actual new poses.
+
+        Navigation stabilization must not pin a tilted tool forever during a
+        wait or lid operation. Keep container roots supported, release only
+        resident pose stabilization, and recapture native containment after
+        physics (or after an enclosing operation has rolled back). Escaped or
+        removed objects are never restored to their previous locations.
+        """
+        pins = getattr(self, '_stabilized_container_payloads', {})
+        containers = tuple(pins)
+        for container in containers:
+            pins.pop(container)
+        try:
+            yield
+        finally:
+            if containers:
+                live = {id(obj) for obj in self.env.scene.objects}
+                held = self._get_held()
+                for container in containers:
+                    if id(container) not in live:
+                        getattr(self, '_stabilized_containers', {}).pop(container, None)
+                    elif container is not held:
+                        pins[container] = self._container_payload(container)
+
     def _restore_carry_joints(self):
         # Pose carry represents the selected assembly as a controlled body.
         # Preserve the captured articulation too; root projection alone can
@@ -82,7 +108,8 @@ class ControlledCarry:
         payload=self._container_payload(obj) if state is Open else []
         particles=snapshot_particles(self.env.scene,[obj]) if state is Open else []
         edit=self._editable_carry_joints(obj) if state is Open else nullcontext()
-        with edit,self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
+        settling=self._settling_container_contents() if state is Open else nullcontext()
+        with edit,settling,self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
             # Upstream symbolic OPEN samples a random opening and returns early
             # when already ajar. Fully open/close all annotated joints instead.
             accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))

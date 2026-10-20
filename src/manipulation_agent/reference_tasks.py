@@ -194,13 +194,26 @@ class ReferenceTask:
         for i in range(1, 4):
             self.transfer_inside(f'can{i}', 'bin')
 
+    def stage_fridge_food(self, item):
+        # A lower-shelf food center is an occluded navigation target, and
+        # carrying it at shelf height can trap the assembly beside the
+        # refrigerator. Approach the appliance, then use an ordinary counted
+        # placement/regrasp on the adjacent counter before travel. This also
+        # supports uncooked-food negative cases; no cooking occurs here.
+        self.action('navigate_to', 'fridge')
+        self.action('grasp', item)
+        self.action('place_on_top', 'storage', [7.05, -1.75, .88754])
+        self.floor(6.8, -.9)
+        self.action('grasp', item)
+
     def lunch(self, order, *, deliver_box=True):
         if order == 'cleanup_first':
             self.lunch_cleanup()
-        self.move('open', 'fridge')
         self.move('open', 'microwave')
+        self.move('open', 'fridge')
         for i in (1, 2):
-            self.transfer_inside(f'hotdog{i}', 'microwave')
+            self.stage_fridge_food(f'hotdog{i}')
+            self.inside('microwave')
         self.move('close', 'microwave')
         self.move('toggle_on', 'microwave')
         if order == 'cook_first':
@@ -255,11 +268,18 @@ class ReferenceTask:
             # allows grid snapping without the helper reapproaching at 1.2 m.
             self.action('grasp', f'can{i}')
             self.inside('bin')
-        self.move('grasp', 'brush')
+        self.action('navigate_to', 'brush')
+        self.floor(7.3, .65)
+        self.action('grasp', 'brush')
+        # The closest west-side table approach has no bounded complete route
+        # with this brush offset. Use the reachable southeast floor stance;
+        # the table center remains within the ordinary 1.4 m action reach.
+        self.floor(4.4, 4.45)
         for _ in range(4):
-            self.move('wipe', 'table', self.top('table'))
+            self.action('wipe', 'table', self.top('table'))
             if not self.backend._predicate_values()['table_dusty']:
                 break
+        self.floor(6.2, 1.2)
         self.move('place_on_top', 'prep', [7.758, -.62, .88736])
 
     def movie(self, order):
@@ -328,8 +348,16 @@ class ReferenceTask:
                 self.log('container_close_recovery', failed_attempt=attempt+1,
                          reason='Checked close rolled back; wait for free settling before retry')
 
-    def return_kit(self):
-        self.transfer_top('box', 'source', [21.95, 1.2, .91574])
+    def return_kit(self, *, empty=False):
+        if empty:
+            # Both the box and its destination fit within checked reach from
+            # this stance. The general 1.2 m approach heuristic would trigger
+            # an unnecessary loaded navigation after the grasp.
+            self.floor(23.25, 1.1)
+            self.action('grasp', 'box')
+            self.action('place_on_top', 'source', [21.95, 1.2, .91574])
+        else:
+            self.transfer_top('box', 'source', [21.95, 1.2, .91574])
         self.action('wait', seconds=1.)
 
     def open_delivered_kit(self):
@@ -380,7 +408,7 @@ class ReferenceTask:
         self.unpack_delivered_kit()
         self.move('close', 'box')
         if return_box:
-            self.return_kit()
+            self.return_kit(empty=True)
 
     def workshop_inventory(self, order):
         self.workshop(order, return_box=False)
@@ -419,8 +447,9 @@ class ReferenceTask:
         witness = {}
         fault = None
         if case == 'skip_inventory_unpack':
+            self.workshop_cleanup()
             self.pack_kit()
-            self.transfer_top('box', 'bench', [24.5, 1.5, .92754])
+            self.transfer_top('box', 'bench', [24.5, 1.5, .92754], placement_world_yaw=-45.)
             self.return_kit()
             witness = {'box_at_source': True, 'box_open': False,
                        **{item+'_in_box': True for item in
@@ -462,12 +491,14 @@ class ReferenceTask:
         elif case == 'uncooked_plate':
             self.move('open', 'fridge')
             self.transfer_top('plate1', 'table', [6.5, 3.5, .813])
-            self.transfer_top('hotdog1', 'plate1', self.top('plate1', .3, .5))
+            self.stage_fridge_food('hotdog1')
+            self.move('place_on_top', 'plate1', self.top('plate1', .3, .5))
             witness = {'hotdog1_on_plate1': True, 'hotdog1_cooked': False}
             expected = {'terminal_conditions': {'hotdog1_cooked': False}}
         elif case == 'unfinished_food':
             self.move('open', 'fridge')
-            self.transfer_inside('hotdog1', 'box')
+            self.stage_fridge_food('hotdog1')
+            self.inside('box')
             witness = {'hotdog1_packed': True, 'hotdog1_cooked': False}
             expected = {'terminal_conditions': {'hotdog1_cooked': False}}
         elif case == 'prep_not_restored':
@@ -520,6 +551,10 @@ class ReferenceTask:
                 expected = {'constraint_conditions': {'closed_loaded_box_transport': False},
                             'historical_conditions': {'packed_at_storage': True}}
         elif case == 'skip_loaded_transport':
+            # Clear the destination using the valid cleanup branch, so the
+            # witness isolates missing loaded transport instead of depending
+            # on a placement through the initial books and cans.
+            self.workshop_cleanup()
             for item, y in zip(['pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill'],
                                [-1.95, -.8, -.2, .4, 1.]):
                 self.transfer_top(item, 'bench', [24.5, y, .92754])
