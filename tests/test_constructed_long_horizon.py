@@ -58,6 +58,10 @@ class ConstructionContracts(unittest.TestCase):
         spec['initial_layout'].append({'object':child,'position':[0,0,0]})
         with self.assertRaisesRegex(ValueError,'future'):validate_spec(spec)
 
+    def test_background_exclusion_cannot_delete_a_scored_entity(self):
+        spec=recipe('garden');spec['scene_exclusions']=[spec['roles']['plant00']]
+        with self.assertRaisesRegex(ValueError,'outside task roles'):validate_spec(spec)
+
     def test_destination_count_cannot_double_count_one_member(self):
         spec=recipe('garden')
         row=spec['evaluation']['predicates']['destination0_count']

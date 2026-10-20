@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "garden_treatment_and_distribution_100_v1",
-  "instance_id": "garden_treatment_and_distribution_100_v1_seed0_r2",
+  "instance_id": "garden_treatment_and_distribution_100_v1_seed0_r3",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -12,6 +12,7 @@
   },
   "roles": {
     "floor": "floors_ghetev_0",
+    "background_sprayer": "insectifuge_atomizer_174",
     "source0": "lh_source0",
     "source1": "lh_source1",
     "stage": "lh_stage",
@@ -64,7 +65,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         11.36,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -75,7 +76,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         11.88,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -86,7 +87,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         12.4,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -97,7 +98,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         12.92,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -108,7 +109,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         13.440000000000001,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -119,7 +120,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         11.36,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -130,7 +131,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         11.88,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -141,7 +142,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         12.4,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -152,7 +153,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         12.92,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -163,7 +164,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         13.440000000000001,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -174,7 +175,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         15.16,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -185,7 +186,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         15.68,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -196,7 +197,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         16.2,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -207,7 +208,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         16.72,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -218,7 +219,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         17.24,
-        12.2,
+        12.399999999999999,
         0.85
       ]
     },
@@ -229,7 +230,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         15.16,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -240,7 +241,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         15.68,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -251,7 +252,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         16.2,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -262,7 +263,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         16.72,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -273,7 +274,7 @@
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
         17.24,
-        12.8,
+        13.0,
         0.85
       ]
     },
@@ -327,7 +328,7 @@
       "name": "lh_source0",
       "position": [
         12.4,
-        12.5,
+        12.7,
         0.225
       ],
       "size": [
@@ -347,7 +348,7 @@
       "name": "lh_source1",
       "position": [
         16.2,
-        12.5,
+        12.7,
         0.225
       ],
       "size": [
@@ -466,6 +467,16 @@
   ],
   "initial_layout": [
     {
+      "object": "background_sprayer",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        14.8,
+        9.8
+      ],
+      "settle_steps": 10
+    },
+    {
       "object": "tool",
       "target": "tool_home",
       "place_on_support": true,
@@ -487,7 +498,7 @@
       "place_on_support": true,
       "xy": [
         11.36,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -504,7 +515,7 @@
       "place_on_support": true,
       "xy": [
         11.88,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -521,7 +532,7 @@
       "place_on_support": true,
       "xy": [
         12.4,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -538,7 +549,7 @@
       "place_on_support": true,
       "xy": [
         12.92,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -555,7 +566,7 @@
       "place_on_support": true,
       "xy": [
         13.440000000000001,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -572,7 +583,7 @@
       "place_on_support": true,
       "xy": [
         11.36,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -589,7 +600,7 @@
       "place_on_support": true,
       "xy": [
         11.88,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -606,7 +617,7 @@
       "place_on_support": true,
       "xy": [
         12.4,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -623,7 +634,7 @@
       "place_on_support": true,
       "xy": [
         12.92,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -640,7 +651,7 @@
       "place_on_support": true,
       "xy": [
         13.440000000000001,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -657,7 +668,7 @@
       "place_on_support": true,
       "xy": [
         15.16,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -674,7 +685,7 @@
       "place_on_support": true,
       "xy": [
         15.68,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -691,7 +702,7 @@
       "place_on_support": true,
       "xy": [
         16.2,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -708,7 +719,7 @@
       "place_on_support": true,
       "xy": [
         16.72,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -725,7 +736,7 @@
       "place_on_support": true,
       "xy": [
         17.24,
-        12.2
+        12.399999999999999
       ],
       "settle_steps": 10
     },
@@ -742,7 +753,7 @@
       "place_on_support": true,
       "xy": [
         15.16,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -759,7 +770,7 @@
       "place_on_support": true,
       "xy": [
         15.68,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -776,7 +787,7 @@
       "place_on_support": true,
       "xy": [
         16.2,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -793,7 +804,7 @@
       "place_on_support": true,
       "xy": [
         16.72,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -810,7 +821,7 @@
       "place_on_support": true,
       "xy": [
         17.24,
-        12.8
+        13.0
       ],
       "settle_steps": 10
     },
@@ -891,6 +902,7 @@
     }
   ],
   "initial_assertions": {
+    "background_sprayer_starts_on_floor": "background_sprayer_on_floor",
     "tool_starts_on_tool_home": "tool_on_tool_home",
     "tool_ToggledOn": {
       "not": "tool_ToggledOn"
@@ -1154,6 +1166,11 @@
   ],
   "evaluation": {
     "predicates": {
+      "background_sprayer_on_floor": {
+        "object": "background_sprayer",
+        "state": "OnTop",
+        "target": "floor"
+      },
       "tool_on_tool_home": {
         "object": "tool",
         "state": "OnTop",
@@ -3197,7 +3214,15 @@
     "reference_attempt_budget": 1000,
     "proposed_model_act_look_budget": 600
   },
+  "scene_exclusions": [
+    "tree_rrhqpw_1",
+    "tree_rrhqpw_2",
+    "garden_chair_cottya_1",
+    "garden_chair_cottya_2",
+    "garden_light_qyfrwj_4"
+  ],
   "design_deviations": [
-    "Treated pots are interchangeable across green tables; exactly ten on each, without hidden category/identity assignment."
+    "Treated pots are interchangeable across green tables; exactly ten on each, without hidden category/identity assignment.",
+    "Task work area excludes two background trees, two chairs and one garden light at measured fixture collisions; original sprayer retained separately on the floor."
   ]
 }

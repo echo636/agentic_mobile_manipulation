@@ -138,7 +138,10 @@ class CustomTaskBackend(RGBBackend):
         root = Path(os.environ['OMNIGIBSON_DATA_PATH']) / '2026-challenge-task-instances'
         catalog = yaml.safe_load((root/'metadata/available_tasks.yaml').read_text())
         scene = json.loads(json.dumps(self.env.scene.save(as_dict=True), cls=TorchEncoder))
+        protected={getattr(obj,'name',None) for obj in self.env.task.object_scope.values()}
         for name in spec.get('scene_exclusions',[]):
+            if name in protected:
+                raise ValueError('Cannot exclude a base task binding: '+name)
             entry=scene['objects_info']['init_info'].pop(name)
             if entry['args'].get('category') in ('agent','floors','walls','ceilings','door'):
                 raise ValueError('Cannot exclude structural or robot entities: '+name)

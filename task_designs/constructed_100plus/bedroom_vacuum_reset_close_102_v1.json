@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
   "id": "bedroom_vacuum_reset_close_102_v1",
-  "instance_id": "bedroom_vacuum_reset_close_102_v1_seed0_r2",
+  "instance_id": "bedroom_vacuum_reset_close_102_v1_seed0_r3",
   "status": "candidate_physics_unvalidated",
   "official_submission_eligible": false,
   "benchmark_ready": false,
@@ -13,6 +13,7 @@
   "roles": {
     "floor": "floors_nlswvt_0",
     "floor_b": "floors_zrhxwn_0",
+    "background_vacuum": "vacuum_89",
     "tool_home": "lh_tool_home",
     "tool": "lh_tool",
     "a_stage": "lh_a_stage",
@@ -60,7 +61,7 @@
       "source_sha256": "3aa56342cc02f704725cdd268ce94e15fa7015dfa8c88fadf01b3f5890772b36",
       "position": [
         -3.0,
-        0.2,
+        0.65,
         0.85
       ]
     },
@@ -213,7 +214,7 @@
       "source_object": "table_lamp_428",
       "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
       "position": [
-        -3.0,
+        -3.4,
         3.85,
         0.85
       ]
@@ -378,7 +379,7 @@
       "name": "lh_tool_home",
       "position": [
         -3.0,
-        0.2,
+        0.65,
         0.225
       ],
       "size": [
@@ -417,13 +418,13 @@
     {
       "name": "lh_a_destination",
       "position": [
-        -3.31,
+        -3.5,
         2.7,
         0.225
       ],
       "size": [
-        1.0,
-        1.2,
+        0.8,
+        1.6,
         0.45
       ],
       "rgba": [
@@ -457,7 +458,7 @@
     {
       "name": "lh_a_lamp1_stand",
       "position": [
-        -3.0,
+        -3.4,
         3.85,
         0.225
       ],
@@ -498,7 +499,7 @@
       "name": "lh_b_destination",
       "position": [
         5.619999999999999,
-        0.5,
+        0.9,
         0.225
       ],
       "size": [
@@ -557,12 +558,22 @@
   ],
   "initial_layout": [
     {
+      "object": "background_vacuum",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -3.55,
+        1.3
+      ],
+      "settle_steps": 10
+    },
+    {
       "object": "tool",
       "target": "tool_home",
       "place_on_support": true,
       "xy": [
         -3.0,
-        0.2
+        0.65
       ],
       "settle_steps": 10
     },
@@ -720,7 +731,7 @@
       "target": "a_lamp1_stand",
       "place_on_support": true,
       "xy": [
-        -3.0,
+        -3.4,
         3.85
       ],
       "settle_steps": 10
@@ -892,6 +903,7 @@
     }
   ],
   "initial_assertions": {
+    "background_vacuum_starts_on_floor": "background_vacuum_on_floor",
     "tool_starts_on_tool_home": "tool_on_tool_home",
     "tool_ToggledOn": {
       "not": "tool_ToggledOn"
@@ -1015,6 +1027,11 @@
   ],
   "evaluation": {
     "predicates": {
+      "background_vacuum_on_floor": {
+        "object": "background_vacuum",
+        "state": "OnTop",
+        "target": "floor"
+      },
       "tool_on_tool_home": {
         "object": "tool",
         "state": "OnTop",
@@ -1696,8 +1713,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.61,
-              2.325
+              -3.67,
+              2.1
             ]
           },
           {
@@ -1710,8 +1727,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.31,
-              2.325
+              -3.33,
+              2.1
             ]
           },
           {
@@ -1724,8 +1741,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.0100000000000002,
-              2.325
+              -3.67,
+              2.3400000000000003
             ]
           },
           {
@@ -1738,8 +1755,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.61,
-              2.575
+              -3.33,
+              2.3400000000000003
             ]
           },
           {
@@ -1752,8 +1769,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.31,
-              2.575
+              -3.67,
+              2.58
             ]
           },
           {
@@ -1766,8 +1783,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.0100000000000002,
-              2.575
+              -3.33,
+              2.58
             ]
           },
           {
@@ -1780,8 +1797,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.61,
-              2.825
+              -3.67,
+              2.8200000000000003
             ]
           },
           {
@@ -1794,8 +1811,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.31,
-              2.825
+              -3.33,
+              2.8200000000000003
             ]
           },
           {
@@ -1808,8 +1825,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.0100000000000002,
-              2.825
+              -3.67,
+              3.06
             ]
           },
           {
@@ -1822,8 +1839,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.61,
-              3.075
+              -3.33,
+              3.06
             ]
           },
           {
@@ -1836,8 +1853,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.31,
-              3.075
+              -3.67,
+              3.3000000000000003
             ]
           },
           {
@@ -1850,8 +1867,8 @@
             ],
             "destination": "a_destination",
             "destination_xy": [
-              -3.0100000000000002,
-              3.075
+              -3.33,
+              3.3000000000000003
             ]
           }
         ]
@@ -1871,7 +1888,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.319999999999999,
-              0.125
+              0.525
             ]
           },
           {
@@ -1885,7 +1902,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.619999999999999,
-              0.125
+              0.525
             ]
           },
           {
@@ -1899,7 +1916,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.919999999999999,
-              0.125
+              0.525
             ]
           },
           {
@@ -1913,7 +1930,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.319999999999999,
-              0.375
+              0.775
             ]
           },
           {
@@ -1927,7 +1944,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.619999999999999,
-              0.375
+              0.775
             ]
           },
           {
@@ -1941,7 +1958,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.919999999999999,
-              0.375
+              0.775
             ]
           },
           {
@@ -1955,7 +1972,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.319999999999999,
-              0.625
+              1.025
             ]
           },
           {
@@ -1969,7 +1986,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.619999999999999,
-              0.625
+              1.025
             ]
           },
           {
@@ -1983,7 +2000,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.919999999999999,
-              0.625
+              1.025
             ]
           },
           {
@@ -1997,7 +2014,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.319999999999999,
-              0.875
+              1.275
             ]
           },
           {
@@ -2011,7 +2028,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.619999999999999,
-              0.875
+              1.275
             ]
           },
           {
@@ -2025,7 +2042,7 @@
             "destination": "b_destination",
             "destination_xy": [
               5.919999999999999,
-              0.875
+              1.275
             ]
           }
         ]
@@ -2041,7 +2058,7 @@
     "tool_home": "tool_home",
     "tool_xy": [
       -3.0,
-      0.2
+      0.65
     ],
     "toggle": true
   },
