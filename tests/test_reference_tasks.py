@@ -46,9 +46,9 @@ class ReferenceRecoveryTests(unittest.TestCase):
     def test_inventory_repack_retains_reach_and_preserves_omitted_tool(self):
         # Coordinates already exercised by the unload continuation. Repacking
         # must not navigate with a tool held or silently restore an omitted tool.
-        tools = {'pliers': (24.2, .3), 'allen_wrench': (24.6, .3),
-                 'screwdriver': (24.4, .5), 'flashlight': (24.6, .7),
-                 'drill': (24.4, 1.)}
+        tools = {'pliers': (24.21057, .28708), 'allen_wrench': (24.67402, .34865),
+                 'screwdriver': (24.37291, .49238), 'flashlight': (24.53003, .68251),
+                 'drill': (24.39630, 1.00261)}
         for omit in (None, 'drill'):
             with self.subTest(omit=omit):
                 reference = ReferenceTask(None, None)
@@ -63,6 +63,9 @@ class ReferenceRecoveryTests(unittest.TestCase):
                     elif primitive == 'grasp':
                         self.assertIsNone(held)
                         self.assertLess(math.dist(stance, tools[role]), 1.4)
+                        for dx in (-.025, .025):
+                            for dy in (-.025, .025):
+                                self.assertLess(math.dist((stance[0]+dx, stance[1]+dy), tools[role]), 1.4)
                         held = role
                     elif primitive == 'place_inside':
                         self.assertEqual(role, 'box')

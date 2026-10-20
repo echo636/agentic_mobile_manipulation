@@ -186,6 +186,11 @@ class ReferenceTask:
         raise RuntimeError('Physical process did not reach ' + repr(wanted))
 
     def lunch_cleanup(self):
+        # Leave the east-side pickup stance empty-handed before attaching
+        # the can. The closer stance fits the body but traps its loaded
+        # forward departure. This short checked approach was replayed live.
+        self.action('navigate_to', 'can1')
+        self.floor(9.5, 3.5)
         for i in range(1, 4):
             self.transfer_inside(f'can{i}', 'bin')
 
@@ -295,7 +300,9 @@ class ReferenceTask:
             # checked reach of this stance. Reposition empty-handed once;
             # the general 1.2 m approach heuristic would otherwise move with
             # the Allen wrench held, despite its valid 1.4 m action reach.
-            self.floor(23.5, 1.1)
+            # Leave margin for grid snapping and the wrench's offset origin:
+            # its settled grasp point is ~7 cm beyond its placement target.
+            self.floor(23.55, .95)
         self.move('open', 'box')
         for item in ('pliers', 'allen_wrench', 'screwdriver', 'flashlight', 'drill'):
             if item != omit:
