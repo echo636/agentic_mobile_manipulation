@@ -2,6 +2,7 @@
 from pathlib import Path
 from contextlib import redirect_stdout
 import io
+import json
 import math
 import tempfile
 from types import SimpleNamespace
@@ -60,6 +61,46 @@ class ApplianceApproachTests(unittest.TestCase):
 
 
 class ReferenceRecoveryTests(unittest.TestCase):
+    def test_powered_removal_negative_requires_actual_extraction_after_zero_lift_grasp(self):
+        from manipulation_agent.long_horizon import TemporalGoalEvaluator
+        path = Path(__file__).resolve().parents[1] / 'task_designs/evaluation_v2/movie_night_and_restore_v2.json'
+        spec = json.loads(path.read_text())
+        for placement_moves_bag in (False, True):
+            with self.subTest(placement_moves_bag=placement_moves_bag):
+                evaluator = TemporalGoalEvaluator(spec['evaluation'])
+                values = dict.fromkeys(spec['evaluation']['predicates'], False)
+                evaluator.observe(values, 0, env_step=0, initial=True)
+
+                def observe(**changed):
+                    values.update(changed)
+                    sequence = evaluator.last_sequence + 1
+                    evaluator.observe(values, sequence, env_step=sequence)
+
+                backend = SimpleNamespace(custom_spec=spec, _predicate_values=lambda: dict(values),
+                                          evaluate=lambda: evaluator.result(values))
+                reference = ReferenceTask(backend, None)
+                reference.log = lambda *args, **kwargs: None
+                reference.load_popcorn = lambda: observe(bag_in_microwave=True, raw_popcorn_present=True)
+                reference.wait_for = lambda wanted: observe(**wanted)
+
+                def action(primitive, role=None, point=None, **kwargs):
+                    if primitive in ('toggle_on', 'toggle_off'):
+                        observe(microwave_on=primitive == 'toggle_on')
+                    elif primitive == 'grasp':
+                        self.assertTrue(values['bag_in_microwave'])
+                        # An attachment at zero lift has not removed anything.
+                    elif primitive == 'place_on_top' and placement_moves_bag:
+                        values['bag_in_microwave'] = False
+                        evaluator.check_motion(values, {'bag'}, env_step=evaluator.last_sequence+1)
+                        observe()
+
+                reference.action = action
+                reference.move = action
+                result = reference.negative('reenergized_removal')
+                self.assertEqual(result['status'], 'passed' if placement_moves_bag else 'failed')
+                self.assertEqual(result['checks']['bag_in_microwave'], placement_moves_bag)
+                self.assertTrue(result['checks']['historical_conditions.microwave_off_before_removal'])
+
     def test_appliance_operation_keeps_valid_loading_stance(self):
         try:
             import torch
