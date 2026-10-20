@@ -319,10 +319,24 @@ class ReferenceTask:
         self.move('open', 'microwave')
         self.pickup_popcorn_bag()
         self.inside('microwave')
-        # A fresh-scene probe showed that immediate door closure displaced
-        # particles. Allow ordinary settling before the checked close.
-        self.action('wait', seconds=2.)
-        self.move('close', 'microwave')
+        self.close_popcorn_microwave()
+
+    def close_popcorn_microwave(self):
+        # Loose grains can continue settling at the microwave's volume edge
+        # during the checked close. Retain that failure and let actual physics
+        # settle before bounded retries. Never weaken containment or alter
+        # particles; every retry captures and checks the current real contents.
+        for attempt in range(3):
+            self.action('wait', seconds=2.)
+            try:
+                return self.move('close', 'microwave')
+            except Exception as exc:
+                if (getattr(exc, 'code', None) != 'postcondition_error'
+                        or 'Contained particles left the carried container' not in str(exc)
+                        or attempt == 2):
+                    raise
+                self.log('microwave_close_settling_recovery', failed_attempt=attempt+1,
+                         reason='Checked close rolled back; wait for actual loose particles to settle')
 
     def serve_movie_dish(self, item, x, y):
         if item in ('plate1', 'fork2'):

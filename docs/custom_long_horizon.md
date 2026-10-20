@@ -130,6 +130,11 @@ bag, records actual removal, and keeps the power-off guard active through remova
 Turning the microwave off, turning it back on, and then removing the bag does not
 satisfy the safety requirement. Particle cooking and subsequent transport must
 be demonstrated in the simulator; a symbolic trace cannot establish feasibility.
+The reference retains a rejected microwave close if loose particles leave its
+annotated volume, waits for physical settling and retries at most twice. All
+failed closes and waits count toward the action ceiling. Containment checks stay
+unchanged; persistent loss still fails, and recovery does not imply lossless food
+transport. Fresh physical evidence is required for this reference change.
 
 The current movie-night construction recipe uses a 1.5× scale trash bin
 (about 35 cm wide and 42 cm tall). The original 23 cm × 28 cm bin

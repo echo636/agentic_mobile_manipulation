@@ -258,6 +258,36 @@ class ReferenceRecoveryTests(unittest.TestCase):
     def displaced(self):
         return SkillError('postcondition_error', 'Operation displaced existing contents from the container')
 
+    def test_popcorn_close_preserves_rejected_action_and_wait_budget(self):
+        def escaped():
+            return SkillError('postcondition_error', 'Contained particles left the carried container')
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [escaped()])
+            reference.close_popcorn_microwave()
+            self.assertEqual([r['primitive'] for r in reference.calls], ['wait', 'close', 'wait', 'close'])
+            self.assertEqual([r['status'] for r in reference.calls], ['passed', 'failed', 'passed', 'passed'])
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [escaped()], max_attempts=3)
+            with self.assertRaisesRegex(RuntimeError, 'budget exhausted'):
+                reference.close_popcorn_microwave()
+            self.assertEqual(len(reference.calls), 3)
+
+    def test_popcorn_close_does_not_hide_persistent_loss_or_other_errors(self):
+        failure = SkillError('postcondition_error', 'Contained particles left the carried container')
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [failure, failure, failure])
+            with self.assertRaises(SkillError) as raised:
+                reference.close_popcorn_microwave()
+            self.assertIs(raised.exception, failure)
+            self.assertEqual(len(reference.calls), 6)
+        for failure in [self.displaced(), SkillError('target_changed', 'Carried particles changed')]:
+            with tempfile.TemporaryDirectory() as directory:
+                reference = self.reference(directory, [failure])
+                with self.assertRaises(SkillError) as raised:
+                    reference.close_popcorn_microwave()
+                self.assertIs(raised.exception, failure)
+                self.assertEqual(len(reference.calls), 2)
+
     def test_material_transition_regrasp_keeps_failures_and_budget(self):
         def changed():
             return SkillError('target_changed', 'Carried particles changed; old particles cannot be restored')
