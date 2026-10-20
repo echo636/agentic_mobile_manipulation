@@ -5,8 +5,11 @@
 新增内容见 [结构化目录](../task_designs/proposals_100plus/diverse_catalog.json)，
 旧 5 项仍见 [上一轮设计](long_horizon_100plus_designs.md)。
 
-本轮只做任务设计与静态核对，没有创建新场景、修执行器或运行新的仿真实验。
-所有新任务均为 `design_only`、`benchmark_ready=false`。
+设计阶段只做任务设计与静态核对；目录中的设计记录保留为 `design_only`。
+2026-10-20 后续已为庭院、鞋履、双卧室、劈木四项增加
+[可执行构建配方、独立评分与参考流程](../task_designs/constructed_100plus/README.md)，并启动真实仿真构建。
+本页描述原始设计，实际配方中的等价匹配和初态布局以该构建入口为准。
+所有新任务仍为 `benchmark_ready=false`，构建通过与完整参考、模型成功分别验收。
 
 ## 覆盖与优先级
 

@@ -4,6 +4,9 @@ import math
 
 def validate_construction(spec):
     roles = spec['roles']
+    excluded=spec.get('scene_exclusions',[])
+    if len(excluded)!=len(set(excluded)) or set(excluded)&set(roles.values()):
+        raise ValueError('Scene exclusions must be distinct background entities outside task roles')
     future = set(spec.get('future_roles', []))
     if not future <= roles.keys():
         raise ValueError('Unknown future entity')

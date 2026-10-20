@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from contextlib import nullcontext
+from unittest.mock import Mock, patch
 
 from manipulation_agent.custom_tasks import load_spec, validate_spec
 from manipulation_agent.diverse_task_contract import replacement_complete
@@ -15,6 +17,25 @@ def recipe(prefix):
 
 
 class ConstructionContracts(unittest.TestCase):
+    def test_restore_reenables_native_transitions_even_on_error(self):
+        from manipulation_agent.executors.custom_task import CustomTaskBackend
+        for fail in (False,True):
+            gm=SimpleNamespace(ENABLE_TRANSITION_RULES=True,unlocked=nullcontext)
+            refresh=Mock()
+            def restore(data):
+                self.assertFalse(gm.ENABLE_TRANSITION_RULES)
+                if fail:raise RuntimeError('restore failed')
+            backend=CustomTaskBackend.__new__(CustomTaskBackend)
+            backend.custom_spec={'schema_version':3}
+            backend.env=SimpleNamespace(scene=SimpleNamespace(restore=restore,
+                transition_rule_api=SimpleNamespace(refresh_all_rules=refresh)))
+            with patch.dict('sys.modules',{'omnigibson.macros':SimpleNamespace(gm=gm)}):
+                if fail:
+                    with self.assertRaisesRegex(RuntimeError,'restore failed'):backend._restore_custom_scene({})
+                else:backend._restore_custom_scene({})
+            self.assertTrue(gm.ENABLE_TRANSITION_RULES)
+            refresh.assert_called_once_with()
+
     def test_recipes_have_public_mapping_and_no_frozen_claim(self):
         paths=list((ROOT/'task_designs/constructed_100plus').glob('*.json'))
         self.assertEqual(len(paths),4)

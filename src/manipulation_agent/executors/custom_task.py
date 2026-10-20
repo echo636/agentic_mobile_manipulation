@@ -78,7 +78,7 @@ class CustomTaskBackend(RGBBackend):
             instance_path = (self.spec_path.parent / frozen['path']).resolve()
             if hashlib.sha256(instance_path.read_bytes()).hexdigest() != frozen['sha256']:
                 raise ValueError('Custom initial scene hash mismatch')
-            self.env.scene.restore(str(instance_path))
+            self._restore_custom_scene(str(instance_path))
         self.custom_objects = {o.name: o for o in self.env.scene.objects}
         for role, name in spec['roles'].items():
             if name not in self.custom_objects and role not in spec.get('future_roles', []):
@@ -105,6 +105,26 @@ class CustomTaskBackend(RGBBackend):
         return {role:([v.tolist() for v in live[name].get_position_orientation()] if name in live else None)
                 for role,name in self.custom_spec['roles'].items()}
 
+    def _restore_custom_scene(self, data):
+        if self.custom_spec.get('schema_version') != 3:
+            return self.env.scene.restore(data)
+        # Native restore briefly initializes newly added bodies at the origin
+        # before loading saved poses. An axe touching all new logs there can
+        # slice them during play(), before the intended scene even exists.
+        # Suspend transitions only during restore, then refresh real rule
+        # candidates before any settling, scoring, or policy execution.
+        from omnigibson.macros import gm
+        enabled = gm.ENABLE_TRANSITION_RULES
+        with gm.unlocked():
+            gm.ENABLE_TRANSITION_RULES = False
+        try:
+            self.env.scene.restore(data)
+        finally:
+            with gm.unlocked():
+                gm.ENABLE_TRANSITION_RULES = enabled
+            if enabled:
+                self.env.scene.transition_rule_api.refresh_all_rules()
+
     def _construct_instance(self):
         """Import pinned asset definitions, then sample one joint initial layout.
 
@@ -118,6 +138,11 @@ class CustomTaskBackend(RGBBackend):
         root = Path(os.environ['OMNIGIBSON_DATA_PATH']) / '2026-challenge-task-instances'
         catalog = yaml.safe_load((root/'metadata/available_tasks.yaml').read_text())
         scene = json.loads(json.dumps(self.env.scene.save(as_dict=True), cls=TorchEncoder))
+        for name in spec.get('scene_exclusions',[]):
+            entry=scene['objects_info']['init_info'].pop(name)
+            if entry['args'].get('category') in ('agent','floors','walls','ceilings','door'):
+                raise ValueError('Cannot exclude structural or robot entities: '+name)
+            scene['state']['registry']['object_registry'].pop(name)
         provenance = []
         for item in spec.get('asset_imports', []):
             task = item['source_task']; source_scene = catalog[task][0]['scene_model']
@@ -142,7 +167,8 @@ class CustomTaskBackend(RGBBackend):
             provenance.append({'name':name,'source_template':str(template),
                 'source_sha256':hashlib.sha256(template.read_bytes()).hexdigest(),
                 'asset':entry['args']})
-        self.env.scene.restore(scene)
+        with self._startup_stage("custom_imported_scene_restore"):
+            self._restore_custom_scene(scene)
         if spec.get('fixtures'):
             from omnigibson.objects.primitive_object import PrimitiveObject
             self.og.sim.stop()
@@ -159,31 +185,11 @@ class CustomTaskBackend(RGBBackend):
             for _ in range(5): self.og.sim.step()
         objects = {o.name:o for o in self.env.scene.objects}
         roles = {k:objects.get(v) for k,v in spec['roles'].items()}
-        for operation in spec.get('initial_layout', []):
-            obj = roles[operation['object']]
-            if operation.get('place_on_support'):
-                support = roles[operation['target']]
-                pos, ori = obj.get_position_orientation()
-                if 'orientation' in operation:
-                    ori = self.torch.tensor(operation['orientation'],dtype=pos.dtype,device=pos.device)
-                    obj.set_position_orientation(pos,ori)
-                low, high = obj.aabb
-                xy = self.torch.tensor(operation['xy'],dtype=pos.dtype,device=pos.device)
-                pos = pos.clone()
-                pos[:2] += xy-(low[:2]+high[:2])/2
-                pos[2] += support.aabb[1][2]-low[2]+.004
-                obj.set_position_orientation(pos,ori);obj.keep_still()
-            elif 'position' in operation:
-                pos = self.torch.tensor(operation['position'], dtype=self.torch.float32)
-                ori = self.torch.tensor(operation.get('orientation',[0,0,0,1]), dtype=self.torch.float32)
-                obj.set_position_orientation(pos,ori);obj.keep_still()
-            else:
-                cls = getattr(object_states, operation['state'])
-                args = [roles[operation['target']]] if operation.get('target') else []
-                if operation.get('system'): args.append(self.env.scene.get_system(operation['system'],force_init=True))
-                if not obj.states[cls].set_value(*args, operation.get('value',True), **operation.get('kwargs',{})):
-                    raise RuntimeError('Custom layout setter failed: '+str(operation))
-            for _ in range(operation.get('settle_steps',5)): self.og.sim.step()
+        missing=[role for role,obj in roles.items() if obj is None and role not in spec.get('future_roles',[])]
+        if missing:raise RuntimeError('Required construction roles disappeared before layout: '+', '.join(missing))
+        for index,operation in enumerate(spec.get('initial_layout', [])):
+            with self._startup_stage(f'custom_layout_{index:03d}_{operation["object"]}'):
+                self._apply_initial_operation(operation,roles)
         for _ in range(spec.get('settle_steps',30)): self.og.sim.step()
         self.custom_objects = objects
         initial_values = self._predicate_values()
@@ -191,7 +197,35 @@ class CustomTaskBackend(RGBBackend):
         for label,condition in spec.get('initial_assertions',{}).items():
             if not expression(condition,initial_values): raise RuntimeError('Initial state assertion failed: '+label)
         write_json(self.output/'custom_scene_build.json', {'status':'passed','asset_imports':provenance,
+            'excluded_background_entities':spec.get('scene_exclusions',[]),
             'initial_predicates':initial_values,'scope':'joint initial scene only; independent trajectory feasibility pending'})
+
+    def _apply_initial_operation(self, operation, roles):
+        from omnigibson import object_states
+        obj = roles[operation['object']]
+        if operation.get('place_on_support'):
+            support = roles[operation['target']]
+            pos, ori = obj.get_position_orientation()
+            if 'orientation' in operation:
+                ori = self.torch.tensor(operation['orientation'],dtype=pos.dtype,device=pos.device)
+                obj.set_position_orientation(pos,ori)
+            low, high = obj.aabb
+            xy = self.torch.tensor(operation['xy'],dtype=pos.dtype,device=pos.device)
+            pos = pos.clone()
+            pos[:2] += xy-(low[:2]+high[:2])/2
+            pos[2] += support.aabb[1][2]-low[2]+.004
+            obj.set_position_orientation(pos,ori);obj.keep_still()
+        elif 'position' in operation:
+            pos = self.torch.tensor(operation['position'], dtype=self.torch.float32)
+            ori = self.torch.tensor(operation.get('orientation',[0,0,0,1]), dtype=self.torch.float32)
+            obj.set_position_orientation(pos,ori);obj.keep_still()
+        else:
+            cls = getattr(object_states, operation['state'])
+            args = [roles[operation['target']]] if operation.get('target') else []
+            if operation.get('system'): args.append(self.env.scene.get_system(operation['system'],force_init=True))
+            if not obj.states[cls].set_value(*args, operation.get('value',True), **operation.get('kwargs',{})):
+                raise RuntimeError('Custom layout setter failed: '+str(operation))
+        for _ in range(operation.get('settle_steps',5)): self.og.sim.step()
 
     def _predicate_values(self):
         from omnigibson import object_states
