@@ -299,18 +299,41 @@ class ReferenceTask:
         self.floor(6.2, 1.2)
         self.move('place_on_top', 'prep', [7.758, -.62, .88736])
 
+    def pickup_popcorn_bag(self):
+        # Reposition before attaching the load. The closest pickup stance
+        # left no checked forward departure with the bag and its particles.
+        self.action('navigate_to', 'bag')
+        self.floor(7.3, .65)
+        self.action('grasp', 'bag')
+
+    def load_popcorn(self):
+        self.move('open', 'microwave')
+        self.pickup_popcorn_bag()
+        self.inside('microwave')
+        # A fresh-scene probe showed that immediate door closure displaced
+        # particles. Allow ordinary settling before the checked close.
+        self.action('wait', seconds=2.)
+        self.move('close', 'microwave')
+
+    def serve_movie_dish(self, item, x, y):
+        if item == 'plate1':
+            self.floor(5.2, .5)
+            self.action('grasp', item)
+            self.floor(6.2, 1.2)
+        else:
+            self.move('grasp', item)
+        self.move('place_on_top', 'table', self.top('table', x, y))
+
     def movie(self, order):
         if order == 'cleanup_first':
             self.movie_cleanup()
-        self.move('open', 'microwave')
-        self.transfer_inside('bag', 'microwave')
-        self.move('close', 'microwave')
+        self.load_popcorn()
         self.move('toggle_on', 'microwave')
         if order == 'cook_overlap':
             self.movie_cleanup()
         for item, x, y in [('plate1', .25, .5), ('plate2', .75, .5), ('cup1', .25, .8),
                            ('cup2', .75, .8), ('fork1', .25, .2), ('fork2', .75, .2)]:
-            self.transfer_top(item, 'table', self.top('table', x, y))
+            self.serve_movie_dish(item, x, y)
         self.wait_for({'cooked_popcorn': True, 'raw_popcorn_present': False})
         self.move('toggle_off', 'microwave')
         self.move('open', 'microwave')
@@ -552,17 +575,16 @@ class ReferenceTask:
             self.backend.og.sim.remove_object(self.obj('board'))
             self.action('wait', seconds=.2)
         elif case == 'serve_before_clean':
-            self.transfer_top('plate1', 'table', self.top('table', .25, .5))
+            self.serve_movie_dish('plate1', .25, .5)
             witness = {'table_dusty': True, 'plate1_set': True}
             expected = {'constraint_conditions': {'clear_and_dust_before_serving': False}}
         elif case == 'uncooked_snack':
-            self.transfer_top('bag', 'table', self.top('table'))
+            self.pickup_popcorn_bag()
+            self.move('place_on_top', 'table', self.top('table'))
             witness = {'bag_on_table': True, 'cooked_popcorn': False, 'raw_popcorn_present': True}
             expected = {'terminal_conditions': {'popcorn_served': False}}
         elif case == 'reenergized_removal':
-            self.move('open', 'microwave')
-            self.transfer_inside('bag', 'microwave')
-            self.move('close', 'microwave')
+            self.load_popcorn()
             self.move('toggle_on', 'microwave')
             self.wait_for({'cooked_popcorn': True, 'raw_popcorn_present': False})
             self.move('toggle_off', 'microwave')
