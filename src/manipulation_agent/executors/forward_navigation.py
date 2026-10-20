@@ -76,7 +76,7 @@ def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: 
 
 
 def shallow_forward_connections(start, collision, check_cancelled=lambda: None):
-    """Bounded forward links out of a lattice dead end, with full sweeps.
+    """Bounded forward links through a constrained lattice, with full sweeps.
 
     A narrow exit can permit a six-degree turn while rejecting a 45-degree
     lattice turn. Shift one cell sideways over a longer forward leg, then
@@ -420,13 +420,16 @@ without requiring enough clearance to rotate at every point in that corridor.
             parents[nxt] = state
             connections.pop((state,nxt),None)
             heapq.heappush(queue, (updated+heuristic(nxt), updated, nxt))
-        # Only refine a geometric dead end. Already visited or higher-cost
-        # neighbors still count as exits; they must not trigger extra work.
+        # Refine before entering a throat when neither lattice turn fits.
+        # A long front load can still advance, but waiting until forward
+        # motion is blocked can leave no room to begin a shallow turn.
+        # Also refine at a forward obstruction even if a turn remains legal.
+        # Visited/higher-cost neighbors still count as geometric exits.
         def free_neighbor(nxt):
             if not grid.navigable(nxt[:2]):return False
             if nxt not in allowed:allowed[nxt]=collision.motion_free(current,pose(nxt))
             return allowed[nxt]
-        if any(free_neighbor(nxt) for nxt in neighbors):
+        if free_neighbor(neighbors[2]) and any(free_neighbor(nxt) for nxt in neighbors[:2]):
             continue
         for cell,connection in shallow_forward_connections(current,collision,check_cancelled):
             nxt=(*cell,h)

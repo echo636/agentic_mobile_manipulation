@@ -57,12 +57,14 @@ each `act` / `look` supplies the next one.
    Certify every segment and turn with orientation-aware height-layer collision
    geometry. If the existing polyline cannot be driven, use a bounded eight-heading
    position/heading search (forward steps and in-place turns, no strafing).
-   At a geometric dead end in that lattice, also try bounded shallow-angle
+   When forward motion is blocked or neither lattice turn fits, also try bounded shallow-angle
    forward connections: one cell of lateral offset over several forward
    cells, with at most 65 cm of translation. Each connection checks its
    initial turn, complete translation and final turn. Intermediate poses are
    retained for execution, so a narrow exit requiring a small turn is not
-   reconstructed as sideways motion. The existing time/state limits remain.
+   reconstructed as sideways motion. Refine while forward travel is still
+   possible if both coarse turns are blocked: a long front payload may need
+   to align before entering a narrower throat. The existing time/state limits remain.
    Uncached continuous-heading translations erode only the crossed raster
    region with the full obstacle halo, using the same kernels and supercover
    checks as full-floor erosion.

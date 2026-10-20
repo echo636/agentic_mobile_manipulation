@@ -26,6 +26,41 @@ class PointCollision:
 
 
 class ForwardNavigationTests(unittest.TestCase):
+    def test_narrow_entry_needs_alignment_before_forward_motion_is_blocked(self):
+        class EarlyAlignmentSlot(PointCollision):
+            def __init__(self, barrier=False):
+                self.grid = GridMap(61, 61, .05, (-1., -1.), bytes([1])*61**2)
+                self.barrier = barrier
+
+            def motion_free(self, a, b):
+                for i in range(101):
+                    x = a[0] + (b[0]-a[0])*i/100
+                    y = a[1] + (b[1]-a[1])*i/100
+                    yaw = angle(a[2] + angle(b[2]-a[2])*i/100)
+                    if x < -.001 or (self.barrier and .5 < x < .55):
+                        return False
+                    if x < .85:
+                        if not -.025 < y < .075 or not -.001 <= yaw <= .15:
+                            return False
+                        # A long front load can advance into the throat, but
+                        # then lacks room to begin the small alignment turn.
+                        if x > .25 and y < .025 and yaw > .01:
+                            return False
+                        if x >= .4 and y < .025:
+                            return False
+                return super().motion_free(a, b)
+
+        start = (0., 0., 0.)
+        target = (1., .4)
+        collision = EarlyAlignmentSlot()
+        self.assertTrue(collision.motion_free(start, (.2, 0., 0.)))
+        route = plan_forward_route(plan([start[:2], target], math.pi/2),
+                                   start, collision, max_expansions=500)
+        self.follow(route, start, collision)
+        with self.assertRaises(NavigationError):
+            plan_forward_route(plan([start[:2], target], math.pi/2),
+                               start, EarlyAlignmentSlot(True), max_expansions=500)
+
     def test_shallow_forward_exit_from_coarse_heading_dead_end(self):
         class BentSlot(PointCollision):
             def __init__(self,barrier=False):
