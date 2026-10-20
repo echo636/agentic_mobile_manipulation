@@ -322,10 +322,10 @@ class ReferenceTask:
         self.close_popcorn_microwave()
 
     def close_popcorn_microwave(self):
-        # Loose grains can continue settling at the microwave's volume edge
-        # during the checked close. Retain that failure and let actual physics
-        # settle before bounded retries. Never weaken containment or alter
-        # particles; every retry captures and checks the current real contents.
+        # A grain at the cavity edge can fail every close from the same pose.
+        # After the checked rollback, use ordinary regrasp/reinsertion to find
+        # a different supported pose. Every failed close and recovery action
+        # is counted; no particles or task predicates are forced into place.
         for attempt in range(3):
             self.action('wait', seconds=2.)
             try:
@@ -335,8 +335,10 @@ class ReferenceTask:
                         or 'Contained particles left the carried container' not in str(exc)
                         or attempt == 2):
                     raise
-                self.log('microwave_close_settling_recovery', failed_attempt=attempt+1,
-                         reason='Checked close rolled back; wait for actual loose particles to settle')
+                self.log('microwave_close_reinsertion_recovery', failed_attempt=attempt+1,
+                         reason='Checked close rolled back; regrasp and resample the actual cold bag')
+                self.move('grasp', 'bag')
+                self.inside('microwave')
 
     def serve_movie_dish(self, item, x, y):
         if item == 'plate1':

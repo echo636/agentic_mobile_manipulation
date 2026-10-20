@@ -59,8 +59,10 @@ attachment does not certify extraction: normal checked placement or navigation
 must still move the assembly out. Demo hand motion is unchanged. This motor
 repair requires fresh physical validation; existing task passes retain their
 original source identity.
-Inside placement treats captured particles as part of the assembly envelope and
-checks their destination volume as well as their original containment/support.
+Inside placement checks captured particles' destination volume as well as their
+original containment/support. Single carriers retain native Inside sampling:
+the rigid shape can fit even when its AABB exceeds a conservative fill-volume
+annotation. Geometric fallback includes captured particles in its envelope.
 The geometric sampler rejects a candidate with lost particle support and may
 try another pose within its existing budget; changed identities still abort.
 This prevents a root-only placement from accepting a bag whose grains extend

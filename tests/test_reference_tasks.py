@@ -264,8 +264,10 @@ class ReferenceRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             reference = self.reference(directory, [escaped()])
             reference.close_popcorn_microwave()
-            self.assertEqual([r['primitive'] for r in reference.calls], ['wait', 'close', 'wait', 'close'])
-            self.assertEqual([r['status'] for r in reference.calls], ['passed', 'failed', 'passed', 'passed'])
+            self.assertEqual([r['primitive'] for r in reference.calls],
+                             ['wait', 'close', 'grasp', 'place_inside', 'wait', 'close'])
+            self.assertEqual([r['status'] for r in reference.calls],
+                             ['passed', 'failed', 'passed', 'passed', 'passed', 'passed'])
         with tempfile.TemporaryDirectory() as directory:
             reference = self.reference(directory, [escaped()], max_attempts=3)
             with self.assertRaisesRegex(RuntimeError, 'budget exhausted'):
@@ -279,7 +281,7 @@ class ReferenceRecoveryTests(unittest.TestCase):
             with self.assertRaises(SkillError) as raised:
                 reference.close_popcorn_microwave()
             self.assertIs(raised.exception, failure)
-            self.assertEqual(len(reference.calls), 6)
+            self.assertEqual(len(reference.calls), 10)
         for failure in [self.displaced(), SkillError('target_changed', 'Carried particles changed')]:
             with tempfile.TemporaryDirectory() as directory:
                 reference = self.reference(directory, [failure])

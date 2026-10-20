@@ -563,7 +563,11 @@ class CheckedPlacement:
         with self._placement_context(target):
             contents=list(self._carry_contents) if self.ideal_carry else []
             particle_payload=getattr(self,'_placement_particle_payload',(None,[]))[1]
-            assembly_search=bool(contents or particle_payload)
+            # A single carrier still uses native Inside first. Its collision
+            # geometry may fit even when its full AABB exceeds a conservative
+            # annotated volume. Particle ownership and destination containment
+            # are verified after settling; geometric fallback includes them.
+            assembly_search=bool(contents)
             dependencies=list(getattr(self,'_carry_dependencies',[]))
             orientation=held.get_position_orientation()[1].clone()
             self._carry_detach()
