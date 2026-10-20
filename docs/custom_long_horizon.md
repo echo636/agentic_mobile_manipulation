@@ -66,7 +66,8 @@ annotation. Geometric fallback includes captured particles in its envelope.
 The geometric sampler rejects a candidate with lost particle support and may
 try another pose within its existing budget; changed identities still abort.
 This prevents a root-only placement from accepting a bag whose grains extend
-beyond an appliance interior. Physical validation of this repair is pending.
+beyond an appliance interior. Physical validation is recorded against each
+frozen source revision.
 A failed grasp removes its control relationship while preserving the actual
 scene outcome. Retrying grasp on an already held object rechecks particles;
 it cannot bypass a prior support failure by returning an unchecked no-op.

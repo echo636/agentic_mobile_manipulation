@@ -1151,6 +1151,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
+        if self.ideal_carry:
+            result['grasp_protocol'].update(
+                initial_lift_policy='demo_hand_motion' if getattr(self,'demo_motion',False) else 'live_swept_AABB_clearance_or_in_place',
+                failed_attachment_policy='detach_control_without_scene_rollback',
+                repeated_grasp_rechecks_particles=True,
+                initial_attachment_certifies_extraction=False)
         result['manipulation_navigation'] = {'implicit_navigation':False,
             'reach_check':'base_to_selected_point_xy', 'reach_limit_m':1.4,
             'out_of_reach':'return_to_agent_for_explicit_navigate_to_and_fresh_pixel',
