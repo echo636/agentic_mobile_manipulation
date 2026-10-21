@@ -33,6 +33,13 @@
     "room_bed": "bed_rrcvaq_1",
     "closet_door": "sliding_door_tprpvb_4",
     "shelf_door": "sliding_door_tprpvb_1",
+    "hall_floor": "floors_wkdxrr_0",
+    "study_exit": "door_kwbnhy_3",
+    "guest_entry": "sliding_door_tprpvb_0",
+    "guest_partition": "sliding_door_tprpvb_9",
+    "utility_entry": "sliding_door_tprpvb_12",
+    "utility_exit": "sliding_door_tprpvb_7",
+    "bath_entry": "sliding_door_tprpvb_5",
     "desk_pen": "pen_229",
     "tool_home": "fv2_tool_home",
     "delivery": "fv2_delivery",
@@ -106,7 +113,7 @@
       "source_object": "keyboard_121",
       "source_sha256": "f8a478a306d8e97c8c3bc42f5b224558bd1a615ca22b88e73f5bae86a4a0d0dd",
       "position": [
-        131.0,
+        152.0,
         50.0,
         2.0
       ],
@@ -123,7 +130,7 @@
       "source_object": "pipe_cleaner_120",
       "source_sha256": "f8a478a306d8e97c8c3bc42f5b224558bd1a615ca22b88e73f5bae86a4a0d0dd",
       "position": [
-        134.0,
+        155.0,
         50.0,
         2.0
       ],
@@ -140,7 +147,7 @@
       "source_object": "vacuum_89",
       "source_sha256": "3aa56342cc02f704725cdd268ce94e15fa7015dfa8c88fadf01b3f5890772b36",
       "position": [
-        137.0,
+        158.0,
         50.0,
         2.0
       ],
@@ -157,7 +164,7 @@
       "source_object": "toy_figure_242",
       "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
       "position": [
-        140.0,
+        161.0,
         50.0,
         2.0
       ],
@@ -174,7 +181,7 @@
       "source_object": "toy_box_240",
       "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
       "position": [
-        143.0,
+        164.0,
         50.0,
         2.0
       ],
@@ -191,7 +198,7 @@
       "source_object": "wicker_basket_89",
       "source_sha256": "1c66f06ad635249ea0700537cdf1bb2196a1888701fe140ac20286eec6b369b8",
       "position": [
-        146.0,
+        167.0,
         50.0,
         2.0
       ],
@@ -213,7 +220,7 @@
       "source_object": "water_glass_bbpraa_0",
       "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
       "position": [
-        149.0,
+        170.0,
         50.0,
         2.0
       ],
@@ -230,7 +237,7 @@
       "source_object": "poster_73",
       "source_sha256": "3922b24902d11c8fe30a57abe637904084a265f411c17929bf1354436e6d6994",
       "position": [
-        176.0,
+        197.0,
         50.0,
         2.0
       ],
@@ -265,7 +272,7 @@
       "source_object": "poster_73",
       "source_sha256": "3922b24902d11c8fe30a57abe637904084a265f411c17929bf1354436e6d6994",
       "position": [
-        185.0,
+        206.0,
         50.0,
         2.0
       ],
@@ -303,7 +310,7 @@
       "usd_sha256": "e7100fa6faef0ea985de7058d95893635276cc5fa25886fb234309a53224a074",
       "prim_type": 0,
       "position": [
-        155.0,
+        176.0,
         50.0,
         2.0
       ]
@@ -315,7 +322,7 @@
       "usd_sha256": "851e163d9279fd07d8037b819a621a539db64db787c29f5c50af43df4e5d400c",
       "prim_type": 0,
       "position": [
-        158.0,
+        179.0,
         50.0,
         2.0
       ]
@@ -327,7 +334,7 @@
       "usd_sha256": "732677fea4ca1e96c8b71f843249e2b5740287542aae48245871d7a6daeb7068",
       "prim_type": 0,
       "position": [
-        161.0,
+        182.0,
         50.0,
         2.0
       ]
@@ -339,7 +346,7 @@
       "usd_sha256": "da8e2524f41fbae998ee82b50cb013d14a6a8b64ff986edb5a5fefcc8619417c",
       "prim_type": 0,
       "position": [
-        164.0,
+        185.0,
         50.0,
         2.0
       ]
@@ -351,7 +358,7 @@
       "usd_sha256": "84ad6bc80bc8c25c136bdbcc51a06e5c672b9061026359893f3e87a609fea133",
       "prim_type": 0,
       "position": [
-        167.0,
+        188.0,
         50.0,
         2.0
       ]
@@ -363,7 +370,7 @@
       "usd_sha256": "358062958131d0d1c967f3a14b3cb73f5951d4bc93e9f991174fbaf54f2bbd3e",
       "prim_type": 0,
       "position": [
-        170.0,
+        191.0,
         50.0,
         2.0
       ]
@@ -374,12 +381,12 @@
       "name": "fv2_tool_home",
       "position": [
         21.8,
-        14.5,
+        14.85,
         0.3
       ],
       "size": [
         1.3,
-        0.65,
+        0.4,
         0.6
       ],
       "rgba": [
@@ -454,11 +461,11 @@
   "initial_layout": [
     {
       "object": "drawer",
-      "target": "floor_a",
+      "target": "hall_floor",
       "place_on_support": true,
       "xy": [
-        20.6,
-        14.5
+        18.4,
+        16.0
       ]
     },
     {
@@ -624,7 +631,7 @@
       "place_on_support": true,
       "support_uv": [
         0.5,
-        0.7
+        0.5
       ]
     },
     {
@@ -700,6 +707,54 @@
     },
     {
       "object": "shelf_door",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "study_exit",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "guest_entry",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "guest_partition",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "utility_entry",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "utility_exit",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "bath_entry",
       "state": "Open",
       "value": true,
       "kwargs": {
@@ -2104,7 +2159,7 @@
             "role": "tool_home",
             "uv": [
               0.5,
-              0.7
+              0.5
             ]
           }
         ],

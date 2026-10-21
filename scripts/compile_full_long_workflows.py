@@ -405,12 +405,19 @@ def study(inv,models):
  b.imported('cabinet','clean_up_your_desk','bottom_cabinet_fancyy_0',fixed_base=True)
  b.existing('closet_floor','floors_yrqspn_0');b.existing('room_bed','bed_rrcvaq_1')
  b.existing('closet_door','sliding_door_tprpvb_4');b.existing('shelf_door','sliding_door_tprpvb_1')
+ b.existing('hall_floor','floors_wkdxrr_0')
+ for role,name in dict(study_exit='door_kwbnhy_3',guest_entry='sliding_door_tprpvb_0',
+                       guest_partition='sliding_door_tprpvb_9',utility_entry='sliding_door_tprpvb_12',
+                       utility_exit='sliding_door_tprpvb_7',bath_entry='sliding_door_tprpvb_5').items():
+  b.existing(role,name)
  b.existing('desk_pen','pen_229')
  b.s['scene_exclusions']=['nightstand_wbxekb_2','wardrobe_lrokhl_0']
  b.s['scene_setup_note']='Replace non-articulated nightstand and open wardrobe shells with native articulated storage furniture before freezing.'
- b.place('drawer','floor_a',[20.6,14.5]);b.place('cabinet','closet_floor',[20.28,24.15])
+ # The replacement drawer previously filled the west bedroom passage.
+ # Keep it against the hall's west wall, with the native shelves accessible.
+ b.place('drawer','hall_floor',[18.4,16.]);b.place('cabinet','closet_floor',[20.28,24.15])
  b.s['robot_start']={'position':[22.9,14.2,.02],'orientation':[0.,0.,0.,1.]}
- b.fixture('tool_home',[21.8,14.5],[1.3,.65,.6]);b.fixture('delivery',[22.3,22.5],[1.,.7,.65]);b.fixture('desk_stage',[23.75,14.6],[.8,.8,.65])
+ b.fixture('tool_home',[21.8,14.85],[1.3,.4,.6]);b.fixture('delivery',[22.3,22.5],[1.,.7,.65]);b.fixture('desk_stage',[23.75,14.6],[.8,.8,.65])
  # A dedicated supply surface accommodates the carrier and six guest items;
  # the original narrow countertop remains in the native utility room.
  b.fixture('source',[23.1,-1.05],[1.5,.8,.65])
@@ -428,13 +435,14 @@ def study(inv,models):
  b.place('book1','floor_a',[22.3,13.9]);b.place('book2','floor_b',[22.3,24.3]);b.place('toy','floor_b',[22.2,25.1]);b.place('toy_box','floor_b',[21.,22.8])
  b.place('pencil','room_bed',[21.7,13.3]);b.place('desk_pen','desk')
  for r,t in [('keyboard','desk'),('monitor','desk'),('brush','tool_home'),('vacuum','tool_home'),('rag','tool_home'),('shirt','source'),('shorts','source'),('carrier','source'),('cup','source'),('water','source'),('soap','source'),('paper','source')]:b.place(r,t)
- initial_slots={'keyboard':(.5,.86),'monitor':(.5,.407),'desk_pen':(.9,.18),'picture1':(.35,.25),'picture2':(.35,.75),'brush':(.2,.5),'vacuum':(.75,.5),'rag':(.5,.7),'carrier':(.18,.5),'shirt':(.5,.25),'shorts':(.8,.28),'cup':(.5,.75),'water':(.65,.75),'soap':(.8,.75),'paper':(.92,.75)}
+ initial_slots={'keyboard':(.5,.86),'monitor':(.5,.407),'desk_pen':(.9,.18),'picture1':(.35,.25),'picture2':(.35,.75),'brush':(.2,.5),'vacuum':(.75,.5),'rag':(.5,.5),'carrier':(.18,.5),'shirt':(.5,.25),'shorts':(.8,.28),'cup':(.5,.75),'water':(.65,.75),'soap':(.8,.75),'paper':(.92,.75)}
  for row in b.layout:
   if row['object'] in initial_slots and row.get('auto_slot'):
    row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
  # Access passages are open in the prepared scene, including the native
  # closet that actually supports the replacement articulated cabinet.
- for r in ['closet_door','shelf_door']:b.state(r,'Open',True,kwargs={'fully':True})
+ for r in ['closet_door','shelf_door','study_exit','guest_entry','guest_partition','utility_entry','utility_exit','bath_entry']:
+  b.state(r,'Open',True,kwargs={'fully':True})
  for r in ['washer','dryer']:b.state(r,'ToggledOn',False);b.state(r,'Open',False,kwargs={'fully':True});b.pred(r+'_open',r,'Open');b.pred(r+'_on',r,'ToggledOn')
  b.state('monitor','ToggledOn',True);b.pred('monitor_on','monitor','ToggledOn')
  for r in ['drawer','cabinet']:b.state(r,'Open',False,kwargs={'fully':True});b.pred(r+'_open',r,'Open')
@@ -453,7 +461,7 @@ def study(inv,models):
  b.phase('cabinet',[action('open','cabinet'),take('brush'),action('wipe','cabinet'),put('tool_home',(.2,.3))])
  b.phase('wash',[action('open','washer')]+transfer('shirt','washer',into=True)+transfer('shorts','washer',into=True)+[action('close','washer'),action('toggle_on','washer'),action('wait_for',condition=washed,attempts=18,seconds=10.),action('toggle_off','washer')])
  b.phase('dry',[action('open','washer'),action('open','dryer')]+transfer('shirt','dryer',into=True)+transfer('shorts','dryer',into=True)+[action('close','washer'),action('close','dryer'),action('toggle_on','dryer'),action('wait_for',condition=dry,attempts=18,seconds=10.),action('toggle_off','dryer'),action('open','dryer')],['wash'])
- b.phase('bathroom',[take('rag'),action('soak','sink'),action('wipe','sink'),action('wipe','bath'),action('wipe','toilet'),put('tool_home',(.5,.7))])
+ b.phase('bathroom',[take('rag'),action('soak','sink'),action('wipe','sink'),action('wipe','bath'),action('wipe','toilet'),put('tool_home',(.5,.5))])
  contents=['shirt','shorts','cup','water','soap','paper']
  b.phase('pack',transfer('carrier','laundry')+[a for r in contents for a in transfer(r,'carrier',into=True)]+[action('close','dryer')],['dry'])
  deliver=transfer('carrier','delivery')+transfer('shirt','cabinet',into=True)+transfer('shorts','cabinet',into=True)+transfer('cup','bedside',(.25,.22))+transfer('water','bedside',(.7,.22))+transfer('soap','amenities',(.2,.5))+transfer('paper','amenities',(.7,.5))+transfer('carrier','source',(.18,.5))+[action('close','cabinet')]
