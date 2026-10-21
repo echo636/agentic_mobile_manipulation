@@ -24,7 +24,7 @@
     "table": "breakfast_table_rhjoby_0",
     "cabinet": "bottom_cabinet_fancyy_0",
     "stage": "fv2_stage",
-    "tool_home": "fv2_tool_home",
+    "tool_home": "bar_udatjt_0",
     "bin": "fv2_bin",
     "apple": "fv2_apple",
     "knife": "fv2_knife",
@@ -291,26 +291,6 @@
         2.0,
         1.0,
         0.65
-      ],
-      "rgba": [
-        0.32,
-        0.42,
-        0.52,
-        1.0
-      ],
-      "fixed_base": true
-    },
-    {
-      "name": "fv2_tool_home",
-      "position": [
-        8.0,
-        1.375,
-        0.275
-      ],
-      "size": [
-        1.8,
-        0.45,
-        0.55
       ],
       "rgba": [
         0.32,
@@ -1796,7 +1776,7 @@
             "role": "prep",
             "uv": [
               0.5,
-              0.5
+              0.7
             ]
           }
         ],
@@ -1814,8 +1794,8 @@
             "primitive": "place_on_top",
             "role": "prep",
             "uv": [
-              0.5,
-              0.8
+              0.7,
+              0.08
             ]
           },
           {

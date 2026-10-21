@@ -125,10 +125,10 @@ def kitchen(inv,models):
  # Preserve connected working aisles, not just non-overlapping fixtures.
  # The r20 tool table left only .657m beside the sofa; its staging table
  # left .74m beside the dining table. Both pinched loaded approaches.
- # Fix the south edge beside the native stools while leaving room to turn
- # north of the tool surface after releasing the brush. Both tools retain
- # native dimensions and use centred depth slots on the narrower surface.
- b.fixture('stage',[11.1,2.55],[2.,1.,.65]);b.fixture('tool_home',[8.,1.375],[1.8,.45,.55])
+ # Reserve part of the existing bar for cleaning tools. Even the shallow
+ # added table pinched the only loaded route between bar and dining chairs;
+ # using a native support preserves the room's original working aisle.
+ b.fixture('stage',[11.1,2.55],[2.,1.,.65]);b.existing('tool_home','bar_udatjt_0')
  b.imported('bin','picking_up_trash','trash_can_116',scale=[1.5]*3);b.place('bin','floor',[5.2,4.2])
  b.native('apple','apple');b.native('knife','carving_knife')
  b.imported('brush','clean_a_keyboard','pipe_cleaner_120');b.imported('broom','clean_a_patio','broom_172')
@@ -183,8 +183,10 @@ def kitchen(inv,models):
  b.phase('surfaces',transfer('can','bin',into=True)+[take('brush'),*[action('wipe',r) for r in ['table','prep','storage']],put('tool_home',(.2,.5))])
  table_slots={'plate1':(.25,.3),'plate2':(.7,.3),'fork1':(.12,.3),'fork2':(.88,.3),'cup1':(.25,.75),'cup2':(.7,.75),'tea':(.5,.75)}
  b.phase('set_table',[a for r,uv in table_slots.items() for a in transfer(r,'table',uv)],['clean_ware','surfaces'])
- b.phase('carrier_ready',transfer('box','prep',(.5,.5)),['surfaces'])
- fruit=transfer('board','prep',(.5,.8))+transfer('apple','board')+[take('knife'),action('cut','apple'),put('stage',slots['knife'])]
+ # The native countertop centre is an inset burner, and its north end
+ # carries the microwave. Use measured clear worktop areas for both items.
+ b.phase('carrier_ready',transfer('box','prep',(.5,.7)),['surfaces'])
+ fruit=transfer('board','prep',(.7,.08))+transfer('apple','board')+[take('knife'),action('cut','apple'),put('stage',slots['knife'])]
  fruit += [a for r in ['apple_half0','apple_half1'] for a in transfer(r,'box',into=True)]
  fruit += transfer('knife','cabinet',into=True)
  b.phase('fruit',fruit,['clean_ware','carrier_ready'])
