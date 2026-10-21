@@ -1,5 +1,6 @@
 """Host-side batch checks and launch, without importing the simulator for checks."""
 import argparse
+import base64
 import hashlib
 import importlib.util
 import json
@@ -242,8 +243,13 @@ def main():
     p.add_argument('--deadline-unix', type=float, help='Legacy absolute task deadline; new runs arm the execution clock after initialization')
     p.add_argument('--reserved-host-memory-gib',type=int,default=0)
     p.add_argument('--runtime-storage-path',type=Path,action='append',default=[])
-    p.add_argument('--memory-policy-json', help='Shared measured-peak admission snapshot')
+    policy=p.add_mutually_exclusive_group()
+    policy.add_argument('--memory-policy-json', help='Shared measured-peak admission snapshot')
+    policy.add_argument('--memory-policy-base64', help='Base64 admission snapshot safe through GDB argv')
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
+    memory_policy=(json.loads(base64.b64decode(a.memory_policy_base64,validate=True))
+                   if a.memory_policy_base64 else json.loads(a.memory_policy_json)
+                   if a.memory_policy_json else None)
     if a.mode == 'assets':
         selected=manifest if a.index is None else {'tasks':[manifest_task(manifest,a.index)]}
         print(json.dumps(assets(selected,a.data_root))); return
@@ -251,7 +257,7 @@ def main():
         print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
                                   reserved_host_memory_gib=a.reserved_host_memory_gib,
                                   runtime_storage_paths=a.runtime_storage_path,
-                                  memory_policy=json.loads(a.memory_policy_json) if a.memory_policy_json else None))); return
+                                  memory_policy=memory_policy))); return
     row=manifest_task(manifest,a.index)
     if a.run_id:
         import re
@@ -266,7 +272,7 @@ def main():
     result=preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
                      reserved_host_memory_gib=a.reserved_host_memory_gib,
                      runtime_storage_paths=a.runtime_storage_path,
-                     memory_policy=json.loads(a.memory_policy_json) if a.memory_policy_json else None)
+                     memory_policy=memory_policy)
     # Persist a second check inside the allocated unit, immediately before startup.
     check_path=a.manifest.parent/'preflight'/f"{row['run_id']}_in_unit.json"
     check_path.write_text(json.dumps(result,indent=2)+'\n')

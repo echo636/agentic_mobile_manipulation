@@ -4,6 +4,7 @@ Run from a clean, frozen checkout on the controller host. JSON config supplies
 site paths; authentication stays in the existing local SSH/model clients.
 """
 import argparse
+import base64
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import fcntl
@@ -475,7 +476,10 @@ class Batch:
         policy={'peers':lease.active_peers(),
                 'candidate_gib':self.c.get('memory_budget_gib',28),
                 'host_budget_gib':self._config['host_worker_memory_budget_gib'][self.c['ssh'][-1]]}
-        return ['--memory-policy-json',json.dumps(policy)]
+        # GDB with startup-with-shell disabled does not round-trip quoted JSON
+        # arguments. A single ASCII token survives both systemd and GDB argv.
+        encoded=base64.b64encode(json.dumps(policy).encode()).decode('ascii')
+        return ['--memory-policy-base64',encoded]
 
     def resource_admission(self):
         """No task is claimed here; immutable host checks run once per worker."""

@@ -11,6 +11,32 @@ import unittest
 
 class NativeFaultCaptureTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('gdb'), 'GDB is unavailable')
+    def test_adaptive_policy_survives_real_gdb_argument_transport(self):
+        import importlib.util
+        import threading
+        from unittest.mock import Mock
+        root=Path(__file__).resolve().parents[1]
+        spec=importlib.util.spec_from_file_location('memory_transport_batch',root/'scripts/run_behavior100.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        batch=module.Batch.__new__(module.Batch)
+        batch._config={'adaptive_memory_admission':True,'host_worker_memory_budget_gib':{'host':56}}
+        batch._worker_local=threading.local()
+        batch._worker_local.config={'ssh':['ssh','host'],'memory_budget_gib':28}
+        peers=[{'unit':'peer.service','runtime_stage':'ready','memory_admission_mode':'observed_peak'}]
+        batch._worker_local.lease=Mock(active_peers=lambda:peers)
+        with tempfile.TemporaryDirectory(prefix='mas-memory-argv-') as directory:
+            folder=Path(directory);helper=folder/'decode.py';result_path=folder/'decoded.json'
+            helper.write_text('import argparse,base64,json\nfrom pathlib import Path\n'
+                'p=argparse.ArgumentParser();p.add_argument("--memory-policy-base64");p.add_argument("--output");a=p.parse_args()\n'
+                'Path(a.output).write_text(json.dumps(json.loads(base64.b64decode(a.memory_policy_base64,validate=True))))\n')
+            result=subprocess.run(['/usr/bin/gdb','--batch','-q','-nx','-x',str(root/'scripts/capture_native_fault.gdb'),
+                '--args',sys.executable,str(helper),*batch.memory_policy_args(),'--output',str(result_path)],
+                env=dict(os.environ,MAS_NATIVE_FAULT_DIR=str(folder/'fault')),capture_output=True,text=True,timeout=30)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            self.assertEqual(json.loads(result_path.read_text()),{'peers':peers,'candidate_gib':28,'host_budget_gib':56})
+            self.assertFalse((folder/'fault').exists())
+
+    @unittest.skipUnless(shutil.which('gdb'), 'GDB is unavailable')
     def test_exec_exit_codes_signals_and_owned_child_cleanup(self):
         script=Path(__file__).resolve().parents[1]/'scripts/capture_native_fault.gdb'
         cases={
