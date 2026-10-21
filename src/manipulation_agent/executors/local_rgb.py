@@ -150,6 +150,12 @@ class LocalRGBManipulation:
         budget=PlanningBudget(operation.check,seconds=operation.limits.planning_seconds)
         collision.check_cancelled=budget.check
         selected=None;attempts=[];exhausted=False;proposal_diagnostics={};eligible=[]
+        # A short forward departure can lead deeper into a blind pocket.
+        # Surface work keeps the rigid load/obstacles unchanged, so prefer
+        # stances with a swept-checked return to the measured approach pose.
+        # This ranks proposals only: legitimate one-way approaches remain
+        # available when no return connector is certified within this budget.
+        prefer_return=primitive in {'wipe','sweep','vacuum','spray','soak','spread'}
         preparation=PlanningBudget(budget.check,seconds=4.)
         collision.check_cancelled=preparation.check
         try:
@@ -181,8 +187,11 @@ class LocalRGBManipulation:
                     eligible.append((plan,row,getattr(operation,'carry_plan',None),
                                      getattr(operation,'articulation_plan',None)))
                     row['status']='route_candidate'
+                    if prefer_return:
+                        row['checked_return_poses']=checked_connection(
+                            pose,actual[:2],actual[2],collision,preparation.check)
                     poses=checked_connection(actual,pose[:2],pose[2],collision,preparation.check)
-                    if poses is not None:
+                    if poses is not None and (not prefer_return or row['checked_return_poses'] is not None):
                         selected=(plan,route_from_poses(plan,poses,collision,
                             method='certified_target_approach',check_cancelled=preparation.check))
                         break
@@ -195,7 +204,10 @@ class LocalRGBManipulation:
                 exhausted=True
             collision.check_cancelled=budget.check
             if selected is None and eligible:
-                plans=[entry[0] for entry in eligible]
+                returning=[entry for entry in eligible if entry[1].get('checked_return_poses') is not None]
+                preferred=returning if prefer_return and returning else eligible
+                plans=[entry[0] for entry in preferred]
+                proposal_diagnostics['checked_return_candidates']=len(returning)
                 try:
                     # Reuse the compiled shared roadmap as a fast proposal;
                     # continuous search remains the fallback and all endpoints

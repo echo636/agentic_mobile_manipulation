@@ -6,6 +6,7 @@ import importlib.util
 import json
 import math
 import unittest
+from unittest.mock import patch
 
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.gt_navigation import GridMap, SearchBudgetExhausted
@@ -42,6 +43,36 @@ class GeometryMotor(LocalRGBManipulation):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('numpy'), 'navigation geometry dependencies')
 class ArchivedStanceTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec('scipy'), 'roadmap dependency')
+    def test_surface_stance_keeps_checked_return_in_recorded_garden_pocket(self):
+        import numpy as np
+        from manipulation_agent.executors.forward_navigation import checked_connection, local_exit_certificate
+        with np.load(FIXTURES/'garden_tool_return_r44.npz',allow_pickle=False) as z:
+            free=z['free'];start=tuple(z['start']);support=z['support']
+            grid=GridMap(free.shape[1],free.shape[0],float(z['resolution']),tuple(z['origin']),free.tobytes())
+            layers=list(zip(z['raw_layers'],[v['footprint'] for v in json.loads(str(z['layer_footprints_json']))]))
+            collision=HeadingCollisionChecker(grid,layers,float(z['initial_layer_yaw']),support)
+        # Both candidates passed the original simulator's camera/raycast check.
+        # The old first directly reachable candidate faced into a blind pocket.
+        safe=(13.993857974360072,7.233492331298677,1.6442053664543292)
+        trap=(13.599452329604711,7.378836366670543,start[2])
+        target=(14.04886531829834,6.4855122566223145,.6900001764297485)
+        self.assertIsNotNone(local_exit_certificate(trap,collision))
+        self.assertIsNone(checked_connection(trap,start[:2],start[2],collision))
+        motor=GeometryMotor(start,collision,True)
+        motor._approach_visible=lambda xy,point,obj,**kw: (tuple(xy),kw['base_yaw']) in [(p[:2],p[2]) for p in (safe,trap)]
+        op=LocalOperation(motor,'wipe',None,600,{})
+        with patch('manipulation_agent.executors.local_stances.local_stance_proposals',
+                   return_value=iter([(safe,'recorded_visible'),(trap,'recorded_visible')])):
+            motor._local_reposition('wipe',object(),target,op)
+        end=motor.route.phases[-1]
+        self.assertEqual((*end.goal,end.final_yaw),safe)
+        poses=[start]+[(*p.goal,p.final_yaw) for p in motor.route.phases]
+        self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])))
+        returning=checked_connection(safe,start[:2],start[2],collision)
+        self.assertIsNotNone(returning)
+        self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(returning,returning[1:])))
+
     def fixture(self, number):
         import cv2
         import numpy as np
