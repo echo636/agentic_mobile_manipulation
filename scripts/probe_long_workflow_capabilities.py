@@ -65,7 +65,7 @@ def main():
                         if name in protected:
                             raise ValueError('Cannot remove a base-task entity')
                         self.env.scene.remove_object(obj)
-                for role, xy in [('source', [13.2, 8.4]), ('destination', [15.5, 8.4])]:
+                for role, xy in spec['supports'].items():
                     obj = PrimitiveObject(name='v2_probe_' + role, primitive_type='Cube', size=1.,
                                           scale=[1.8, 1.6, .45], fixed_base=True,
                                           rgba=[.3, .4, .6, 1.], category='work_surface')
