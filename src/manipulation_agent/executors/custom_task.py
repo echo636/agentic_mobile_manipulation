@@ -112,6 +112,9 @@ class CustomTaskBackend(RGBBackend):
             'role_poses':self._role_poses()})
         if failed:
             raise RuntimeError('Policy-ready initial state assertion failed: '+', '.join(failed))
+        if self.custom_spec.get('robot_start'):
+            with self._startup_stage('policy_ready_robot_start'):
+                self._validate_custom_robot_start()
         self.custom_tracker=TemporalGoalEvaluator(self.custom_spec['evaluation'])
         self.custom_sequence=0
         self.custom_tracker.observe(initial,0,env_step=self.steps,initial=True)
@@ -121,6 +124,51 @@ class CustomTaskBackend(RGBBackend):
             'input_hashes':self.input_hashes,'initial_predicates':initial,
             'initial_evaluation':self.custom_tracker.result(initial),
             'env_step':self.steps})
+
+    def _validate_custom_robot_start(self):
+        """Reject a tipped or trapped prepared robot before accepting a build."""
+        import math
+        import numpy as np
+        from .live_gt_map import build_navigation_grid
+        from .heading_collision import HeadingCollisionChecker
+        from .forward_navigation import local_exit_certificate
+        from .gt_navigation import PlanningBudget, SearchBudgetExhausted
+        pos,quat=self.robot.get_position_orientation()
+        position=[float(v) for v in pos];orientation=[float(v) for v in quat]
+        up_z=1.-2.*(orientation[0]**2+orientation[1]**2)
+        record={'position':position,'orientation':orientation,
+                'upright':math.isfinite(up_z) and up_z>=math.cos(math.radians(10.)),
+                'collision_free':False,'departure_available':False,
+                'validation_level':'read-only initial robot pose and departure geometry; not task success'}
+        if record['upright']:
+            trav=self.env.scene.trav_map
+            floor=min(range(len(trav.floor_heights)),key=lambda i:abs(position[2]-trav.floor_heights[i]))
+            grid,details=build_navigation_grid(self,floor)
+            pose=self._local_pose()
+            budget=PlanningBudget(self.deadline.check,seconds=10.)
+            collision=HeadingCollisionChecker(grid,self._navigation_layers,pose[2],self._navigation_support,
+                                               check_cancelled=budget.check)
+            path=self.output/'custom_robot_start_grid.npz'
+            np.savez_compressed(path,
+                free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+                origin=grid.origin,resolution=grid.resolution,start=pose,
+                raw_layers=np.stack([layer[0] for layer in collision.layers]),
+                support=self._navigation_support,initial_layer_yaw=collision.reference_yaw,
+                layer_footprints_json=json.dumps([{'footprint':layer[1].tolist()} for layer in collision.layers]))
+            record.update(floor=floor,map_sha256=hashlib.sha256(grid.free).hexdigest(),
+                          grid_artifact=path.name,grid_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+            try:
+                record['collision_free']=collision.motion_free(pose,pose)
+                if record['collision_free']:
+                    record['departure_certificate']=local_exit_certificate(pose,collision,
+                        check_cancelled=budget.check)
+                    record['departure_available']=record['departure_certificate'] is not None
+            except SearchBudgetExhausted:
+                record['planning_budget_exhausted']=True
+        record['status']='passed' if all(record[k] for k in ('upright','collision_free','departure_available')) else 'failed'
+        write_json(self.output/'custom_robot_start_validation.json',record)
+        if record['status']!='passed':
+            raise RuntimeError('Prepared robot must be upright with collision-free departure geometry')
 
     def _prepare_task_instance(self):
         """Called before camera setup / first policy observation."""
@@ -297,6 +345,17 @@ class CustomTaskBackend(RGBBackend):
                 self._restore_custom_scene(scene)
         else:
             provenance=[{'construction_seed':spec['construction_seed'],'scope':'complete native objects loaded before GPU simulation'}]
+        if spec.get('robot_start'):
+            # Scene import can temporarily overlap newly authored supports
+            # with the base task's old robot pose. Do not carry a displaced or
+            # folded articulation into a CPU seed or the frozen task instance.
+            with self._startup_stage('construction_robot_reset'):
+                pose=spec['robot_start']
+                self.robot.set_joint_positions(self.robot.reset_joint_pos.clone())
+                self.robot.set_position_orientation(self.torch.tensor(pose['position']),
+                                                    self.torch.tensor(pose['orientation']))
+                self.robot.keep_still()
+                self.robot.apply_action(self.robot.q_to_action(self.robot.get_joint_positions()))
         if self.geometry_only:
             # Macro particle templates contain native prims too. Include their
             # empty systems in the CPU seed so the fresh GPU scene loads them
@@ -325,12 +384,6 @@ class CustomTaskBackend(RGBBackend):
             return
         objects = {o.name:o for o in self.env.scene.objects}
         roles = {k:objects.get(v) for k,v in spec['roles'].items()}
-        if spec.get('robot_start'):
-            pose=spec['robot_start']
-            self.robot.set_position_orientation(self.torch.tensor(pose['position']),
-                                                self.torch.tensor(pose['orientation']))
-            self.robot.keep_still()
-            self.robot.apply_action(self.robot.q_to_action(self.robot.get_joint_positions()))
         missing=[role for role,obj in roles.items() if obj is None and role not in spec.get('future_roles',[])]
         if missing:raise RuntimeError('Required construction roles disappeared before layout: '+', '.join(missing))
         layout=spec.get('initial_layout', [])

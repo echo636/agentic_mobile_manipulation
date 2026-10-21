@@ -321,7 +321,8 @@ def workshop(inv,models):
  b.s['scene_exclusions']=['car_ssxsje_0']
  b.s['scene_setup_note']='Native garage prepared as an empty workshop before the episode; the background car is absent from the frozen scene.'
  b.s['robot_start']={'position':[-13.2,10.7,.02],'orientation':[0.,0.,0.,1.]}
- for role,xy,size in [('source',[-13.2,9.4],[1.8,1.,.65]),('bench',[-12.3,10.9],[.7,1.8,.7]),('shelf',[-13.85,17.7],[1.4,.7,.7])]:b.fixture(role,xy,size)
+ # The bench's north end must also leave room to turn into the parts aisle.
+ for role,xy,size in [('source',[-13.2,9.4],[1.8,1.,.65]),('bench',[-12.3,10.7],[.7,1.4,.7]),('shelf',[-13.85,17.7],[1.4,.7,.7])]:b.fixture(role,xy,size)
  # Native garage walls narrow in the middle. Use measured floor-map clearance
  # and keep an east-side passage beside the compact component staging surface.
  b.fixture('tool_home',[-14.3,11.],[1.,1.8,.6]);b.fixture('products',[-12.2,17.5],[.7,1.6,.6])
