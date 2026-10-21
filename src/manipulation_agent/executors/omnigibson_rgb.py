@@ -911,6 +911,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         from .gt_navigation import GreedyGridFollower, NavigationError, PlanningBudget
         from .forward_navigation import plan_forward_route
         from .heading_collision import HeadingCollisionChecker
+        local=getattr(self,'_local_operation',None)
         settling=10
         if max_steps<=settling:raise SkillError('action_timeout','Insufficient GT follower step budget')
         pos,quat=self.robot.get_position_orientation()
@@ -954,6 +955,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                 # Planning has ended; motion checks still honor episode
                 # cancellation but must not reuse the expired search timer.
                 collision.check_cancelled=self.deadline.check
+            if local is not None and route is not None:
+                max_steps=local.reserve_route(route,self.og.sim.get_sim_step_dt(),settling_steps=settling)
             execution_grid=collision.grid if collision else grid
             with (self.output/'base_motion.jsonl').open('a') as stream:
                 for phase_index,phase in enumerate(phases):
@@ -1000,6 +1003,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         except NavigationError as exc:
             raise SkillError(exc.code,str(exc),changed=self.steps>before) from exc
         finally:
+            if local is not None:local.finish_route()
             self._base_target=None
         return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
                 'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
@@ -1250,6 +1254,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
             'protocol':'target_locked_approach_v2' if getattr(self,'local_manipulation',False) else 'explicit_navigation_v1',
+            'control_budget':'atomic_allowance_plus_certified_routes_with_caller_cap',
             'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
             'stance_candidates':'target_reach_rings_then_collision_free_target_disk_v2',
             'stance_domain':'selected_target_reach_disk',

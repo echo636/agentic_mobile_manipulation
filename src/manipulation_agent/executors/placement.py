@@ -704,7 +704,11 @@ class CheckedPlacement:
         split=[(float(low[0]+fx*(high[0]-low[0])),float(low[1]+fy*(high[1]-low[1])))
                for fx,fy in ((.25,.5),(.75,.5),(.25,.25),(.75,.25),
                              (.25,.75),(.75,.75),(.5,.25),(.5,.75))]
-        for x,y in dict.fromkeys([*selected,*split,*[(float(c[0]),float(c[1])) for c in centers]]):
+        # An unladen item can be rotated to fit the central cavity. Loaded
+        # assemblies retain the selected compartment as their first proposal.
+        central=[] if payload or getattr(self,'_placement_particle_payload',(None,[]))[1] else [
+            (float((low[0]+high[0])/2),float((low[1]+high[1])/2))]
+        for x,y in dict.fromkeys([*central,*selected,*split,*[(float(c[0]),float(c[1])) for c in centers]]):
             check()
             ax=x-float(center_offset[0])+float(bottom[0])
             ay=y-float(center_offset[1])+float(bottom[1])
@@ -714,7 +718,7 @@ class CheckedPlacement:
                                                  if point is not None else float(h['position'][2]))):
                 if hit.get('rigidBody') not in target_paths or float(hit['normal'][2])<.9:continue
                 z=float(hit['position'][2])+float(center_offset[2]-bottom[2])+clearance
-                if not float(low[2])<=z<=float(high[2]):continue
+                if not float(low[2])<=z-clearance<=float(high[2]):continue
                 center=(x,y,z)
                 if any(sum((a-b)**2 for a,b in zip(center,old))<1e-8 for old in proposals):continue
                 proposals.append(center)

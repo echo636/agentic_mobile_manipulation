@@ -15,7 +15,7 @@ class LocalLimits:
     preferred_reach_m: float = 1.25
     max_repositions: int = 3
     max_operation_attempts: int = 2
-    max_env_steps: int = 600
+    max_env_steps: int = 600  # Atomic allowance; certified routes reserve extra steps.
     max_sampling_steps: int = 1200
     wall_seconds: float = 300.0
     planning_seconds: float = 12.0
@@ -36,6 +36,7 @@ class LocalOperation:
         self.clock, self.started = clock, clock()
         self.start_steps = backend.steps
         self.start_sampling = getattr(backend, 'sampling_physics_steps', 0)
+        self.caller_step_limit = max_steps
         self.step_limit = min(max_steps, self.limits.max_env_steps)
         self.origin = tuple(backend._local_pose())
         self.last_pose = self.origin
@@ -43,6 +44,8 @@ class LocalOperation:
         self.repositions = self.attempts = 0
         self.visited = []
         self.changed = False
+        self.route_started = None
+        self.route_wall_seconds = 0.
 
     def record(self, phase, **data):
         self.backend._local_record(phase=phase, primitive=self.primitive,
@@ -54,9 +57,47 @@ class LocalOperation:
         used = self.backend.steps-self.start_steps
         sampled = getattr(self.backend, 'sampling_physics_steps', 0)-self.start_sampling
         self.changed |= changed or used > 0 or sampled > 0
-        if (self.clock()-self.started >= self.limits.wall_seconds or used >= self.step_limit
+        # Certified route execution has its own step bound and follower stall
+        # checks. Rendering/I/O time must not consume the planning/manipulation
+        # wall budget; external cancellation still applies on every step.
+        active_route = 0. if self.route_started is None else self.clock()-self.route_started
+        work_seconds = self.clock()-self.started-self.route_wall_seconds-active_route
+        if (work_seconds >= self.limits.wall_seconds or used >= self.step_limit
                 or sampled >= self.limits.max_sampling_steps):
             raise SkillError('local_adjustment_exhausted', 'Local operation work limit reached', changed=self.changed)
+
+    def reserve_route(self, route, dt, *, settling_steps=10):
+        """Budget a certified route before motion, retaining the caller's cap.
+
+        Motion time follows the follower's rates. Two feedback steps per phase
+        cover phase quantization/correction; ten settling steps are separate.
+        The original atomic allowance remains available for manipulation.
+        """
+        self.check()
+        if not math.isfinite(dt) or dt <= 0:
+            raise ValueError('Positive finite control timestep required')
+        seconds = route.estimated_motion_seconds
+        if not math.isfinite(seconds) or seconds < 0:
+            raise ValueError('Finite nonnegative certified motion time required')
+        used = self.backend.steps-self.start_steps
+        required = math.ceil(seconds/dt)+2*len(route.phases)+settling_steps
+        remaining = self.caller_step_limit-used
+        if required > remaining:
+            self.record('route_budget_rejected', required_steps=required, remaining_steps=remaining)
+            raise SkillError('local_adjustment_exhausted',
+                             'Certified route exceeds the caller control-step budget before motion',
+                             changed=self.changed, stage='local_control_budget')
+        self.step_limit = min(self.caller_step_limit, self.step_limit+required)
+        self.record('route_budget', required_steps=required, step_limit=self.step_limit,
+                    caller_step_limit=self.caller_step_limit,
+                    estimated_motion_seconds=seconds, phases=len(route.phases))
+        self.route_started = self.clock()
+        return min(required, self.step_limit-used)
+
+    def finish_route(self):
+        if self.route_started is not None:
+            self.route_wall_seconds += self.clock()-self.route_started
+            self.route_started = None
 
     def admit_pose(self, pose):
         """Check every commanded pose BEFORE a base setter can move the robot."""
