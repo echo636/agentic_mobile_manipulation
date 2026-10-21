@@ -28,6 +28,31 @@ class PointCollision:
 
 
 class ForwardNavigationTests(unittest.TestCase):
+    def test_connection_preserves_clear_long_turn_around_blocked_short_arc(self):
+        class ShelfBesidePayload(PointCollision):
+            block_other_side = False
+            def motion_free(self, a, b):
+                for i in range(101):
+                    yaw = angle(a[2]+angle(b[2]-a[2])*i/100)
+                    if .3 < yaw < 1.2:
+                        return False
+                    if self.block_other_side and -1.2 < yaw < -.3:
+                        return False
+                return super().motion_free(a, b)
+
+        collision = ShelfBesidePayload()
+        start = (0., 0., 0.)
+        target = (0., 0., math.pi/2)
+        self.assertFalse(collision.motion_free(start, target))
+        poses = checked_connection(start, target[:2], target[2], collision)
+        self.assertIsNotNone(poses)
+        route = route_from_poses(plan([(0., 0.)], target[2]), poses, collision)
+        executed = [start]+[(*p.goal, p.final_yaw) for p in route.phases]
+        self.assertAlmostEqual(sum(abs(angle(b[2]-a[2])) for a,b in zip(executed, executed[1:])), 3*math.pi/2)
+        self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(executed, executed[1:])))
+        collision.block_other_side = True
+        self.assertIsNone(checked_connection(start, target[:2], target[2], collision))
+
     def test_explicit_complete_scene_budget_allows_work_but_still_expires(self):
         clock=[100.]
         original=plan_forward_route

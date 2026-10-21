@@ -69,11 +69,29 @@ def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: 
         # grid snap must not require a large turn toward its numerical bearing.
         poses.append((*xy, start[2]))
     poses.append((*xy, final_yaw))
+    checked = [poses[0]]
     for a, b in zip(poses, poses[1:]):
         check_cancelled()
-        if not collision.motion_free(a, b):
+        if collision.motion_free(a, b):
+            checked.append(b)
+            continue
+        if math.dist(a[:2], b[:2]) > 1e-10:
             return None
-    return poses
+        # The shorter rotation may sweep a payload into a nearby shelf even
+        # though the other direction is clear. Split the longer turn into
+        # two sub-turns, each strictly shorter than pi, so the follower and
+        # collision adapter execute the same certified direction. Never
+        # replace a blocked translation or a colliding stationary pose.
+        delta = angle(b[2]-a[2])
+        if abs(delta) < 1e-8:
+            return None
+        opposite = delta-math.copysign(2*math.pi, delta)
+        middle = (*a[:2], a[2]+opposite/2)
+        check_cancelled()
+        if not collision.motion_free(a, middle) or not collision.motion_free(middle, b):
+            return None
+        checked.extend((middle, b))
+    return checked
 
 
 def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, check_cancelled=lambda: None):
