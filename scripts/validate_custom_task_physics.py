@@ -69,8 +69,11 @@ def main():
     try:
         from manipulation_agent.executors.custom_task import CustomTaskBackend
         from manipulation_agent.reference_tasks import ReferenceTask
-        backend = CustomTaskBackend(args.spec, args.output, record_video=args.record_video,
-                                    inside_placement='official_volume', max_steps=100000)
+        # Retain the partially initialized backend when policy-ready assertions
+        # reject a restore, so its actual scene and video can still be closed.
+        backend = CustomTaskBackend.__new__(CustomTaskBackend)
+        backend.__init__(args.spec, args.output, record_video=args.record_video,
+                         inside_placement='official_volume', max_steps=100000)
         record['backend'] = backend.provenance()
         backend.observe()
         reference = ReferenceTask(backend, args.output,
@@ -88,7 +91,7 @@ def main():
     except BaseException as exc:
         record.update(status='failed', error=str(exc), error_code=getattr(exc, 'code', None))
         (args.output / 'traceback.txt').write_text(traceback.format_exc())
-        if backend is not None:
+        if backend is not None and hasattr(backend, 'env'):
             # Keep a post-failure scene for focused diagnostics. Restoring it
             # is a continuation, never a fresh full-reference acceptance run.
             try:
@@ -96,6 +99,11 @@ def main():
                 backend.env.scene.save(json_path=str(scene))
                 record['failure_scene'] = {'path':scene.name,'sha256':sha256(scene),
                     'scope':'post-failure diagnostic continuation only; action may have rolled back'}
+                write_json(args.output / 'failure_geometry.json', {
+                    obj.name: {'category':obj.category,
+                               'aabb':[v.tolist() for v in obj.aabb],
+                               'pose':[v.tolist() for v in obj.get_position_orientation()]}
+                    for obj in backend.env.scene.objects})
             except Exception:
                 (args.output / 'failure_scene_error.txt').write_text(traceback.format_exc())
             try:
