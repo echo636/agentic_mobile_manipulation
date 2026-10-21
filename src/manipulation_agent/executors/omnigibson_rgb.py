@@ -26,6 +26,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
     def __init__(self,*args,record_video=False,**kwargs):
         self.deadline=EpisodeDeadline.from_env()
         self.deadline.check()
+        from .point_route_projection import prepare_point_projection
+        self._point_projection_ready=prepare_point_projection()
+        self.deadline.check()
         self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
         self.demo_motion = os.environ.get('MAS_DEMO_MOTION','0') in {'1','true','yes'}
         if self.demo_motion and not self.ideal_carry:
@@ -809,15 +812,19 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                         heading_attempts[-1].update(status='incomplete',reason='refinement_budget_exhausted')
                     details['arrival_heading_refinement_budget_exhausted']=True
             details['arrival_heading_refinement']=heading_attempts
+            # Keep exact candidates for future failure replay, including the
+            # guide polylines that a geometry-only snapshot cannot reconstruct.
+            details['forward_candidate_options']=[asdict(candidate) for candidate in options]
             endpoint_collision.check_cancelled=self.deadline.check
             with component(self,'navigation_route_selection'):
                 plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
-                    target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check)
+                    target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
+                    project_point=mode=='point')
             details['forward_candidate_selection']=selection
             grid=endpoint_collision.grid_at_heading(plan.final_yaw)
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
-            details['local_exit_certificate']=exits.get((*plan.goal,plan.final_yaw))
-            details['local_entry_certificate']=entries.get((*plan.goal,plan.final_yaw))
+            details['local_exit_certificate']=selection.get('local_exit_certificate',exits.get((*plan.goal,plan.final_yaw)))
+            details['local_entry_certificate']=selection.get('local_entry_certificate',entries.get((*plan.goal,plan.final_yaw)))
             details['heading_selection_only']=True
             details['pre_turn_executed']=False
             if plan is not None:
@@ -1254,8 +1261,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
             'motion_policy':'turn_then_drive_forward_v1',
-            'forward_route':'checked_polyline_or_bidirectional_continuous_pose_astar',
-            'forward_candidate_budget':{'seconds_per_candidate':4.,'shared_seconds':10.,'expanded_poses':10000},
+            'forward_route':'checked_forward_point_projection_or_polyline_or_shared_bidirectional_continuous_pose_astar',
+            'forward_candidate_budget':{'shared_seconds':10.,'point_projection_seconds':3.,'expanded_poses':20000},
             'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},
             'fixed_heading_exception':'contact_shedding_clearance_retreat_only',
             'carried_collision_footprint':True,'physical_controller':False,

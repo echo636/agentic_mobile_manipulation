@@ -39,6 +39,17 @@ each `act` / `look` supplies the next one.
    reversing, and inward-facing poses that cannot leave, are both rejected.
    These are local certificates under the current robot/load geometry, not a
    guarantee that every later target remains reachable after manipulation.
+   For a floor click requiring projection, a bounded forward-motion roadmap
+   first computes reachability across endpoint positions and headings together.
+   It chooses the nearest checked endpoint in that roadmap, with the same
+   arrival/departure certificates. This avoids fixing a holonomically reachable
+   endpoint and discarding a slightly farther endpoint with an executable route.
+   The eight sampled headings accelerate this proposal only: continuous measured
+   start connectors and every reconstructed edge are swept-checked, and the
+   continuous planner remains available if the proposal fails. Its spatial
+   window contains the original guide paths plus turning room; it is not a
+   proof of global optimality or infeasibility. Graph dependencies load during
+   simulator startup rather than consuming the first route's planning budget.
 5. If the starting footprint overlaps an obstacle, seek a short continuous
    retreat with non-increasing overlap for each connected 3D obstacle across
    height bands, no new obstacle regions, and continuous contact patches. Once
@@ -63,7 +74,7 @@ each `act` / `look` supplies the next one.
    down to 3.75 degrees. Relative 45-degree proposals accelerate open-space search;
    they are not a restriction on the stored orientation. Shallow checked forward
    links shift laterally over a longer forward leg before restoring the previous
-   heading. No motion or endpoint is snapped to eight fixed headings.
+   heading. There is no unchecked snap to a grid pose or heading.
    The reverse search checks every edge in its original forward direction;
    joining the two trees never authorizes reverse driving.
    Each turn and complete forward translation passes the same swept collision
@@ -72,6 +83,8 @@ each `act` / `look` supplies the next one.
    heuristic weight to seek feasible routes within the existing work budget.
    A sampled-heading XY guide orders the search where it has coverage; missing
    cells fall back to Euclidean distance and never exclude continuous poses.
+   Its distance field shares a compiled sparse shortest-path calculation;
+   the dependency-free fallback bounds each incremental distance update.
    The separate optimistic grid uses orientation-independent discs inscribed
    in body footprints, retaining passages between coarse headings. Offset
    payload layers without a base-centred inscribed disc are omitted only from
@@ -93,9 +106,11 @@ each `act` / `look` supplies the next one.
    cameras' margin-cropped frusta without a full return turn. These proposals
    share the same two-second refinement budget and clearance checks. The
    original validated heading stays available; neither mode requires restoring
-   the departure yaw. Complete-route motion time chooses among these options.
+   the departure yaw. Equivalent wrapped headings are deduplicated, and
+   alternative endpoints share one bidirectional search and reverse root set.
    Bounded collision-checked shortcuts remove detours only when combined
-   translation/rotation time decreases. Execution reuses the selected route
+   translation/rotation time decreases. The certified route survives even if
+   the optional shortcut budget expires. Execution reuses it
    when the measured start has not changed, and still checks every command.
    A relaxed XY geodesic guides that search around walls. All motion phases
    share the caller's remaining simulation-step budget. Pruned paths
@@ -121,12 +136,12 @@ heading. These limit work, not the geographical search domain or episode duratio
 An already visible approach within the executor's 1.4 m manipulation check stops
 heading refinement; it need not project onto the object's XY within one grid cell.
 Additional arrival-heading certification is bounded by 2 seconds. Complete-route
-comparison tests at most six candidates, within a shared 10 seconds and up to
-4 seconds / 10,000 expanded poses per candidate. Continuous branching can take
-more work than the former eight-heading graph: the candidate cap increased from
-2 to 4 seconds while the shared 10-second cap stays fixed, so fewer candidates
-may be compared in difficult scenes. A validated incumbent may win
-when the refinement budget expires. Its objective uses 0.5 m/s translation and
+selection shares 10 seconds across all work. The optional floor-point projection
+uses at most 3 of those seconds; continuous planning shares up to six distinct
+endpoint poses and 20,000 expansions without restarting per endpoint. Endpoint
+slack applies to that fallback candidate family, not as a reachability assertion
+for floor-point projection. A validated route survives expiration during
+optional shortcutting. Motion cost uses 0.5 m/s translation and
 60 degrees/s rotation; it is **not a globally shortest continuous route**.
 When the work budget expires, an existing validated plan can execute; otherwise
 `navigation_search_exhausted` returns fresh RGB for policy recovery. This is not

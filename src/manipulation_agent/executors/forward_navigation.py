@@ -151,54 +151,106 @@ def simplify_forward_poses(poses, collision, *, check_cancelled=lambda: None, ma
     return result, shortcuts
 
 
+def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose_graph", check_cancelled=lambda: None):
+    """Build follower phases from a fully certified pose chain."""
+    actual=poses[0]
+    # A certified route must survive expiration during optional smoothing.
+    try:poses, shortcuts = simplify_forward_poses(poses, collision, check_cancelled=check_cancelled)
+    except SearchBudgetExhausted:shortcuts=0
+    phases = []
+    distance = 0.
+    for a, b in zip(poses, poses[1:]):
+        length = math.dist(a[:2], b[:2])
+        if length < 1e-8 and abs(angle(b[2]-a[2])) < 1e-8:
+            continue
+        # Keep distinct turns: a safe 270-degree turn must not be changed
+        # to the obstructed shortest 90-degree turn during reconstruction.
+        points = (a[:2], b[:2]) if length > 1e-8 else (b[:2],)
+        phase = NavigationPlan(points, b[:2], plan.target, b[2], length,
+                               plan.score, plan.candidates_considered,
+                               plan.candidates_reachable, 0., expanded, b[2])
+        # Merge collinear forward cells, never merge across a turn.
+        if (length > 1e-8 and phases and phases[-1].geodesic_m > 0
+                and abs(angle(phases[-1].final_yaw-b[2])) < 1e-8):
+            previous = phases.pop()
+            phase = replace(phase, points=(previous.points[0], b[:2]),
+                            geodesic_m=previous.geodesic_m+length)
+        phases.append(phase)
+        distance += length
+    if not phases:
+        phases.append(replace(plan, points=(plan.goal,), travel_yaw=plan.final_yaw))
+    turns = sum(abs(angle(b[2]-a[2])) for a, b in zip(poses, poses[1:]))
+    return ForwardRoute(tuple(phases), distance, expanded, method,
+                        shortcuts, turns, motion_seconds(poses),actual)
+
+
 def select_forward_route(options, actual, collision, *, target_slack=.1,
-                         check_cancelled=lambda: None, max_candidates=6):
-    """Compare bounded complete routes, allowing explicit endpoint slack.
+                         check_cancelled=lambda: None, max_candidates=6, project_point=False):
+    """Search acceptable endpoints together, allowing explicit endpoint slack.
 
     Candidates already have local entry/exit and optional visibility proofs.
-    Optimize measured-start travel plus turn time among the tested candidates;
+    Rank cheap connections by travel/turn cost, then share one bidirectional
+    search across the remaining endpoints. Feasibility precedes shortcutting;
     no continuous/global shortest-route guarantee is made.
     """
     closest=min(p.score for p in options)
-    candidates={(*p.goal, p.final_yaw):p for p in options if p.score<=closest+target_slack+1e-9}
+    candidates={}
+    for p in options:
+        if p.score>closest+target_slack+1e-9:continue
+        yaw=angle(p.final_yaw)
+        # Equivalent 90 / -270 degree endpoints must not restart a search.
+        key=(*p.goal,round(math.cos(yaw),9),round(math.sin(yaw),9))
+        candidates.setdefault(key,replace(p,final_yaw=yaw))
     def estimate(p):
         bearing=math.atan2(p.goal[1]-actual[1],p.goal[0]-actual[0])
         return (math.dist(actual[:2],p.goal)/.5+
                 (abs(angle(bearing-actual[2]))+abs(angle(p.final_yaw-bearing)))/(math.pi/3))
     ordered=sorted(candidates.values(),key=lambda p:(estimate(p),p.score))[:max_candidates]
     budget=PlanningBudget(check_cancelled,seconds=10.)
-    best=None;attempts=[]
-    for candidate in ordered:
-        try:budget.check()
-        except SearchBudgetExhausted:break
-        # Continuous-pose branches need more time than the old eight-heading
-        # graph. Keep the shared 10-second cap, allowing fewer candidates.
-        attempt=PlanningBudget(budget.check,seconds=4.)
-        collision.check_cancelled=attempt.check
-        row={'goal':candidate.goal,'final_yaw':candidate.final_yaw,'target_distance_m':candidate.score}
-        try:
-            route=plan_forward_route(candidate,actual,collision,check_cancelled=attempt.check,max_expansions=10000)
-            row.update(status='planned',motion_seconds=route.estimated_motion_seconds,
+    attempts=[{'goal':p.goal,'final_yaw':p.final_yaw,'target_distance_m':p.score,
+               'status':'shared_search'} for p in ordered]
+    collision.check_cancelled=budget.check
+    try:
+        if project_point and closest>collision.grid.resolution/math.sqrt(2)+1e-9:
+            from .point_route_projection import project_forward_point
+            projection_budget=PlanningBudget(budget.check,seconds=3.)
+            collision.check_cancelled=projection_budget.check
+            try:
+                projected=project_forward_point(options,actual,collision,projection_budget.check)
+            except (SearchBudgetExhausted,ImportError):
+                projected=None
+            finally:
+                collision.check_cancelled=budget.check
+            if projected is not None:
+                selected,poses,details=projected
+                route=route_from_poses(selected,poses,collision,method='checked_forward_point_projection',
+                                       check_cancelled=budget.check)
+                details.update(closest_candidate_m=closest,target_slack_m=None,total_seconds=10.,
+                               objective='nearest_checked_forward_reachable_grid_pose_then_motion_cost')
+                return selected,route,details
+        route=plan_forward_route(ordered[0],actual,collision,check_cancelled=budget.check,
+                                 max_expansions=20000,alternatives=ordered[1:])
+    except NavigationError as exc:
+        exc.attempts=attempts
+        raise
+    finally:
+        collision.check_cancelled=check_cancelled
+    final=route.phases[-1]
+    selected=next(p for p in ordered if math.dist(p.goal,final.goal)<1e-6
+                  and abs(angle(p.final_yaw-final.final_yaw))<1e-6)
+    for candidate,row in zip(ordered,attempts):
+        row['status']='planned' if candidate is selected else 'not_selected'
+        if candidate is selected:
+            row.update(motion_seconds=route.estimated_motion_seconds,
                        turn_degrees=math.degrees(route.turn_radians),distance_m=route.distance_m)
-            key=(route.estimated_motion_seconds,candidate.score)
-            if best is None or key<best[0]:best=(key,candidate,route)
-        except NavigationError as exc:
-            row.update(status='failed',error_code=exc.code,error=str(exc))
-        attempts.append(row)
-    collision.check_cancelled=check_cancelled
-    if best is None:
-        error=NavigationError('No checked complete route among bounded endpoint candidates',
-                              'navigation_search_exhausted' if any(a.get('error_code')=='navigation_search_exhausted' for a in attempts) else 'navigation_unreachable')
-        error.attempts=attempts
-        raise error
-    return best[1],best[2],{'target_slack_m':target_slack,'closest_candidate_m':closest,
-                           'max_candidates':max_candidates,'candidate_seconds':4.,'total_seconds':10.,'attempts':attempts,
-                           'objective':'translation_seconds_plus_rotation_seconds',
-                           'globally_optimal':False}
+    return selected,route,{'target_slack_m':target_slack,'closest_candidate_m':closest,
+                          'max_candidates':max_candidates,'candidate_seconds':None,'total_seconds':10.,'attempts':attempts,
+                          'search':'shared_multi_goal_continuous_pose','unique_endpoints':len(ordered),
+                          'objective':'first_checked_route_then_motion_shortcuts','globally_optimal':False}
 
 
 def plan_forward_route(plan, actual, collision, *, check_cancelled=lambda: None,
-                       max_expansions=20000):
+                       max_expansions=20000, alternatives=()):
     """Preserve the selected goal and final yaw; never fall back to strafing.
 
 First certify the existing pruned path. If its corners cannot be turned, a
@@ -207,11 +259,12 @@ without requiring enough clearance to rotate at every point in that corridor.
     """
     grid = collision.grid
     actual = tuple(map(float, actual))
-    goal_pose = (*plan.goal, plan.final_yaw)
+    choices=(plan,*alternatives)
+    goal_poses=[(*p.goal,p.final_yaw) for p in choices]
     if not collision.motion_free(actual, actual):
         raise NavigationError('Forward driving starts without collision clearance',
                               'navigation_invalid_start')
-    if not collision.motion_free(goal_pose, goal_pose):
+    if not all(collision.motion_free(p,p) for p in goal_poses):
         raise NavigationError('Selected endpoint lacks clearance at its required final heading')
 
     def connector(start, xy, final_yaw):
@@ -219,48 +272,25 @@ without requiring enough clearance to rotate at every point in that corridor.
         return checked_connection(start, xy, final_yaw, collision, check_cancelled)
 
     def finish(poses, expanded, method):
-        poses, shortcuts = simplify_forward_poses(poses, collision, check_cancelled=check_cancelled)
-        phases = []
-        distance = 0.
-        for a, b in zip(poses, poses[1:]):
-            length = math.dist(a[:2], b[:2])
-            if length < 1e-8 and abs(angle(b[2]-a[2])) < 1e-8:
-                continue
-            # Keep distinct turns: a safe 270-degree turn must not be changed
-            # to the obstructed shortest 90-degree turn during reconstruction.
-            points = (a[:2], b[:2]) if length > 1e-8 else (b[:2],)
-            phase = NavigationPlan(points, b[:2], plan.target, b[2], length,
-                                   plan.score, plan.candidates_considered,
-                                   plan.candidates_reachable, 0., expanded, b[2])
-            # Merge collinear forward cells, never merge across a turn.
-            if (length > 1e-8 and phases and phases[-1].geodesic_m > 0
-                    and abs(angle(phases[-1].final_yaw-b[2])) < 1e-8):
-                previous = phases.pop()
-                phase = replace(phase, points=(previous.points[0], b[:2]),
-                                geodesic_m=previous.geodesic_m+length)
-            phases.append(phase)
-            distance += length
-        if not phases:
-            phases.append(replace(plan, points=(plan.goal,), travel_yaw=plan.final_yaw))
-        turns = sum(abs(angle(b[2]-a[2])) for a, b in zip(poses, poses[1:]))
-        return ForwardRoute(tuple(phases), distance, expanded, method,
-                            shortcuts, turns, motion_seconds(poses),actual)
+        chosen=next(p for p in choices if math.dist(p.goal,poses[-1][:2])<1e-6
+                    and abs(angle(p.final_yaw-poses[-1][2]))<1e-6)
+        return route_from_poses(chosen,poses,collision,expanded=expanded,method=method,
+                                check_cancelled=check_cancelled)
 
     # Replace the stale starting sample with the measured position.
-    poses = [actual]
-    for xy in (*plan.points[1:], plan.goal):
-        if math.dist(poses[-1][:2], xy) < 1e-8:
-            continue
-        yaw = math.atan2(xy[1]-poses[-1][1], xy[0]-poses[-1][0])
-        segment = connector(poses[-1], xy, yaw)
-        if segment is None:
-            poses = None
-            break
-        poses.extend(segment[1:])
-    if poses is not None:
-        final = connector(poses[-1], plan.goal, plan.final_yaw)
-        if final is not None:
-            return finish(poses+final[1:], 0, 'certified_polyline')
+    for candidate in choices:
+        poses = [actual]
+        for xy in (*candidate.points[1:], candidate.goal):
+            if math.dist(poses[-1][:2], xy) < 1e-8:continue
+            yaw = math.atan2(xy[1]-poses[-1][1], xy[0]-poses[-1][0])
+            segment = connector(poses[-1], xy, yaw)
+            if segment is None:
+                poses = None
+                break
+            poses.extend(segment[1:])
+        if poses is not None:
+            final = connector(poses[-1], candidate.goal, candidate.final_yaw)
+            if final is not None:return finish(poses+final[1:], 0, 'certified_polyline')
 
     # Bidirectional continuous-pose search. Reverse edges are checked in their
     # original forward direction; reversing the resulting poses restores a
@@ -274,11 +304,16 @@ without requiring enough clearance to rotate at every point in that corridor.
             return collision.optimistic_grid() if hasattr(collision,'optimistic_grid') else None
         def guidance_grid(self):
             return collision.guidance_grid() if hasattr(collision,'guidance_grid') else self.optimistic_grid()
+        def guidance_components(self):
+            return collision.guidance_components() if hasattr(collision,'guidance_components') else None
+        def guidance_distances(self,seeds):
+            return collision.guidance_distances(seeds) if hasattr(collision,'guidance_distances') else None
     reverse_plan = replace(plan,points=tuple(reversed((actual[:2],*plan.points[1:],plan.goal))),
                            goal=actual[:2],final_yaw=angle(actual[2]+math.pi))
-    reverse_start = (*plan.goal,angle(plan.final_yaw+math.pi))
-    searches = [_continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions),
-                _continuous_pose_search(reverse_plan,reverse_start,ReverseEdges(),check_cancelled,max_expansions)]
+    reverse_starts=[(*p.goal,angle(p.final_yaw+math.pi)) for p in choices]
+    searches = [_continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions,alternatives=alternatives),
+                _continuous_pose_search(reverse_plan,reverse_starts[0],ReverseEdges(),check_cancelled,
+                                        max_expansions,starts=reverse_starts)]
     indices = [{},{}]
     active = [True,True]
     expanded = 0
@@ -289,9 +324,9 @@ without requiring enough clearance to rotate at every point in that corridor.
         _,node_id,nodes = entry
         segments = []
         while node_id is not None:
-            _,node_id,_,segment = nodes[node_id]
+            root_pose,node_id,_,segment = nodes[node_id]
             segments.append(segment)
-        poses = [nodes[0][0]]
+        poses = [root_pose]
         for segment in reversed(segments):poses.extend(segment)
         return [physical(p,side) for p in reversed(poses)] if side else poses
     while any(active):
@@ -332,9 +367,11 @@ without requiring enough clearance to rotate at every point in that corridor.
     raise NavigationError('No collision-free forward route to the selected approach')
 
 
-def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions):
+def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions,*,alternatives=(),starts=None):
     grid = collision.grid
-    goal_pose = (*plan.goal,plan.final_yaw)
+    choices=(plan,*alternatives)
+    goal_poses=[(*p.goal,p.final_yaw) for p in choices]
+    guides=tuple(dict.fromkeys(xy for p in choices for xy in p.points[1:]))
     def connector(start,xy,final_yaw):
         return checked_connection(start,xy,final_yaw,collision,check_cancelled)
     # Hybrid A*: retain continuous XY/yaw poses. Quantization only limits the
@@ -354,36 +391,57 @@ def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions
     relaxed = (collision.guidance_grid() if hasattr(collision,'guidance_grid') else
                collision.optimistic_grid() if hasattr(collision,'optimistic_grid') else None)
     reverse_queue, reverse_costs, reverse_closed = [], {}, set()
-    arrivals = [goal_pose]
-    for distance in (.1, .2, .4, .6, .8, 1.2):
-        check_cancelled()
-        entry = (goal_pose[0]-distance*math.cos(goal_pose[2]),
-                 goal_pose[1]-distance*math.sin(goal_pose[2]), goal_pose[2])
-        if not collision.motion_free(entry, goal_pose):
-            break
-        arrivals.append(entry)
+    arrivals=[]
+    for goal_pose in goal_poses:
+        arrivals.append((goal_pose,goal_pose))
+        for distance in (.1, .2, .4, .6, .8, 1.2):
+            check_cancelled()
+            entry = (goal_pose[0]-distance*math.cos(goal_pose[2]),
+                     goal_pose[1]-distance*math.sin(goal_pose[2]), goal_pose[2])
+            if not collision.motion_free(entry, goal_pose):break
+            arrivals.append((entry,goal_pose))
+    components=None
+    goal_components=set()
     if relaxed is not None:
-        for entry in arrivals:
+        for entry,goal_pose in arrivals:
             row, col = grid.cell(entry[:2])
             for dr in (-1, 0, 1):
                 for dc in (-1, 0, 1):
                     cell = (row+dr, col+dc)
                     if relaxed.navigable(cell):
-                        cost = math.dist(grid.world(cell), entry[:2])+math.dist(entry[:2], plan.goal)
+                        cost = math.dist(grid.world(cell), entry[:2])+math.dist(entry[:2], goal_pose[:2])
                         if cost < reverse_costs.get(cell, math.inf):
                             reverse_costs[cell] = cost
                             heapq.heappush(reverse_queue, (cost, cell))
+    field=None
+    if relaxed is not None and hasattr(collision,'guidance_distances'):
+        try:field=collision.guidance_distances(reverse_costs)
+        except ImportError:pass
+    if field is None and relaxed is not None and hasattr(collision,'guidance_components'):
+        components=collision.guidance_components()
+        if components is not None:goal_components={int(components[cell]) for cell in reverse_costs}
     def heuristic(p):
+        fallback=min(math.dist(p[:2],goal[:2]) for goal in goal_poses)
         if relaxed is None:
-            return math.dist(p[:2], plan.goal)
+            return fallback
         cell = grid.cell(p[:2])
-        while reverse_queue and cell not in reverse_closed:
+        if field is not None:
+            distance=float(field[cell]) if grid.contains(cell) else math.inf
+            return distance if math.isfinite(distance) else fallback
+        # A sampled-heading guide can omit a physically legal pose or aisle.
+        # Never flood the whole floor trying to settle such an absent cell.
+        if (not relaxed.navigable(cell) or
+                components is not None and int(components[cell]) not in goal_components):
+            return fallback
+        work=0
+        while reverse_queue and cell not in reverse_closed and work<256:
             distance, current = heapq.heappop(reverse_queue)
             if current in reverse_closed:
                 continue
             if len(reverse_closed) % 256 == 0:
                 check_cancelled()
             reverse_closed.add(current)
+            work+=1
             for neighbor, cost in relaxed.neighbors(current):
                 updated = distance+cost
                 if updated < reverse_costs.get(neighbor, math.inf):
@@ -391,13 +449,18 @@ def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions
                     heapq.heappush(reverse_queue, (updated, neighbor))
         # A raster relaxation may omit a continuous entry at a cell boundary.
         # It guides the queue only; it must never reject a collision-free pose.
-        return reverse_costs.get(cell, math.dist(p[:2], plan.goal))
+        return reverse_costs.get(cell, fallback)
 
     # Immutable node IDs keep parent geometry intact when a cheaper continuous
     # pose supersedes another pose in the same duplicate-detection bucket.
-    nodes = [(actual, None, 0., ())]
-    best = {key(actual): (0., 0)}
-    queue = [(heuristic(actual), 0., 0)]
+    nodes=[];best={};queue=[]
+    for start in starts or (actual,):
+        state=key(start)
+        if state in best:continue
+        node_id=len(nodes)
+        nodes.append((start,None,0.,()))
+        best[state]=(0.,node_id)
+        heapq.heappush(queue,(heuristic(start),0.,node_id))
     expanded = 0
     lengths = tuple(sorted({grid.resolution, 3*grid.resolution, 6*grid.resolution}, reverse=True))
     while queue:
@@ -413,18 +476,18 @@ def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions
         yield node_id,nodes
         # Connect using exact headings, including a straight final aisle that
         # has no turning room. Limit long speculative connections per node.
-        for entry in sorted(arrivals, key=lambda p: math.dist(current[:2], p[:2]))[:2]:
+        for entry,goal_pose in sorted(arrivals, key=lambda pair: math.dist(current[:2], pair[0][:2]))[:max(2,len(choices))]:
             if math.dist(current[:2], entry[:2]) > .65:
                 continue
-            terminal = connector(current, entry[:2], plan.final_yaw)
+            terminal = connector(current, entry[:2], goal_pose[2])
             if terminal is None:
                 continue
             segments = []
             ancestor = node_id
             while ancestor is not None:
-                _, ancestor, _, segment = nodes[ancestor]
+                root_pose, ancestor, _, segment = nodes[ancestor]
                 segments.append(segment)
-            poses = [actual]
+            poses = [root_pose]
             for segment in reversed(segments):
                 poses.extend(segment)
             return poses+terminal[1:]+[goal_pose], expanded
@@ -474,17 +537,25 @@ def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions
         allowed = [collision.motion_free(current,p) for p in neighbors]
         for p,free in zip(neighbors,allowed):
             if free:offer(p,checked=True)
-        if node_id == 0:
+        # Cross open stretches in one swept, forward-only edge. Retain the
+        # one-cell edge so a narrow turn or alignment site is not skipped.
+        if allowed[2]:
+            for distance in (.3,.6,1.2):
+                destination=(current[0]+distance*math.cos(current[2]),
+                             current[1]+distance*math.sin(current[2]),current[2])
+                if not collision.motion_free(current,destination):break
+                offer(destination,checked=True)
+        if parent is None:
             # These cheap initial suggestions reuse map-aligned kernels, while
             # retaining the measured continuous heading when none fits.
-            for yaw in (plan.final_yaw,*(i*math.pi/4 for i in range(8))):
+            for yaw in (*[p.final_yaw for p in choices],*(i*math.pi/4 for i in range(8))):
                 offer((*current[:2],angle(yaw)))
         if allowed[2] and any(allowed[:2]):
             continue
 
         # Refine before entering a throat, not only after reaching a dead end.
         # Keep exact guide points and full turn/forward/turn connectors.
-        for xy in plan.points[1:]:
+        for xy in guides:
             distance = math.dist(current[:2],xy)
             if .002 < distance <= 1.2:
                 offer_connection(xy,math.atan2(xy[1]-current[1],xy[0]-current[0]))
@@ -494,8 +565,9 @@ def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions
                     current[1]+grid.resolution*(length*math.sin(current[2])+side*math.cos(current[2])))
                 if math.dist(current[:2],xy) <= .65:
                     offer_connection(xy,current[2])
+        nearby_arrivals=sorted(arrivals,key=lambda pair:math.dist(current[:2],pair[0][:2]))[:2]
         headings = [current[2]]+[math.atan2(p[1]-current[1],p[0]-current[0])
-                    for p in (plan.goal,*[a[:2] for a in arrivals[-2:]])
+                    for p in (*[g[:2] for g in goal_poses],*[a[0][:2] for a in nearby_arrivals])
                     if math.dist(current[:2],p) > .002]
         headings.extend(current[2]+math.radians(offset)
                         for offset in (-3.75,3.75,-7.5,7.5,-15,15,-30,30))
