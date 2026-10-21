@@ -28,6 +28,9 @@ def validate_workflow_plan(spec):
         if not phase.get('actions'):raise ValueError('A workflow phase must do physical work')
         for action in phase['actions']:
             if action.get('role') is not None and action['role'] not in roles:raise ValueError('Unknown action role')
+            if action.get('approach_role') is not None:
+                if action['approach_role'] not in roles or action['primitive']!='grasp':
+                    raise ValueError('An extraction approach must name an existing role for grasp')
             if action['primitive']=='wait_for':
                 if type(action.get('attempts',18)) is not int or not 1<=action.get('attempts',18)<=60:
                     raise ValueError('Invalid native process wait budget')
@@ -116,7 +119,14 @@ class FullWorkflowReference:
                     base=self.backend.robot.get_position_orientation()[0]
                     distance=sum((float(base[i])-point[i])**2 for i in (0,1))**.5
                     if force_approach or distance>(1.2 if primitive=='grasp' else 1.4):
-                        self.ref.action('navigate_to',role,point)
+                        # Approach a containing appliance's visible exterior
+                        # before selecting a low, recessed item. This is an
+                        # ordinary recorded navigation, followed by the same
+                        # checked grasp of the original item; no state setter.
+                        approach=row.get('approach_role',role)
+                        approach_point=(self.surface_point(approach,'navigate_to',attempt)
+                                        if approach!=role else point)
+                        self.ref.action('navigate_to',approach,approach_point)
                         if 'uv' not in row and 'xy' not in row and 'point' not in row:
                             point=self.surface_point(role,primitive,attempt)
                 return self.ref.action(primitive,role,point,**row.get('options',{}))

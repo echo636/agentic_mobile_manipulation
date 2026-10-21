@@ -1864,7 +1864,8 @@
           },
           {
             "primitive": "grasp",
-            "role": "hotdog1"
+            "role": "hotdog1",
+            "approach_role": "fridge"
           },
           {
             "primitive": "place_on_top",
@@ -1876,7 +1877,8 @@
           },
           {
             "primitive": "grasp",
-            "role": "hotdog2"
+            "role": "hotdog2",
+            "approach_role": "fridge"
           },
           {
             "primitive": "place_on_top",
@@ -1939,7 +1941,8 @@
           },
           {
             "primitive": "grasp",
-            "role": "hotdog1"
+            "role": "hotdog1",
+            "approach_role": "microwave"
           },
           {
             "primitive": "place_inside",
@@ -1947,7 +1950,8 @@
           },
           {
             "primitive": "grasp",
-            "role": "hotdog2"
+            "role": "hotdog2",
+            "approach_role": "microwave"
           },
           {
             "primitive": "place_inside",

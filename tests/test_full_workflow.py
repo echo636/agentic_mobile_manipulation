@@ -3,8 +3,10 @@ import copy
 import json
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 from manipulation_agent.custom_tasks import validate_spec
-from manipulation_agent.full_workflow_reference import validate_workflow_plan
+from manipulation_agent.full_workflow_reference import FullWorkflowReference, validate_workflow_plan
 from manipulation_agent.long_horizon import TemporalGoalEvaluator
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -40,6 +42,18 @@ class CompleteWorkflowContracts(unittest.TestCase):
         s=copy.deepcopy(self.specs[0]);p=next(iter(s['reference_plan']['phases'].values()))
         p['actions'].append({'primitive':'wait_for','condition':next(iter(s['evaluation']['predicates'])),'attempts':100000})
         with self.assertRaisesRegex(ValueError,'wait budget'):validate_workflow_plan(s)
+
+    def test_extraction_approach_names_existing_role_and_preserves_grasp(self):
+        s=copy.deepcopy(self.specs[0]);p=next(iter(s['reference_plan']['phases'].values()))
+        p['actions'][0]['approach_role']='missing'
+        with self.assertRaisesRegex(ValueError,'extraction approach'):validate_workflow_plan(s)
+        flow=FullWorkflowReference.__new__(FullWorkflowReference)
+        flow.backend=SimpleNamespace(robot=SimpleNamespace(get_position_orientation=lambda:([0.,0.,0.],None)))
+        flow.ref=SimpleNamespace(action=Mock())
+        flow.surface_point=Mock(side_effect=[[3.,0.,.5],[2.,0.,1.2],[3.,0.,.5]])
+        flow.action(dict(primitive='grasp',role='food',approach_role='fridge'))
+        self.assertEqual(flow.ref.action.call_args_list[0].args,('navigate_to','fridge',[2.,0.,1.2]))
+        self.assertEqual(flow.ref.action.call_args_list[1].args,('grasp','food',[3.,0.,.5]))
 
     def test_full_task_does_not_start_with_future_slicing_outputs(self):
         for s in self.specs:

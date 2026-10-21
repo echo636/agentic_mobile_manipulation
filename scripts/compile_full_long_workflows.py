@@ -15,7 +15,10 @@ def action(primitive,role=None,**kw):return dict(primitive=primitive,**({'role':
 def take(r):return action('grasp',r)
 def put(r,uv=(.5,.5),**kw):return action('place_on_top',r,uv=list(uv),**kw)
 def inside(r):return action('place_inside',r)
-def transfer(r,t,uv=(.5,.5),into=False):return [take(r),inside(t) if into else put(t,uv)]
+def transfer(r,t,uv=(.5,.5),into=False,from_role=None):
+ grasp=take(r)
+ if from_role:grasp['approach_role']=from_role
+ return [grasp,inside(t) if into else put(t,uv)]
 
 class Builder:
  def __init__(self,key,base,inventory,models):
@@ -191,11 +194,11 @@ def kitchen(inv,models):
  fruit += transfer('knife','cabinet',into=True)
  b.phase('fruit',fruit,['clean_ware','carrier_ready'])
  hot=[action('open','fridge')]
- for i in (1,2):hot+=transfer('hotdog'+str(i),'stage',(.2+.5*(i-1),.6))
+ for i in (1,2):hot+=transfer('hotdog'+str(i),'stage',(.2+.5*(i-1),.6),from_role='fridge')
  hot += [action('close','fridge'),action('open','microwave')]
  for i in (1,2):hot+=transfer('hotdog'+str(i),'microwave',into=True)
  hot += [action('close','microwave'),action('toggle_on','microwave'),action('wait_for',condition=ALL(*cooked),seconds=10.,attempts=18),action('toggle_off','microwave'),action('open','microwave')]
- for i in (1,2):hot+=transfer('hotdog'+str(i),'box',into=True)
+ for i in (1,2):hot+=transfer('hotdog'+str(i),'box',into=True,from_role='microwave')
  hot += [action('close','microwave')];b.phase('hot_food',hot,['carrier_ready'])
  serve=transfer('box','table',(.5,.5))
  for i in (1,2):serve+=transfer('hotdog'+str(i),'plate'+str(i),(.4,.5))+transfer('apple_half'+str(i-1),'plate'+str(i),(.7,.5))
