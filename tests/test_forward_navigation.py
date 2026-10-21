@@ -307,6 +307,27 @@ class ForwardNavigationTests(unittest.TestCase):
             self.assertTrue(collision.motion_free(a,b))
             self.assertGreaterEqual((b[0]-a[0])*math.cos(a[2])+(b[1]-a[1])*math.sin(a[2]),-1e-9)
 
+    def test_local_half_turn_exit_keeps_clear_direction_under_yaw_residual(self):
+        # One side of a stance blocks the counterclockwise turn. Only the
+        # backwards-facing forward departure is open. A pi-angle tie must
+        # not discard the clear clockwise sweep after small pose feedback.
+        for residual in (-1e-8, 0., 1e-6):
+            yaw=-.9285902628196879+residual
+            class Pocket(PointCollision):
+                def motion_free(self,a,b):
+                    if math.dist(a[:2],b[:2])>1e-10:
+                        return abs(angle(a[2]-yaw-math.pi))<1e-6
+                    delta=angle(b[2]-a[2])
+                    return delta<=1e-9
+            collision=Pocket();pose=(0.,0.,yaw)
+            with self.subTest(residual=residual):
+                result=local_exit_certificate(pose,collision)
+                self.assertIsNotNone(result)
+                self.assertGreaterEqual(result['displacement_m'],.3-1e-9)
+                for a,b in zip(result['poses'],result['poses'][1:]):
+                    self.assertTrue(collision.motion_free(a,b))
+                    self.assertLessEqual(abs(angle(b[2]-a[2])),math.pi/2+1e-9)
+
     def test_numeric_cell_correction_does_not_demand_a_turn(self):
         class NoTurns(PointCollision):
             def motion_free(self,a,b):

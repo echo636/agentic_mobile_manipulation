@@ -202,7 +202,8 @@ class TargetVisibilityTests(unittest.TestCase):
         target=SimpleNamespace(get_position_orientation=lambda:(Tensor([.5,2.3,.24]),None))
         b._approach_visible.side_effect=lambda xy,*a,**kw:math.dist(xy,(.5,2.3))>1.4
         result=b._navigate(target,1000)
-        self.assertEqual(result['manipulation_handoff'],'within_local_range')
+        self.assertEqual(result['manipulation_handoff'],'target_approach_available')
+        self.assertGreater(result['target_projection_distance_m'],1.4)
         self.assertLessEqual(result['target_projection_distance_m'],2.4)
         self.assertLess(b._approach_visible.call_count,100)
         self.headings.assert_not_called()

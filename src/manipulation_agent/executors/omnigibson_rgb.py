@@ -943,7 +943,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             stream.write(json.dumps({'at':now(),'audience':'executor_private',
                 'grid_artifact':details['grid_artifact'],'goal_mode':mode,
                 'selected_world_point':point.cpu().tolist(),'planned_goal':list(plan.goal),
-                'actual_position':actual.cpu().tolist(),'target_visible':visible,
+                'actual_position':actual.cpu().tolist(),'actual_yaw':actual_yaw,'target_visible':visible,
                 'local_exit_certificate':actual_exit,
                 'status':'failed' if visible is False or actual_exit is None else nav_status})+'\n')
         if actual_exit is None:

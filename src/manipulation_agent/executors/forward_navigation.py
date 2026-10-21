@@ -117,13 +117,21 @@ def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, chec
             check_cancelled()
             heading = pose[2]+offset
             turned = (*start[:2], heading)
-            if not collision.motion_free(start, turned):
+            # A pi turn has two different swept volumes. Tiny feedback yaw
+            # residuals can make atan2(sin(delta), cos(delta)) choose the
+            # opposite sign for BOTH nominal +/-pi proposals. Certify each
+            # intended direction as two unambiguous quarter turns, and keep
+            # that intermediate pose in the certificate for execution.
+            turns = ([start, (*start[:2], pose[2]+offset/2), turned]
+                     if abs(offset) == math.pi else [start, turned])
+            if not all(collision.motion_free(a,b) for a,b in zip(turns,turns[1:])):
                 continue
             end = (start[0]+direction*(distance+staging)*math.cos(heading),
                    start[1]+direction*(distance+staging)*math.sin(heading), heading)
             if not collision.motion_free(turned, end):
                 continue
-            poses = [end, turned, start, pose] if incoming else [pose, start, turned, end]
+            poses = [pose, *turns, end]
+            if incoming: poses.reverse()
             if incoming and not all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])):
                 continue
             return {'poses': poses,
