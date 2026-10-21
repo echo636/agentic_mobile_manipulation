@@ -37,11 +37,13 @@ class CustomTaskBackend(RGBBackend):
     def __init__(self, spec_path, output, *, build_instance=None, **kwargs):
         self.spec_path = Path(spec_path).resolve()
         self.custom_spec = json.loads(self.spec_path.read_text())
+        self.use_gpu_dynamics = self.custom_spec.get('physics', {}).get('use_gpu_dynamics', False)
         validate_spec(self.custom_spec, spec_path=self.spec_path, require_frozen=build_instance is None)
         validate_system_references(self.custom_spec,
             Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/systems')
         self.custom_tracker = None; self.custom_sequence = 0
         self._initial_entity_names = None
+        self._protected_initial_positions = {}
         self.build_instance = Path(build_instance) if build_instance else None
         self._custom_motion_positions = {}; self._custom_state_errors = []
         base = self.custom_spec['base']
@@ -160,6 +162,21 @@ class CustomTaskBackend(RGBBackend):
                 raise ValueError('Cannot exclude structural or robot entities: '+name)
             scene['state']['registry']['object_registry'].pop(name)
         provenance = []
+        for item in spec.get('native_assets', []):
+            name, category, model = item['name'], item['category'], item['model']
+            usd = Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/objects'/category/model/'usd'/f'{model}.encrypted.usd'
+            if hashlib.sha256(usd.read_bytes()).hexdigest() != item['usd_sha256']:
+                raise ValueError('Native construction asset changed: '+name)
+            if name in scene['objects_info']['init_info']:
+                raise ValueError('Duplicate native construction asset: '+name)
+            args = {k:item[k] for k in ('name','category','model','prim_type','fixed_base','scale') if k in item}
+            scene['objects_info']['init_info'][name] = {
+                'class_module':'omnigibson.objects.dataset_object', 'class_name':'DatasetObject', 'args':args}
+            scene['state']['registry']['object_registry'][name] = {
+                'is_asleep':False, 'root_link':{
+                    'pos':item['position'], 'ori':item.get('orientation',[0.,0.,0.,1.]),
+                    'lin_vel':[0.,0.,0.], 'ang_vel':[0.,0.,0.]}, 'non_kin':{}}
+            provenance.append({'name':name,'native_asset':args,'usd_sha256':item['usd_sha256']})
         for item in spec.get('asset_imports', []):
             task = item['source_task']; source_scene = catalog[task][0]['scene_model']
             template = root/'scene_test/public'/source_scene/'json'/f'{source_scene}_task_{task}_0_0_template.json'
@@ -251,7 +268,12 @@ class CustomTaskBackend(RGBBackend):
                 ori = self.torch.tensor(operation['orientation'],dtype=pos.dtype,device=pos.device)
                 obj.set_position_orientation(pos,ori)
             low, high = obj.aabb
-            xy = self.torch.tensor(operation['xy'],dtype=pos.dtype,device=pos.device)
+            if 'support_uv' in operation:
+                slo,shi=support.aabb
+                uv=self.torch.tensor(operation['support_uv'],dtype=pos.dtype,device=pos.device)
+                xy=slo[:2]+uv*(shi[:2]-slo[:2])
+            else:
+                xy = self.torch.tensor(operation['xy'],dtype=pos.dtype,device=pos.device)
             pos = pos.clone()
             pos[:2] += xy-(low[:2]+high[:2])/2
             pos[2] += support.aabb[1][2]-low[2]+.004
@@ -298,6 +320,11 @@ class CustomTaskBackend(RGBBackend):
                 result[key] = self._get_held() is None; continue
             if obj is None or (row.get('target') and roles[row['target']] is None):
                 result[key] = False; continue
+            if row['state']=='NearInitial':
+                current=obj.get_position_orientation()[0]
+                initial=self._protected_initial_positions.setdefault(row['object'],current.clone())
+                result[key]=float(self.torch.linalg.vector_norm(current-initial)) <= row.get('distance',.03)
+                continue
             if row['state']=='Upright':
                 from ..diverse_task_contract import upright_orientation
                 result[key]=upright_orientation(obj.get_position_orientation()[1],row.get('max_tilt_degrees',15.))

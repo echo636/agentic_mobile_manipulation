@@ -180,7 +180,7 @@ class OmniGibsonBackend:
         gm.HEADLESS = True
         gm.RENDER_VIEWER_CAMERA = bool(getattr(self,'private_viewer_grounding',False))
         gm.ENABLE_HQ_RENDERING = False
-        gm.USE_GPU_DYNAMICS = False
+        gm.USE_GPU_DYNAMICS = bool(getattr(self, 'use_gpu_dynamics', False))
         gm.ENABLE_TRANSITION_RULES = True
         self.og, self.torch = og, torch
         self.task_name, self.instance, self.seed, self.output = task, instance, seed, output

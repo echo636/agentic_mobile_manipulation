@@ -26,6 +26,9 @@ class DiverseReference:
         self.ref.move('place_on_top',home,[*(xy or self.plan['tool_xy']),float(self.ref.obj(home).aabb[1][2])])
 
     def run(self,order,negative=None):
+        if self.plan['kind']=='full_workflow':
+            from .full_workflow_reference import FullWorkflowReference
+            return FullWorkflowReference(self.ref).run(order,negative)
         if self.plan['kind']=='branching_library':
             from .branching_reference import BranchingLibraryReference
             return BranchingLibraryReference(self.ref).run(order,negative)
@@ -76,6 +79,9 @@ class DiverseReference:
         else:raise ValueError('Unknown constructed-task reference kind')
 
     def negative(self,case):
+        if self.plan['kind']=='full_workflow':
+            from .full_workflow_reference import FullWorkflowReference
+            return FullWorkflowReference(self.ref).negative(case)
         if self.plan['kind']=='branching_library':
             from .branching_reference import BranchingLibraryReference
             return BranchingLibraryReference(self.ref).negative(case)

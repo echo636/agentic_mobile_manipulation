@@ -314,10 +314,11 @@ class ControlledCarry(CompactCarry):
 
     def _grasp_dependencies(self,obj):
         """Read-only closure shared by grasp and loaded-departure prediction."""
-        from omnigibson.object_states import Inside,OnTop,Touching
+        from omnigibson.object_states import Inside,OnTop,Touching,AttachedTo
         candidates=[child for child in self.env.scene.objects if child not in (obj,self.robot)
                     and not getattr(child,'fixed_base',True) and hasattr(child,'states')]
         def relation(child,parent):
+            if AttachedTo in child.states and child.states[AttachedTo].get_value(parent):return 'AttachedTo'
             lo,hi=parent.aabb;clo,chi=child.aabb;center=(clo+chi)/2
             if Inside in child.states and bool(((center>=lo-.02)&(center<=hi+.02)).all()) and child.states[Inside].get_value(parent):return 'Inside'
             overlap=bool(((chi[:2]>=lo[:2])&(clo[:2]<=hi[:2])).all())
@@ -427,12 +428,12 @@ class ControlledCarry(CompactCarry):
                 'supported_particles':particle_count(particles,'supported')}
 
     def _verify_payload(self, dependencies):
-        from omnigibson.object_states import Inside,OnTop
+        from omnigibson.object_states import Inside,OnTop,AttachedTo
         verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
         for child,parent,kind in dependencies:
-            state=Inside if kind=='Inside' else OnTop
+            state={'Inside':Inside,'OnTop':OnTop,'AttachedTo':AttachedTo}[kind]
             if state not in child.states or not child.states[state].get_value(parent):
-                raise SkillError('postcondition_error','Carried payload lost its original support or containment after placement',changed=True)
+                raise SkillError('postcondition_error','Carried payload lost its original support, containment or attachment after placement',changed=True)
 
     def _ideal_release(self,max_steps):
         if self._ideal_held is None:raise SkillError('empty_hand','No carried object')

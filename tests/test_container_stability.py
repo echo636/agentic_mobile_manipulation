@@ -171,6 +171,7 @@ class NestedStabilizationTests(unittest.TestCase):
         b._step=lambda action:(b._restore_stabilized_containers(),b._carry_follow())
         states=types.ModuleType('omnigibson.object_states')
         states.Inside,states.OnTop,states.Touching=Inside,OnTop,Touching
+        states.AttachedTo=type('AttachedTo',(),{})
         utils=types.ModuleType('omnigibson.utils');utils.transform_utils=transforms
         with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.utils':utils}), \
              patch('manipulation_agent.executors.carry.assembly_lift', return_value=0.):

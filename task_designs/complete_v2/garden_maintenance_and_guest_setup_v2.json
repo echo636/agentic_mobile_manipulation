@@ -1,0 +1,2667 @@
+{
+  "schema_version": 3,
+  "id": "garden_maintenance_and_guest_setup_v2",
+  "instance_id": "garden_maintenance_and_guest_setup_v2_seed0_r1",
+  "status": "complete_recipe_physics_pending",
+  "benchmark_ready": false,
+  "official_submission_eligible": false,
+  "base": {
+    "task": "spraying_for_bugs",
+    "instance": 301,
+    "seed": 0
+  },
+  "roles": {
+    "plant1": "pot_plant_172",
+    "plant2": "pot_plant_173",
+    "sprayer": "insectifuge_atomizer_174",
+    "floor": "floors_ghetev_0",
+    "source": "fv2_source",
+    "work": "fv2_work",
+    "display": "fv2_display",
+    "stage": "fv2_stage",
+    "tool_home": "fv2_tool_home",
+    "food_stage": "fv2_food_stage",
+    "trowel": "fv2_trowel",
+    "shears": "fv2_shears",
+    "pillow1": "fv2_pillow1",
+    "pillow2": "fv2_pillow2",
+    "apple": "fv2_apple",
+    "knife": "fv2_knife",
+    "protected": "fv2_protected",
+    "brush": "fv2_brush",
+    "broom": "fv2_broom",
+    "book": "fv2_book",
+    "can": "fv2_can",
+    "bin": "fv2_bin",
+    "tea": "fv2_tea",
+    "board": "fv2_board",
+    "plate": "fv2_plate",
+    "cup1": "fv2_cup1",
+    "lamp1": "fv2_lamp1",
+    "seat1": "fv2_seat1",
+    "cup2": "fv2_cup2",
+    "lamp2": "fv2_lamp2",
+    "seat2": "fv2_seat2",
+    "apple_half0": "half_fv2_apple_0",
+    "apple_half1": "half_fv2_apple_1",
+    "parts": "fv2_parts",
+    "jig": "fv2_jig",
+    "table": "fv2_table",
+    "bracket": "fv2_bracket",
+    "leg1": "fv2_leg1",
+    "leg2": "fv2_leg2",
+    "leg3": "fv2_leg3",
+    "leg4": "fv2_leg4"
+  },
+  "asset_imports": [
+    {
+      "name": "fv2_protected",
+      "source_task": "spraying_for_bugs",
+      "source_object": "pot_plant_172",
+      "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
+      "position": [
+        101.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_brush",
+      "source_task": "clean_a_keyboard",
+      "source_object": "pipe_cleaner_120",
+      "source_sha256": "f8a478a306d8e97c8c3bc42f5b224558bd1a615ca22b88e73f5bae86a4a0d0dd",
+      "position": [
+        104.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_broom",
+      "source_task": "clean_a_patio",
+      "source_object": "broom_172",
+      "source_sha256": "e9440c9f057b752a316cdc60cb72c499b6837c03945db2c9dc2ca0ea4094458e",
+      "position": [
+        107.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_book",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        110.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_can",
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "source_sha256": "e8e61d04e358fbf61ff04fed3f11e1f213433cb7d8a9ef263b62e16387d6c83a",
+      "position": [
+        113.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_bin",
+      "source_task": "picking_up_trash",
+      "source_object": "trash_can_116",
+      "source_sha256": "e8e61d04e358fbf61ff04fed3f11e1f213433cb7d8a9ef263b62e16387d6c83a",
+      "position": [
+        116.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_tea",
+      "source_task": "preparing_lunch_box",
+      "source_object": "bottle_of_tea_208",
+      "source_sha256": "a0f100b58db5ff0127a9de6192b43cd420953f5932115af5de7ee53aa9b7aba0",
+      "position": [
+        119.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_board",
+      "source_task": "preparing_lunch_box",
+      "source_object": "chopping_board_211",
+      "source_sha256": "a0f100b58db5ff0127a9de6192b43cd420953f5932115af5de7ee53aa9b7aba0",
+      "position": [
+        122.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_plate",
+      "source_task": "setting_the_table",
+      "source_object": "plate_243",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        125.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_cup1",
+      "source_task": "setting_the_table",
+      "source_object": "water_glass_bbpraa_0",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        128.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_lamp1",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        131.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_seat1",
+      "source_task": "setting_the_table",
+      "source_object": "straight_chair_gktknj_0",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        134.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_cup2",
+      "source_task": "setting_the_table",
+      "source_object": "water_glass_bbpraa_0",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        137.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_lamp2",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        140.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_seat2",
+      "source_task": "setting_the_table",
+      "source_object": "straight_chair_jgoolz_0",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        143.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "native_assets": [
+    {
+      "name": "fv2_trowel",
+      "category": "trowel",
+      "model": "ematag",
+      "usd_sha256": "028e985041d57bfd1a981884450ac731c9c21876209a54b801d11dc19123c743",
+      "prim_type": 0,
+      "position": [
+        83.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_shears",
+      "category": "shears",
+      "model": "iizidc",
+      "usd_sha256": "a18916e14ef79ecce6e4b385fa170de7a47076bbb81f9e150dba8b2ee3d75461",
+      "prim_type": 0,
+      "position": [
+        86.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_pillow1",
+      "category": "pillow",
+      "model": "gqsmrz",
+      "usd_sha256": "02b44d98f33c689d0afd8fb78bc858de55057ca36ba62b9f3cfbe1a51cd1f735",
+      "prim_type": 0,
+      "position": [
+        89.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_pillow2",
+      "category": "pillow",
+      "model": "gqsmrz",
+      "usd_sha256": "02b44d98f33c689d0afd8fb78bc858de55057ca36ba62b9f3cfbe1a51cd1f735",
+      "prim_type": 0,
+      "position": [
+        92.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_apple",
+      "category": "apple",
+      "model": "agveuv",
+      "usd_sha256": "4e1786f1e30519bb22ece59149f11d56a3d9212a94fd70b820ffc160629c5abb",
+      "prim_type": 0,
+      "position": [
+        95.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_knife",
+      "category": "carving_knife",
+      "model": "ghhbgo",
+      "usd_sha256": "f60f7200a713a180f7a9e9bb2f0576541e161d3e317ff9de5d11ba33ddc9ca82",
+      "prim_type": 0,
+      "position": [
+        98.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_table",
+      "category": "desk_top",
+      "model": "eggere",
+      "usd_sha256": "525ecd8c5c841d8a5f18b9ac26fe2eddd2d4ec55ce766c32b6cac7ae903b66d6",
+      "prim_type": 0,
+      "position": [
+        158.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_bracket",
+      "category": "desk_bracket",
+      "model": "lwqwre",
+      "usd_sha256": "087535628976b293c502c23a6c3639360ada8915ea2362939b6298bb7a829210",
+      "prim_type": 0,
+      "position": [
+        161.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_leg1",
+      "category": "desk_leg",
+      "model": "qoerre",
+      "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
+      "prim_type": 0,
+      "position": [
+        164.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_leg2",
+      "category": "desk_leg",
+      "model": "qoerre",
+      "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
+      "prim_type": 0,
+      "position": [
+        167.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_leg3",
+      "category": "desk_leg",
+      "model": "qoerre",
+      "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
+      "prim_type": 0,
+      "position": [
+        170.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_leg4",
+      "category": "desk_leg",
+      "model": "qoerre",
+      "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
+      "prim_type": 0,
+      "position": [
+        173.0,
+        50.0,
+        2.0
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "fv2_source",
+      "position": [
+        12.8,
+        7.2,
+        0.275
+      ],
+      "size": [
+        1.5,
+        0.65,
+        0.55
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_work",
+      "position": [
+        15.6,
+        7.2,
+        0.275
+      ],
+      "size": [
+        1.5,
+        0.65,
+        0.55
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_display",
+      "position": [
+        12.8,
+        12.0,
+        0.3
+      ],
+      "size": [
+        1.6,
+        0.6,
+        0.6
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_stage",
+      "position": [
+        12.7,
+        10.7,
+        0.325
+      ],
+      "size": [
+        1.8,
+        0.7,
+        0.65
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_tool_home",
+      "position": [
+        16.7,
+        12.0,
+        0.3
+      ],
+      "size": [
+        1.2,
+        0.6,
+        0.6
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_food_stage",
+      "position": [
+        16.7,
+        10.2,
+        0.3
+      ],
+      "size": [
+        0.7,
+        1.0,
+        0.6
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_parts",
+      "position": [
+        13.0,
+        8.8,
+        0.325
+      ],
+      "size": [
+        2.4,
+        2.0,
+        0.65
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_jig",
+      "position": [
+        15.5,
+        8.8,
+        0.43
+      ],
+      "size": [
+        0.18,
+        0.18,
+        0.86
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "seat1",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        14.4,
+        11.2
+      ]
+    },
+    {
+      "object": "pillow1",
+      "target": "work",
+      "place_on_support": true,
+      "support_uv": [
+        0.125,
+        0.5
+      ]
+    },
+    {
+      "object": "lamp1",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.25,
+        0.5
+      ]
+    },
+    {
+      "object": "lamp1",
+      "state": "ToggledOn",
+      "value": false
+    },
+    {
+      "object": "seat2",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        16.1,
+        11.2
+      ]
+    },
+    {
+      "object": "pillow2",
+      "target": "work",
+      "place_on_support": true,
+      "support_uv": [
+        0.375,
+        0.5
+      ]
+    },
+    {
+      "object": "lamp2",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.75,
+        0.5
+      ]
+    },
+    {
+      "object": "lamp2",
+      "state": "ToggledOn",
+      "value": false
+    },
+    {
+      "object": "plant1",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        12.4,
+        7.2
+      ]
+    },
+    {
+      "object": "plant2",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        13.2,
+        7.2
+      ]
+    },
+    {
+      "object": "protected",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        11.7,
+        12.6
+      ]
+    },
+    {
+      "object": "bin",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        11.8,
+        9.8
+      ]
+    },
+    {
+      "object": "book",
+      "target": "work",
+      "place_on_support": true,
+      "support_uv": [
+        0.625,
+        0.5
+      ]
+    },
+    {
+      "object": "can",
+      "target": "work",
+      "place_on_support": true,
+      "support_uv": [
+        0.875,
+        0.5
+      ]
+    },
+    {
+      "object": "trowel",
+      "target": "source",
+      "place_on_support": true,
+      "support_uv": [
+        0.16666666666666666,
+        0.5
+      ]
+    },
+    {
+      "object": "shears",
+      "target": "source",
+      "place_on_support": true,
+      "support_uv": [
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "object": "sprayer",
+      "target": "source",
+      "place_on_support": true,
+      "support_uv": [
+        0.8333333333333334,
+        0.5
+      ]
+    },
+    {
+      "object": "brush",
+      "target": "tool_home",
+      "place_on_support": true,
+      "support_uv": [
+        0.25,
+        0.5
+      ]
+    },
+    {
+      "object": "broom",
+      "target": "tool_home",
+      "place_on_support": true,
+      "support_uv": [
+        0.75,
+        0.5
+      ]
+    },
+    {
+      "object": "tea",
+      "target": "food_stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.125,
+        0.25
+      ]
+    },
+    {
+      "object": "apple",
+      "target": "food_stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.375,
+        0.25
+      ]
+    },
+    {
+      "object": "plate",
+      "target": "food_stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.625,
+        0.25
+      ]
+    },
+    {
+      "object": "cup1",
+      "target": "food_stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.875,
+        0.25
+      ]
+    },
+    {
+      "object": "cup2",
+      "target": "food_stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.125,
+        0.75
+      ]
+    },
+    {
+      "object": "knife",
+      "target": "food_stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.375,
+        0.75
+      ]
+    },
+    {
+      "object": "board",
+      "target": "food_stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.625,
+        0.75
+      ]
+    },
+    {
+      "object": "work",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "display",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "pillow1",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "pillow2",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "cup1",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "cup2",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "trowel",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "shears",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "sprayer",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "floor",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "protected",
+      "state": "Covered",
+      "value": false,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant1",
+      "state": "Covered",
+      "value": false,
+      "system": "insectifuge"
+    },
+    {
+      "object": "plant2",
+      "state": "Covered",
+      "value": false,
+      "system": "insectifuge"
+    },
+    {
+      "object": "table",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        12.38,
+        8.8
+      ]
+    },
+    {
+      "object": "bracket",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        13.35,
+        8.8
+      ]
+    },
+    {
+      "object": "leg1",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        12.25,
+        7.950000000000001
+      ]
+    },
+    {
+      "object": "leg2",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        12.95,
+        7.950000000000001
+      ]
+    },
+    {
+      "object": "leg3",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        13.65,
+        7.950000000000001
+      ]
+    },
+    {
+      "object": "leg4",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        13.65,
+        9.65
+      ]
+    },
+    {
+      "object": "table",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "bracket",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "leg1",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "leg2",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "leg3",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "leg4",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    }
+  ],
+  "initial_assertions": {
+    "work_dust": "work_dust",
+    "display_dust": "display_dust",
+    "pillow1_dust": "pillow1_dust",
+    "pillow2_dust": "pillow2_dust",
+    "cup1_dust": "cup1_dust",
+    "cup2_dust": "cup2_dust",
+    "trowel_dust": "trowel_dust",
+    "shears_dust": "shears_dust",
+    "sprayer_dust": "sprayer_dust",
+    "floor_dust": "floor_dust",
+    "table_dust": "table_dust",
+    "bracket_dust": "bracket_dust",
+    "leg1_dust": "leg1_dust",
+    "leg2_dust": "leg2_dust",
+    "leg3_dust": "leg3_dust",
+    "leg4_dust": "leg4_dust",
+    "initial_seat1_OnTop": "initial_seat1_OnTop",
+    "initial_pillow1_OnTop": "initial_pillow1_OnTop",
+    "initial_lamp1_OnTop": "initial_lamp1_OnTop",
+    "initial_seat2_OnTop": "initial_seat2_OnTop",
+    "initial_pillow2_OnTop": "initial_pillow2_OnTop",
+    "initial_lamp2_OnTop": "initial_lamp2_OnTop",
+    "initial_plant1_OnTop": "initial_plant1_OnTop",
+    "initial_plant2_OnTop": "initial_plant2_OnTop",
+    "initial_protected_OnTop": "initial_protected_OnTop",
+    "initial_bin_OnTop": "initial_bin_OnTop",
+    "initial_book_OnTop": "initial_book_OnTop",
+    "initial_can_OnTop": "initial_can_OnTop",
+    "initial_trowel_OnTop": "initial_trowel_OnTop",
+    "initial_shears_OnTop": "initial_shears_OnTop",
+    "initial_sprayer_OnTop": "initial_sprayer_OnTop",
+    "initial_brush_OnTop": "initial_brush_OnTop",
+    "initial_broom_OnTop": "initial_broom_OnTop",
+    "initial_tea_OnTop": "initial_tea_OnTop",
+    "initial_apple_OnTop": "initial_apple_OnTop",
+    "initial_plate_OnTop": "initial_plate_OnTop",
+    "initial_cup1_OnTop": "initial_cup1_OnTop",
+    "initial_cup2_OnTop": "initial_cup2_OnTop",
+    "initial_knife_OnTop": "initial_knife_OnTop",
+    "initial_board_OnTop": "initial_board_OnTop",
+    "initial_table_OnTop": "initial_table_OnTop",
+    "initial_bracket_OnTop": "initial_bracket_OnTop",
+    "initial_leg1_OnTop": "initial_leg1_OnTop",
+    "initial_leg2_OnTop": "initial_leg2_OnTop",
+    "initial_leg3_OnTop": "initial_leg3_OnTop",
+    "initial_leg4_OnTop": "initial_leg4_OnTop",
+    "intact_apple": {
+      "not": "apple_replaced"
+    },
+    "hand_empty": "hand_empty"
+  },
+  "future_roles": [
+    "apple_half0",
+    "apple_half1"
+  ],
+  "replacements": [
+    {
+      "parent": "apple",
+      "children": [
+        {
+          "role": "apple_half0",
+          "category": "half_apple",
+          "model": "sguztn"
+        },
+        {
+          "role": "apple_half1",
+          "category": "half_apple",
+          "model": "sguztn"
+        }
+      ]
+    }
+  ],
+  "public_instruction": "完成庭院维护并布置双人阅读茶歇区：护理两盆植物、整理园艺工具，装好小桌，清洁座垫，准备水果与杯具，恢复照明和用品。",
+  "public_context": [
+    "六个有尘部件先清洁，再用原生接合点装成一张桌子；完成后桌面正立、四条腿各自接触地板，移离临时装配支撑。",
+    "两盆植物在独立作业台护理后放到当前干净的展示架；免处理植物整个过程保持原位且不沾药剂。",
+    "两座垫清洁归座；装配合格的桌上摆两杯、茶瓶、果盘和书，整苹果真实切两半装盘，两盏灯归展示架并开启。",
+    "两园艺工具、喷壶、刀板和清洁工具归还；工作台、展示架、座垫、杯具、园艺工具、喷壶外表和地面清洁，空罐入桶。",
+    "完成后放下所持物品。"
+  ],
+  "requirements": [
+    {
+      "id": "table_assembly",
+      "text": "六个有尘部件先清洁，再用原生接合点装成一张桌子；完成后桌面正立、四条腿各自接触地板，移离临时装配支撑。",
+      "terminal": [
+        "usable_table"
+      ],
+      "milestones": [
+        "table_assembled"
+      ],
+      "constraints": [
+        "clean_before_attach_bracket",
+        "clean_before_attach_leg1",
+        "clean_before_attach_leg2",
+        "clean_before_attach_leg3",
+        "clean_before_attach_leg4"
+      ]
+    },
+    {
+      "id": "plants",
+      "text": "两盆植物在独立作业台护理后放到当前干净的展示架；免处理植物整个过程保持原位且不沾药剂。",
+      "terminal": [
+        "plants_ready"
+      ],
+      "constraints": [
+        "protected_unchanged",
+        "clean_display_1",
+        "clean_display_2"
+      ]
+    },
+    {
+      "id": "guests",
+      "text": "两座垫清洁归座；装配合格的桌上摆两杯、茶瓶、果盘和书，整苹果真实切两半装盘，两盏灯归展示架并开启。",
+      "terminal": [
+        "guest_ready"
+      ],
+      "constraints": [
+        "assembled_before_food"
+      ]
+    },
+    {
+      "id": "reset",
+      "text": "两园艺工具、喷壶、刀板和清洁工具归还；工作台、展示架、座垫、杯具、园艺工具、喷壶外表和地面清洁，空罐入桶。",
+      "terminal": [
+        "reset"
+      ]
+    },
+    {
+      "id": "hand_empty",
+      "text": "完成后放下所持物品。",
+      "terminal": [
+        "hand_empty"
+      ]
+    }
+  ],
+  "evaluation": {
+    "predicates": {
+      "work_dust": {
+        "object": "work",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "display_dust": {
+        "object": "display",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "pillow1_dust": {
+        "object": "pillow1",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "pillow2_dust": {
+        "object": "pillow2",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "cup1_dust": {
+        "object": "cup1",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "cup2_dust": {
+        "object": "cup2",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "trowel_dust": {
+        "object": "trowel",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shears_dust": {
+        "object": "shears",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "sprayer_dust": {
+        "object": "sprayer",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "floor_dust": {
+        "object": "floor",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "protected_contaminated": {
+        "object": "protected",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "protected_at_start": {
+        "object": "protected",
+        "state": "NearInitial",
+        "distance": 0.03
+      },
+      "plant1_treated": {
+        "object": "plant1",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "plant2_treated": {
+        "object": "plant2",
+        "state": "Covered",
+        "system": "insectifuge"
+      },
+      "apple_replaced": {
+        "object": "apple",
+        "state": "Replaced"
+      },
+      "table_dust": {
+        "object": "table",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "bracket_dust": {
+        "object": "bracket",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "leg1_dust": {
+        "object": "leg1",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "leg2_dust": {
+        "object": "leg2",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "leg3_dust": {
+        "object": "leg3",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "leg4_dust": {
+        "object": "leg4",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "bracket_attachedto_table": {
+        "object": "bracket",
+        "state": "AttachedTo",
+        "target": "table"
+      },
+      "leg1_attachedto_bracket": {
+        "object": "leg1",
+        "state": "AttachedTo",
+        "target": "bracket"
+      },
+      "leg2_attachedto_bracket": {
+        "object": "leg2",
+        "state": "AttachedTo",
+        "target": "bracket"
+      },
+      "leg3_attachedto_bracket": {
+        "object": "leg3",
+        "state": "AttachedTo",
+        "target": "bracket"
+      },
+      "leg4_attachedto_bracket": {
+        "object": "leg4",
+        "state": "AttachedTo",
+        "target": "bracket"
+      },
+      "table_upright": {
+        "object": "table",
+        "state": "Upright",
+        "max_tilt_degrees": 10.0
+      },
+      "leg1_ontop_floor": {
+        "object": "leg1",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "leg2_ontop_floor": {
+        "object": "leg2",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "leg3_ontop_floor": {
+        "object": "leg3",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "leg4_ontop_floor": {
+        "object": "leg4",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "plant1_ontop_display": {
+        "object": "plant1",
+        "state": "OnTop",
+        "target": "display"
+      },
+      "plant2_ontop_display": {
+        "object": "plant2",
+        "state": "OnTop",
+        "target": "display"
+      },
+      "cup1_ontop_table": {
+        "object": "cup1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "cup2_ontop_table": {
+        "object": "cup2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "tea_ontop_table": {
+        "object": "tea",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "plate_ontop_table": {
+        "object": "plate",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "pillow1_ontop_seat1": {
+        "object": "pillow1",
+        "state": "OnTop",
+        "target": "seat1"
+      },
+      "pillow2_ontop_seat2": {
+        "object": "pillow2",
+        "state": "OnTop",
+        "target": "seat2"
+      },
+      "book_ontop_table": {
+        "object": "book",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "apple_half0_ontop_plate": {
+        "object": "apple_half0",
+        "state": "OnTop",
+        "target": "plate"
+      },
+      "apple_half1_ontop_plate": {
+        "object": "apple_half1",
+        "state": "OnTop",
+        "target": "plate"
+      },
+      "lamp1_on": {
+        "object": "lamp1",
+        "state": "ToggledOn"
+      },
+      "lamp2_on": {
+        "object": "lamp2",
+        "state": "ToggledOn"
+      },
+      "lamp1_ontop_display": {
+        "object": "lamp1",
+        "state": "OnTop",
+        "target": "display"
+      },
+      "lamp2_ontop_display": {
+        "object": "lamp2",
+        "state": "OnTop",
+        "target": "display"
+      },
+      "trowel_ontop_tool_home": {
+        "object": "trowel",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "shears_ontop_tool_home": {
+        "object": "shears",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "sprayer_ontop_tool_home": {
+        "object": "sprayer",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "brush_ontop_tool_home": {
+        "object": "brush",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "broom_ontop_tool_home": {
+        "object": "broom",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "board_ontop_tool_home": {
+        "object": "board",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "knife_ontop_tool_home": {
+        "object": "knife",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "can_inside_bin": {
+        "object": "can",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "initial_seat1_OnTop": {
+        "object": "seat1",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "initial_pillow1_OnTop": {
+        "object": "pillow1",
+        "state": "OnTop",
+        "target": "work"
+      },
+      "initial_lamp1_OnTop": {
+        "object": "lamp1",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "initial_seat2_OnTop": {
+        "object": "seat2",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "initial_pillow2_OnTop": {
+        "object": "pillow2",
+        "state": "OnTop",
+        "target": "work"
+      },
+      "initial_lamp2_OnTop": {
+        "object": "lamp2",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "initial_plant1_OnTop": {
+        "object": "plant1",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_plant2_OnTop": {
+        "object": "plant2",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_protected_OnTop": {
+        "object": "protected",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "initial_bin_OnTop": {
+        "object": "bin",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "initial_book_OnTop": {
+        "object": "book",
+        "state": "OnTop",
+        "target": "work"
+      },
+      "initial_can_OnTop": {
+        "object": "can",
+        "state": "OnTop",
+        "target": "work"
+      },
+      "initial_trowel_OnTop": {
+        "object": "trowel",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_shears_OnTop": {
+        "object": "shears",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_sprayer_OnTop": {
+        "object": "sprayer",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_brush_OnTop": {
+        "object": "brush",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "initial_broom_OnTop": {
+        "object": "broom",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "initial_tea_OnTop": {
+        "object": "tea",
+        "state": "OnTop",
+        "target": "food_stage"
+      },
+      "initial_apple_OnTop": {
+        "object": "apple",
+        "state": "OnTop",
+        "target": "food_stage"
+      },
+      "initial_plate_OnTop": {
+        "object": "plate",
+        "state": "OnTop",
+        "target": "food_stage"
+      },
+      "initial_cup1_OnTop": {
+        "object": "cup1",
+        "state": "OnTop",
+        "target": "food_stage"
+      },
+      "initial_cup2_OnTop": {
+        "object": "cup2",
+        "state": "OnTop",
+        "target": "food_stage"
+      },
+      "initial_knife_OnTop": {
+        "object": "knife",
+        "state": "OnTop",
+        "target": "food_stage"
+      },
+      "initial_board_OnTop": {
+        "object": "board",
+        "state": "OnTop",
+        "target": "food_stage"
+      },
+      "initial_table_OnTop": {
+        "object": "table",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_bracket_OnTop": {
+        "object": "bracket",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_leg1_OnTop": {
+        "object": "leg1",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_leg2_OnTop": {
+        "object": "leg2",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_leg3_OnTop": {
+        "object": "leg3",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_leg4_OnTop": {
+        "object": "leg4",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "hand_empty": {
+        "object": "plant1",
+        "state": "HandEmpty"
+      }
+    },
+    "terminal": {
+      "usable_table": {
+        "all": [
+          {
+            "all": [
+              {
+                "all": [
+                  "bracket_attachedto_table",
+                  "leg1_attachedto_bracket",
+                  "leg2_attachedto_bracket",
+                  "leg3_attachedto_bracket",
+                  "leg4_attachedto_bracket"
+                ]
+              },
+              "table_upright",
+              "leg1_ontop_floor",
+              "leg2_ontop_floor",
+              "leg3_ontop_floor",
+              "leg4_ontop_floor"
+            ]
+          },
+          {
+            "not": "table_dust"
+          },
+          {
+            "not": "bracket_dust"
+          },
+          {
+            "not": "leg1_dust"
+          },
+          {
+            "not": "leg2_dust"
+          },
+          {
+            "not": "leg3_dust"
+          },
+          {
+            "not": "leg4_dust"
+          }
+        ]
+      },
+      "plants_ready": {
+        "all": [
+          "plant1_treated",
+          "plant2_treated",
+          "plant1_ontop_display",
+          "plant2_ontop_display"
+        ]
+      },
+      "guest_ready": {
+        "all": [
+          "pillow1_ontop_seat1",
+          "pillow2_ontop_seat2",
+          "cup1_ontop_table",
+          "cup2_ontop_table",
+          "tea_ontop_table",
+          "plate_ontop_table",
+          "book_ontop_table",
+          "apple_half0_ontop_plate",
+          "apple_half1_ontop_plate",
+          "apple_replaced",
+          "lamp1_on",
+          "lamp2_on",
+          "lamp1_ontop_display",
+          "lamp2_ontop_display"
+        ]
+      },
+      "reset": {
+        "all": [
+          {
+            "not": "work_dust"
+          },
+          {
+            "not": "display_dust"
+          },
+          {
+            "not": "pillow1_dust"
+          },
+          {
+            "not": "pillow2_dust"
+          },
+          {
+            "not": "cup1_dust"
+          },
+          {
+            "not": "cup2_dust"
+          },
+          {
+            "not": "trowel_dust"
+          },
+          {
+            "not": "shears_dust"
+          },
+          {
+            "not": "sprayer_dust"
+          },
+          {
+            "not": "floor_dust"
+          },
+          "trowel_ontop_tool_home",
+          "shears_ontop_tool_home",
+          "sprayer_ontop_tool_home",
+          "brush_ontop_tool_home",
+          "broom_ontop_tool_home",
+          "board_ontop_tool_home",
+          "knife_ontop_tool_home",
+          "can_inside_bin"
+        ]
+      },
+      "hand_empty": "hand_empty"
+    },
+    "milestones": {
+      "table_assembled": {
+        "when": {
+          "all": [
+            "bracket_attachedto_table",
+            "leg1_attachedto_bracket",
+            "leg2_attachedto_bracket",
+            "leg3_attachedto_bracket",
+            "leg4_attachedto_bracket"
+          ]
+        },
+        "after": []
+      }
+    },
+    "state_guards": [
+      {
+        "id": "protected_unchanged",
+        "require": {
+          "all": [
+            {
+              "not": "protected_contaminated"
+            },
+            "protected_at_start"
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_bracket",
+        "require": {
+          "any": [
+            {
+              "not": "bracket_attachedto_table"
+            },
+            {
+              "all": [
+                {
+                  "not": "bracket_dust"
+                },
+                {
+                  "not": "table_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_leg1",
+        "require": {
+          "any": [
+            {
+              "not": "leg1_attachedto_bracket"
+            },
+            {
+              "all": [
+                {
+                  "not": "leg1_dust"
+                },
+                {
+                  "not": "bracket_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_leg2",
+        "require": {
+          "any": [
+            {
+              "not": "leg2_attachedto_bracket"
+            },
+            {
+              "all": [
+                {
+                  "not": "leg2_dust"
+                },
+                {
+                  "not": "bracket_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_leg3",
+        "require": {
+          "any": [
+            {
+              "not": "leg3_attachedto_bracket"
+            },
+            {
+              "all": [
+                {
+                  "not": "leg3_dust"
+                },
+                {
+                  "not": "bracket_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_leg4",
+        "require": {
+          "any": [
+            {
+              "not": "leg4_attachedto_bracket"
+            },
+            {
+              "all": [
+                {
+                  "not": "leg4_dust"
+                },
+                {
+                  "not": "bracket_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_display_1",
+        "require": {
+          "any": [
+            {
+              "not": "plant1_ontop_display"
+            },
+            {
+              "all": [
+                "plant1_treated",
+                {
+                  "not": "display_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_display_2",
+        "require": {
+          "any": [
+            {
+              "not": "plant2_ontop_display"
+            },
+            {
+              "all": [
+                "plant2_treated",
+                {
+                  "not": "display_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "assembled_before_food",
+        "require": {
+          "any": [
+            {
+              "not": {
+                "any": [
+                  "cup1_ontop_table",
+                  "cup2_ontop_table",
+                  "tea_ontop_table",
+                  "plate_ontop_table"
+                ]
+              }
+            },
+            {
+              "all": [
+                {
+                  "all": [
+                    "bracket_attachedto_table",
+                    "leg1_attachedto_bracket",
+                    "leg2_attachedto_bracket",
+                    "leg3_attachedto_bracket",
+                    "leg4_attachedto_bracket"
+                  ]
+                },
+                "table_upright",
+                "leg1_ontop_floor",
+                "leg2_ontop_floor",
+                "leg3_ontop_floor",
+                "leg4_ontop_floor"
+              ]
+            }
+          ]
+        },
+        "until": null
+      }
+    ],
+    "motion_guards": [],
+    "score_type": "custom_joint_terminal_and_public_history_v2"
+  },
+  "acceptance_cases": {
+    "reference_orders": [
+      "order_1",
+      "order_2"
+    ],
+    "physical_negative_cases": [
+      "omit_process",
+      "omit_delivery",
+      "omit_reset"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 600
+  },
+  "reference_plan": {
+    "kind": "full_workflow",
+    "phases": {
+      "clear": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "book"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.1,
+              0.2
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "can"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "bin"
+          },
+          {
+            "primitive": "grasp",
+            "role": "pillow1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.3,
+              0.6
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "pillow2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.75,
+              0.6
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "broom"
+          },
+          {
+            "primitive": "sweep",
+            "role": "floor"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.8,
+              0.6
+            ]
+          }
+        ],
+        "after": []
+      },
+      "tools": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "trowel"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "work",
+            "uv": [
+              0.2,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "shears"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "work",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "sprayer"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "work",
+            "uv": [
+              0.8,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "trowel"
+          },
+          {
+            "primitive": "wipe",
+            "role": "shears"
+          },
+          {
+            "primitive": "wipe",
+            "role": "sprayer"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.2,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "trowel"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.35,
+              0.7
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "shears"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.6,
+              0.7
+            ]
+          }
+        ],
+        "after": [
+          "clear"
+        ]
+      },
+      "isolate_plants": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "plant1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "work",
+            "uv": [
+              0.25,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "plant2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "work",
+            "uv": [
+              0.75,
+              0.5
+            ]
+          }
+        ],
+        "after": [
+          "tools"
+        ]
+      },
+      "treat": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "sprayer"
+          },
+          {
+            "primitive": "spray",
+            "role": "plant1"
+          },
+          {
+            "primitive": "spray",
+            "role": "plant2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.8,
+              0.2
+            ]
+          }
+        ],
+        "after": [
+          "isolate_plants"
+        ]
+      },
+      "display_clean": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "display"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.2,
+              0.3
+            ]
+          }
+        ],
+        "after": []
+      },
+      "return_plants": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "plant1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "display",
+            "uv": [
+              0.25,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "plant2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "display",
+            "uv": [
+              0.75,
+              0.5
+            ]
+          }
+        ],
+        "after": [
+          "treat",
+          "display_clean"
+        ]
+      },
+      "work_reset": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "work"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.2,
+              0.3
+            ]
+          }
+        ],
+        "after": [
+          "return_plants"
+        ]
+      },
+      "assemble": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "table"
+          },
+          {
+            "primitive": "wipe",
+            "role": "bracket"
+          },
+          {
+            "primitive": "wipe",
+            "role": "leg1"
+          },
+          {
+            "primitive": "wipe",
+            "role": "leg2"
+          },
+          {
+            "primitive": "wipe",
+            "role": "leg3"
+          },
+          {
+            "primitive": "wipe",
+            "role": "leg4"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.2,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "table"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "jig",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "bracket"
+          },
+          {
+            "primitive": "attach",
+            "role": "table"
+          },
+          {
+            "primitive": "grasp",
+            "role": "leg1"
+          },
+          {
+            "primitive": "attach",
+            "role": "bracket"
+          },
+          {
+            "primitive": "grasp",
+            "role": "leg2"
+          },
+          {
+            "primitive": "attach",
+            "role": "bracket"
+          },
+          {
+            "primitive": "grasp",
+            "role": "leg3"
+          },
+          {
+            "primitive": "attach",
+            "role": "bracket"
+          },
+          {
+            "primitive": "grasp",
+            "role": "leg4"
+          },
+          {
+            "primitive": "attach",
+            "role": "bracket"
+          },
+          {
+            "primitive": "grasp",
+            "role": "table"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "floor",
+            "xy": [
+              15.2,
+              10.5
+            ]
+          }
+        ],
+        "after": []
+      },
+      "seats": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "pillow1"
+          },
+          {
+            "primitive": "wipe",
+            "role": "pillow2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.2,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "pillow1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "seat1",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "pillow2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "seat2",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          }
+        ],
+        "after": [
+          "clear"
+        ]
+      },
+      "tea": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "cup1"
+          },
+          {
+            "primitive": "wipe",
+            "role": "cup2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.2,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "cup1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.25,
+              0.7
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "cup2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.75,
+              0.7
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "tea"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.5,
+              0.8
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "plate"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.5,
+              0.35
+            ]
+          }
+        ],
+        "after": [
+          "assemble"
+        ]
+      },
+      "fruit": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "board"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "food_stage",
+            "uv": [
+              0.5,
+              0.4
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "apple"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "board",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "knife"
+          },
+          {
+            "primitive": "cut",
+            "role": "apple"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "food_stage",
+            "uv": [
+              0.5,
+              0.9
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "apple_half0"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "plate",
+            "uv": [
+              0.3,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "apple_half1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "plate",
+            "uv": [
+              0.7,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "board"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "knife"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.4,
+              0.2
+            ]
+          }
+        ],
+        "after": [
+          "tea"
+        ]
+      },
+      "reading": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "book"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.5,
+              0.55
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "lamp1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "display",
+            "uv": [
+              0.1,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "lamp2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "display",
+            "uv": [
+              0.9,
+              0.5
+            ]
+          },
+          {
+            "primitive": "toggle_on",
+            "role": "lamp1"
+          },
+          {
+            "primitive": "toggle_on",
+            "role": "lamp2"
+          }
+        ],
+        "after": [
+          "clear",
+          "assemble",
+          "return_plants"
+        ]
+      }
+    },
+    "orders": {
+      "order_1": [
+        "clear",
+        "tools",
+        "isolate_plants",
+        "treat",
+        "display_clean",
+        "return_plants",
+        "work_reset",
+        "assemble",
+        "seats",
+        "tea",
+        "fruit",
+        "reading"
+      ],
+      "order_2": [
+        "assemble",
+        "display_clean",
+        "clear",
+        "seats",
+        "tea",
+        "fruit",
+        "tools",
+        "isolate_plants",
+        "treat",
+        "return_plants",
+        "reading",
+        "work_reset"
+      ]
+    },
+    "negative_omissions": {
+      "omit_process": "treat",
+      "omit_delivery": "tea",
+      "omit_reset": "work_reset"
+    }
+  },
+  "settle_steps": 30,
+  "design_source": {
+    "path": "task_designs/nonrepetitive_v2/catalog.json",
+    "sha256": "ce00403a302b3376c901932feb5c8ea122ed59e6cdeb9a33d270d5986fd93c52",
+    "conditional_design_count": 108,
+    "recovery_status": "original_file"
+  },
+  "compiled_action_count": 109,
+  "compiled_count_includes_waits": true,
+  "compiled_manipulation_count": 109
+}

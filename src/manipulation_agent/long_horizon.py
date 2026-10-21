@@ -29,7 +29,7 @@ class TemporalGoalEvaluator:
     def __init__(self, spec):
         self.spec = copy.deepcopy(spec)
         self.milestones = {}; self.events = []; self.violations = []
-        self.previous_terminal = {}; self.last_sequence = -1
+        self.previous_terminal = {}; self.previous_values = None; self.last_sequence = -1
         predicates = {key: False for key in spec['predicates']}
         if not predicates or not spec['terminal']:
             raise ValueError('A task needs explicit predicates and terminal goals')
@@ -42,7 +42,7 @@ class TemporalGoalEvaluator:
                 expression(pending[key]['when'], predicates)
                 ordered.append(key); del pending[key]
         self.order = ordered
-        guards = [*spec.get('motion_guards', []), *spec.get('state_guards', []), *spec.get('carry_guards', [])]
+        guards = [*spec.get('motion_guards', []), *spec.get('state_guards', []), *spec.get('carry_guards', []), *spec.get('transition_guards', [])]
         if len({rule['id'] for rule in guards}) != len(guards):
             raise ValueError('Constraint IDs must be unique')
         for rule in spec.get('motion_guards', []):
@@ -54,12 +54,25 @@ class TemporalGoalEvaluator:
                 raise ValueError('State guard references unknown milestone')
             expression(rule['require'], predicates)
 
+        for rule in spec.get('transition_guards', []):
+            if rule.get('predicate') not in predicates or type(rule.get('from_value')) is not bool or type(rule.get('to_value')) is not bool or rule['from_value']==rule['to_value']:
+                raise ValueError('Transition guard requires a known boolean predicate and distinct values')
+            expression(rule['require'], predicates)
+
     def observe(self, values, sequence, *, env_step, initial=False):
         if sequence <= self.last_sequence: raise ValueError('Observation sequence must increase')
         self.last_sequence = sequence
         # Simultaneous prerequisites are allowed: event order reflects physical
         # conditions, not an artificial demand for one model action per goal.
         if not initial:
+            for rule in self.spec.get('transition_guards', []):
+                key=rule['predicate']
+                if (self.previous_values is not None and self.previous_values[key] == rule['from_value']
+                        and values[key] == rule['to_value']
+                        and not expression(rule['require'], self.previous_values)
+                        and not any(v['id']==rule['id'] for v in self.violations)):
+                    self.violations.append({'id':rule['id'],'env_step':env_step,'sequence':sequence,
+                                            'kind':'public_transition_constraint'})
             for rule in self.spec.get('state_guards', []):
                 if rule['until'] not in self.milestones and not expression(rule['require'], values) \
                         and not any(v['id']==rule['id'] for v in self.violations):
@@ -77,6 +90,7 @@ class TemporalGoalEvaluator:
                 self.events.append({'kind': 'terminal_state', 'id': key, 'satisfied': value,
                                     'sequence': sequence, 'env_step': env_step, 'initial': initial})
         self.previous_terminal = terminal
+        self.previous_values = copy.deepcopy(values)
         return terminal
 
     def check_motion(self, values, moved_roles, *, env_step):
@@ -95,7 +109,7 @@ class TemporalGoalEvaluator:
         violations = {v['id'] for v in self.violations}
         constraints = {rule['id']:rule['id'] not in violations for rule in
                        [*self.spec.get('motion_guards',[]),*self.spec.get('state_guards',[]),
-                        *self.spec.get('carry_guards',[])]}
+                        *self.spec.get('carry_guards',[]),*self.spec.get('transition_guards',[])]}
         satisfied = sum(terminal.values()) + sum(history.values()) + sum(constraints.values())
         total = len(terminal) + len(history) + len(constraints)
         return {'task_success': all(terminal.values()) and all(history.values()) and not self.violations,

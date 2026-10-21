@@ -62,7 +62,7 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
     counted = {
         'terminal': set(evaluation['terminal']),
         'milestones': set(evaluation.get('milestones', {})),
-        'constraints': {row['id'] for kind in ('motion_guards', 'state_guards', 'carry_guards')
+        'constraints': {row['id'] for kind in ('motion_guards', 'state_guards', 'carry_guards', 'transition_guards')
                         for row in evaluation.get(kind, [])},
     }
     if spec['schema_version'] >= 2:

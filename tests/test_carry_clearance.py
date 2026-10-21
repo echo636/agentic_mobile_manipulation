@@ -93,7 +93,7 @@ class FailedGraspTests(unittest.TestCase):
         b._anchored_operation=lambda:nullcontext();b._carry_record=lambda **kwargs:None
         b._step=lambda action:obj.position.add_(torch.tensor([0.,0.,.03]))
         states=ModuleType('omnigibson.object_states')
-        for name in ['Inside','OnTop','Touching']:setattr(states,name,type(name,(),{}))
+        for name in ['Inside','OnTop','Touching','AttachedTo']:setattr(states,name,type(name,(),{}))
         utils=ModuleType('omnigibson.utils')
         utils.transform_utils=SimpleNamespace(relative_pose_transform=lambda p,q,b,bq:(p-b,q),
                                              pose_transform=lambda b,bq,p,q:(b+p,q))

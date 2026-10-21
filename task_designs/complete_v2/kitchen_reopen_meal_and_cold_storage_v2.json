@@ -1,0 +1,2182 @@
+{
+  "schema_version": 3,
+  "id": "kitchen_reopen_meal_and_cold_storage_v2",
+  "instance_id": "kitchen_reopen_meal_and_cold_storage_v2_seed0_r1",
+  "status": "complete_recipe_physics_pending",
+  "benchmark_ready": false,
+  "official_submission_eligible": false,
+  "base": {
+    "task": "preparing_lunch_box",
+    "instance": 301,
+    "seed": 0
+  },
+  "roles": {
+    "box": "packing_box_210",
+    "tea": "bottle_of_tea_208",
+    "sandwich": "club_sandwich_209",
+    "cookie": "chocolate_chip_cookie_207",
+    "board": "chopping_board_211",
+    "prep": "countertop_kelker_0",
+    "storage": "countertop_kelzer_0",
+    "fridge": "fridge_dszchb_0",
+    "microwave": "microwave_abzvij_0",
+    "floor": "floors_qgmjvd_0",
+    "table": "breakfast_table_rhjoby_0",
+    "cabinet": "bottom_cabinet_fancyy_0",
+    "stage": "fv2_stage",
+    "tool_home": "fv2_tool_home",
+    "bin": "fv2_bin",
+    "apple": "fv2_apple",
+    "knife": "fv2_knife",
+    "brush": "fv2_brush",
+    "broom": "fv2_broom",
+    "can": "fv2_can",
+    "hotdog1": "fv2_hotdog1",
+    "plate1": "fv2_plate1",
+    "fork1": "fv2_fork1",
+    "cup1": "fv2_cup1",
+    "hotdog2": "fv2_hotdog2",
+    "plate2": "fv2_plate2",
+    "fork2": "fv2_fork2",
+    "cup2": "fv2_cup2",
+    "apple_half0": "half_fv2_apple_0",
+    "apple_half1": "half_fv2_apple_1"
+  },
+  "asset_imports": [
+    {
+      "name": "fv2_bin",
+      "source_task": "picking_up_trash",
+      "source_object": "trash_can_116",
+      "source_sha256": "e8e61d04e358fbf61ff04fed3f11e1f213433cb7d8a9ef263b62e16387d6c83a",
+      "position": [
+        95.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.5,
+        1.5,
+        1.5
+      ]
+    },
+    {
+      "name": "fv2_brush",
+      "source_task": "clean_a_keyboard",
+      "source_object": "pipe_cleaner_120",
+      "source_sha256": "f8a478a306d8e97c8c3bc42f5b224558bd1a615ca22b88e73f5bae86a4a0d0dd",
+      "position": [
+        104.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_broom",
+      "source_task": "clean_a_patio",
+      "source_object": "broom_172",
+      "source_sha256": "e9440c9f057b752a316cdc60cb72c499b6837c03945db2c9dc2ca0ea4094458e",
+      "position": [
+        107.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_can",
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "source_sha256": "e8e61d04e358fbf61ff04fed3f11e1f213433cb7d8a9ef263b62e16387d6c83a",
+      "position": [
+        110.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_hotdog1",
+      "source_task": "cook_hot_dogs",
+      "source_object": "hotdog_207",
+      "source_sha256": "70c847d8bb48d9aa9ec505be60745636b2bee6b8eb82ffff439a78bb31d278d0",
+      "position": [
+        113.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_plate1",
+      "source_task": "setting_the_table",
+      "source_object": "plate_243",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        116.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_fork1",
+      "source_task": "setting_the_table",
+      "source_object": "tablefork_247",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        119.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_cup1",
+      "source_task": "setting_the_table",
+      "source_object": "water_glass_bbpraa_0",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        122.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_hotdog2",
+      "source_task": "cook_hot_dogs",
+      "source_object": "hotdog_208",
+      "source_sha256": "70c847d8bb48d9aa9ec505be60745636b2bee6b8eb82ffff439a78bb31d278d0",
+      "position": [
+        125.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_plate2",
+      "source_task": "setting_the_table",
+      "source_object": "plate_244",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        128.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_fork2",
+      "source_task": "setting_the_table",
+      "source_object": "tablefork_248",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        131.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_cup2",
+      "source_task": "setting_the_table",
+      "source_object": "water_glass_bbpraa_0",
+      "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+      "position": [
+        134.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "native_assets": [
+    {
+      "name": "fv2_apple",
+      "category": "apple",
+      "model": "agveuv",
+      "usd_sha256": "4e1786f1e30519bb22ece59149f11d56a3d9212a94fd70b820ffc160629c5abb",
+      "prim_type": 0,
+      "position": [
+        98.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_knife",
+      "category": "carving_knife",
+      "model": "ghhbgo",
+      "usd_sha256": "f60f7200a713a180f7a9e9bb2f0576541e161d3e317ff9de5d11ba33ddc9ca82",
+      "prim_type": 0,
+      "position": [
+        101.0,
+        50.0,
+        2.0
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "fv2_stage",
+      "position": [
+        6.0,
+        0.5,
+        0.325
+      ],
+      "size": [
+        1.8,
+        0.7,
+        0.65
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_tool_home",
+      "position": [
+        8.6,
+        1.4,
+        0.275
+      ],
+      "size": [
+        0.8,
+        0.6,
+        0.55
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "knife",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.15,
+        0.25
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "hotdog1",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.38,
+        0.25
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "plate1",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.61,
+        0.25
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "fork1",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.8400000000000001,
+        0.25
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "cup1",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.15,
+        0.75
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "hotdog2",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.38,
+        0.75
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "plate2",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.61,
+        0.75
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "fork2",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.8400000000000001,
+        0.75
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "cup2",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.15,
+        0.25
+      ],
+      "construction_staging": true
+    },
+    {
+      "object": "bin",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        6.0,
+        3.0
+      ]
+    },
+    {
+      "object": "cabinet",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "plate1",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "cabinet"
+    },
+    {
+      "object": "fork1",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "cabinet"
+    },
+    {
+      "object": "cup1",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "cabinet"
+    },
+    {
+      "object": "plate2",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "cabinet"
+    },
+    {
+      "object": "fork2",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "cabinet"
+    },
+    {
+      "object": "cup2",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "cabinet"
+    },
+    {
+      "object": "knife",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "cabinet"
+    },
+    {
+      "object": "board",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "cabinet"
+    },
+    {
+      "object": "cabinet",
+      "state": "Open",
+      "value": false,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "fridge",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "hotdog1",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "fridge"
+    },
+    {
+      "object": "hotdog1",
+      "state": "Cooked",
+      "value": false
+    },
+    {
+      "object": "hotdog2",
+      "state": "Inside",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "target": "fridge"
+    },
+    {
+      "object": "hotdog2",
+      "state": "Cooked",
+      "value": false
+    },
+    {
+      "object": "fridge",
+      "state": "Open",
+      "value": false,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "box",
+      "target": "storage",
+      "place_on_support": true,
+      "support_uv": [
+        0.16666666666666666,
+        0.5
+      ]
+    },
+    {
+      "object": "apple",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.25,
+        0.5
+      ]
+    },
+    {
+      "object": "tea",
+      "target": "stage",
+      "place_on_support": true,
+      "support_uv": [
+        0.75,
+        0.5
+      ]
+    },
+    {
+      "object": "cookie",
+      "target": "storage",
+      "place_on_support": true,
+      "support_uv": [
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "object": "sandwich",
+      "target": "storage",
+      "place_on_support": true,
+      "support_uv": [
+        0.8333333333333334,
+        0.5
+      ]
+    },
+    {
+      "object": "can",
+      "target": "table",
+      "place_on_support": true,
+      "support_uv": [
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "object": "brush",
+      "target": "tool_home",
+      "place_on_support": true,
+      "support_uv": [
+        0.25,
+        0.5
+      ]
+    },
+    {
+      "object": "broom",
+      "target": "tool_home",
+      "place_on_support": true,
+      "support_uv": [
+        0.75,
+        0.5
+      ]
+    },
+    {
+      "object": "microwave",
+      "state": "ToggledOn",
+      "value": false
+    },
+    {
+      "object": "microwave",
+      "state": "Open",
+      "value": false,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "plate1",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "fork1",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "cup1",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "plate2",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "fork2",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "cup2",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "knife",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "board",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "cabinet",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "table",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "prep",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "storage",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "floor",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    }
+  ],
+  "initial_assertions": {
+    "plate1_dust": "plate1_dust",
+    "fork1_dust": "fork1_dust",
+    "cup1_dust": "cup1_dust",
+    "plate2_dust": "plate2_dust",
+    "fork2_dust": "fork2_dust",
+    "cup2_dust": "cup2_dust",
+    "knife_dust": "knife_dust",
+    "board_dust": "board_dust",
+    "cabinet_dust": "cabinet_dust",
+    "table_dust": "table_dust",
+    "prep_dust": "prep_dust",
+    "storage_dust": "storage_dust",
+    "floor_dust": "floor_dust",
+    "initial_knife_Inside": "initial_knife_Inside",
+    "initial_hotdog1_Inside": "initial_hotdog1_Inside",
+    "initial_plate1_Inside": "initial_plate1_Inside",
+    "initial_fork1_Inside": "initial_fork1_Inside",
+    "initial_cup1_Inside": "initial_cup1_Inside",
+    "initial_hotdog2_Inside": "initial_hotdog2_Inside",
+    "initial_plate2_Inside": "initial_plate2_Inside",
+    "initial_fork2_Inside": "initial_fork2_Inside",
+    "initial_cup2_Inside": "initial_cup2_Inside",
+    "initial_bin_OnTop": "initial_bin_OnTop",
+    "initial_board_Inside": "initial_board_Inside",
+    "initial_box_OnTop": "initial_box_OnTop",
+    "initial_apple_OnTop": "initial_apple_OnTop",
+    "initial_tea_OnTop": "initial_tea_OnTop",
+    "initial_cookie_OnTop": "initial_cookie_OnTop",
+    "initial_sandwich_OnTop": "initial_sandwich_OnTop",
+    "initial_can_OnTop": "initial_can_OnTop",
+    "initial_brush_OnTop": "initial_brush_OnTop",
+    "initial_broom_OnTop": "initial_broom_OnTop",
+    "intact_apple": {
+      "not": "apple_replaced"
+    },
+    "hand_empty": "hand_empty"
+  },
+  "future_roles": [
+    "apple_half0",
+    "apple_half1"
+  ],
+  "replacements": [
+    {
+      "parent": "apple",
+      "children": [
+        {
+          "role": "apple_half0",
+          "category": "half_apple",
+          "model": "sguztn"
+        },
+        {
+          "role": "apple_half1",
+          "category": "half_apple",
+          "model": "sguztn"
+        }
+      ]
+    }
+  ],
+  "public_instruction": "把久置厨房恢复可用，准备并送达双人热食水果餐，再复用空饭盒收纳留餐，冷藏并恢复厨房。",
+  "public_context": [
+    "将整苹果真实切成两半；两根热狗在微波炉中煮熟但不烤焦。四份食物在准备台同装一个饭盒并完整送达餐桌，再每盘分一根热狗和半个苹果。",
+    "分餐后将同一空饭盒返回储存台，再装入既有曲奇和三明治，整盒放入冰箱。",
+    "清洁后的两盘、两叉、两杯和茶瓶摆在干净餐桌上；食品接收时桌面必须干净。",
+    "刀板放回柜中，清洁工具归还，空罐入垃圾桶；八件用品、柜面、餐桌、准备台、储存台和地面全部去尘；柜门、冰箱、微波炉关闭且微波炉停机。",
+    "完成后放下所持物品。"
+  ],
+  "requirements": [
+    {
+      "id": "cook_and_deliver",
+      "text": "将整苹果真实切成两半；两根热狗在微波炉中煮熟但不烤焦。四份食物在准备台同装一个饭盒并完整送达餐桌，再每盘分一根热狗和半个苹果。",
+      "terminal": [
+        "complete_servings"
+      ],
+      "milestones": [
+        "meal_packed",
+        "meal_delivered",
+        "meal_served"
+      ],
+      "constraints": [
+        "complete_meal_transport",
+        "cook_before_pack"
+      ]
+    },
+    {
+      "id": "leftovers",
+      "text": "分餐后将同一空饭盒返回储存台，再装入既有曲奇和三明治，整盒放入冰箱。",
+      "terminal": [
+        "cold_storage"
+      ],
+      "milestones": [
+        "carrier_released",
+        "leftovers_chilled"
+      ]
+    },
+    {
+      "id": "setting",
+      "text": "清洁后的两盘、两叉、两杯和茶瓶摆在干净餐桌上；食品接收时桌面必须干净。",
+      "terminal": [
+        "ware_set"
+      ],
+      "constraints": [
+        "clean_table_receives_food"
+      ]
+    },
+    {
+      "id": "reset",
+      "text": "刀板放回柜中，清洁工具归还，空罐入垃圾桶；八件用品、柜面、餐桌、准备台、储存台和地面全部去尘；柜门、冰箱、微波炉关闭且微波炉停机。",
+      "terminal": [
+        "supplies_reset",
+        "surfaces_clean",
+        "appliances_safe"
+      ]
+    },
+    {
+      "id": "hand_empty",
+      "text": "完成后放下所持物品。",
+      "terminal": [
+        "hand_empty"
+      ]
+    }
+  ],
+  "evaluation": {
+    "predicates": {
+      "plate1_dust": {
+        "object": "plate1",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "fork1_dust": {
+        "object": "fork1",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "cup1_dust": {
+        "object": "cup1",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "plate2_dust": {
+        "object": "plate2",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "fork2_dust": {
+        "object": "fork2",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "cup2_dust": {
+        "object": "cup2",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "knife_dust": {
+        "object": "knife",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "board_dust": {
+        "object": "board",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "cabinet_dust": {
+        "object": "cabinet",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "table_dust": {
+        "object": "table",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "prep_dust": {
+        "object": "prep",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "storage_dust": {
+        "object": "storage",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "floor_dust": {
+        "object": "floor",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "hotdog1_cooked": {
+        "object": "hotdog1",
+        "state": "Cooked"
+      },
+      "hotdog2_cooked": {
+        "object": "hotdog2",
+        "state": "Cooked"
+      },
+      "hotdog1_burnt": {
+        "object": "hotdog1",
+        "state": "Burnt"
+      },
+      "hotdog2_burnt": {
+        "object": "hotdog2",
+        "state": "Burnt"
+      },
+      "fridge_open": {
+        "object": "fridge",
+        "state": "Open"
+      },
+      "cabinet_open": {
+        "object": "cabinet",
+        "state": "Open"
+      },
+      "microwave_open": {
+        "object": "microwave",
+        "state": "Open"
+      },
+      "microwave_on": {
+        "object": "microwave",
+        "state": "ToggledOn"
+      },
+      "apple_replaced": {
+        "object": "apple",
+        "state": "Replaced"
+      },
+      "hotdog1_inside_box": {
+        "object": "hotdog1",
+        "state": "Inside",
+        "target": "box"
+      },
+      "hotdog2_inside_box": {
+        "object": "hotdog2",
+        "state": "Inside",
+        "target": "box"
+      },
+      "apple_half0_inside_box": {
+        "object": "apple_half0",
+        "state": "Inside",
+        "target": "box"
+      },
+      "apple_half1_inside_box": {
+        "object": "apple_half1",
+        "state": "Inside",
+        "target": "box"
+      },
+      "box_ontop_prep": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "prep"
+      },
+      "box_ontop_table": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "hotdog1_ontop_plate1": {
+        "object": "hotdog1",
+        "state": "OnTop",
+        "target": "plate1"
+      },
+      "hotdog2_ontop_plate2": {
+        "object": "hotdog2",
+        "state": "OnTop",
+        "target": "plate2"
+      },
+      "apple_half0_ontop_plate1": {
+        "object": "apple_half0",
+        "state": "OnTop",
+        "target": "plate1"
+      },
+      "apple_half1_ontop_plate2": {
+        "object": "apple_half1",
+        "state": "OnTop",
+        "target": "plate2"
+      },
+      "plate1_ontop_table": {
+        "object": "plate1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "plate2_ontop_table": {
+        "object": "plate2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "box_ontop_storage": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "storage"
+      },
+      "box_inside_fridge": {
+        "object": "box",
+        "state": "Inside",
+        "target": "fridge"
+      },
+      "cookie_inside_box": {
+        "object": "cookie",
+        "state": "Inside",
+        "target": "box"
+      },
+      "sandwich_inside_box": {
+        "object": "sandwich",
+        "state": "Inside",
+        "target": "box"
+      },
+      "fork1_ontop_table": {
+        "object": "fork1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "fork2_ontop_table": {
+        "object": "fork2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "cup1_ontop_table": {
+        "object": "cup1",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "cup2_ontop_table": {
+        "object": "cup2",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "tea_ontop_table": {
+        "object": "tea",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "knife_inside_cabinet": {
+        "object": "knife",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "board_inside_cabinet": {
+        "object": "board",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "brush_ontop_tool_home": {
+        "object": "brush",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "broom_ontop_tool_home": {
+        "object": "broom",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "can_inside_bin": {
+        "object": "can",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "initial_knife_Inside": {
+        "object": "knife",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_hotdog1_Inside": {
+        "object": "hotdog1",
+        "state": "Inside",
+        "target": "fridge"
+      },
+      "initial_plate1_Inside": {
+        "object": "plate1",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_fork1_Inside": {
+        "object": "fork1",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_cup1_Inside": {
+        "object": "cup1",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_hotdog2_Inside": {
+        "object": "hotdog2",
+        "state": "Inside",
+        "target": "fridge"
+      },
+      "initial_plate2_Inside": {
+        "object": "plate2",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_fork2_Inside": {
+        "object": "fork2",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_cup2_Inside": {
+        "object": "cup2",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_bin_OnTop": {
+        "object": "bin",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "initial_board_Inside": {
+        "object": "board",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_box_OnTop": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "storage"
+      },
+      "initial_apple_OnTop": {
+        "object": "apple",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "initial_tea_OnTop": {
+        "object": "tea",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "initial_cookie_OnTop": {
+        "object": "cookie",
+        "state": "OnTop",
+        "target": "storage"
+      },
+      "initial_sandwich_OnTop": {
+        "object": "sandwich",
+        "state": "OnTop",
+        "target": "storage"
+      },
+      "initial_can_OnTop": {
+        "object": "can",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "initial_brush_OnTop": {
+        "object": "brush",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "initial_broom_OnTop": {
+        "object": "broom",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "hand_empty": {
+        "object": "box",
+        "state": "HandEmpty"
+      }
+    },
+    "terminal": {
+      "complete_servings": {
+        "all": [
+          {
+            "all": [
+              "hotdog1_ontop_plate1",
+              "hotdog2_ontop_plate2",
+              "apple_half0_ontop_plate1",
+              "apple_half1_ontop_plate2",
+              "plate1_ontop_table",
+              "plate2_ontop_table"
+            ]
+          },
+          "hotdog1_cooked",
+          "hotdog2_cooked",
+          {
+            "not": "hotdog1_burnt"
+          },
+          {
+            "not": "hotdog2_burnt"
+          }
+        ]
+      },
+      "cold_storage": {
+        "all": [
+          "box_inside_fridge",
+          "cookie_inside_box",
+          "sandwich_inside_box"
+        ]
+      },
+      "ware_set": {
+        "all": [
+          "plate1_ontop_table",
+          "plate2_ontop_table",
+          "fork1_ontop_table",
+          "fork2_ontop_table",
+          "cup1_ontop_table",
+          "cup2_ontop_table",
+          "tea_ontop_table",
+          {
+            "not": "plate1_dust"
+          },
+          {
+            "not": "fork1_dust"
+          },
+          {
+            "not": "cup1_dust"
+          },
+          {
+            "not": "plate2_dust"
+          },
+          {
+            "not": "fork2_dust"
+          },
+          {
+            "not": "cup2_dust"
+          }
+        ]
+      },
+      "supplies_reset": {
+        "all": [
+          "knife_inside_cabinet",
+          "board_inside_cabinet",
+          "brush_ontop_tool_home",
+          "broom_ontop_tool_home",
+          "can_inside_bin"
+        ]
+      },
+      "surfaces_clean": {
+        "all": [
+          {
+            "not": "plate1_dust"
+          },
+          {
+            "not": "fork1_dust"
+          },
+          {
+            "not": "cup1_dust"
+          },
+          {
+            "not": "plate2_dust"
+          },
+          {
+            "not": "fork2_dust"
+          },
+          {
+            "not": "cup2_dust"
+          },
+          {
+            "not": "knife_dust"
+          },
+          {
+            "not": "board_dust"
+          },
+          {
+            "not": "cabinet_dust"
+          },
+          {
+            "not": "table_dust"
+          },
+          {
+            "not": "prep_dust"
+          },
+          {
+            "not": "storage_dust"
+          },
+          {
+            "not": "floor_dust"
+          }
+        ]
+      },
+      "appliances_safe": {
+        "all": [
+          {
+            "not": "fridge_open"
+          },
+          {
+            "not": "cabinet_open"
+          },
+          {
+            "not": "microwave_open"
+          },
+          {
+            "not": "microwave_on"
+          }
+        ]
+      },
+      "hand_empty": "hand_empty"
+    },
+    "milestones": {
+      "meal_packed": {
+        "when": {
+          "all": [
+            "box_ontop_prep",
+            {
+              "all": [
+                "hotdog1_inside_box",
+                "hotdog2_inside_box",
+                "apple_half0_inside_box",
+                "apple_half1_inside_box",
+                "hotdog1_cooked",
+                "hotdog2_cooked",
+                "apple_replaced"
+              ]
+            }
+          ]
+        },
+        "after": []
+      },
+      "meal_delivered": {
+        "when": {
+          "all": [
+            "box_ontop_table",
+            {
+              "all": [
+                "hotdog1_inside_box",
+                "hotdog2_inside_box",
+                "apple_half0_inside_box",
+                "apple_half1_inside_box",
+                "hotdog1_cooked",
+                "hotdog2_cooked",
+                "apple_replaced"
+              ]
+            }
+          ]
+        },
+        "after": [
+          "meal_packed"
+        ]
+      },
+      "meal_served": {
+        "when": {
+          "all": [
+            "hotdog1_ontop_plate1",
+            "hotdog2_ontop_plate2",
+            "apple_half0_ontop_plate1",
+            "apple_half1_ontop_plate2",
+            "plate1_ontop_table",
+            "plate2_ontop_table"
+          ]
+        },
+        "after": [
+          "meal_delivered"
+        ]
+      },
+      "carrier_released": {
+        "when": {
+          "all": [
+            "box_ontop_storage",
+            {
+              "not": "hotdog1_inside_box"
+            },
+            {
+              "not": "hotdog2_inside_box"
+            },
+            {
+              "not": "apple_half0_inside_box"
+            },
+            {
+              "not": "apple_half1_inside_box"
+            }
+          ]
+        },
+        "after": [
+          "meal_served"
+        ]
+      },
+      "leftovers_chilled": {
+        "when": {
+          "all": [
+            "box_inside_fridge",
+            "cookie_inside_box",
+            "sandwich_inside_box"
+          ]
+        },
+        "after": [
+          "carrier_released"
+        ]
+      }
+    },
+    "state_guards": [
+      {
+        "id": "cook_before_pack",
+        "require": {
+          "all": [
+            {
+              "any": [
+                {
+                  "not": "hotdog1_inside_box"
+                },
+                "hotdog1_cooked"
+              ]
+            },
+            {
+              "any": [
+                {
+                  "not": "hotdog2_inside_box"
+                },
+                "hotdog2_cooked"
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_table_receives_food",
+        "require": {
+          "any": [
+            {
+              "not": {
+                "any": [
+                  "box_ontop_table",
+                  "plate1_ontop_table",
+                  "plate2_ontop_table",
+                  "fork1_ontop_table",
+                  "fork2_ontop_table",
+                  "cup1_ontop_table",
+                  "cup2_ontop_table",
+                  "tea_ontop_table"
+                ]
+              }
+            },
+            {
+              "not": "table_dust"
+            }
+          ]
+        },
+        "until": null
+      }
+    ],
+    "motion_guards": [
+      {
+        "id": "complete_meal_transport",
+        "object": "box",
+        "since": "meal_packed",
+        "until": "meal_delivered",
+        "require": {
+          "all": [
+            "hotdog1_inside_box",
+            "hotdog2_inside_box",
+            "apple_half0_inside_box",
+            "apple_half1_inside_box",
+            "hotdog1_cooked",
+            "hotdog2_cooked",
+            "apple_replaced"
+          ]
+        }
+      }
+    ],
+    "score_type": "custom_joint_terminal_and_public_history_v2"
+  },
+  "acceptance_cases": {
+    "reference_orders": [
+      "order_1",
+      "order_2"
+    ],
+    "physical_negative_cases": [
+      "omit_process",
+      "omit_delivery",
+      "omit_reset"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 600
+  },
+  "reference_plan": {
+    "kind": "full_workflow",
+    "phases": {
+      "stage_ware": {
+        "actions": [
+          {
+            "primitive": "open",
+            "role": "cabinet"
+          },
+          {
+            "primitive": "grasp",
+            "role": "plate1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.16,
+              0.25
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "fork1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.38,
+              0.25
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "cup1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.6,
+              0.25
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "plate2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.8200000000000001,
+              0.25
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "fork2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.16,
+              0.75
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "cup2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.38,
+              0.75
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "knife"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.6,
+              0.75
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "board"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.8200000000000001,
+              0.75
+            ]
+          }
+        ],
+        "after": []
+      },
+      "clean_ware": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "plate1"
+          },
+          {
+            "primitive": "wipe",
+            "role": "fork1"
+          },
+          {
+            "primitive": "wipe",
+            "role": "cup1"
+          },
+          {
+            "primitive": "wipe",
+            "role": "plate2"
+          },
+          {
+            "primitive": "wipe",
+            "role": "fork2"
+          },
+          {
+            "primitive": "wipe",
+            "role": "cup2"
+          },
+          {
+            "primitive": "wipe",
+            "role": "knife"
+          },
+          {
+            "primitive": "wipe",
+            "role": "board"
+          },
+          {
+            "primitive": "wipe",
+            "role": "cabinet"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.2,
+              0.3
+            ]
+          }
+        ],
+        "after": [
+          "stage_ware"
+        ]
+      },
+      "surfaces": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "can"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "bin"
+          },
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "table"
+          },
+          {
+            "primitive": "wipe",
+            "role": "prep"
+          },
+          {
+            "primitive": "wipe",
+            "role": "storage"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.2,
+              0.3
+            ]
+          }
+        ],
+        "after": []
+      },
+      "set_table": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "plate1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.25,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "plate2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.7,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "fork1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.12,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "fork2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.88,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "cup1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.25,
+              0.75
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "cup2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.7,
+              0.75
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "tea"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.5,
+              0.75
+            ]
+          }
+        ],
+        "after": [
+          "clean_ware",
+          "surfaces"
+        ]
+      },
+      "carrier_ready": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "box"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "prep",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          }
+        ],
+        "after": [
+          "surfaces"
+        ]
+      },
+      "fruit": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "board"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "prep",
+            "uv": [
+              0.5,
+              0.8
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "apple"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "board",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "knife"
+          },
+          {
+            "primitive": "cut",
+            "role": "apple"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.6,
+              0.75
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "apple_half0"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "apple_half1"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "knife"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "cabinet"
+          }
+        ],
+        "after": [
+          "clean_ware",
+          "carrier_ready"
+        ]
+      },
+      "hot_food": {
+        "actions": [
+          {
+            "primitive": "open",
+            "role": "fridge"
+          },
+          {
+            "primitive": "grasp",
+            "role": "hotdog1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.2,
+              0.6
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "hotdog2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "stage",
+            "uv": [
+              0.7,
+              0.6
+            ]
+          },
+          {
+            "primitive": "close",
+            "role": "fridge"
+          },
+          {
+            "primitive": "open",
+            "role": "microwave"
+          },
+          {
+            "primitive": "grasp",
+            "role": "hotdog1"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "microwave"
+          },
+          {
+            "primitive": "grasp",
+            "role": "hotdog2"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "microwave"
+          },
+          {
+            "primitive": "close",
+            "role": "microwave"
+          },
+          {
+            "primitive": "toggle_on",
+            "role": "microwave"
+          },
+          {
+            "primitive": "wait_for",
+            "condition": {
+              "all": [
+                "hotdog1_cooked",
+                "hotdog2_cooked"
+              ]
+            },
+            "seconds": 10.0,
+            "attempts": 18
+          },
+          {
+            "primitive": "toggle_off",
+            "role": "microwave"
+          },
+          {
+            "primitive": "open",
+            "role": "microwave"
+          },
+          {
+            "primitive": "grasp",
+            "role": "hotdog1"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "hotdog2"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "close",
+            "role": "microwave"
+          }
+        ],
+        "after": [
+          "carrier_ready"
+        ]
+      },
+      "serve": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "box"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "table",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "hotdog1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "plate1",
+            "uv": [
+              0.4,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "apple_half0"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "plate1",
+            "uv": [
+              0.7,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "hotdog2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "plate2",
+            "uv": [
+              0.4,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "apple_half1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "plate2",
+            "uv": [
+              0.7,
+              0.5
+            ]
+          }
+        ],
+        "after": [
+          "fruit",
+          "hot_food",
+          "set_table"
+        ]
+      },
+      "cold_storage": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "box"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "storage",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "cookie"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "sandwich"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "open",
+            "role": "fridge"
+          },
+          {
+            "primitive": "grasp",
+            "role": "box"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "fridge"
+          },
+          {
+            "primitive": "close",
+            "role": "fridge"
+          }
+        ],
+        "after": [
+          "serve",
+          "surfaces"
+        ]
+      },
+      "restore_supplies": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "board"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "cabinet"
+          },
+          {
+            "primitive": "close",
+            "role": "cabinet"
+          }
+        ],
+        "after": [
+          "fruit",
+          "set_table"
+        ]
+      },
+      "floor": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "broom"
+          },
+          {
+            "primitive": "sweep",
+            "role": "floor"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.8,
+              0.5
+            ]
+          }
+        ],
+        "after": []
+      }
+    },
+    "orders": {
+      "order_1": [
+        "stage_ware",
+        "clean_ware",
+        "surfaces",
+        "set_table",
+        "carrier_ready",
+        "fruit",
+        "hot_food",
+        "serve",
+        "cold_storage",
+        "restore_supplies",
+        "floor"
+      ],
+      "order_2": [
+        "surfaces",
+        "carrier_ready",
+        "hot_food",
+        "stage_ware",
+        "clean_ware",
+        "fruit",
+        "floor",
+        "set_table",
+        "serve",
+        "restore_supplies",
+        "cold_storage"
+      ]
+    },
+    "negative_omissions": {
+      "omit_process": "clean_ware",
+      "omit_delivery": "set_table",
+      "omit_reset": "restore_supplies"
+    }
+  },
+  "settle_steps": 30,
+  "design_source": {
+    "path": "task_designs/nonrepetitive_v2/catalog.json",
+    "sha256": "ce00403a302b3376c901932feb5c8ea122ed59e6cdeb9a33d270d5986fd93c52",
+    "conditional_design_count": 104,
+    "recovery_status": "original_file"
+  },
+  "compiled_action_count": 111,
+  "compiled_count_includes_waits": true,
+  "compiled_manipulation_count": 110
+}

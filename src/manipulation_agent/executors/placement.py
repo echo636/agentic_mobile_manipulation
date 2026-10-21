@@ -284,7 +284,24 @@ class CheckedPlacement:
                 'postcondition': 'official_NextTo_and_OnTop_after_free_settling',
                 'failure_policy': 'restore_pre_action_state'}
 
+    def _attached_placement_bodies(self, root):
+        if not hasattr(root,'scene'):return [root]
+        from omnigibson.object_states import AttachedTo
+        from .carry import support_closure
+        candidates=[obj for obj in root.scene.objects if obj is not root and not getattr(obj,'fixed_base',True)]
+        def relation(child,parent):
+            state=child.states.get(AttachedTo)
+            return 'AttachedTo' if state is not None and state.get_value(parent) else None
+        return [root,*[child for child,_,_ in support_closure(root,candidates,relation)]]
+
     def _collision_vertices(self, held):
+        # Rigid attachments form one moving structure; a tabletop's lowest
+        # collider is at its feet, while loose contents remain payload checks.
+        import numpy as np
+        return np.concatenate([self._object_collision_vertices(obj)
+                               for obj in self._attached_placement_bodies(held)])
+
+    def _object_collision_vertices(self, held):
         """Read active physical geometry, including world scale, without a box proxy."""
         import numpy as np
         vertices = []
@@ -505,7 +522,7 @@ class CheckedPlacement:
             resting.add(*held.get_position_orientation())
             self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
             adjacency = held.states[VerticalAdjacency].get_value()
-            touching = bool(held.states[Touching].get_value(target))
+            touching = any(path in self._placement_contacts(held,payload) for path in (link.prim_path for link in target.links.values()))
             official_on_top = bool(held.states[OnTop].get_value(target))
             supported, support = self._selected_surface_support(
                 held, target, point, touching, payload, resting=resting.report())

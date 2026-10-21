@@ -19,6 +19,15 @@ def upright_orientation(quaternion, max_tilt_degrees=15.):
 
 def validate_construction(spec):
     roles = spec['roles']
+    native=spec.get('native_assets',[])
+    if len({r['name'] for r in native})!=len(native):raise ValueError('Duplicate native assets')
+    for row in native:
+        if not row.get('category') or not row.get('model') or len(row.get('usd_sha256',''))!=64:
+            raise ValueError('Native assets need pinned category, model and SHA256')
+        if row.get('prim_type',0) not in (0,1):raise ValueError('Unknown native primitive type')
+    if spec.get('reference_plan',{}).get('kind')=='full_workflow':
+        from .full_workflow_reference import validate_workflow_plan
+        validate_workflow_plan(spec)
     if spec.get('robot_start'):
         pose=spec['robot_start']
         for key,length in [('position',3),('orientation',4)]:
@@ -59,6 +68,8 @@ def validate_construction(spec):
     if len(names) != len(set(names)):
         raise ValueError('Duplicate fixture names')
     for row in spec['evaluation']['predicates'].values():
+        if row['state']=='NearInitial' and not 0<float(row.get('distance',.03))<=.10:
+            raise ValueError('Invalid protected object displacement tolerance')
         if row['state']=='Upright' and not 0<float(row.get('max_tilt_degrees',15.))<=45:
             raise ValueError('Invalid upright tilt tolerance')
         if row['state'] in ('PairedOnTop','CountOnTop'):
