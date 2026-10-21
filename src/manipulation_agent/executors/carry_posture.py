@@ -14,7 +14,12 @@ def compact_translation(origin, base, bounds, clear, *, check=lambda: None):
     radius = max(math.hypot(x-origin[0], y-origin[1]) for lo,hi in bounds
                  for x in (lo[0],hi[0]) for y in (lo[1],hi[1]))
     reach = max(.55, .42+radius+.06)
-    if reach > .95:
+    # Full-size desk components need roughly 1.27 m of centre standoff.
+    # The former .95 m cutoff skipped every packing proposal for them,
+    # preserving a long side offset even when a checked route was available.
+    # Stay within the ordinary 1.4 m manipulation reach; the entire payload
+    # and robot still participate in every continuous swept-volume check.
+    if reach > 1.4:
         return None, 'payload_too_large'
     distance = math.dist(origin[:2], base[:2])
     direction = math.atan2(origin[1]-base[1], origin[0]-base[0])
@@ -41,7 +46,7 @@ def compact_translation(origin, base, bounds, clear, *, check=lambda: None):
                             for i in range(count+1))
                 routes.append((origin,raised,*arc))
             for route in routes:
-                if sum(math.dist(a,b) for a,b in zip(route,route[1:])) > 2.:
+                if sum(math.dist(a,b) for a,b in zip(route,route[1:])) > 3.:
                     continue
                 if all(clear(a,b) for a,b in zip(route,route[1:])):
                     return route, 'planned'

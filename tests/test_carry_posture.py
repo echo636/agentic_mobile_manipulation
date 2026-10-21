@@ -21,8 +21,31 @@ class CarryRouteTests(unittest.TestCase):
         samples=list(translation_samples(route,.01))
         self.assertTrue(all(math.dist(a,b)<=.010001 for a,b in zip([origin,*samples],samples)))
         self.assertLess(math.dist(samples[-1],route[-1]),1e-12)
-        route,status=compact_translation(origin,base,[*bounds,((.5,-.1,.2),(2.,.1,.4))],lambda a,b:True)
+        route,status=compact_translation(origin,base,[*bounds,((.2,-.1,.2),(2.4,.1,.4))],lambda a,b:True)
         self.assertIsNone(route);self.assertEqual(status,'payload_too_large')
+
+    def test_full_size_table_moves_around_robot_only_through_clear_sweeps(self):
+        origin=(0.,-1.6,.84);base=(0.,0.,0.,0.)
+        bounds=[((-.41,-2.27,.83),(.41,-.93,.85))]
+        # Conservative body expanded by the complete tabletop radius.
+        reserve=.42+math.hypot(.41,.67)
+        checks=[]
+        def clear(a,b):
+            checks.append((a,b))
+            vx,vy=b[0]-a[0],b[1]-a[1]
+            d=vx*vx+vy*vy
+            t=max(0.,min(1.,-(a[0]*vx+a[1]*vy)/d)) if d else 0.
+            return math.hypot(a[0]+t*vx,a[1]+t*vy)>reserve
+        route,status=compact_translation(origin,base,bounds,clear)
+        self.assertEqual(status,'planned')
+        self.assertTrue(checks)
+        self.assertFalse(clear(origin,route[-1]))
+        self.assertTrue(all(clear(a,b) for a,b in zip(route,route[1:])))
+        self.assertAlmostEqual(route[-1][1],0.)
+        self.assertLessEqual(math.dist(route[-1][:2],base[:2]),1.4)
+        self.assertLessEqual(sum(math.dist(a,b) for a,b in zip(route,route[1:])),3.)
+        blocked,status=compact_translation(origin,base,bounds,lambda a,b:False)
+        self.assertIsNone(blocked);self.assertEqual(status,'blocked')
 
     def test_obstacle_in_every_swept_route_preserves_original_posture(self):
         route,status=compact_translation((1.3,0.,.2),(0.,0.,0.,0.),
