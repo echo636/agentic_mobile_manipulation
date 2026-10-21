@@ -225,7 +225,8 @@ def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False):
 def garden(inv,models):
  b=Builder('garden','spraying_for_bugs',inv,models)
  for r,n in dict(plant1='pot_plant_172',plant2='pot_plant_173',sprayer='insectifuge_atomizer_174',floor='floors_ghetev_0',lawn='lawn_aztwla_0').items():b.existing(r,n)
- for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[13.1,13.6],[1.6,.6,.6]),('stage',[12.8,8.7],[1.8,.7,.65]),('tool_home',[15.4,4.],[1.2,.6,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
+ for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[12.9,13.65],[2.2,.8,.6]),('stage',[12.8,8.7],[1.8,1.3,.65]),('tool_home',[15.55,4.1],[1.7,1.1,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
+ b.existing('background_lounger','garden_chair_lraplz_0');b.place('background_lounger','floor',[18.3,12.7])
  for r in ['trowel','shears','pillow1','pillow2','apple','knife']:
   b.native(r,{'pillow1':'pillow','pillow2':'pillow','knife':'carving_knife'}.get(r,r))
  b.imported('protected','spraying_for_bugs','pot_plant_172')
@@ -242,12 +243,12 @@ def garden(inv,models):
  # Separate large boards / plants from small tools using measured native extents.
  initial_slots={'pillow1':(.3,.65),'pillow2':(.7,.65),'book':(.25,.15),'can':(.75,.15),'trowel':(.18,.17),'shears':(.5,.17),'sprayer':(.82,.17),
                 'board':(.25,.65),'knife':(.25,.13),'tea':(.75,.8),'apple':(.9,.6),
-                'plate':(.65,.5),'cup1':(.7,.2),'cup2':(.9,.2)}
+                'plate':(.65,.5),'cup1':(.7,.2),'cup2':(.9,.2),'lamp1':(.2,.2),'lamp2':(.8,.2),'brush':(.7,.2),'broom':(.7,.95)}
  for row in b.layout:
   if row['object'] in initial_slots and row.get('auto_slot'):
    row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
- b.s['robot_start']={'position':[15.3,12.8,.03],'orientation':[0.,0.,0.,1.]}
- b.s['scene_setup_note']='Stations arranged from measured native geometry, retaining original trees, garden lights, grill and patio furniture.'
+ b.s['robot_start']={'position':[16.,12.7,.03],'orientation':[0.,0.,0.,1.]}
+ b.s['scene_setup_note']='Stations arranged from measured native geometry. Original trees, lights, grill and patio furniture retained; lounger moved east before the episode to clear the assembled table destination.'
  clean={r:b.clean(r) for r in ['work','display','pillow1','pillow2','cup1','cup2','trowel','shears','sprayer','floor']}
  b.state('protected','Covered',False,system='insectifuge')
  protected_clean=NOT(b.pred('protected_contaminated','protected','Covered',system='insectifuge'))
@@ -258,26 +259,29 @@ def garden(inv,models):
  for i in (1,2):
   r='plant'+str(i);b.state(r,'Covered',False,system='insectifuge');treated.append(b.pred(r+'_treated',r,'Covered',system='insectifuge'))
  b.replacement('apple','half_apple','sguztn')
- b.phase('clear',transfer('book','stage',(.1,.2))+transfer('can','bin',into=True)+transfer('pillow1','stage',(.3,.6))+transfer('pillow2','stage',(.75,.6))+[take('broom'),action('sweep','floor'),put('tool_home',(.8,.6))])
+ tool_slots={'board':(.23,.5),'brush':(.7,.2),'trowel':(.7,.4),'shears':(.7,.6),'sprayer':(.95,.4),'knife':(.7,.8),'broom':(.7,.95)}
+ b.phase('clear',transfer('book','stage',(.5,.5))+transfer('can','bin',into=True)+transfer('pillow1','stage',(.25,.75))+transfer('pillow2','stage',(.75,.75))+[take('broom'),action('sweep','floor'),put('tool_home',tool_slots['broom'])])
  tools=[]
  for i,r in enumerate(['trowel','shears','sprayer']):tools+=transfer(r,'work',(.2+.3*i,.5))
- tools += [take('brush'),*[action('wipe',r) for r in ['trowel','shears','sprayer']],put('tool_home',(.2,.3))]
- for i,r in enumerate(['trowel','shears']):tools+=transfer(r,'tool_home',(.35+.25*i,.7))
+ tools += [take('brush'),*[action('wipe',r) for r in ['trowel','shears','sprayer']],put('tool_home',tool_slots['brush'])]
+ for r in ['trowel','shears']:tools+=transfer(r,'tool_home',tool_slots[r])
  b.phase('tools',tools,['clear'])
  b.phase('isolate_plants',[a for i,r in enumerate(['plant1','plant2']) for a in transfer(r,'work',(.25+.5*i,.5))],['tools'])
- b.phase('treat',[take('sprayer'),action('spray','plant1'),action('spray','plant2'),put('tool_home',(.8,.2))],['isolate_plants'])
- b.phase('display_clean',[take('brush'),action('wipe','display'),put('tool_home',(.2,.3))])
- b.phase('return_plants',[a for i,r in enumerate(['plant1','plant2']) for a in transfer(r,'display',(.25+.5*i,.5))],['treat','display_clean'])
- b.phase('work_reset',[take('brush'),action('wipe','work'),put('tool_home',(.2,.3))],['return_plants'])
+ b.phase('treat',[take('sprayer'),action('spray','plant1'),action('spray','plant2'),put('tool_home',tool_slots['sprayer'])],['isolate_plants'])
+ b.phase('display_clean',[take('brush'),action('wipe','display'),put('tool_home',tool_slots['brush'])])
+ b.phase('return_plants',[a for i,r in enumerate(['plant1','plant2']) for a in transfer(r,'display',(.38+.26*i,.5))],['treat','display_clean'])
+ b.phase('work_reset',[take('brush'),action('wipe','work'),put('tool_home',tool_slots['brush'])],['return_plants'])
  assembly,usable=table_parts(b,[14.,5.7],[15.4,8.1],[14.1,11.7]);b.phase('assemble',assembly)
- b.phase('seats',[take('brush'),action('wipe','pillow1'),action('wipe','pillow2'),put('tool_home',(.2,.3))]+transfer('pillow1','seat1')+transfer('pillow2','seat2'),['clear'])
- serving=[take('brush'),action('wipe','cup1'),action('wipe','cup2'),put('tool_home',(.2,.3))]
+ for row in assembly:
+  if row['primitive']=='place_on_top' and row.get('role')=='tool_home':row['uv']=list(tool_slots['brush'])
+ b.phase('seats',[take('brush'),action('wipe','pillow1'),action('wipe','pillow2'),put('tool_home',tool_slots['brush'])]+transfer('pillow1','seat1')+transfer('pillow2','seat2'),['clear'])
+ serving=[take('brush'),action('wipe','cup1'),action('wipe','cup2'),put('tool_home',tool_slots['brush'])]
  for r,uv in [('cup1',(.25,.7)),('cup2',(.75,.7)),('tea',(.5,.8)),('plate',(.5,.35))]:serving+=transfer(r,'table',uv)
  b.phase('tea',serving,['assemble'])
  fruit=transfer('board','food_stage',(.5,.4))+transfer('apple','board')+[take('knife'),action('cut','apple'),put('food_stage',(.5,.9))]
  for r in ['apple_half0','apple_half1']:fruit+=transfer(r,'plate',(.3 if r.endswith('0') else .7,.5))
- fruit+=transfer('board','tool_home',(.5,.5))+transfer('knife','tool_home',(.4,.2));b.phase('fruit',fruit,['tea'])
- b.phase('reading',transfer('book','table',(.5,.55))+transfer('lamp1','display',(.1,.5))+transfer('lamp2','display',(.9,.5))+[action('toggle_on','lamp1'),action('toggle_on','lamp2')],['clear','assemble','return_plants'])
+ fruit+=transfer('board','tool_home',tool_slots['board'])+transfer('knife','tool_home',tool_slots['knife']);b.phase('fruit',fruit,['tea'])
+ b.phase('reading',transfer('book','table',(.5,.55))+transfer('lamp1','display',(.12,.5))+transfer('lamp2','display',(.89,.5))+[action('toggle_on','lamp1'),action('toggle_on','lamp2')],['clear','assemble','return_plants'])
  for i in (1,2):b.guard('clean_display_'+str(i),ANY(NOT(b.rel('plant'+str(i),'display')),ALL(treated[i-1],clean['display'])))
  b.guard('assembled_before_food',ANY(NOT(ANY(*[b.rel(r,'table') for r in ['cup1','cup2','tea','plate']])),usable))
  b.terminal('plants_ready',ALL(*treated,*[b.rel('plant'+str(i),'display') for i in (1,2)]))
