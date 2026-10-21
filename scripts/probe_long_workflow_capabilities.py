@@ -10,7 +10,7 @@ import sys
 import time
 import traceback
 
-SOURCE = Path(__file__).resolve().parents[1]
+SOURCE = Path(os.environ.get('MAS_PROBE_SOURCE', Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(SOURCE / 'src'))
 from manipulation_agent.records import write_json, release_source_digest
 from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
@@ -39,6 +39,7 @@ def main():
                   interpreter=sys.executable, pid=os.getpid(), unit=os.environ.get('MAS_UNIT'),
                   gpu_uuid=os.environ.get('MAS_GPU_UUID'), source_commit=commit,
                   source_sha256=release_source_digest(SOURCE), spec_sha256=hashlib.sha256(args.spec.read_bytes()).hexdigest(),
+                  diagnostic_script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                   output_path=str(args.output), probe=args.order, affected_tasks=spec['affected_tasks'],
                   validation_level='real_simulator_native_asset_checked_executor_capability_probe',
                   model_used=False, benchmark_ready=False, full_task_executed=False, evaluation=None)
@@ -116,9 +117,12 @@ def main():
                     return {child + '_attached': bool(self.probe_objects[child].states[AttachedTo].get_value(
                             self.probe_objects[parent])) for child, parent in pairs}
                 if args.order == 'apple_cut':
+                    halves = [o for o in live.values() if o.category == 'half_apple'
+                              and o.name not in self.initial_names]
                     return dict(parent_removed='v2_probe_apple' not in live,
-                                real_halves=len([o for o in live.values() if o.category == 'half_apple'
-                                                and o.name not in self.initial_names]) == 2)
+                                real_halves=len(halves) == 2,
+                                both_halves_delivered=len(halves) == 2 and all(
+                                    o.states[OnTop].get_value(self.probe_objects['destination']) for o in halves))
                 return {r + '_delivered': bool(self.probe_objects[r].states[OnTop].get_value(
                         self.probe_objects['destination'])) for r in ['blouse', 'boxers']}
 
@@ -140,7 +144,9 @@ def main():
         elif args.order == 'apple_cut':
             reference.action('grasp', 'knife')
             reference.action('cut', 'apple')
-            reference.action('place_on_top', 'destination', reference.top('destination', .2, .2))
+            knife_return = spec.get('knife_return', {'support': 'destination', 'uv': [.2, .2]})
+            reference.action('place_on_top', knife_return['support'],
+                             reference.top(knife_return['support'], *knife_return['uv']))
             halves = [o for o in backend.env.scene.objects if o.category == 'half_apple'
                       and o.name not in backend.initial_names]
             if len(halves) != 2:
