@@ -466,10 +466,10 @@
       "target": "cabinet",
       "place_on_support": true,
       "xy": [
-        9.0,
+        9.09,
         -1.95
       ],
-      "support_probe_height": 0.7,
+      "support_probe_height": 1.05,
       "initial_relation": "Inside",
       "orientation": [
         0.0,
