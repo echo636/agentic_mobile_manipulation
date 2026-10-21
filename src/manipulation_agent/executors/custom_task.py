@@ -26,6 +26,19 @@ def imported_state_with_velocities(source_state):
     return state
 
 
+def complete_native_articulation_state(state, objects, native_names):
+    """Use actual newly loaded native joint defaults only during construction."""
+    completed=copy.deepcopy(state);changes=[]
+    entries=completed['registry']['object_registry']
+    for name in native_names:
+        obj=objects[name];entry=entries[name]
+        if obj.n_joints and 'joints' not in entry and 'joint_pos' not in entry:
+            entry['joint_pos']=copy.deepcopy(obj.get_joint_positions())
+            entry['joint_vel']=copy.deepcopy(obj.get_joint_velocities())
+            changes.append({'name':name,'n_joints':obj.n_joints})
+    return completed,changes
+
+
 def validate_system_references(spec, system_root):
     names={row['system'] for row in [*spec['evaluation']['predicates'].values(),
                                    *spec.get('initial_layout',[])] if row.get('system')}
@@ -132,9 +145,24 @@ class CustomTaskBackend(RGBBackend):
         enabled = gm.ENABLE_TRANSITION_RULES
         with gm.unlocked():
             gm.ENABLE_TRANSITION_RULES = False
+        scene=self.env.scene
+        original_load=scene.load_state
+        construction=isinstance(data,dict) and self.build_instance is not None
+        if construction:
+            def load_constructed_state(state, serialized=False):
+                if serialized:raise ValueError('Native construction needs structured state')
+                objects={obj.name:obj for obj in scene.objects}
+                state,changes=complete_native_articulation_state(
+                    state,objects,[row['name'] for row in self.custom_spec.get('native_assets',[])])
+                write_json(self.output/'native_articulation_defaults.json',{
+                    'status':'passed','scope':'construction only; actual loaded native joint defaults',
+                    'changes':changes})
+                return original_load(state,serialized=False)
+            scene.load_state=load_constructed_state
         try:
-            self.env.scene.restore(data)
+            scene.restore(data)
         finally:
+            if construction:scene.load_state=original_load
             with gm.unlocked():
                 gm.ENABLE_TRANSITION_RULES = enabled
             if enabled:
