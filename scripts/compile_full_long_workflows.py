@@ -470,7 +470,9 @@ def study(inv,models):
  b.phase('clear_rooms',transfer('book1','shelf',(.25,.5))+transfer('book2','shelf',(.75,.5))+transfer('toy','toy_box',into=True),['storage'])
  b.phase('desk',transfer('keyboard','desk_stage',(.82,.5))+[action('toggle_off','monitor'),take('brush'),action('wipe','desk'),action('wipe','keyboard'),action('wipe','monitor'),put('tool_home',(.2,.5))]+transfer('keyboard','desk',(.5,.86))+[action('toggle_on','monitor')])
  b.phase('lamps',transfer('lamp1','desk',(.5,.08))+[action('toggle_off','lamp1')]+transfer('lamp2','bedside',(.5,.75))+[action('toggle_off','lamp2')])
- b.phase('vacuum',[take('vacuum'),action('vacuum','floor_a'),action('vacuum','floor_b'),put('tool_home',(.8,.5))],['clear_rooms','lamps'])
+ # The native vacuum's dust remover requires ToggledOn; switch it off before
+ # returning it so the reference leaves the cleaning appliance safely idle.
+ b.phase('vacuum',[take('vacuum'),action('toggle_on','vacuum'),action('vacuum','floor_a'),action('vacuum','floor_b'),action('toggle_off','vacuum'),put('tool_home',(.8,.5))],['clear_rooms','lamps'])
  b.phase('cabinet',[action('open','cabinet'),take('brush'),action('wipe','cabinet'),put('tool_home',(.2,.3))])
  b.phase('wash',[action('open','washer')]+transfer('shirt','washer',into=True)+transfer('shorts','washer',into=True)+[action('close','washer'),action('toggle_on','washer'),action('wait_for',condition=washed,attempts=18,seconds=10.),action('toggle_off','washer')])
  b.phase('dry',[action('open','washer'),action('open','dryer')]+transfer('shirt','dryer',into=True)+transfer('shorts','dryer',into=True)+[action('close','washer'),action('close','dryer'),action('toggle_on','dryer'),action('wait_for',condition=dry,attempts=18,seconds=10.),action('toggle_off','dryer'),action('open','dryer')],['wash'])

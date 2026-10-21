@@ -1960,12 +1960,20 @@
             "role": "vacuum"
           },
           {
+            "primitive": "toggle_on",
+            "role": "vacuum"
+          },
+          {
             "primitive": "vacuum",
             "role": "floor_a"
           },
           {
             "primitive": "vacuum",
             "role": "floor_b"
+          },
+          {
+            "primitive": "toggle_off",
+            "role": "vacuum"
           },
           {
             "primitive": "place_on_top",
@@ -2428,7 +2436,7 @@
     "deformable_cloth_validated": false,
     "process": "native_washer_and_dryer_rules_with_observed_clean_wet_dry_history"
   },
-  "compiled_action_count": 101,
+  "compiled_action_count": 103,
   "compiled_count_includes_waits": true,
-  "compiled_manipulation_count": 99
+  "compiled_manipulation_count": 101
 }
