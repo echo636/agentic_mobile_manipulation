@@ -43,9 +43,20 @@ class CarryRouteTests(unittest.TestCase):
         self.assertTrue(all(clear(a,b) for a,b in zip(route,route[1:])))
         self.assertAlmostEqual(route[-1][1],0.)
         self.assertLessEqual(math.dist(route[-1][:2],base[:2]),1.4)
+        self.assertGreaterEqual(route[-1][2]-.01,.95)
         self.assertLessEqual(sum(math.dist(a,b) for a,b in zip(route,route[1:])),3.)
         blocked,status=compact_translation(origin,base,bounds,lambda a,b:False)
         self.assertIsNone(blocked);self.assertEqual(status,'blocked')
+
+    def test_wide_payload_uses_lower_checked_pose_under_a_low_ceiling(self):
+        origin=(1.6,0.,.84);base=(0.,0.,0.,0.)
+        bounds=[((1.19,-.67,.83),(2.01,.67,.85))]
+        def clear(a,b):
+            return max(a[2],b[2])+.01 < .91
+        route,status=compact_translation(origin,base,bounds,clear)
+        self.assertEqual(status,'planned')
+        self.assertTrue(all(clear(a,b) for a,b in zip(route,route[1:])))
+        self.assertAlmostEqual(route[-1][2],.84)
 
     def test_obstacle_in_every_swept_route_preserves_original_posture(self):
         route,status=compact_translation((1.3,0.,.2),(0.,0.,0.,0.),

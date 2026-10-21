@@ -27,13 +27,17 @@ def compact_translation(origin, base, bounds, clear, *, check=lambda: None):
     if distance <= reach+.05 and abs(front_delta) <= math.radians(10):
         return (), 'already_compact'
     bottom = min(lo[2]-origin[2] for lo,hi in bounds)
+    # Wide furniture parts otherwise skim ordinary worktops and assembly
+    # supports after the short extraction lift. Prefer the existing higher
+    # transport proposal, with the lower one retained for overhead obstacles.
+    heights = (.95, .65) if reach > .95 else (.65, .95)
     # A short side offset can still make a loaded robot too wide for a door.
     # Prefer a front pose, including a checked polygonal route around the
     # body when a direct pull crosses it. The assembly never rotates here.
     for angle in (base[3], direction, base[3]+math.pi/2, base[3]-math.pi/2):
         if angle == direction and distance <= reach+.05:
             return (), 'already_compact'
-        for height in (.65, .95):
+        for height in heights:
             check()
             end = (base[0]+reach*math.cos(angle), base[1]+reach*math.sin(angle),
                    max(origin[2], base[2]+height-bottom))
