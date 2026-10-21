@@ -38,11 +38,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             for name, modalities in requested:
                 if name in names:
                     raise ValueError('Reserved RGB sensor name is already configured: '+name)
-                row = dict(type='VisionSensor', name=name, relative_prim_path='/'+name,
-                    modalities=modalities, image_width=self.image_size, image_height=self.image_size,
-                    viewport_name=None, include_in_obs=False)
+                kwargs = dict(image_width=self.image_size, image_height=self.image_size, viewport_name=None)
                 if name != 'mas_spectator':
-                    row.update(focal_length=10.0, horizontal_aperture=20.0)
+                    kwargs.update(focal_length=10.0, horizontal_aperture=20.0)
+                row = dict(sensor_type='VisionSensor', name=name, relative_prim_path='/'+name,
+                    modalities=modalities, sensor_kwargs=kwargs, include_in_obs=False)
                 sensors.append(row)
             config['env']['external_sensors'] = sensors
         return config

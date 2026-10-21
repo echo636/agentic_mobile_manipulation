@@ -38,13 +38,14 @@ class CameraReadiness(unittest.TestCase):
                 self.assertIs(sensors['unrelated_sensor'],existing)
                 for name in expected:
                     self.assertFalse(sensors[name]['include_in_obs'])
-                    self.assertEqual(sensors[name]['image_width'],512)
+                    self.assertEqual(sensors[name]['sensor_type'],'VisionSensor')
+                    self.assertEqual(sensors[name]['sensor_kwargs']['image_width'],512)
                     if name=='mas_spectator':
                         self.assertEqual(sensors[name]['modalities'],['rgb'])
-                        self.assertNotIn('focal_length',sensors[name])
+                        self.assertNotIn('focal_length',sensors[name]['sensor_kwargs'])
                     else:
                         self.assertEqual(set(sensors[name]['modalities']),{'rgb','depth_linear','camera_params'})
-                        self.assertEqual(sensors[name]['focal_length'],10.)
+                        self.assertEqual(sensors[name]['sensor_kwargs']['focal_length'],10.)
 
     def test_gpu_rig_reuses_initialized_sensor_and_rejects_missing_preload(self):
         b=RGBBackend.__new__(RGBBackend);b.use_gpu_dynamics=True
