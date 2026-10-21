@@ -125,7 +125,10 @@ def kitchen(inv,models):
  # Preserve connected working aisles, not just non-overlapping fixtures.
  # The r20 tool table left only .657m beside the sofa; its staging table
  # left .74m beside the dining table. Both pinched loaded approaches.
- b.fixture('stage',[11.1,2.55],[2.,1.,.65]);b.fixture('tool_home',[8.,1.45],[1.8,.6,.55])
+ # Fix the south edge beside the native stools while leaving room to turn
+ # north of the tool surface after releasing the brush. Both tools retain
+ # native dimensions and use centred depth slots on the narrower surface.
+ b.fixture('stage',[11.1,2.55],[2.,1.,.65]);b.fixture('tool_home',[8.,1.375],[1.8,.45,.55])
  b.imported('bin','picking_up_trash','trash_can_116',scale=[1.5]*3);b.place('bin','floor',[5.2,4.2])
  b.native('apple','apple');b.native('knife','carving_knife')
  b.imported('brush','clean_a_keyboard','pipe_cleaner_120');b.imported('broom','clean_a_patio','broom_172')
@@ -164,7 +167,7 @@ def kitchen(inv,models):
  # The countertop AABB includes its native sink cutout; use solid surface slots.
  # Keep the full broom footprint supported and clear of the neighboring bar stools.
  # Keep the loose can on the table's open end, away from chair backrests.
- initial_slots={'box':(1/6,.5),'cookie':(.65,.5),'sandwich':(5/6,.5),'can':(.85,.5),'brush':(.2,.3),'broom':(.7,.6)}
+ initial_slots={'box':(1/6,.5),'cookie':(.65,.5),'sandwich':(5/6,.5),'can':(.85,.5),'brush':(.2,.5),'broom':(.7,.5)}
  for row in b.layout:
   if row['object'] in initial_slots and row.get('auto_slot'):
    row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
@@ -176,8 +179,8 @@ def kitchen(inv,models):
  b.pred('microwave_on','microwave','ToggledOn');b.replacement('apple','half_apple','sguztn')
  slots={r:(.16+.22*(i%4),.25+.5*(i//4)) for i,r in enumerate(ware)}
  b.phase('stage_ware',[action('open','cabinet'),*[a for r in ware for a in transfer(r,'stage',slots[r])]])
- b.phase('clean_ware',[take('brush'),*[action('wipe',r) for r in [*ware,'cabinet']],put('tool_home',(.2,.3))],['stage_ware'])
- b.phase('surfaces',transfer('can','bin',into=True)+[take('brush'),*[action('wipe',r) for r in ['table','prep','storage']],put('tool_home',(.2,.3))])
+ b.phase('clean_ware',[take('brush'),*[action('wipe',r) for r in [*ware,'cabinet']],put('tool_home',(.2,.5))],['stage_ware'])
+ b.phase('surfaces',transfer('can','bin',into=True)+[take('brush'),*[action('wipe',r) for r in ['table','prep','storage']],put('tool_home',(.2,.5))])
  table_slots={'plate1':(.25,.3),'plate2':(.7,.3),'fork1':(.12,.3),'fork2':(.88,.3),'cup1':(.25,.75),'cup2':(.7,.75),'tea':(.5,.75)}
  b.phase('set_table',[a for r,uv in table_slots.items() for a in transfer(r,'table',uv)],['clean_ware','surfaces'])
  b.phase('carrier_ready',transfer('box','prep',(.5,.5)),['surfaces'])
@@ -197,7 +200,7 @@ def kitchen(inv,models):
  b.phase('serve',serve,['fruit','hot_food','set_table'])
  b.phase('cold_storage',transfer('box','storage',(1/6,.5))+transfer('cookie','box',into=True)+transfer('sandwich','box',into=True)+[action('open','fridge')]+transfer('box','fridge',into=True)+[action('close','fridge')],['serve','surfaces'])
  b.phase('restore_supplies',transfer('board','cabinet',into=True)+[action('close','cabinet')],['fruit','set_table'])
- b.phase('floor',[take('broom'),action('sweep','floor'),put('tool_home',(.7,.6))])
+ b.phase('floor',[take('broom'),action('sweep','floor'),put('tool_home',(.7,.5))])
  food=['hotdog1','hotdog2','apple_half0','apple_half1'];packed=ALL(*[b.rel(r,'box','Inside') for r in food],*cooked,'apple_replaced')
  staged=b.rel('box','prep');delivered=b.rel('box','table');b.milestone('meal_packed',ALL(staged,packed));b.milestone('meal_delivered',ALL(delivered,packed),['meal_packed'])
  served=ALL(*[b.rel('hotdog'+str(i),'plate'+str(i)) for i in (1,2)],*[b.rel('apple_half'+str(i-1),'plate'+str(i)) for i in (1,2)],*[b.rel('plate'+str(i),'table') for i in (1,2)])
