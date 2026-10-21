@@ -274,6 +274,28 @@ class CustomTaskBackend(RGBBackend):
         else:
             provenance=[{'construction_seed':spec['construction_seed'],'scope':'complete native objects loaded before GPU simulation'}]
         if self.geometry_only:
+            # Macro particle templates contain native prims too. Include their
+            # empty systems in the CPU seed so the fresh GPU scene loads them
+            # before play(), instead of adding a template to a live GPU scene
+            # at the first Covered setter. Do not create fluids without GPU
+            # dynamics or apply any task initial conditions in this seed.
+            from omnigibson.systems.macro_particle_system import MacroParticleSystem
+            names=sorted({row['system'] for row in [*spec.get('initial_layout',[]),
+                *spec['evaluation']['predicates'].values()] if row.get('system')})
+            preloaded=[]
+            for name in names:
+                system=self.env.scene.get_system(name,force_init=False)
+                if isinstance(system,MacroParticleSystem):
+                    with self._startup_stage('geometry_system_template_'+name):
+                        system=self.env.scene.get_system(name,force_init=True)
+                        self.og.sim.step()
+                        preloaded.append({'name':name,'class':type(system).__name__,
+                                          'n_particles':system.n_particles})
+                        if system.n_particles:
+                            raise RuntimeError('Geometry seed unexpectedly contains task particles: '+name)
+            write_json(self.output/'geometry_system_templates.json',{
+                'status':'passed','systems':preloaded,
+                'scope':'native empty templates only; material initial conditions remain unvalidated'})
             write_json(self.output/'custom_geometry_seed_validation.json',{'status':'passed',
                 'scope':'object construction and serialization only; initial conditions and task not validated'})
             return
