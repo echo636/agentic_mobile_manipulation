@@ -23,8 +23,8 @@ def public_observation(value: dict, revision: int) -> dict:
 ERROR_MESSAGES = {
     'look_rotation_blocked':'The requested turn has no checked clearance for the robot and carried item. Use the current four views; choose a different general approach if needed instead of repeating this turn.',
     'needs_macro_navigation':'The selected target is outside local adjustment range. Use navigate_to for a closer general approach, then select the target in the returned RGB.',
-    'local_adjustment_blocked':'The executor could not find a safe, visible, reachable local stance for this selected target. Inspect the returned RGB and choose a different general approach or report blocked; do not repeat the same operation or make tiny navigation corrections.',
-    'local_adjustment_exhausted':'The executor reached its bounded local motion or operation budget. Inspect the current RGB before choosing a different general approach; do not blindly repeat the same action.',
+    'local_adjustment_blocked':'The executor could not find a safe, visible, reachable operation stance around this selected target. Inspect the returned RGB and choose a different general approach or report blocked; do not repeat the same operation or make tiny navigation corrections.',
+    'local_adjustment_exhausted':'The executor reached its approach planning or operation work budget. Inspect the current RGB before choosing a different general approach; do not blindly repeat the same action.',
     "stale_image_ref":"Select a point in the latest returned image.",
     "no_surface_at_point":"The selected pixel could not be grounded to a surface. Inspect RGB and choose another point.",
     "invalid_visual_target":"The selected surface cannot be used for this action. Inspect RGB and select a different visible point.",
@@ -57,12 +57,12 @@ ERROR_MESSAGES = {
 # Only fixed stages/messages cross the RGB boundary; exception text and private
 # maps, positions, object identities and rejection counts stay executor-private.
 LOCAL_STANCE_MESSAGES = {
-    'local_stance_collision': 'No collision-free operation stance was found within the local movement region. Use a different general approach through visible free floor, then select the target again. This does not prove the target is globally unreachable.',
+    'local_stance_collision': 'No sampled collision-free operation stance was found within reach of the selected target. Inspect the target surface and surrounding space before choosing a different general approach or reporting blocked. This does not prove the target is globally unreachable.',
     'local_target_visibility': 'Collision-free local stances were considered, but none passed all checks including visibility of the selected point. Inspect all four views and choose a different visible surface point or general approach.',
     'local_departure_clearance': 'Some local stances passed collision and visibility checks but lacked a checked departure. Choose a more open general approach, allowing room for the robot and carried item.',
     'local_articulation_clearance': 'Local preparation could not admit a stance with safe door or lid movement and departure. Choose a different general approach with space around the opening.',
     'local_loaded_departure': 'Local preparation could not admit a safe pickup and departure with the item. Approach from another side with room to lift and carry it.',
-    'local_route': 'Operation stances passed preliminary checks, but no route within the local movement limits was found. Choose a different general approach; nearby space alone does not establish a usable route.',
+    'local_route': 'Operation stances around the selected target passed preliminary checks, but no complete checked route was found. Choose a different general approach; nearby space alone does not establish a usable route.',
     'local_planning_budget': 'Local preparation reached its search budget before finding a fully checked stance and route. This does not prove the approach is impossible. Inspect RGB and choose a materially different approach.',
 }
 

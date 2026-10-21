@@ -60,11 +60,6 @@ class ArchivedStanceTests(unittest.TestCase):
 
     def check_repaired_route(self, number):
         row, start, target, collision = self.fixture(number)
-        local = LocalCollision(collision, start, 2.)
-        if number in (1, 4, 9, 18):
-            old = stance_candidates(start, start, target, LocalLimits())
-            self.assertTrue(old)
-            self.assertFalse(any(local.motion_free(p,p) for p in old))
         motor = GeometryMotor(start, collision, number in (9,24))
         op = LocalOperation(motor, row['primitive'], None, 600, {})
         motor._local_reposition(row['primitive'], object(), target, op)
@@ -73,14 +68,11 @@ class ArchivedStanceTests(unittest.TestCase):
         for phase in motor.route.phases:
             for xy in phase.points:
                 end = (*xy, phase.final_yaw)
-                self.assertLessEqual(math.dist(start[:2],end[:2]), 2.+1e-9)
-                self.assertTrue(local.motion_free(current,end))
+                self.assertTrue(collision.motion_free(current,end))
                 current = end
-        self.assertLessEqual(motor.route.distance_m, 4.)
         self.assertLessEqual(math.dist(current[:2],target[:2]), 1.4)
         record = next(x for x in motor.records if x['phase'] == 'stance_search')
         self.assertEqual(record['termination'], 'selected')
-        self.assertTrue(record['geometry_fallback_started'])
 
     def test_fridge_open_approach_has_missed_geometry_stance(self): self.check_repaired_route(1)
     def test_first_plate_has_missed_geometry_stance(self): self.check_repaired_route(4)
@@ -88,17 +80,41 @@ class ArchivedStanceTests(unittest.TestCase):
     def test_second_plate_has_missed_geometry_stance(self): self.check_repaired_route(18)
     def test_departure_rejected_radial_stance_gets_another_free_space_option(self): self.check_repaired_route(24)
 
-    def test_far_table_side_remains_rejected_without_relaxing_collision_or_radius(self):
+    def test_far_table_side_is_no_longer_rejected_only_by_start_radius(self):
         row, start, target, collision = self.fixture(7)
         motor = GeometryMotor(start, collision, True)
         op = LocalOperation(motor,row['primitive'],None,600,{})
-        with self.assertRaises(SkillError) as caught:
+        try:
             motor._local_reposition(row['primitive'],object(),target,op)
-        self.assertEqual(caught.exception.code,'local_adjustment_blocked')
-        self.assertEqual(caught.exception.stage,'local_stance_collision')
-        self.assertIsNone(motor.route)
+        except SkillError as caught:
+            # A finite route budget may still expire; the target disk must
+            # contain free poses rather than inheriting the old start cutoff.
+            self.assertEqual(caught.code,'local_adjustment_exhausted')
         summary = next(x for x in motor.records if x['phase']=='stance_search')
-        self.assertEqual(summary['geometry_free_poses'],0)
+        candidates=next(x['candidates'] for x in motor.records if x['phase']=='candidates')
+        self.assertTrue(any(math.dist(c['pose'][:2],start[:2])>2. and c.get('reason')!='collision' for c in candidates)
+                        or summary.get('geometry_free_poses',0)>0)
+
+    def test_target_approach_can_execute_checked_route_longer_than_four_meters(self):
+        import numpy as np
+        raw=np.ones((61,101),dtype='uint8')
+        raw[:,50]=0;raw[42:57,50]=1
+        grid=GridMap(101,61,.1,(-2.,-3.),raw.tobytes())
+        footprint=[[-.15,-.1],[.15,-.1],[.15,.1],[-.15,.1]]
+        start=(0.,0.,0.);target=(6.,0.,.8)
+        collision=HeadingCollisionChecker(grid,[(raw,footprint)],0.,raw)
+        motor=GeometryMotor(start,collision,False)
+        op=LocalOperation(motor,'grasp',None,600,{})
+        motor._local_reposition('grasp',object(),target,op)
+        self.assertGreater(motor.route.distance_m,4.)
+        current=start
+        fresh=HeadingCollisionChecker(grid,[(raw,footprint)],0.,raw)
+        self.assertFalse(fresh.motion_free(start,(4.7,0.,0.)))
+        for phase in motor.route.phases:
+            for xy in phase.points:
+                end=(*xy,phase.final_yaw)
+                self.assertTrue(fresh.motion_free(current,end));current=end
+        self.assertLessEqual(math.dist(current[:2],target[:2]),1.4)
 
     def test_free_geometry_does_not_bypass_visibility(self):
         row, start, target, collision = self.fixture(4)

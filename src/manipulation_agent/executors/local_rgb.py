@@ -108,8 +108,8 @@ class LocalRGBManipulation:
     def _local_reposition(self,primitive,obj,point,operation):
         from collections import Counter
         from .gt_navigation import NavigationPlan, NavigationError, PlanningBudget, SearchBudgetExhausted
-        from .forward_navigation import plan_forward_route, local_exit_certificate
-        from .local_manipulation import LocalCollision
+        from .forward_navigation import (plan_forward_route, local_exit_certificate,
+                                         checked_connection, route_from_poses, angle)
         from .local_stances import local_stance_proposals
         geometry=getattr(operation,'geometry',None) or self._local_geometry(operation)
         grid,collision,details,hulls,_=geometry
@@ -124,56 +124,96 @@ class LocalRGBManipulation:
             if getattr(operation,'articulation_preview',None) is None:
                 from .local_articulation import prepare_articulation
                 operation.articulation_preview=prepare_articulation(self,obj,primitive,operation)
-        local=LocalCollision(collision,operation.origin,operation.limits.radius_m)
+        # Endpoint checks only need the target neighbourhood plus the full
+        # short departure (at most .7m). Routes retain the full-floor checker.
+        local=(collision.local_window(point[:2],operation.limits.reach_m+.75)
+               if hasattr(collision,'local_window') else collision)
         budget=PlanningBudget(operation.check,seconds=operation.limits.planning_seconds)
         collision.check_cancelled=budget.check
-        selected=None;attempts=[];exhausted=False;extended=False;proposal_diagnostics={}
+        selected=None;attempts=[];exhausted=False;proposal_diagnostics={};eligible=[]
+        preparation=PlanningBudget(budget.check,seconds=4.)
+        collision.check_cancelled=preparation.check
         try:
-            proposals=local_stance_proposals(actual,operation.origin,point,operation.limits,local,
-                operation.visited,check_cancelled=budget.check,diagnostics=proposal_diagnostics)
-            for pose,source in proposals:
-                budget.check()
-                row={'pose':pose,'source':source,'status':'checking'};attempts.append(row)
-                if not local.motion_free(pose,pose):row.update(status='rejected',reason='collision');continue
-                if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=hulls,base_yaw=pose[2]):
-                    row.update(status='rejected',reason='target_not_visible');continue
-                if local_exit_certificate(pose,collision,check_cancelled=budget.check) is None:
-                    row.update(status='rejected',reason='no_departure');continue
-                if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
-                    if not self._admit_articulation(primitive,obj,pose,operation,budget.check):
-                        row.update(status='rejected',reason='articulation_clearance');continue
-                if preview is not None:
-                    if not self._admit_loaded_departure(pose,preview,operation,budget.check):
-                        row.update(status='rejected',reason='no_loaded_departure',
-                                   diagnostic=getattr(operation,'preview_failure',None));continue
-                plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],tuple(map(float,point[:2])),pose[2],
-                    math.dist(actual[:2],pose[:2]),math.dist(pose[:2],point[:2]),len(attempts),1,0.,0,pose[2],'forward')
-                per_route=PlanningBudget(budget.check,seconds=2.)
-                collision.check_cancelled=per_route.check
-                try:route=plan_forward_route(plan,actual,local,check_cancelled=per_route.check,max_expansions=3000)
+            try:
+                proposals=local_stance_proposals(actual,operation.origin,point,operation.limits,local,
+                    operation.visited,check_cancelled=preparation.check,diagnostics=proposal_diagnostics)
+                for pose,source in proposals:
+                    preparation.check()
+                    row={'pose':pose,'source':source,'status':'checking'};attempts.append(row)
+                    if not local.motion_free(pose,pose):row.update(status='rejected',reason='collision');continue
+                    if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=hulls,base_yaw=pose[2]):
+                        row.update(status='rejected',reason='target_not_visible');continue
+                    if local_exit_certificate(pose,local,check_cancelled=preparation.check) is None:
+                        row.update(status='rejected',reason='no_departure');continue
+                    if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
+                        if not self._admit_articulation(primitive,obj,pose,operation,preparation.check):
+                            row.update(status='rejected',reason='articulation_clearance');continue
+                    if preview is not None:
+                        if not self._admit_loaded_departure(pose,preview,operation,preparation.check):
+                            row.update(status='rejected',reason='no_loaded_departure',
+                                       diagnostic=getattr(operation,'preview_failure',None));continue
+                    plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],tuple(map(float,point[:2])),pose[2],
+                        math.dist(actual[:2],pose[:2]),math.dist(pose[:2],point[:2]),len(attempts),1,0.,0,pose[2],'forward')
+                    # Keep operation-specific proofs attached to their endpoint:
+                    # a shared search may choose any earlier admitted stance.
+                    eligible.append((plan,row,getattr(operation,'carry_plan',None),
+                                     getattr(operation,'articulation_plan',None)))
+                    row['status']='route_candidate'
+                    poses=checked_connection(actual,pose[:2],pose[2],collision,preparation.check)
+                    if poses is not None:
+                        selected=(plan,route_from_poses(plan,poses,collision,
+                            method='certified_target_approach',check_cancelled=preparation.check))
+                        break
+                    if len(eligible)>=32:
+                        proposal_diagnostics['candidate_pool_limited']=True
+                        exhausted=True
+                        break
+            except SearchBudgetExhausted:
+                proposal_diagnostics['candidate_preparation_exhausted']=True
+                exhausted=True
+            collision.check_cancelled=budget.check
+            if selected is None and eligible:
+                plans=[entry[0] for entry in eligible]
+                try:
+                    # Reuse the compiled shared roadmap as a fast proposal;
+                    # continuous search remains the fallback and all endpoints
+                    # retain their operation-specific proofs.
+                    from .point_route_projection import project_forward_point
+                    roadmap_budget=PlanningBudget(budget.check,seconds=3.)
+                    collision.check_cancelled=roadmap_budget.check
+                    try:
+                        roadmap=project_forward_point(plans,actual,collision,roadmap_budget.check,
+                                                      exact_endpoints=True)
+                    except (ImportError,SearchBudgetExhausted):roadmap=None
+                    finally:collision.check_cancelled=budget.check
+                    if roadmap is not None:
+                        plan,poses,roadmap_details=roadmap
+                        proposal_diagnostics['roadmap']=roadmap_details
+                        route=route_from_poses(plan,poses,collision,method='shared_roadmap_to_admitted_stances',
+                                               check_cancelled=budget.check)
+                    else:
+                        route=plan_forward_route(plans[0],actual,collision,check_cancelled=budget.check,
+                                                 max_expansions=20000,alternatives=plans[1:])
+                        end=route.phases[-1]
+                        plan=next(p for p in plans if math.dist(p.goal,end.goal)<1e-6
+                                  and abs(angle(p.final_yaw-end.final_yaw))<1e-6)
+                    selected=(plan,route)
                 except NavigationError as exc:
-                    row.update(status='rejected',reason=exc.code,detail=str(exc))
-                    if exc.code!='navigation_search_exhausted':continue
-                    exhausted=True
-                    # One promising, geometrically admitted stance gets a
-                    # larger retry; all work still shares the outer budget.
-                    if extended:continue
-                    extended=True;row['extended_route_search']=True
-                    per_route=PlanningBudget(budget.check,seconds=4.)
-                    collision.check_cancelled=per_route.check
-                    try:route=plan_forward_route(plan,actual,local,check_cancelled=per_route.check,max_expansions=10000)
-                    except NavigationError as retry:
-                        row.update(reason=retry.code,detail=str(retry));continue
-                finally:collision.check_cancelled=budget.check
-                if route.distance_m+operation.path>operation.limits.path_m:
-                    row.update(status='rejected',reason='path_budget');continue
-                row.update(status='selected');row.pop('reason',None);row.pop('detail',None)
-                selected=(plan,route);break
+                    exhausted|=exc.code=='navigation_search_exhausted'
+                    for _,row,_,_ in eligible:
+                        row.update(status='rejected',reason=exc.code,detail=str(exc))
+            if selected is not None:
+                for plan,row,carry,articulation in eligible:
+                    if plan is selected[0]:
+                        row['status']='selected'
+                        operation.carry_plan=carry;operation.articulation_plan=articulation
+                    elif row['status']=='route_candidate':row['status']='not_selected'
         except SearchBudgetExhausted:
             exhausted=True
             operation.record('planning_limit',candidate_attempts=len(attempts))
         finally:
             collision.check_cancelled=operation.check
+            proposal_diagnostics.update(route_search='shared_target_stances',route_candidates=len(eligible))
             operation.record('candidates',candidates=attempts,held_footprint=details['held_object_footprint_included'])
             operation.record('stance_search',**proposal_diagnostics,
                 candidate_sources=dict(Counter(row['source'] for row in attempts)),
@@ -189,9 +229,9 @@ class LocalRGBManipulation:
                                  ('no_departure','local_departure_clearance'),
                                  ('articulation_clearance','local_articulation_clearance'),
                                  ('no_loaded_departure','local_loaded_departure'),
-                                 ('navigation_unreachable','local_route'),('path_budget','local_route')]:
+                                 ('navigation_unreachable','local_route')]:
                 if reason in reasons:stage=value
-            raise SkillError('local_adjustment_blocked','No reachable visible manipulation stance within local limits',
+            raise SkillError('local_adjustment_blocked','No checked reachable visible stance within target operation reach',
                              stage=stage)
         plan,route=selected
         operation.record('move',route=asdict(route))
@@ -214,15 +254,11 @@ class LocalRGBManipulation:
         guard=clearance_transition_guard(grid,self._navigation_layers,self._navigation_support,
             [(layer['z_min'],layer['z_max']) for layer in details['collision_layers']]
             if 'collision_layers' in details else None)
-        def allowed(a,b):
-            return (math.dist(grid.world(b),operation.origin[:2])<=operation.limits.radius_m and guard(a,b))
         try:
             corridor,plan,report=plan_start_clearance_exit(grid,raw,overlap,actual[:2],
-                radius=min(radius,.75),transition_allowed=allowed,check_cancelled=budget.check)
+                radius=min(radius,.75),transition_allowed=guard,check_cancelled=budget.check)
         except NavigationError as exc:
             raise SkillError('local_adjustment_blocked','No guarded local clearance recovery: '+str(exc)) from exc
-        if plan.geodesic_m+operation.path>operation.limits.path_m:
-            raise SkillError('local_adjustment_exhausted','Clearance recovery exceeds local path budget')
         plan=replace(plan,travel_yaw=actual[2],final_yaw=actual[2],motion_mode='clearance_retreat')
         operation.record('clearance_recovery',plan=asdict(plan),**report)
         result=self._execute_gt_plan(corridor,plan,operation.step_limit-(self.steps-operation.start_steps))
@@ -270,22 +306,19 @@ class LocalRGBManipulation:
             # checked forward route to a nearby pose with a certified exit.
             from .gt_navigation import NavigationPlan,NavigationError,PlanningBudget
             from .forward_navigation import plan_forward_route
-            from .local_manipulation import LocalCollision
             actual=self._local_pose();grid,collision,_,_,_=geometry
             budget=PlanningBudget(operation.check,seconds=6.)
             collision.check_cancelled=budget.check
-            bounded=LocalCollision(collision,operation.origin,operation.limits.radius_m)
             try:
                 for pose in stance_candidates(actual,operation.origin,(*actual[:2],0.),operation.limits):
                     budget.check()
                     if math.dist(actual[:2],pose[:2])>.75:continue
-                    if not bounded.motion_free(pose,pose):continue
+                    if not collision.motion_free(pose,pose):continue
                     if local_exit_certificate(pose,collision,check_cancelled=budget.check) is None:continue
                     plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],pose[:2],pose[2],
                         math.dist(actual[:2],pose[:2]),0.,1,1,0.,0,pose[2],'forward')
-                    try:route=plan_forward_route(plan,actual,bounded,check_cancelled=budget.check,max_expansions=2000)
+                    try:route=plan_forward_route(plan,actual,collision,check_cancelled=budget.check,max_expansions=2000)
                     except NavigationError:continue
-                    if operation.path+route.distance_m>operation.limits.path_m:continue
                     operation.record('departure_recovery',route=asdict(route))
                     result=self._execute_gt_plan(grid,plan,operation.step_limit-(self.steps-operation.start_steps),prepared_route=route)
                     self.navigation_distance+=result['actual_path_distance_m'];operation.repositions+=1

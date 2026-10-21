@@ -60,7 +60,7 @@ class CoordinationTests(unittest.TestCase):
                 return {**result,'private_grounding':{'object_id':'do_not_publish'}}
             b.execute_visual=execute
             h=VisionHarness(b,recorder,Budget(wall_seconds=None),profile='minimal',agent_step_limit=50)
-            self.assertEqual(h.initialize()['control']['manipulation_protocol'],'target_locked_local_v1')
+            self.assertEqual(h.initialize()['control']['manipulation_protocol'],'target_locked_approach_v2')
             args={'primitive':'grasp','revision':0,'target':{
                 'image_ref':h.snapshot['images'][0]['image_ref'],'point':[.5,.5]}}
             result=h.call('act',args,'one-brain-action')
@@ -82,11 +82,16 @@ class CoordinationTests(unittest.TestCase):
     def test_ready_target_executes_without_unnecessary_motion(self):
         b=Motor();b.point=(1.,0.,.7);r=b.run()
         self.assertEqual(r['local_manipulation']['repositions'],0)
-    def test_far_target_delegates_before_motion(self):
-        b=Motor();b.point=(4.,0.,.7)
-        with self.assertRaises(SkillError) as cm:b.run()
-        self.assertEqual(cm.exception.code,'needs_macro_navigation');self.assertFalse(cm.exception.changed)
-        self.assertEqual(b.steps,0)
+    def test_far_selected_target_can_approach_and_execute_in_one_call(self):
+        b=Motor();b.point=(6.,0.,.7)
+        def approach(primitive,obj,point,op):
+            pose=stance_candidates(b.pose,op.origin,point,op.limits)[0]
+            op.admit_pose(pose);b.pose=pose;b.steps+=1
+        b._local_reposition=approach
+        result=b.run()['local_manipulation']
+        self.assertGreater(result['path_m'],4.)
+        self.assertEqual(len(b.executions),1)
+        self.assertIs(b.executions[0][0],b.target)
     def test_semantic_failure_precedes_any_reposition(self):
         b=Motor();b.precondition_error='container_closed'
         with self.assertRaises(SkillError) as cm:b.run()
@@ -124,16 +129,15 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(limit['attempts'],0)
         self.assertEqual(b.events[-1]['phase'],'failed')
         self.assertEqual(b.events[-1]['error_code'],'local_adjustment_exhausted')
-    def test_limits_apply_before_pose_command(self):
+    def test_motion_accounting_has_no_start_radius_or_distance_cap(self):
         b=Motor();op=LocalOperation(b,'grasp',b.binding,100,{})
-        with self.assertRaises(SkillError):op.admit_pose((2.01,0.,0.))
-        self.assertEqual(op.path,0.)
-        for x in (1.8,0.):op.admit_pose((x,0.,0.))
-        with self.assertRaises(SkillError):op.admit_pose((.5,0.,0.))
+        for x in (3.,0.,5.):op.admit_pose((x,0.,0.))
+        self.assertAlmostEqual(op.path,11.)
+        b.steps=100
+        with self.assertRaises(SkillError):op.admit_pose((6.,0.,0.))
+        self.assertAlmostEqual(op.path,11.)
     def test_outer_local_target_can_execute_with_one_internal_reposition(self):
         b=Motor();b.point=(2.8,0.,.7)
-        old=replace(b.local_limits,radius_m=1.,path_m=2.)
-        self.assertEqual(stance_candidates(b.pose,b.pose,b.point,old),[])
         def reposition(primitive,obj,point,op):
             pose=stance_candidates(b.pose,op.origin,point,op.limits)[0]
             op.admit_pose(pose);b.pose=pose;b.steps+=1
@@ -163,17 +167,18 @@ class CoordinationTests(unittest.TestCase):
         self.assertTrue(any(math.hypot(*p[:2])>1. for p in prefix))
         self.assertTrue(any(p[1]>.1 for p in prefix))
         self.assertTrue(any(p[1]<-.1 for p in prefix))
-    def test_expanded_candidates_still_use_original_action_center(self):
+    def test_candidates_cover_target_disk_beyond_original_action_center(self):
         origin=(0.,0.,0.);actual=(1.5,0.,0.);point=(3.,0.,.7)
         candidates=stance_candidates(actual,origin,point,LocalLimits())
         self.assertTrue(candidates)
-        self.assertTrue(all(math.dist(p[:2],origin[:2])<=2.+1e-8 for p in candidates))
-    def test_local_collision_grid_and_connectors_enforce_two_meter_disk(self):
+        self.assertTrue(any(math.dist(p[:2],origin[:2])>2. for p in candidates))
+        self.assertTrue(all(math.dist(p[:2],point[:2])<=1.4 for p in candidates))
+    def test_explicit_collision_window_restricts_only_its_own_users(self):
         from manipulation_agent.executors.gt_navigation import GridMap
         from manipulation_agent.executors.local_manipulation import LocalCollision
         grid=GridMap(61,61,.1,(-3.,-3.),bytes([1])*61**2)
         collision=SimpleNamespace(grid=grid,motion_free=lambda *args:True,optimistic_grid=lambda:grid)
-        local=LocalCollision(collision,(0.,0.,0.),LocalLimits().radius_m)
+        local=LocalCollision(collision,(0.,0.,0.),2.)
         for restricted in (local.grid,local.optimistic_grid()):
             self.assertTrue(restricted.navigable(restricted.cell((1.8,0.))))
             self.assertFalse(restricted.navigable(restricted.cell((2.1,0.))))
@@ -214,12 +219,11 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(result['departure'],'checked')
         self.assertEqual(result['repositions'],1)
         self.assertEqual(len(recoveries),1);self.assertEqual(len(b.executions),1)
-    def test_candidate_search_stays_local_and_avoids_old_pose(self):
+    def test_candidate_search_stays_within_target_reach_and_avoids_old_pose(self):
         limits=LocalLimits();actual=(0.,0.,0.);point=(1.6,0.,1.)
         candidates=stance_candidates(actual,actual,point,limits,[(.3,0.,0.)])
         self.assertTrue(candidates)
         for p in candidates:
-            self.assertLessEqual(math.dist(p[:2],actual[:2]),limits.radius_m+1e-8)
             self.assertLessEqual(math.dist(p[:2],point[:2]),limits.reach_m)
         self.assertNotIn((.3,0.,0.),candidates)
 

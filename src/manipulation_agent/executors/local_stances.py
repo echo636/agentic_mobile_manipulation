@@ -1,7 +1,7 @@
-"""Geometry-guided fallback for bounded manipulation stance selection.
+"""Geometry-guided stance selection in the selected target's reach disk.
 
 The cheap radial proposals remain first. If they fail, enumerate free map cells
-in the intersection of the action disk and target reach disk. Geometry supplies
+in the target reach disk, regardless of distance from the action start. Geometry supplies
 positions rather than discarding the whole neighbourhood after eight spokes.
 Every proposal still needs visibility, departure, operation-specific checks and
 a swept, forward route before it may move the robot.
@@ -14,7 +14,7 @@ from .local_manipulation import stance_candidates
 
 def local_stance_proposals(actual, origin, point, limits, collision, visited=(), *,
                            check_cancelled=lambda: None, diagnostics=None):
-    """Yield (pose, source) within unchanged local and reach bounds.
+    """Yield (pose, source) within the operation reach of the selected target.
 
     Heading samples are a candidate generator, not a completeness claim. Include
     the measured continuous heading as well as finer world-heading proposals;
@@ -26,7 +26,10 @@ def local_stance_proposals(actual, origin, point, limits, collision, visited=(),
     def key(pose):
         return tuple(round(v, 6) for v in (*pose[:2], math.atan2(math.sin(pose[2]), math.cos(pose[2]))))
 
-    for pose in stance_candidates(actual, origin, point, limits, visited):
+    radial=stance_candidates(actual, origin, point, limits, visited)
+    # Give map-derived positions/headings a chance before distant ring poses
+    # fill the shared route pool with alternatives behind the same obstacle.
+    for pose in radial[:48]:
         check_cancelled()
         seen.add(key(pose))
         yield pose, 'radial'
@@ -34,24 +37,24 @@ def local_stance_proposals(actual, origin, point, limits, collision, visited=(),
     import numpy as np
     diagnostics['geometry_fallback_started'] = True
     grid = collision.grid
-    row, col = grid.cell(origin[:2])
-    half = math.ceil(limits.radius_m / grid.resolution) + 1
+    row, col = grid.cell(point[:2])
+    half = math.ceil(limits.reach_m / grid.resolution) + 1
     rr, cc = np.mgrid[max(0, row-half):min(grid.height, row+half+1),
                      max(0, col-half):min(grid.width, col+half+1)]
     xs = grid.origin[0] + cc * grid.resolution
     ys = grid.origin[1] + rr * grid.resolution
-    displacement = np.hypot(xs-origin[0], ys-origin[1])
     reach = np.hypot(xs-float(point[0]), ys-float(point[1]))
-    domain = (displacement <= limits.radius_m) & (reach <= limits.reach_m)
+    domain = reach <= limits.reach_m
     travel = np.hypot(xs-actual[0], ys-actual[1])
     bearing = np.arctan2(ys-actual[1], xs-actual[0])
     turn = np.abs(np.arctan2(np.sin(bearing-actual[2]), np.cos(bearing-actual[2])))
     scores = travel/.5 + turn/(math.pi/3) + np.maximum(0., reach-limits.preferred_reach_m)
     diagnostics['geometry_domain_cells'] = int(domain.sum())
+    diagnostics['geometry_domain'] = 'target_reach_disk'
     diagnostics['geometry_free_poses'] = 0
     buckets = {}
-    # Use the windowed checker directly; domain already enforces the original
-    # action radius. Avoid rebuilding an entire restricted raster per heading.
+    # The target window accelerates endpoint checks. Route planning uses the
+    # full collision map and may travel outside this candidate window.
     checker = getattr(collision, 'collision', collision)
     headings = [actual[2], *(i*math.pi/12 for i in range(24))]
     for yaw in headings:
@@ -90,3 +93,9 @@ def local_stance_proposals(actual, origin, point, limits, collision, visited=(),
             if group:
                 following.append(group)
         ordered = following
+
+    for pose in radial[48:]:
+        check_cancelled()
+        if key(pose) not in seen:
+            seen.add(key(pose))
+            yield pose, 'radial'

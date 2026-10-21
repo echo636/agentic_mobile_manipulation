@@ -26,7 +26,7 @@ Dependencies describe necessary result ordering, not a fixed serial script. Open
 
 Select an unfinished child whose prerequisites hold. Keep only its immediate actions and next result check in `active`, outside the tree. Use current-image targets and the execution skills. Avoid a full episode action script or future pixels.
 
-In `target_locked_local_v1`, do not automatically prepend "approach/navigate" to every pickup or placement in L3. If the intended target is clearly selectable and appears nearby in any current view, plan the operation directly; its local controller checks exact reach and prepares the stance. Macro navigation needs a reason: a clearly distant target, another task area, exploration/reacquisition, or execution feedback requesting a different approach. Being unsure of the ideal position for an otherwise nearby identifiable target is not that reason. After necessary travel, recheck current RGB before adding another navigation step.
+In `target_locked_approach_v2`, do not automatically prepend "approach/navigate" to every pickup or placement in L3. If the intended target is clearly selectable in any current view, plan the operation directly; its controller chooses a stance around the target and plans a checked route from the current pose. Macro navigation needs a reason: another task area, exploration/reacquisition of a target that cannot be reliably selected, or execution feedback requesting a different approach. Being unsure of the ideal position for an otherwise identifiable target is not that reason. After necessary travel, recheck current RGB before adding another navigation step.
 
 After each returned result, compare it with the child's check:
 

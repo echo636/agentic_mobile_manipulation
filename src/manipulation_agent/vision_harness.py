@@ -90,7 +90,7 @@ class VisionHarness:
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
         if hasattr(self.backend,'local_manipulation'):
             result['control']={'manipulation_protocol':
-                'target_locked_local_v1' if self.backend.local_manipulation else 'explicit_navigation_v1',
+                'target_locked_approach_v2' if self.backend.local_manipulation else 'explicit_navigation_v1',
                 'local_base_adjustment':bool(self.backend.local_manipulation)}
         if 'task_notes' in self.catalog: result['notes']=self.task_notes.read()
         return result

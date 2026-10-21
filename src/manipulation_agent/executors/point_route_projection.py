@@ -19,7 +19,7 @@ def prepare_point_projection():
     return True
 
 
-def project_forward_point(options, actual, collision, check_cancelled, *, max_endpoint_checks=128):
+def project_forward_point(options, actual, collision, check_cancelled, *, max_endpoint_checks=128, exact_endpoints=False):
     import numpy as np
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import dijkstra
@@ -90,6 +90,45 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
     check_cancelled()
     node_cells=np.concatenate(node_cells);node_headings=np.concatenate(node_headings)
     reachable=np.flatnonzero(np.isfinite(distances[:-1]))
+    def reconstruct(node):
+        chain=[node]
+        while int(parents[chain[-1]])!=count:
+            chain.append(int(parents[chain[-1]]))
+        poses=list(roots[chain[-1]])
+        for ancestor in reversed(chain[:-1]):
+            xy=grid.world(divmod(int(node_cells[ancestor]),grid.width))
+            poses.append((*xy,angle(headings[int(node_headings[ancestor])])))
+        return poses
+
+    if exact_endpoints:
+        # Connect reachable roadmap nodes to already admitted continuous
+        # manipulation poses. Never project to a different unchecked stance.
+        terminals=[]
+        for option_index,option in enumerate(options):
+            r,c=grid.cell(option.goal)
+            for dr in (-1,0,1):
+                for dc in (-1,0,1):
+                    cell=(r+dr,c+dc)
+                    if not grid.contains(cell):continue
+                    xy=grid.world(cell)
+                    for k,yaw in enumerate(headings):
+                        node=int(indices[k][cell])
+                        if node<0 or not math.isfinite(distances[node]):continue
+                        cost=float(distances[node])+math.dist(xy,option.goal)+.5*abs(angle(yaw-option.final_yaw))/(math.pi/3)
+                        terminals.append((cost,option_index,node,xy,angle(yaw)))
+        for checked,(_,option_index,node,xy,yaw) in enumerate(sorted(terminals)[:max_endpoint_checks],1):
+            check_cancelled()
+            chosen=options[option_index]
+            terminal=checked_connection((*xy,yaw),chosen.goal,chosen.final_yaw,collision,check_cancelled)
+            if terminal is None:continue
+            poses=reconstruct(node)+terminal[1:]
+            if not all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])):continue
+            return chosen,poses,{'search':'shared_roadmap_to_admitted_stances','sampled_headings':8,
+                                'continuous_pose_fallback':True,'graph_nodes':count,'graph_edges':graph.nnz,
+                                'projection_window':getattr(collision,'window',None),
+                                'reachable_poses':len(reachable),'endpoint_checks':checked,
+                                'exact_endpoint_preserved':True,'globally_optimal':False}
+        return None
     target=options[0].target
     cells=node_cells[reachable]
     target_distances=np.hypot((cells%grid.width)*grid.resolution+grid.origin[0]-target[0],
@@ -103,13 +142,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
         if entry is None:continue
         departure=local_exit_certificate(pose,collision,check_cancelled=check_cancelled)
         if departure is None:continue
-        chain=[node]
-        while int(parents[chain[-1]])!=count:
-            chain.append(int(parents[chain[-1]]))
-        poses=list(roots[chain[-1]])
-        for ancestor in reversed(chain[:-1]):
-            xy=grid.world(divmod(int(node_cells[ancestor]),grid.width))
-            poses.append((*xy,angle(headings[int(node_headings[ancestor])])))
+        poses=reconstruct(node)
         # Recheck the actual reconstructed trajectory, independently of the
         # vectorized graph construction and using execution's swept checker.
         if not all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])):continue

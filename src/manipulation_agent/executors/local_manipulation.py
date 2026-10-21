@@ -1,4 +1,4 @@
-"""Bounded, target-locked coordination; no simulator or model dependencies.
+"""Target-locked coordination with bounded work, not a start-centred travel disk.
 
 One brain action owns one controller. Internal motions do not consume MCP
 turns, change public image revisions, or select another task/object.
@@ -11,8 +11,6 @@ from ..contracts import SkillError
 
 @dataclass(frozen=True)
 class LocalLimits:
-    radius_m: float = 2.0
-    path_m: float = 4.0
     reach_m: float = 1.4
     preferred_reach_m: float = 1.25
     max_repositions: int = 3
@@ -64,9 +62,6 @@ class LocalOperation:
         """Check every commanded pose BEFORE a base setter can move the robot."""
         self.check()
         distance = math.dist(self.last_pose[:2], pose[:2])
-        if (math.dist(self.origin[:2], pose[:2]) > self.limits.radius_m+1e-6
-                or self.path+distance > self.limits.path_m+1e-6):
-            raise SkillError('local_adjustment_exhausted', 'Local motion boundary reached', changed=self.changed)
         self.path += distance
         self.last_pose = tuple(pose)
         self.changed = True
@@ -79,8 +74,6 @@ class LocalOperation:
                 obj, point = self.backend._resolve_local_target(self.binding)
                 self.backend._manipulation_preconditions(self.primitive, obj)
                 pose = self.backend._local_pose()
-                if math.dist(pose[:2], point[:2]) > self.limits.reach_m+self.limits.radius_m:
-                    raise SkillError('needs_macro_navigation', 'Target is outside local takeover range')
                 ready = self.backend._local_ready(self.primitive, obj, point, self)
                 self.record('check', ready=ready)
                 if ready:
@@ -106,7 +99,7 @@ class LocalOperation:
                         departure = self.backend._local_departure(self, obj)
                         self.record('complete', departure=departure)
                         return {**result, 'local_manipulation': {
-                            'protocol': 'target_locked_local_v1', 'repositions': self.repositions,
+                            'protocol': 'target_locked_approach_v2', 'repositions': self.repositions,
                             'primitive_attempts': self.attempts, 'path_m': self.path,
                             'env_steps': self.backend.steps-self.start_steps,
                             'sampling_steps': getattr(self.backend, 'sampling_physics_steps', 0)-self.start_sampling,
@@ -136,21 +129,21 @@ class LocalOperation:
 
 
 def stance_candidates(actual, origin, point, limits, visited=()):
-    """Prefer small adjustments; sample only the local disk, not the room."""
+    """Propose poses around the selected target, ranked from the actual pose."""
     candidates = []
     points = [tuple(actual[:2])]
     toward = math.atan2(point[1]-actual[1], point[0]-actual[0])
-    # Sample the configured disk, retaining the denser small adjustments.
-    distances = [.15, .3, .5, .75]
-    distances.extend(i*.25 for i in range(4, math.ceil(limits.radius_m/.25)))
-    distances.append(limits.radius_m)
-    for distance in sorted({d for d in distances if d <= limits.radius_m}):
-        for offset in (0, 45, -45, 90, -90, 135, -135, 180):
-            yaw = toward+math.radians(offset)
-            points.append((actual[0]+distance*math.cos(yaw), actual[1]+distance*math.sin(yaw)))
+    # Target-centred rings include the side facing the robot and alternatives
+    # around the object. The full reachable disk is covered by the grid fallback.
+    distances = {.5, .75, 1., limits.preferred_reach_m, limits.reach_m}
+    for distance in sorted(d for d in distances if d <= limits.reach_m):
+        distance = min(distance, limits.reach_m-1e-6)
+        for i in range(16):
+            yaw = toward+math.pi+i*math.pi/8
+            points.append((float(point[0])+distance*math.cos(yaw),
+                           float(point[1])+distance*math.sin(yaw)))
     for xy in points:
-        if (math.dist(xy, origin[:2]) > limits.radius_m+1e-9 or
-                math.dist(xy, point[:2]) > limits.reach_m):
+        if math.dist(xy, point[:2]) > limits.reach_m+1e-9:
             continue
         bearing = math.atan2(point[1]-xy[1], point[0]-xy[0])
         travel = math.atan2(xy[1]-actual[1], xy[0]-actual[0]) if math.dist(xy,actual[:2])>.01 else actual[2]
@@ -165,9 +158,8 @@ def stance_candidates(actual, origin, point, limits, visited=()):
         travel = math.atan2(p[1]-actual[1],p[0]-actual[0]) if math.dist(p[:2],actual[:2])>.01 else actual[2]
         preference = max(0., math.dist(p[:2],point[:2])-limits.preferred_reach_m)
         return math.dist(p[:2],actual[:2])/.5 + (angle(travel-actual[2])+angle(p[2]-travel))/(math.pi/3) + preference
-    # Round-robin distance/side buckets retain cheap nearby adjustments while
-    # giving the outer disk and both sides a chance before the shared timer
-    # expires. Preferred reach is a ranking preference, never an admission cap.
+    # Interleave approach sides instead of exhausting a single blocked patch.
+    # Distance from the starting pose affects ranking only, never admission.
     buckets = {}
     for pose in sorted(candidates,key=score):
         dx,dy=pose[0]-actual[0],pose[1]-actual[1]

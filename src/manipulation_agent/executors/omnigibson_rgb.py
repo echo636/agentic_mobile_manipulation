@@ -880,11 +880,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             raise SkillError('navigation_unreachable',
                 'The selected target is occluded from the reached approach; inspect updated RGB',changed=True)
         reach=getattr(getattr(self,'local_limits',None),'reach_m',1.4)
-        local_radius=(getattr(getattr(self,'local_limits',None),'radius_m',1.)
-                      if getattr(self,'local_manipulation',False) else 0.)
         handoff=('travel_only' if mode=='point' else
                  'selected_surface_nearby' if projection<=reach else
-                 'within_local_range' if projection<=reach+local_radius else 'needs_closer_approach')
+                 'target_approach_available' if getattr(self,'local_manipulation',False) else 'needs_closer_approach')
         return {**result,'nav_status':nav_status,'manipulation_handoff':handoff,
                 'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
@@ -1237,12 +1235,14 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
-            'protocol':'target_locked_local_v1' if getattr(self,'local_manipulation',False) else 'explicit_navigation_v1',
+            'protocol':'target_locked_approach_v2' if getattr(self,'local_manipulation',False) else 'explicit_navigation_v1',
             'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
-            'stance_candidates':'radial_then_collision_free_grid_cells_v1',
+            'stance_candidates':'target_reach_rings_then_collision_free_target_disk_v2',
+            'stance_domain':'selected_target_reach_disk',
+            'start_radius_limit_m':None,'path_distance_limit_m':None,
             'stance_failure_feedback':'allowlisted_local_search_stage',
             'target_lock':'private_selected_link_relative_surface',
-            'scope':'GT-assisted bounded local controller; no learned model or real-arm IK',
+            'scope':'GT-assisted target approach with work budgets; no learned model or real-arm IK',
             'reach_check':'base_to_selected_point_xy', 'reach_limit_m':1.4,
             'out_of_reach':'local_stance_controller' if getattr(self,'local_manipulation',False) else 'return_to_agent_for_explicit_navigate_to_and_fresh_pixel',
             'demo_reach_navigation_retry':False}
