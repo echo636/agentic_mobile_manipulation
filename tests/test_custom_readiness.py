@@ -6,6 +6,7 @@ import unittest
 
 from manipulation_agent.custom_readiness import evidence, validate_release, _physical
 from manipulation_agent.custom_tasks import sha256
+from manipulation_agent.long_horizon import TemporalGoalEvaluator
 
 
 class ReadinessTests(unittest.TestCase):
@@ -126,7 +127,8 @@ class ReadinessTests(unittest.TestCase):
                       'model_notes_used_for_scoring': False, 'public_constraint_violations': [],
                       'terminal_conditions': dict.fromkeys(spec['evaluation']['terminal'], True),
                       'historical_conditions': dict.fromkeys(spec['evaluation']['milestones'], True),
-                      'constraint_conditions': {'closed_loaded_box_transport': True}}
+                      'constraint_conditions': TemporalGoalEvaluator(spec['evaluation']).result(
+                          dict.fromkeys(spec['evaluation']['predicates'], False))['constraint_conditions']}
         records = {
             'validation': {'status': 'passed', 'cleanup_status': 'passed', 'task': spec['id'],
                 'instance': spec['instance_id'], 'seed': spec['base']['seed'],
@@ -202,6 +204,31 @@ class ReadinessTests(unittest.TestCase):
         self.release['runtime']['packages'] = {'simulator': 'different-runtime'}
         with self.assertRaisesRegex(ValueError, 'runtime changed'):
             _physical(self.root, bundle, spec, sha256(self.spec), self.release)
+
+    def test_study_transition_guard_is_required_in_complete_scoring(self):
+        source = Path(__file__).resolve().parents[1]/'task_designs/complete_v2/study_guest_room_and_laundry_v2.json'
+        task = json.loads(source.read_text())
+        task['frozen_instance'] = {'path': 'scene.json', 'sha256': sha256(self.root/'scene.json')}
+        self.spec.write_text(json.dumps(task))
+        self.release['tasks'][0]['task'] = task['id']
+        spec, records, bundle = self.physical_fixture()
+        guard = 'monitor_off_when_cleaned'
+        self.assertTrue(records['validation']['evaluation']['constraint_conditions'][guard])
+        _physical(self.root, bundle, spec, sha256(self.spec), self.release)
+        original = dict(records['validation']['evaluation']['constraint_conditions'])
+        for outcome in ('missing', 'violated'):
+            with self.subTest(outcome=outcome):
+                constraints = dict(original)
+                if outcome == 'missing':
+                    constraints.pop(guard)
+                else:
+                    constraints[guard] = False
+                records['validation']['evaluation']['constraint_conditions'] = constraints
+                path = self.root/'validation.json'
+                path.write_text(json.dumps(records['validation']))
+                bundle['validation']['sha256'] = sha256(path)
+                with self.assertRaisesRegex(ValueError, 'Incomplete independent scoring: constraint_conditions'):
+                    _physical(self.root, bundle, spec, sha256(self.spec), self.release)
 
     def test_declared_asset_pass_does_not_hide_changed_bddl(self):
         spec, records, bundle = self.physical_fixture()
