@@ -1,6 +1,8 @@
 """Forward movement and heading search; these are CPU controller tests."""
 import importlib.util
 import math
+import json
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -476,6 +478,32 @@ class ForwardNavigationTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2'),'Requires OpenCV; no simulator is started')
 class HeadingCollisionTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec('scipy'),'Requires optional roadmap dependency')
+    def test_loaded_fridge_departure_reaches_original_visible_stance(self):
+        import numpy as np
+        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        z=np.load(Path(__file__).parent/'fixtures/local_stances/kitchen_loaded_departure_r43.npz')
+        free=z['free'];grid=GridMap(free.shape[1],free.shape[0],float(z['resolution']),
+                                   tuple(z['origin']),free.tobytes())
+        footprints=json.loads(str(z['layer_footprints_json']))
+        collision=HeadingCollisionChecker(grid,[(raw,row['footprint']) for raw,row in
+            zip(z['raw_layers'],footprints)],float(z['initial_layer_yaw']),z['support'])
+        options=[NavigationPlan(**{**p,'points':tuple(map(tuple,p['points'])),
+            'goal':tuple(p['goal']),'target':tuple(p['target'])}) for p in json.loads(str(z['options_json']))]
+        actual=tuple(z['start']);raw_before=[r.copy() for r,_ in collision.layers]
+        chosen,route,_=select_forward_route(options,actual,collision,target_slack=.1,planning_seconds=30.)
+        self.assertEqual(route.method,'checked_roadmap_to_admitted_stance')
+        self.assertEqual(route.start,actual)
+        self.assertIn((chosen.goal,chosen.final_yaw),[(p.goal,p.final_yaw) for p in options])
+        poses=[actual]+[(*phase.goal,phase.final_yaw) for phase in route.phases]
+        self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])))
+        for a,b in zip(poses,poses[1:]):
+            dx,dy=b[0]-a[0],b[1]-a[1]
+            if math.hypot(dx,dy)>.002:
+                self.assertGreater(dx*math.cos(a[2])+dy*math.sin(a[2]),0.)
+                self.assertLess(abs(angle(math.atan2(dy,dx)-a[2])),1e-6)
+        self.assertTrue(all(np.array_equal(before,after) for before,(after,_) in zip(raw_before,collision.layers)))
+
     def test_floor_projection_cannot_choose_closer_pose_across_wall(self):
         import numpy as np
         from dataclasses import replace

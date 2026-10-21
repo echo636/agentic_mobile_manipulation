@@ -27,8 +27,10 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
 
     if not hasattr(collision,'grid_at_heading') or not hasattr(collision,'_sweep_grid'):
         return None
+    departure=local_exit_certificate(actual,collision,check_cancelled=check_cancelled)
     if hasattr(collision,'local_window'):
         points=[actual[:2],options[0].target,*[xy for p in options for xy in p.points],*[p.goal for p in options]]
+        if departure is not None:points.extend(p[:2] for p in departure['poses'])
         low=tuple(min(p[i] for p in points) for i in (0,1))
         high=tuple(max(p[i] for p in points) for i in (0,1))
         centre=tuple((a+b)/2 for a,b in zip(low,high))
@@ -52,16 +54,32 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
         count+=len(cells)
     # The graph starts at the measured continuous pose through fully checked
     # connectors. There is no unchecked snap to a cell or compass heading.
-    sr,sc=grid.cell(actual[:2]);roots={}
-    cells=sorted(((sr+dr,sc+dc) for dr in (-1,0,1) for dc in (-1,0,1)
-                  if grid.contains((sr+dr,sc+dc))),key=lambda cell:math.dist(grid.world(cell),actual[:2]))
-    for cell in cells:
-        for k,yaw in enumerate(headings):
-            check_cancelled()
-            node=int(indices[k][cell])
-            if node<0:continue
-            poses=checked_connection(actual,grid.world(cell),angle(yaw),collision,check_cancelled)
-            if poses is not None:roots[node]=poses
+    roots={}
+    def path_cost(poses):
+        return sum(math.dist(a[:2],b[:2])+.5*abs(angle(b[2]-a[2]))/(math.pi/3)
+                   for a,b in zip(poses,poses[1:]))
+    def connect_roots(prefix):
+        start=prefix[-1];sr,sc=grid.cell(start[:2])
+        cells=sorted(((sr+dr,sc+dc) for dr in (-1,0,1) for dc in (-1,0,1)
+                      if grid.contains((sr+dr,sc+dc))),key=lambda cell:math.dist(grid.world(cell),start[:2]))
+        for cell in cells:
+            for k,yaw in enumerate(headings):
+                check_cancelled()
+                node=int(indices[k][cell])
+                if node<0:continue
+                poses=checked_connection(start,grid.world(cell),angle(yaw),collision,check_cancelled)
+                if poses is not None:
+                    joined=list(prefix)+poses[1:]
+                    if node not in roots or path_cost(joined)<path_cost(roots[node]):roots[node]=joined
+    connect_roots([actual])
+    departure_seed=False
+    # Nearby compass nodes can be absent or form a disconnected pocket at a
+    # continuous grasp stance. Its checked departure can reach turning space.
+    # Keep the entire certificate in each root path; this never snaps or
+    # teleports the actual start onto the graph.
+    if departure is not None:
+        before=set(roots);connect_roots(departure['poses'])
+        departure_seed=bool(set(roots)-before)
     if not roots:return None
     rows=[];cols=[];weights=[]
     for k,yaw in enumerate(headings):
@@ -140,6 +158,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
                                 'continuous_pose_fallback':True,'graph_nodes':count,'graph_edges':graph.nnz,
                                 'projection_window':getattr(collision,'window',None),
                                 'reachable_poses':len(reachable),'endpoint_checks':checked,
+                                'checked_departure_seed':departure_seed,
                                 'exact_endpoint_preserved':True,'globally_optimal':False}
         return None
     target=options[0].target
@@ -166,6 +185,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
                             'continuous_pose_fallback':True,'graph_nodes':count,'graph_edges':graph.nnz,
                             'projection_window':getattr(collision,'window',None),
                             'reachable_poses':len(reachable),'endpoint_checks':checked,
+                            'checked_departure_seed':departure_seed,
                             'local_entry_certificate':entry,'local_exit_certificate':departure,
                             'target_distance_m':chosen.score,'globally_optimal':False}
     return None

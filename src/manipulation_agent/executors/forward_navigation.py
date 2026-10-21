@@ -259,7 +259,8 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
                                objective='nearest_checked_forward_reachable_grid_pose_then_motion_cost')
                 return selected,route,details
         route=plan_forward_route(ordered[0],actual,collision,check_cancelled=budget.check,
-                                 max_expansions=20000,alternatives=ordered[1:])
+                                 max_expansions=20000,alternatives=ordered[1:],
+                                 roadmap_seconds=min(10.,planning_seconds/2))
     except NavigationError as exc:
         exc.attempts=attempts
         raise
@@ -280,7 +281,7 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
 
 
 def plan_forward_route(plan, actual, collision, *, check_cancelled=lambda: None,
-                       max_expansions=20000, alternatives=()):
+                       max_expansions=20000, alternatives=(), roadmap_seconds=5.):
     """Preserve the selected goal and final yaw; never fall back to strafing.
 
 First certify the existing pruned path. If its corners cannot be turned, a
@@ -321,6 +322,23 @@ without requiring enough clearance to rotate at every point in that corridor.
         if poses is not None:
             final = connector(poses[-1], candidate.goal, candidate.final_yaw)
             if final is not None:return finish(poses+final[1:], 0, 'certified_polyline')
+
+    # A holonomic shortest guide can choose a corridor whose corner cannot
+    # be turned by the loaded robot. Reuse the checked heading roadmap to
+    # find an alternate aisle before the continuous search expands that dead
+    # end. Preserve the exact visibility-admitted endpoint and final heading.
+    # The optional roadmap shares the caller's budget; sampled headings are
+    # proposals, and failure still falls back to continuous-pose search.
+    if hasattr(collision,'grid_at_heading'):
+        from .point_route_projection import project_forward_point
+        roadmap_budget=PlanningBudget(check_cancelled,seconds=roadmap_seconds)
+        try:
+            roadmap=project_forward_point(choices,actual,collision,roadmap_budget.check,exact_endpoints=True)
+        except (SearchBudgetExhausted,ImportError):
+            roadmap=None
+        if roadmap is not None:
+            _,poses,_=roadmap
+            return finish(poses,0,'checked_roadmap_to_admitted_stance')
 
     # Bidirectional continuous-pose search. Reverse edges are checked in their
     # original forward direction; reversing the resulting poses restores a
