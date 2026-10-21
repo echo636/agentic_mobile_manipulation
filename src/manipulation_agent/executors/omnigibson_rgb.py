@@ -23,6 +23,38 @@ from .local_manipulation import LocalLimits
 class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
+    def _config(self, task, gpu, max_steps):
+        config = super()._config(task, gpu, max_steps)
+        if getattr(self, 'use_gpu_dynamics', False):
+            # Environment loads external sensors while physics is stopped.
+            # Avoid adding render products to an already active GPU particle
+            # scene. The same rig is positioned and warmed after task restore.
+            sensors = list(config['env'].get('external_sensors') or [])
+            names = {row.get('name') for row in sensors}
+            requested = [('mas_rgb_'+direction, ['rgb', 'depth_linear', 'camera_params'])
+                         for direction in DIRECTIONS]
+            if self.record_video:
+                requested.append(('mas_spectator', ['rgb']))
+            for name, modalities in requested:
+                if name in names:
+                    raise ValueError('Reserved RGB sensor name is already configured: '+name)
+                row = dict(type='VisionSensor', name=name, relative_prim_path='/'+name,
+                    modalities=modalities, image_width=self.image_size, image_height=self.image_size,
+                    viewport_name=None, include_in_obs=False)
+                if name != 'mas_spectator':
+                    row.update(focal_length=10.0, horizontal_aperture=20.0)
+                sensors.append(row)
+            config['env']['external_sensors'] = sensors
+        return config
+
+    def _preloaded_rgb_sensor(self, name):
+        if not getattr(self, 'use_gpu_dynamics', False):
+            return None
+        sensor = (self.env.external_sensors or {}).get(name)
+        if sensor is None or not sensor.initialized:
+            raise RuntimeError('GPU RGB sensor was not initialized before physics: '+name)
+        return sensor
+
     def __init__(self,*args,record_video=False,**kwargs):
         self.deadline=EpisodeDeadline.from_env()
         self.deadline.check()
@@ -103,13 +135,18 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             pitch_degrees=self.rig_pitch_degrees, radius=self.rig_radius)
         with self._startup_stage('surround_camera_setup_and_warmup'):
             for direction in DIRECTIONS:
-                sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
-                    modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
-                    focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
-                with self._startup_stage(f'surround_camera_{direction}_load'):
-                    sensor.load(None)
-                with self._startup_stage(f'surround_camera_{direction}_initialize'):
-                    sensor.initialize()
+                sensor = self._preloaded_rgb_sensor('mas_rgb_'+direction)
+                if sensor is None:
+                    sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
+                        modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
+                        focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
+                    with self._startup_stage(f'surround_camera_{direction}_load'):
+                        sensor.load(None)
+                    with self._startup_stage(f'surround_camera_{direction}_initialize'):
+                        sensor.initialize()
+                else:
+                    with self._startup_stage(f'surround_camera_{direction}_reuse_preloaded'):
+                        pass
                 # Otherwise intrinsic_matrix lazily attaches a new annotator AFTER
                 # RGB readback and warms only four frames, sometimes returning a
                 # degenerate projection. Attach all before the shared barrier.
@@ -127,13 +164,18 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                 # Use an independent offscreen render product at its final size. Do
                 # not resize/destroy the shared GUI viewer product: it invalidates
                 # robot RGB annotators in the pinned headless runtime.
-                self.spectator = VisionSensor(relative_prim_path='/mas_spectator',name='mas_spectator',
-                                              modalities=['rgb'],image_width=self.image_size,
-                                              image_height=self.image_size,viewport_name=None)
-                with self._startup_stage('spectator_camera_load'):
-                    self.spectator.load(None)
-                with self._startup_stage('spectator_camera_initialize'):
-                    self.spectator.initialize()
+                self.spectator = self._preloaded_rgb_sensor('mas_spectator')
+                if self.spectator is None:
+                    self.spectator = VisionSensor(relative_prim_path='/mas_spectator',name='mas_spectator',
+                                                  modalities=['rgb'],image_width=self.image_size,
+                                                  image_height=self.image_size,viewport_name=None)
+                    with self._startup_stage('spectator_camera_load'):
+                        self.spectator.load(None)
+                    with self._startup_stage('spectator_camera_initialize'):
+                        self.spectator.initialize()
+                else:
+                    with self._startup_stage('spectator_camera_reuse_preloaded'):
+                        pass
                 self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size,
                                           views=(*DIRECTIONS,'spectator'),demo_motion=self.demo_motion)
                 self._position_spectator()

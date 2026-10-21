@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+from manipulation_agent.omnigibson_backend import OmniGibsonBackend
 
 
 class Tensor:
@@ -21,6 +22,49 @@ class Tensor:
 
 
 class CameraReadiness(unittest.TestCase):
+    def test_gpu_rig_and_optional_video_are_loaded_as_external_sensors(self):
+        for record_video in (False, True):
+            with self.subTest(record_video=record_video):
+                b=RGBBackend.__new__(RGBBackend)
+                b.use_gpu_dynamics=True;b.record_video=record_video;b.image_size=512
+                existing={'name':'unrelated_sensor'}
+                config={'env':{'external_sensors':[existing]}}
+                with patch.object(OmniGibsonBackend,'_config',return_value=config):
+                    result=b._config('fixture',2,100)
+                sensors={s['name']:s for s in result['env']['external_sensors']}
+                expected={'mas_rgb_'+v for v in ('front','back','left','right')}
+                if record_video:expected.add('mas_spectator')
+                self.assertEqual(set(sensors)-{'unrelated_sensor'},expected)
+                self.assertIs(sensors['unrelated_sensor'],existing)
+                for name in expected:
+                    self.assertFalse(sensors[name]['include_in_obs'])
+                    self.assertEqual(sensors[name]['image_width'],512)
+                    if name=='mas_spectator':
+                        self.assertEqual(sensors[name]['modalities'],['rgb'])
+                        self.assertNotIn('focal_length',sensors[name])
+                    else:
+                        self.assertEqual(set(sensors[name]['modalities']),{'rgb','depth_linear','camera_params'})
+                        self.assertEqual(sensors[name]['focal_length'],10.)
+
+    def test_gpu_rig_reuses_initialized_sensor_and_rejects_missing_preload(self):
+        b=RGBBackend.__new__(RGBBackend);b.use_gpu_dynamics=True
+        camera=SimpleNamespace(initialized=True)
+        b.env=SimpleNamespace(external_sensors={'mas_rgb_front':camera})
+        self.assertIs(b._preloaded_rgb_sensor('mas_rgb_front'),camera)
+        with self.assertRaisesRegex(RuntimeError,'before physics'):
+            b._preloaded_rgb_sensor('mas_rgb_back')
+        camera.initialized=False
+        with self.assertRaisesRegex(RuntimeError,'before physics'):
+            b._preloaded_rgb_sensor('mas_rgb_front')
+        b.use_gpu_dynamics=False
+        self.assertIsNone(b._preloaded_rgb_sensor('mas_rgb_front'))
+
+    def test_cpu_sensor_configuration_is_unchanged(self):
+        b=RGBBackend.__new__(RGBBackend);b.use_gpu_dynamics=False
+        config={'env':{'external_sensors':None}}
+        with patch.object(OmniGibsonBackend,'_config',return_value=config):
+            self.assertEqual(b._config('fixture',0,100),{'env':{'external_sensors':None}})
+
     def backend(self,output,ready_after):
         b=RGBBackend.__new__(RGBBackend);b.output=Path(output);b.steps=0;b.image_size=8
         b._position_rig=Mock();b.og=SimpleNamespace(sim=SimpleNamespace(render=Mock(),step=Mock(side_effect=AssertionError('physics advanced')),
