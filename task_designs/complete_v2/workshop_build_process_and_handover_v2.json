@@ -519,6 +519,12 @@
       "support_uv": [
         0.22,
         0.5
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
       ]
     },
     {
@@ -2303,6 +2309,17 @@
     "conditional_design_count": 101,
     "recovery_status": "original_file"
   },
+  "construction_asset_scales": [
+    {
+      "object": "box",
+      "scale": [
+        1.4,
+        1.4,
+        1.4
+      ],
+      "reason": "Workshop-size toolbox accommodates the full native axe, brush and rag below the closing lid."
+    }
+  ],
   "scene_exclusions": [
     "car_ssxsje_0"
   ],

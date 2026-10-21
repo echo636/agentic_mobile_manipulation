@@ -335,6 +335,9 @@ def garden(inv,models):
 def workshop(inv,models):
  b=Builder('workshop','outfit_a_basic_toolbox',inv,models)
  b.existing('box','toolbox_191');b.existing('floor','floors_hkdmte_0')
+ # Use a workshop-size case for the full-size hatchet and coating rag. The
+ # original 26 cm-wide case admitted rim placements that prevented closing.
+ b.s['construction_asset_scales']=[dict(object='box',scale=[1.4]*3,reason='Workshop-size toolbox accommodates the full native axe, brush and rag below the closing lid.')]
  b.s['scene_exclusions']=['car_ssxsje_0']
  b.s['scene_setup_note']='Native garage prepared as an empty workshop before the episode; the background car is absent from the frozen scene.'
  b.s['robot_start']={'position':[-13.2,10.7,.02],'orientation':[0.,0.,0.,1.]}
@@ -353,6 +356,8 @@ def workshop(inv,models):
  for row in b.layout:
   if row['object'] in initial_slots and row.get('auto_slot'):
    row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
+  if row['object']=='box' and row.get('place_on_support'):
+   row['orientation']=[0.,0.,0.,1.]
  # The source table and garage wall hide the old floor bin from every
  # collision-free manipulation stance. Keep it beside the open parts aisle.
  b.place('bin','floor',[-12.,12.3]);b.place('block','floor',[-13.9,12.]);b.state('box','Open',False,kwargs={'fully':True})
