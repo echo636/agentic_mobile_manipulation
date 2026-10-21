@@ -22,7 +22,6 @@
     "stage": "fv2_stage",
     "tool_home": "fv2_tool_home",
     "food_stage": "fv2_food_stage",
-    "background_lounger": "garden_chair_lraplz_0",
     "trowel": "fv2_trowel",
     "shears": "fv2_shears",
     "pillow1": "fv2_pillow1",
@@ -62,7 +61,7 @@
       "source_object": "pot_plant_172",
       "source_sha256": "5f51190928ddff234e5a9a2f5673b3bfedd68b9709bd533f5f16e8fbd28bb2fb",
       "position": [
-        107.0,
+        104.0,
         50.0,
         2.0
       ],
@@ -79,7 +78,7 @@
       "source_object": "pipe_cleaner_120",
       "source_sha256": "f8a478a306d8e97c8c3bc42f5b224558bd1a615ca22b88e73f5bae86a4a0d0dd",
       "position": [
-        110.0,
+        107.0,
         50.0,
         2.0
       ],
@@ -96,7 +95,7 @@
       "source_object": "broom_172",
       "source_sha256": "e9440c9f057b752a316cdc60cb72c499b6837c03945db2c9dc2ca0ea4094458e",
       "position": [
-        113.0,
+        110.0,
         50.0,
         2.0
       ],
@@ -118,7 +117,7 @@
       "source_object": "paperback_book_225",
       "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
       "position": [
-        116.0,
+        113.0,
         50.0,
         2.0
       ],
@@ -135,7 +134,7 @@
       "source_object": "can_of_soda_114",
       "source_sha256": "e8e61d04e358fbf61ff04fed3f11e1f213433cb7d8a9ef263b62e16387d6c83a",
       "position": [
-        119.0,
+        116.0,
         50.0,
         2.0
       ],
@@ -152,7 +151,7 @@
       "source_object": "trash_can_116",
       "source_sha256": "e8e61d04e358fbf61ff04fed3f11e1f213433cb7d8a9ef263b62e16387d6c83a",
       "position": [
-        122.0,
+        119.0,
         50.0,
         2.0
       ],
@@ -169,7 +168,7 @@
       "source_object": "bottle_of_tea_208",
       "source_sha256": "a0f100b58db5ff0127a9de6192b43cd420953f5932115af5de7ee53aa9b7aba0",
       "position": [
-        125.0,
+        122.0,
         50.0,
         2.0
       ],
@@ -186,7 +185,7 @@
       "source_object": "chopping_board_211",
       "source_sha256": "a0f100b58db5ff0127a9de6192b43cd420953f5932115af5de7ee53aa9b7aba0",
       "position": [
-        128.0,
+        125.0,
         50.0,
         2.0
       ],
@@ -203,7 +202,7 @@
       "source_object": "plate_243",
       "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
       "position": [
-        131.0,
+        128.0,
         50.0,
         2.0
       ],
@@ -220,7 +219,7 @@
       "source_object": "water_glass_bbpraa_0",
       "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
       "position": [
-        134.0,
+        131.0,
         50.0,
         2.0
       ],
@@ -237,7 +236,7 @@
       "source_object": "table_lamp_428",
       "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
       "position": [
-        137.0,
+        134.0,
         50.0,
         2.0
       ],
@@ -254,7 +253,7 @@
       "source_object": "straight_chair_gktknj_0",
       "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
       "position": [
-        140.0,
+        137.0,
         50.0,
         2.0
       ],
@@ -271,7 +270,7 @@
       "source_object": "water_glass_bbpraa_0",
       "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
       "position": [
-        143.0,
+        140.0,
         50.0,
         2.0
       ],
@@ -288,7 +287,7 @@
       "source_object": "table_lamp_428",
       "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
       "position": [
-        146.0,
+        143.0,
         50.0,
         2.0
       ],
@@ -305,7 +304,7 @@
       "source_object": "straight_chair_jgoolz_0",
       "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
       "position": [
-        149.0,
+        146.0,
         50.0,
         2.0
       ],
@@ -325,7 +324,7 @@
       "usd_sha256": "028e985041d57bfd1a981884450ac731c9c21876209a54b801d11dc19123c743",
       "prim_type": 0,
       "position": [
-        89.0,
+        86.0,
         50.0,
         2.0
       ]
@@ -337,7 +336,7 @@
       "usd_sha256": "a18916e14ef79ecce6e4b385fa170de7a47076bbb81f9e150dba8b2ee3d75461",
       "prim_type": 0,
       "position": [
-        92.0,
+        89.0,
         50.0,
         2.0
       ]
@@ -349,7 +348,7 @@
       "usd_sha256": "02b44d98f33c689d0afd8fb78bc858de55057ca36ba62b9f3cfbe1a51cd1f735",
       "prim_type": 0,
       "position": [
-        95.0,
+        92.0,
         50.0,
         2.0
       ]
@@ -361,7 +360,7 @@
       "usd_sha256": "02b44d98f33c689d0afd8fb78bc858de55057ca36ba62b9f3cfbe1a51cd1f735",
       "prim_type": 0,
       "position": [
-        98.0,
+        95.0,
         50.0,
         2.0
       ]
@@ -373,7 +372,7 @@
       "usd_sha256": "4e1786f1e30519bb22ece59149f11d56a3d9212a94fd70b820ffc160629c5abb",
       "prim_type": 0,
       "position": [
-        101.0,
+        98.0,
         50.0,
         2.0
       ]
@@ -385,7 +384,7 @@
       "usd_sha256": "f60f7200a713a180f7a9e9bb2f0576541e161d3e317ff9de5d11ba33ddc9ca82",
       "prim_type": 0,
       "position": [
-        104.0,
+        101.0,
         50.0,
         2.0
       ]
@@ -397,7 +396,7 @@
       "usd_sha256": "525ecd8c5c841d8a5f18b9ac26fe2eddd2d4ec55ce766c32b6cac7ae903b66d6",
       "prim_type": 0,
       "position": [
-        164.0,
+        161.0,
         50.0,
         2.0
       ]
@@ -409,7 +408,7 @@
       "usd_sha256": "087535628976b293c502c23a6c3639360ada8915ea2362939b6298bb7a829210",
       "prim_type": 0,
       "position": [
-        167.0,
+        164.0,
         50.0,
         2.0
       ]
@@ -421,7 +420,7 @@
       "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
       "prim_type": 0,
       "position": [
-        170.0,
+        167.0,
         50.0,
         2.0
       ]
@@ -433,7 +432,7 @@
       "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
       "prim_type": 0,
       "position": [
-        173.0,
+        170.0,
         50.0,
         2.0
       ]
@@ -445,7 +444,7 @@
       "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
       "prim_type": 0,
       "position": [
-        176.0,
+        173.0,
         50.0,
         2.0
       ]
@@ -457,7 +456,7 @@
       "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
       "prim_type": 0,
       "position": [
-        179.0,
+        176.0,
         50.0,
         2.0
       ]
@@ -627,21 +626,12 @@
   ],
   "initial_layout": [
     {
-      "object": "background_lounger",
-      "target": "floor",
-      "place_on_support": true,
-      "xy": [
-        18.3,
-        12.7
-      ]
-    },
-    {
       "object": "seat1",
       "target": "floor",
       "place_on_support": true,
       "xy": [
-        13.2,
-        11.8
+        13.4,
+        12.4
       ]
     },
     {
@@ -672,7 +662,7 @@
       "target": "floor",
       "place_on_support": true,
       "xy": [
-        14.9,
+        15.7,
         12.5
       ]
     },
@@ -1094,7 +1084,6 @@
     "initially_detached_leg4": {
       "not": "leg4_attachedto_bracket"
     },
-    "initial_background_lounger_OnTop": "initial_background_lounger_OnTop",
     "initial_seat1_OnTop": "initial_seat1_OnTop",
     "initial_pillow1_OnTop": "initial_pillow1_OnTop",
     "initial_lamp1_OnTop": "initial_lamp1_OnTop",
@@ -1482,11 +1471,6 @@
         "object": "can",
         "state": "Inside",
         "target": "bin"
-      },
-      "initial_background_lounger_OnTop": {
-        "object": "background_lounger",
-        "state": "OnTop",
-        "target": "floor"
       },
       "initial_seat1_OnTop": {
         "object": "seat1",
@@ -2368,8 +2352,8 @@
             "primitive": "place_on_top",
             "role": "floor",
             "xy": [
-              14.1,
-              11.7
+              14.65,
+              12.85
             ]
           }
         ],
@@ -2696,7 +2680,7 @@
   "robot_start": {
     "position": [
       16.0,
-      12.7,
+      13.25,
       0.03
     ],
     "orientation": [
@@ -2706,7 +2690,7 @@
       1.0
     ]
   },
-  "scene_setup_note": "Stations arranged from measured native geometry. Original trees, lights, grill and patio furniture retained; lounger moved east before the episode to clear the assembled table destination.",
+  "scene_setup_note": "Stations and final table arranged around measured native geometry. Original trees, lights, grill and patio furniture retain their native poses.",
   "compiled_action_count": 109,
   "compiled_count_includes_waits": true,
   "compiled_manipulation_count": 109

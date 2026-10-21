@@ -230,7 +230,6 @@ def garden(inv,models):
  b=Builder('garden','spraying_for_bugs',inv,models)
  for r,n in dict(plant1='pot_plant_172',plant2='pot_plant_173',sprayer='insectifuge_atomizer_174',floor='floors_ghetev_0',lawn='lawn_aztwla_0').items():b.existing(r,n)
  for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[12.9,13.65],[2.2,.8,.6]),('stage',[12.8,8.7],[1.8,1.3,.65]),('tool_home',[15.55,4.1],[1.7,1.1,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
- b.existing('background_lounger','garden_chair_lraplz_0');b.place('background_lounger','floor',[18.3,12.7])
  for r in ['trowel','shears','pillow1','pillow2','apple','knife']:
   b.native(r,{'pillow1':'pillow','pillow2':'pillow','knife':'carving_knife'}.get(r,r))
  b.imported('protected','spraying_for_bugs','pot_plant_172')
@@ -240,7 +239,7 @@ def garden(inv,models):
   b.imported('cup'+str(i),'setting_the_table','water_glass_bbpraa_0')
   b.imported('lamp'+str(i),'turning_out_all_lights_before_sleep','table_lamp_428')
   b.imported('seat'+str(i),'setting_the_table',category='straight_chair',index=i-1)
-  b.place('seat'+str(i),'floor',[13.2,11.8] if i==1 else [14.9,12.5])
+  b.place('seat'+str(i),'floor',[13.4,12.4] if i==1 else [15.7,12.5])
   b.place('pillow'+str(i),'work');b.place('lamp'+str(i),'stage');b.state('lamp'+str(i),'ToggledOn',False)
  b.place('plant1','source',[11.4,4.25]);b.place('plant2','source',[12.2,4.25]);b.place('protected','lawn',[18.6,4.]);b.place('bin','lawn',[18.6,6.5])
  for r,t in [('book','work'),('can','work'),('trowel','source'),('shears','source'),('sprayer','source'),('brush','tool_home'),('broom','tool_home'),('tea','food_stage'),('apple','food_stage'),('plate','food_stage'),('cup1','food_stage'),('cup2','food_stage'),('knife','food_stage'),('board','food_stage')]:b.place(r,t)
@@ -251,8 +250,8 @@ def garden(inv,models):
  for row in b.layout:
   if row['object'] in initial_slots and row.get('auto_slot'):
    row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
- b.s['robot_start']={'position':[16.,12.7,.03],'orientation':[0.,0.,0.,1.]}
- b.s['scene_setup_note']='Stations arranged from measured native geometry. Original trees, lights, grill and patio furniture retained; lounger moved east before the episode to clear the assembled table destination.'
+ b.s['robot_start']={'position':[16.,13.25,.03],'orientation':[0.,0.,0.,1.]}
+ b.s['scene_setup_note']='Stations and final table arranged around measured native geometry. Original trees, lights, grill and patio furniture retain their native poses.'
  clean={r:b.clean(r) for r in ['work','display','pillow1','pillow2','cup1','cup2','trowel','shears','sprayer','floor']}
  b.state('protected','Covered',False,system='insectifuge')
  protected_clean=NOT(b.pred('protected_contaminated','protected','Covered',system='insectifuge'))
@@ -275,7 +274,7 @@ def garden(inv,models):
  b.phase('display_clean',[take('brush'),action('wipe','display'),put('tool_home',tool_slots['brush'])])
  b.phase('return_plants',[a for i,r in enumerate(['plant1','plant2']) for a in transfer(r,'display',(.38+.26*i,.5))],['treat','display_clean'])
  b.phase('work_reset',[take('brush'),action('wipe','work'),put('tool_home',tool_slots['brush'])],['return_plants'])
- assembly,usable=table_parts(b,[14.,5.7],[15.4,8.1],[14.1,11.7]);b.phase('assemble',assembly)
+ assembly,usable=table_parts(b,[14.,5.7],[15.4,8.1],[14.65,12.85]);b.phase('assemble',assembly)
  for row in assembly:
   if row['primitive']=='place_on_top' and row.get('role')=='tool_home':row['uv']=list(tool_slots['brush'])
  b.phase('seats',[take('brush'),action('wipe','pillow1'),action('wipe','pillow2'),put('tool_home',tool_slots['brush'])]+transfer('pillow1','seat1')+transfer('pillow2','seat2'),['clear'])
