@@ -20,6 +20,17 @@ class NativeConstructionStateTests(unittest.TestCase):
   actual,changes=complete_native_articulation_state(state,{'apple':NS(n_joints=0)},['apple'])
   self.assertEqual(actual,state);self.assertEqual(changes,[])
 
+ def test_import_time_attachment_is_not_retained_when_state_was_omitted(self):
+  AttachedTo=type('AttachedTo',(),{})
+  state={'registry':{'object_registry':{'bracket':{'non_kin':{}}}}}
+  obj=NS(n_joints=0,states={AttachedTo:object()})
+  actual,changes=complete_native_articulation_state(state,{'bracket':obj},['bracket'])
+  self.assertEqual(actual['registry']['object_registry']['bracket']['non_kin']['AttachedTo'],{'attached_obj_uuid':-1})
+  self.assertEqual(state['registry']['object_registry']['bracket']['non_kin'],{})
+  state['registry']['object_registry']['bracket']['non_kin']['AttachedTo']={'attached_obj_uuid':123}
+  actual,_=complete_native_articulation_state(state,{'bracket':obj},['bracket'])
+  self.assertEqual(actual,state)
+
  def test_construction_sampling_failure_restores_runtime_search_limits(self):
   from contextlib import nullcontext
   from manipulation_agent.executors.custom_task import construction_native_sampling_limit

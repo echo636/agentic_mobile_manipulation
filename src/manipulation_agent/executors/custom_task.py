@@ -37,6 +37,15 @@ def complete_native_articulation_state(state, objects, native_names):
             entry['joint_pos']=copy.deepcopy(obj.get_joint_positions())
             entry['joint_vel']=copy.deepcopy(obj.get_joint_velocities())
             changes.append({'name':name,'n_joints':obj.n_joints})
+        # Added assets may briefly touch at the loader origin and trigger the
+        # native contact-driven attachment callback before authored poses load.
+        # An omitted attachment state must mean initially detached, rather
+        # than retaining that accidental import-time joint across relocation.
+        if any(cls.__name__=='AttachedTo' for cls in getattr(obj,'states',{})):
+            states=entry.setdefault('non_kin',{})
+            if 'AttachedTo' not in states:
+                states['AttachedTo']={'attached_obj_uuid':-1}
+                changes.append({'name':name,'initial_attachment':'detached'})
     return completed,changes
 
 

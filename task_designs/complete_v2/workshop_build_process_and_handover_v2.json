@@ -762,6 +762,21 @@
     "leg2_dust": "leg2_dust",
     "leg3_dust": "leg3_dust",
     "leg4_dust": "leg4_dust",
+    "initially_detached_bracket": {
+      "not": "bracket_attachedto_table"
+    },
+    "initially_detached_leg1": {
+      "not": "leg1_attachedto_bracket"
+    },
+    "initially_detached_leg2": {
+      "not": "leg2_attachedto_bracket"
+    },
+    "initially_detached_leg3": {
+      "not": "leg3_attachedto_bracket"
+    },
+    "initially_detached_leg4": {
+      "not": "leg4_attachedto_bracket"
+    },
     "initial_detergent_basin_OnTop": "initial_detergent_basin_OnTop",
     "initial_log1_OnTop": "initial_log1_OnTop",
     "initial_log2_OnTop": "initial_log2_OnTop",

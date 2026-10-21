@@ -207,6 +207,8 @@ def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False):
  for role,offset in zip(roles,xy):b.place(role,'parts',[parts_xy[i]+offset[i] for i in range(2)])
  clean={r:b.clean(r) for r in roles}
  assembled=ALL(b.rel('bracket','table','AttachedTo'),*[b.rel('leg'+str(i),'bracket','AttachedTo') for i in range(1,5)])
+ for child,parent in [('bracket','table')]+[('leg'+str(i),'bracket') for i in range(1,5)]:
+  b.s['initial_assertions']['initially_detached_'+child]=NOT(b.rel(child,parent,'AttachedTo'))
  upright=b.pred('table_upright','table','Upright',max_tilt_degrees=10.)
  # Real floor contact is required on every leg. A tabletop resting on the jig cannot pass.
  usable=ALL(assembled,upright,*[b.rel('leg'+str(i),'floor') for i in range(1,5)])
