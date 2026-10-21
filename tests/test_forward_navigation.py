@@ -372,6 +372,28 @@ class ForwardNavigationTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2'),'Requires OpenCV; no simulator is started')
 class HeadingCollisionTests(unittest.TestCase):
+    def test_floor_projection_cannot_choose_closer_pose_across_wall(self):
+        import numpy as np
+        from dataclasses import replace
+        from manipulation_agent.executors.point_route_projection import prepare_point_projection
+        if not prepare_point_projection():self.skipTest('Requires optional SciPy graph support')
+        raw=np.ones((81,81),dtype='uint8');raw[:,40]=0
+        footprint=[[-.15,-.1],[.15,-.1],[.15,.1],[-.15,.1]]
+        collision=self.checker(raw,footprint)
+        start=(0.,0.,0.)
+        candidate=replace(plan([start[:2],(.5,0.)]),target=(2.,0.),score=1.5)
+        selected,route,details=select_forward_route([candidate],start,collision,project_point=True)
+        self.assertEqual(details['search'],'forward_reachable_point_projection')
+        self.assertLess(selected.goal[0],1.)
+        self.assertLess(selected.score,candidate.score)
+        fresh=self.checker(raw,footprint);current=start
+        for phase in route.phases:
+            for xy in phase.points:
+                destination=(*xy,phase.final_yaw)
+                self.assertTrue(fresh.motion_free(current,destination))
+                current=destination
+        self.assertIsNotNone(local_exit_certificate(current,fresh))
+
     def test_relaxation_retains_passage_between_coarse_headings(self):
         import numpy as np
         yaw = .317
