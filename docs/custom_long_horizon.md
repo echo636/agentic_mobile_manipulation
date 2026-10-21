@@ -27,8 +27,10 @@ runtime candidates below; they have no frozen scenes or physical acceptance.
 The subsequent [diverse task designs](long_horizon_diverse_designs.md) add ten
 proposals covering cooking, cutting, spraying, attachment, item/floor cleaning,
 shutdown, laundry and material transfer. Their mixed-action ledgers contain
-100–113 conditional useful calls. All fifteen proposals remain design-only;
-the new source/arithmetic audit does not certify executable tasks.
+100–113 conditional useful calls. All fifteen were design-only at publication;
+four diverse proposals subsequently received separate construction recipes and
+frozen scenes. The remaining eleven are still design-only. A source/arithmetic
+audit does not certify executable tasks.
 
 The user's subsequent October 20 request adds dependency complexity as a separate
 design objective. The [dependency audit and branching candidate](long_horizon_dependency_design.md)
@@ -38,6 +40,31 @@ library proposal adds cross-branch prerequisites and repeated joins/forks. It no
 has a separate [construction recipe and simulator evidence](branching_library_construction.md).
 Its scene construction has passed, while full physical-reference acceptance is
 incomplete. The existing task contracts remain unchanged.
+
+On October 21 the user required that task length must not come from large amounts
+of repeated work. New designs must retain meaningful planning complexity after
+same-work object groups are reduced to a small functional set. More object copies,
+unnecessary transfers, navigation and retries cannot be used to reach 100+ calls;
+shorter candidates must report their actual scope. The branching library also needs less
+repeated work: 108 of its 117 conditional calls are object-transfer grasp/place
+operations. See the updated [design criteria and priorities](long_horizon_dependency_design.md).
+This is a design-policy update, not a change to frozen contracts or physical acceptance.
+
+The user subsequently selected a single repetition-baseline policy. The
+[October 21 redesign](nonrepetitive_long_horizon_redesign.md) retains shoe care
+and replaces the other four active slots with garden/reading-area restoration,
+tool-kit inventory and surface turnover, two-person meal delivery, and
+study/bedroom restoration. These four are structured designs with planned
+acceptance, not executable recipes or new simulator results. Old frozen tasks
+remain historical evidence and are not additional active repetition baselines.
+
+The follow-up [extended v2 designs](extended_long_horizon_designs.md) replace the
+four short design candidates with conditional reference ledgers of 108, 101,
+104 and 101 non-navigation operations. They add actual assembly, processing,
+service and handover work, with new capability gates. These are design-only
+action multisets, not executable references, measured lengths or proven minima.
+The single shoe-care baseline and all historical frozen tasks remain unchanged.
+Validation records are in `operations/long_horizon_extension_20261021/`.
 
 ## Tasks and dependencies
 

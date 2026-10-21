@@ -1,0 +1,2026 @@
+{
+  "schema_version": 1,
+  "kind": "nonrepetitive_long_horizon_redesign",
+  "date": "2026-10-21",
+  "status": "design_only",
+  "benchmark_ready": false,
+  "selection_policy": {
+    "retained_repetition_baselines": 1,
+    "target_minimum_calls": null,
+    "previous_100plus_target": "Only meaningful work may meet it; these designs make no 100+ claim",
+    "padding_forbidden": true,
+    "frozen_history_unchanged": true
+  },
+  "retained_baseline": {
+    "id": "hotel_shoe_care_and_pairing_100_v1",
+    "source": "hotel",
+    "rationale_zh": "唯一保留的大量同构操作基线；20 只鞋的旧冻结合同和失败证据保持原义。",
+    "status": "constructed_full_reference_failed",
+    "benchmark_ready": false,
+    "evidence": "operations/long_horizon_retest_20261021/comparison.json"
+  },
+  "sources": [
+    {
+      "id": "hotel",
+      "path": "task_designs/constructed_100plus/hotel_shoe_care_and_pairing_100_v1.json",
+      "sha256": "b2dd421f610d7326f6430f8623b0c3c1f4084ee6af7586b80298c3bae7532aa8"
+    },
+    {
+      "id": "garden",
+      "path": "task_designs/constructed_100plus/garden_treatment_and_distribution_100_v1.json",
+      "sha256": "b72e78ad91885378ddc30ffce45ac325e77a0f1be01d1afc359afbe99c3d5014"
+    },
+    {
+      "id": "garage",
+      "path": "task_designs/constructed_100plus/garage_cut_sort_store_113_v1.json",
+      "sha256": "8e00f5454226a879f2302070a10a628b097793741fe5281999dea664b4276eed"
+    },
+    {
+      "id": "bedroom",
+      "path": "task_designs/constructed_100plus/bedroom_vacuum_reset_close_102_v1.json",
+      "sha256": "f48996201b4eac8c1daff3f30f861dcbb5ef00d33ad38999cb36187cee2e8c36"
+    },
+    {
+      "id": "library",
+      "path": "task_designs/constructed_branching/bedroom_shared_library_branching_v2.json",
+      "sha256": "233f4e5dafad6551df15ba8d3328c376ad3b53464564720908bc90282af22b6d"
+    },
+    {
+      "id": "kitchen",
+      "path": "task_designs/candidates/kitchen_service_and_reset_v1.json",
+      "sha256": "d882257ec1b4cba9310ad0067bf3786094da23d62024997417242456652ae6f9"
+    },
+    {
+      "id": "workshop",
+      "path": "task_designs/candidates/workshop_inventory_roundtrip_v1.json",
+      "sha256": "629e5c49075bc25e66e6554345257fa605ee9d2b0536fea743d58f34c4338eb5"
+    },
+    {
+      "id": "movie",
+      "path": "task_designs/evaluation_v2/movie_night_and_restore_v2.json",
+      "sha256": "20d5bd6c03ec235ed5afb17245d87da33382abbac502b70333d90beb1169fe80"
+    },
+    {
+      "id": "diverse_assets",
+      "path": "task_designs/proposals_100plus/diverse_catalog.json",
+      "sha256": "9aa5e9a44cf62c538a6dc65f62b771f2812d16a3c88c4ed582ba8a629a693034"
+    }
+  ],
+  "semantics": {
+    "macro_nodes_are_not_individual_actions": true,
+    "global": "公开前提或当前接收条件，需编译为状态/事件检查",
+    "per_item": "仅约束对应物品，不把同组所有物品变为全量屏障",
+    "reference_only": "仅描述一种可行参考顺序，禁止自动编译为评分先后约束",
+    "check_only": "终态/分区状态的汇合检查，不新增物理动作，不声称增加操作深度",
+    "current_state_not_latched_history": true,
+    "no_default_individual_handling_restriction": true,
+    "reference_orders_are_macro_designs_not_physical_traces": true
+  },
+  "tasks": [
+    {
+      "id": "garden_care_and_reading_corner_v1",
+      "title_zh": "少量盆栽养护与庭院阅读角复原",
+      "replaces": "task_designs/constructed_100plus/garden_treatment_and_distribution_100_v1.json",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "runtime_recipe": null,
+      "frozen_instance": null,
+      "measured_action_count": null,
+      "public_instruction_zh": "护理展示架上的两盆植物，清洁展示架和庭院工作区，然后恢复阅读角；旁边一盆免处理植物保持原位且不沾喷雾。",
+      "public_context_zh": [
+        "两盆待处理植物起初占用有灰尘的展示架。阅读桌临时用作护理台，桌上的书须收好，空罐入垃圾桶。",
+        "为避免喷到阅读区及免处理植物，喷洒在公开指定的护理位进行；展示架腾空后去尘。每盆处理合格且架面当前清洁后即可归架。",
+        "庭院指定地面初始已有砂尘；最后地面和阅读桌干净，书回阅读桌，两盆植物直立归架，喷壶关闭，所有工具归位。",
+        "护理台初始也有灰尘。清洁桌面前先移走其上的任务物品；不假定搬运或喷洒会自动制造灰尘。免处理植物由位置和公开外观识别。"
+      ],
+      "object_groups": [
+        {
+          "id": "plants",
+          "count": 2,
+          "description_zh": "需护理的盆栽",
+          "count_reason_zh": "保留少量流水操作；两盆可交错处理，不扩增数量",
+          "source": "garden",
+          "source_role_or_locator": "plant00, plant01",
+          "kind": "work_item",
+          "repetition_class": "plants",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "control",
+          "count": 1,
+          "description_zh": "免处理盆栽",
+          "count_reason_zh": "检验邻近对象保护，不能作为工作量来源",
+          "source": "garden",
+          "source_role_or_locator": "control0",
+          "kind": "protected_item",
+          "repetition_class": "control",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "book",
+          "count": 1,
+          "description_zh": "阅读用书",
+          "count_reason_zh": "阅读桌转作护理台后需要恢复原用途",
+          "source": "library",
+          "source_role_or_locator": "a_item01",
+          "kind": "work_item",
+          "repetition_class": "book",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "can",
+          "count": 1,
+          "description_zh": "空饮料罐",
+          "count_reason_zh": "清出护理空间和处理垃圾",
+          "source": "kitchen",
+          "source_role_or_locator": "can1",
+          "kind": "work_item",
+          "repetition_class": "can",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "sprayer",
+          "count": 1,
+          "description_zh": "喷壶",
+          "count_reason_zh": "实施植物处理",
+          "source": "garden",
+          "source_role_or_locator": "tool",
+          "kind": "tool",
+          "repetition_class": "sprayer",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "brush",
+          "count": 1,
+          "description_zh": "除尘刷",
+          "count_reason_zh": "展示架和阅读桌共享清洁工具",
+          "source": "library",
+          "source_role_or_locator": "wipe_tool",
+          "kind": "tool",
+          "repetition_class": "brush",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "broom",
+          "count": 1,
+          "description_zh": "扫帚",
+          "count_reason_zh": "处理已有地面砂尘",
+          "source": "garage",
+          "source_role_or_locator": "reference_plan broom role",
+          "kind": "tool",
+          "repetition_class": "broom",
+          "asset_binding_status": "planned"
+        }
+      ],
+      "phases": [
+        {
+          "id": "clear_service",
+          "stream": "space",
+          "description_zh": "把书妥善暂放、空罐入桶，释放护理桌",
+          "witness_zh": "书在安全支撑面，空罐 Inside 垃圾桶，护理工作位无阻挡",
+          "primitives": [
+            "grasp",
+            "place_on_top",
+            "place_inside"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "stage_plants",
+          "stream": "care",
+          "description_zh": "把植物从展示架移到护理位",
+          "witness_zh": "各植物 OnTop 护理位；展示架是否腾空独立检查",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clear_service",
+              "reason_zh": "护理位原被书和空罐占用",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "treat",
+          "stream": "care",
+          "description_zh": "在护理位喷洒",
+          "witness_zh": "对应植物由非 Covered 变为 Covered(insectifuge)，免处理盆栽不被污染",
+          "primitives": [
+            "grasp",
+            "toggle_on",
+            "spray",
+            "toggle_off"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "stage_plants",
+              "reason_zh": "该盆必须处于隔离护理位",
+              "scope": "per_item"
+            }
+          ]
+        },
+        {
+          "id": "clean_display",
+          "stream": "space",
+          "description_zh": "擦净已腾空的展示架",
+          "witness_zh": "两盆均离架；架面非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "stage_plants",
+              "reason_zh": "需要清洁两盆原来遮挡的支撑面",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "sweep",
+          "stream": "floor",
+          "description_zh": "清扫已有砂尘",
+          "witness_zh": "指定地面非 Covered(sand) 且非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "sweep"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "restore_plants",
+          "stream": "care",
+          "description_zh": "合格植物归到干净展示架",
+          "witness_zh": "该盆已处理、直立、OnTop 展示架，架面当前清洁",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "treat",
+              "reason_zh": "该盆已完成养护",
+              "scope": "per_item"
+            },
+            {
+              "phase": "clean_display",
+              "reason_zh": "接收位置已清洁且仍保持清洁",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "clean_service",
+          "stream": "space",
+          "description_zh": "护理位释放后擦净阅读桌",
+          "witness_zh": "桌上无护理植物、书或工具，桌面非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "restore_plants",
+              "reason_zh": "给出无需额外暂存的参考顺序；实际只检查工作位已释放",
+              "scope": "reference_only"
+            }
+          ]
+        },
+        {
+          "id": "restore_book",
+          "stream": "reading",
+          "description_zh": "把书归回阅读桌",
+          "witness_zh": "书 OnTop 当前干净的阅读桌",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clean_service",
+              "reason_zh": "阅读桌已完成由护理用途到阅读用途的恢复",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "tools_home",
+          "stream": "resources",
+          "description_zh": "结束工具使用并归还",
+          "witness_zh": "喷壶关闭，刷、扫帚、喷壶在各自归还位置，手空",
+          "primitives": [
+            "toggle_off",
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clean_display",
+              "reason_zh": "参考中刷子不再用于架面",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "clean_service",
+              "reason_zh": "参考中刷子不再用于桌面",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "sweep",
+              "reason_zh": "参考中扫帚不再使用",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "treat",
+              "reason_zh": "参考中喷壶不再使用",
+              "scope": "reference_only"
+            }
+          ]
+        },
+        {
+          "id": "complete",
+          "stream": "finish",
+          "description_zh": "同时核验阅读角、植物和地面",
+          "witness_zh": "所有终态同时成立且没有历史违规",
+          "primitives": [],
+          "check_only": true,
+          "requires": [
+            {
+              "phase": "restore_plants",
+              "reason_zh": "植物工作完成",
+              "scope": "global"
+            },
+            {
+              "phase": "restore_book",
+              "reason_zh": "阅读用途恢复",
+              "scope": "global"
+            },
+            {
+              "phase": "sweep",
+              "reason_zh": "地面清洁完成",
+              "scope": "global"
+            },
+            {
+              "phase": "tools_home",
+              "reason_zh": "设备关闭和工具归还",
+              "scope": "global"
+            }
+          ]
+        }
+      ],
+      "reference_orders": [
+        {
+          "id": "order_1",
+          "phases": [
+            "clear_service",
+            "stage_plants",
+            "treat",
+            "clean_display",
+            "restore_plants",
+            "sweep",
+            "clean_service",
+            "restore_book",
+            "tools_home",
+            "complete"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "order_2",
+          "phases": [
+            "sweep",
+            "clear_service",
+            "stage_plants",
+            "clean_display",
+            "treat",
+            "restore_plants",
+            "clean_service",
+            "tools_home",
+            "restore_book",
+            "complete"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "order_3",
+          "phases": [
+            "clear_service",
+            "sweep",
+            "stage_plants",
+            "clean_display",
+            "treat",
+            "restore_plants",
+            "clean_service",
+            "restore_book",
+            "tools_home",
+            "complete"
+          ],
+          "status": "planned"
+        }
+      ],
+      "evaluator_contract": {
+        "implementation_status": "planned",
+        "terminal_zh": [
+          "两盆已处理、直立归架；展示架、阅读桌和指定地面清洁",
+          "书回阅读桌，空罐入桶，免处理盆栽原位且未污染",
+          "喷壶关闭，工具归还，手空"
+        ],
+        "required_history_zh": [
+          "每盆在护理位接受实际喷洒；历史状态不能替代当前处理状态"
+        ],
+        "persistent_guards_zh": [
+          "免处理盆栽被移动或污染后补救仍判违规",
+          "植物不得提前归到脏展示架；书不得提前放回脏阅读桌",
+          "清洁支撑表面时其指定工作区需腾空；不要求物品必须停在某个无用途的暂存台"
+        ]
+      },
+      "negative_cases": [
+        {
+          "id": "dirty_display",
+          "description_zh": "先放植物后擦架",
+          "rejection_witness_zh": "归架当时架面仍 Covered(dust)，后续擦净不消除违规",
+          "phases": [
+            "restore_plants",
+            "clean_display"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "control_spray",
+          "description_zh": "喷到免处理盆栽后再清掉",
+          "rejection_witness_zh": "全过程污染记录",
+          "phases": [
+            "treat"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "skip_treatment",
+          "description_zh": "未经处理直接归架",
+          "rejection_witness_zh": "缺少护理位真实处理事件",
+          "phases": [
+            "treat",
+            "restore_plants"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "reading_dirty",
+          "description_zh": "书先归脏桌后补擦",
+          "rejection_witness_zh": "归书时桌面不合格",
+          "phases": [
+            "clean_service",
+            "restore_book"
+          ],
+          "status": "planned"
+        }
+      ],
+      "capability_gates_zh": [
+        "原生展示架/阅读桌的可达表面及去尘能力；优先使用场景家具，不能仅凭新增色块台称作真实布置",
+        "护理位与免处理盆栽之间的喷洒隔离、可见性、两盆容量；护理位放得下两盆不是已验证事实",
+        "同一场景内扫帚对 sand/dust 与刷子对两个表面的兼容性",
+        "依赖分层编译：reference_only 不可变成评分先后；per_item 不可变成全量屏障"
+      ],
+      "allowed_shortcuts_zh": [
+        "允许单盆完成处理后及时归架，不强制两盆同时处理完",
+        "允许先扫地或穿插扫地，工具可提前归还再取用",
+        "工作台腾空可由其他安全摆放实现，不强制额外暂存往返"
+      ],
+      "repetition_collapse_review_zh": "即使只留一盆，仍保留工作空间转换、隔离喷洒、目的地清洁、归架与阅读桌复原；两盆不构成两种流程。此项依赖深度来自空间复用，汇合种类少于备餐和工具交接，列为次优先候选。",
+      "branch_type": "required_partial_order_not_observation_conditional",
+      "validation": {
+        "static": "planned",
+        "scene_construction": "planned",
+        "physical_references": "planned",
+        "physical_negatives": "planned",
+        "visual_model": "planned"
+      }
+    },
+    {
+      "id": "workshop_inventory_and_surface_turnover_v1",
+      "title_zh": "工具箱盘点与双工作面交接",
+      "replaces": "task_designs/constructed_100plus/garage_cut_sort_store_113_v1.json",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "runtime_recipe": null,
+      "frozen_instance": null,
+      "measured_action_count": null,
+      "public_instruction_zh": "把三件维修工具装箱送到清洁工作台，完整展开盘点后重新装箱；趁箱子离开时清理储物箱位，最后把完整闭箱归还并收好清洁工具。",
+      "public_context_zh": [
+        "本次清单只有电钻、钳子和螺丝刀，各一件。工作台上有一本书和一个空罐，工作台及原储物箱位均初始有尘。",
+        "外运和回运时工具箱盖关闭，三件工具齐全且留在箱内。完整工具箱送达后，三件工具须同时展开在干净工作台上，供一次完整盘点，再重新装箱。",
+        "箱子离开原箱位后可擦净该位置；归还时箱位必须当前干净。清洁时支撑工作区腾空，工具在工作台上时该表面保持清洁。",
+        "书归储物架，空罐入桶，最后三件工具在原箱位的闭合工具箱内，清洁刷归还、手空。"
+      ],
+      "object_groups": [
+        {
+          "id": "drill",
+          "count": 1,
+          "description_zh": "电钻",
+          "count_reason_zh": "维修清单的动力工具",
+          "source": "workshop",
+          "source_role_or_locator": "drill",
+          "kind": "work_item",
+          "repetition_class": "kit_inventory_roundtrip",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "pliers",
+          "count": 1,
+          "description_zh": "钳子",
+          "count_reason_zh": "维修清单的夹持工具",
+          "source": "workshop",
+          "source_role_or_locator": "pliers",
+          "kind": "work_item",
+          "repetition_class": "kit_inventory_roundtrip",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "screwdriver",
+          "count": 1,
+          "description_zh": "螺丝刀",
+          "count_reason_zh": "维修清单的紧固工具",
+          "source": "workshop",
+          "source_role_or_locator": "screwdriver",
+          "kind": "work_item",
+          "repetition_class": "kit_inventory_roundtrip",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "box",
+          "count": 1,
+          "description_zh": "带盖工具箱",
+          "count_reason_zh": "两个方向均运输完整工具包",
+          "source": "workshop",
+          "source_role_or_locator": "box",
+          "kind": "carrier",
+          "repetition_class": "box",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "book",
+          "count": 1,
+          "description_zh": "工作台上的书",
+          "count_reason_zh": "清出盘点工作面",
+          "source": "workshop",
+          "source_role_or_locator": "book1",
+          "kind": "work_item",
+          "repetition_class": "book",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "can",
+          "count": 1,
+          "description_zh": "空罐",
+          "count_reason_zh": "清出盘点工作面并处理垃圾",
+          "source": "workshop",
+          "source_role_or_locator": "can1",
+          "kind": "work_item",
+          "repetition_class": "can",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "brush",
+          "count": 1,
+          "description_zh": "除尘刷",
+          "count_reason_zh": "两工作面共用",
+          "source": "library",
+          "source_role_or_locator": "wipe_tool",
+          "kind": "tool",
+          "repetition_class": "brush",
+          "asset_binding_status": "planned"
+        }
+      ],
+      "phases": [
+        {
+          "id": "clear_bench",
+          "stream": "destination",
+          "description_zh": "清走书和空罐",
+          "witness_zh": "书归架、罐入桶，盘点面腾空",
+          "primitives": [
+            "grasp",
+            "place_on_top",
+            "place_inside"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "clean_bench",
+          "stream": "destination",
+          "description_zh": "清洁盘点工作台",
+          "witness_zh": "工作面空且非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clear_bench",
+              "reason_zh": "清洁被书和罐遮挡的区域",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "pack",
+          "stream": "kit",
+          "description_zh": "在储物区集齐三件工具并闭箱",
+          "witness_zh": "三件工具同时 Inside 箱，箱盖关闭",
+          "primitives": [
+            "open",
+            "grasp",
+            "place_inside",
+            "close"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "depart",
+          "stream": "kit",
+          "description_zh": "携完整闭箱离开原箱位",
+          "witness_zh": "从原箱位离开时完整闭箱；原箱位释放",
+          "primitives": [
+            "grasp",
+            "navigate_to"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "pack",
+              "reason_zh": "完整闭箱运输的起点",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "deliver",
+          "stream": "kit",
+          "description_zh": "将完整工具箱送到清洁工作台",
+          "witness_zh": "完整闭箱 OnTop 当前干净工作台",
+          "primitives": [
+            "navigate_to",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "depart",
+              "reason_zh": "工具包从原位置整箱运来",
+              "scope": "global"
+            },
+            {
+              "phase": "clean_bench",
+              "reason_zh": "盘点接收面已准备好",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "inventory",
+          "stream": "inspection",
+          "description_zh": "开箱，三件工具同时展开盘点",
+          "witness_zh": "三件工具同时 OnTop 工作台，箱内无清单工具，工作台清洁",
+          "primitives": [
+            "open",
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "deliver",
+              "reason_zh": "盘点的是整箱交付的工具",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "repack",
+          "stream": "kit",
+          "description_zh": "盘点后重装并闭箱",
+          "witness_zh": "三件工具同时 Inside 箱，盖关闭",
+          "primitives": [
+            "grasp",
+            "place_inside",
+            "close"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "inventory",
+              "reason_zh": "完整盘点必须曾真实发生，不能逐件取出立即放回",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "clean_source",
+          "stream": "source",
+          "description_zh": "擦净已释放的原箱位",
+          "witness_zh": "箱位无箱和工具，非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "depart",
+              "reason_zh": "箱底原先遮挡的支撑面已释放",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "return_kit",
+          "stream": "kit",
+          "description_zh": "完整闭箱返回干净原位",
+          "witness_zh": "完整闭箱回原箱位，箱位当前清洁",
+          "primitives": [
+            "grasp",
+            "navigate_to",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "repack",
+              "reason_zh": "返回的是盘点后重新装好的完整工具包",
+              "scope": "global"
+            },
+            {
+              "phase": "clean_source",
+              "reason_zh": "原箱位已清洁，可接收归还",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "brush_home",
+          "stream": "resources",
+          "description_zh": "结束清洁工具使用",
+          "witness_zh": "刷子在工具位",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clean_bench",
+              "reason_zh": "参考完成第一次用刷",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "clean_source",
+              "reason_zh": "参考完成第二次用刷",
+              "scope": "reference_only"
+            }
+          ]
+        },
+        {
+          "id": "complete",
+          "stream": "finish",
+          "description_zh": "核验交接和复原",
+          "witness_zh": "完整闭箱归位，两个表面清洁，书/罐/刷归位，手空",
+          "primitives": [],
+          "check_only": true,
+          "requires": [
+            {
+              "phase": "return_kit",
+              "reason_zh": "完成往返交接",
+              "scope": "global"
+            },
+            {
+              "phase": "brush_home",
+              "reason_zh": "工具归还",
+              "scope": "global"
+            }
+          ]
+        }
+      ],
+      "reference_orders": [
+        {
+          "id": "order_1",
+          "phases": [
+            "clear_bench",
+            "clean_bench",
+            "pack",
+            "depart",
+            "deliver",
+            "inventory",
+            "repack",
+            "clean_source",
+            "return_kit",
+            "brush_home",
+            "complete"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "order_2",
+          "phases": [
+            "pack",
+            "depart",
+            "clean_source",
+            "clear_bench",
+            "clean_bench",
+            "deliver",
+            "inventory",
+            "repack",
+            "brush_home",
+            "return_kit",
+            "complete"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "order_3",
+          "phases": [
+            "clear_bench",
+            "pack",
+            "clean_bench",
+            "depart",
+            "deliver",
+            "clean_source",
+            "inventory",
+            "repack",
+            "return_kit",
+            "brush_home",
+            "complete"
+          ],
+          "status": "planned"
+        }
+      ],
+      "evaluator_contract": {
+        "implementation_status": "planned",
+        "terminal_zh": [
+          "三件工具同时在已关闭的原位工具箱内",
+          "工作台和箱位当前干净；书归架、罐入桶、刷归位、手空"
+        ],
+        "required_history_zh": [
+          "完整闭箱外运并交付",
+          "三件工具在工作台同时展开一次",
+          "盘点后重装完整闭箱返回"
+        ],
+        "persistent_guards_zh": [
+          "外运/回运时开盖或丢失清单工具，后续补齐不能消除违规",
+          "不能在脏工作台展开工具，不能把箱子归到脏箱位",
+          "清洁原箱位时箱子不得仍覆盖其工作面"
+        ]
+      },
+      "negative_cases": [
+        {
+          "id": "fake_inventory",
+          "description_zh": "每件工具取出即放回，从不同时展开",
+          "rejection_witness_zh": "未出现三工具同时在台上的盘点见证",
+          "phases": [
+            "inventory",
+            "repack"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "open_transport",
+          "description_zh": "开盖搬箱后再关闭",
+          "rejection_witness_zh": "搬运期间闭盖约束曾失败",
+          "phases": [
+            "depart",
+            "return_kit"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "dirty_return",
+          "description_zh": "先归箱再清洁原位",
+          "rejection_witness_zh": "归还时原箱位仍脏，补擦不消除违规",
+          "phases": [
+            "clean_source",
+            "return_kit"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "missing_tool",
+          "description_zh": "留下钳子，其余归箱",
+          "rejection_witness_zh": "终态或运输完整性缺项",
+          "phases": [
+            "repack",
+            "return_kit"
+          ],
+          "status": "planned"
+        }
+      ],
+      "capability_gates_zh": [
+        "两个原生台面的 dust 状态和刷子兼容性；箱底遮挡区域须实际可清理",
+        "缩为三工具后的箱内容积、沉降、整箱运输和同时展开容量必须重新验证",
+        "带负载的暂时停放和单手换刷计划；不能在同一动作同时拿箱和刷"
+      ],
+      "allowed_shortcuts_zh": [
+        "可先清台或先装箱；箱子离开后可穿插清原位",
+        "允许在合法支撑面临时停箱来换工具，不能规定额外无用搬运",
+        "刷子归还可穿插完成，最后已在原位不要求重复取放"
+      ],
+      "repetition_collapse_review_zh": "每种工具一件；物品数量由三件维修清单解释。压缩清单后仍保留双向闭箱运输、目的地准备、同时盘点、源位置腾空清洁及再次汇合的归还链。",
+      "branch_type": "required_partial_order_not_observation_conditional",
+      "validation": {
+        "static": "planned",
+        "scene_construction": "planned",
+        "physical_references": "planned",
+        "physical_negatives": "planned",
+        "visual_model": "planned"
+      }
+    },
+    {
+      "id": "two_person_meal_delivery_and_reset_v1",
+      "title_zh": "双人备餐、整盒送餐与分餐复原",
+      "replaces": "task_designs/constructed_100plus/bedroom_vacuum_reset_close_102_v1.json",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "runtime_recipe": null,
+      "frozen_instance": null,
+      "measured_action_count": null,
+      "public_instruction_zh": "为两人准备热狗和苹果午餐，送到清洁餐桌上分餐，并归还空饭盒、收好余料、恢复厨房。",
+      "public_context_zh": [
+        "两根热狗必须加热至熟且未焦；已有两块苹果半，不增加切割工序。四件食物在准备台装入同一饭盒后整盒送达。",
+        "餐桌初始有一个空罐和灰尘。清罐、擦桌后再放两个盘子、两把叉子和茶瓶。每个盘子最终各有一根热狗和一块苹果；同类食物可互换。",
+        "从微波炉取出食物前必须停机。两人份须同时分好，饭盒才能作为已完成配送的空盒归还。",
+        "饭盒归还台初始有一份需冷藏的余料和一块砧板；余料进冰箱、板回指定收纳位，归还台清空后擦净，再接收空饭盒。微波炉最终停机关门、冰箱关闭。",
+        "餐食和餐具起初位于干净备料区。饭盒归还台与餐桌的灰尘属于冻结初态；归还台和食品准备台是不同支撑面。允许加热过程中推进其他工作，实际加热时间以物理状态为准。"
+      ],
+      "object_groups": [
+        {
+          "id": "hotdogs",
+          "count": 2,
+          "description_zh": "热狗",
+          "count_reason_zh": "两位用餐者各一份",
+          "source": "kitchen",
+          "source_role_or_locator": "hotdog1, hotdog2",
+          "kind": "work_item",
+          "repetition_class": "hotdogs",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "apple_halves",
+          "count": 2,
+          "description_zh": "苹果半",
+          "count_reason_zh": "两位用餐者各一份",
+          "source": "kitchen",
+          "source_role_or_locator": "apple1, apple2",
+          "kind": "work_item",
+          "repetition_class": "apple_halves",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "plates",
+          "count": 2,
+          "description_zh": "餐盘",
+          "count_reason_zh": "两位用餐者各一个",
+          "source": "kitchen",
+          "source_role_or_locator": "plate1, plate2",
+          "kind": "work_item",
+          "repetition_class": "tableware_transfer",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "forks",
+          "count": 2,
+          "description_zh": "叉子",
+          "count_reason_zh": "两位用餐者各一把",
+          "source": "kitchen",
+          "source_role_or_locator": "fork1, fork2",
+          "kind": "work_item",
+          "repetition_class": "tableware_transfer",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "tea",
+          "count": 1,
+          "description_zh": "茶瓶",
+          "count_reason_zh": "共用饮品",
+          "source": "kitchen",
+          "source_role_or_locator": "tea",
+          "kind": "work_item",
+          "repetition_class": "tea",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "carrier",
+          "count": 1,
+          "description_zh": "饭盒",
+          "count_reason_zh": "配送后被释放并归还的共享容器",
+          "source": "kitchen",
+          "source_role_or_locator": "box",
+          "kind": "carrier",
+          "repetition_class": "carrier",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "leftover",
+          "count": 1,
+          "description_zh": "余料",
+          "count_reason_zh": "独立冷藏收尾工作",
+          "source": "kitchen",
+          "source_role_or_locator": "sandwich",
+          "kind": "work_item",
+          "repetition_class": "leftover",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "board",
+          "count": 1,
+          "description_zh": "砧板",
+          "count_reason_zh": "释放饭盒归还台以清洁",
+          "source": "kitchen",
+          "source_role_or_locator": "board",
+          "kind": "work_item",
+          "repetition_class": "board",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "can",
+          "count": 1,
+          "description_zh": "空罐",
+          "count_reason_zh": "释放餐桌并处理垃圾",
+          "source": "kitchen",
+          "source_role_or_locator": "can1",
+          "kind": "work_item",
+          "repetition_class": "can",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "brush",
+          "count": 1,
+          "description_zh": "清洁刷",
+          "count_reason_zh": "归还台和餐桌共享除尘工具",
+          "source": "movie",
+          "source_role_or_locator": "brush",
+          "kind": "tool",
+          "repetition_class": "brush",
+          "asset_binding_status": "planned"
+        }
+      ],
+      "phases": [
+        {
+          "id": "heat",
+          "stream": "food",
+          "description_zh": "装入热狗、关门加热并停机",
+          "witness_zh": "两根 Cooked 且非 Burnt；取出前设备已关闭",
+          "primitives": [
+            "open",
+            "grasp",
+            "place_inside",
+            "close",
+            "toggle_on",
+            "wait",
+            "toggle_off"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "pack",
+          "stream": "food",
+          "description_zh": "熟热狗和苹果在准备区装盒",
+          "witness_zh": "四件食物同时 Inside 饭盒且热狗熟而未焦",
+          "primitives": [
+            "open",
+            "grasp",
+            "place_inside"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "heat",
+              "reason_zh": "热狗符合菜单要求",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "clear_table",
+          "stream": "dining",
+          "description_zh": "空罐入桶、释放桌面",
+          "witness_zh": "指定桌面无任务杂物，罐 Inside 垃圾桶",
+          "primitives": [
+            "grasp",
+            "place_inside"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "clean_table",
+          "stream": "dining",
+          "description_zh": "擦净餐桌",
+          "witness_zh": "指定桌面腾空且非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clear_table",
+              "reason_zh": "清洁原被空罐占用的工作面",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "set_table",
+          "stream": "dining",
+          "description_zh": "布置两套餐具和茶",
+          "witness_zh": "两盘两叉和茶在当前干净餐桌",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clean_table",
+              "reason_zh": "餐具的接收面应干净",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "deliver",
+          "stream": "food",
+          "description_zh": "把完整饭盒运到干净餐桌",
+          "witness_zh": "从准备区携四食物的饭盒完整到达餐桌",
+          "primitives": [
+            "grasp",
+            "navigate_to",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "pack",
+              "reason_zh": "配送完整午餐",
+              "scope": "global"
+            },
+            {
+              "phase": "clean_table",
+              "reason_zh": "食物容器的接收面准备好",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "serve",
+          "stream": "service",
+          "description_zh": "分别分成两人份",
+          "witness_zh": "两个盘子同时各有一根熟热狗和一块苹果；饭盒为空",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "deliver",
+              "reason_zh": "从已交付的完整午餐分餐",
+              "scope": "global"
+            },
+            {
+              "phase": "set_table",
+              "reason_zh": "两位用餐者的餐盘和餐具准备好",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "store_leftover",
+          "stream": "storage",
+          "description_zh": "余料冷藏、砧板归位",
+          "witness_zh": "余料 Inside 冰箱，砧板在指定收纳位，归还台释放",
+          "primitives": [
+            "open",
+            "grasp",
+            "place_inside",
+            "place_on_top",
+            "close"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "clean_return",
+          "stream": "kitchen",
+          "description_zh": "清空后擦净饭盒归还台",
+          "witness_zh": "归还台工作区无余料和砧板，非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "store_leftover",
+              "reason_zh": "参考中余料和板已归位；实际仅要求工作面腾空",
+              "scope": "reference_only"
+            }
+          ]
+        },
+        {
+          "id": "return_box",
+          "stream": "carrier",
+          "description_zh": "把空饭盒归还干净位置",
+          "witness_zh": "空饭盒 OnTop 当前干净的归还台，餐桌上两人份仍齐备",
+          "primitives": [
+            "grasp",
+            "navigate_to",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "serve",
+              "reason_zh": "配送容器已被分餐释放",
+              "scope": "global"
+            },
+            {
+              "phase": "clean_return",
+              "reason_zh": "归还位置已完成清洁",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "reset",
+          "stream": "resources",
+          "description_zh": "关闭设备并归还清洁工具",
+          "witness_zh": "微波炉停机且门关闭，冰箱门关闭，刷子归位，手空",
+          "primitives": [
+            "toggle_off",
+            "close",
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "heat",
+              "reason_zh": "参考在加热结束后关闭设备",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "store_leftover",
+              "reason_zh": "参考在最后存取后关冰箱",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "clean_return",
+              "reason_zh": "参考不再用刷清归还台",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "clean_table",
+              "reason_zh": "参考不再用刷清餐桌",
+              "scope": "reference_only"
+            }
+          ]
+        },
+        {
+          "id": "complete",
+          "stream": "finish",
+          "description_zh": "同时核验用餐和厨房终态",
+          "witness_zh": "两份餐食、餐具、饮品及厨房复原同时成立",
+          "primitives": [],
+          "check_only": true,
+          "requires": [
+            {
+              "phase": "return_box",
+              "reason_zh": "容器归还",
+              "scope": "global"
+            },
+            {
+              "phase": "reset",
+              "reason_zh": "设备和工具状态合格",
+              "scope": "global"
+            },
+            {
+              "phase": "serve",
+              "reason_zh": "两份食物仍在盘中",
+              "scope": "global"
+            }
+          ]
+        }
+      ],
+      "reference_orders": [
+        {
+          "id": "order_1",
+          "phases": [
+            "heat",
+            "pack",
+            "clear_table",
+            "clean_table",
+            "set_table",
+            "deliver",
+            "serve",
+            "store_leftover",
+            "clean_return",
+            "return_box",
+            "reset",
+            "complete"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "order_2",
+          "phases": [
+            "clear_table",
+            "clean_table",
+            "set_table",
+            "store_leftover",
+            "clean_return",
+            "heat",
+            "pack",
+            "deliver",
+            "reset",
+            "serve",
+            "return_box",
+            "complete"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "order_3",
+          "phases": [
+            "store_leftover",
+            "clear_table",
+            "heat",
+            "clean_table",
+            "pack",
+            "deliver",
+            "set_table",
+            "clean_return",
+            "serve",
+            "return_box",
+            "reset",
+            "complete"
+          ],
+          "status": "planned"
+        }
+      ],
+      "evaluator_contract": {
+        "implementation_status": "planned",
+        "terminal_zh": [
+          "两盘分别有一根熟而未焦的热狗和一块苹果，盘叉和茶在清洁餐桌",
+          "空饭盒在清洁归还台，余料冷藏、板归位、罐入桶，准备台不留餐食与餐具",
+          "微波炉关闭且停机、冰箱关闭、清洁刷归还、手空"
+        ],
+        "required_history_zh": [
+          "四件餐食在准备台同时装盒并整盒送达",
+          "两份餐食同时分好，才把空盒作为完成配送的容器归还",
+          "从微波炉取食物之前已停机"
+        ],
+        "persistent_guards_zh": [
+          "未熟/烧焦食物不可被当作合格餐食配送或分餐",
+          "配送途中缺少食物，或到达后才补齐，不能替代完整送达",
+          "不能先放餐具/饭盒到脏目标面，随后补擦来抹去违规",
+          "历史清洁不代替当前清洁，终态需同时成立"
+        ]
+      },
+      "negative_cases": [
+        {
+          "id": "uncooked",
+          "description_zh": "未熟热狗装盒送达后再补加热",
+          "rejection_witness_zh": "首次配送时食品不合格",
+          "phases": [
+            "heat",
+            "deliver"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "fake_delivery",
+          "description_zh": "食物逐件送桌，到桌上才装盒",
+          "rejection_witness_zh": "缺少准备台装盒和完整负载运输见证",
+          "phases": [
+            "pack",
+            "deliver"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "early_return",
+          "description_zh": "只分好一人份就归还饭盒",
+          "rejection_witness_zh": "缺少同时两份分餐且容器释放的见证",
+          "phases": [
+            "serve",
+            "return_box"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "dirty_box_home",
+          "description_zh": "空盒先归脏归还台，后补清洁",
+          "rejection_witness_zh": "归还当时接收面未清洁",
+          "phases": [
+            "clean_return",
+            "return_box"
+          ],
+          "status": "planned"
+        }
+      ],
+      "capability_gates_zh": [
+        "联合场景中独立归还台和餐桌的原生 dust、刷子兼容性、污染状态是否会跨面传播；食品备料区初始清洁",
+        "两热狗真实熟制、未焦与停机取出；不能按固定 wait 次数假定已熟",
+        "完整负载盒的搬运、食品沉降和盘上状态；早期午饭成功不能替代本版验证",
+        "归还台清空必须检查实际占用；reference_only 顺序不得成为隐藏评分规则"
+      ],
+      "allowed_shortcuts_zh": [
+        "允许加热等待期间清桌、摆台或储存余料；不强制观察/等待次数",
+        "桌面清洁后可以先送盒或先摆餐具",
+        "归还台实际腾空时即可清洁，冷藏归位与配送可交错",
+        "允许合法整体搬运，不加逐件搬运禁令来凑步数"
+      ],
+      "repetition_collapse_review_zh": "每位用餐者一份餐食和一套餐具，其他物品各一件。即使缩为一人份，仍有熟制、接收面准备、完整配送、分餐释放容器、归还台复原和空盒归还的交叉依赖。",
+      "branch_type": "required_partial_order_not_observation_conditional",
+      "validation": {
+        "static": "planned",
+        "scene_construction": "planned",
+        "physical_references": "planned",
+        "physical_negatives": "planned",
+        "visual_model": "planned"
+      }
+    },
+    {
+      "id": "study_bedroom_shared_storage_reset_v1",
+      "title_zh": "书房与卧室联动整理",
+      "replaces": "task_designs/constructed_branching/bedroom_shared_library_branching_v2.json",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "runtime_recipe": null,
+      "frozen_instance": null,
+      "measured_action_count": null,
+      "public_instruction_zh": "整理书房和卧室：清洁共用书柜并归书，清洁书桌与键盘，收好玩具，吸净两房地面，最后恢复各房设备和清洁工具。",
+      "public_context_zh": [
+        "共用书柜上只有一个笔袋和灰尘，笔袋入指定收纳盒后擦净书柜。书房、卧室地面各有一本书；书柜干净后可直接归书。",
+        "书房桌面和键盘初始有尘。键盘移开后擦桌，键盘单独去尘；两者当前都干净时键盘才归桌。无需给书或玩具增加无用途的暂存往返。",
+        "卧室只有一件地面玩具，归玩具箱。指定地面任务物品清走后吸尘，两房共用吸尘器；书柜、书桌、键盘共用经兼容性验证的清洁工具。",
+        "各房灯可在该房完成后独立关闭，也允许提前关闭后因照明需要再打开；只要求最终灯关闭。工具可穿插归还，结束时吸尘器关闭且工具归位、手空。"
+      ],
+      "object_groups": [
+        {
+          "id": "study_book",
+          "count": 1,
+          "description_zh": "书房地面的一本书",
+          "count_reason_zh": "共享书柜准备影响书房地面释放",
+          "source": "library",
+          "source_role_or_locator": "a_item01",
+          "kind": "work_item",
+          "repetition_class": "book_storage",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "bedroom_book",
+          "count": 1,
+          "description_zh": "卧室地面的一本书",
+          "count_reason_zh": "同一共享书柜影响另一房间",
+          "source": "library",
+          "source_role_or_locator": "b_item01",
+          "kind": "work_item",
+          "repetition_class": "book_storage",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "toy",
+          "count": 1,
+          "description_zh": "卧室玩具",
+          "count_reason_zh": "有独立于归书的目的地，和归书汇合释放卧室地面",
+          "source": "library",
+          "source_role_or_locator": "b_item00",
+          "kind": "work_item",
+          "repetition_class": "toy",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "pencil_case",
+          "count": 1,
+          "description_zh": "书柜上的笔袋",
+          "count_reason_zh": "清出书柜接收空间",
+          "source": "library",
+          "source_role_or_locator": "clutter0",
+          "kind": "work_item",
+          "repetition_class": "pencil_case",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "keyboard",
+          "count": 1,
+          "description_zh": "书房键盘",
+          "count_reason_zh": "与桌面分别清洁，然后汇合归位",
+          "source": "diverse_assets",
+          "source_role_or_locator": "office_maintenance_and_shutdown_108_v1 / clean_a_keyboard",
+          "kind": "work_item",
+          "repetition_class": "keyboard",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "brush",
+          "count": 1,
+          "description_zh": "除尘工具",
+          "count_reason_zh": "在键盘、桌面与书柜之间复用",
+          "source": "library",
+          "source_role_or_locator": "wipe_tool",
+          "kind": "tool",
+          "repetition_class": "brush",
+          "asset_binding_status": "planned"
+        },
+        {
+          "id": "vacuum",
+          "count": 1,
+          "description_zh": "吸尘器",
+          "count_reason_zh": "两房共用，状态及归还位置明确",
+          "source": "library",
+          "source_role_or_locator": "tool",
+          "kind": "tool",
+          "repetition_class": "vacuum",
+          "asset_binding_status": "planned"
+        }
+      ],
+      "phases": [
+        {
+          "id": "clear_shelf",
+          "stream": "storage",
+          "description_zh": "笔袋入收纳盒，清出书柜",
+          "witness_zh": "笔袋在指定盒内，书柜接收面腾空",
+          "primitives": [
+            "grasp",
+            "place_inside"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "clean_shelf",
+          "stream": "storage",
+          "description_zh": "擦净共用书柜",
+          "witness_zh": "接收面非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clear_shelf",
+              "reason_zh": "清除遮挡后清洁书籍接收面",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "store_study_book",
+          "stream": "study",
+          "description_zh": "书房书直接归柜",
+          "witness_zh": "书 OnTop 当前清洁的书柜，离开书房地面",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clean_shelf",
+              "reason_zh": "归书目的地合格",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "store_bedroom_book",
+          "stream": "bedroom",
+          "description_zh": "卧室书直接归柜",
+          "witness_zh": "书 OnTop 当前清洁的书柜，离开卧室地面",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clean_shelf",
+              "reason_zh": "同一书柜准备解锁另一个房间",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "store_toy",
+          "stream": "bedroom",
+          "description_zh": "玩具直接归箱",
+          "witness_zh": "玩具 Inside 玩具箱，离开卧室地面",
+          "primitives": [
+            "grasp",
+            "place_inside"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "move_keyboard",
+          "stream": "desk",
+          "description_zh": "移开键盘以露出桌面",
+          "witness_zh": "键盘在安全支撑面，桌面工作区腾空",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "clean_desk",
+          "stream": "desk",
+          "description_zh": "擦净书桌工作面",
+          "witness_zh": "桌面腾空且非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "move_keyboard",
+              "reason_zh": "键盘原来遮挡的表面需清洁",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "clean_keyboard",
+          "stream": "device",
+          "description_zh": "单独清洁键盘",
+          "witness_zh": "键盘非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "wipe"
+          ],
+          "check_only": false,
+          "requires": []
+        },
+        {
+          "id": "restore_keyboard",
+          "stream": "desk",
+          "description_zh": "干净键盘归回干净书桌",
+          "witness_zh": "键盘 OnTop 书桌，双方当前都非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "clean_keyboard",
+              "reason_zh": "待归还物品合格",
+              "scope": "global"
+            },
+            {
+              "phase": "clean_desk",
+              "reason_zh": "接收表面合格",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "vacuum_study",
+          "stream": "study",
+          "description_zh": "书房地面腾空后吸尘",
+          "witness_zh": "指定地面无任务杂物且非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "toggle_on",
+            "vacuum",
+            "toggle_off"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "store_study_book",
+              "reason_zh": "参考通过直接归书释放地面；其他合法暂放也可",
+              "scope": "reference_only"
+            }
+          ]
+        },
+        {
+          "id": "vacuum_bedroom",
+          "stream": "bedroom",
+          "description_zh": "卧室两类地面物品清走后吸尘",
+          "witness_zh": "卧室指定地面无书和玩具且非 Covered(dust)",
+          "primitives": [
+            "grasp",
+            "toggle_on",
+            "vacuum",
+            "toggle_off"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "store_bedroom_book",
+              "reason_zh": "参考中书已离地；评分检查地面实际清空",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "store_toy",
+              "reason_zh": "参考中玩具已离地；评分检查地面实际清空",
+              "scope": "reference_only"
+            }
+          ]
+        },
+        {
+          "id": "study_ready",
+          "stream": "study",
+          "description_zh": "核验书房功能恢复",
+          "witness_zh": "书归柜、键盘和书桌干净且归位、地面清洁",
+          "primitives": [],
+          "check_only": true,
+          "requires": [
+            {
+              "phase": "restore_keyboard",
+              "reason_zh": "工作位复原",
+              "scope": "global"
+            },
+            {
+              "phase": "vacuum_study",
+              "reason_zh": "地面清洁",
+              "scope": "global"
+            },
+            {
+              "phase": "store_study_book",
+              "reason_zh": "书归位",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "bedroom_ready",
+          "stream": "bedroom",
+          "description_zh": "核验卧室复原",
+          "witness_zh": "书归柜、玩具入箱、地面清洁",
+          "primitives": [],
+          "check_only": true,
+          "requires": [
+            {
+              "phase": "store_bedroom_book",
+              "reason_zh": "书归位",
+              "scope": "global"
+            },
+            {
+              "phase": "store_toy",
+              "reason_zh": "玩具归位",
+              "scope": "global"
+            },
+            {
+              "phase": "vacuum_bedroom",
+              "reason_zh": "地面清洁",
+              "scope": "global"
+            }
+          ]
+        },
+        {
+          "id": "shutdown",
+          "stream": "resources",
+          "description_zh": "各房关灯、清洁设备停机归位",
+          "witness_zh": "两盏灯和吸尘器关闭，刷及吸尘器归位，手空",
+          "primitives": [
+            "toggle_off",
+            "grasp",
+            "place_on_top"
+          ],
+          "check_only": false,
+          "requires": [
+            {
+              "phase": "study_ready",
+              "reason_zh": "参考在书房完成后收尾；非强制关灯时序",
+              "scope": "reference_only"
+            },
+            {
+              "phase": "bedroom_ready",
+              "reason_zh": "参考在卧室完成后收尾；非强制关灯时序",
+              "scope": "reference_only"
+            }
+          ]
+        },
+        {
+          "id": "complete",
+          "stream": "finish",
+          "description_zh": "同时检查全部终态",
+          "witness_zh": "所有终态当前成立且无违规",
+          "primitives": [],
+          "check_only": true,
+          "requires": [
+            {
+              "phase": "study_ready",
+              "reason_zh": "书房仍完成",
+              "scope": "global"
+            },
+            {
+              "phase": "bedroom_ready",
+              "reason_zh": "卧室仍完成",
+              "scope": "global"
+            },
+            {
+              "phase": "shutdown",
+              "reason_zh": "设备和工具终态",
+              "scope": "global"
+            }
+          ]
+        }
+      ],
+      "reference_orders": [
+        {
+          "id": "order_1",
+          "phases": [
+            "clear_shelf",
+            "clean_shelf",
+            "store_study_book",
+            "store_bedroom_book",
+            "store_toy",
+            "move_keyboard",
+            "clean_desk",
+            "clean_keyboard",
+            "restore_keyboard",
+            "vacuum_study",
+            "vacuum_bedroom",
+            "study_ready",
+            "bedroom_ready",
+            "shutdown",
+            "complete"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "order_2",
+          "phases": [
+            "move_keyboard",
+            "clean_keyboard",
+            "clean_desk",
+            "restore_keyboard",
+            "store_toy",
+            "clear_shelf",
+            "clean_shelf",
+            "store_bedroom_book",
+            "vacuum_bedroom",
+            "bedroom_ready",
+            "store_study_book",
+            "vacuum_study",
+            "study_ready",
+            "shutdown",
+            "complete"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "order_3",
+          "phases": [
+            "store_toy",
+            "clean_keyboard",
+            "clear_shelf",
+            "move_keyboard",
+            "clean_desk",
+            "clean_shelf",
+            "store_study_book",
+            "vacuum_study",
+            "store_bedroom_book",
+            "vacuum_bedroom",
+            "restore_keyboard",
+            "bedroom_ready",
+            "study_ready",
+            "shutdown",
+            "complete"
+          ],
+          "status": "planned"
+        }
+      ],
+      "evaluator_contract": {
+        "implementation_status": "planned",
+        "terminal_zh": [
+          "两本书在清洁书柜、笔袋入盒、玩具入箱",
+          "键盘和书桌清洁且键盘归位，两房指定地面清洁",
+          "两灯和吸尘器关闭，工具归位、手空"
+        ],
+        "required_history_zh": [
+          "清洁支撑面的实际腾空见证；允许不同合法暂放方式，不要求同时放上指定暂存台"
+        ],
+        "persistent_guards_zh": [
+          "书不得提前放到脏书柜后再补擦",
+          "脏键盘不得先放回干净桌；干净键盘也不得先放到脏桌，补清洁不抹去违规",
+          "吸尘前指定地面任务杂物已离地；不把归柜/入箱当作唯一清场办法",
+          "曾经清洁不代表现在仍干净，最终状态需同时满足"
+        ]
+      },
+      "negative_cases": [
+        {
+          "id": "dirty_keyboard",
+          "description_zh": "脏键盘先归桌再清洁",
+          "rejection_witness_zh": "归位事件时键盘脏",
+          "phases": [
+            "clean_keyboard",
+            "restore_keyboard"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "dirty_shelf",
+          "description_zh": "书先归脏柜再擦",
+          "rejection_witness_zh": "归书时接收面脏",
+          "phases": [
+            "store_study_book",
+            "clean_shelf"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "blocked_floor",
+          "description_zh": "玩具留地上直接吸尘",
+          "rejection_witness_zh": "清洁发生时地面有指定任务杂物",
+          "phases": [
+            "store_toy",
+            "vacuum_bedroom"
+          ],
+          "status": "planned"
+        },
+        {
+          "id": "regressed_clean",
+          "description_zh": "书柜曾干净，重新变脏后仍归书",
+          "rejection_witness_zh": "当前清洁状态不满足接收要求",
+          "phases": [
+            "clean_shelf",
+            "store_bedroom_book"
+          ],
+          "status": "planned"
+        }
+      ],
+      "capability_gates_zh": [
+        "键盘资产从 clean_a_keyboard 原生模板导入，当前仅有来源目录，尚未绑定模型哈希",
+        "同一除尘工具对键盘、原生书桌、书柜的兼容性；不兼容时按真实能力选择工具并重审资源约束",
+        "两个可独立评分的房间地面和可用收纳盒；新布局需验证门洞、通路、键盘停放和机器人出生点",
+        "清空工作区的占用检查须由实际几何/关系支撑，不能只沿用旧配方的强制全量暂存里程碑"
+      ],
+      "allowed_shortcuts_zh": [
+        "书柜准备好后书直接归柜，玩具可随时直接归箱",
+        "地面实际已清空时可先吸尘再最终归书，不强迫多一次搬运",
+        "键盘可在移开前或移开后清洁，只要求归位时物品和桌面都合格",
+        "灯可按每房独立收尾，不设置两房都完成才许关任一灯的隐藏屏障"
+      ],
+      "repetition_collapse_review_zh": "由原 24 件书玩具和 6 件柜上杂物缩为 2 本书、1 玩具、1 键盘、1 笔袋。书房有设备/桌面双清洁汇合，卧室有归书/收玩具后的地面释放，两房共享书柜和工具；不再复制两条完整腾空暂存归位流程。",
+      "branch_type": "required_partial_order_not_observation_conditional",
+      "validation": {
+        "static": "planned",
+        "scene_construction": "planned",
+        "physical_references": "planned",
+        "physical_negatives": "planned",
+        "visual_model": "planned"
+      }
+    }
+  ],
+  "implementation_plan": [
+    {
+      "order": 1,
+      "task": "two_person_meal_delivery_and_reset_v1",
+      "reason_zh": "复用已有备餐/分餐能力，先验证多接收面与容器复用"
+    },
+    {
+      "order": 2,
+      "task": "workshop_inventory_and_surface_turnover_v1",
+      "reason_zh": "复用闭箱运输和同时盘点，新增两个工作面的交接"
+    },
+    {
+      "order": 3,
+      "task": "study_bedroom_shared_storage_reset_v1",
+      "reason_zh": "去掉强制暂存，验证键盘与共享书柜的异质分支"
+    },
+    {
+      "order": 4,
+      "task": "garden_care_and_reading_corner_v1",
+      "reason_zh": "保留庭院场景，但作为次优先候选审查空间复用是否足够有价值"
+    }
+  ],
+  "acceptance": [
+    "静态引用、DAG、每条依赖原因和三种合法参考顺序",
+    "人工反重复/非人为先后审查；静态图指标不能代替此项",
+    "新配方与公开要求映射，状态/事件约束及反例测试",
+    "新场景冻结、原生能力和可见性/通路/容量验证",
+    "至少两种不同工作分支顺序的完整物理参考及独立负例",
+    "真实 RGB/MCP 模型执行与视频、独立评分记录"
+  ]
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "task": "assembling_furniture",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/assembling_furniture/problem0.bddl",
+    "sha256": "071a46305e84fac1a3bbc63e2f95c238e34ba637a78965a6cc778d052ec46d39",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  },
+  {
+    "task": "cleaning_garden_tools",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/cleaning_garden_tools/problem0.bddl",
+    "sha256": "25119537448a61c00fb658888e89d10d3cfe3f20f7fa723ac81f99e2e2bda5f3",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  },
+  {
+    "task": "clean_a_garden_sprayer",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_a_garden_sprayer/problem0.bddl",
+    "sha256": "dee24c5c696863d1e47b231048946a58acf0009d4a8ab8ba28c9114a82313e0a",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  },
+  {
+    "task": "staining_wood_furniture",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/staining_wood_furniture/problem0.bddl",
+    "sha256": "43eaff77afcecf5d42efe30dad9ac2ca24b2fbdc811a7c54de0a4c6492d7d084",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  },
+  {
+    "task": "doing_laundry",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/doing_laundry/problem0.bddl",
+    "sha256": "6f73c328c5d8b48020c56a58948c2044d9764ce78232be427833cd5d369d2ce5",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  },
+  {
+    "task": "cleaning_bathrooms",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/cleaning_bathrooms/problem0.bddl",
+    "sha256": "ecab53496ad681fb4a2e24b84f009aaf540698669d7fc42be4e085a758e7d5ea",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  },
+  {
+    "task": "clean_a_computer_monitor",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_a_computer_monitor/problem0.bddl",
+    "sha256": "e7365558a164e2e5fffb9809bf6603e30495773d86ccc53eb4335c95decbdfd9",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  },
+  {
+    "task": "hanging_pictures",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/hanging_pictures/problem0.bddl",
+    "sha256": "3fa458a5bd55d6a560014689ae209c5a9c77b88cf830c5bbd46f301a9e46fb80",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  },
+  {
+    "task": "clean_apples",
+    "path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_apples/problem0.bddl",
+    "sha256": "aeba0e2ab227766400b8284113a39780ba7063f137db565ba77774e506347144",
+    "evidence_level": "BDDL_source_only",
+    "model_binding": "planned",
+    "physical_validation": "planned"
+  }
+]
