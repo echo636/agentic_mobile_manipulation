@@ -22,6 +22,7 @@ def main():
     p.add_argument('--spec',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--order',default='build',help=argparse.SUPPRESS)
+    p.add_argument('--geometry-only',action='store_true',help='Serialize complete native objects with CPU physics; not a task instance pass')
     p.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
     a=p.parse_args()
     if not a.worker:
@@ -46,7 +47,11 @@ def main():
         from manipulation_agent.executors.custom_task import CustomTaskBackend
         backend=CustomTaskBackend.__new__(CustomTaskBackend)
         backend.__init__(a.spec,a.output,build_instance=a.output/'initial_scene.json',record_video=False,
-                         inside_placement='official_volume',max_steps=1000000)
+                         inside_placement='official_volume',max_steps=1000000,geometry_only=a.geometry_only)
+        if a.geometry_only:
+            record.update(status='passed',validation_level='native_object_geometry_seed_only_not_initial_state_or_task_success',
+                          geometry_seed={'path':'initial_scene.json','sha256':sha256(a.output/'initial_scene.json')})
+            return 0
         from manipulation_agent.diverse_task_contract import robot_spawn_supports
         position=backend.robot.get_position_orientation()[0].tolist()
         floors={obj.name:[v.tolist() for v in obj.aabb] for obj in backend.env.scene.objects
@@ -61,6 +66,7 @@ def main():
         if record['evaluation']['task_success']:
             raise RuntimeError('New task is already solved at initialization')
         write_json(a.output/'initial_observation.json',backend.observe())
+        spec.pop('construction_seed',None)
         spec['frozen_instance']={'path':'initial_scene.json','sha256':sha256(a.output/'initial_scene.json')}
         write_json(a.output/'task.json',spec)
         load_spec(a.output/'task.json',require_frozen=True)

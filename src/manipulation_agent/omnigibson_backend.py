@@ -311,6 +311,13 @@ class OmniGibsonBackend:
             config["scene"].update(load_room_instances=None, load_room_types=None)
         instance_path = template.parent / f'{scene}_task_{task}_instances' / f'{scene}_task_{task}_0_{self.instance}_template-tro_state.json'
         self.required_instance_bindings = set(json.loads(instance_path.read_text())) - {'robot_poses'}
+        custom=getattr(self,"custom_spec",{})
+        seed=custom.get('frozen_instance') or custom.get('construction_seed')
+        if seed:
+            selected=(self.spec_path.parent/seed['path']).resolve()
+            if hashlib.sha256(selected.read_bytes()).hexdigest()!=seed['sha256']:
+                raise ValueError('Preloaded custom scene hash mismatch')
+            template=selected
         deferred = []
         template, data, rejected = select_compatible_scene(
             template, instance_path, task_name=task, deferred_bindings=deferred)

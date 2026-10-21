@@ -465,13 +465,13 @@
     {
       "name": "fv2_source",
       "position": [
-        12.8,
-        7.2,
+        11.8,
+        4.0,
         0.275
       ],
       "size": [
-        1.5,
-        0.65,
+        1.8,
+        1.0,
         0.55
       ],
       "rgba": [
@@ -485,13 +485,13 @@
     {
       "name": "fv2_work",
       "position": [
-        15.6,
-        7.2,
+        17.4,
+        4.0,
         0.275
       ],
       "size": [
-        1.5,
-        0.65,
+        1.7,
+        0.9,
         0.55
       ],
       "rgba": [
@@ -505,8 +505,8 @@
     {
       "name": "fv2_display",
       "position": [
-        12.8,
-        12.0,
+        13.1,
+        13.6,
         0.3
       ],
       "size": [
@@ -525,8 +525,8 @@
     {
       "name": "fv2_stage",
       "position": [
-        12.7,
-        10.7,
+        12.8,
+        8.7,
         0.325
       ],
       "size": [
@@ -545,8 +545,8 @@
     {
       "name": "fv2_tool_home",
       "position": [
-        16.7,
-        12.0,
+        15.4,
+        4.0,
         0.3
       ],
       "size": [
@@ -565,13 +565,13 @@
     {
       "name": "fv2_food_stage",
       "position": [
-        16.7,
-        10.2,
+        18.1,
+        5.4,
         0.3
       ],
       "size": [
-        0.7,
-        1.0,
+        1.6,
+        1.2,
         0.6
       ],
       "rgba": [
@@ -585,8 +585,8 @@
     {
       "name": "fv2_parts",
       "position": [
-        13.0,
-        8.8,
+        14.0,
+        5.7,
         0.325
       ],
       "size": [
@@ -605,8 +605,8 @@
     {
       "name": "fv2_jig",
       "position": [
-        15.5,
-        8.8,
+        15.4,
+        8.1,
         0.43
       ],
       "size": [
@@ -629,8 +629,8 @@
       "target": "floor",
       "place_on_support": true,
       "xy": [
-        14.4,
-        11.2
+        13.2,
+        11.8
       ]
     },
     {
@@ -638,8 +638,8 @@
       "target": "work",
       "place_on_support": true,
       "support_uv": [
-        0.125,
-        0.5
+        0.3,
+        0.65
       ]
     },
     {
@@ -661,8 +661,8 @@
       "target": "floor",
       "place_on_support": true,
       "xy": [
-        16.1,
-        11.2
+        14.9,
+        12.5
       ]
     },
     {
@@ -670,8 +670,8 @@
       "target": "work",
       "place_on_support": true,
       "support_uv": [
-        0.375,
-        0.5
+        0.7,
+        0.65
       ]
     },
     {
@@ -693,8 +693,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        12.4,
-        7.2
+        11.4,
+        4.25
       ]
     },
     {
@@ -702,8 +702,8 @@
       "target": "source",
       "place_on_support": true,
       "xy": [
-        13.2,
-        7.2
+        12.2,
+        4.25
       ]
     },
     {
@@ -711,8 +711,8 @@
       "target": "floor",
       "place_on_support": true,
       "xy": [
-        11.7,
-        12.6
+        18.6,
+        4.0
       ]
     },
     {
@@ -720,8 +720,8 @@
       "target": "floor",
       "place_on_support": true,
       "xy": [
-        11.8,
-        9.8
+        18.6,
+        6.5
       ]
     },
     {
@@ -729,8 +729,8 @@
       "target": "work",
       "place_on_support": true,
       "support_uv": [
-        0.625,
-        0.5
+        0.25,
+        0.15
       ]
     },
     {
@@ -738,8 +738,8 @@
       "target": "work",
       "place_on_support": true,
       "support_uv": [
-        0.875,
-        0.5
+        0.75,
+        0.15
       ]
     },
     {
@@ -747,8 +747,8 @@
       "target": "source",
       "place_on_support": true,
       "support_uv": [
-        0.16666666666666666,
-        0.5
+        0.18,
+        0.17
       ]
     },
     {
@@ -757,7 +757,7 @@
       "place_on_support": true,
       "support_uv": [
         0.5,
-        0.5
+        0.17
       ]
     },
     {
@@ -765,8 +765,8 @@
       "target": "source",
       "place_on_support": true,
       "support_uv": [
-        0.8333333333333334,
-        0.5
+        0.82,
+        0.17
       ]
     },
     {
@@ -792,8 +792,8 @@
       "target": "food_stage",
       "place_on_support": true,
       "support_uv": [
-        0.125,
-        0.25
+        0.75,
+        0.8
       ]
     },
     {
@@ -801,8 +801,8 @@
       "target": "food_stage",
       "place_on_support": true,
       "support_uv": [
-        0.375,
-        0.25
+        0.9,
+        0.6
       ]
     },
     {
@@ -810,8 +810,8 @@
       "target": "food_stage",
       "place_on_support": true,
       "support_uv": [
-        0.625,
-        0.25
+        0.65,
+        0.5
       ]
     },
     {
@@ -819,8 +819,8 @@
       "target": "food_stage",
       "place_on_support": true,
       "support_uv": [
-        0.875,
-        0.25
+        0.7,
+        0.2
       ]
     },
     {
@@ -828,8 +828,8 @@
       "target": "food_stage",
       "place_on_support": true,
       "support_uv": [
-        0.125,
-        0.75
+        0.9,
+        0.2
       ]
     },
     {
@@ -837,8 +837,8 @@
       "target": "food_stage",
       "place_on_support": true,
       "support_uv": [
-        0.375,
-        0.75
+        0.25,
+        0.13
       ]
     },
     {
@@ -846,8 +846,8 @@
       "target": "food_stage",
       "place_on_support": true,
       "support_uv": [
-        0.625,
-        0.75
+        0.25,
+        0.65
       ]
     },
     {
@@ -953,8 +953,8 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        12.38,
-        8.8
+        13.38,
+        5.7
       ]
     },
     {
@@ -962,8 +962,8 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        13.35,
-        8.8
+        14.35,
+        5.7
       ]
     },
     {
@@ -971,8 +971,8 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        12.25,
-        7.950000000000001
+        13.25,
+        4.8500000000000005
       ]
     },
     {
@@ -980,8 +980,8 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        12.95,
-        7.950000000000001
+        13.95,
+        4.8500000000000005
       ]
     },
     {
@@ -989,8 +989,8 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        13.65,
-        7.950000000000001
+        14.65,
+        4.8500000000000005
       ]
     },
     {
@@ -998,8 +998,8 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        13.65,
-        9.65
+        14.65,
+        6.55
       ]
     },
     {
@@ -2336,8 +2336,8 @@
             "primitive": "place_on_top",
             "role": "floor",
             "xy": [
-              15.2,
-              10.5
+              14.1,
+              11.7
             ]
           }
         ],
@@ -2661,6 +2661,20 @@
     "conditional_design_count": 108,
     "recovery_status": "original_file"
   },
+  "robot_start": {
+    "position": [
+      15.3,
+      12.8,
+      0.03
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "scene_setup_note": "Stations arranged from measured native geometry, retaining original trees, garden lights, grill and patio furniture.",
   "compiled_action_count": 109,
   "compiled_count_includes_waits": true,
   "compiled_manipulation_count": 109

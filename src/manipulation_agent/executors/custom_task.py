@@ -47,10 +47,11 @@ def validate_system_references(spec, system_root):
 
 
 class CustomTaskBackend(RGBBackend):
-    def __init__(self, spec_path, output, *, build_instance=None, **kwargs):
+    def __init__(self, spec_path, output, *, build_instance=None, geometry_only=False, **kwargs):
         self.spec_path = Path(spec_path).resolve()
         self.custom_spec = json.loads(self.spec_path.read_text())
-        self.use_gpu_dynamics = self.custom_spec.get('physics', {}).get('use_gpu_dynamics', False)
+        self.geometry_only = geometry_only
+        self.use_gpu_dynamics = self.custom_spec.get('physics', {}).get('use_gpu_dynamics', False) and not geometry_only
         validate_spec(self.custom_spec, spec_path=self.spec_path, require_frozen=build_instance is None)
         validate_system_references(self.custom_spec,
             Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/systems')
@@ -61,6 +62,7 @@ class CustomTaskBackend(RGBBackend):
         self._custom_motion_positions = {}; self._custom_state_errors = []
         base = self.custom_spec['base']
         super().__init__(base['task'], base['instance'], output, seed=base['seed'], **kwargs)
+        if self.geometry_only:return
         # Camera initialization may advance physics. Begin scoring from the
         # actual policy-ready scene, and reject a fixture that already drifted
         # out of its declared initial conditions before the agent can act.
@@ -107,6 +109,7 @@ class CustomTaskBackend(RGBBackend):
             if hashlib.sha256(instance_path.read_bytes()).hexdigest() != frozen['sha256']:
                 raise ValueError('Custom initial scene hash mismatch')
             self._restore_custom_scene(str(instance_path))
+        if self.geometry_only:return
         self.custom_objects = {o.name: o for o in self.env.scene.objects}
         for role, name in spec['roles'].items():
             if name not in self.custom_objects and role not in spec.get('future_roles', []):
@@ -181,69 +184,76 @@ class CustomTaskBackend(RGBBackend):
         root = Path(os.environ['OMNIGIBSON_DATA_PATH']) / '2026-challenge-task-instances'
         catalog = yaml.safe_load((root/'metadata/available_tasks.yaml').read_text())
         scene = json.loads(json.dumps(self.env.scene.save(as_dict=True), cls=TorchEncoder))
-        protected={getattr(obj,'name',None) for obj in self.env.task.object_scope.values()}
-        for name in spec.get('scene_exclusions',[]):
-            if name in protected:
-                raise ValueError('Cannot exclude a base task binding: '+name)
-            entry=scene['objects_info']['init_info'].pop(name)
-            if entry['args'].get('category') in ('agent','floors','walls','ceilings','door'):
-                raise ValueError('Cannot exclude structural or robot entities: '+name)
-            scene['state']['registry']['object_registry'].pop(name)
-        provenance = []
-        for item in spec.get('native_assets', []):
-            name, category, model = item['name'], item['category'], item['model']
-            usd = Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/objects'/category/model/'usd'/f'{model}.encrypted.usd'
-            if hashlib.sha256(usd.read_bytes()).hexdigest() != item['usd_sha256']:
-                raise ValueError('Native construction asset changed: '+name)
-            if name in scene['objects_info']['init_info']:
-                raise ValueError('Duplicate native construction asset: '+name)
-            args = {k:item[k] for k in ('name','category','model','prim_type','fixed_base','scale') if k in item}
-            scene['objects_info']['init_info'][name] = {
-                'class_module':'omnigibson.objects.dataset_object', 'class_name':'DatasetObject', 'args':args}
-            scene['state']['registry']['object_registry'][name] = {
-                'is_asleep':False, 'root_link':{
-                    'pos':item['position'], 'ori':item.get('orientation',[0.,0.,0.,1.]),
-                    'lin_vel':[0.,0.,0.], 'ang_vel':[0.,0.,0.]}, 'non_kin':{}}
-            provenance.append({'name':name,'native_asset':args,'usd_sha256':item['usd_sha256']})
-        for item in spec.get('asset_imports', []):
-            task = item['source_task']; source_scene = catalog[task][0]['scene_model']
-            template = root/'scene_test/public'/source_scene/'json'/f'{source_scene}_task_{task}_0_0_template.json'
-            data = json.loads(template.read_text()); old = item['source_object']; name = item.get('name', old)
-            digest = hashlib.sha256(template.read_bytes()).hexdigest()
-            if item.get('source_sha256') and item['source_sha256'] != digest:
-                raise ValueError('Construction source template changed: '+task)
-            if name in scene['objects_info']['init_info'] and item.get('if_missing'):
-                continue
-            if name in scene['objects_info']['init_info']: raise ValueError('Duplicate imported object: '+name)
-            entry = copy.deepcopy(data['objects_info']['init_info'][old])
-            entry['args']['name'] = name; entry['args'].pop('bddl_object_scope', None)
-            if 'in_rooms' in item: entry['args']['in_rooms'] = item['in_rooms']
-            if 'scale' in item: entry['args']['scale'] = list(item['scale'])
-            if 'fixed_base' in item: entry['args']['fixed_base'] = item['fixed_base']
-            state = imported_state_with_velocities(data['state']['registry']['object_registry'][old])
-            if 'position' in item: state['root_link']['pos'] = item['position']
-            if 'orientation' in item: state['root_link']['ori'] = item['orientation']
-            scene['objects_info']['init_info'][name] = entry
-            scene['state']['registry']['object_registry'][name] = state
-            provenance.append({'name':name,'source_template':str(template),
-                'source_sha256':hashlib.sha256(template.read_bytes()).hexdigest(),
-                'asset':entry['args']})
-        # Restore supports together with imported assets. A second stop/play
-        # would rewind newly imported bodies to their creation poses at origin
-        # and trigger physical contacts/transitions before layout is applied.
-        for fixture in spec.get('fixtures', []):
-            name=fixture['name']
-            if name in scene['objects_info']['init_info']:
-                raise ValueError('Duplicate construction support: '+name)
-            scene['objects_info']['init_info'][name]={
-                'class_module':'omnigibson.objects.primitive_object', 'class_name':'PrimitiveObject',
-                'args':dict(name=name,primitive_type='Cube',size=1.,scale=fixture['size'],
-                            fixed_base=True,rgba=fixture['rgba'],category='work_surface')}
-            scene['state']['registry']['object_registry'][name]={
-                'is_asleep':False,'root_link':{'pos':fixture['position'],'ori':[0.,0.,0.,1.]},
-                'non_kin':{},'radius':-1,'height':-1,'size':1.}
-        with self._startup_stage('custom_imported_scene_restore'):
-            self._restore_custom_scene(scene)
+        if not spec.get('construction_seed'):
+            protected={getattr(obj,'name',None) for obj in self.env.task.object_scope.values()}
+            for name in spec.get('scene_exclusions',[]):
+                if name in protected:
+                    raise ValueError('Cannot exclude a base task binding: '+name)
+                entry=scene['objects_info']['init_info'].pop(name)
+                if entry['args'].get('category') in ('agent','floors','walls','ceilings','door'):
+                    raise ValueError('Cannot exclude structural or robot entities: '+name)
+                scene['state']['registry']['object_registry'].pop(name)
+            provenance = []
+            for item in spec.get('native_assets', []):
+                name, category, model = item['name'], item['category'], item['model']
+                usd = Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/objects'/category/model/'usd'/f'{model}.encrypted.usd'
+                if hashlib.sha256(usd.read_bytes()).hexdigest() != item['usd_sha256']:
+                    raise ValueError('Native construction asset changed: '+name)
+                if name in scene['objects_info']['init_info']:
+                    raise ValueError('Duplicate native construction asset: '+name)
+                args = {k:item[k] for k in ('name','category','model','prim_type','fixed_base','scale') if k in item}
+                scene['objects_info']['init_info'][name] = {
+                    'class_module':'omnigibson.objects.dataset_object', 'class_name':'DatasetObject', 'args':args}
+                scene['state']['registry']['object_registry'][name] = {
+                    'is_asleep':False, 'root_link':{
+                        'pos':item['position'], 'ori':item.get('orientation',[0.,0.,0.,1.]),
+                        'lin_vel':[0.,0.,0.], 'ang_vel':[0.,0.,0.]}, 'non_kin':{}}
+                provenance.append({'name':name,'native_asset':args,'usd_sha256':item['usd_sha256']})
+            for item in spec.get('asset_imports', []):
+                task = item['source_task']; source_scene = catalog[task][0]['scene_model']
+                template = root/'scene_test/public'/source_scene/'json'/f'{source_scene}_task_{task}_0_0_template.json'
+                data = json.loads(template.read_text()); old = item['source_object']; name = item.get('name', old)
+                digest = hashlib.sha256(template.read_bytes()).hexdigest()
+                if item.get('source_sha256') and item['source_sha256'] != digest:
+                    raise ValueError('Construction source template changed: '+task)
+                if name in scene['objects_info']['init_info'] and item.get('if_missing'):
+                    continue
+                if name in scene['objects_info']['init_info']: raise ValueError('Duplicate imported object: '+name)
+                entry = copy.deepcopy(data['objects_info']['init_info'][old])
+                entry['args']['name'] = name; entry['args'].pop('bddl_object_scope', None)
+                if 'in_rooms' in item: entry['args']['in_rooms'] = item['in_rooms']
+                if 'scale' in item: entry['args']['scale'] = list(item['scale'])
+                if 'fixed_base' in item: entry['args']['fixed_base'] = item['fixed_base']
+                state = imported_state_with_velocities(data['state']['registry']['object_registry'][old])
+                if 'position' in item: state['root_link']['pos'] = item['position']
+                if 'orientation' in item: state['root_link']['ori'] = item['orientation']
+                scene['objects_info']['init_info'][name] = entry
+                scene['state']['registry']['object_registry'][name] = state
+                provenance.append({'name':name,'source_template':str(template),
+                    'source_sha256':hashlib.sha256(template.read_bytes()).hexdigest(),
+                    'asset':entry['args']})
+            # Restore supports together with imported assets. A second stop/play
+            # would rewind newly imported bodies to their creation poses at origin
+            # and trigger physical contacts/transitions before layout is applied.
+            for fixture in spec.get('fixtures', []):
+                name=fixture['name']
+                if name in scene['objects_info']['init_info']:
+                    raise ValueError('Duplicate construction support: '+name)
+                scene['objects_info']['init_info'][name]={
+                    'class_module':'omnigibson.objects.primitive_object', 'class_name':'PrimitiveObject',
+                    'args':dict(name=name,primitive_type='Cube',size=1.,scale=fixture['size'],
+                                fixed_base=True,rgba=fixture['rgba'],category='work_surface')}
+                scene['state']['registry']['object_registry'][name]={
+                    'is_asleep':False,'root_link':{'pos':fixture['position'],'ori':[0.,0.,0.,1.]},
+                    'non_kin':{},'radius':-1,'height':-1,'size':1.}
+            with self._startup_stage('custom_imported_scene_restore'):
+                self._restore_custom_scene(scene)
+        else:
+            provenance=[{'construction_seed':spec['construction_seed'],'scope':'complete native objects loaded before GPU simulation'}]
+        if self.geometry_only:
+            write_json(self.output/'custom_geometry_seed_validation.json',{'status':'passed',
+                'scope':'object construction and serialization only; initial conditions and task not validated'})
+            return
         objects = {o.name:o for o in self.env.scene.objects}
         roles = {k:objects.get(v) for k,v in spec['roles'].items()}
         if spec.get('robot_start'):
@@ -304,7 +314,16 @@ class CustomTaskBackend(RGBBackend):
                 xy = self.torch.tensor(operation['xy'],dtype=pos.dtype,device=pos.device)
             pos = pos.clone()
             pos[:2] += xy-(low[:2]+high[:2])/2
-            pos[2] += support.aabb[1][2]-low[2]+.004
+            surface_height=float(support.aabb[1][2])
+            if getattr(support,'category',None) in ('floors','lawn','driveway'):
+                from omnigibson.utils.sampling_utils import raytest
+                start=self.torch.tensor([float(xy[0]),float(xy[1]),surface_height+1.5],device=pos.device)
+                end=start.clone();end[2]=float(support.aabb[0][2])-.2
+                hit=raytest(start,end,ignore_bodies=[link.prim_path for link in obj.links.values()])
+                if hit.get('rigidBody') not in {link.prim_path for link in support.links.values()}:
+                    raise RuntimeError(f"Initial floor point for {operation['object']} does not hit selected support: {hit.get('rigidBody')} at {xy.tolist()}")
+                surface_height=float(hit['position'][2])
+            pos[2] += surface_height-low[2]+.004
             obj.set_position_orientation(pos,ori);obj.keep_still()
         elif 'position' in operation:
             pos = self.torch.tensor(operation['position'], dtype=self.torch.float32)

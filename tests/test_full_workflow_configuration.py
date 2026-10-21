@@ -1,12 +1,12 @@
 """Complete custom scenes must retain furnishings outside the base task's room."""
-import json,os,tempfile,unittest
+import hashlib,json,os,tempfile,unittest
 from pathlib import Path
 from types import ModuleType,SimpleNamespace
 from unittest.mock import patch
 from manipulation_agent.omnigibson_backend import OmniGibsonBackend
 
 class FullWorkflowConfigurationTests(unittest.TestCase):
- def config(self,full,gpu_physics=False):
+ def config(self,full,gpu_physics=False,seed=False):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);data=root/'2026-challenge-task-instances';meta=data/'metadata';meta.mkdir(parents=True)
    task={'scene_model':'house','robot_start_position':[0,0,0],'robot_start_orientation':[0,0,0,1]}
@@ -24,6 +24,10 @@ class FullWorkflowConfigurationTests(unittest.TestCase):
    module.generate_basic_environment_config=lambda *a:{'env':{},'scene':{'load_room_instances':['kitchen_0']},'task':{'termination_config':{}}}
    b=OmniGibsonBackend.__new__(OmniGibsonBackend);b.og=SimpleNamespace(__file__=str(package/'__init__.py'));b.output=root;b.instance=301;b.deadline=SimpleNamespace(managed=False);b.use_gpu_dynamics=gpu_physics
    if full:b.custom_spec={'reference_plan':{'kind':'full_workflow'}}
+   if seed:
+    objects['preloaded_native']={'class_name':'DatasetObject','args':{'category':'rag'}}
+    saved=root/'geometry.json';saved.write_text(json.dumps(scene));b.spec_path=root/'task.json'
+    b.custom_spec['construction_seed']={'path':saved.name,'sha256':hashlib.sha256(saved.read_bytes()).hexdigest()}
    with patch.dict('sys.modules',{'omnigibson.eval.utils.eval_utils':module}),patch.dict(os.environ,{'OMNIGIBSON_DATA_PATH':str(root),'OMNIGIBSON_APPDATA_PATH':str(root/'cache')}):
     config=b._config('fixture',4,1000)
    return config,json.loads(Path(config['scene']['scene_file']).read_text())
@@ -39,3 +43,9 @@ class FullWorkflowConfigurationTests(unittest.TestCase):
   self.assertNotIn('dining_table',scene['objects_info']['init_info'])
   self.assertEqual(config['scene']['load_room_instances'],['kitchen_0'])
   self.assertEqual(config['env']['device'],'cuda:4')
+
+ def test_complete_native_seed_is_loaded_before_simulator_creation(self):
+  config,scene=self.config(True,True,True)
+  self.assertIn('preloaded_native',scene['objects_info']['init_info'])
+  self.assertIn('dining_table',scene['objects_info']['init_info'])
+  self.assertEqual(config['env']['device'],'cpu')

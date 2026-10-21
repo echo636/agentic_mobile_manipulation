@@ -217,7 +217,7 @@ def table_parts(b,parts_xy,jig_xy,destination_xy):
 def garden(inv,models):
  b=Builder('garden','spraying_for_bugs',inv,models)
  for r,n in dict(plant1='pot_plant_172',plant2='pot_plant_173',sprayer='insectifuge_atomizer_174',floor='floors_ghetev_0').items():b.existing(r,n)
- for r,xy,size in [('source',[12.8,7.2],[1.5,.65,.55]),('work',[15.6,7.2],[1.5,.65,.55]),('display',[12.8,12.],[1.6,.6,.6]),('stage',[12.7,10.7],[1.8,.7,.65]),('tool_home',[16.7,12.],[1.2,.6,.6]),('food_stage',[16.7,10.2],[.7,1.,.6])]:b.fixture(r,xy,size)
+ for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[13.1,13.6],[1.6,.6,.6]),('stage',[12.8,8.7],[1.8,.7,.65]),('tool_home',[15.4,4.],[1.2,.6,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
  for r in ['trowel','shears','pillow1','pillow2','apple','knife']:
   b.native(r,{'pillow1':'pillow','pillow2':'pillow','knife':'carving_knife'}.get(r,r))
  b.imported('protected','spraying_for_bugs','pot_plant_172')
@@ -227,10 +227,19 @@ def garden(inv,models):
   b.imported('cup'+str(i),'setting_the_table','water_glass_bbpraa_0')
   b.imported('lamp'+str(i),'turning_out_all_lights_before_sleep','table_lamp_428')
   b.imported('seat'+str(i),'setting_the_table',category='straight_chair',index=i-1)
-  b.place('seat'+str(i),'floor',[14.4+(i-1)*1.7,11.2])
+  b.place('seat'+str(i),'floor',[13.2,11.8] if i==1 else [14.9,12.5])
   b.place('pillow'+str(i),'work');b.place('lamp'+str(i),'stage');b.state('lamp'+str(i),'ToggledOn',False)
- b.place('plant1','source',[12.4,7.2]);b.place('plant2','source',[13.2,7.2]);b.place('protected','floor',[11.7,12.6]);b.place('bin','floor',[11.8,9.8])
+ b.place('plant1','source',[11.4,4.25]);b.place('plant2','source',[12.2,4.25]);b.place('protected','floor',[18.6,4.]);b.place('bin','floor',[18.6,6.5])
  for r,t in [('book','work'),('can','work'),('trowel','source'),('shears','source'),('sprayer','source'),('brush','tool_home'),('broom','tool_home'),('tea','food_stage'),('apple','food_stage'),('plate','food_stage'),('cup1','food_stage'),('cup2','food_stage'),('knife','food_stage'),('board','food_stage')]:b.place(r,t)
+ # Separate large boards / plants from small tools using measured native extents.
+ initial_slots={'pillow1':(.3,.65),'pillow2':(.7,.65),'book':(.25,.15),'can':(.75,.15),'trowel':(.18,.17),'shears':(.5,.17),'sprayer':(.82,.17),
+                'board':(.25,.65),'knife':(.25,.13),'tea':(.75,.8),'apple':(.9,.6),
+                'plate':(.65,.5),'cup1':(.7,.2),'cup2':(.9,.2)}
+ for row in b.layout:
+  if row['object'] in initial_slots and row.get('auto_slot'):
+   row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
+ b.s['robot_start']={'position':[15.3,12.8,.03],'orientation':[0.,0.,0.,1.]}
+ b.s['scene_setup_note']='Stations arranged from measured native geometry, retaining original trees, garden lights, grill and patio furniture.'
  clean={r:b.clean(r) for r in ['work','display','pillow1','pillow2','cup1','cup2','trowel','shears','sprayer','floor']}
  b.state('protected','Covered',False,system='insectifuge')
  protected_clean=NOT(b.pred('protected_contaminated','protected','Covered',system='insectifuge'))
@@ -252,7 +261,7 @@ def garden(inv,models):
  b.phase('display_clean',[take('brush'),action('wipe','display'),put('tool_home',(.2,.3))])
  b.phase('return_plants',[a for i,r in enumerate(['plant1','plant2']) for a in transfer(r,'display',(.25+.5*i,.5))],['treat','display_clean'])
  b.phase('work_reset',[take('brush'),action('wipe','work'),put('tool_home',(.2,.3))],['return_plants'])
- assembly,usable=table_parts(b,[13.,8.8],[15.5,8.8],[15.2,10.5]);b.phase('assemble',assembly)
+ assembly,usable=table_parts(b,[14.,5.7],[15.4,8.1],[14.1,11.7]);b.phase('assemble',assembly)
  b.phase('seats',[take('brush'),action('wipe','pillow1'),action('wipe','pillow2'),put('tool_home',(.2,.3))]+transfer('pillow1','seat1')+transfer('pillow2','seat2'),['clear'])
  serving=[take('brush'),action('wipe','cup1'),action('wipe','cup2'),put('tool_home',(.2,.3))]
  for r,uv in [('cup1',(.25,.7)),('cup2',(.75,.7)),('tea',(.5,.8)),('plate',(.5,.35))]:serving+=transfer(r,'table',uv)
