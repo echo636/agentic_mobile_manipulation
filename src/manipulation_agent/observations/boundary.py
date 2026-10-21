@@ -64,6 +64,7 @@ LOCAL_STANCE_MESSAGES = {
     'local_loaded_departure': 'Local preparation could not admit a safe pickup and departure with the item. Approach from another side with room to lift and carry it.',
     'local_route': 'Operation stances around the selected target passed preliminary checks, but no complete checked route was found. Choose a different general approach; nearby space alone does not establish a usable route.',
     'local_planning_budget': 'Local preparation reached its search budget before finding a fully checked stance and route. This does not prove the approach is impossible. Inspect RGB and choose a materially different approach.',
+    'local_candidate_preparation_budget': 'The executor exhausted stance preparation before admitting any route endpoint; route search has not started. Inspect all four views and select another visible point or approach. This does not prove the target is unreachable.',
 }
 
 

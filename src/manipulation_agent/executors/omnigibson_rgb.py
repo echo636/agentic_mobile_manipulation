@@ -535,7 +535,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         return hulls,report
 
     def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=None,
-                          self_hulls=(), base_yaw=None):
+                          self_hulls=(), base_yaw=None, diagnostics=None):
         """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
@@ -550,6 +550,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,
                               point.cpu().tolist(),margin=margin,radius=self.rig_radius,
                               pitch_degrees=self.rig_pitch_degrees)
+        if diagnostics is not None:
+            diagnostics.update(in_frame_cameras=len(rays),self_occluded=0,scene_occluders=[])
         c,s=math.cos(yaw),math.sin(yaw)
         base_z=float(self.robot.get_position_orientation()[0][2])
         def local(world):
@@ -557,9 +559,13 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             return (c*dx+s*dy,-s*dx+c*dy,dz)
         for _,origin,_ in rays:
             if segment_hits_self_hull(local(origin),local(point.cpu().tolist()),self_hulls):
+                if diagnostics is not None:diagnostics['self_occluded']+=1
                 continue
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
+            if diagnostics is not None:
+                diagnostics['scene_occluders'].append({'body':hit.get('rigidBody'),
+                    'distance_to_target_m':float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))})
         return False
 
     def _navigate(self, target, max_steps, *, for_manipulation=False):
