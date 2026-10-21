@@ -196,13 +196,14 @@ def kitchen(inv,models):
 
 
 
-def table_parts(b,parts_xy,jig_xy,destination_xy):
+def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False):
  """Six actual furniture components; the temporary central jig must be released."""
- b.fixture('parts',parts_xy,[2.4,2.,.65]);b.fixture('jig',jig_xy,[.18,.18,.86])
+ b.fixture('parts',parts_xy,[2.1 if compact else 2.4,2.,.65]);b.fixture('jig',jig_xy,[.18,.18,.86])
  for role,category in [('table','desk_top'),('bracket','desk_bracket')]+[('leg'+str(i),'desk_leg') for i in range(1,5)]:b.native(role,category)
  roles=['table','bracket','leg1','leg2','leg3','leg4']
  # Parts occupy separate strips; one table, one bracket and four structural legs.
  xy=[[-.62,0.],[.35,0.],[-.75,-.85],[-.05,-.85],[.65,-.85],[.65,.85]]
+ if compact:xy=[[-.5,0.],[.43,0.],[-.48,-.85],[.48,-.85],[-.48,.85],[.48,.85]]
  for role,offset in zip(roles,xy):b.place(role,'parts',[parts_xy[i]+offset[i] for i in range(2)])
  clean={r:b.clean(r) for r in roles}
  assembled=ALL(b.rel('bracket','table','AttachedTo'),*[b.rel('leg'+str(i),'bracket','AttachedTo') for i in range(1,5)])
@@ -293,43 +294,51 @@ def workshop(inv,models):
  b.existing('box','toolbox_191');b.existing('floor','floors_hkdmte_0')
  b.s['scene_exclusions']=['car_ssxsje_0']
  b.s['scene_setup_note']='Native garage prepared as an empty workshop before the episode; the background car is absent from the frozen scene.'
- b.s['robot_start']={'position':[-13.,9.,.02],'orientation':[0.,0.,0.,1.]}
- for role,xy,size in [('source',[-14.4,9.1],[1.5,.7,.65]),('bench',[-11.8,10.8],[.7,1.8,.7]),('shelf',[-14.4,17.5],[1.5,.7,.7])]:b.fixture(role,xy,size)
- # Keep the closed-toolbox route in the native utility room. Furniture assembly
- # occurs on its working floor; actual geometry admission must accept the layout.
- b.fixture('tool_home',[-14.8,11.],[.65,1.8,.6]);b.fixture('products',[-11.8,17.5],[.7,1.6,.6])
+ b.s['robot_start']={'position':[-13.2,10.7,.02],'orientation':[0.,0.,0.,1.]}
+ for role,xy,size in [('source',[-13.2,9.4],[1.8,1.,.65]),('bench',[-12.3,10.9],[.7,1.8,.7]),('shelf',[-13.85,17.7],[1.4,.7,.7])]:b.fixture(role,xy,size)
+ # Native garage walls narrow in the middle. Use measured floor-map clearance
+ # and keep an east-side passage beside the compact component staging surface.
+ b.fixture('tool_home',[-14.3,11.],[1.,1.8,.6]);b.fixture('products',[-12.2,17.5],[.7,1.6,.6])
  for r,t,n in [('brush','clean_a_keyboard','pipe_cleaner_120'),('axe','chopping_wood','axe_173'),('block','chopping_wood','chopping_block_172'),('crate','assembling_gift_baskets','wicker_basket_89'),('book','clean_up_your_desk','paperback_book_225'),('can','picking_up_trash','can_of_soda_114'),('bin','picking_up_trash','trash_can_116'),('broom','clean_a_patio','broom_172')]:b.imported(r,t,n,**({'scale':[1.,1.,1.]} if r=='broom' else {}))
  b.native('paintbrush','rag');b.native('ink','ink_bottle');b.native('detergent_basin','ink_bottle',scale=[3.,3.,2.]);b.place('detergent_basin','tool_home');b.state('detergent_basin','Filled',True,system='detergent')
  b.s['physics']={'use_gpu_dynamics':True}
  b.s['representation']={'coating_tool':'native_rigid_rag','reason':'Native paintbrush lacks ParticleRemover/Saturated; rag absorbs ink only after detergent preparation.'}
  for i in (1,2):b.imported('log'+str(i),'chopping_wood','log_'+str(173+i));b.place('log'+str(i),'shelf')
  for r,t in [('box','source'),('axe','source'),('brush','source'),('paintbrush','source'),('book','bench'),('can','bench'),('crate','shelf'),('ink','source'),('broom','tool_home')]:b.place(r,t)
- b.place('bin','floor',[-11.8,9.]);b.place('block','floor',[-11.8,12.8]);b.state('box','Open',False,kwargs={'fully':True})
+ initial_slots={'box':(.22,.5),'axe':(.7,.25),'brush':(.7,.5),'paintbrush':(.7,.8),'ink':(.95,.8),'detergent_basin':(.5,.08),'broom':(.5,.93)}
+ for row in b.layout:
+  if row['object'] in initial_slots and row.get('auto_slot'):
+   row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
+ b.place('bin','floor',[-12.1,9.1]);b.place('block','floor',[-13.9,12.]);b.state('box','Open',False,kwargs={'fully':True})
  b.state('ink','Filled',True,system='ink')
  clean={r:b.clean(r) for r in ['bench','source','floor']}
  b.pred('box_open','box','Open')
  tools=['axe','brush','paintbrush'];kit=ALL(*[b.rel(r,'box','Inside') for r in tools],NOT('box_open'))
- b.phase('clear_bench',transfer('book','shelf')+transfer('can','bin',into=True)+[take('brush'),action('wipe','bench'),put('source',(.4,.2))])
+ b.phase('clear_bench',transfer('book','shelf',(.5,.85))+transfer('can','bin',into=True)+[take('brush'),action('wipe','bench'),put('source',(.7,.5))])
  b.phase('pack_kit',[action('open','box'),*[a for r in tools for a in transfer(r,'box',into=True)],action('close','box')],['clear_bench'])
- b.phase('deliver_kit',transfer('box','bench'),['pack_kit'])
- b.phase('inventory',[action('open','box'),*[a for i,r in enumerate(tools) for a in transfer(r,'tool_home',(.2+.3*i,.5))]],['deliver_kit'])
- assembly,usable=table_parts(b,[-14.,13.5],[-11.8,14.6],[-13.8,16.]);b.phase('assemble',assembly,['inventory','clear_bench'])
+ b.phase('deliver_kit',transfer('box','bench',(.5,.25)),['pack_kit'])
+ tool_slots={'axe':(.5,.3),'brush':(.5,.5),'paintbrush':(.5,.73)}
+ b.phase('inventory',[action('open','box'),*[a for r in tools for a in transfer(r,'tool_home',tool_slots[r])]],['deliver_kit'])
+ assembly,usable=table_parts(b,[-13.8,13.5],[-12.25,15.],[-13.6,15.8],compact=True);b.phase('assemble',assembly,['inventory','clear_bench'])
+ # The shared assembly helper returns its brush to the same dedicated tool slot.
+ for row in assembly:
+  if row['primitive']=='place_on_top' and row.get('role')=='tool_home':row['uv']=list(tool_slots['brush'])
  for i in (1,2):b.replacement('log'+str(i),'half_log',['bbieuz','rvtvqc'])
  # Native half model is resolved from actual source metadata before scene build.
- b.phase('crate_ready',transfer('crate','bench',(.8,.5)),['clear_bench'])
+ b.phase('crate_ready',transfer('crate','bench',(.5,.75)),['clear_bench'])
  cut=[]
  for i in (1,2):
-  r='log'+str(i);cut+=transfer(r,'block')+[take('axe'),action('cut',r),put('tool_home',(.2,.5))]
+  r='log'+str(i);cut+=transfer(r,'block')+[take('axe'),action('cut',r),put('tool_home',tool_slots['axe'])]
   for j in (0,1):cut+=transfer(r+'_half'+str(j),'crate',into=True)
  b.phase('cut_logs',cut,['inventory','crate_ready'])
- b.phase('coat',transfer('ink','bench',(.2,.5))+[take('paintbrush'),action('soak','detergent_basin'),action('soak','ink'),action('spread','table'),put('tool_home',(.8,.5))]+transfer('ink','source',(.8,.5)),['assemble','inventory'])
+ b.phase('coat',transfer('ink','bench',(.5,.5))+[take('paintbrush'),action('soak','detergent_basin'),action('soak','ink'),action('spread','table'),put('tool_home',tool_slots['paintbrush'])]+transfer('ink','source',(.95,.8)),['assemble','inventory'])
  children=['log'+str(i)+'_half'+str(j) for i in (1,2) for j in (0,1)]
- delivery=transfer('crate','products')
- for i,r in enumerate(children):delivery+=transfer(r,'products',(.15+.23*i,.5))
+ delivery=transfer('crate','products',(.5,.2))
+ for i,r in enumerate(children):delivery+=transfer(r,'products',(.5,.4+.16*i))
  delivery+=transfer('crate','shelf',(.2,.5));b.phase('deliver_wood',delivery,['cut_logs'])
  b.phase('clean_return',[take('brush'),action('wipe','source'),put('tool_home',(.5,.5))],['inventory'])
  b.phase('return_kit',[*[a for r in tools for a in transfer(r,'box',into=True)],action('close','box')]+transfer('box','source',(.3,.5)),['coat','deliver_wood','clean_return'])
- b.phase('floor',[take('broom'),action('sweep','floor'),put('tool_home',(.9,.7))])
+ b.phase('floor',[take('broom'),action('sweep','floor'),put('tool_home',(.5,.93))])
  packed=b.milestone('kit_packed',ALL(kit,b.rel('box','source')));delivered=b.milestone('kit_delivered',ALL(kit,b.rel('box','bench')),[packed])
  inventory=b.milestone('inventory_unpacked',ALL(*[b.rel(r,'tool_home') for r in tools]),[delivered])
  wood=ALL(*[b.rel(r,'crate','Inside') for r in children],'log1_replaced','log2_replaced')

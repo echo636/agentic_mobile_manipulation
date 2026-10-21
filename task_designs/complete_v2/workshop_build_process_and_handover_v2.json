@@ -340,13 +340,13 @@
     {
       "name": "fv2_source",
       "position": [
-        -14.4,
-        9.1,
+        -13.2,
+        9.4,
         0.325
       ],
       "size": [
-        1.5,
-        0.7,
+        1.8,
+        1.0,
         0.65
       ],
       "rgba": [
@@ -360,8 +360,8 @@
     {
       "name": "fv2_bench",
       "position": [
-        -11.8,
-        10.8,
+        -12.3,
+        10.9,
         0.35
       ],
       "size": [
@@ -380,12 +380,12 @@
     {
       "name": "fv2_shelf",
       "position": [
-        -14.4,
-        17.5,
+        -13.85,
+        17.7,
         0.35
       ],
       "size": [
-        1.5,
+        1.4,
         0.7,
         0.7
       ],
@@ -400,12 +400,12 @@
     {
       "name": "fv2_tool_home",
       "position": [
-        -14.8,
+        -14.3,
         11.0,
         0.3
       ],
       "size": [
-        0.65,
+        1.0,
         1.8,
         0.6
       ],
@@ -420,7 +420,7 @@
     {
       "name": "fv2_products",
       "position": [
-        -11.8,
+        -12.2,
         17.5,
         0.3
       ],
@@ -440,12 +440,12 @@
     {
       "name": "fv2_parts",
       "position": [
-        -14.0,
+        -13.8,
         13.5,
         0.325
       ],
       "size": [
-        2.4,
+        2.1,
         2.0,
         0.65
       ],
@@ -460,8 +460,8 @@
     {
       "name": "fv2_jig",
       "position": [
-        -11.8,
-        14.6,
+        -12.25,
+        15.0,
         0.43
       ],
       "size": [
@@ -484,8 +484,8 @@
       "target": "tool_home",
       "place_on_support": true,
       "support_uv": [
-        0.25,
-        0.5
+        0.5,
+        0.08
       ]
     },
     {
@@ -517,8 +517,8 @@
       "target": "source",
       "place_on_support": true,
       "support_uv": [
-        0.125,
-        0.25
+        0.22,
+        0.5
       ]
     },
     {
@@ -526,7 +526,7 @@
       "target": "source",
       "place_on_support": true,
       "support_uv": [
-        0.375,
+        0.7,
         0.25
       ]
     },
@@ -535,8 +535,8 @@
       "target": "source",
       "place_on_support": true,
       "support_uv": [
-        0.625,
-        0.25
+        0.7,
+        0.5
       ]
     },
     {
@@ -544,8 +544,8 @@
       "target": "source",
       "place_on_support": true,
       "support_uv": [
-        0.875,
-        0.25
+        0.7,
+        0.8
       ]
     },
     {
@@ -580,8 +580,8 @@
       "target": "source",
       "place_on_support": true,
       "support_uv": [
-        0.125,
-        0.75
+        0.95,
+        0.8
       ]
     },
     {
@@ -589,8 +589,8 @@
       "target": "tool_home",
       "place_on_support": true,
       "support_uv": [
-        0.75,
-        0.5
+        0.5,
+        0.93
       ]
     },
     {
@@ -598,8 +598,8 @@
       "target": "floor",
       "place_on_support": true,
       "xy": [
-        -11.8,
-        9.0
+        -12.1,
+        9.1
       ]
     },
     {
@@ -607,8 +607,8 @@
       "target": "floor",
       "place_on_support": true,
       "xy": [
-        -11.8,
-        12.8
+        -13.9,
+        12.0
       ]
     },
     {
@@ -654,7 +654,7 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        -14.62,
+        -14.3,
         13.5
       ]
     },
@@ -663,7 +663,7 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        -13.65,
+        -13.370000000000001,
         13.5
       ]
     },
@@ -672,7 +672,7 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        -14.75,
+        -14.280000000000001,
         12.65
       ]
     },
@@ -681,7 +681,7 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        -14.05,
+        -13.32,
         12.65
       ]
     },
@@ -690,8 +690,8 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        -13.35,
-        12.65
+        -14.280000000000001,
+        14.35
       ]
     },
     {
@@ -699,7 +699,7 @@
       "target": "parts",
       "place_on_support": true,
       "xy": [
-        -13.35,
+        -13.32,
         14.35
       ]
     },
@@ -1658,7 +1658,7 @@
             "role": "shelf",
             "uv": [
               0.5,
-              0.5
+              0.85
             ]
           },
           {
@@ -1681,8 +1681,8 @@
             "primitive": "place_on_top",
             "role": "source",
             "uv": [
-              0.4,
-              0.2
+              0.7,
+              0.5
             ]
           }
         ],
@@ -1738,7 +1738,7 @@
             "role": "bench",
             "uv": [
               0.5,
-              0.5
+              0.25
             ]
           }
         ],
@@ -1760,8 +1760,8 @@
             "primitive": "place_on_top",
             "role": "tool_home",
             "uv": [
-              0.2,
-              0.5
+              0.5,
+              0.3
             ]
           },
           {
@@ -1784,8 +1784,8 @@
             "primitive": "place_on_top",
             "role": "tool_home",
             "uv": [
-              0.8,
-              0.5
+              0.5,
+              0.73
             ]
           }
         ],
@@ -1827,8 +1827,8 @@
             "primitive": "place_on_top",
             "role": "tool_home",
             "uv": [
-              0.2,
-              0.3
+              0.5,
+              0.5
             ]
           },
           {
@@ -1891,8 +1891,8 @@
             "primitive": "place_on_top",
             "role": "floor",
             "xy": [
-              -13.8,
-              16.0
+              -13.6,
+              15.8
             ]
           }
         ],
@@ -1911,8 +1911,8 @@
             "primitive": "place_on_top",
             "role": "bench",
             "uv": [
-              0.8,
-              0.5
+              0.5,
+              0.75
             ]
           }
         ],
@@ -1946,8 +1946,8 @@
             "primitive": "place_on_top",
             "role": "tool_home",
             "uv": [
-              0.2,
-              0.5
+              0.5,
+              0.3
             ]
           },
           {
@@ -1990,8 +1990,8 @@
             "primitive": "place_on_top",
             "role": "tool_home",
             "uv": [
-              0.2,
-              0.5
+              0.5,
+              0.3
             ]
           },
           {
@@ -2026,7 +2026,7 @@
             "primitive": "place_on_top",
             "role": "bench",
             "uv": [
-              0.2,
+              0.5,
               0.5
             ]
           },
@@ -2050,8 +2050,8 @@
             "primitive": "place_on_top",
             "role": "tool_home",
             "uv": [
-              0.8,
-              0.5
+              0.5,
+              0.73
             ]
           },
           {
@@ -2062,8 +2062,8 @@
             "primitive": "place_on_top",
             "role": "source",
             "uv": [
-              0.8,
-              0.5
+              0.95,
+              0.8
             ]
           }
         ],
@@ -2083,7 +2083,7 @@
             "role": "products",
             "uv": [
               0.5,
-              0.5
+              0.2
             ]
           },
           {
@@ -2094,8 +2094,8 @@
             "primitive": "place_on_top",
             "role": "products",
             "uv": [
-              0.15,
-              0.5
+              0.5,
+              0.4
             ]
           },
           {
@@ -2106,8 +2106,8 @@
             "primitive": "place_on_top",
             "role": "products",
             "uv": [
-              0.38,
-              0.5
+              0.5,
+              0.56
             ]
           },
           {
@@ -2118,8 +2118,8 @@
             "primitive": "place_on_top",
             "role": "products",
             "uv": [
-              0.61,
-              0.5
+              0.5,
+              0.72
             ]
           },
           {
@@ -2130,8 +2130,8 @@
             "primitive": "place_on_top",
             "role": "products",
             "uv": [
-              0.8400000000000001,
-              0.5
+              0.5,
+              0.88
             ]
           },
           {
@@ -2237,8 +2237,8 @@
             "primitive": "place_on_top",
             "role": "tool_home",
             "uv": [
-              0.9,
-              0.7
+              0.5,
+              0.93
             ]
           }
         ],
@@ -2294,8 +2294,8 @@
   "scene_setup_note": "Native garage prepared as an empty workshop before the episode; the background car is absent from the frozen scene.",
   "robot_start": {
     "position": [
-      -13.0,
-      9.0,
+      -13.2,
+      10.7,
       0.02
     ],
     "orientation": [
