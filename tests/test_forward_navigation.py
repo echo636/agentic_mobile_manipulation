@@ -43,25 +43,28 @@ class ForwardNavigationTests(unittest.TestCase):
             _, route, details = select_forward_route(
                 [plan([(0., 0.), (1., 0.)])], (0., 0., 0.), PointCollision())
         self.assertAlmostEqual(route.distance_m, 1.)
-        self.assertAlmostEqual(details['attempts'][0]['search_seconds'], 4.6)
+        self.assertAlmostEqual(clock[0] - 100., 4.6)
+        self.assertEqual(details['total_seconds'], 10.)
+        self.assertEqual(details['search'], 'shared_multi_goal_continuous_pose')
 
     def test_slow_candidates_still_share_a_bounded_total_budget(self):
         from dataclasses import replace
         clock = [100.]
 
         def exhausted_search(*args, **kwargs):
-            clock[0] += 8.1
+            clock[0] += 10.1
             kwargs['check_cancelled']()
             self.fail('Exhausted candidate must not return an unchecked route')
 
         options = [replace(plan([(0., 0.), (1., 0.)]), final_yaw=i*.1) for i in range(6)]
         with patch('manipulation_agent.executors.gt_navigation.time.monotonic', side_effect=lambda: clock[0]), \
-                patch('manipulation_agent.executors.forward_navigation.plan_forward_route', side_effect=exhausted_search):
+                patch('manipulation_agent.executors.forward_navigation.plan_forward_route', side_effect=exhausted_search) as search:
             with self.assertRaises(NavigationError) as caught:
                 select_forward_route(options, (0., 0., 0.), PointCollision())
         self.assertEqual(caught.exception.code, 'navigation_search_exhausted')
-        self.assertEqual(len(caught.exception.route_attempts), 4)
-        self.assertTrue(all(row['status'] == 'failed' for row in caught.exception.route_attempts))
+        self.assertEqual(search.call_count, 1)
+        self.assertEqual(len(search.call_args.kwargs['alternatives']), 5)
+        self.assertEqual(len(caught.exception.attempts), 6)
 
     def test_search_from_narrow_goal_still_executes_only_forward_edges(self):
         target = (1.2,.8)
