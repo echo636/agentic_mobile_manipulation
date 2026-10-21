@@ -90,8 +90,9 @@ def main():
                     obj.set_position_orientation(position, orientation)
                     if row.get('prim_type', 0) == 0:
                         obj.keep_still()
-                self.robot.set_position_orientation(self.torch.tensor([14.7, 9.7, .02]),
-                                                    self.torch.tensor([0., 0., 0., 1.]))
+                start = spec.get('robot_start', {'position': [14.7, 9.7, .02], 'orientation': [0., 0., 0., 1.]})
+                self.robot.set_position_orientation(self.torch.tensor(start['position']),
+                                                    self.torch.tensor(start['orientation']))
                 self.robot.keep_still()
                 for _ in range(30):
                     self.og.sim.step()
