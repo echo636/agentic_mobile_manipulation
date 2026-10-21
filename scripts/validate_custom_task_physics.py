@@ -28,6 +28,8 @@ def main():
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--order')
     mode.add_argument('--negative-case')
+    parser.add_argument('--record-video', action='store_true',
+                        help='Preserve continuous simulator video for reference diagnosis')
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not args.worker:
@@ -56,6 +58,7 @@ def main():
               'source_commit': commit, 'source_sha256': release_source_digest(SOURCE),
               'spec_sha256': sha256(args.spec), 'scene_sha256': spec['frozen_instance']['sha256'],
               'output_path': str(args.output.resolve()), 'model_used': False,
+              'record_video': args.record_video,
               'validation_level': ('real_simulator_physical_negative_case' if args.negative_case else
                                    'real_simulator_checked_executor_privileged_full_reference'),
               'contract_validation': contract}
@@ -66,7 +69,7 @@ def main():
     try:
         from manipulation_agent.executors.custom_task import CustomTaskBackend
         from manipulation_agent.reference_tasks import ReferenceTask
-        backend = CustomTaskBackend(args.spec, args.output, record_video=False,
+        backend = CustomTaskBackend(args.spec, args.output, record_video=args.record_video,
                                     inside_placement='official_volume', max_steps=100000)
         record['backend'] = backend.provenance()
         backend.observe()
