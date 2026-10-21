@@ -141,7 +141,7 @@ def kitchen(inv,models):
  for r in ware:
   if r.startswith('plate'):
    b.layout.append(dict(object=r,target='cabinet',place_on_support=True,
-       xy=[8.38,-1.8],support_probe_height=1.4 if r=='plate1' else 1.05,
+       xy=[9.15,-1.8],support_probe_height=1.4 if r=='plate1' else 1.05,
        initial_relation='Inside',orientation=[0.,0.,0.,1.]))
   else:b.state(r,'Inside',True,target='cabinet',max_sampling_attempts=3)
  b.state('cabinet','Open',False,kwargs={'fully':True})

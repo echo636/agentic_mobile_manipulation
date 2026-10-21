@@ -414,7 +414,7 @@
       "target": "cabinet",
       "place_on_support": true,
       "xy": [
-        8.38,
+        9.15,
         -1.8
       ],
       "support_probe_height": 1.4,
@@ -445,7 +445,7 @@
       "target": "cabinet",
       "place_on_support": true,
       "xy": [
-        8.38,
+        9.15,
         -1.8
       ],
       "support_probe_height": 1.05,
