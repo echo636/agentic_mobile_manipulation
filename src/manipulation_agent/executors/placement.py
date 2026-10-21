@@ -670,7 +670,7 @@ class CheckedPlacement:
                 'new_object_settling':'free_physics',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
 
-    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check):
+    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None):
         """Project assembly centers onto actual internal shelves and bottoms.
 
         All ray hits are needed: the closest hit alone can be the roof above
@@ -687,13 +687,31 @@ class CheckedPlacement:
         target_paths={link.prim_path for link in target.links.values()}
         clearance=.025+.5*9.81*self.og.sim.get_physics_dt()**2
         proposals=[];surfaces=[]
-        for x,y in dict.fromkeys((float(c[0]),float(c[1])) for c in centers):
+        # Preserve the model's spatial hint. Three coarse volume fractions can
+        # land on a central divider and two side walls while missing both usable
+        # compartments. Project the selected point and its local neighbourhood
+        # onto real supports before falling back to volume-wide positions.
+        selected=[]
+        if point is not None:
+            offsets=[(0.,0.)]+[(x,y) for radius in (.04,.08,.12)
+                              for x,y in ((radius,0.),(-radius,0.),(0.,radius),(0.,-radius))]
+            for dx,dy in offsets:
+                xy=(float(point[0])+dx+float(center_offset[0]-bottom[0]),
+                    float(point[1])+dy+float(center_offset[1]-bottom[1]))
+                if all(float(low[i])<=xy[i]<=float(high[i]) for i in (0,1)):selected.append(xy)
+        # Midpoints of the volume's halves cover compartments on either side
+        # of a divider without adding physics attempts or a larger work budget.
+        split=[(float(low[0]+fx*(high[0]-low[0])),float(low[1]+fy*(high[1]-low[1])))
+               for fx,fy in ((.25,.5),(.75,.5),(.25,.25),(.75,.25),
+                             (.25,.75),(.75,.75),(.5,.25),(.5,.75))]
+        for x,y in dict.fromkeys([*selected,*split,*[(float(c[0]),float(c[1])) for c in centers]]):
             check()
             ax=x-float(center_offset[0])+float(bottom[0])
             ay=y-float(center_offset[1])+float(bottom[1])
             hits=raytest([ax,ay,float(high[2])+.05],[ax,ay,float(low[2])-.05],
                          only_closest=False,ignore_bodies=ignored)
-            for hit in sorted(hits,key=lambda h:float(h['position'][2])):
+            for hit in sorted(hits,key=lambda h:(abs(float(h['position'][2]-point[2]))
+                                                 if point is not None else float(h['position'][2]))):
                 if hit.get('rigidBody') not in target_paths or float(hit['normal'][2])<.9:continue
                 z=float(hit['position'][2])+float(center_offset[2]-bottom[2])+clearance
                 if not float(low[2])<=z<=float(high[2]):continue

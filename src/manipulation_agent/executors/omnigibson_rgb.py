@@ -535,7 +535,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         return hulls,report
 
     def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=None,
-                          self_hulls=(), base_yaw=None, diagnostics=None):
+                          self_hulls=(), base_yaw=None, diagnostics=None, selected_container=False):
         """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
@@ -544,6 +544,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         if max_distance is not None and math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
         ignore=[l.prim_path for l in self.robot.links.values()]
         held=self._get_held()
+        selected_paths=({link.prim_path for link in selected_object.links.values()}
+                        if selected_container and selected_object is not None else set())
         if held is not None:ignore.extend(l.prim_path for l in held.links.values())
         ignore.extend(l.prim_path for obj,_ in self._carry_contents for l in obj.links.values())
         yaw=base_yaw if base_yaw is not None else math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
@@ -563,6 +565,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                 continue
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
+            # Inside selects a container, not an exact shelf/surface point.
+            # Seeing the same selected container is sufficient for approach;
+            # other scene occluders and own-body silhouettes still reject it.
+            if hit.get('rigidBody') in selected_paths:
+                if diagnostics is not None:diagnostics['visible_selected_container']=True
+                return True
             if diagnostics is not None:
                 diagnostics['scene_occluders'].append({'body':hit.get('rigidBody'),
                     'distance_to_target_m':float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))})

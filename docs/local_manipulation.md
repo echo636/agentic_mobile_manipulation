@@ -87,3 +87,16 @@ Local stance diagnostics distinguish out-of-frame targets, own-body/payload
 occlusion and scene ray occluders. Budget exhaustion with zero admitted route
 endpoints reports `local_candidate_preparation_budget`, distinct from route
 search exhaustion. Detailed geometry remains executor-private.
+
+For `place_inside`, the click binds the container identity. A stance may see a
+different surface of that same container along the target ray; requiring the
+original interior point to remain unoccluded incorrectly rejects approaches
+behind a shelf or the container's own collision shell. Other scene occluders,
+camera frusta, own-body/payload occlusion, reach, collision and the open-container
+precondition remain checked. Surface-specific placement keeps exact-point
+visibility. This ideal executor still does not certify an arm insertion path.
+
+Support proposals first use the model-selected XY neighbourhood and prioritize
+physical shelf heights near the click. The previous three volume-wide XY
+fractions can all hit a central divider or side walls, missing an otherwise
+usable compartment. The original volume candidates remain a fallback.
