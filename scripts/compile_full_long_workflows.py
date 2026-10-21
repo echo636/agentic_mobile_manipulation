@@ -135,15 +135,24 @@ def kitchen(inv,models):
   b.imported('fork'+str(i),'setting_the_table','tablefork_'+str(246+i))
   b.imported('cup'+str(i),'setting_the_table','water_glass_bbpraa_0')
  b.state('cabinet','Open',True,kwargs={'fully':True});ware=['plate1','fork1','cup1','plate2','fork2','cup2','knife','board']
- # Native Inside sampling can put flat plates above the fixed camera rig,
- # where a shelf hides every selectable plate surface. Use real lower shelf
- # hits for the plates; retain the closed-cabinet retrieval dependency.
+ # Native Inside sampling can put flat ware above the fixed camera rig, or
+ # leave a knife across a compartment boundary after settling. Use separated
+ # slots on three real shelves in the right compartment, clear of the oven.
+ # The downward rays and final Inside assertions still verify every slot.
+ cabinet_slots={
+  'plate1':([9.20,-1.80],1.4,[0.,0.,0.,1.]),
+  'board':([8.93,-1.95],1.4,[0.,0.,0.,1.]),
+  'plate2':([9.20,-1.80],1.05,[0.,0.,0.,1.]),
+  'fork1':([8.95,-1.78],1.05,[0.,0.,0.,1.]),
+  'fork2':([8.95,-2.04],1.05,[0.,0.,0.,1.]),
+  'knife':([9.00,-1.95],.7,[0.,0.,.70710678,.70710678]),
+  'cup1':([9.22,-1.80],.7,[0.,0.,0.,1.]),
+  'cup2':([9.22,-2.05],.7,[0.,0.,0.,1.]),
+ }
  for r in ware:
-  if r.startswith('plate'):
-   b.layout.append(dict(object=r,target='cabinet',place_on_support=True,
-       xy=[9.15,-1.8],support_probe_height=1.4 if r=='plate1' else 1.05,
-       initial_relation='Inside',orientation=[0.,0.,0.,1.]))
-  else:b.state(r,'Inside',True,target='cabinet',max_sampling_attempts=3)
+  xy,height,orientation=cabinet_slots[r]
+  b.layout.append(dict(object=r,target='cabinet',place_on_support=True,
+      xy=xy,support_probe_height=height,initial_relation='Inside',orientation=orientation))
  b.state('cabinet','Open',False,kwargs={'fully':True})
  b.state('fridge','Open',True,kwargs={'fully':True})
  for r in ['hotdog1','hotdog2']:b.state(r,'Inside',True,target='fridge',max_sampling_attempts=3);b.state(r,'Cooked',False)

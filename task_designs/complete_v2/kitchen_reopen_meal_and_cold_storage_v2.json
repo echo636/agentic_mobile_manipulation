@@ -323,41 +323,11 @@
   ],
   "initial_layout": [
     {
-      "object": "knife",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
-        0.15,
-        0.25
-      ],
-      "construction_staging": true
-    },
-    {
       "object": "hotdog1",
       "target": "stage",
       "place_on_support": true,
       "support_uv": [
-        0.38,
-        0.25
-      ],
-      "construction_staging": true
-    },
-    {
-      "object": "fork1",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
-        0.61,
-        0.25
-      ],
-      "construction_staging": true
-    },
-    {
-      "object": "cup1",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
-        0.8400000000000001,
+        0.15,
         0.25
       ],
       "construction_staging": true
@@ -367,28 +337,8 @@
       "target": "stage",
       "place_on_support": true,
       "support_uv": [
-        0.15,
-        0.75
-      ],
-      "construction_staging": true
-    },
-    {
-      "object": "fork2",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
         0.38,
-        0.75
-      ],
-      "construction_staging": true
-    },
-    {
-      "object": "cup2",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
-        0.61,
-        0.75
+        0.25
       ],
       "construction_staging": true
     },
@@ -414,7 +364,7 @@
       "target": "cabinet",
       "place_on_support": true,
       "xy": [
-        9.15,
+        9.2,
         -1.8
       ],
       "support_probe_height": 1.4,
@@ -428,24 +378,44 @@
     },
     {
       "object": "fork1",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "cabinet"
+      "target": "cabinet",
+      "place_on_support": true,
+      "xy": [
+        8.95,
+        -1.78
+      ],
+      "support_probe_height": 1.05,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "cup1",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "cabinet"
+      "target": "cabinet",
+      "place_on_support": true,
+      "xy": [
+        9.22,
+        -1.8
+      ],
+      "support_probe_height": 0.7,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "plate2",
       "target": "cabinet",
       "place_on_support": true,
       "xy": [
-        9.15,
+        9.2,
         -1.8
       ],
       "support_probe_height": 1.05,
@@ -459,31 +429,71 @@
     },
     {
       "object": "fork2",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "cabinet"
+      "target": "cabinet",
+      "place_on_support": true,
+      "xy": [
+        8.95,
+        -2.04
+      ],
+      "support_probe_height": 1.05,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "cup2",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "cabinet"
+      "target": "cabinet",
+      "place_on_support": true,
+      "xy": [
+        9.22,
+        -2.05
+      ],
+      "support_probe_height": 0.7,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "knife",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "cabinet"
+      "target": "cabinet",
+      "place_on_support": true,
+      "xy": [
+        9.0,
+        -1.95
+      ],
+      "support_probe_height": 0.7,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.70710678,
+        0.70710678
+      ]
     },
     {
       "object": "board",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "cabinet"
+      "target": "cabinet",
+      "place_on_support": true,
+      "xy": [
+        8.93,
+        -1.95
+      ],
+      "support_probe_height": 1.4,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "cabinet",
@@ -737,16 +747,16 @@
     "prep_dust": "prep_dust",
     "storage_dust": "storage_dust",
     "floor_dust": "floor_dust",
-    "initial_knife_Inside": "initial_knife_Inside",
     "initial_hotdog1_Inside": "initial_hotdog1_Inside",
-    "initial_fork1_Inside": "initial_fork1_Inside",
-    "initial_cup1_Inside": "initial_cup1_Inside",
     "initial_hotdog2_Inside": "initial_hotdog2_Inside",
-    "initial_fork2_Inside": "initial_fork2_Inside",
-    "initial_cup2_Inside": "initial_cup2_Inside",
     "initial_bin_OnTop": "initial_bin_OnTop",
     "initial_plate1_Inside": "initial_plate1_Inside",
+    "initial_fork1_Inside": "initial_fork1_Inside",
+    "initial_cup1_Inside": "initial_cup1_Inside",
     "initial_plate2_Inside": "initial_plate2_Inside",
+    "initial_fork2_Inside": "initial_fork2_Inside",
+    "initial_cup2_Inside": "initial_cup2_Inside",
+    "initial_knife_Inside": "initial_knife_Inside",
     "initial_board_Inside": "initial_board_Inside",
     "initial_box_OnTop": "initial_box_OnTop",
     "initial_apple_OnTop": "initial_apple_OnTop",
@@ -1078,40 +1088,15 @@
         "state": "Inside",
         "target": "bin"
       },
-      "initial_knife_Inside": {
-        "object": "knife",
-        "state": "Inside",
-        "target": "cabinet"
-      },
       "initial_hotdog1_Inside": {
         "object": "hotdog1",
         "state": "Inside",
         "target": "fridge"
       },
-      "initial_fork1_Inside": {
-        "object": "fork1",
-        "state": "Inside",
-        "target": "cabinet"
-      },
-      "initial_cup1_Inside": {
-        "object": "cup1",
-        "state": "Inside",
-        "target": "cabinet"
-      },
       "initial_hotdog2_Inside": {
         "object": "hotdog2",
         "state": "Inside",
         "target": "fridge"
-      },
-      "initial_fork2_Inside": {
-        "object": "fork2",
-        "state": "Inside",
-        "target": "cabinet"
-      },
-      "initial_cup2_Inside": {
-        "object": "cup2",
-        "state": "Inside",
-        "target": "cabinet"
       },
       "initial_bin_OnTop": {
         "object": "bin",
@@ -1123,8 +1108,33 @@
         "state": "Inside",
         "target": "cabinet"
       },
+      "initial_fork1_Inside": {
+        "object": "fork1",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_cup1_Inside": {
+        "object": "cup1",
+        "state": "Inside",
+        "target": "cabinet"
+      },
       "initial_plate2_Inside": {
         "object": "plate2",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_fork2_Inside": {
+        "object": "fork2",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_cup2_Inside": {
+        "object": "cup2",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_knife_Inside": {
+        "object": "knife",
         "state": "Inside",
         "target": "cabinet"
       },
