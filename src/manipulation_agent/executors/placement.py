@@ -16,6 +16,10 @@ def inside_sample_with_fallback(native, fallback, restore, record):
             raise
         sampled = False
         record({'status': 'native_sampling_exhausted', 'error': str(exc)})
+    else:
+        if not sampled:
+            record({'status':'native_sampling_failed', 'termination':'returned_false',
+                    'fallback':'assembly_volume_search'})
     if sampled:
         return True, False
     restore()

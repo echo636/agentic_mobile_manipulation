@@ -29,6 +29,21 @@ def inset_centers(low, high, extent):
         for x, y in xy for z in (.05, .5, .95)))
 
 
+def volume_center_domains(low, high, extent):
+    """Prefer full-envelope fits without treating annotations as cavity walls.
+
+    Official Inside tests object centers. Its native sampler also falls back
+    to the full annotated volume when an inset is empty. These are only pose
+    proposals: collision, support and every assembly member's Inside predicate
+    must still pass. Interleaving domains reserves work for this fallback even
+    when an inset exists but its sampled positions are obstructed.
+    """
+    preferred = inset_centers(low, high, extent)
+    domains = [('inset', preferred)] if preferred else []
+    domains.append(('full_volume', inset_centers(low, high, (0., 0., 0.))))
+    return domains
+
+
 def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None):
     """Nearby asset-supported resting poses may correct carry-induced tilt.
 
@@ -72,8 +87,9 @@ def sample_assembly_inside(backend, held, target, contents, *, point=None,
                            max_candidates=108, max_seconds=30.):
     """Search all selected-container volumes and nearby supported orientations.
 
-Unlike sampling root origins uniformly, inset bounds refer to the whole assembly
-center. Orientations preserve every carried relative pose and never flip it.
+Unlike sampling root origins uniformly, bounds refer to the whole assembly
+center. Insets are preferred proposals, not mandatory full-mesh containment.
+Orientations preserve every carried relative pose and never flip it.
 Rejected candidate poses never become committed actions or task evidence.
 """
     from omnigibson.object_states import Inside, Open
@@ -102,6 +118,8 @@ Rejected candidate poses never become committed actions or task evidence.
             return float(torch.linalg.norm(nearest-point.to(lo.device)))
         volumes.sort(key=distance)
     counts = {}
+    domain_attempts = {}
+    empty_insets = 0
     attempted = 0
     dirty = False
     accepted = False
@@ -146,11 +164,16 @@ Rejected candidate poses never become committed actions or task evidence.
             extent = (high-low).cpu().tolist()
             for volume in volumes:
                 lo, hi = volume.visual_aabb
-                centers = inset_centers(lo.cpu().tolist(), hi.cpu().tolist(), extent)
-                if not centers:
-                    reject('assembly_extent_exceeds_volume', {'volume': volume.prim_path,
-                           'yaw_radians': angle}, extent=extent, volume_extent=(hi-lo).cpu().tolist())
-                groups.append([(volume, center, center_offset.clone(), quat.clone(), angle,orientation_source) for center in centers])
+                domains = volume_center_domains(lo.cpu().tolist(), hi.cpu().tolist(), extent)
+                if domains[0][0] != 'inset':
+                    empty_insets += 1
+                    backend._placement_record({'status':'inside_inset_unavailable',
+                        'reason':'assembly_extent_exceeds_volume', 'held':held.name, 'target':target.name,
+                        'volume':volume.prim_path, 'yaw_radians':angle, 'extent':extent,
+                        'volume_extent':(hi-lo).cpu().tolist(), 'fallback':'full_volume'})
+                for domain, centers in domains:
+                    groups.append([(volume, center, center_offset.clone(), quat.clone(), angle,
+                                    orientation_source, domain) for center in centers])
         held.set_position_orientation(root_pos, root_quat)
         backend._relocate_contents(held, contents)
         # Spread early work across positions as well as orientations. Repeating
@@ -165,11 +188,13 @@ Rejected candidate poses never become committed actions or task evidence.
             diversified.append([shifted[i:i+3] for i in range(0,len(shifted),3)])
         candidates=(c for layer in itertools.zip_longest(*diversified)
                     for chunk in layer if chunk is not None for c in chunk)
-        for volume, center, offset, quat, angle, orientation_source in candidates:
+        for volume, center, offset, quat, angle, orientation_source, domain in candidates:
             check()
             if attempted >= max_candidates: break
             attempted += 1
+            domain_attempts[domain] = domain_attempts.get(domain, 0)+1
             candidate = {'candidate': attempted, 'volume': volume.prim_path, 'center': center,
+                         'center_domain':domain,
                          'yaw_radians': angle,'orientation_source':orientation_source,'orientation':quat.cpu().tolist()}
             center = torch.tensor(center, dtype=root_pos.dtype, device=root_pos.device)
             if not bool(volume.check_points_in_volume(center.unsqueeze(0)).item()):
@@ -253,5 +278,6 @@ Rejected candidate poses never become committed actions or task evidence.
         finally:
             backend._placement_record({'status':'inside_sampling_summary', 'method':'assembly_volume_search',
                                        'accepted':accepted, 'attempted':attempted, 'rejections':counts,
+                                       'empty_insets':empty_insets, 'domain_attempts':domain_attempts,
                                        'seconds':time.monotonic()-start, 'held':held.name, 'target':target.name,
                                        'identity_changed':identity_changed})
