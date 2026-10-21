@@ -81,8 +81,10 @@ class AssemblySamplingTests(unittest.TestCase):
                 self.name=name; self.position=torch.tensor(position); self.quat=torch.tensor([0.,0.,0.,1.])
                 self.extent=torch.tensor(extent); self.offset=torch.tensor(offset)
                 self.scene=SimpleNamespace(idx=0); self.n_joints=0
-                self.states={Inside:SimpleNamespace(get_value=lambda target:all(
-                    bool(((self.aabb[0] >= l.visual_aabb[0]) & (self.aabb[1] <= l.visual_aabb[1])).all())
+                # Match the installed official predicate: center in volume,
+                # not the stricter whole-envelope rule under regression.
+                self.states={Inside:SimpleNamespace(get_value=lambda target:any(
+                    bool(l.check_points_in_volume(((self.aabb[0]+self.aabb[1])/2).unsqueeze(0)).item())
                     for l in target.links.values()))}
             def get_position_orientation(self): return self.position.clone(),self.quat.clone()
             def set_position_orientation(self, position, orientation): self.position=position.clone();self.quat=orientation.clone()
@@ -223,13 +225,38 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertTrue(b.torch.equal(held.position,original[0]))
         self.assertEqual(records[-1]['rejections']['initial_collision'],3)
 
-    def test_oversize_fails_without_physics(self):
-        b,held,target,contents,state,records,modules=self.fixture(oversize=True)
+    def test_recorded_plate_larger_than_annotation_reaches_physics(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        held.extent=b.torch.tensor([.40778923,.40779799,.04712933])
+        volume=target.links['volume']
+        low=b.torch.zeros(3);high=b.torch.tensor([.90788984,.34610021,1.23199081])
+        volume.visual_aabb=(low,high)
+        volume.check_points_in_volume=lambda points:((points>=low)&(points<=high)).all(dim=1)
         with patch.dict('sys.modules',modules):
-            self.assertFalse(sample_assembly_inside(b,held,target,contents))
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=3))
+        self.assertGreater(state['steps'],0)
+        self.assertEqual(records[-1]['domain_attempts'],{'full_volume':1})
+        self.assertEqual(records[-2]['center_domain'],'full_volume')
+        self.assertTrue(b.torch.allclose(contents[0][0].position,held.position+held.offset))
+
+    def test_full_volume_fallback_still_rejects_collisions_and_restores_pose(self):
+        b,held,target,contents,state,records,modules=self.fixture(oversize=True,collide='all')
+        original=held.get_position_orientation()
+        with patch.dict('sys.modules',modules):
+            self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=3))
         self.assertEqual(state['steps'],0)
-        self.assertEqual(state['loads'],0)
-        self.assertEqual(records[-1]['attempted'],0)
+        self.assertGreater(state['loads'],0)
+        self.assertEqual(records[-1]['attempted'],3)
+        self.assertEqual(records[-1]['rejections'],{'initial_collision':3})
+        self.assertTrue(b.torch.equal(held.position,original[0]))
+
+    def test_full_volume_fallback_does_not_bypass_payload_inside(self):
+        b,held,target,contents,state,records,modules=self.fixture(oversize=True,collide=False)
+        child=contents[0][0]
+        child.states[modules['omnigibson.object_states'].Inside].get_value=lambda target:False
+        with patch.dict('sys.modules',modules):
+            self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+        self.assertEqual(records[-1]['rejections'],{'payload_outside_destination':1})
         self.assertEqual(float(held.position[0]),5.)
 
 
