@@ -1,9 +1,7 @@
-"""Read-only whole-payload translation checks, shared by prediction and motion.
+"""Read-only carry destination and loaded-navigation collision checks.
 
-PhysX queries stay in the adapter. No hypothetical object or robot setters are
-used. During vertical extraction, PhysX must find no obstacle in the newly
-entered top slab of each payload box. Existing support contact can therefore
-only shrink, and the end of extraction must be clear.
+Ideal pickup transfers the assembly directly; only its destination must be
+clear. Robot travel with the carried assembly still requires continuous sweeps.
 """
 import math
 import numpy as np
@@ -110,6 +108,43 @@ class PayloadSweep:
             self.last_failure={'stage':'translation_endpoint','blockers':sorted(remaining),'extraction':extraction}
             return False
         return True
+
+    def destination_clear(self, position):
+        contacts=self.contacts(translated_bounds(self.bounds,np.asarray(position)-self.origin))
+        if contacts:
+            self.last_failure={'stage':'carry_destination','blockers':sorted(contacts)}
+            return False
+        self.last_failure=None
+        return True
+
+
+def instant_carry_destinations(origin, base, bounds):
+    """Compact endpoint proposals, independent of the pickup support/roof.
+
+    Preserve the assembly's orientation and place its envelope in front of the
+    base. Larger objects need more radial space, not an arbitrary size cutoff.
+    These are proposals; the whole payload and robot are checked at each pose.
+    """
+    origin=np.asarray(origin,dtype=float)
+    low=np.min([lo for lo,_ in bounds],axis=0)-origin
+    high=np.max([hi for _,hi in bounds],axis=0)-origin
+    center=(low+high)/2
+    for extra in (0.,.15):
+        for delta in (0.,math.pi/4,-math.pi/4,math.pi/2,-math.pi/2,math.pi):
+            angle=base[3]+delta;direction=np.array([math.cos(angle),math.sin(angle)])
+            radius=float(np.abs(direction)@((high-low)[:2]/2))
+            reach=.48+radius+extra
+            xy=np.asarray(base[:2])+reach*direction-center[:2]
+            for bottom_height in (.65,.95,1.2):
+                yield (float(xy[0]),float(xy[1]),float(base[2]+bottom_height-low[2]))
+
+
+def plan_instant_carry(origin, base, bounds, destination_clear, *, check=lambda: None):
+    for destination in instant_carry_destinations(origin,base,bounds):
+        check()
+        if destination_clear(destination):
+            return (tuple(map(float,origin)),destination),'instant_pose_transfer'
+    return None,'carry_destination_blocked'
 
 
 def plan_lift_and_compact(origin, base, bounds, clear, *, check=lambda: None):

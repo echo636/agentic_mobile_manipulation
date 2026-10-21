@@ -608,7 +608,7 @@ class CheckedPlacement:
             try:
                 if assembly_search:
                     from .inside_sampling import sample_assembly_inside
-                    sampled=sample_assembly_inside(self,held,target,contents,point=point)
+                    sampled=sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
                 else:
                     from .inside_sampling import sample_assembly_inside
                     checkpoint=self.og.sim.dump_state(serialized=False)
@@ -625,7 +625,7 @@ class CheckedPlacement:
                         self.og.sim.load_state(checkpoint,serialized=False)
                         restore_particle_state(particles)
                     sampled,geometric_fallback=inside_sample_with_fallback(
-                        native,lambda:sample_assembly_inside(self,held,target,contents,point=point),
+                        native,lambda:sample_assembly_inside(self,held,target,contents,point=point,residents=residents),
                         restore,self._placement_record)
                 sampling_done=True
             finally:
@@ -670,7 +670,7 @@ class CheckedPlacement:
                 'new_object_settling':'free_physics',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
 
-    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None):
+    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None, residents=()):
         """Project assembly centers onto actual internal shelves and bottoms.
 
         All ray hits are needed: the closest hit alone can be the roof above
@@ -685,6 +685,12 @@ class CheckedPlacement:
         low,high=volume.visual_aabb
         ignored=[link.prim_path for obj in (held,self.robot,*payload) for link in obj.links.values()]
         target_paths={link.prim_path for link in target.links.values()}
+        # Existing contents are valid supports too (e.g. a cookie on a sandwich).
+        # Restrict this to verified residents of the selected container; the
+        # proposal still needs collision, settling and official Inside checks.
+        resident_paths={link.prim_path for obj,_,_ in residents for link in obj.links.values()
+                        if not link.is_meta_link}
+        support_paths=target_paths|resident_paths
         clearance=.025+.5*9.81*self.og.sim.get_physics_dt()**2
         proposals=[];surfaces=[]
         # Preserve the model's spatial hint. Three coarse volume fractions can
@@ -716,7 +722,7 @@ class CheckedPlacement:
                          only_closest=False,ignore_bodies=ignored)
             for hit in sorted(hits,key=lambda h:(abs(float(h['position'][2]-point[2]))
                                                  if point is not None else float(h['position'][2]))):
-                if hit.get('rigidBody') not in target_paths or float(hit['normal'][2])<.9:continue
+                if hit.get('rigidBody') not in support_paths or float(hit['normal'][2])<.9:continue
                 z=float(hit['position'][2])+float(center_offset[2]-bottom[2])+clearance
                 if not float(low[2])<=z-clearance<=float(high[2]):continue
                 center=(x,y,z)

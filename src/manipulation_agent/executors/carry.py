@@ -296,15 +296,26 @@ class ControlledCarry(CompactCarry):
         local=getattr(self,'_local_operation',None)
         prepared=getattr(local,'carry_plan',None)
         if prepared is not None:
-            from .carry_posture import translation_samples
             pose=self._local_pose()
             if (math.dist(pose[:2],prepared['pose'][:2])>.01 or
                     abs(math.atan2(math.sin(pose[2]-prepared['pose'][2]),math.cos(pose[2]-prepared['pose'][2])))>.02):
                 raise SkillError('local_adjustment_blocked','Base moved after carry preparation')
-            samples=list(translation_samples(prepared['route'],.5*self.og.sim.get_sim_step_dt()))
-            if len(samples)+6>max_steps:
-                raise SkillError('local_adjustment_exhausted','Prepared carry route exceeds remaining step budget')
         dependencies=self._grasp_dependencies(obj)
+        if not getattr(self,'demo_motion',False):
+            from .carry_geometry import PayloadSweep, plan_instant_carry
+            payload=[obj,*[child for child,_,_ in dependencies]]
+            if prepared is None:
+                pose=self._local_pose()
+                check=local.check if local is not None else self.deadline.check
+                sweep=PayloadSweep(self,obj,payload,pose,check=check)
+                base_z=float(self.robot.get_position_orientation()[0][2])
+                route,status=plan_instant_carry(sweep.origin,(*pose[:2],base_z,pose[2]),
+                                               sweep.bounds,sweep.destination_clear,check=check)
+                if route is None:
+                    self._carry_record(status=status,diagnostic=sweep.last_failure)
+                    raise SkillError('local_adjustment_blocked','No collision-free carry destination found')
+                prepared={'pose':pose,'route':route,'status':status,'transfer_mode':'instant_pose_transfer'}
+            self._validate_carry_destination(obj,prepared,payload,max_steps)
         contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
         particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in dependencies]],include_supported=True)
         # The entire selected assembly is leaving its old support. An outer
@@ -327,9 +338,7 @@ class ControlledCarry(CompactCarry):
             relative=T.relative_pose_transform(*original,
                 *self.robot.eef_links[self._demo_arm].get_position_orientation())
         else:
-            # Legacy ideal carry starts at a safe elevated pose.
-            lifted=original[0].clone();lifted[2]+=.18
-            relative=T.relative_pose_transform(lifted,original[1],base_pos,base_quat)
+            relative=T.relative_pose_transform(*original,base_pos,base_quat)
         self._ideal_held=obj;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
         self._carry_particles=particles
         self._carry_joint_positions={body:body.get_joint_positions().clone()
@@ -347,8 +356,7 @@ class ControlledCarry(CompactCarry):
             with self._anchored_operation():
                 for _ in range(min(6,max_steps)):
                     self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-            packing=(self._compact_carry(max(0,max_steps-6)) if getattr(self,'local_manipulation',False)
-                     and not getattr(self,'demo_motion',False) else {'status':'disabled'})
+            packing={'status':'demo_hand_carry'}
         pos,quat=obj.get_position_orientation()
         if not bool(torch.isfinite(pos).all() and torch.isfinite(quat).all()):
             raise SkillError('physics_instability','Non-finite held pose',changed=True)
