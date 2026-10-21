@@ -5,7 +5,7 @@ from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.executors.inside_sampling import assembly_orientations, inset_centers, sample_assembly_inside
+from manipulation_agent.executors.inside_sampling import assembly_orientations, inset_centers, sample_assembly_inside, envelope_protrusion
 from manipulation_agent.executors.placement import inside_sample_with_fallback
 from manipulation_agent.contracts import SkillError
 
@@ -37,6 +37,11 @@ class SamplerBudgetRecoveryTests(unittest.TestCase):
 
 
 class InsetCentersTests(unittest.TestCase):
+    def test_recorded_box_rim_loses_to_internal_support(self):
+        low=(-14.,9.,.65);high=(-13.4,9.7,.90);extent=(.5,.16,.095)
+        self.assertGreater(envelope_protrusion((-13.7,9.35,.908),extent,low,high,.025),
+                           envelope_protrusion((-13.7,9.35,.725),extent,low,high,.025))
+
     def test_every_center_keeps_whole_extent_inside(self):
         points = inset_centers((1., 2., 3.), (2., 4., 6.), (.3, .8, 1.2))
         self.assertEqual(len(points), 27)
@@ -175,6 +180,25 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertTrue(records[-1]['accepted'])
         self.assertGreater(state['loads'],0)
         self.assertGreater(abs(float(held.position[1])),.1)
+
+    def test_unladen_item_chooses_bottom_before_native_inside_rim_false_fit(self):
+        b,held,target,_,state,records,modules=self.fixture(collide=False)
+        # Both centers satisfy the unchanged native predicate. The first
+        # support leaves half the rigid item above the annotated interior.
+        b._inside_support_centers=lambda *a,**kw:[(0.,0.,1.025),(0.,0.,.225)]
+        with patch.dict('sys.modules',modules):
+            self.assertTrue(sample_assembly_inside(b,held,target,[],max_candidates=1))
+        self.assertAlmostEqual(float((held.position+held.offset)[2]),.225,places=5)
+        self.assertEqual(records[-1]['attempted'],1)
+
+    def test_interior_rank_does_not_waive_collision(self):
+        b,held,target,_,state,records,modules=self.fixture(collide='all')
+        original=held.get_position_orientation()
+        b._inside_support_centers=lambda *a,**kw:[(0.,0.,1.025),(0.,0.,.225)]
+        with patch.dict('sys.modules',modules):
+            self.assertFalse(sample_assembly_inside(b,held,target,[],max_candidates=1))
+        self.assertTrue(b.torch.equal(held.position,original[0]))
+        self.assertEqual(records[-1]['rejections'],{'initial_collision':1})
 
     def test_small_budget_reaches_empty_space_despite_many_yaws(self):
         b,held,target,contents,state,records,modules=self.fixture()

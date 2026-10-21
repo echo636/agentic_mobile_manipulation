@@ -44,6 +44,18 @@ def volume_center_domains(low, high, extent):
     return domains
 
 
+def envelope_protrusion(center, extent, low, high, settling_drop=0.):
+    """Rank a resting envelope within a volume; never reject conservative bounds.
+
+    Native Inside can accept an item's center while it rests on a box rim and
+    obstructs the lid. Prefer lower interior supports for unladen placements.
+    Bounds are only a ranking hint: physical contact and Inside remain required.
+    """
+    resting = (*center[:2], center[2]-settling_drop)
+    return sum(max(0., lo-(c-e/2))+max(0., c+e/2-hi)
+               for c,e,lo,hi in zip(resting,extent,low,high))
+
+
 def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None, *, allow_reorientation=False):
     """Resting proposals preserve payloads; unladen items may turn onto a side.
 
@@ -228,12 +240,21 @@ Rejected candidate poses never become committed actions or task evidence.
                                      for c,e,a,b in zip(center,extent,lo,hi))
                            for lo,hi in resident_bounds)/volume
             def location(candidate):return tuple(round(float(v)/.02) for v in candidate[1])
+            volume_bounds={v.prim_path:tuple(a.cpu().tolist() for a in v.visual_aabb) for v in volumes}
+            settling_drop=.025+.5*9.81*sim.get_physics_dt()**2
+            def support_rank(candidate):
+                volume,center,_,quat,*_=candidate
+                extent=extents[tuple(quat.cpu().tolist())]
+                lo,hi=volume_bounds[volume.prim_path]
+                return (round(envelope_protrusion(center,extent,lo,hi,settling_drop),6),
+                        round(occupancy(candidate),6),round(float(center[2]),6),
+                        visits.get(location(candidate),0))
             first_support=[];remainder=[]
             for group in supported:
-                if resident_bounds:
-                    group=sorted(group,key=lambda c:(round(occupancy(c),6),visits.get(location(c),0)))
+                group=sorted(group,key=support_rank)
                 first_support.append(group[0]);remainder.append(group[1:])
                 key=location(group[0]);visits[key]=visits.get(key,0)+1
+            first_support.sort(key=support_rank)
             remainder+=other
             chunks=[[group[i:i+3] for i in range(0,len(group),3)] for group in remainder if group]
             tail=(c for layer in itertools.zip_longest(*chunks)
