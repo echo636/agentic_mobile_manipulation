@@ -121,6 +121,7 @@ class Builder:
 def kitchen(inv,models):
  b=Builder('kitchen','preparing_lunch_box',inv,models)
  for r,n in dict(box='packing_box_210',tea='bottle_of_tea_208',sandwich='club_sandwich_209',cookie='chocolate_chip_cookie_207',board='chopping_board_211',prep='countertop_kelker_0',storage='countertop_kelzer_0',fridge='fridge_dszchb_0',microwave='microwave_abzvij_0',floor='floors_qgmjvd_0',table='breakfast_table_rhjoby_0',cabinet='bottom_cabinet_fancyy_0').items():b.existing(r,n)
+ b.s['construction_asset_scales']=[{'object':'board','scale':[1.,1.,1.],'reason':'Use full native afwefw cutting board dimensions; source atomic task scaled it about 2x.'}]
  b.fixture('stage',[6.,.5],[1.8,.7,.65]);b.fixture('tool_home',[8.6,1.4],[.8,.6,.55])
  b.imported('bin','picking_up_trash','trash_can_116',scale=[1.5]*3);b.place('bin','floor',[6.,3.])
  b.native('apple','apple');b.native('knife','carving_knife')

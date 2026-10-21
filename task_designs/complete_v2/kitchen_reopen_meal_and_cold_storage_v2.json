@@ -2176,6 +2176,17 @@
     "conditional_design_count": 104,
     "recovery_status": "original_file"
   },
+  "construction_asset_scales": [
+    {
+      "object": "board",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "reason": "Use full native afwefw cutting board dimensions; source atomic task scaled it about 2x."
+    }
+  ],
   "compiled_action_count": 111,
   "compiled_count_includes_waits": true,
   "compiled_manipulation_count": 110

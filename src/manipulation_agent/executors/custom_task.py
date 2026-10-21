@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager, nullcontext
 import hashlib
 import json
 import os
@@ -37,6 +38,19 @@ def complete_native_articulation_state(state, objects, native_names):
             entry['joint_vel']=copy.deepcopy(obj.get_joint_velocities())
             changes.append({'name':name,'n_joints':obj.n_joints})
     return completed,changes
+
+
+@contextmanager
+def construction_native_sampling_limit(macros, trials=30):
+    """Bound initial rejection sampling, restoring runtime defaults even on failure."""
+    previous=(macros.DEFAULT_HIGH_LEVEL_SAMPLING_ATTEMPTS,macros.DEFAULT_LOW_LEVEL_SAMPLING_ATTEMPTS)
+    with macros.unlocked():
+        macros.DEFAULT_HIGH_LEVEL_SAMPLING_ATTEMPTS=1
+        macros.DEFAULT_LOW_LEVEL_SAMPLING_ATTEMPTS=trials
+    try:yield
+    finally:
+        with macros.unlocked():
+            macros.DEFAULT_HIGH_LEVEL_SAMPLING_ATTEMPTS,macros.DEFAULT_LOW_LEVEL_SAMPLING_ATTEMPTS=previous
 
 
 def validate_system_references(spec, system_root):
@@ -335,7 +349,11 @@ class CustomTaskBackend(RGBBackend):
             if operation.get('system'): args.append(self.env.scene.get_system(operation['system'],force_init=True))
             successes=[]
             for attempt in range(operation.get('max_sampling_attempts',1)):
-                success=bool(obj.states[cls].set_value(*args, operation.get('value',True), **operation.get('kwargs',{})))
+                from omnigibson.utils.object_state_utils import m as sampling_macros
+                limits=(construction_native_sampling_limit(sampling_macros)
+                        if self.custom_spec.get('reference_plan',{}).get('kind')=='full_workflow' else nullcontext())
+                with limits:
+                    success=bool(obj.states[cls].set_value(*args, operation.get('value',True), **operation.get('kwargs',{})))
                 successes.append(success)
                 if success:break
                 self.og.sim.step()

@@ -19,3 +19,13 @@ class NativeConstructionStateTests(unittest.TestCase):
   state={'registry':{'object_registry':{'apple':{}}}}
   actual,changes=complete_native_articulation_state(state,{'apple':NS(n_joints=0)},['apple'])
   self.assertEqual(actual,state);self.assertEqual(changes,[])
+
+ def test_construction_sampling_failure_restores_runtime_search_limits(self):
+  from contextlib import nullcontext
+  from manipulation_agent.executors.custom_task import construction_native_sampling_limit
+  macros=NS(DEFAULT_HIGH_LEVEL_SAMPLING_ATTEMPTS=10,DEFAULT_LOW_LEVEL_SAMPLING_ATTEMPTS=100,unlocked=nullcontext)
+  with self.assertRaisesRegex(RuntimeError,'construction rejected'):
+   with construction_native_sampling_limit(macros,30):
+    self.assertEqual(macros.DEFAULT_HIGH_LEVEL_SAMPLING_ATTEMPTS*macros.DEFAULT_LOW_LEVEL_SAMPLING_ATTEMPTS,30)
+    raise RuntimeError('construction rejected')
+  self.assertEqual((macros.DEFAULT_HIGH_LEVEL_SAMPLING_ATTEMPTS,macros.DEFAULT_LOW_LEVEL_SAMPLING_ATTEMPTS),(10,100))

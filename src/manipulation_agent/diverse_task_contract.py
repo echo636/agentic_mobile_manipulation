@@ -19,6 +19,9 @@ def upright_orientation(quaternion, max_tilt_degrees=15.):
 
 def validate_construction(spec):
     roles = spec['roles']
+    for row in spec.get('construction_asset_scales',[]):
+        if row['object'] not in roles or len(row.get('scale',[]))!=3 or any(float(v)<=0 for v in row['scale']) or not row.get('reason'):
+            raise ValueError('Construction asset scales require a bound role, positive XYZ scale and reason')
     native=spec.get('native_assets',[])
     if len({r['name'] for r in native})!=len(native):raise ValueError('Duplicate native assets')
     for row in native:

@@ -340,6 +340,9 @@ class OmniGibsonBackend:
                     'added_floors':restored_floors,'full_template_sha256':hashlib.sha256(full_template.read_bytes()).hexdigest(),
                     'task_object_bindings_unchanged':True,'original_assets_unmodified':True,
                     'scope':'research_scene_geometry_repair_not_official_submission'})
+        for override in custom.get('construction_asset_scales',[]):
+            name=custom['roles'][override['object']]
+            data['objects_info']['init_info'][name]['args']['scale']=list(override['scale'])
         migrations = normalize_embedded_robot(data, reset_controller_state=True)
         if migrations:
             write_json(self.output/'scene_compatibility.json',{'changes':migrations,
