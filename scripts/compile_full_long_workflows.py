@@ -248,7 +248,7 @@ def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False):
 def garden(inv,models):
  b=Builder('garden','spraying_for_bugs',inv,models)
  for r,n in dict(plant1='pot_plant_172',plant2='pot_plant_173',sprayer='insectifuge_atomizer_174',floor='floors_ghetev_0',lawn='lawn_aztwla_0').items():b.existing(r,n)
- for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[12.9,13.65],[2.2,.8,.6]),('stage',[12.8,8.7],[1.8,1.3,.65]),('tool_home',[15.55,4.1],[1.7,1.1,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
+ for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[12.9,13.65],[2.2,.8,.6]),('stage',[12.8,8.7],[1.8,1.3,.65]),('tool_home',[15.55,4.35],[1.7,.6,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
  for r in ['trowel','shears','pillow1','pillow2','apple','knife']:
   b.native(r,{'pillow1':'pillow','pillow2':'pillow','knife':'carving_knife'}.get(r,r))
  b.imported('protected','spraying_for_bugs','pot_plant_172')
@@ -293,7 +293,9 @@ def garden(inv,models):
  b.phase('display_clean',[take('brush'),action('wipe','display'),put('tool_home',tool_slots['brush'])])
  b.phase('return_plants',[a for i,r in enumerate(['plant1','plant2']) for a in transfer(r,'display',(.38+.26*i,.5))],['treat','display_clean'])
  b.phase('work_reset',[take('brush'),action('wipe','work'),put('tool_home',tool_slots['brush'])],['return_plants'])
- assembly,usable=table_parts(b,[14.,5.7],[15.4,8.1],[14.65,12.85]);b.phase('assemble',assembly)
+ # Preserve the parts surface's west edge and native part sizes, opening the
+ # east aisle for carrying pillows and entering the tool station from north.
+ assembly,usable=table_parts(b,[13.65,5.7],[15.4,8.1],[14.65,12.85],compact=True);b.phase('assemble',assembly)
  for row in assembly:
   if row['primitive']=='place_on_top' and row.get('role')=='tool_home':row['uv']=list(tool_slots['brush'])
  b.phase('seats',[take('brush'),action('wipe','pillow1'),action('wipe','pillow2'),put('tool_home',tool_slots['brush'])]+transfer('pillow1','seat1')+transfer('pillow2','seat2'),['clear'])
