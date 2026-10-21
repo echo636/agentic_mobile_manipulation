@@ -91,7 +91,7 @@ are proposals only, with unchanged collision and settling acceptance checks.
     return result
 
 
-def sample_assembly_inside(backend, held, target, contents, *, point=None,
+def sample_assembly_inside(backend, held, target, contents, *, point=None, residents=(),
                            max_candidates=108, max_seconds=30.):
     """Search all selected-container volumes and nearby supported orientations.
 
@@ -158,7 +158,8 @@ Rejected candidate poses never become committed actions or task evidence.
                                    'volumes':[link.prim_path for link in volumes]})
         # Compute envelopes once for each nearby resting/carried orientation. Merely
         # computing candidates must not step physics or load the whole scene.
-        groups = []
+        groups = []; extents = {}
+        resident_bounds=[tuple(v.cpu().tolist() for v in obj.aabb) for obj,_,_ in residents]
         payload_locked = bool(contents or getattr(backend,'_placement_particle_payload',(None,[]))[1])
         for orientation_source, quat, angle in assembly_orientations(
                 held,root_quat,torch,T,reference_quat=target_quat,allow_reorientation=not payload_locked):
@@ -172,6 +173,7 @@ Rejected candidate poses never become committed actions or task evidence.
             high = torch.stack([b for _, b in bounds]).amax(dim=0)
             center_offset = (low+high)/2-root_pos
             extent = (high-low).cpu().tolist()
+            extents[tuple(quat.cpu().tolist())]=extent
             for volume in volumes:
                 lo, hi = volume.visual_aabb
                 domains = volume_center_domains(lo.cpu().tolist(), hi.cpu().tolist(), extent)
@@ -184,7 +186,8 @@ Rejected candidate poses never become committed actions or task evidence.
                 for domain, centers in domains:
                     support=getattr(backend,'_inside_support_centers',None)
                     if support is not None:
-                        supported=support(held,target,volume,centers,center_offset,assembly[1:],check,point=point)
+                        supported=support(held,target,volume,centers,center_offset,assembly[1:],check,
+                                          point=point,**({'residents':residents} if residents else {}))
                         if supported:
                             groups.append([(volume,center,center_offset.clone(),quat.clone(),angle,
                                             orientation_source,'support_'+domain) for center in supported])
@@ -212,16 +215,45 @@ Rejected candidate poses never become committed actions or task evidence.
             # poses reached physics. Preserve click order for loaded assemblies.
             supported=[group for group in groups if group and group[0][-1].startswith('support_')]
             other=[group for group in groups if group and not group[0][-1].startswith('support_')]
-            first_support=[group[0] for group in supported]
-            remainder=[group[1:] for group in supported]+other
+            # In occupied containers, rotating repeatedly at one blocked center
+            # spends the whole budget without testing the remaining space. Rank
+            # resident overlap only as a heuristic (AABBs are not rejection
+            # certificates), then distribute ties over different positions.
+            visits={}
+            def occupancy(candidate):
+                _,center,_,quat,*_=candidate
+                extent=extents[tuple(quat.cpu().tolist())]
+                volume=max(math.prod(extent),1e-12)
+                return sum(math.prod(max(0.,min(c+e/2,b)-max(c-e/2,a))
+                                     for c,e,a,b in zip(center,extent,lo,hi))
+                           for lo,hi in resident_bounds)/volume
+            def location(candidate):return tuple(round(float(v)/.02) for v in candidate[1])
+            first_support=[];remainder=[]
+            for group in supported:
+                if resident_bounds:
+                    group=sorted(group,key=lambda c:(round(occupancy(c),6),visits.get(location(c),0)))
+                first_support.append(group[0]);remainder.append(group[1:])
+                key=location(group[0]);visits[key]=visits.get(key,0)+1
+            remainder+=other
             chunks=[[group[i:i+3] for i in range(0,len(group),3)] for group in remainder if group]
             tail=(c for layer in itertools.zip_longest(*chunks)
                   for chunk in layer if chunk is not None for c in chunk)
             candidates=itertools.chain(first_support,tail)
+        seen=set();locations=set();duplicates=0
         for volume, center, offset, quat, angle, orientation_source, domain in candidates:
             check()
+            # Inset and full-volume support projections often produce exactly
+            # the same pose. One physics trial suffices; do not charge it twice.
+            q=quat.cpu().tolist()
+            if next((x for x in reversed(q) if abs(x)>1e-8),1.)<0:q=[-x for x in q]
+            key=(volume.prim_path,*(round(float(c-o),5) for c,o in zip(center,offset)),
+                 *(round(float(v),5) for v in q))
+            if key in seen:
+                duplicates+=1;continue
+            seen.add(key)
             if attempted >= max_candidates: break
             attempted += 1
+            locations.add(tuple(round(float(v),4) for v in center[:2]))
             domain_attempts[domain] = domain_attempts.get(domain, 0)+1
             candidate = {'candidate': attempted, 'volume': volume.prim_path, 'center': center,
                          'center_domain':domain,
@@ -312,5 +344,7 @@ Rejected candidate poses never become committed actions or task evidence.
             backend._placement_record({'status':'inside_sampling_summary', 'method':'assembly_volume_search',
                                        'accepted':accepted, 'attempted':attempted, 'rejections':counts,
                                        'empty_insets':empty_insets, 'domain_attempts':domain_attempts,
+                                       'unique_xy_attempted':len(locations) if 'locations' in locals() else 0,
+                                       'duplicate_poses_skipped':duplicates if 'duplicates' in locals() else 0,
                                        'seconds':time.monotonic()-start, 'held':held.name, 'target':target.name,
                                        'identity_changed':identity_changed})
