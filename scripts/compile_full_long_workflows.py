@@ -343,7 +343,9 @@ def workshop(inv,models):
  for row in b.layout:
   if row['object'] in initial_slots and row.get('auto_slot'):
    row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
- b.place('bin','floor',[-12.1,9.1]);b.place('block','floor',[-13.9,12.]);b.state('box','Open',False,kwargs={'fully':True})
+ # The source table and garage wall hide the old floor bin from every
+ # collision-free manipulation stance. Keep it beside the open parts aisle.
+ b.place('bin','floor',[-12.,12.3]);b.place('block','floor',[-13.9,12.]);b.state('box','Open',False,kwargs={'fully':True})
  b.state('ink','Filled',True,system='ink')
  clean={r:b.clean(r) for r in ['bench','source','floor']}
  b.pred('box_open','box','Open')
