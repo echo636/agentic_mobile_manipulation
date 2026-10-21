@@ -172,6 +172,12 @@ Rejected candidate poses never become committed actions or task evidence.
                         'volume':volume.prim_path, 'yaw_radians':angle, 'extent':extent,
                         'volume_extent':(hi-lo).cpu().tolist(), 'fallback':'full_volume'})
                 for domain, centers in domains:
+                    support=getattr(backend,'_inside_support_centers',None)
+                    if support is not None:
+                        supported=support(held,target,volume,centers,center_offset,assembly[1:],check,point=point)
+                        if supported:
+                            groups.append([(volume,center,center_offset.clone(),quat.clone(),angle,
+                                            orientation_source,'support_'+domain) for center in supported])
                     groups.append([(volume, center, center_offset.clone(), quat.clone(), angle,
                                     orientation_source, domain) for center in centers])
         held.set_position_orientation(root_pos, root_quat)

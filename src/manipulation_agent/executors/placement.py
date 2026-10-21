@@ -411,7 +411,7 @@ class CheckedPlacement:
         self.sampling_physics_steps += 1
         self.og.sim.step_physics()
 
-    def _settle_surface_contacts(self, held, target, payload, max_steps):
+    def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None):
         """Finish free settling with live contacts and fresh native state reads.
 
         Sampling can put a small object to sleep before its contact state has
@@ -430,6 +430,8 @@ class CheckedPlacement:
                     for state in obj.states.values():
                         state.clear_cache()
             self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if resting is not None:
+                resting.add(*held.get_position_orientation())
         for obj in objects:
             for state in obj.states.values():
                 state.clear_cache()
@@ -437,6 +439,7 @@ class CheckedPlacement:
     def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
+        from .resting_motion import RestingMotionWindow
         with self._placement_context(watch=(held, target)):
             contents = list(self._carry_contents) if self.ideal_carry else []
             payload = [obj for obj, _ in contents]
@@ -472,12 +475,15 @@ class CheckedPlacement:
                             'candidate': candidate['index'], 'target': target.name, 'held': held.name,
                             'contact_bodies': contacts, 'clearance_m': candidate['clearance_m']})
                         continue
+                    resting = RestingMotionWindow(self.og.sim.get_physics_dt())
+                    resting.add(*held.get_position_orientation())
                     for _ in range(settle_steps):
                         self._placement_physics_step()
+                        resting.add(*held.get_position_orientation())
                     contacts = self._placement_contacts(held, payload)
                     touching = any(path in contacts for path in (link.prim_path for link in target.links.values()))
                     supported, support = self._selected_surface_support(
-                        held, target, point, touching, payload, require_contact=False)
+                        held, target, point, touching, payload, require_contact=False, resting=resting.report())
                     if not supported:
                         self._placement_record({'status': 'candidate_rejected', 'stage': 'free_settling',
                             'candidate': candidate['index'], 'target': target.name, 'held': held.name,
@@ -495,11 +501,14 @@ class CheckedPlacement:
                     raise SkillError('sampling_error', 'No collision-free, stable pose on the selected surface', changed=True)
             # Only the accepted physical result advances environment metrics,
             # object-state transition rules and the recorded replay.
-            self._settle_surface_contacts(held, target, payload, max_steps)
+            resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
+            resting.add(*held.get_position_orientation())
+            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
             adjacency = held.states[VerticalAdjacency].get_value()
             touching = bool(held.states[Touching].get_value(target))
             official_on_top = bool(held.states[OnTop].get_value(target))
-            supported, support = self._selected_surface_support(held, target, point, touching, payload)
+            supported, support = self._selected_surface_support(
+                held, target, point, touching, payload, resting=resting.report())
             self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
                 'position': held.get_position_orientation()[0].tolist(),
                 'touching': touching, 'official_on_top': official_on_top, 'selected_surface_support': support,
@@ -511,7 +520,7 @@ class CheckedPlacement:
             self._verify_payload(dependencies)
         return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
-    def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=True):
+    def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=True, resting=None):
         """Check the actual lower collider patch after gravity, including lower shelves.
 
         No whole-box footprint, goal predicate mutation, or held-pose projection
@@ -550,13 +559,15 @@ class CheckedPlacement:
                   'bottom_near_support': gap is not None and -.01 <= gap <= .015,
                   'selected_shelf_height': height_error is not None and height_error <= .05,
                   'selected_surface_neighborhood': selected_xy_distance <= .20,
-                  'settled': speed <= .10 and angular_speed <= .5,
+                  'settled': (bool(resting['stable']) if resting is not None
+                              else speed <= .10 and angular_speed <= .5),
                   'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
         return all(checks.values()), {'checks': checks, 'touching_selected_object': touching,
             'selected_contact': selected_contact, 'contact_required': require_contact,
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
+            'resting_motion':resting,
             'support_hit_body': hit.get('rigidBody'), 'contact_bodies': contacts,
             'ignored_payload_names': [obj.name for obj in payload]}
 
@@ -699,3 +710,57 @@ class CheckedPlacement:
                 'target_root_anchored':True,'existing_containment_verified':resident_count,
                 'new_object_settling':'free_physics',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
+
+    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None):
+        """Project assembly centers onto actual internal shelves and bottoms.
+
+        All ray hits are needed: the closest hit alone can be the roof above
+        a usable shelf. These are proposals, with the same collision, settling
+        and containment checks as volume samples. No contact is waived.
+        """
+        from .surface_geometry import bottom_anchor
+        from omnigibson.utils.sampling_utils import raytest
+        position=held.get_position_orientation()[0]
+        bottom=self.torch.as_tensor(bottom_anchor(self._collision_vertices(held)),
+                                   dtype=position.dtype,device=position.device)-position
+        low,high=volume.visual_aabb
+        ignored=[link.prim_path for obj in (held,self.robot,*payload) for link in obj.links.values()]
+        target_paths={link.prim_path for link in target.links.values()}
+        clearance=.025+.5*9.81*self.og.sim.get_physics_dt()**2
+        proposals=[];surfaces=[]
+        # Preserve the model's spatial hint. Three coarse volume fractions can
+        # land on a central divider and two side walls while missing both usable
+        # compartments. Project the selected point and its local neighbourhood
+        # onto real supports before falling back to volume-wide positions.
+        selected=[]
+        if point is not None:
+            offsets=[(0.,0.)]+[(x,y) for radius in (.04,.08,.12)
+                              for x,y in ((radius,0.),(-radius,0.),(0.,radius),(0.,-radius))]
+            for dx,dy in offsets:
+                xy=(float(point[0])+dx+float(center_offset[0]-bottom[0]),
+                    float(point[1])+dy+float(center_offset[1]-bottom[1]))
+                if all(float(low[i])<=xy[i]<=float(high[i]) for i in (0,1)):selected.append(xy)
+        # Midpoints of the volume's halves cover compartments on either side
+        # of a divider without adding physics attempts or a larger work budget.
+        split=[(float(low[0]+fx*(high[0]-low[0])),float(low[1]+fy*(high[1]-low[1])))
+               for fx,fy in ((.25,.5),(.75,.5),(.25,.25),(.75,.25),
+                             (.25,.75),(.75,.75),(.5,.25),(.5,.75))]
+        for x,y in dict.fromkeys([*selected,*split,*[(float(c[0]),float(c[1])) for c in centers]]):
+            check()
+            ax=x-float(center_offset[0])+float(bottom[0])
+            ay=y-float(center_offset[1])+float(bottom[1])
+            hits=raytest([ax,ay,float(high[2])+.05],[ax,ay,float(low[2])-.05],
+                         only_closest=False,ignore_bodies=ignored)
+            for hit in sorted(hits,key=lambda h:(abs(float(h['position'][2]-point[2]))
+                                                 if point is not None else float(h['position'][2]))):
+                if hit.get('rigidBody') not in target_paths or float(hit['normal'][2])<.9:continue
+                z=float(hit['position'][2])+float(center_offset[2]-bottom[2])+clearance
+                if not float(low[2])<=z<=float(high[2]):continue
+                center=(x,y,z)
+                if any(sum((a-b)**2 for a,b in zip(center,old))<1e-8 for old in proposals):continue
+                proposals.append(center)
+                surfaces.append({'center':center,'support_position':hit['position'].tolist(),
+                                 'body':hit.get('rigidBody'),'collision':hit.get('collision')})
+        self._placement_record({'status':'inside_support_proposals','held':held.name,'target':target.name,
+            'volume':volume.prim_path,'clearance_m':clearance,'surfaces':surfaces})
+        return proposals

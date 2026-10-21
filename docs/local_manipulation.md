@@ -21,6 +21,8 @@
 
 组合放置优先在按整体包围盒收缩后的容积中选中心，同时交错尝试完整标注容积中的中心。标注容积用于官方 Inside 的中心点判定，不等同于物理空腔边界；包围盒大于标注不能直接证明放不下。所有候选仍须通过组合碰撞、重力接触与稳定、根物体及载物 Inside、容器状态和最终事务检查。日志区分收缩域为空、各候选域的尝试次数、实际物理拒绝原因及官方采样器返回失败或耗尽预算。
 
+表面放置在候选自由落定及最终环境步进期间记录真实物体位姿。最近至少 0.25 秒内，任意采样位置相差不超过 2 毫米、姿态相差不超过 2 度，才形成稳定证据；接触求解器的单帧速度仍写入日志，但不单独否决已测得稳定的物体。支撑物、接触几何、目标层板与点击邻域、载物关系及失败回滚检查保持独立，不通过冻结或改动物体来制造稳定。
+
 局部可操作性包括：原有 1.4 m XY 作用范围、四相机视锥及场景射线、自遮挡、底盘与携带物碰撞范围。新站位以 1.25 m 为优选范围，留下距离余量；它不是机械臂关节空间可达性的保证。只调整实际存在的底盘 XY 和 yaw，不虚构俯仰相机或上下移动能力。
 
 站位朝向地图只计算目标操作圆及短程离开证明需要的窗口，窗口外仍读取完整机器人/载荷轮廓覆盖到的障碍。这个窗口仅加速终点筛选；接近路线使用完整碰撞地图，不限制在目标窗口或调用起点附近。碰撞余量保持不变。
@@ -71,3 +73,30 @@
 2026-10-21 空闲空间站位补充修复位于 `operations/local_stance_repair_20261021/`。存档 CPU 夹具保留桌椅、机器人和载荷的真实碰撞层，验证原径向候选全碰撞时仍可找到经过扫掠检查的路线；它不包含相机射线、开门或抬物的真实仿真验证，这些结果单独记录。
 
 2026-10-21 目标中心站位修改记录位于 `operations/target_centered_stance_20261021/`。移除调用起点 2 m 活动圆和累计 4 m 底盘路线限制；几何重放、真实模拟器及完整自主任务分别记录状态，未完成的验证不得视为通过。
+# Placement geometry diagnostics (2026-10-21)
+
+Inside proposals now also project volume XY centers onto upward collision
+surfaces of the selected container, enumerating all downward ray hits so an
+upper shelf does not hide a lower one. The held object's measured collision
+bottom determines the candidate height. The existing 25 mm contact clearance,
+physical settling, collision rejection, root/payload containment and rollback
+remain in force. Volume-height proposals remain available as fallback. This
+change requires simulator validation; candidate generation is not a proof of fit.
+
+Local stance diagnostics distinguish out-of-frame targets, own-body/payload
+occlusion and scene ray occluders. Budget exhaustion with zero admitted route
+endpoints reports `local_candidate_preparation_budget`, distinct from route
+search exhaustion. Detailed geometry remains executor-private.
+
+For `place_inside`, the click binds the container identity. A stance may see a
+different surface of that same container along the target ray; requiring the
+original interior point to remain unoccluded incorrectly rejects approaches
+behind a shelf or the container's own collision shell. Other scene occluders,
+camera frusta, own-body/payload occlusion, reach, collision and the open-container
+precondition remain checked. Surface-specific placement keeps exact-point
+visibility. This ideal executor still does not certify an arm insertion path.
+
+Support proposals first use the model-selected XY neighbourhood and prioritize
+physical shelf heights near the click. The previous three volume-wide XY
+fractions can all hit a central divider or side walls, missing an otherwise
+usable compartment. The original volume candidates remain a fallback.

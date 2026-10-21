@@ -95,7 +95,8 @@ class LocalRGBManipulation:
         geometry=self._local_geometry(operation)
         operation.geometry=geometry
         if not geometry[1].motion_free(pose,pose):return False
-        if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=geometry[3],base_yaw=pose[2]):return False
+        if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=geometry[3],base_yaw=pose[2],
+                                      selected_container=primitive=='place_inside'):return False
         if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
             if not self._admit_articulation(primitive,obj,pose,operation,operation.check):return False
         if primitive=='grasp' and self.ideal_carry and not self.demo_motion:
@@ -141,8 +142,11 @@ class LocalRGBManipulation:
                     preparation.check()
                     row={'pose':pose,'source':source,'status':'checking'};attempts.append(row)
                     if not local.motion_free(pose,pose):row.update(status='rejected',reason='collision');continue
-                    if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=hulls,base_yaw=pose[2]):
-                        row.update(status='rejected',reason='target_not_visible');continue
+                    visibility={}
+                    if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=hulls,
+                                                  base_yaw=pose[2],diagnostics=visibility,
+                                                  selected_container=primitive=='place_inside'):
+                        row.update(status='rejected',reason='target_not_visible',visibility=visibility);continue
                     if local_exit_certificate(pose,local,check_cancelled=preparation.check) is None:
                         row.update(status='rejected',reason='no_departure');continue
                     if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
@@ -221,6 +225,10 @@ class LocalRGBManipulation:
                 termination='selected' if selected else 'budget' if exhausted else 'candidates_exhausted')
         if selected is None:
             if exhausted:
+                if not eligible:
+                    raise SkillError('local_adjustment_exhausted',
+                        'Stance preparation exhausted its budget before admitting a route endpoint',
+                        stage='local_candidate_preparation_budget')
                 raise SkillError('local_adjustment_exhausted','Local route search incomplete within planning budget',
                                  stage='local_planning_budget')
             reasons={row.get('reason') for row in attempts}
