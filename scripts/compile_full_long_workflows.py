@@ -248,7 +248,7 @@ def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False):
 def garden(inv,models):
  b=Builder('garden','spraying_for_bugs',inv,models)
  for r,n in dict(plant1='pot_plant_172',plant2='pot_plant_173',sprayer='insectifuge_atomizer_174',floor='floors_ghetev_0',lawn='lawn_aztwla_0').items():b.existing(r,n)
- for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[12.9,13.65],[2.2,.8,.6]),('stage',[12.8,8.7],[1.8,1.3,.65]),('tool_home',[15.55,4.35],[1.7,.6,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
+ for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[12.9,13.65],[2.2,.8,.6]),('stage',[12.8,8.7],[1.8,1.3,.65]),('tool_home',[15.55,4.1],[1.7,1.1,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
  for r in ['trowel','shears','pillow1','pillow2','apple','knife']:
   b.native(r,{'pillow1':'pillow','pillow2':'pillow','knife':'carving_knife'}.get(r,r))
  b.imported('protected','spraying_for_bugs','pot_plant_172')
@@ -265,7 +265,7 @@ def garden(inv,models):
  # Separate large boards / plants from small tools using measured native extents.
  initial_slots={'pillow1':(.3,.65),'pillow2':(.7,.65),'book':(.25,.15),'can':(.75,.15),'trowel':(.18,.17),'shears':(.5,.17),'sprayer':(.82,.17),
                 'board':(.25,.65),'knife':(.25,.13),'tea':(.75,.8),'apple':(.9,.6),
-                'plate':(.65,.5),'cup1':(.7,.2),'cup2':(.9,.2),'lamp1':(.2,.2),'lamp2':(.8,.2),'brush':(.7,.2),'broom':(.7,.95)}
+                'plate':(.65,.5),'cup1':(.7,.2),'cup2':(.9,.2),'lamp1':(.2,.2),'lamp2':(.8,.2),'brush':(.7,.6),'broom':(.7,.95)}
  for row in b.layout:
   if row['object'] in initial_slots and row.get('auto_slot'):
    row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
@@ -281,7 +281,7 @@ def garden(inv,models):
  for i in (1,2):
   r='plant'+str(i);b.state(r,'Covered',False,system='insectifuge');treated.append(b.pred(r+'_treated',r,'Covered',system='insectifuge'))
  b.replacement('apple','half_apple','sguztn')
- tool_slots={'board':(.23,.5),'brush':(.7,.2),'trowel':(.7,.4),'shears':(.7,.6),'sprayer':(.95,.4),'knife':(.7,.8),'broom':(.7,.95)}
+ tool_slots={'board':(.23,.5),'brush':(.7,.6),'trowel':(.7,.4),'shears':(.7,.2),'sprayer':(.95,.4),'knife':(.7,.8),'broom':(.7,.95)}
  b.phase('clear',transfer('book','stage',(.5,.5))+transfer('can','bin',into=True)+transfer('pillow1','stage',(.25,.75))+transfer('pillow2','stage',(.75,.75))+[take('broom'),action('sweep','floor'),put('tool_home',tool_slots['broom'])])
  tools=[]
  for i,r in enumerate(['trowel','shears','sprayer']):tools+=transfer(r,'work',(.2+.3*i,.5))
