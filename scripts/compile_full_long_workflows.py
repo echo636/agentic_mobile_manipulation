@@ -236,7 +236,11 @@ def kitchen(inv,models):
 
 def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False,near_side_legs=False):
  """Six actual furniture components; the temporary central jig must be released."""
- b.fixture('parts',parts_xy,[1.7 if compact else 2.4,2.,.65]);b.fixture('jig',jig_xy,[.18,.18,.86])
+ # The 18 cm pedestal let the tabletop tip after two legs were attached.
+ # A broad central support fits inside the native perimeter bracket and
+ # leaves the four corner attachment sites and legs clear. The assembled
+ # table must still leave this temporary support and stand on all four feet.
+ b.fixture('parts',parts_xy,[1.7 if compact else 2.4,2.,.65]);b.fixture('jig',jig_xy,[.54,.90,.86])
  for role,category in [('table','desk_top'),('bracket','desk_bracket')]+[('leg'+str(i),'desk_leg') for i in range(1,5)]:b.native(role,category)
  roles=['table','bracket','leg1','leg2','leg3','leg4']
  # Parts occupy separate strips; one table, one bracket and four structural legs.
