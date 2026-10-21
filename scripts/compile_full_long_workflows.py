@@ -219,12 +219,12 @@ def kitchen(inv,models):
 
 def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False):
  """Six actual furniture components; the temporary central jig must be released."""
- b.fixture('parts',parts_xy,[2.1 if compact else 2.4,2.,.65]);b.fixture('jig',jig_xy,[.18,.18,.86])
+ b.fixture('parts',parts_xy,[1.7 if compact else 2.4,2.,.65]);b.fixture('jig',jig_xy,[.18,.18,.86])
  for role,category in [('table','desk_top'),('bracket','desk_bracket')]+[('leg'+str(i),'desk_leg') for i in range(1,5)]:b.native(role,category)
  roles=['table','bracket','leg1','leg2','leg3','leg4']
  # Parts occupy separate strips; one table, one bracket and four structural legs.
  xy=[[-.62,0.],[.35,0.],[-.75,-.85],[-.05,-.85],[.65,-.85],[.65,.85]]
- if compact:xy=[[-.5,0.],[.43,0.],[-.48,-.85],[.48,-.85],[-.48,.85],[.48,.85]]
+ if compact:xy=[[-.425,0.],[.425,0.],[-.4,-.85],[.4,-.85],[-.4,.85],[.4,.85]]
  for role,offset in zip(roles,xy):b.place(role,'parts',[parts_xy[i]+offset[i] for i in range(2)])
  clean={r:b.clean(r) for r in roles}
  assembled=ALL(b.rel('bracket','table','AttachedTo'),*[b.rel('leg'+str(i),'bracket','AttachedTo') for i in range(1,5)])
@@ -345,7 +345,10 @@ def workshop(inv,models):
  b.phase('deliver_kit',transfer('box','bench',(.5,.25)),['pack_kit'])
  tool_slots={'axe':(.5,.3),'brush':(.5,.5),'paintbrush':(.5,.73)}
  b.phase('inventory',[action('open','box'),*[a for r in tools for a in transfer(r,'tool_home',tool_slots[r])]],['deliver_kit'])
- assembly,usable=table_parts(b,[-13.8,13.5],[-12.25,15.],[-13.6,15.8],compact=True);b.phase('assemble',assembly,['inventory','clear_bench'])
+ # Keep the west edge fixed while narrowing the parts station: r25's loaded
+ # collision maps split the garage into disconnected north/south work areas.
+ # Native component dimensions remain unchanged in separated support slots.
+ assembly,usable=table_parts(b,[-14.,13.5],[-12.25,15.],[-13.6,15.8],compact=True);b.phase('assemble',assembly,['inventory','clear_bench'])
  # The shared assembly helper returns its brush to the same dedicated tool slot.
  for row in assembly:
   if row['primitive']=='place_on_top' and row.get('role')=='tool_home':row['uv']=list(tool_slots['brush'])
