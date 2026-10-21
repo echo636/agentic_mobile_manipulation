@@ -6,6 +6,7 @@ No initial assertions, collision checks, or physical predicates are bypassed.
 """
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -19,6 +20,41 @@ sys.path.insert(0, str(SOURCE / 'src'))
 from manipulation_agent.custom_tasks import load_spec, sha256
 from manipulation_agent.records import write_json, release_source_digest
 from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
+
+
+def trace_dynamics(backend, output, limit=16):
+    """Read-only per-step evidence for native physics faults; no state repair."""
+    original=backend._step
+    def snapshot(phase):
+        if backend.steps>=limit:return
+        rows=[];errors=[];awake=[]
+        for obj in backend.env.scene.objects:
+            try:
+                if obj.is_asleep:continue
+                awake.append(obj.name)
+                pos,quat=obj.get_position_orientation()
+                linear=float(backend.torch.linalg.norm(obj.get_linear_velocity()))
+                angular=float(backend.torch.linalg.norm(obj.get_angular_velocity()))
+                joints=obj.get_joint_velocities() if obj.n_joints else backend.torch.zeros(1)
+                joint_speed=float(abs(joints).max())
+                rows.append(dict(name=obj.name,position=pos.tolist(),orientation=quat.tolist(),
+                                 linear_speed=linear,angular_speed=angular,joint_speed=joint_speed))
+            except Exception as exc:errors.append(dict(name=obj.name,error=str(exc)))
+        rows.sort(key=lambda r:max(r['linear_speed'],r['angular_speed'],r['joint_speed'])
+                  if all(math.isfinite(r[k]) for k in ('linear_speed','angular_speed','joint_speed'))
+                  else float('inf'),reverse=True)
+        selected=rows[:20]
+        if not any(r['name']==backend.robot.name for r in selected):
+            selected += [r for r in rows if r['name']==backend.robot.name]
+        with (output/'diagnostic_dynamics.jsonl').open('a') as stream:
+            stream.write(json.dumps(dict(at_unix=time.time(),env_step=backend.steps,phase=phase,
+                awake_objects=awake,fastest_objects=selected,read_errors=errors))+'\n')
+    def step(action):
+        snapshot('before')
+        result=original(action)
+        snapshot('after')
+        return result
+    backend._step=step
 
 
 def main():
@@ -64,6 +100,7 @@ def main():
                          inside_placement='official_volume', max_steps=100000)
         record['backend'] = backend.provenance()
         backend.observe()
+        if plan.get('trace_dynamics',False):trace_dynamics(backend,args.output)
         reference = ReferenceTask(backend, args.output, max_attempts=100)
         workflow = FullWorkflowReference(reference)
         for action in plan['actions']:
