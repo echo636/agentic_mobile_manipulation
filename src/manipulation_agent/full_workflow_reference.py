@@ -76,9 +76,18 @@ class FullWorkflowReference:
         # eye ray while exposing only a top corner outside the approach RGB
         # frusta. Ray-cast real side surfaces at camera height as alternatives;
         # ordinary navigation still checks reachability and visibility.
-        for axis,sign in ((0,-1),(1,-1),(0,1),(1,1)):
-            origin=preferred.clone();origin[axis]=(low[axis] if sign<0 else high[axis])+sign*.4
-            rays.append((origin,preferred))
+        # Appliances can sit below a countertop with a neighbor covering the
+        # near AABB face. Top-height rays then all hit the countertop. Sample
+        # real side surfaces below it as well, so a remote approach selects
+        # the exposed door instead of repeatedly falling back to a hidden face.
+        side_targets=[preferred,center]
+        for fraction in (.75,.25):
+            target=center.clone();target[2]=low[2]+fraction*(high[2]-low[2])
+            side_targets.append(target)
+        for target in side_targets:
+            for axis,sign in ((0,-1),(1,-1),(0,1),(1,1)):
+                origin=target.clone();origin[axis]=(low[axis] if sign<0 else high[axis])+sign*.4
+                rays.append((origin,target))
         candidates=[]
         for origin,target in rays:
             direction=target-origin
