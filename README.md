@@ -123,3 +123,4 @@ The [earlier results and failure analysis](http://10.76.5.241:8765/retest32_gt_2
 
 - [Replay and model trace recording](docs/replay_trace.md) and a [recorded model episode](http://10.76.5.241:8765/replay_trace_20261001/manipulation_runs/mas_trace_000_turning_on_radio_i301_s0_r1/replay.html#step=9)
 - [Startup and placement repair scope](docs/executor_repairs_20261001.md) and [repair attempts](http://10.76.5.241:8765/executor_fixes_20261001/index.html)
+- [Measured host memory admission and shared startup coordination](docs/memory_admission.md)

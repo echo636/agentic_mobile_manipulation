@@ -98,7 +98,7 @@ def runtime_storage_readiness(paths):
 
 
 def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *, light=False,
-              reserved_host_memory_gib=0, runtime_storage_paths=()):
+              reserved_host_memory_gib=0, runtime_storage_paths=(), memory_policy=None):
     # A worker performs the full version/encoder check once. Resource polling
     # only rechecks quantities that can change while it waits for a GPU lease.
     encoding_check = None
@@ -150,6 +150,18 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
               'bridge_port_free': port_free}
     host_available=int(mem['MemAvailable'].split()[0])*1024
     checks['host_memory_including_peer_reservations']=host_available>(40+reserved_host_memory_gib)*1024**3
+    adaptive = None
+    if memory_policy is not None:
+        from manipulation_agent.memory_admission import host_memory_admission
+        adaptive = host_memory_admission(memory_policy,
+            account_current=int(cg['memory.current']), account_stats=stats,
+            account_limit=None if cg['memory.max']=='max' else int(cg['memory.max']))
+        checks['adaptive_account_memory'] = adaptive['status']=='passed'
+        checks['host_memory_including_peer_reservations'] = (
+            host_available > 40*1024**3 + adaptive['peer_growth_reserve_bytes'])
+        # An abandoned startup must be adopted/cleaned before another starts.
+        checks['peer_initialization_complete'] = not any(
+            peer.get('runtime_stage')=='starting' for peer in memory_policy['peers'])
     runtime_storage = runtime_storage_readiness(runtime_storage_paths)
     checks['runtime_storage_headroom_16GiB'] = runtime_storage['status'] == 'passed'
     if not light:
@@ -164,6 +176,7 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
             'required_working_memory_gib':memory_budget_gib,
             'quota_free_bytes':quota_free,
             'runtime_storage':runtime_storage,
+            'adaptive_memory':adaptive,
             'host_available_bytes':host_available,'reserved_host_memory_gib':reserved_host_memory_gib,
             'driver_version':selected[4].strip(),'gpu_policy':{'shared':bool(min_free_gpu_mib),'minimum_free_mib':min_free_gpu_mib},
             'validation_scope': 'dynamic_resources' if light else 'resources_and_static_runtime',
@@ -229,6 +242,7 @@ def main():
     p.add_argument('--deadline-unix', type=float, help='Legacy absolute task deadline; new runs arm the execution clock after initialization')
     p.add_argument('--reserved-host-memory-gib',type=int,default=0)
     p.add_argument('--runtime-storage-path',type=Path,action='append',default=[])
+    p.add_argument('--memory-policy-json', help='Shared measured-peak admission snapshot')
     a=p.parse_args(); manifest=json.loads(a.manifest.read_text())
     if a.mode == 'assets':
         selected=manifest if a.index is None else {'tasks':[manifest_task(manifest,a.index)]}
@@ -236,7 +250,8 @@ def main():
     if a.mode == 'preflight':
         print(json.dumps(preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
                                   reserved_host_memory_gib=a.reserved_host_memory_gib,
-                                  runtime_storage_paths=a.runtime_storage_path))); return
+                                  runtime_storage_paths=a.runtime_storage_path,
+                                  memory_policy=json.loads(a.memory_policy_json) if a.memory_policy_json else None))); return
     row=manifest_task(manifest,a.index)
     if a.run_id:
         import re
@@ -250,7 +265,8 @@ def main():
         os.environ['MAS_EPISODE_DEADLINE_UNIX'] = str(a.deadline_unix)
     result=preflight(a.gpu,a.port,a.data_root,a.min_free_gpu_mib,a.memory_budget_gib,light=a.light,
                      reserved_host_memory_gib=a.reserved_host_memory_gib,
-                     runtime_storage_paths=a.runtime_storage_path)
+                     runtime_storage_paths=a.runtime_storage_path,
+                     memory_policy=json.loads(a.memory_policy_json) if a.memory_policy_json else None)
     # Persist a second check inside the allocated unit, immediately before startup.
     check_path=a.manifest.parent/'preflight'/f"{row['run_id']}_in_unit.json"
     check_path.write_text(json.dumps(result,indent=2)+'\n')
