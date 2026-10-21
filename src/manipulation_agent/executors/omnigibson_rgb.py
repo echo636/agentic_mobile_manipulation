@@ -845,7 +845,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             with component(self,'navigation_route_selection'):
                 plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
                     target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
-                    project_point=mode=='point')
+                    project_point=mode=='point',
+                    planning_seconds=getattr(self,'forward_route_planning_seconds',10.))
             details['forward_candidate_selection']=selection
             grid=endpoint_collision.grid_at_heading(plan.final_yaw)
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())

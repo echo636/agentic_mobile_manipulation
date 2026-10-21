@@ -73,6 +73,12 @@ class CustomTaskBackend(RGBBackend):
     def __init__(self, spec_path, output, *, build_instance=None, geometry_only=False, **kwargs):
         self.spec_path = Path(spec_path).resolve()
         self.custom_spec = json.loads(self.spec_path.read_text())
+        # Complete furnished scenes require more search time than the small
+        # atomic fixtures. The recorded loaded garden map has a valid route
+        # that the 10-second budget misses under simulator CPU contention.
+        # Keep the same collision checks, candidate set and expansion bound.
+        self.forward_route_planning_seconds=(60. if
+            self.custom_spec.get('reference_plan',{}).get('kind')=='full_workflow' else 10.)
         self.geometry_only = geometry_only
         self.use_gpu_dynamics = self.custom_spec.get('physics', {}).get('use_gpu_dynamics', False) and not geometry_only
         validate_spec(self.custom_spec, spec_path=self.spec_path, require_frozen=build_instance is None)

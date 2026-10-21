@@ -186,7 +186,8 @@ def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose
 
 
 def select_forward_route(options, actual, collision, *, target_slack=.1,
-                         check_cancelled=lambda: None, max_candidates=6, project_point=False):
+                         check_cancelled=lambda: None, max_candidates=6, project_point=False,
+                         planning_seconds=10.):
     """Search acceptable endpoints together, allowing explicit endpoint slack.
 
     Candidates already have local entry/exit and optional visibility proofs.
@@ -194,6 +195,8 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
     search across the remaining endpoints. Feasibility precedes shortcutting;
     no continuous/global shortest-route guarantee is made.
     """
+    if not math.isfinite(planning_seconds) or planning_seconds<=0:
+        raise ValueError('Forward route planning budget must be positive and finite')
     closest=min(p.score for p in options)
     candidates={}
     for p in options:
@@ -207,7 +210,7 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
         return (math.dist(actual[:2],p.goal)/.5+
                 (abs(angle(bearing-actual[2]))+abs(angle(p.final_yaw-bearing)))/(math.pi/3))
     ordered=sorted(candidates.values(),key=lambda p:(estimate(p),p.score))[:max_candidates]
-    budget=PlanningBudget(check_cancelled,seconds=10.)
+    budget=PlanningBudget(check_cancelled,seconds=planning_seconds)
     attempts=[{'goal':p.goal,'final_yaw':p.final_yaw,'target_distance_m':p.score,
                'status':'shared_search'} for p in ordered]
     collision.check_cancelled=budget.check
@@ -226,7 +229,7 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
                 selected,poses,details=projected
                 route=route_from_poses(selected,poses,collision,method='checked_forward_point_projection',
                                        check_cancelled=budget.check)
-                details.update(closest_candidate_m=closest,target_slack_m=None,total_seconds=10.,
+                details.update(closest_candidate_m=closest,target_slack_m=None,total_seconds=planning_seconds,
                                objective='nearest_checked_forward_reachable_grid_pose_then_motion_cost')
                 return selected,route,details
         route=plan_forward_route(ordered[0],actual,collision,check_cancelled=budget.check,
@@ -245,7 +248,7 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
             row.update(motion_seconds=route.estimated_motion_seconds,
                        turn_degrees=math.degrees(route.turn_radians),distance_m=route.distance_m)
     return selected,route,{'target_slack_m':target_slack,'closest_candidate_m':closest,
-                          'max_candidates':max_candidates,'candidate_seconds':None,'total_seconds':10.,'attempts':attempts,
+                          'max_candidates':max_candidates,'candidate_seconds':None,'total_seconds':planning_seconds,'attempts':attempts,
                           'search':'shared_multi_goal_continuous_pose','unique_endpoints':len(ordered),
                           'objective':'first_checked_route_then_motion_shortcuts','globally_optimal':False}
 

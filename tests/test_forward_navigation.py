@@ -28,6 +28,25 @@ class PointCollision:
 
 
 class ForwardNavigationTests(unittest.TestCase):
+    def test_explicit_complete_scene_budget_allows_work_but_still_expires(self):
+        clock=[100.]
+        original=plan_forward_route
+        def search(*args,**kwargs):
+            result=original(*args,**kwargs)
+            clock[0]+=25.
+            kwargs['check_cancelled']()
+            return result
+        with patch('manipulation_agent.executors.gt_navigation.time.monotonic',side_effect=lambda:clock[0]), \
+                patch('manipulation_agent.executors.forward_navigation.plan_forward_route',side_effect=search):
+            _,route,details=select_forward_route([plan([(0.,0.),(1.,0.)])],
+                (0.,0.,0.),PointCollision(),planning_seconds=60.)
+            self.assertAlmostEqual(route.distance_m,1.)
+            self.assertEqual(details['total_seconds'],60.)
+            with self.assertRaises(NavigationError) as caught:
+                select_forward_route([plan([(0.,0.),(1.,0.)])],
+                    (0.,0.,0.),PointCollision(),planning_seconds=20.)
+            self.assertEqual(caught.exception.code,'navigation_search_exhausted')
+
     def test_valid_complete_route_can_use_more_than_two_seconds(self):
         clock = [100.]
         original = plan_forward_route
