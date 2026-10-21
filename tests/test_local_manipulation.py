@@ -131,6 +131,7 @@ class CoordinationTests(unittest.TestCase):
         candidates=next(e for e in b.events if e['phase']=='candidates')
         self.assertEqual(len(candidates['candidates']),1)
         self.assertEqual(search['attempts'],0)
+        self.assertEqual(caught.exception.stage,'local_candidate_preparation_budget')
         self.assertEqual(b.events[-1]['phase'],'failed')
         self.assertEqual(b.events[-1]['error_code'],'local_adjustment_exhausted')
     def test_motion_accounting_has_no_start_radius_or_distance_cap(self):
@@ -188,6 +189,34 @@ class CoordinationTests(unittest.TestCase):
             self.assertFalse(restricted.navigable(restricted.cell((2.1,0.))))
         self.assertTrue(local.motion_free((0.,0.,0.),(1.8,0.,0.)))
         self.assertFalse(local.motion_free((1.8,0.,0.),(2.01,0.,0.)))
+    def test_certified_route_reserves_control_steps_and_preserves_atomic_allowance(self):
+        b=Motor();clock=[0.];op=LocalOperation(b,'grasp',b.binding,20000,{},clock=lambda:clock[0])
+        # Recorded failed approach: 35.49 simulated seconds exceeded 600 steps.
+        route=SimpleNamespace(estimated_motion_seconds=35.4866,phases=(None,)*50)
+        motion=op.reserve_route(route,1/30)
+        self.assertGreater(motion,600)
+        self.assertEqual(op.step_limit,600+motion)
+        # Slow rendering may exceed the non-motion wall allowance; progress
+        # remains bounded by reserved steps and the follower's stall checks.
+        clock[0]=350.;b.steps=motion-1;op.check()
+        op.finish_route();clock[0]=651.
+        with self.assertRaises(SkillError):op.check()
+
+    def test_insufficient_caller_budget_is_rejected_before_moving(self):
+        b=Motor();op=LocalOperation(b,'grasp',b.binding,700,{})
+        route=SimpleNamespace(estimated_motion_seconds=35.4866,phases=(None,)*50)
+        with self.assertRaises(SkillError) as caught:op.reserve_route(route,1/30)
+        self.assertEqual(caught.exception.stage,'local_control_budget')
+        self.assertFalse(caught.exception.changed)
+        self.assertEqual(b.steps,0);self.assertEqual(op.step_limit,600)
+
+    def test_route_allowance_still_honors_caller_limit_and_cancellation(self):
+        b=Motor();op=LocalOperation(b,'grasp',b.binding,1000,{})
+        route=SimpleNamespace(estimated_motion_seconds=15.,phases=(None,)*10)
+        op.reserve_route(route,1/30);self.assertEqual(op.step_limit,1000)
+        b.steps=1000
+        with self.assertRaises(SkillError):op.check()
+
     def test_time_steps_and_sampling_are_bounded(self):
         for cause in ('time','steps','sampling'):
             b=Motor();clock=[0.];op=LocalOperation(b,'grasp',b.binding,100,{},clock=lambda:clock[0])

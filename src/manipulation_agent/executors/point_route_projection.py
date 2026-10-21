@@ -1,6 +1,6 @@
 """Project a floor click onto a checked forward-reachable endpoint.
 
-An eight-heading roadmap is a fast route proposal, not the continuous planner's
+A sixteen-direction roadmap is a fast route proposal, not the continuous planner's
 orientation limit. Failure here falls back to continuous-pose planning. The
 roadmap shares reachability work across all endpoint positions and headings;
 endpoint projection happens after reachability, rather than fixing a nearby
@@ -37,7 +37,9 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
         collision.check_cancelled=check_cancelled
     grid=collision.grid
     shape=(grid.height,grid.width)
-    headings=tuple(i*math.pi/4 for i in range(8))
+    directions=((1,0),(2,1),(1,1),(1,2),(0,1),(-1,2),(-1,1),(-2,1),
+                (-1,0),(-2,-1),(-1,-1),(-1,-2),(0,-1),(1,-2),(1,-1),(2,-1))
+    headings=tuple(math.atan2(dr,dc) for dc,dr in directions)
     free=[];indices=[];node_cells=[];node_headings=[];count=0
     for k,yaw in enumerate(headings):
         check_cancelled()
@@ -64,22 +66,33 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
     rows=[];cols=[];weights=[]
     for k,yaw in enumerate(headings):
         check_cancelled()
-        dr,dc=round(math.sin(yaw)),round(math.cos(yaw))
+        dc,dr=directions[k]
         r0,r1=max(0,-dr),min(grid.height,grid.height-dr)
         c0,c1=max(0,-dc),min(grid.width,grid.width-dc)
         mask=free[k]
         valid=mask[r0:r1,c0:c1]&mask[r0+dr:r1+dr,c0+dc:c1+dc]
-        if dr and dc:valid &= mask[r0:r1,c0+dc:c1+dc]&mask[r0+dr:r1+dr,c0:c1]
+        # Cell supercover of the stride, including corner tangencies.
+        for rr in range(min(0,dr),max(0,dr)+1):
+            for cc in range(min(0,dc),max(0,dc)+1):
+                enter,leave=0.,1.
+                for center,delta in ((rr,dr),(cc,dc)):
+                    if delta:
+                        bounds=sorted(((center-.5)/delta,(center+.5)/delta))
+                        enter=max(enter,bounds[0]);leave=min(leave,bounds[1])
+                    elif abs(center)>.5:leave=-1.
+                if enter<=leave+1e-12:
+                    valid &= mask[r0+rr:r1+rr,c0+cc:c1+cc]
         source=indices[k][r0:r1,c0:c1][valid]
         rows.append(source);cols.append(indices[k][r0+dr:r1+dr,c0+dc:c1+dc][valid])
         weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
         for offset in (-1,1):
             check_cancelled()
-            other=(k+offset)%8
-            swept=collision._sweep_grid(collision._key(yaw,yaw+offset*math.pi/4))
+            other=(k+offset)%len(headings)
+            delta=angle(headings[other]-yaw)
+            swept=collision._sweep_grid(collision._key(yaw,yaw+delta))
             valid=np.frombuffer(swept.free,dtype='uint8').reshape(shape).astype(bool)&mask&free[other]
             source=indices[k][valid]
-            rows.append(source);cols.append(indices[other][valid]);weights.append(np.full(len(source),.375))
+            rows.append(source);cols.append(indices[other][valid]);weights.append(np.full(len(source),.5*abs(delta)/(math.pi/3)))
     rows.append(np.full(len(roots),count,dtype=np.int32));cols.append(np.array(list(roots),dtype=np.int32))
     weights.append(np.array([sum(math.dist(a[:2],b[:2])+.5*abs(angle(b[2]-a[2]))/(math.pi/3)
                                  for a,b in zip(poses,poses[1:])) for poses in roots.values()]))
@@ -123,7 +136,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
             if terminal is None:continue
             poses=reconstruct(node)+terminal[1:]
             if not all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])):continue
-            return chosen,poses,{'search':'shared_roadmap_to_admitted_stances','sampled_headings':8,
+            return chosen,poses,{'search':'shared_roadmap_to_admitted_stances','sampled_headings':len(headings),
                                 'continuous_pose_fallback':True,'graph_nodes':count,'graph_edges':graph.nnz,
                                 'projection_window':getattr(collision,'window',None),
                                 'reachable_poses':len(reachable),'endpoint_checks':checked,
@@ -149,7 +162,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
         distance=sum(math.dist(a[:2],b[:2]) for a,b in zip(poses,poses[1:]))
         chosen=replace(options[0],points=tuple(p[:2] for p in poses),goal=goal,final_yaw=yaw,
                        travel_yaw=yaw,score=float(target_distances[index]),geodesic_m=distance)
-        return chosen,poses,{'search':'forward_reachable_point_projection','sampled_headings':8,
+        return chosen,poses,{'search':'forward_reachable_point_projection','sampled_headings':len(headings),
                             'continuous_pose_fallback':True,'graph_nodes':count,'graph_edges':graph.nnz,
                             'projection_window':getattr(collision,'window',None),
                             'reachable_poses':len(reachable),'endpoint_checks':checked,

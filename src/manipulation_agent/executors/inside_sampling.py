@@ -44,12 +44,12 @@ def volume_center_domains(low, high, extent):
     return domains
 
 
-def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None):
-    """Nearby asset-supported resting poses may correct carry-induced tilt.
+def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None, *, allow_reorientation=False):
+    """Resting proposals preserve payloads; unladen items may turn onto a side.
 
-Compare gravity in the object's local frame, so arbitrary yaw cannot exclude a
-valid resting pose. Reject flips/large tilts; contents follow the same rigid
-rotation and still must pass post-placement containment checks.
+For payloads, compare local gravity and reject flips or large tilts. Unladen
+objects may try asset poses or principal faces when metadata is absent; these
+are proposals only, with unchanged collision and settling acceptance checks.
 """
     current = transforms.quat2mat(root_quat)
     current_yaw = math.atan2(float(current[1,0]), float(current[0,0]))
@@ -57,21 +57,29 @@ rotation and still must pass post-placement containment checks.
     options = sorted((metadata or {}).values(), key=lambda value: -value.get('prob', 0))
     if metadata is not None and not options:
         options = [{'rotation':[0.,0.,0.,1.], 'prob':1.}]
+    if allow_reorientation and not metadata:
+        # Without asset resting metadata, principal faces are pose proposals.
+        # Only physical settling plus official containment may accept them.
+        options = [{'rotation': transforms.euler2quat(torch.tensor(angles, device=root_quat.device)).tolist(),
+                    'prob': 1., 'source': 'unladen_face_proposal'}
+                   for angles in ((0.,0.,0.),(math.pi/2,0.,0.),(-math.pi/2,0.,0.),
+                                  (0.,math.pi/2,0.),(0.,-math.pi/2,0.),(math.pi,0.,0.))]
     bases = []
     for option in options:
         stable = torch.tensor(option['rotation'], dtype=root_quat.dtype, device=root_quat.device)
         rotation = transforms.quat2mat(stable)
-        if float(torch.dot(rotation[2], current[2])) < math.cos(math.radians(45)):
+        if not allow_reorientation and float(torch.dot(rotation[2], current[2])) < math.cos(math.radians(45)):
             continue
         angle = current_yaw-math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         yaw = transforms.euler2quat(torch.tensor([0.,0.,angle],device=root_quat.device))
-        bases.append(('asset_resting_pose', transforms.quat_multiply(yaw,stable)))
+        bases.append((option.get('source','asset_resting_pose'), transforms.quat_multiply(yaw,stable)))
     bases.append(('carried_pose',root_quat))
     angles=[0.,math.pi/2,math.pi,3*math.pi/2]
     if reference_quat is not None:
         reference=transforms.quat2mat(reference_quat)
         aligned=math.atan2(float(reference[1,0]),float(reference[0,0]))-current_yaw
-        angles.extend(aligned+a for a in (0.,math.pi/2,math.pi,3*math.pi/2))
+        angles.extend(aligned+i*math.pi/(4 if allow_reorientation else 2)
+                      for i in range(8 if allow_reorientation else 4))
     result = []
     for label, base in bases:
         for angle in angles:
@@ -89,7 +97,7 @@ def sample_assembly_inside(backend, held, target, contents, *, point=None,
 
 Unlike sampling root origins uniformly, bounds refer to the whole assembly
 center. Insets are preferred proposals, not mandatory full-mesh containment.
-Orientations preserve every carried relative pose and never flip it.
+Payload orientations preserve local gravity. Unladen objects may rest on a side.
 Rejected candidate poses never become committed actions or task evidence.
 """
     from omnigibson.object_states import Inside, Open
@@ -151,7 +159,9 @@ Rejected candidate poses never become committed actions or task evidence.
         # Compute envelopes once for each nearby resting/carried orientation. Merely
         # computing candidates must not step physics or load the whole scene.
         groups = []
-        for orientation_source, quat, angle in assembly_orientations(held,root_quat,torch,T,reference_quat=target_quat):
+        payload_locked = bool(contents or getattr(backend,'_placement_particle_payload',(None,[]))[1])
+        for orientation_source, quat, angle in assembly_orientations(
+                held,root_quat,torch,T,reference_quat=target_quat,allow_reorientation=not payload_locked):
             check()
             held.set_position_orientation(root_pos, quat)
             backend._relocate_contents(held, contents)
@@ -182,18 +192,32 @@ Rejected candidate poses never become committed actions or task evidence.
                                     orientation_source, domain) for center in centers])
         held.set_position_orientation(root_pos, root_quat)
         backend._relocate_contents(held, contents)
-        # Spread early work across positions as well as orientations. Repeating
-        # many yaws at one occupied center can exhaust the time budget before
-        # trying empty space beside an existing item. Keep each height triplet
-        # together so a thick container bottom does not starve higher poses.
-        diversified=[]
-        for index,group in enumerate(groups):
-            if not group:continue
-            offset=(index*3)%len(group)
-            shifted=group[offset:]+group[:offset]
-            diversified.append([shifted[i:i+3] for i in range(0,len(shifted),3)])
-        candidates=(c for layer in itertools.zip_longest(*diversified)
-                    for chunk in layer if chunk is not None for c in chunk)
+        if payload_locked:
+            # Spread early work across positions as well as orientations. Repeating
+            # many yaws at one occupied center can exhaust the time budget before
+            # trying empty space beside an existing item. Keep each height triplet
+            # together so a thick container bottom does not starve higher poses.
+            diversified=[]
+            for index,group in enumerate(groups):
+                if not group:continue
+                offset=(index*3)%len(group)
+                shifted=group[offset:]+group[:offset]
+                diversified.append([shifted[i:i+3] for i in range(0,len(shifted),3)])
+            candidates=(c for layer in itertools.zip_longest(*diversified)
+                        for chunk in layer if chunk is not None for c in chunk)
+        else:
+            # Give every supported orientation one actual support proposal before
+            # spending trials on arbitrary heights. A three-height coarse-volume
+            # block per orientation used to exhaust 108 trials before useful side
+            # poses reached physics. Preserve click order for loaded assemblies.
+            supported=[group for group in groups if group and group[0][-1].startswith('support_')]
+            other=[group for group in groups if group and not group[0][-1].startswith('support_')]
+            first_support=[group[0] for group in supported]
+            remainder=[group[1:] for group in supported]+other
+            chunks=[[group[i:i+3] for i in range(0,len(group),3)] for group in remainder if group]
+            tail=(c for layer in itertools.zip_longest(*chunks)
+                  for chunk in layer if chunk is not None for c in chunk)
+            candidates=itertools.chain(first_support,tail)
         for volume, center, offset, quat, angle, orientation_source, domain in candidates:
             check()
             if attempted >= max_candidates: break
@@ -203,7 +227,10 @@ Rejected candidate poses never become committed actions or task evidence.
                          'center_domain':domain,
                          'yaw_radians': angle,'orientation_source':orientation_source,'orientation':quat.cpu().tolist()}
             center = torch.tensor(center, dtype=root_pos.dtype, device=root_pos.device)
-            if not bool(volume.check_points_in_volume(center.unsqueeze(0)).item()):
+            admission_center = center.clone()
+            if domain.startswith('support_'):
+                admission_center[2] -= .025+.5*9.81*sim.get_physics_dt()**2
+            if not bool(volume.check_points_in_volume(admission_center.unsqueeze(0)).item()):
                 reject('outside_fillable_volume', candidate)
                 continue
             if dirty:
