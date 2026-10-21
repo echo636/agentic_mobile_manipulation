@@ -96,15 +96,13 @@ class CustomTaskBackend(RGBBackend):
         # actual policy-ready scene, and reject a fixture that already drifted
         # out of its declared initial conditions before the agent can act.
         from ..long_horizon import expression
-        before_refresh=self._predicate_values()
+        with self._startup_stage('policy_ready_predicates_before_refresh'):
+            before_refresh=self._predicate_values()
         # Restoring a scene and attaching cameras can invalidate PhysX contact
         # caches. Render-only warmup does not rebuild OnTop / Touching data.
         # KinematicsMixin also retains a cached false value when a restored
         # object's pose barely changes, even after contact data is refreshed.
-        self.env.scene.wake_scene_objects()
-        for _ in range(5): self.og.sim.step()
-        for obj in self.env.scene.objects:
-            for state in obj.states.values(): state.clear_cache()
+        self._refresh_custom_contacts('policy_ready')
         initial=self._predicate_values()
         failed=[label for label,condition in self.custom_spec.get('initial_assertions',{}).items()
                 if not expression(condition,initial)]
@@ -164,6 +162,26 @@ class CustomTaskBackend(RGBBackend):
         live = {o.name:o for o in self.env.scene.objects}
         return {role:([v.tolist() for v in live[name].get_position_orientation()] if name in live else None)
                 for role,name in self.custom_spec['roles'].items()}
+
+    def _refresh_custom_contacts(self, stage):
+        # Only task entities participate in custom contact predicates. Waking
+        # hundreds of unrelated background articulations simultaneously can
+        # invalidate the furnished GPU scene. Keep them in their native sleep
+        # state, while waking every declared entity (including goal supports)
+        # and the robot. All bodies still take ordinary physics steps.
+        names=set(self.custom_spec['roles'].values()) | {self.robot.name}
+        with self._startup_stage(stage+'_contact_wake'):
+            awakened=[]
+            for obj in self.env.scene.objects:
+                if obj.name in names:
+                    obj.wake();awakened.append(obj.name)
+            write_json(self.output/(stage+'_contact_wake.json'),{
+                'scope':'all declared task entities and robot; background sleep state preserved',
+                'awakened':awakened,'physics_steps':5})
+        with self._startup_stage(stage+'_contact_physics'):
+            for _ in range(5):self.og.sim.step()
+        for obj in self.env.scene.objects:
+            for state in obj.states.values():state.clear_cache()
 
     def _restore_custom_scene(self, data):
         if self.custom_spec.get('schema_version') != 3:
@@ -328,13 +346,12 @@ class CustomTaskBackend(RGBBackend):
         for index,operation in enumerate(layout):
             with self._startup_stage(f'custom_layout_{index:03d}_{operation["object"]}'):
                 self._apply_initial_operation(operation,roles)
-        for _ in range(spec.get('settle_steps',30)): self.og.sim.step()
+        with self._startup_stage('construction_final_settle'):
+            for _ in range(spec.get('settle_steps',30)): self.og.sim.step()
         self.custom_objects = objects
-        before_refresh = self._predicate_values()
-        self.env.scene.wake_scene_objects()
-        for _ in range(5):self.og.sim.step()
-        for obj in self.env.scene.objects:
-            for state in obj.states.values():state.clear_cache()
+        with self._startup_stage('construction_predicates_before_refresh'):
+            before_refresh = self._predicate_values()
+        self._refresh_custom_contacts('construction')
         initial_values = self._predicate_values()
         from ..long_horizon import expression
         failed=[label for label,condition in spec.get('initial_assertions',{}).items()

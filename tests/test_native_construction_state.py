@@ -3,6 +3,26 @@ from types import SimpleNamespace as NS
 from manipulation_agent.executors.custom_task import complete_native_articulation_state
 
 class NativeConstructionStateTests(unittest.TestCase):
+ def test_contact_refresh_wakes_goal_supports_and_steps_whole_scene(self):
+  from contextlib import nullcontext
+  from pathlib import Path
+  from tempfile import TemporaryDirectory
+  from manipulation_agent.executors.custom_task import CustomTaskBackend
+  events=[]
+  def obj(name):
+   return NS(name=name,wake=lambda:events.append(('wake',name)),
+             states={'contact':NS(clear_cache=lambda:events.append(('clear',name)))})
+  objects=[obj(n) for n in ['item','support','background','robot']]
+  with TemporaryDirectory() as directory:
+   backend=NS(custom_spec={'roles':{'load':'item','destination':'support'}},robot=objects[-1],
+              env=NS(scene=NS(objects=objects)),output=Path(directory),
+              og=NS(sim=NS(step=lambda:events.append(('step','whole_scene')))),
+              _startup_stage=lambda stage:nullcontext())
+   CustomTaskBackend._refresh_custom_contacts(backend,'test')
+  self.assertEqual([name for kind,name in events if kind=='wake'],['item','support','robot'])
+  self.assertEqual(events.count(('step','whole_scene')),5)
+  self.assertEqual([name for kind,name in events if kind=='clear'],['item','support','background','robot'])
+
  def test_new_articulated_asset_gets_actual_defaults_without_overwriting_pose(self):
   state={'registry':{'object_registry':{'sprayer':{'root_link':{'pos':[2,3,4]},'non_kin':{}}}}};before=copy.deepcopy(state)
   obj=NS(n_joints=1,get_joint_positions=lambda:[.35],get_joint_velocities=lambda:[0.])
