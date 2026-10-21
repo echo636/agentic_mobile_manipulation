@@ -283,7 +283,7 @@
     {
       "name": "fv2_stage",
       "position": [
-        10.5,
+        11.1,
         2.55,
         0.325
       ],
@@ -303,7 +303,7 @@
     {
       "name": "fv2_tool_home",
       "position": [
-        8.6,
+        8.0,
         1.45,
         0.275
       ],
@@ -593,7 +593,7 @@
       "target": "table",
       "place_on_support": true,
       "support_uv": [
-        0.5,
+        0.85,
         0.5
       ]
     },

@@ -122,9 +122,10 @@ def kitchen(inv,models):
  b=Builder('kitchen','preparing_lunch_box',inv,models)
  for r,n in dict(box='packing_box_210',tea='bottle_of_tea_208',sandwich='club_sandwich_209',cookie='chocolate_chip_cookie_207',board='chopping_board_211',prep='countertop_kelker_0',storage='countertop_kelzer_0',fridge='fridge_dszchb_0',microwave='microwave_abzvij_0',floor='floors_qgmjvd_0',table='breakfast_table_rhjoby_0',cabinet='bottom_cabinet_fancyy_0').items():b.existing(r,n)
  b.s['construction_asset_scales']=[{'object':'board','scale':[1.,1.,1.],'reason':'Use full native afwefw cutting board dimensions; source atomic task scaled it about 2x.'}]
- # This side station is clear of the native bar, sofa, and terrace doorway.
- # The old point inside the bar's AABB left only part of the shelf accessible.
- b.fixture('stage',[10.5,2.55],[2.,1.,.65]);b.fixture('tool_home',[8.6,1.45],[1.8,.6,.55])
+ # Preserve connected working aisles, not just non-overlapping fixtures.
+ # The r20 tool table left only .657m beside the sofa; its staging table
+ # left .74m beside the dining table. Both pinched loaded approaches.
+ b.fixture('stage',[11.1,2.55],[2.,1.,.65]);b.fixture('tool_home',[8.,1.45],[1.8,.6,.55])
  b.imported('bin','picking_up_trash','trash_can_116',scale=[1.5]*3);b.place('bin','floor',[5.2,4.2])
  b.native('apple','apple');b.native('knife','carving_knife')
  b.imported('brush','clean_a_keyboard','pipe_cleaner_120');b.imported('broom','clean_a_patio','broom_172')
@@ -160,7 +161,8 @@ def kitchen(inv,models):
  for r,t in [('box','storage'),('apple','stage'),('tea','stage'),('cookie','storage'),('sandwich','storage'),('can','table'),('brush','tool_home'),('broom','tool_home')]:b.place(r,t)
  # The countertop AABB includes its native sink cutout; use solid surface slots.
  # Keep the full broom footprint supported and clear of the neighboring bar stools.
- initial_slots={'box':(1/6,.5),'cookie':(.65,.5),'sandwich':(5/6,.5),'brush':(.2,.3),'broom':(.7,.6)}
+ # Keep the loose can on the table's open end, away from chair backrests.
+ initial_slots={'box':(1/6,.5),'cookie':(.65,.5),'sandwich':(5/6,.5),'can':(.85,.5),'brush':(.2,.3),'broom':(.7,.6)}
  for row in b.layout:
   if row['object'] in initial_slots and row.get('auto_slot'):
    row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
