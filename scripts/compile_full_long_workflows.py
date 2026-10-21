@@ -122,7 +122,7 @@ def kitchen(inv,models):
  b=Builder('kitchen','preparing_lunch_box',inv,models)
  for r,n in dict(box='packing_box_210',tea='bottle_of_tea_208',sandwich='club_sandwich_209',cookie='chocolate_chip_cookie_207',board='chopping_board_211',prep='countertop_kelker_0',storage='countertop_kelzer_0',fridge='fridge_dszchb_0',microwave='microwave_abzvij_0',floor='floors_qgmjvd_0',table='breakfast_table_rhjoby_0',cabinet='bottom_cabinet_fancyy_0').items():b.existing(r,n)
  b.s['construction_asset_scales']=[{'object':'board','scale':[1.,1.,1.],'reason':'Use full native afwefw cutting board dimensions; source atomic task scaled it about 2x.'}]
- b.fixture('stage',[6.,.5],[1.8,.7,.65]);b.fixture('tool_home',[8.6,1.4],[.8,.6,.55])
+ b.fixture('stage',[6.,.5],[1.8,.7,.65]);b.fixture('tool_home',[8.6,1.45],[1.8,.6,.55])
  b.imported('bin','picking_up_trash','trash_can_116',scale=[1.5]*3);b.place('bin','floor',[6.,3.])
  b.native('apple','apple');b.native('knife','carving_knife')
  b.imported('brush','clean_a_keyboard','pipe_cleaner_120');b.imported('broom','clean_a_patio','broom_172')
@@ -139,6 +139,12 @@ def kitchen(inv,models):
  for r in ['hotdog1','hotdog2']:b.state(r,'Inside',True,target='fridge',max_sampling_attempts=3);b.state(r,'Cooked',False)
  b.state('fridge','Open',False,kwargs={'fully':True})
  for r,t in [('box','storage'),('apple','stage'),('tea','stage'),('cookie','storage'),('sandwich','storage'),('can','table'),('brush','tool_home'),('broom','tool_home')]:b.place(r,t)
+ # The countertop AABB includes its native sink cutout; use solid surface slots.
+ # Keep the full broom footprint supported and clear of the neighboring bar stools.
+ initial_slots={'box':(1/6,.5),'cookie':(.65,.5),'sandwich':(5/6,.5),'brush':(.2,.3),'broom':(.7,.6)}
+ for row in b.layout:
+  if row['object'] in initial_slots and row.get('auto_slot'):
+   row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
  for r in ['microwave']:b.state(r,'ToggledOn',False);b.state(r,'Open',False,kwargs={'fully':True})
  cleans={r:b.clean(r) for r in [*ware,'cabinet','table','prep','storage','floor']}
  cooked=[b.pred(r+'_cooked',r,'Cooked') for r in ['hotdog1','hotdog2']]
@@ -166,9 +172,9 @@ def kitchen(inv,models):
  serve=transfer('box','table',(.5,.5))
  for i in (1,2):serve+=transfer('hotdog'+str(i),'plate'+str(i),(.4,.5))+transfer('apple_half'+str(i-1),'plate'+str(i),(.7,.5))
  b.phase('serve',serve,['fruit','hot_food','set_table'])
- b.phase('cold_storage',transfer('box','storage')+transfer('cookie','box',into=True)+transfer('sandwich','box',into=True)+[action('open','fridge')]+transfer('box','fridge',into=True)+[action('close','fridge')],['serve','surfaces'])
+ b.phase('cold_storage',transfer('box','storage',(1/6,.5))+transfer('cookie','box',into=True)+transfer('sandwich','box',into=True)+[action('open','fridge')]+transfer('box','fridge',into=True)+[action('close','fridge')],['serve','surfaces'])
  b.phase('restore_supplies',transfer('board','cabinet',into=True)+[action('close','cabinet')],['fruit','set_table'])
- b.phase('floor',[take('broom'),action('sweep','floor'),put('tool_home',(.8,.5))])
+ b.phase('floor',[take('broom'),action('sweep','floor'),put('tool_home',(.7,.6))])
  food=['hotdog1','hotdog2','apple_half0','apple_half1'];packed=ALL(*[b.rel(r,'box','Inside') for r in food],*cooked,'apple_replaced')
  staged=b.rel('box','prep');delivered=b.rel('box','table');b.milestone('meal_packed',ALL(staged,packed));b.milestone('meal_delivered',ALL(delivered,packed),['meal_packed'])
  served=ALL(*[b.rel('hotdog'+str(i),'plate'+str(i)) for i in (1,2)],*[b.rel('apple_half'+str(i-1),'plate'+str(i)) for i in (1,2)],*[b.rel('plate'+str(i),'table') for i in (1,2)])

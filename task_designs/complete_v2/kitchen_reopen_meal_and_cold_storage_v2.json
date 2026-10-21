@@ -304,11 +304,11 @@
       "name": "fv2_tool_home",
       "position": [
         8.6,
-        1.4,
+        1.45,
         0.275
       ],
       "size": [
-        0.8,
+        1.8,
         0.6,
         0.55
       ],
@@ -565,7 +565,7 @@
       "target": "storage",
       "place_on_support": true,
       "support_uv": [
-        0.5,
+        0.65,
         0.5
       ]
     },
@@ -592,8 +592,8 @@
       "target": "tool_home",
       "place_on_support": true,
       "support_uv": [
-        0.25,
-        0.5
+        0.2,
+        0.3
       ]
     },
     {
@@ -601,8 +601,8 @@
       "target": "tool_home",
       "place_on_support": true,
       "support_uv": [
-        0.75,
-        0.5
+        0.7,
+        0.6
       ]
     },
     {
@@ -2051,7 +2051,7 @@
             "primitive": "place_on_top",
             "role": "storage",
             "uv": [
-              0.5,
+              0.16666666666666666,
               0.5
             ]
           },
@@ -2127,8 +2127,8 @@
             "primitive": "place_on_top",
             "role": "tool_home",
             "uv": [
-              0.8,
-              0.5
+              0.7,
+              0.6
             ]
           }
         ],
