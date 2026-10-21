@@ -267,11 +267,15 @@ class AssemblySamplingTests(unittest.TestCase):
             return [(held.position-b.torch.tensor([.6,.1,.1]),
                      held.position+b.torch.tensor([.6,.1,.1]))]
         with patch.dict('sys.modules',modules), \
-             patch('manipulation_agent.executors.particle_payload.particle_bounds', side_effect=oversized):
-            self.assertFalse(sample_assembly_inside(b,held,target,contents))
+             patch('manipulation_agent.executors.particle_payload.particle_bounds', side_effect=oversized), \
+             patch('manipulation_agent.executors.particle_payload.particles_in_volumes', return_value=False) as check:
+            self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+        check.assert_called_once()
         self.assertEqual(state['steps'],0)
-        self.assertEqual(records[-1]['attempted'],0)
-        self.assertIn('assembly_extent_exceeds_volume',records[-1]['rejections'])
+        self.assertEqual(records[-1]['attempted'],1)
+        self.assertEqual(records[-1]['domain_attempts'],{'full_volume':1})
+        self.assertIn('particles_outside_destination',records[-1]['rejections'])
+        self.assertEqual(float(held.position[0]),5.)
 
     def test_destination_and_actual_particle_support_are_both_required(self):
         for outside in (True,False):
