@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import now, write_json, read_run, source_version
 from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
+from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
 from manipulation_agent.startup_progress import STARTUP_POLICY, startup_progress_update
 from manipulation_agent.closure import closure_watchdog
 from manipulation_agent.clients.events import parse_events
@@ -112,6 +112,11 @@ def worker_configs(config):
     # Workers are candidates, not simultaneous reservations. Shared host/GPU
     # leases below constrain actual admission across both comparison arms.
     slot_size=config.get('host_slot_memory_gib',28)
+    adaptive=config.get('adaptive_memory_admission',False)
+    if type(adaptive) is not bool:
+        raise ValueError('adaptive_memory_admission must be boolean')
+    if adaptive and not 1<=config.get('adaptive_host_slot_count',4)<=16:
+        raise ValueError('Invalid adaptive host slot count')
     for worker in result:
         limit=config.get('host_worker_memory_budget_gib',{}).get(worker['ssh'][-1],slot_size)
         if worker.get('memory_budget_gib',28)>slot_size or limit<slot_size:
@@ -334,7 +339,7 @@ class Batch:
                       'worker_states':self.worker_states,
                       'run_source_commits':dict(Counter((r.get('run_source') or r.get('source') or {}).get('commit','pending') for r in self.rows))}
             progress['summary']['waiting_resource_workers']=sum(v.get('stage') in
-                {'waiting_for_lease','waiting_for_resources'} for v in self.worker_states.values())
+                {'waiting_for_lease','waiting_for_resources','waiting_for_initialization'} for v in self.worker_states.values())
             validation={'status':'running' if progress['summary']['execution_status']=='running' else ('passed' if all(r['status']=='passed' for r in self.rows) else 'failed'),
                         'level':'real_rgb_simulator_batch','task_count':len(self.rows),'summary':progress['summary'],
                         'source':progress['source'],'official_submission_eligible':False,
@@ -418,7 +423,9 @@ class Batch:
         slot_size=self._config.get('host_slot_memory_gib',28)
         host_budget=self._config.get('host_worker_memory_budget_gib',{}).get(self.c['ssh'][-1],slot_size)
         lease=WorkerLease(directory,self.c,host_budget_gib=host_budget,slot_memory_gib=slot_size,
-                          owner={'batch':str(self.root),'coordinator_pid':os.getpid()})
+                          owner={'batch':str(self.root),'coordinator_pid':os.getpid()},
+                          adaptive_slot_count=self._config.get('adaptive_host_slot_count',4)
+                          if self._config.get('adaptive_memory_admission') else None)
         if not lease.acquire():
             self.worker_state('waiting_for_lease')
             return None
@@ -443,6 +450,33 @@ class Batch:
             raise
         return lease
 
+    def acquire_startup_gate(self):
+        """Serialize admission through initialization across new coordinators."""
+        if not self._config.get('adaptive_memory_admission'):
+            return True
+        directory=self._config['shared_lease_dir']
+        host_key=hashlib.sha256(self.c['ssh'][-1].encode()).hexdigest()[:20]
+        gate=FileLease(Path(directory)/f'startup-{host_key}.lock',
+                       {'batch':str(self.root),'worker_id':self.c['id']})
+        if not gate.acquire():
+            self.worker_state('waiting_for_initialization');return False
+        self._worker_local.startup_gate=gate
+        return True
+
+    def release_startup_gate(self):
+        gate=getattr(self._worker_local,'startup_gate',None)
+        if gate:
+            gate.release();self._worker_local.startup_gate=None
+
+    def memory_policy_args(self):
+        if not self._config.get('adaptive_memory_admission'):
+            return []
+        lease=self._worker_local.lease
+        policy={'peers':lease.active_peers(),
+                'candidate_gib':self.c.get('memory_budget_gib',28),
+                'host_budget_gib':self._config['host_worker_memory_budget_gib'][self.c['ssh'][-1]]}
+        return ['--memory-policy-json',json.dumps(policy)]
+
     def resource_admission(self):
         """No task is claimed here; immutable host checks run once per worker."""
         self.worker_state('admitting')
@@ -452,6 +486,7 @@ class Batch:
               '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
               '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0))]
         args += runtime_storage_args(self.c)
+        args += self.memory_policy_args()
         lease=getattr(self._worker_local,'lease',None)
         if lease:args+=['--reserved-host-memory-gib',str(lease.other_reserved_gib(self._config.get('host_slot_memory_gib',28)))]
         if getattr(self._worker_local,'static_ready',False):args.append('--light')
@@ -784,6 +819,7 @@ class Batch:
                 '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0)),
                 '--light']
             command += runtime_storage_args(self.c)
+            command += self.memory_policy_args()
             # Optional external first-fault capture; no in-process tracing thread.
             # GDB follows the helper's execv into vision_cli and preserves normal
             # exit codes. The capture script creates files only on a native fault.
@@ -808,7 +844,7 @@ class Batch:
                 '-p','KillMode=control-group','-p','SuccessExitStatus=2','-p','WorkingDirectory='+str(self.source)]
             launch+=inline_systemd_launcher(launcher.read_text())
             lease=getattr(self._worker_local,'lease',None)
-            if lease:lease.record(run_id=runid,unit=unit,released=False)
+            if lease:lease.record(run_id=runid,unit=unit,released=False,runtime_stage='starting')
             self.update(row,stage='simulator_starting',simulator_started_at_unix=started,
                         startup_deadline_unix=startup_deadline,startup_timeout_seconds=startup_seconds,
                         startup_watchdog_policy=STARTUP_POLICY,
@@ -844,6 +880,8 @@ class Batch:
                     break
                 time.sleep(min(2,max(0,row['startup_deadline_unix']-time.time())))
             self.update(row,stage='controller_starting',bridge_ready_at=now())
+            if lease:lease.record(runtime_stage='ready')
+            self.release_startup_gate()
             self.worker_state('controller_starting',run_id=runid,startup_deadline_unix=row['startup_deadline_unix'])
             remote=shlex.join(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],
                 '-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
@@ -1160,6 +1198,7 @@ class Batch:
                     self.worker_state('waiting_for_capacity');time.sleep(poll);continue
                 lease=None;row=None;paths=None;cleared=True
                 try:
+                    if not adopting and not self.acquire_startup_gate():continue
                     lease=self.acquire_worker_lease(adopting=adopting)
                     if lease is None:continue
                     self._worker_local.lease=lease
@@ -1198,7 +1237,7 @@ class Batch:
                         if row is not None:self.update(row,lease_metadata_cleanup_error=f'{type(exc).__name__}: {exc}')
                         self.journal('LEASE METADATA CLEANUP '+config['id']+': '+str(exc))
                     finally:
-                        self._worker_local.lease=None;capacity.release()
+                        self._worker_local.lease=None;self.release_startup_gate();capacity.release()
                     if row is None:time.sleep(poll)
                 # GPU and host capacity are free before any bulk copy or decode.
                 if row is not None:

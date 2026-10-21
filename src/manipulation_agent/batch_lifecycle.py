@@ -163,14 +163,20 @@ class WorkerLease:
     All methods must share the directory and host slot sizing. Host capacity is
     independent of the number of candidate GPU workers configured by an arm.
     """
-    def __init__(self, directory, worker, *, host_budget_gib, slot_memory_gib=28, owner=None):
+    def __init__(self, directory, worker, *, host_budget_gib, slot_memory_gib=28, owner=None,
+                 adaptive_slot_count=None):
         self.directory = Path(directory)
         self.worker = worker
         self.owner = dict(owner or {}, worker_id=worker['id'], host=worker['ssh'][-1],
-                          gpu=worker['gpu'], gpu_uuid=worker.get('expected_gpu_uuid'))
+                          gpu=worker['gpu'], gpu_uuid=worker.get('expected_gpu_uuid'),
+                          hard_limit_gib=worker.get('memory_budget_gib', 28))
         if worker.get('memory_budget_gib', 28) > slot_memory_gib:
             raise ValueError('Worker memory exceeds shared host slot size')
         self.slot_count = math.floor(host_budget_gib / slot_memory_gib)
+        if adaptive_slot_count is not None:
+            if type(adaptive_slot_count) is not int or not 1 <= adaptive_slot_count <= 16:
+                raise ValueError('Invalid adaptive host slot count')
+            self.slot_count = adaptive_slot_count
         if self.slot_count < 1:
             raise ValueError('Host budget has no usable simulator slot')
         self.host_key = hashlib.sha256(worker['ssh'][-1].encode()).hexdigest()[:20]
@@ -212,6 +218,25 @@ class WorkerLease:
                 except BlockingIOError:reserved+=slot_memory_gib
                 else:fcntl.flock(stream,fcntl.LOCK_UN)
         return reserved
+
+    def active_peers(self):
+        """Read locked peer metadata while the caller holds the startup gate."""
+        peers = []
+        for path in self.directory.glob(f'host-{self.host_key}-*.lock'):
+            if self.host and path == self.host.path:
+                continue
+            with path.open('a+') as stream:
+                try:
+                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    try:
+                        peer = json.loads(path.with_suffix('.json').read_text())
+                    except (OSError, ValueError):
+                        peer = {}  # Unknown held slot retains a full reservation.
+                    peers.append(peer)
+                else:
+                    fcntl.flock(stream, fcntl.LOCK_UN)
+        return peers
 
     def release(self, *, cleared=False):
         try:
