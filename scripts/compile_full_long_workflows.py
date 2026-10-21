@@ -217,7 +217,7 @@ def table_parts(b,parts_xy,jig_xy,destination_xy):
 
 def garden(inv,models):
  b=Builder('garden','spraying_for_bugs',inv,models)
- for r,n in dict(plant1='pot_plant_172',plant2='pot_plant_173',sprayer='insectifuge_atomizer_174',floor='floors_ghetev_0').items():b.existing(r,n)
+ for r,n in dict(plant1='pot_plant_172',plant2='pot_plant_173',sprayer='insectifuge_atomizer_174',floor='floors_ghetev_0',lawn='lawn_aztwla_0').items():b.existing(r,n)
  for r,xy,size in [('source',[11.8,4.],[1.8,1.,.55]),('work',[17.4,4.],[1.7,.9,.55]),('display',[13.1,13.6],[1.6,.6,.6]),('stage',[12.8,8.7],[1.8,.7,.65]),('tool_home',[15.4,4.],[1.2,.6,.6]),('food_stage',[18.1,5.4],[1.6,1.2,.6])]:b.fixture(r,xy,size)
  for r in ['trowel','shears','pillow1','pillow2','apple','knife']:
   b.native(r,{'pillow1':'pillow','pillow2':'pillow','knife':'carving_knife'}.get(r,r))
@@ -230,7 +230,7 @@ def garden(inv,models):
   b.imported('seat'+str(i),'setting_the_table',category='straight_chair',index=i-1)
   b.place('seat'+str(i),'floor',[13.2,11.8] if i==1 else [14.9,12.5])
   b.place('pillow'+str(i),'work');b.place('lamp'+str(i),'stage');b.state('lamp'+str(i),'ToggledOn',False)
- b.place('plant1','source',[11.4,4.25]);b.place('plant2','source',[12.2,4.25]);b.place('protected','floor',[18.6,4.]);b.place('bin','floor',[18.6,6.5])
+ b.place('plant1','source',[11.4,4.25]);b.place('plant2','source',[12.2,4.25]);b.place('protected','lawn',[18.6,4.]);b.place('bin','lawn',[18.6,6.5])
  for r,t in [('book','work'),('can','work'),('trowel','source'),('shears','source'),('sprayer','source'),('brush','tool_home'),('broom','tool_home'),('tea','food_stage'),('apple','food_stage'),('plate','food_stage'),('cup1','food_stage'),('cup2','food_stage'),('knife','food_stage'),('board','food_stage')]:b.place(r,t)
  # Separate large boards / plants from small tools using measured native extents.
  initial_slots={'pillow1':(.3,.65),'pillow2':(.7,.65),'book':(.25,.15),'can':(.75,.15),'trowel':(.18,.17),'shears':(.5,.17),'sprayer':(.82,.17),
