@@ -564,6 +564,7 @@ class CheckedPlacement:
             # Capture the anchored physics wrapper installed by the context.
             original_step=self.og.sim.step_physics
             native_sampling=False
+            native_start=start;native_before=before
             def preserve_payload_poses():
                 if residents:self._relocate_container_payload(residents)
             def preserve_residents(*args,**kwargs):
@@ -579,7 +580,7 @@ class CheckedPlacement:
             def bounded_step(*args,**kwargs):
                 deadline=getattr(self,'deadline',None)
                 if deadline is not None:deadline.check(changed=True)
-                if native_sampling and (self.sampling_physics_steps-before>=1200 or time.monotonic()-start>30):
+                if native_sampling and (self.sampling_physics_steps-native_before>=1200 or time.monotonic()-native_start>30):
                     raise SkillError('native_sampling_budget_exhausted',
                                      'Native Inside search exhausted its reserved budget',changed=True)
                 # Managed benchmark episodes have one execution deadline;
@@ -615,7 +616,8 @@ class CheckedPlacement:
                     identities=scene_object_identities(self.og.sim)
                     particles=snapshot_particle_state(self.og.sim)
                     def native():
-                        nonlocal native_sampling
+                        nonlocal native_sampling,native_start,native_before
+                        native_start=time.monotonic();native_before=self.sampling_physics_steps
                         native_sampling=True
                         try:return held.states[Inside].set_value(target,True)
                         finally:native_sampling=False
@@ -624,9 +626,29 @@ class CheckedPlacement:
                             raise SkillError('target_changed','Scene identities changed during Inside sampling',changed=True)
                         self.og.sim.load_state(checkpoint,serialized=False)
                         restore_particle_state(particles)
-                    sampled,geometric_fallback=inside_sample_with_fallback(
-                        native,lambda:sample_assembly_inside(self,held,target,contents,point=point,residents=residents),
-                        restore,self._placement_record)
+                    def geometric():
+                        return sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
+                    if residents:
+                        # Occupied containers need proposals on/around their
+                        # existing contents. Do not first spend 30 seconds on a
+                        # native search that ignores those support surfaces.
+                        try:sampled=geometric()
+                        except SkillError as exc:
+                            if exc.code!='sampling_budget_exhausted':raise
+                            sampled=False
+                            self._placement_record({'status':'geometric_sampling_exhausted','error':str(exc)})
+                        geometric_fallback=bool(sampled)
+                        if not sampled:
+                            restore()
+                            try:sampled=native()
+                            except SkillError as exc:
+                                if exc.code!='native_sampling_budget_exhausted':raise
+                                sampled=False
+                                self._placement_record({'status':'native_sampling_exhausted','error':str(exc),
+                                                        'preceded_by':'assembly_volume_search'})
+                    else:
+                        sampled,geometric_fallback=inside_sample_with_fallback(
+                            native,geometric,restore,self._placement_record)
                 sampling_done=True
             finally:
                 if contents:RigidContactAPI.is_in_contact=original_contact
@@ -663,11 +685,13 @@ class CheckedPlacement:
             if not hasattr(self,'_stabilized_container_payloads'):self._stabilized_container_payloads={}
             self._stabilized_container_payloads[target]=stabilized_payload
         return {'primitive':'place_inside','implementation':('transactional_assembly_volume_with_official_Inside'
-                if assembly_search else 'transactional_Inside_with_geometric_fallback' if geometric_fallback
+                if assembly_search else 'transactional_inside_geometry_first' if residents and geometric_fallback
+                else 'transactional_Inside_with_geometric_fallback' if geometric_fallback
                 else 'transactional_official_Inside_with_rigid_payload_sampling'),
                 'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
                 'target_root_anchored':True,'existing_containment_verified':resident_count,
                 'new_object_settling':'free_physics',
+                'sampling_order':'geometry' if assembly_search else 'geometry_then_native' if residents else 'native_then_geometry',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
 
     def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None, residents=()):
