@@ -1711,7 +1711,7 @@
           },
           {
             "primitive": "grasp",
-            "role": "axe"
+            "role": "brush"
           },
           {
             "primitive": "place_inside",
@@ -1719,7 +1719,7 @@
           },
           {
             "primitive": "grasp",
-            "role": "brush"
+            "role": "axe"
           },
           {
             "primitive": "place_inside",

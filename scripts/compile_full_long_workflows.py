@@ -353,7 +353,10 @@ def workshop(inv,models):
  b.pred('box_open','box','Open')
  tools=['axe','brush','paintbrush'];kit=ALL(*[b.rel(r,'box','Inside') for r in tools],NOT('box_open'))
  b.phase('clear_bench',transfer('book','shelf',(.5,.85))+transfer('can','bin',into=True)+[take('brush'),action('wipe','bench'),put('source',(.7,.5))])
- b.phase('pack_kit',[action('open','box'),*[a for r in tools for a in transfer(r,'box',into=True)],action('close','box')],['clear_bench'])
+ # The cleaned brush can rotate when returned to the crowded source. Pack
+ # it first so its collision envelope no longer blocks the axe's extraction.
+ # All three tools still travel together in the closed original toolbox.
+ b.phase('pack_kit',[action('open','box'),*[a for r in ['brush','axe','paintbrush'] for a in transfer(r,'box',into=True)],action('close','box')],['clear_bench'])
  b.phase('deliver_kit',transfer('box','bench',(.5,.25)),['pack_kit'])
  tool_slots={'axe':(.5,.3),'brush':(.5,.5),'paintbrush':(.5,.73)}
  b.phase('inventory',[action('open','box'),*[a for r in tools for a in transfer(r,'tool_home',tool_slots[r])]],['deliver_kit'])
