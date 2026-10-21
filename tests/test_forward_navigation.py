@@ -8,6 +8,7 @@ from manipulation_agent.executors.forward_navigation import (
     plan_forward_route, angle, local_exit_certificate, checked_connection,
     simplify_forward_poses, motion_seconds,
     select_forward_route,
+    route_from_poses,
 )
 from manipulation_agent.executors.gt_navigation import GridMap, NavigationPlan, GreedyGridFollower, NavigationError
 
@@ -80,6 +81,33 @@ class ForwardNavigationTests(unittest.TestCase):
         route = plan_forward_route(plan([start[:2],target],.37),start,collision,max_expansions=1000)
         self.assertEqual(route.method,'continuous_pose_astar')
         self.follow(route,start,collision)
+        # A legal but isolated first endpoint must not corrupt reconstruction
+        # when the reverse search reaches a different root.
+        isolated=(-1.5,-1.5)
+        class TwoPockets(NarrowGoal):
+            def motion_free(self,a,b):
+                for i in range(101):
+                    xy=(a[0]+(b[0]-a[0])*i/100,a[1]+(b[1]-a[1])*i/100)
+                    if .05<math.dist(xy,isolated)<.3:return False
+                return super().motion_free(a,b)
+        collision=TwoPockets()
+        route=plan_forward_route(plan([start[:2],isolated]),start,collision,
+                                 alternatives=(plan([start[:2],target],.37),),max_expansions=1000)
+        self.assertEqual(route.phases[-1].goal,target)
+        self.follow(route,start,collision)
+
+    def test_certified_route_survives_optional_shortcut_timeout(self):
+        from manipulation_agent.executors.gt_navigation import SearchBudgetExhausted
+        poses=[(0.,0.,0.),(1.,0.,0.),(1.,0.,math.pi/2),(1.,1.,math.pi/2)]
+        collision=PointCollision()
+        self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])))
+        def expired():raise SearchBudgetExhausted()
+        route=route_from_poses(plan([p[:2] for p in poses],math.pi/2),poses,collision,check_cancelled=expired)
+        self.assertEqual(route.phases[-1].goal,poses[-1][:2])
+        self.follow(route,poses[0],collision)
+        def cancelled():raise RuntimeError('cancelled by caller')
+        with self.assertRaisesRegex(RuntimeError,'cancelled by caller'):
+            route_from_poses(plan([p[:2] for p in poses],math.pi/2),poses,collision,check_cancelled=cancelled)
 
     def test_bent_narrow_passage_keeps_continuous_headings_through_its_middle(self):
         class RotatedPassage(PointCollision):
@@ -380,6 +408,28 @@ class ForwardNavigationTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2'),'Requires OpenCV; no simulator is started')
 class HeadingCollisionTests(unittest.TestCase):
+    def test_floor_projection_cannot_choose_closer_pose_across_wall(self):
+        import numpy as np
+        from dataclasses import replace
+        from manipulation_agent.executors.point_route_projection import prepare_point_projection
+        if not prepare_point_projection():self.skipTest('Requires optional SciPy graph support')
+        raw=np.ones((81,81),dtype='uint8');raw[:,40]=0
+        footprint=[[-.15,-.1],[.15,-.1],[.15,.1],[-.15,.1]]
+        collision=self.checker(raw,footprint)
+        start=(0.,0.,0.)
+        candidate=replace(plan([start[:2],(.5,0.)]),target=(2.,0.),score=1.5)
+        selected,route,details=select_forward_route([candidate],start,collision,project_point=True)
+        self.assertEqual(details['search'],'forward_reachable_point_projection')
+        self.assertLess(selected.goal[0],1.)
+        self.assertLess(selected.score,candidate.score)
+        fresh=self.checker(raw,footprint);current=start
+        for phase in route.phases:
+            for xy in phase.points:
+                destination=(*xy,phase.final_yaw)
+                self.assertTrue(fresh.motion_free(current,destination))
+                current=destination
+        self.assertIsNotNone(local_exit_certificate(current,fresh))
+
     def test_relaxation_retains_passage_between_coarse_headings(self):
         import numpy as np
         yaw = .317

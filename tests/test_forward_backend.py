@@ -134,7 +134,7 @@ class ForwardBackendTests(unittest.TestCase):
         self.assertEqual(caught.exception.code,'look_rotation_blocked')
         self.assertEqual(self.restores,0)
 
-    def test_local_search_exhaustion_is_distinct_from_geometric_rejection(self):
+    def test_incomplete_candidate_pool_does_not_claim_geometric_impossibility(self):
         from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
         from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
         from manipulation_agent.executors.gt_navigation import NavigationError
@@ -147,15 +147,17 @@ class ForwardBackendTests(unittest.TestCase):
                     {'held_object_footprint_included':False},(),0)
         b._local_geometry=geometry
         for reason,expected in [('navigation_search_exhausted','local_adjustment_exhausted'),
-                                ('navigation_unreachable','local_adjustment_blocked')]:
+                                ('navigation_unreachable','local_adjustment_exhausted')]:
             op=LocalOperation(b,'open',None,600,{})
             with patch('manipulation_agent.executors.forward_navigation.plan_forward_route',
-                       side_effect=NavigationError('fixture incomplete search',reason)):
+                       side_effect=NavigationError('fixture incomplete search',reason)), \
+                 patch('manipulation_agent.executors.forward_navigation.checked_connection',return_value=None), \
+                 patch('manipulation_agent.executors.point_route_projection.project_forward_point',return_value=None):
                 with self.assertRaises(SkillError) as caught:
                     b._local_reposition('open',object(),self.torch.tensor([1.55,0.,.8]),op)
             self.assertEqual(caught.exception.code,expected)
             self.assertEqual(self.restores,0)
-        self.assertTrue(any(c.get('extended_route_search') for r in records for c in r.get('candidates',[])))
+        self.assertTrue(any(r.get('route_search')=='shared_target_stances' for r in records))
 
     def test_local_operation_drives_then_executes_once_without_macro_navigation(self):
         from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
@@ -163,7 +165,7 @@ class ForwardBackendTests(unittest.TestCase):
         b=self.b;b.local_limits=LocalLimits();b.navigation_distance=0.
         b.deadline=SimpleNamespace(check=lambda **kwargs:None)
         b._carry_contents=[];b.demo_motion=False;b.ideal_carry=False
-        target=object();point=self.torch.tensor([1.55,0.,.8]);effects=[];captures=[]
+        target=object();point=self.torch.tensor(getattr(self,'approach_test_target',[1.55,0.,.8]));effects=[];captures=[]
         binding=SimpleNamespace(grounding={},describe=lambda:{'scope':'cpu_fixture'})
         b._resolve_local_target=lambda lock:(target,point)
         b._manipulation_preconditions=lambda *args:None
@@ -187,18 +189,27 @@ class ForwardBackendTests(unittest.TestCase):
         self.assertEqual(effects,[target]);self.assertEqual(captures,[binding])
         self.assertEqual(result['local_manipulation']['repositions'],1)
         self.assertLessEqual(result['local_manipulation']['path_m'],2.)
-        self.assertGreater(float(self.position[0]),.14)
+        self.assertGreater(float(self.torch.linalg.norm(self.position[:2])),.14)
         self.assertIsNone(b._base_target)
 
-    def test_local_budget_prevents_outside_pose_before_setter(self):
+    def test_reach_boundary_reserves_room_for_follower_position_tolerance(self):
+        # Archived bowl approach stopped1.08mm before a1.399999m endpoint.
+        # Reuse the real adapter follower with the same relative displacement.
+        self.approach_test_target=[4.495014190673828-6.949999809265137,
+                                   1.6939940452575684-.6499996185302734,.705]
+        self.test_local_operation_drives_then_executes_once_without_macro_navigation()
+
+    def test_local_work_budget_prevents_motion_before_setter(self):
         from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
-        b=self.b;b.local_limits=LocalLimits(radius_m=.1)
+        b=self.b;b.local_limits=LocalLimits(max_env_steps=1)
         b.deadline=SimpleNamespace(check=lambda **kwargs:None)
         op=LocalOperation(b,'open',None,600,{})
         b._local_operation=op
+        b.steps=1
         with self.assertRaises(SkillError) as caught:b._execute_gt_plan(self.grid,self.plan(),500)
         self.assertEqual(caught.exception.code,'local_adjustment_exhausted')
-        self.assertLessEqual(float(self.torch.linalg.norm(self.position[:2])),.100001)
+        self.assertEqual(float(self.torch.linalg.norm(self.position[:2])),0.)
+        self.assertEqual(self.restores,0)
 
 
 if __name__=='__main__':unittest.main()

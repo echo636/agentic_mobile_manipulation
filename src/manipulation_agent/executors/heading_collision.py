@@ -26,6 +26,8 @@ class HeadingCollisionChecker:
         self.window = None
         self._optimistic = None
         self._guidance = None
+        self._guidance_components = None
+        self._guidance_graph = None
         self.turns = OrderedDict()
 
     def local_window(self, origin, radius):
@@ -264,3 +266,60 @@ class HeadingCollisionChecker:
             self._guidance = GridMap(self.grid.width,self.grid.height,self.grid.resolution,
                                      self.grid.origin,free.tobytes())
         return self._guidance
+
+    def guidance_components(self):
+        """Cheap guide connectivity, used only to avoid futile distance floods.
+
+        Grid diagonals forbid corner cutting, so four-neighbour components
+        have the same connectivity. Missing guide connectivity never rejects
+        an actual continuous pose or a checked motion edge.
+        """
+        import cv2
+        import numpy as np
+        self.check_cancelled()
+        if self._guidance_components is None:
+            grid=self.guidance_grid()
+            free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width)
+            _,self._guidance_components=cv2.connectedComponents(free,connectivity=4)
+        return self._guidance_components
+
+    def guidance_distances(self, seeds):
+        """Compute the shared XY ordering field in compiled graph code.
+
+        This sampled-heading map is guidance only. Infinite distances are not
+        evidence of physical infeasibility; callers retain Euclidean fallback.
+        """
+        import numpy as np
+        from scipy.sparse import coo_matrix, vstack
+        from scipy.sparse.csgraph import dijkstra
+        self.check_cancelled()
+        grid=self.guidance_grid()
+        if self._guidance_graph is None:
+            free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width).astype(bool)
+            flat=np.flatnonzero(free)
+            indices=np.full(free.shape,-1,dtype=np.int32)
+            indices.ravel()[flat]=np.arange(len(flat),dtype=np.int32)
+            rows=[];cols=[];weights=[]
+            for dr,dc in ((-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)):
+                self.check_cancelled()
+                r0,r1=max(0,-dr),min(grid.height,grid.height-dr)
+                c0,c1=max(0,-dc),min(grid.width,grid.width-dc)
+                valid=free[r0:r1,c0:c1]&free[r0+dr:r1+dr,c0+dc:c1+dc]
+                if dr and dc:valid &= free[r0:r1,c0+dc:c1+dc]&free[r0+dr:r1+dr,c0:c1]
+                source=indices[r0:r1,c0:c1][valid]
+                rows.append(source);cols.append(indices[r0+dr:r1+dr,c0+dc:c1+dc][valid])
+                weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
+            graph=coo_matrix((np.concatenate(weights),(np.concatenate(rows),np.concatenate(cols))),
+                             shape=(len(flat),len(flat)+1)).tocsr()
+            self._guidance_graph=(graph,indices,flat)
+        graph,indices,flat=self._guidance_graph
+        goals={int(indices[cell]):float(cost) for cell,cost in seeds.items() if indices[cell]>=0}
+        distances=np.full((grid.height,grid.width),np.inf)
+        if goals:
+            virtual=coo_matrix((list(goals.values()),(np.zeros(len(goals),dtype=int),list(goals))),
+                               shape=(1,len(flat)+1)).tocsr()
+            self.check_cancelled()
+            field=dijkstra(vstack((graph,virtual),format='csr'),directed=True,indices=len(flat))
+            distances.ravel()[flat]=field[:-1]
+        self.check_cancelled()
+        return distances
