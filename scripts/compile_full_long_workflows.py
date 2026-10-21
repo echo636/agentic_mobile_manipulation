@@ -364,10 +364,17 @@ def study(inv,models):
  for r,n in dict(desk='desk_bhkhxo_0',shelf='shelf_amyper_2',floor_a='floors_qnvzkr_0',floor_b='floors_htolat_0',washer='washer_ynwamu_0',dryer='clothes_dryer_xsuyua_0',laundry='countertop_ikwqer_0',source='countertop_sjxber_0',sink='tabletop_sink_qnequy_0',bath='bathtub_pdcrfs_0',toilet='toilet_udiezm_1',amenities='bottom_cabinet_xqmipa_0',bedside='nightstand_wbxekb_0',pencil='pencil_case_224',book1='paperback_book_225',book2='paperback_book_226').items():b.existing(r,n)
  b.imported('drawer','clean_up_your_desk','bottom_cabinet_rhdbzv_0',fixed_base=True,scale=[1.,.3,1.])
  b.imported('cabinet','clean_up_your_desk','bottom_cabinet_fancyy_0',fixed_base=True)
+ b.existing('closet_floor','floors_yrqspn_0');b.existing('room_bed','bed_rrcvaq_1')
+ b.existing('closet_door','sliding_door_tprpvb_4');b.existing('shelf_door','sliding_door_tprpvb_1')
+ b.existing('desk_pen','pen_229')
  b.s['scene_exclusions']=['nightstand_wbxekb_2','wardrobe_lrokhl_0']
  b.s['scene_setup_note']='Replace non-articulated nightstand and open wardrobe shells with native articulated storage furniture before freezing.'
- b.place('drawer','floor_a',[20.56,13.9]);b.place('cabinet','floor_b',[20.28,24.15])
- b.fixture('tool_home',[22.,12.],[.6,.55,.6]);b.fixture('delivery',[22.3,22.5],[1.,.7,.65]);b.fixture('desk_stage',[24.,14.2],[1.,.5,.65])
+ b.place('drawer','floor_a',[20.6,14.5]);b.place('cabinet','closet_floor',[20.28,24.15])
+ b.s['robot_start']={'position':[22.9,14.2,.02],'orientation':[0.,0.,0.,1.]}
+ b.fixture('tool_home',[21.8,14.5],[1.3,.65,.6]);b.fixture('delivery',[22.3,22.5],[1.,.7,.65]);b.fixture('desk_stage',[23.75,14.6],[.8,.8,.65])
+ # A dedicated supply surface accommodates the carrier and six guest items;
+ # the original narrow countertop remains in the native utility room.
+ b.fixture('source',[23.1,-1.05],[1.5,.8,.65])
  for r,t,n in [('keyboard','clean_a_keyboard','keyboard_121'),('brush','clean_a_keyboard','pipe_cleaner_120'),('vacuum','vacuuming_floors','vacuum_89'),('toy','putting_away_toys','toy_figure_242'),('toy_box','putting_away_toys','toy_box_240'),('carrier','assembling_gift_baskets','wicker_basket_89'),('cup','setting_the_table','water_glass_bbpraa_0')]:b.imported(r,t,n,**({'scale':[1.8,1.8,1.4]} if r=='carrier' else {}))
  # Laptop screen supplies the native switchable monitor used for maintenance.
  b.existing('monitor','laptop_233')
@@ -375,12 +382,20 @@ def study(inv,models):
  b.s['physics']={'use_gpu_dynamics':True}
  b.s['representation']={'garments':'native_full_size_rigid_sock_and_boxers','deformable_cloth_validated':False,'process':'native_washer_and_dryer_rules_with_observed_clean_wet_dry_history'}
  for i in (1,2):
-  b.imported('lamp'+str(i),'turning_out_all_lights_before_sleep','table_lamp_428');b.place('lamp'+str(i),'floor_a' if i==1 else 'floor_b',[22.,13.2] if i==1 else [23.,23.]);b.state('lamp'+str(i),'ToggledOn',True)
+  b.existing('lamp'+str(i),'table_lamp_uupwiq_0' if i==1 else 'table_lamp_qgdwbh_1');b.place('lamp'+str(i),'floor_a' if i==1 else 'floor_b',[22.55,13.1] if i==1 else [22.15,23.6]);b.state('lamp'+str(i),'ToggledOn',True)
   b.imported('picture'+str(i),'hanging_pictures','poster_73')
-  b.imported('nail'+str(i),'hanging_pictures','wall_nail_wlnail_0',fixed_base=True,position=[24.9,12.4+.9*(i-1),1.5],orientation=[0.,0.,0.,1.])
-  b.place('picture'+str(i),'desk_stage')
- b.place('book1','floor_a',[22.1,13.6]);b.place('book2','floor_b',[22.5,23.5]);b.place('toy','floor_b',[23.3,23.8]);b.place('toy_box','floor_b',[21.,22.8])
+  b.imported('nail'+str(i),'hanging_pictures','wall_nail_wlnail_0',fixed_base=True,position=[24.241,13.55+.5*(i-1),1.7],orientation=[0.,-.70710678,0.,.70710678])
+  b.place('picture'+str(i),'desk_stage',orientation=[0.,.70710678,0.,.70710678])
+ b.place('book1','floor_a',[22.3,13.9]);b.place('book2','floor_b',[22.3,24.3]);b.place('toy','floor_b',[22.2,25.1]);b.place('toy_box','floor_b',[21.,22.8])
+ b.place('pencil','room_bed',[21.7,13.3]);b.place('desk_pen','desk')
  for r,t in [('keyboard','desk'),('monitor','desk'),('brush','tool_home'),('vacuum','tool_home'),('rag','tool_home'),('shirt','source'),('shorts','source'),('carrier','source'),('cup','source'),('water','source'),('soap','source'),('paper','source')]:b.place(r,t)
+ initial_slots={'keyboard':(.5,.86),'monitor':(.5,.407),'desk_pen':(.9,.18),'picture1':(.35,.25),'picture2':(.35,.75),'brush':(.2,.5),'vacuum':(.75,.5),'rag':(.5,.7),'carrier':(.18,.5),'shirt':(.5,.25),'shorts':(.8,.28),'cup':(.5,.75),'water':(.65,.75),'soap':(.8,.75),'paper':(.92,.75)}
+ for row in b.layout:
+  if row['object'] in initial_slots and row.get('auto_slot'):
+   row.pop('auto_slot');row['support_uv']=list(initial_slots[row['object']])
+ # Access passages are open in the prepared scene, including the native
+ # closet that actually supports the replacement articulated cabinet.
+ for r in ['closet_door','shelf_door']:b.state(r,'Open',True,kwargs={'fully':True})
  for r in ['washer','dryer']:b.state(r,'ToggledOn',False);b.state(r,'Open',False,kwargs={'fully':True});b.pred(r+'_open',r,'Open');b.pred(r+'_on',r,'ToggledOn')
  b.state('monitor','ToggledOn',True);b.pred('monitor_on','monitor','ToggledOn')
  for r in ['drawer','cabinet']:b.state(r,'Open',False,kwargs={'fully':True});b.pred(r+'_open',r,'Open')
@@ -393,8 +408,8 @@ def study(inv,models):
  dry=ALL(*garment_clean.values(),NOT('shirt_wet'),NOT('shorts_wet'));washed=ALL(*garment_clean.values(),'shirt_wet','shorts_wet')
  b.phase('storage',[action('open','drawer')]+transfer('pencil','drawer',into=True)+[action('close','drawer'),take('brush'),action('wipe','shelf'),put('tool_home',(.2,.3))])
  b.phase('clear_rooms',transfer('book1','shelf',(.25,.5))+transfer('book2','shelf',(.75,.5))+transfer('toy','toy_box',into=True),['storage'])
- b.phase('desk',transfer('keyboard','desk_stage')+[action('toggle_off','monitor'),take('brush'),action('wipe','desk'),action('wipe','keyboard'),action('wipe','monitor'),put('tool_home',(.2,.3))]+transfer('keyboard','desk')+[action('toggle_on','monitor')])
- b.phase('lamps',transfer('lamp1','desk',(.9,.8))+[action('toggle_off','lamp1')]+transfer('lamp2','bedside',(.8,.5))+[action('toggle_off','lamp2')])
+ b.phase('desk',transfer('keyboard','desk_stage',(.82,.5))+[action('toggle_off','monitor'),take('brush'),action('wipe','desk'),action('wipe','keyboard'),action('wipe','monitor'),put('tool_home',(.2,.5))]+transfer('keyboard','desk',(.5,.86))+[action('toggle_on','monitor')])
+ b.phase('lamps',transfer('lamp1','desk',(.5,.08))+[action('toggle_off','lamp1')]+transfer('lamp2','bedside',(.5,.75))+[action('toggle_off','lamp2')])
  b.phase('vacuum',[take('vacuum'),action('vacuum','floor_a'),action('vacuum','floor_b'),put('tool_home',(.8,.5))],['clear_rooms','lamps'])
  b.phase('cabinet',[action('open','cabinet'),take('brush'),action('wipe','cabinet'),put('tool_home',(.2,.3))])
  b.phase('wash',[action('open','washer')]+transfer('shirt','washer',into=True)+transfer('shorts','washer',into=True)+[action('close','washer'),action('toggle_on','washer'),action('wait_for',condition=washed,attempts=18,seconds=10.),action('toggle_off','washer')])
@@ -402,7 +417,7 @@ def study(inv,models):
  b.phase('bathroom',[take('rag'),action('soak','sink'),action('wipe','sink'),action('wipe','bath'),action('wipe','toilet'),put('tool_home',(.5,.7))])
  contents=['shirt','shorts','cup','water','soap','paper']
  b.phase('pack',transfer('carrier','laundry')+[a for r in contents for a in transfer(r,'carrier',into=True)]+[action('close','dryer')],['dry'])
- deliver=transfer('carrier','delivery')+transfer('shirt','cabinet',into=True)+transfer('shorts','cabinet',into=True)+transfer('cup','bedside',(.2,.5))+transfer('water','bedside',(.5,.5))+transfer('soap','amenities',(.2,.5))+transfer('paper','amenities',(.7,.5))+transfer('carrier','source')+[action('close','cabinet')]
+ deliver=transfer('carrier','delivery')+transfer('shirt','cabinet',into=True)+transfer('shorts','cabinet',into=True)+transfer('cup','bedside',(.25,.22))+transfer('water','bedside',(.7,.22))+transfer('soap','amenities',(.2,.5))+transfer('paper','amenities',(.7,.5))+transfer('carrier','source',(.18,.5))+[action('close','cabinet')]
  b.phase('deliver',deliver,['pack','cabinet','bathroom'])
  b.phase('pictures',[take('picture1'),action('attach','nail1'),take('picture2'),action('attach','nail2')])
  b.milestone('washed',ALL(washed,*[b.rel(r,'washer','Inside') for r in ['shirt','shorts']]))
