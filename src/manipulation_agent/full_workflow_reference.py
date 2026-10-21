@@ -46,23 +46,41 @@ class FullWorkflowReference:
         self.ref=ref;self.backend=ref.backend;self.plan=self.backend.custom_spec['reference_plan']
         validate_workflow_plan(self.backend.custom_spec)
 
-    def surface_point(self,role,primitive):
+    def surface_point(self,role,primitive,attempt=0):
         """Use an actual selected-object collision surface instead of its hidden origin."""
         from omnigibson.utils.sampling_utils import raytest
         obj=self.ref.obj(role);b=self.backend;low,high=obj.aabb
-        center=(low+high)/2;eye=b.robot.get_position_orientation()[0].clone();eye[2]+=1.25
+        center=(low+high)/2;eye=b.robot.get_position_orientation()[0].clone()
+        eye[2]+=b.rig_height
         ignored=[l.prim_path for l in b.robot.links.values()]
         held=b._get_held()
         if held is not None and held is not obj:ignored += [l.prim_path for l in held.links.values()]
         paths={l.prim_path for l in obj.links.values()}
-        targets=[center]
-        for x,y,z in ((.5,.5,1.),(.25,.5,.8),(.75,.5,.8),(.5,.25,.8),(.5,.75,.8),(.5,.5,.3)):
+        preferred=center.clone()
+        preferred[2]=max(float(low[2])+.005,min(float(high[2])-.005,float(eye[2])-.1))
+        targets=[preferred,center]
+        for x,y,z in ((.5,.5,.3),(.25,.5,.5),(.75,.5,.5),(.5,.25,.5),(.5,.75,.5),(.5,.5,1.)):
             targets.append(low+(high-low)*b.torch.tensor([x,y,z],device=low.device))
-        for target in targets:
-            direction=target-eye
+        rays=[(eye,target) for target in targets]
+        # A distant shelf can hide a cabinet's lower face from the current
+        # eye ray while exposing only a top corner outside the approach RGB
+        # frusta. Ray-cast real side surfaces at camera height as alternatives;
+        # ordinary navigation still checks reachability and visibility.
+        for axis,sign in ((0,-1),(1,-1),(0,1),(1,1)):
+            origin=preferred.clone();origin[axis]=(low[axis] if sign<0 else high[axis])+sign*.4
+            rays.append((origin,preferred))
+        candidates=[]
+        for origin,target in rays:
+            direction=target-origin
             end=target+.1*direction/max(float(b.torch.linalg.norm(direction)),1e-6)
-            hit=raytest(eye,end,ignore_bodies=ignored)
-            if hit.get('hit') and hit.get('rigidBody') in paths:return [float(v) for v in hit['position']]
+            hit=raytest(origin,end,ignore_bodies=ignored)
+            if hit.get('hit') and hit.get('rigidBody') in paths:
+                point=[float(v) for v in hit['position']]
+                if all(sum((x-y)**2 for x,y in zip(point,old))>.0025 for old in candidates):candidates.append(point)
+        if candidates:
+            candidates.sort(key=lambda p:(abs(p[2]-float(preferred[2])),
+                                          sum((p[i]-float(eye[i]))**2 for i in (0,1))))
+            return candidates[attempt%len(candidates)]
         # A physically meaningful top/near-face point remains subject to the
         # executor's normal visibility, collision, reach and departure checks.
         if primitive in ('wipe','cut','grasp','spray','spread','vacuum','sweep'):
@@ -78,21 +96,22 @@ class FullWorkflowReference:
                 if attempt==row.get('attempts',18):raise SkillError('process_incomplete','Native process did not reach the declared physical condition')
                 self.ref.action('wait',seconds=row.get('seconds',10.))
             return
+        force_approach=False
         for attempt in range(3):
             point=row.get('point')
             if 'xy' in row:point=[*row['xy'],float(self.ref.obj(role).aabb[1][2])]
             elif 'uv' in row:point=self.ref.top(role,*row['uv'])
-            elif point is None and role:point=self.surface_point(role,primitive)
+            elif point is None and role:point=self.surface_point(role,primitive,attempt)
             try:
                 # Long-range approach is a separately recorded ordinary motor call.
                 # This generic reference has no task-specific coordinate shortcuts.
                 if role and primitive!='navigate_to':
                     base=self.backend.robot.get_position_orientation()[0]
                     distance=sum((float(base[i])-point[i])**2 for i in (0,1))**.5
-                    if distance>(1.2 if primitive=='grasp' else 1.4):
+                    if force_approach or distance>(1.2 if primitive=='grasp' else 1.4):
                         self.ref.action('navigate_to',role,point)
                         if 'uv' not in row and 'xy' not in row and 'point' not in row:
-                            point=self.surface_point(role,primitive)
+                            point=self.surface_point(role,primitive,attempt)
                 return self.ref.action(primitive,role,point,**row.get('options',{}))
             except SkillError as exc:
                 recoverable=exc.code in {'local_adjustment_exhausted','local_adjustment_blocked','out_of_reach',
@@ -104,7 +123,7 @@ class FullWorkflowReference:
                 else:
                     # A fresh explicit navigation call has its own recorded
                     # work budget; it never changes the selected object ID.
-                    self.ref.action('navigate_to',role,point)
+                    force_approach=True
 
     def run(self,order,negative=None):
         from .records import write_json
