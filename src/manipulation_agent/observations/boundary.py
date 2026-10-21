@@ -54,6 +54,22 @@ ERROR_MESSAGES = {
     "unsupported_relation":"The selected object does not support this placement or attachment operation.",
 }
 
+# Only fixed stages/messages cross the RGB boundary; exception text and private
+# maps, positions, object identities and rejection counts stay executor-private.
+LOCAL_STANCE_MESSAGES = {
+    'local_stance_collision': 'No collision-free operation stance was found within the local movement region. Use a different general approach through visible free floor, then select the target again. This does not prove the target is globally unreachable.',
+    'local_target_visibility': 'Collision-free local stances were considered, but none passed all checks including visibility of the selected point. Inspect all four views and choose a different visible surface point or general approach.',
+    'local_departure_clearance': 'Some local stances passed collision and visibility checks but lacked a checked departure. Choose a more open general approach, allowing room for the robot and carried item.',
+    'local_articulation_clearance': 'Local preparation could not admit a stance with safe door or lid movement and departure. Choose a different general approach with space around the opening.',
+    'local_loaded_departure': 'Local preparation could not admit a safe pickup and departure with the item. Approach from another side with room to lift and carry it.',
+    'local_route': 'Operation stances passed preliminary checks, but no route within the local movement limits was found. Choose a different general approach; nearby space alone does not establish a usable route.',
+    'local_planning_budget': 'Local preparation reached its search budget before finding a fully checked stance and route. This does not prove the approach is impossible. Inspect RGB and choose a materially different approach.',
+}
+
+
 def public_execution_error(exc: SkillError) -> dict:
     code = exc.code if exc.code in ERROR_MESSAGES else "execution_error"
-    return {"code":code,"message":ERROR_MESSAGES[code],"world_may_have_changed":exc.changed}
+    result = {"code":code,"message":ERROR_MESSAGES[code],"world_may_have_changed":exc.changed}
+    if code in {'local_adjustment_blocked','local_adjustment_exhausted'} and exc.stage in LOCAL_STANCE_MESSAGES:
+        result.update(stage=exc.stage,message=LOCAL_STANCE_MESSAGES[exc.stage])
+    return result

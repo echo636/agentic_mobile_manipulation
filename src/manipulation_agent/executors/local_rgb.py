@@ -106,9 +106,11 @@ class LocalRGBManipulation:
         return True
 
     def _local_reposition(self,primitive,obj,point,operation):
+        from collections import Counter
         from .gt_navigation import NavigationPlan, NavigationError, PlanningBudget, SearchBudgetExhausted
         from .forward_navigation import plan_forward_route, local_exit_certificate
         from .local_manipulation import LocalCollision
+        from .local_stances import local_stance_proposals
         geometry=getattr(operation,'geometry',None) or self._local_geometry(operation)
         grid,collision,details,hulls,_=geometry
         actual=self._local_pose()
@@ -125,11 +127,13 @@ class LocalRGBManipulation:
         local=LocalCollision(collision,operation.origin,operation.limits.radius_m)
         budget=PlanningBudget(operation.check,seconds=operation.limits.planning_seconds)
         collision.check_cancelled=budget.check
-        selected=None;attempts=[];exhausted=False;extended=False
+        selected=None;attempts=[];exhausted=False;extended=False;proposal_diagnostics={}
         try:
-            for pose in stance_candidates(actual,operation.origin,point,operation.limits,operation.visited):
+            proposals=local_stance_proposals(actual,operation.origin,point,operation.limits,local,
+                operation.visited,check_cancelled=budget.check,diagnostics=proposal_diagnostics)
+            for pose,source in proposals:
                 budget.check()
-                row={'pose':pose,'status':'checking'};attempts.append(row)
+                row={'pose':pose,'source':source,'status':'checking'};attempts.append(row)
                 if not local.motion_free(pose,pose):row.update(status='rejected',reason='collision');continue
                 if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=hulls,base_yaw=pose[2]):
                     row.update(status='rejected',reason='target_not_visible');continue
@@ -171,10 +175,24 @@ class LocalRGBManipulation:
         finally:
             collision.check_cancelled=operation.check
             operation.record('candidates',candidates=attempts,held_footprint=details['held_object_footprint_included'])
+            operation.record('stance_search',**proposal_diagnostics,
+                candidate_sources=dict(Counter(row['source'] for row in attempts)),
+                candidate_outcomes=dict(Counter(row.get('reason',row['status']) for row in attempts)),
+                termination='selected' if selected else 'budget' if exhausted else 'candidates_exhausted')
         if selected is None:
             if exhausted:
-                raise SkillError('local_adjustment_exhausted','Local route search incomplete within planning budget')
-            raise SkillError('local_adjustment_blocked','No reachable visible manipulation stance within local limits')
+                raise SkillError('local_adjustment_exhausted','Local route search incomplete within planning budget',
+                                 stage='local_planning_budget')
+            reasons={row.get('reason') for row in attempts}
+            stage='local_stance_collision'
+            for reason,value in [('target_not_visible','local_target_visibility'),
+                                 ('no_departure','local_departure_clearance'),
+                                 ('articulation_clearance','local_articulation_clearance'),
+                                 ('no_loaded_departure','local_loaded_departure'),
+                                 ('navigation_unreachable','local_route'),('path_budget','local_route')]:
+                if reason in reasons:stage=value
+            raise SkillError('local_adjustment_blocked','No reachable visible manipulation stance within local limits',
+                             stage=stage)
         plan,route=selected
         operation.record('move',route=asdict(route))
         result=self._execute_gt_plan(grid,plan,operation.step_limit-(self.steps-operation.start_steps),prepared_route=route)

@@ -1232,6 +1232,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
             'protocol':'target_locked_local_v1' if getattr(self,'local_manipulation',False) else 'explicit_navigation_v1',
             'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
+            'stance_candidates':'radial_then_collision_free_grid_cells_v1',
+            'stance_failure_feedback':'allowlisted_local_search_stage',
             'target_lock':'private_selected_link_relative_surface',
             'scope':'GT-assisted bounded local controller; no learned model or real-arm IK',
             'reach_check':'base_to_selected_point_xy', 'reach_limit_m':1.4,

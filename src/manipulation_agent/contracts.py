@@ -27,10 +27,11 @@ class Budget:
 
 
 class SkillError(Exception):
-    def __init__(self, code: str, message: str, *, changed: bool = False):
+    def __init__(self, code: str, message: str, *, changed: bool = False, stage: str | None = None):
         super().__init__(message)
         self.code = code
         self.changed = changed
+        self.stage = stage
 
 
 class Backend(Protocol):

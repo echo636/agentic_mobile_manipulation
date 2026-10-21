@@ -130,7 +130,8 @@ class LocalOperation:
             if exc.code == 'out_of_reach':
                 exc = SkillError('local_adjustment_blocked',str(exc),changed=exc.changed)
             exc.changed |= self.changed or self.backend.steps > self.start_steps
-            self.record('failed', error_code=exc.code, detail=str(exc), world_may_have_changed=exc.changed)
+            self.record('failed', error_code=exc.code, detail=str(exc), world_may_have_changed=exc.changed,
+                        failure_stage=exc.stage)
             raise exc
 
 
