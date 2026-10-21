@@ -78,10 +78,9 @@ class CheckedMaterialActions:
                 'postcondition': 'original_object_replaced', 'completed_during': stage,
                 'replacement_verified': True}
 
-    def _checked_surface_action(self, primitive, target, max_steps):
+    def _surface_action_preconditions(self, primitive, target):
         from omnigibson.object_states import Covered, ParticleApplier, ParticleRemover, Saturated
         from omnigibson.utils.constants import ParticleModifyMethod
-        from .placement import placement_transaction
 
         tool = self._get_held()
         if tool is None:
@@ -124,6 +123,12 @@ class CheckedMaterialActions:
         if not candidates:
             raise SkillError('pre_condition_error', 'No material on the selected surface matches the ready tool')
 
+        return covered, removing, candidates
+
+    def _checked_surface_action(self, primitive, target, max_steps):
+        from .placement import placement_transaction
+        covered, removing, candidates = self._surface_action_preconditions(primitive, target)
+
         # The selected object is fixed in place while the official Covered
         # setter changes only material belonging to that object.
         with self._anchored_operation(target), placement_transaction(self.og.sim, self._placement_record):
@@ -138,9 +143,8 @@ class CheckedMaterialActions:
                 'material_systems': [system.name for system in candidates],
                 'postcondition': 'Covered.get_value_after_settling'}
 
-    def _checked_soak(self, target, max_steps):
+    def _soak_preconditions(self, target):
         from omnigibson.object_states import Contains, ParticleRemover, ParticleSource, Saturated
-        from .placement import placement_transaction
 
         tool = self._get_held()
         if tool is None:
@@ -161,6 +165,11 @@ class CheckedMaterialActions:
         if not candidates:
             raise SkillError('pre_condition_error', 'Selected source has no material this tool can absorb')
         saturated = tool.states[Saturated]
+        return saturated, candidates
+
+    def _checked_soak(self, target, max_steps):
+        from .placement import placement_transaction
+        saturated, candidates = self._soak_preconditions(target)
         with self._anchored_operation(target), placement_transaction(self.og.sim, self._placement_record):
             for system in candidates:
                 if not saturated.set_value(system, True):

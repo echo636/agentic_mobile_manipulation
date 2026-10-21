@@ -62,6 +62,131 @@ class ForwardNavigationTests(unittest.TestCase):
         self.assertEqual(len(caught.exception.route_attempts), 4)
         self.assertTrue(all(row['status'] == 'failed' for row in caught.exception.route_attempts))
 
+    def test_search_from_narrow_goal_still_executes_only_forward_edges(self):
+        target = (1.2,.8)
+        class NarrowGoal(PointCollision):
+            def motion_free(self,a,b):
+                dx,dy = b[0]-a[0],b[1]-a[1]
+                if math.hypot(dx,dy) > .002 and dx*math.cos(a[2])+dy*math.sin(a[2]) < 0.:
+                    return False
+                for i in range(101):
+                    x,y = a[0]+dx*i/100,a[1]+dy*i/100
+                    yaw = a[2]+angle(b[2]-a[2])*i/100
+                    if math.dist((x,y),target) < .4 and abs(angle(yaw-.37)) > .001:
+                        return False
+                return super().motion_free(a,b)
+        collision = NarrowGoal()
+        start = (0.,0.,0.)
+        route = plan_forward_route(plan([start[:2],target],.37),start,collision,max_expansions=1000)
+        self.assertEqual(route.method,'continuous_pose_astar')
+        self.follow(route,start,collision)
+
+    def test_bent_narrow_passage_keeps_continuous_headings_through_its_middle(self):
+        class RotatedPassage(PointCollision):
+            def __init__(self, yaw, barrier=False):
+                super().__init__()
+                self.yaw, self.barrier = yaw, barrier
+
+            def guidance_grid(self):
+                # A sampled-heading guide may omit this entire passage. It
+                # must affect ordering only, never continuous reachability.
+                g = self.grid
+                return GridMap(g.width,g.height,g.resolution,g.origin,bytes(g.width*g.height))
+
+            def motion_free(self, a, b):
+                c, s = math.cos(self.yaw), math.sin(self.yaw)
+                for i in range(101):
+                    wx = a[0] + (b[0]-a[0])*i/100
+                    wy = a[1] + (b[1]-a[1])*i/100
+                    x, y = c*wx+s*wy, -s*wx+c*wy
+                    yaw = angle(a[2]+angle(b[2]-a[2])*i/100-self.yaw)
+                    if x < -.001 or (self.barrier and .5 < x < .55):
+                        return False
+                    if x < .85:
+                        if not -.025 < y < .075 or not -.001 <= yaw <= .15:
+                            return False
+                        if x < .4 and abs(y) >= .025:
+                            return False
+                        if x >= .4 and y < .025 and yaw < .05:
+                            return False
+                return super().motion_free(a, b)
+
+        for yaw in (.317, -.213, .583):
+            with self.subTest(yaw=yaw):
+                c, s = math.cos(yaw), math.sin(yaw)
+                start = (0., 0., yaw)
+                target = (c-.4*s, s+.4*c)
+                collision = RotatedPassage(yaw)
+                route = plan_forward_route(plan([start[:2], target], yaw+math.pi/2),
+                                           start, collision, max_expansions=2000)
+                self.follow(route, start, collision)
+                self.assertTrue(any(.05 < angle(p.final_yaw-yaw) < .15 for p in route.phases))
+                with self.assertRaises(NavigationError):
+                    plan_forward_route(plan([start[:2], target], yaw+math.pi/2),
+                                       start, RotatedPassage(yaw, True), max_expansions=500)
+
+    def test_narrow_entry_needs_alignment_before_forward_motion_is_blocked(self):
+        class EarlyAlignmentSlot(PointCollision):
+            def __init__(self, barrier=False):
+                self.grid = GridMap(61, 61, .05, (-1., -1.), bytes([1])*61**2)
+                self.barrier = barrier
+
+            def motion_free(self, a, b):
+                for i in range(101):
+                    x = a[0] + (b[0]-a[0])*i/100
+                    y = a[1] + (b[1]-a[1])*i/100
+                    yaw = angle(a[2] + angle(b[2]-a[2])*i/100)
+                    if x < -.001 or (self.barrier and .5 < x < .55):
+                        return False
+                    if x < .85:
+                        if not -.025 < y < .075 or not -.001 <= yaw <= .15:
+                            return False
+                        # A long front load can advance into the throat, but
+                        # then lacks room to begin the small alignment turn.
+                        if x > .25 and y < .025 and yaw > .01:
+                            return False
+                        if x >= .4 and y < .025:
+                            return False
+                return super().motion_free(a, b)
+
+        start = (0., 0., 0.)
+        target = (1., .4)
+        collision = EarlyAlignmentSlot()
+        self.assertTrue(collision.motion_free(start, (.2, 0., 0.)))
+        route = plan_forward_route(plan([start[:2], target], math.pi/2),
+                                   start, collision, max_expansions=500)
+        self.follow(route, start, collision)
+        with self.assertRaises(NavigationError):
+            plan_forward_route(plan([start[:2], target], math.pi/2),
+                               start, EarlyAlignmentSlot(True), max_expansions=500)
+
+    def test_shallow_forward_exit_from_coarse_heading_dead_end(self):
+        class BentSlot(PointCollision):
+            def __init__(self,barrier=False):
+                self.grid=GridMap(61,61,.05,(-1.,-1.),bytes([1])*61**2)
+                self.barrier=barrier
+            def motion_free(self,a,b):
+                for i in range(101):
+                    x=a[0]+(b[0]-a[0])*i/100
+                    y=a[1]+(b[1]-a[1])*i/100
+                    yaw=angle(a[2]+angle(b[2]-a[2])*i/100)
+                    if x<-.001:return False
+                    if self.barrier and .5<x<.55:return False
+                    if x<.85:
+                        if not -.025<y<.075 or not -.001<=yaw<=.15:return False
+                        if x<.4 and abs(y)>=.025:return False
+                        if x>=.4 and y<.025 and yaw<.05:return False
+                return super().motion_free(a,b)
+        start=(0.,0.,0.);target=(1.,.4)
+        collision=BentSlot()
+        route=plan_forward_route(plan([start[:2],target],math.pi/2),start,collision,max_expansions=500)
+        self.assertEqual(route.method,'continuous_pose_astar')
+        self.assertTrue(any(.01<abs(angle(p.final_yaw))<.15 for p in route.phases))
+        self.follow(route,start,collision)
+        # Legal endpoints do not allow a long connection through an obstacle.
+        with self.assertRaises(NavigationError):
+            plan_forward_route(plan([start[:2],target],math.pi/2),start,BentSlot(True),max_expansions=500)
+
     def test_outward_facing_pocket_also_requires_a_forward_entry(self):
         class Pocket(PointCollision):
             def motion_free(self,a,b):
@@ -190,7 +315,7 @@ class ForwardNavigationTests(unittest.TestCase):
                 return super().motion_free(a,b)
         collision=Corridor()
         route=plan_forward_route(plan([(0.,0.),(1.,1.)],math.pi/2),(0.,0.,0.),collision)
-        self.assertEqual(route.method,'heading_lattice')
+        self.assertEqual(route.method,'continuous_pose_astar')
         self.assertGreater(route.expanded_states,0)
         self.follow(route,(0.,0.,0.),collision)
 
@@ -222,7 +347,7 @@ class ForwardNavigationTests(unittest.TestCase):
                 return super().motion_free(a,b)
         collision=NarrowEnds()
         route=plan_forward_route(plan([(0.,0.),target],1.2),(0.,0.,.3),collision,max_expansions=500)
-        self.assertEqual(route.method,'heading_lattice')
+        self.assertEqual(route.method,'continuous_pose_astar')
         self.follow(route,(0.,0.,.3),collision)
 
     def test_cancellation_and_heading_expansion_limit(self):
@@ -255,6 +380,57 @@ class ForwardNavigationTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2'),'Requires OpenCV; no simulator is started')
 class HeadingCollisionTests(unittest.TestCase):
+    def test_relaxation_retains_passage_between_coarse_headings(self):
+        import numpy as np
+        yaw = .317
+        rows, cols = np.indices((81,81))
+        x, y = -1.+cols*.05, -1.+rows*.05
+        raw = (np.abs(-math.sin(yaw)*x+math.cos(yaw)*y) < .14).astype('uint8')
+        checker = self.checker(raw,[[-.45,-.035],[.45,-.035],[.45,.035],[-.45,.035]])
+        self.assertTrue(checker.motion_free((0.,0.,yaw),(0.,0.,yaw)))
+        self.assertTrue(all(not checker.motion_free((0.,0.,h*math.pi/4),(0.,0.,h*math.pi/4))
+                            for h in range(8)))
+        relaxed = checker.optimistic_grid()
+        self.assertTrue(relaxed.navigable(relaxed.cell((0.,0.))))
+        self.assertFalse(relaxed.navigable(relaxed.cell((0.,.5))))
+
+    def test_offset_payload_does_not_block_its_free_base_in_relaxation(self):
+        import numpy as np
+        raw = np.ones((81,81),dtype='uint8')
+        raw[20,20] = 0
+        checker = self.checker(raw,[[.7,-.05],[.9,-.05],[.9,.05],[.7,.05]])
+        self.assertTrue(checker.motion_free((0.,0.,0.),(0.,0.,0.)))
+        self.assertTrue(checker.optimistic_grid().navigable(checker.grid.cell((0.,0.))))
+
+    def test_segment_region_matches_full_map_at_edges_and_obstacle_halos(self):
+        import numpy as np
+        raw=np.ones((81,81),dtype='uint8')
+        raw[30:45,30]=0;raw[55,20:60]=0;raw[15:18,48:52]=0
+        footprint=[[-.12,-.08],[.23,-.08],[.23,.08],[-.12,.08]]
+        checker=self.checker(raw,footprint)
+        points=[((.4,.4),(.4,1.4)),((.425,.425),(.425,1.425)),
+                ((.05,.05),(.45,.45)),((-.95,-.95),(-.8,-.8)),
+                ((.2,.5),(.2,1.1)),((1.,1.),(1.8,1.8))]
+        for bounded in (False,True):
+            subject=checker.local_window((.5,.5),.7) if bounded else checker
+            for yaw in (0.,.113,-.37,math.pi/2):
+                for a,b in points:
+                    with self.subTest(bounded=bounded,yaw=yaw,a=a,b=b):
+                        subject.grids.clear()
+                        got=subject.motion_free((*a,yaw),(*b,yaw))
+                        reference=subject._sweep_grid(subject._key(yaw,yaw)).segment_free(a,b)
+                        self.assertEqual(got,reference)
+
+    def test_long_sweep_contains_every_short_sweep_including_wraparound(self):
+        import numpy as np
+        checker=self.checker(np.ones((81,81),dtype='uint8'),
+                             [[-.4006,.0081],[-.1727,-.3071],[.3115,.2330],[.01,.3521]])
+        for lo,hi in ((-125.2,53.5),(170.,250.),(-20.,80.)):
+            full=checker._kernels(checker._key(math.radians(lo),math.radians(hi)))[0]
+            for angle in range(math.ceil(lo)+1,math.floor(hi)-2):
+                step=checker._kernels(checker._key(math.radians(angle),math.radians(angle+2)))[0]
+                self.assertFalse(np.any((step!=0)&(full==0)),(lo,hi,angle))
+
     def checker(self,raw,footprint,reference_yaw=0.):
         import numpy as np
         from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
@@ -285,6 +461,46 @@ class HeadingCollisionTests(unittest.TestCase):
         checker=self.checker(raw,footprint,math.pi/2)
         self.assertTrue(checker.motion_free((-.3,0.,0.),(.3,0.,0.)))
         self.assertFalse(checker.motion_free((-.3,0.,math.pi/2),(.3,0.,math.pi/2)))
+
+    def test_local_window_preserves_collision_halo_and_global_grid_coordinates(self):
+        import numpy as np
+        from manipulation_agent.executors.local_manipulation import LocalCollision
+        raw=np.ones((241,241),dtype='uint8')
+        # Obstacle beyond the allowed base-centre disk still intersects a long
+        # payload near its boundary; cropping must retain this outside halo.
+        raw[80:123,131]=0
+        checker=self.checker(raw,[[-.7,-.08],[.7,-.08],[.7,.08],[-.7,.08]])
+        origin=(4.,4.,0.);local=LocalCollision(checker,origin,1.)
+        self.assertEqual(local.grid.origin,checker.grid.origin)
+        for x,y in [(4.,4.),(4.95,4.),(4.,4.9),(3.1,4.)]:
+            for yaw in (0.,.12,math.pi/4,math.pi/2):
+                a=(4.,4.,yaw);b=(x,y,yaw)
+                self.assertEqual(local.motion_free(a,b),checker.motion_free(a,b),(a,b))
+                self.assertEqual(local.motion_free(b,(*b[:2],yaw+.3)),
+                                 checker.motion_free(b,(*b[:2],yaw+.3)))
+        self.assertFalse(local.motion_free((4.95,4.,0.),(4.95,4.,0.)))
+        self.assertTrue(local.motion_free((4.95,4.,math.pi/2),(4.95,4.,math.pi/2)))
+        # A local grid cache must never restrict later macro navigation.
+        self.assertTrue(checker.motion_free((8.,8.,0.),(9.,8.,0.)))
+
+    def test_local_heading_erosion_is_bounded_and_cancellation_stays_live(self):
+        import cv2
+        import numpy as np
+        from unittest.mock import patch
+        from manipulation_agent.executors.local_manipulation import LocalCollision
+        checker=self.checker(np.ones((401,401),dtype='uint8'),
+                             [[-.35,-.1],[.35,-.1],[.35,.1],[-.35,.1]])
+        local=LocalCollision(checker,(5.,5.,0.),2.)
+        sizes=[];erode=cv2.erode
+        def measured(raw,*args,**kwargs):
+            sizes.append(raw.shape);return erode(raw,*args,**kwargs)
+        with patch.object(cv2,'erode',measured):
+            self.assertTrue(local.optimistic_grid().navigable(local.grid.cell((5.,5.))))
+        self.assertTrue(sizes);self.assertTrue(all(max(shape)<120 for shape in sizes))
+        def cancelled():raise RuntimeError('cancelled')
+        checker.check_cancelled=cancelled
+        with self.assertRaisesRegex(RuntimeError,'cancelled'):
+            local.motion_free((5.,5.,0.),(5.1,5.,0.))
 
 
 if __name__=='__main__':unittest.main()

@@ -10,6 +10,88 @@ from unittest.mock import patch
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('torch'),
                      'Run with the pinned simulator Python; simulator itself is not started')
 class LiveGridTests(unittest.TestCase):
+    def test_gap_between_robot_and_carried_body_is_not_a_solid_bridge(self):
+        import cv2
+        import numpy as np
+        import torch
+        from manipulation_agent.executors.live_gt_map import build_navigation_grid
+        class Body:
+            n_joints=0
+            def __init__(self,name,lo,hi):
+                self.name=name;self.aabb=(torch.tensor(lo),torch.tensor(hi))
+                self.position=(self.aabb[0]+self.aabb[1])/2
+                points=torch.tensor([[x,y,z] for x in (lo[0],hi[0]) for y in (lo[1],hi[1]) for z in (lo[2],hi[2])])
+                self.links={'body':SimpleNamespace(is_meta_link=False,prim_path='/'+name,collision_boundary_points_world=points)}
+            def get_position_orientation(self):return self.position,torch.tensor([0.,0.,0.,1.])
+        robot=Body('robot',[-.2,-.2,.04],[.2,.2,1.2]);robot.position=torch.zeros(3)
+        payload=Body('payload',[.95,-.05,.45],[1.05,.05,.55])
+        obstacle=Body('obstacle',[.46,-.04,.45],[.54,.04,.55])
+        queries=[]
+        def overlap(half,center,rotation,callback,any_hit):
+            queries.append((half,center))
+            low=np.asarray(center)-half;high=np.asarray(center)+half
+            for body in (obstacle,payload):
+                if np.all(high>=body.aabb[0].numpy()) and np.all(low<=body.aabb[1].numpy()):
+                    if callback(SimpleNamespace(rigid_body='/'+body.name)) is False:break
+        modules={name:ModuleType(name) for name in ('omnigibson','omnigibson.lazy')}
+        modules['omnigibson'].lazy=modules['omnigibson.lazy']
+        modules['omnigibson.lazy'].omni=SimpleNamespace(physx=SimpleNamespace(
+            get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap)))
+        with tempfile.TemporaryDirectory() as temp,patch.dict(sys.modules,modules):
+            layout=Path(temp)/'layout';layout.mkdir()
+            cv2.imwrite(str(layout/'floor_trav_no_obj_0.png'),np.full((80,80),255,dtype='uint8'))
+            trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((80,80))])
+            b=SimpleNamespace(robot=robot,_get_held=lambda:None,_carry_contents=[],deadline=SimpleNamespace(check=lambda:None),
+                env=SimpleNamespace(scene=SimpleNamespace(scene_dir=temp,trav_map=trav,objects=[robot,payload,obstacle])))
+            _,empty=build_navigation_grid(b,0)
+            b._get_held=lambda:payload
+            queries.clear()
+            grid,meta=build_navigation_grid(b,0)
+            self.assertTrue(grid.navigable(grid.cell((0.,0.))))
+            self.assertEqual({r['body_group'] for r in meta['collision_layers']},{0,1})
+            self.assertGreater(meta['occupancy_height_bands'],empty['occupancy_height_bands'])
+            self.assertLess(meta['updated_queries'],empty['updated_queries'])
+            self.assertGreater(meta['updated_cells'],0)
+            self.assertEqual(len(queries),meta['updated_queries'])
+            self.assertEqual(len(meta['collision_layers']),meta['occupancy_height_bands'])
+            # Keep actual carried geometry checked, even though the gap is free.
+            obstacle.aabb=tuple(a+torch.tensor([.5,0.,0.]) for a in obstacle.aabb)
+            obstacle.position+=torch.tensor([.5,0.,0.])
+            grid,_=build_navigation_grid(b,0)
+            self.assertFalse(grid.navigable(grid.cell((0.,0.))))
+            # The same XY footprint is free when lifted above a table. This
+            # specifically exercises the real-height bands and their cache.
+            obstacle.aabb=(torch.tensor([.8,-.2,0.]),torch.tensor([1.2,.2,.9]))
+            obstacle.position=torch.tensor([1.,0.,.45])
+            payload.links['body'].collision_boundary_points_world+=torch.tensor([0.,0.,.65])
+            payload.aabb=tuple(a+torch.tensor([0.,0.,.65]) for a in payload.aabb)
+            payload.position+=torch.tensor([0.,0.,.65])
+            grid,raised=build_navigation_grid(b,0)
+            self.assertTrue(grid.navigable(grid.cell((0.,0.))))
+            self.assertGreater(min(layer['z_min'] for layer in raised['collision_layers'] if layer['body_group']==1),.9)
+            obstacle.aabb=(obstacle.aabb[0],torch.tensor([1.2,.2,1.3]))
+            obstacle.position=torch.tensor([1.,0.,.65])
+            grid,_=build_navigation_grid(b,0)
+            self.assertFalse(grid.navigable(grid.cell((0.,0.))))
+
+    def test_retreat_cannot_trade_contact_between_separate_heights(self):
+        import numpy as np
+        from manipulation_agent.executors.gt_navigation import GridMap
+        from manipulation_agent.executors.live_gt_map import clearance_transition_guard
+        lower=np.ones((9,9),dtype='uint8');upper=lower.copy()
+        lower[4,4]=0;upper[4,5]=0
+        point=np.array([[0.,0.]])
+        grid=GridMap(9,9,.1,(0.,0.),np.ones_like(lower).tobytes())
+        guard=clearance_transition_guard(grid,[(lower,point),(upper,point)],np.ones_like(lower),
+                                         [(0.,.1),(1.,1.1)])
+        self.assertFalse(guard((4,4),(4,5)))
+        self.assertTrue(guard((4,4),(4,3)))
+        # A slanted surface may shed contact from one touching height band
+        # into the next; this is one connected obstacle, not a new obstacle.
+        adjacent=clearance_transition_guard(grid,[(lower,point),(upper,point)],np.ones_like(lower),
+                                            [(0.,.1),(.1,.2)])
+        self.assertTrue(adjacent((4,4),(4,5)))
+
     def test_occupied_centre_can_shed_contacts_but_cannot_enter_new_obstacles(self):
         import cv2
         import numpy as np
@@ -41,6 +123,12 @@ class LiveGridTests(unittest.TestCase):
                 transition_allowed=clearance_transition_guard(g,[(raw,footprint)],blocked_support))
 
     def test_rigid_props_door_updates_and_robot_exclusion(self):
+        self.door_cache_fixture()
+
+    def test_hypothetical_door_replaces_stale_query_pose_and_keeps_other_obstacles(self):
+        self.door_cache_fixture(stale_queries=True)
+
+    def door_cache_fixture(self,stale_queries=False):
         import cv2
         import numpy as np
         import torch
@@ -61,12 +149,16 @@ class LiveGridTests(unittest.TestCase):
             robot.links={'base':link}
             wall=Obj('wall',[-.04,-1.,0.],[.04,1.,1.8],[0.,0.,0.])
             door=Obj('door',[-.04,-.4,0.],[.04,.4,1.8],[0.,0.,0.],1)
+            door.links={'leaf':SimpleNamespace(is_meta_link=False,prim_path='/door/leaf')}
+            physical_angle=[0.]
             def overlap(half_extent,origin,rotation,callback,any_hit):
                 # Robot geometry is always ignored, even when PhysX reports it
                 # before a real blocker. Walls remain and the door can open.
                 if callback(SimpleNamespace(rigid_body='/robot/base')):
                     x,y,z=origin
-                    if abs(x)<.049 and (abs(y)>.4 or door.angle==0):callback(SimpleNamespace(rigid_body='/door/leaf'))
+                    if abs(x)<.049 and abs(y)>.4:callback(SimpleNamespace(rigid_body='/wall/base'))
+                    elif abs(x)<.049 and physical_angle[0]==0:callback(SimpleNamespace(rigid_body='/door/leaf'))
+                    elif physical_angle[0]!=0 and abs(x)<=.4 and .35<=y<=.45:callback(SimpleNamespace(rigid_body='/door/leaf'))
             fake=ModuleType('omnigibson');lazy=ModuleType('omnigibson.lazy');fake.lazy=lazy
             lazy.omni=SimpleNamespace(physx=SimpleNamespace(get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap)))
             trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((40,40))])
@@ -77,6 +169,14 @@ class LiveGridTests(unittest.TestCase):
                 self.assertFalse(closed.navigable(closed.cell((0.,0.))))
                 self.assertTrue(closed.navigable(closed.cell((-.7,0.))))
                 door.angle=1.57
+                door.aabb=(torch.tensor([-.4,.35,0.]),torch.tensor([.4,.45,1.8]))
+                if stale_queries:
+                    points=np.array([[x,y,z] for x in (-.4,.4) for y in (.35,.45) for z in (0.,1.8)])
+                    preview,_=build_navigation_grid(backend,0,occupancy_overrides={'/door/leaf':points})
+                    self.assertTrue(preview.navigable(preview.cell((0.,0.))))
+                    self.assertFalse(preview.navigable(preview.cell((0.,.4))))
+                    self.assertFalse(preview.navigable(preview.cell((0.,.7))))
+                physical_angle[0]=1.57
                 opened,updated=build_navigation_grid(backend,0)
                 self.assertTrue(opened.navigable(opened.cell((0.,0.))))
                 self.assertFalse(opened.navigable(opened.cell((0.,.7))))

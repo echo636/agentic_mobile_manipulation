@@ -107,5 +107,98 @@ class ForwardBackendTests(unittest.TestCase):
         self.assertFalse(caught.exception.changed)
         self.assertEqual(self.restores,0)
 
+    def test_look_checks_swept_payload_and_never_translates(self):
+        import numpy as np
+        b=self.b
+        b.env=SimpleNamespace(scene=SimpleNamespace(trav_map=SimpleNamespace(floor_heights=[0.])))
+        raw=b._navigation_layers[0][0]
+        # Long carried item clears both end orientations but clips the diagonal.
+        b._navigation_layers=[(raw,np.array([[-.4,-.03],[.4,-.03],[.4,.03],[-.4,.03]]))]
+        raw[45,45]=0
+        with patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(self.grid,{})):
+            with self.assertRaises(SkillError) as caught:b._turn(90,200)
+            self.assertEqual(caught.exception.code,'look_rotation_blocked')
+            self.assertFalse(caught.exception.changed)
+            self.assertEqual(self.restores,0)
+            raw[45,45]=1
+            result=b._turn(90,200)
+        self.assertEqual(result['forward_route_method'],'checked_in_place_look')
+        self.assertEqual(result['actual_path_distance_m'],0.)
+        self.assertLess(result['final_yaw_error_rad'],.001)
+
+    def test_look_certificate_start_mismatch_does_not_plan_a_detour(self):
+        from manipulation_agent.executors.forward_navigation import ForwardRoute
+        route=ForwardRoute((self.plan(),),0.,0,'fixture',start=(.1,0.,0.))
+        with self.assertRaises(SkillError) as caught:
+            self.b._execute_gt_plan(self.grid,self.plan(),100,prepared_route=route,require_prepared_route=True)
+        self.assertEqual(caught.exception.code,'look_rotation_blocked')
+        self.assertEqual(self.restores,0)
+
+    def test_local_search_exhaustion_is_distinct_from_geometric_rejection(self):
+        from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
+        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.gt_navigation import NavigationError
+        b=self.b;b.local_limits=LocalLimits();b.deadline=SimpleNamespace(check=lambda **kw:None)
+        b.ideal_carry=False;b.demo_motion=False
+        b._approach_visible=lambda *a,**kw:True
+        records=[];b._local_record=lambda **kw:records.append(kw)
+        def geometry(op):
+            return (self.grid,HeadingCollisionChecker(self.grid,b._navigation_layers,0.,b._navigation_support),
+                    {'held_object_footprint_included':False},(),0)
+        b._local_geometry=geometry
+        for reason,expected in [('navigation_search_exhausted','local_adjustment_exhausted'),
+                                ('navigation_unreachable','local_adjustment_blocked')]:
+            op=LocalOperation(b,'open',None,600,{})
+            with patch('manipulation_agent.executors.forward_navigation.plan_forward_route',
+                       side_effect=NavigationError('fixture incomplete search',reason)):
+                with self.assertRaises(SkillError) as caught:
+                    b._local_reposition('open',object(),self.torch.tensor([1.55,0.,.8]),op)
+            self.assertEqual(caught.exception.code,expected)
+            self.assertEqual(self.restores,0)
+        self.assertTrue(any(c.get('extended_route_search') for r in records for c in r.get('candidates',[])))
+
+    def test_local_operation_drives_then_executes_once_without_macro_navigation(self):
+        from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
+        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        b=self.b;b.local_limits=LocalLimits();b.navigation_distance=0.
+        b.deadline=SimpleNamespace(check=lambda **kwargs:None)
+        b._carry_contents=[];b.demo_motion=False;b.ideal_carry=False
+        target=object();point=self.torch.tensor([1.55,0.,.8]);effects=[];captures=[]
+        binding=SimpleNamespace(grounding={},describe=lambda:{'scope':'cpu_fixture'})
+        b._resolve_local_target=lambda lock:(target,point)
+        b._manipulation_preconditions=lambda *args:None
+        def geometry(op):
+            checker=HeadingCollisionChecker(self.grid,b._navigation_layers,0.,b._navigation_support,
+                                             check_cancelled=op.check)
+            return self.grid,checker,{'held_object_footprint_included':False},(),0
+        b._local_geometry=geometry
+        b._approach_visible=lambda *a,**kw:True
+        b._local_reobserve=lambda lock:captures.append(lock)
+        b._navigate=lambda *a,**kw:self.fail('Micropositioning called macro navigation')
+        def execute(primitive,obj,selected,grounding,max_steps,**kwargs):
+            self.assertIs(obj,target)
+            self.assertLessEqual(float(self.torch.linalg.norm(self.position[:2]-selected[:2])),1.4)
+            effects.append(obj)
+            return {'postcondition':'fixture_verified'}
+        b._execute_bound_manipulation=execute
+        op=LocalOperation(b,'open',binding,600,{})
+        b._local_operation=op
+        result=op.run()
+        self.assertEqual(effects,[target]);self.assertEqual(captures,[binding])
+        self.assertEqual(result['local_manipulation']['repositions'],1)
+        self.assertLessEqual(result['local_manipulation']['path_m'],2.)
+        self.assertGreater(float(self.position[0]),.14)
+        self.assertIsNone(b._base_target)
+
+    def test_local_budget_prevents_outside_pose_before_setter(self):
+        from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
+        b=self.b;b.local_limits=LocalLimits(radius_m=.1)
+        b.deadline=SimpleNamespace(check=lambda **kwargs:None)
+        op=LocalOperation(b,'open',None,600,{})
+        b._local_operation=op
+        with self.assertRaises(SkillError) as caught:b._execute_gt_plan(self.grid,self.plan(),500)
+        self.assertEqual(caught.exception.code,'local_adjustment_exhausted')
+        self.assertLessEqual(float(self.torch.linalg.norm(self.position[:2])),.100001)
+
 
 if __name__=='__main__':unittest.main()

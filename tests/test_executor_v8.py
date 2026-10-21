@@ -61,6 +61,8 @@ class MotorContractRegression(unittest.TestCase):
             _navigate=lambda *a:self.fail('attach silently initiated navigation'),
             robot=types.SimpleNamespace(get_position_orientation=lambda:(torch.zeros(3),None)),
             torch=torch,steps=0)
+        backend._manipulation_preconditions=RGBBackend._manipulation_preconditions.__get__(backend)
+        backend._execute_bound_manipulation=RGBBackend._execute_bound_manipulation.__get__(backend)
         states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):
             with self.assertRaises(SkillError) as failure:
@@ -78,6 +80,8 @@ class MotorContractRegression(unittest.TestCase):
             _checked_attach=lambda obj,max_steps:{'primitive':'attach','selected':obj.category},
             robot=types.SimpleNamespace(get_position_orientation=lambda:(torch.zeros(3),None)),
             torch=torch,steps=0)
+        backend._manipulation_preconditions=RGBBackend._manipulation_preconditions.__get__(backend)
+        backend._execute_bound_manipulation=RGBBackend._execute_bound_manipulation.__get__(backend)
         states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):
             result=RGBBackend.execute_visual.__wrapped__(backend,'hang',object(),30)

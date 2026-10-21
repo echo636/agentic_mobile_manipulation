@@ -204,7 +204,7 @@ class NavigationPlan:
 
 
 def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizon, check_cancelled,
-                           max_candidate_checks=None):
+                           max_candidate_checks=None, preferred_distance=0.):
     """Flood connectivity once, then A* only to the nearest feasible goals.
 
     Four-neighbor connectivity equals our no-corner-cut eight-neighbor graph.
@@ -226,7 +226,11 @@ def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizo
                         index-1 if col else -1,index+1 if col+1<width else -1):
                 if nxt>=0 and not visited[nxt] and grid.free[nxt]:
                     visited[nxt]=1;component.append(nxt)
-        ranked=sorted((round(math.dist(grid.world(divmod(i,width)),hint),9),i) for i in component)
+        if preferred_distance:
+            ranked=((score,i) for score,_,i in sorted(
+                (max(0.,round(abs(math.dist(grid.world(divmod(i,width)),hint)-preferred_distance)-grid.resolution,9)),
+                 math.dist(grid.world(divmod(i,width)),grid.world(start)),i) for i in component))
+        else:ranked=sorted((round(math.dist(grid.world(divmod(i,width)),hint),9),i) for i in component)
         total=len(component)
     else:
         if check_cancelled is not None:check_cancelled()
@@ -236,8 +240,13 @@ def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizo
         if total>max_expansions:raise NavigationError('GT path search exhausted its expansion budget')
         distances=np.round(np.hypot(indices%width*grid.resolution+grid.origin[0]-hint[0],
                                    indices//width*grid.resolution+grid.origin[1]-hint[1]),9)
-        order=np.argsort(distances,kind='stable')
-        ranked=((float(distances[i]),int(indices[i])) for i in order)
+        if preferred_distance:
+            scores=np.maximum(0.,np.round(np.abs(distances-preferred_distance)-grid.resolution,9))
+            travel=np.hypot(indices%width-start[1],indices//width-start[0])
+            order=np.lexsort((indices,travel,scores))
+        else:
+            scores=distances;order=np.argsort(distances,kind='stable')
+        ranked=((float(scores[i]),int(indices[i])) for i in order)
     if check_cancelled is not None:check_cancelled()
     goals=set();best=None
     for index,(distance,flat) in enumerate(ranked):
@@ -273,7 +282,7 @@ def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizo
 
 def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
                     horizon=10000., max_expansions=None, candidate_filter=None, goal_mode='approach',
-                    check_cancelled=None, max_candidate_checks=None):
+                    check_cancelled=None, max_candidate_checks=None, preferred_distance=0.):
     """Project candidate goals, validate reachability, rank and plan one GT hop.
 
     One multi-goal Dijkstra search supplies exact grid geodesics for all
@@ -283,11 +292,16 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     With max_snap=None both goal modes use the entire start-connected region,
     ranked by target distance then geodesic. A candidate filter may enforce
     visibility, but there is no target-distance rejection or standoff radius.
+    An opt-in preferred_distance ranks an approach annulus (one-cell slack),
+    with near-start candidates first. Every endpoint still passes the same
+    visibility/collision filter. Exact point travel retains its old semantics.
     Explicit finite bounds remain available for exact internal staging goals.
     """
     current=tuple(map(float,current));hint=tuple(map(float,hint))
     start=grid.cell(current);grid.cell(hint)
     if goal_mode not in {'point','approach'}:raise ValueError('Unknown navigation goal mode')
+    if not math.isfinite(preferred_distance) or preferred_distance<0:raise ValueError('Invalid preferred distance')
+    if preferred_distance and goal_mode!='approach':raise ValueError('Preferred distance requires approach mode')
     if max_expansions is None:max_expansions=grid.width*grid.height
     if not grid.navigable(start):raise NavigationError('Start is outside the traversable grid; no unvalidated recovery teleport','navigation_invalid_start')
     visibility={}
@@ -313,7 +327,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
         return projected
     if max_snap is None:
         goal_cell,distance,parents,expanded=_connected_goal_search(
-            grid,start,hint,acceptable,max_expansions,horizon,check_cancelled,max_candidate_checks)
+            grid,start,hint,acceptable,max_expansions,horizon,check_cancelled,max_candidate_checks,preferred_distance)
         score=math.dist(grid.world(goal_cell),hint)
         considered=len(visibility);reachable=sum(visibility.values())
     else:

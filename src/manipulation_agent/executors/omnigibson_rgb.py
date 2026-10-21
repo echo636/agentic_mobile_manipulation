@@ -17,8 +17,10 @@ from .profiling import component, action_profile
 from .carry import ControlledCarry
 from .material_actions import CheckedMaterialActions
 from .demo_motion import DemoMotion
+from .local_rgb import LocalRGBManipulation
+from .local_manipulation import LocalLimits
 
-class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def __init__(self,*args,record_video=False,**kwargs):
@@ -28,6 +30,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self.demo_motion = os.environ.get('MAS_DEMO_MOTION','0') in {'1','true','yes'}
         if self.demo_motion and not self.ideal_carry:
             raise ValueError('Demo motion requires controlled carry')
+        self.local_manipulation = os.environ.get("MAS_LOCAL_MANIPULATION", "1") not in {"0", "false", "no"}
+        self.local_limits = LocalLimits()
+        self._local_operation = None
         self._demo_arm = None
         self._demo_focus = None
         self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
@@ -312,6 +317,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
 
     def _step(self, action):
         self.deadline.check(changed=True)
+        local=getattr(self,'_local_operation',None)
+        if local is not None:local.check()
         if self._base_target is not None:self._restore_base_target()
         self._restore_object_anchor()
         self._restore_stabilized_containers()
@@ -464,10 +471,41 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
 
     def _turn(self,degrees,max_steps):
         import omnigibson.utils.transform_utils as T
+        from .gt_navigation import NavigationPlan, NavigationError, PlanningBudget
+        from .forward_navigation import ForwardRoute, angle
+        from .heading_collision import HeadingCollisionChecker
+        from .live_gt_map import build_navigation_grid
         pos,quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(quat)
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
-        return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
+        xy=tuple(pos[:2].cpu().tolist());end=yaw+math.radians(degrees)
+        floor=min(range(len(self.env.scene.trav_map.floor_heights)),
+                  key=lambda i:abs(float(pos[2])-self.env.scene.trav_map.floor_heights[i]))
+        grid,_=build_navigation_grid(self,floor)
+        self._navigation_layer_yaw=yaw
+        budget=PlanningBudget(self.deadline.check,seconds=8.)
+        checker=HeadingCollisionChecker(grid,self._navigation_layers,yaw,
+                                        self._navigation_support,check_cancelled=budget.check)
+        record={'at':now(),'parent_request_id':getattr(self,'_active_request_id',None),
+                'audience':'executor_private','requested_degrees':degrees,'start':[*xy,yaw]}
+        try:
+            if not checker.motion_free((*xy,yaw),(*xy,end)):
+                raise SkillError('look_rotation_blocked','Body or payload blocks the requested rotation')
+            plan=NavigationPlan((xy,),xy,xy,end,0.,0.,1,1,0.,0,end,'forward')
+            route=ForwardRoute((plan,),0.,0,'checked_in_place_look',
+                turn_radians=abs(angle(end-yaw)),estimated_motion_seconds=abs(angle(end-yaw))/(math.pi/3),
+                start=(*xy,yaw))
+            result=self._execute_gt_plan(grid,plan,max_steps,prepared_route=route,require_prepared_route=True)
+            record.update(status='passed',execution=result)
+            return result
+        except NavigationError as exc:
+            record.update(status='failed',error_code=exc.code,error_type=type(exc).__name__)
+            raise SkillError(exc.code,str(exc)) from exc
+        except Exception as exc:
+            record.update(status='failed',error_code=getattr(exc,'code',None),error_type=type(exc).__name__)
+            raise
+        finally:
+            with (self.output/'look_motion.jsonl').open('a') as stream:stream.write(json.dumps(record)+'\n')
 
     def _navigation_self_hulls(self):
         """Current visible robot and carried geometry in yaw-local base coordinates."""
@@ -537,6 +575,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         ground_click=not for_manipulation and float(point[2])-float(trav.floor_heights[floor]) <= .15
         mode='point' if ground_click else 'approach'
         standoff,margin=0.,(.08 if mode=='approach' else 0.)
+        if mode=='approach' and getattr(self,'local_manipulation',False):
+            from .gt_navigation import visual_approach_settings
+            suggested,_=visual_approach_settings(self.rig_height,float(position[2]),float(point[2]),
+                pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
+            standoff=max(1.25,suggested)
         grid,map_details=build_navigation_grid(self,floor)
         self._navigation_layer_yaw=travel_yaw
         recovery_results=[];recovery_states=set()
@@ -568,7 +611,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 recovery_states.add(state)
                 if max_steps<=10:raise SkillError('action_timeout','Clearance recovery exhausted its control-step budget')
                 support=self._live_gt_collision_cache[floor]['support']
-                guard=clearance_transition_guard(grid,self._navigation_layers,support)
+                guard=clearance_transition_guard(grid,self._navigation_layers,support,
+                    [(layer['z_min'],layer['z_max']) for layer in map_details['collision_layers']])
                 escape_grid,escape,escape_details=plan_start_clearance_exit(
                     grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius,
                     transition_allowed=guard,check_cancelled=self.deadline.check)
@@ -621,7 +665,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
                  'approach_visibility_required':mode=='approach',
-                 'candidate_ranking':'nearest_feasible_connected_cell_then_travel','target_search_radius_m':None,
+                 'candidate_ranking':('visible_approach_annulus_then_near_start' if standoff else
+                                      'nearest_feasible_connected_cell_then_travel'),'target_search_radius_m':None,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  **map_details,'precomputed_walkability':True,'online_mapping':False}
         try:
@@ -660,6 +705,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                         proposed=replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
                             standoff=standoff,goal_mode=mode,max_snap=None,check_cancelled=budget.check,
                             max_candidate_checks=64 if mode=='approach' else None,
+                            preferred_distance=standoff,
                             candidate_filter=acceptable),
                             travel_yaw=yaw,final_yaw=yaw)
                         options.append(proposed)
@@ -672,7 +718,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                     def adequate(candidate):
                         if candidate is None:return False
                         distance=math.dist(candidate.goal,candidate.target)
-                        return distance <= (1.4 if mode=='approach' else exact_tolerance)
+                        return distance <= (max(1.4,standoff+grid.resolution+.002) if mode=='approach' else exact_tolerance)
                     try:
                         plan=make_plan(grid,travel_yaw)
                         best_key=(round(plan.score,9),plan.geodesic_m)
@@ -732,7 +778,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 try:
                     for candidate in tuple(options):
                         refinement.check()
-                        slack=.1 if mode=='point' else 0.
+                        slack=.1 if mode=='point' or standoff else 0.
                         if candidate.score>plan.score+slack+1e-9:continue
                         for yaw,kind in arrival_heading_options(candidate,(*initial_xy,travel_yaw),approach=mode=='approach'):
                             refinement.check()
@@ -778,7 +824,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 layer_footprints_json=json.dumps(map_details['collision_layers']))
             with component(self,'navigation_route_selection'):
                 plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
-                    target_slack=.1 if mode=='point' else 0.,check_cancelled=self.deadline.check)
+                    target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check)
             details['forward_candidate_selection']=selection
             grid=endpoint_collision.grid_at_heading(plan.final_yaw)
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
@@ -799,6 +845,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             details.update(status='failed',error_code=exc.code,error=str(exc))
             if hasattr(exc, 'route_attempts'):
                 details['forward_candidate_selection']={'attempts':exc.route_attempts,'status':'failed'}
+            if hasattr(exc,'attempts'):details['forward_candidate_attempts']=exc.attempts
             raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
@@ -839,13 +886,20 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if visible is False:
             raise SkillError('navigation_unreachable',
                 'The selected target is occluded from the reached approach; inspect updated RGB',changed=True)
-        return {**result,'nav_status':nav_status,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
+        reach=getattr(getattr(self,'local_limits',None),'reach_m',1.4)
+        local_radius=(getattr(getattr(self,'local_limits',None),'radius_m',1.)
+                      if getattr(self,'local_manipulation',False) else 0.)
+        handoff=('travel_only' if mode=='point' else
+                 'selected_surface_nearby' if projection<=reach else
+                 'within_local_range' if projection<=reach+local_radius else 'needs_closer_approach')
+        return {**result,'nav_status':nav_status,'manipulation_handoff':handoff,
+                'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
                 'start_grid_offset_m':plan.start_grid_offset_m,
                 'goal_mode':mode,'target_projection_distance_m':math.dist(plan.goal,plan.target),
                 'dynamic_collision_check':map_details['dynamic_collision_check']}
 
-    def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route=None):
+    def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route=None, require_prepared_route=False):
         """Turn, drive forward, and turn at corners with swept-volume checks."""
         import omnigibson.utils.transform_utils as T
         from dataclasses import asdict
@@ -880,6 +934,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                             and abs(GreedyGridFollower.angle(prepared_route.start[2]-start_yaw))<1e-6):
                         route=prepared_route
                     else:
+                        if require_prepared_route:
+                            raise SkillError('look_rotation_blocked','Measured start changed before checked rotation')
                         route=plan_forward_route(plan,(*previous,start_yaw),collision,check_cancelled=budget.check)
                     phases=route.phases
                     record.update(status='planned',route=asdict(route))
@@ -908,6 +964,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                         if self.steps-before>=max_steps-settling:
                             raise SkillError('action_timeout','GT follower exhausted its control-step budget',changed=self.steps>before)
                         x,y,yaw=command
+                        local=getattr(self,'_local_operation',None)
+                        if local is not None:local.admit_pose(command)
                         new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
                         orientation=T.euler2quat(self.torch.tensor([0.,0.,yaw],device=quat.device))
                         self._base_target={'position':new_pos,'orientation':orientation,'indices':indices,
@@ -1012,6 +1070,12 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
+        self._manipulation_preconditions(primitive,obj)
+        if getattr(self,'local_manipulation',False):
+            return self._execute_local_manipulation(primitive,obj,point,grounding,max_steps,kwargs)
+        return self._execute_bound_manipulation(primitive,obj,point,grounding,max_steps,**kwargs)
+
+    def _manipulation_preconditions(self,primitive,obj):
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
         held=self._get_held()
@@ -1032,9 +1096,37 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             for parent in self.env.scene.objects:
                 if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
                     raise SkillError('container_closed','Grasp through closed container rejected')
-        # Manipulation never navigates implicitly. Reach belongs to the selected
-        # visible point, not an object's potentially room-sized bounding box.
-        # Reject before arm motion or physics, leaving repositioning to the agent.
+        if getattr(self,'local_manipulation',False):
+            from omnigibson.object_states import ToggledOn,AttachedTo,OnTop,Under,NextTo
+            state={'open':Open,'close':Open,'toggle_on':ToggledOn,'toggle_off':ToggledOn}.get(primitive)
+            if state is not None and state not in obj.states:
+                raise SkillError('pre_condition_error','Selected object does not support this operation')
+            if primitive in {'place_inside','place_on_top','place_under','place_next_to'}:
+                relation={'place_inside':Inside,'place_on_top':OnTop,'place_under':Under,'place_next_to':NextTo}[primitive]
+                if held is obj or relation not in held.states:
+                    raise SkillError('unsupported_relation','Selected carry/destination does not support this relation')
+                if primitive=='place_inside' and not any(link.is_meta_link and link.meta_link_type in {'fillable','openfillable'} for link in obj.links.values()):
+                    raise SkillError('unsupported_relation','Selected destination has no fillable volume')
+            if primitive in {'attach','hang'}:
+                if held is obj or AttachedTo not in held.states or AttachedTo not in obj.states:
+                    raise SkillError('unsupported_relation','Selected objects do not support attachment')
+                if primitive=='hang' and not any(word in str(obj.category).lower() for word in ('nail','hook','hanger')):
+                    raise SkillError('unsupported_relation','Selected object is not a hanging anchor')
+                if held.states[AttachedTo].parent is not obj:
+                    links=held.states[AttachedTo]._find_attachment_links(obj,bypass_alignment_checking=True)
+                    if any(link is None for link in links):raise SkillError('unsupported_relation','No compatible attachment link')
+            if primitive in {'wipe','sweep','vacuum','spray','spread'}:
+                self._surface_action_preconditions(primitive,obj)
+            if primitive=='soak':self._soak_preconditions(obj)
+            if primitive=='cut' and ('slicer' not in held._abilities or not {'sliceable','diceable'}.intersection(obj._abilities)):
+                raise SkillError('pre_condition_error','Selected tool or target cannot support cutting')
+
+    def _execute_bound_manipulation(self,primitive,obj,point,grounding,max_steps,**kwargs):
+        """Execute the same selected object/surface, without recursive act/grounding."""
+        self._manipulation_preconditions(primitive,obj)
+        held=self._get_held()
+        # This leaf executor never moves the base. The outer local controller
+        # owns positioning; this final gate still protects the physical effect.
         base=self.robot.get_position_orientation()[0]
         if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
             raise SkillError('out_of_reach',
@@ -1153,13 +1245,20 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         if self.ideal_carry:
             result['grasp_protocol'].update(
-                initial_lift_policy='demo_hand_motion' if getattr(self,'demo_motion',False) else 'live_swept_AABB_clearance_or_in_place',
+                initial_lift_policy=('demo_hand_motion' if getattr(self,'demo_motion',False) else
+                    'checked_local_lift_and_compact_route' if getattr(self,'local_manipulation',False) else
+                    'live_swept_AABB_clearance_or_in_place'),
                 failed_attachment_policy='detach_control_without_scene_rollback',
+                interrupted_prepared_carry_policy='retain_partial_carry_for_recovery',
                 repeated_grasp_rechecks_particles=True,
-                initial_attachment_certifies_extraction=False)
-        result['manipulation_navigation'] = {'implicit_navigation':False,
+                initial_attachment_certifies_extraction=bool(getattr(self,'local_manipulation',False) and not getattr(self,'demo_motion',False)))
+        result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
+            'protocol':'target_locked_local_v1' if getattr(self,'local_manipulation',False) else 'explicit_navigation_v1',
+            'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
+            'target_lock':'private_selected_link_relative_surface',
+            'scope':'GT-assisted bounded local controller; no learned model or real-arm IK',
             'reach_check':'base_to_selected_point_xy', 'reach_limit_m':1.4,
-            'out_of_reach':'return_to_agent_for_explicit_navigate_to_and_fresh_pixel',
+            'out_of_reach':'local_stance_controller' if getattr(self,'local_manipulation',False) else 'return_to_agent_for_explicit_navigate_to_and_fresh_pixel',
             'demo_reach_navigation_retry':False}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
@@ -1176,7 +1275,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
             'motion_policy':'turn_then_drive_forward_v1',
-            'forward_route':'checked_polyline_or_eight_heading_lattice',
+            'forward_route':'checked_polyline_or_bidirectional_continuous_pose_astar',
+            'forward_candidate_budget':{'seconds_per_candidate':8.,'shared_seconds':30.,'expanded_poses':20000},
             'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},
             'fixed_heading_exception':'contact_shedding_clearance_retreat_only',
             'carried_collision_footprint':True,'physical_controller':False,

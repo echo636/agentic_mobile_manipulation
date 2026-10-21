@@ -195,6 +195,18 @@ class TargetVisibilityTests(unittest.TestCase):
         self.assertGreater(first['target_projection_distance_m'],1.4)
         self.assertEqual(b._navigate(target,1000)['nav_status'],'already_at_closest_approach')
 
+    def test_local_protocol_low_target_uses_visible_macro_standoff(self):
+        b=self.backend
+        self.open_side_target()
+        b.local_manipulation=True;b.rig_height=1.83;b.rig_radius=.35;b.rig_pitch_degrees=20
+        target=SimpleNamespace(get_position_orientation=lambda:(Tensor([.5,2.3,.24]),None))
+        b._approach_visible.side_effect=lambda xy,*a,**kw:math.dist(xy,(.5,2.3))>1.4
+        result=b._navigate(target,1000)
+        self.assertEqual(result['manipulation_handoff'],'within_local_range')
+        self.assertLessEqual(result['target_projection_distance_m'],2.4)
+        self.assertLess(b._approach_visible.call_count,100)
+        self.headings.assert_not_called()
+
     def test_distant_initial_projection_does_not_disable_heading_fallback(self):
         b=self.backend
         raw=np.ones((41,41),dtype='uint8');free=raw.copy();free[:,20]=0

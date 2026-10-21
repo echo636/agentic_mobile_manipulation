@@ -100,8 +100,10 @@ def worker_configs(config):
         if type(budget) is not int or not 12<=budget<=28: raise ValueError('Invalid memory budget')
         if merged.get('simulator_memory_max',str(budget)+'G')!=str(budget)+'G':
             raise ValueError('Resource admission and hard simulator memory limit must agree')
-        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES'}:
-            raise ValueError('Only reviewed recording options may be worker environment overrides')
+        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES','MAS_LOCAL_MANIPULATION'}:
+            raise ValueError('Only reviewed recording and local manipulation options may be worker environment overrides')
+        if 'MAS_LOCAL_MANIPULATION' in env and env['MAS_LOCAL_MANIPULATION'] not in ('0','1'):
+            raise ValueError('MAS_LOCAL_MANIPULATION must be an explicit string 0 or 1')
         if merged.get('simulator_appdata_path') and not Path(merged['simulator_appdata_path']).is_absolute():
             raise ValueError('Simulator appdata path must be absolute')
         if merged.get('simulator_tmpdir') and not Path(merged['simulator_tmpdir']).is_absolute():

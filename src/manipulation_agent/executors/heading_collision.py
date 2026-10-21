@@ -20,7 +20,33 @@ class HeadingCollisionChecker:
         self.reference_yaw = reference_yaw
         self.check_cancelled = check_cancelled
         self.kernels = OrderedDict()
+        self.angular_bins = OrderedDict()
+        self.angular_blocks = OrderedDict()
         self.grids = OrderedDict()
+        self.window = None
+        self._optimistic = None
+        self._guidance = None
+        self.turns = OrderedDict()
+
+    def local_window(self, origin, radius):
+        """Compute heading grids only near a bounded search's possible centres.
+
+        Retain the global raster coordinates and all raw obstacle geometry.
+        Erosion also reads the full footprint halo OUTSIDE the centre window.
+        Other users of this checker keep their full-floor grid caches.
+        """
+        import numpy as np
+        support=np.frombuffer(self.grid.free,dtype='uint8').reshape(self.grid.height,self.grid.width)
+        result=HeadingCollisionChecker(self.grid,self.layers,self.reference_yaw,support,
+                                       check_cancelled=lambda:self.check_cancelled())
+        row,col=self.grid.cell(origin[:2])
+        cells=math.ceil(radius/self.grid.resolution)+2
+        result.window=(max(0,row-cells),min(self.grid.height,row+cells+1),
+                       max(0,col-cells),min(self.grid.width,col+cells+1))
+        # Footprint kernels are independent of the spatial window.
+        result.kernels=self.kernels;result.angular_bins=self.angular_bins
+        result.angular_blocks=self.angular_blocks
+        return result
 
     @staticmethod
     def _key(a, b):
@@ -40,29 +66,62 @@ class HeadingCollisionChecker:
         return value
 
     def _kernels(self, key):
-        import numpy as np
-        from .live_gt_map import footprint_kernel
         if key in self.kernels:
             self.kernels.move_to_end(key)
             return self.kernels[key]
         self.check_cancelled()
         low, span = key
-        angles = np.linspace(low, low+span, max(2, math.ceil(span/2)+1))
-        result = []
-        # Cover subcell placement and the arc between angular samples.
-        for _, points in self.layers:
-            radius = float(np.linalg.norm(points, axis=1).max())
-            margin = self.grid.resolution/2 + radius*(1-math.cos(math.radians(1)))
-            offsets = np.array([[-margin,-margin], [-margin,margin],
-                                [margin,-margin], [margin,margin]])
-            swept = []
-            for degrees in angles:
-                yaw = math.radians(degrees)-self.reference_yaw
-                c, s = math.cos(yaw), math.sin(yaw)
-                rotated = points @ np.array([[c,s], [-s,c]])
-                swept.append((rotated[:,None,:]+offsets).reshape(-1,2))
-            result.append(footprint_kernel(np.concatenate(swept), self.grid.resolution))
+        # Compose every sweep from the SAME integer-degree bins. Rasterizing
+        # one convex hull for a long turn and another for a small command is
+        # not monotone: OpenCV edge rounding can add a cell to the small hull
+        # that is absent from the large one (archived trash episode, step 10).
+        # Union of canonical bins guarantees every contained sub-sweep is a
+        # subset, without weakening collision checking at execution time.
+        # Cached dyadic unions reproduce the exact same integer-degree bins
+        # with at most two block unions for any requested sweep.
+        size = 1 << (span.bit_length()-1)
+        first = self._angular_block(low, size)
+        if size == span:
+            result = first
+        else:
+            last = self._angular_block(low+span-size, size)
+            result = [a | b for a,b in zip(first,last)]
         return self._put(self.kernels, key, result, 256)
+
+    def _angular_block(self, low, size):
+        import numpy as np
+        from .live_gt_map import footprint_kernel
+        self.check_cancelled()
+        low %= 360
+        key = (low,size)
+        if key in self.angular_blocks:
+            self.angular_blocks.move_to_end(key)
+            return self.angular_blocks[key]
+        if size > 1:
+            first = self._angular_block(low,size//2)
+            last = self._angular_block(low+size//2,size//2)
+            result = [a | b for a,b in zip(first,last)]
+        else:
+            result = self.angular_bins.get(low)
+            if result is None:
+                result = []
+                for _, points in self.layers:
+                    radius = float(np.linalg.norm(points, axis=1).max())
+                    margin = self.grid.resolution/2 + radius*(1-math.cos(math.radians(1)))
+                    offsets = np.array([[-margin,-margin], [-margin,margin],
+                                        [margin,-margin], [margin,margin]])
+                    swept = []
+                    for a in (low, low+.5, low+1):
+                        yaw = math.radians(a)-self.reference_yaw
+                        c, s = math.cos(yaw), math.sin(yaw)
+                        rotated = points @ np.array([[c,s], [-s,c]])
+                        swept.append((rotated[:,None,:]+offsets).reshape(-1,2))
+                    kernel = footprint_kernel(np.concatenate(swept), self.grid.resolution)
+                    half = math.ceil((radius+math.sqrt(2)*margin)/self.grid.resolution)+1
+                    pad = half-kernel.shape[0]//2
+                    result.append(np.pad(kernel, pad))
+                self._put(self.angular_bins, low, result, 360)
+        return self._put(self.angular_blocks,key,result,2048)
 
     def _sweep_grid(self, key):
         import cv2
@@ -71,10 +130,17 @@ class HeadingCollisionChecker:
             self.grids.move_to_end(key)
             return self.grids[key]
         self.check_cancelled()
-        free = np.frombuffer(self.grid.free, dtype='uint8').reshape(
-            self.grid.height, self.grid.width).copy()
+        support = np.frombuffer(self.grid.free, dtype='uint8').reshape(self.grid.height,self.grid.width)
+        r0,r1,c0,c1=self.window or (0,self.grid.height,0,self.grid.width)
+        free=np.zeros_like(support)
+        region=free[r0:r1,c0:c1];region[:]=support[r0:r1,c0:c1]
         for (raw, _), kernel in zip(self.layers, self._kernels(key)):
-            free &= cv2.erode(raw, kernel, borderType=cv2.BORDER_CONSTANT, borderValue=0)
+            self.check_cancelled()
+            half=kernel.shape[0]//2
+            a,b=max(0,r0-half),min(self.grid.height,r1+half)
+            c,d=max(0,c0-half),min(self.grid.width,c1+half)
+            eroded=cv2.erode(raw[a:b,c:d],kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+            region &= eroded[r0-a:r1-a,c0-c:c1-c]
         result = GridMap(self.grid.width, self.grid.height, self.grid.resolution,
                          self.grid.origin, free.tobytes())
         return self._put(self.grids, key, result, 16)
@@ -87,31 +153,114 @@ class HeadingCollisionChecker:
             return False
         key = self._key(start[2], end[2])
         if math.dist(start[:2], end[:2]) > 1e-10:
-            return self._sweep_grid(key).segment_free(start[:2], end[:2])
+            if key in self.grids:
+                return self._sweep_grid(key).segment_free(start[:2], end[:2])
+            return self._translation_free(key,start,end)
         # In-place turns need only a small local occupancy window, not a new
         # full-floor erosion on every angular command or A* expansion.
         row, col = self.grid.cell(start[:2])
         if not self.grid.navigable((row, col)):
             return False
+        turn_key = (row,col,key)
+        cached = self.turns.get(turn_key)
+        if cached is not None:
+            return cached
         for (raw, _), kernel in zip(self.layers, self._kernels(key)):
             half = kernel.shape[0]//2
             if row-half < 0 or col-half < 0 or row+half >= self.grid.height or col+half >= self.grid.width:
-                return False
+                return self._put(self.turns,turn_key,False,65536)
             window = raw[row-half:row+half+1, col-half:col+half+1]
             if np.any((window == 0) & (kernel != 0)):
-                return False
-        return True
+                return self._put(self.turns,turn_key,False,65536)
+        return self._put(self.turns,turn_key,True,65536)
+
+    def _translation_free(self,key,start,end):
+        """Erode only the segment's cells, reading the full obstacle halo.
+
+        Rare continuous headings need no full-floor grid. The kernel and
+        supercover are identical to the full-map check, including neighboring
+        cells when the segment lies on a cell edge.
+        """
+        import cv2
+        import numpy as np
+        a,b=self.grid.cell(start[:2]),self.grid.cell(end[:2])
+        if not self.grid.contains(a) or not self.grid.contains(b):return False
+        r0,r1=max(0,min(a[0],b[0])-1),min(self.grid.height,max(a[0],b[0])+2)
+        c0,c1=max(0,min(a[1],b[1])-1),min(self.grid.width,max(a[1],b[1])+2)
+        support=np.frombuffer(self.grid.free,dtype='uint8').reshape(self.grid.height,self.grid.width)
+        free=support[r0:r1,c0:c1].copy()
+        if self.window is not None:
+            ra,rb,ca,cb=self.window
+            free[(np.arange(r0,r1)<ra)|(np.arange(r0,r1)>=rb),:]=0
+            free[:,(np.arange(c0,c1)<ca)|(np.arange(c0,c1)>=cb)]=0
+        for (raw,_),kernel in zip(self.layers,self._kernels(key)):
+            self.check_cancelled()
+            half=kernel.shape[0]//2
+            ra,rb=max(0,r0-half),min(self.grid.height,r1+half)
+            ca,cb=max(0,c0-half),min(self.grid.width,c1+half)
+            eroded=cv2.erode(raw[ra:rb,ca:cb],kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+            free &= eroded[r0-ra:r1-ra,c0-ca:c1-ca]
+        segment=GridMap(c1-c0,r1-r0,self.grid.resolution,self.grid.world((r0,c0)),free.tobytes())
+        return segment.segment_free(start[:2],end[:2])
 
     def grid_at_heading(self, yaw):
         return self._sweep_grid(self._key(yaw, yaw))
 
     def optimistic_grid(self):
-        """XY relaxation of the eight-heading search, including obstacles."""
+        """XY guide valid for arbitrary headings, using inscribed body discs.
+
+        A union of eight oriented footprints can erase an aisle which only
+        permits an intermediate heading. A disc inside a footprint at the base
+        centre is occupied at every heading. Offset payload layers without such
+        a disc impose no constraint here; full sweeps still check every edge.
+        """
+        import cv2
         import numpy as np
-        free = np.zeros((self.grid.height, self.grid.width), dtype='uint8')
-        for heading in range(8):
+        self.check_cancelled()
+        if self._optimistic is not None:
+            return self._optimistic
+        support = np.frombuffer(self.grid.free, dtype='uint8').reshape(self.grid.height,self.grid.width)
+        r0,r1,c0,c1 = self.window or (0,self.grid.height,0,self.grid.width)
+        free = np.zeros_like(support)
+        region = free[r0:r1,c0:c1]
+        region[:] = support[r0:r1,c0:c1]
+        for raw, points in self.layers:
             self.check_cancelled()
-            g = self.grid_at_heading(heading*math.pi/4)
-            free |= np.frombuffer(g.free, dtype='uint8').reshape(free.shape)
-        return GridMap(self.grid.width, self.grid.height, self.grid.resolution,
-                       self.grid.origin, free.tobytes())
+            hull = cv2.convexHull(np.asarray(points,dtype='float32')).reshape(-1,2).astype(float)
+            if len(hull) < 3:
+                continue
+            edges = np.roll(hull,-1,axis=0)-hull
+            cross = edges[:,1]*hull[:,0]-edges[:,0]*hull[:,1]
+            if not (np.all(cross >= 0.) or np.all(cross <= 0.)):
+                continue
+            lengths = np.linalg.norm(edges,axis=1)
+            radius = max(0.,float((np.abs(cross)/np.maximum(lengths,1e-12)).min())-1e-6)
+            half = math.floor(radius/self.grid.resolution)
+            axis = np.arange(-half,half+1)*self.grid.resolution
+            kernel = (axis[:,None]**2+axis[None,:]**2 <= radius**2).astype('uint8')
+            a,b = max(0,r0-half),min(self.grid.height,r1+half)
+            c,d = max(0,c0-half),min(self.grid.width,c1+half)
+            eroded = cv2.erode(raw[a:b,c:d],kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+            region &= eroded[r0-a:r1-a,c0-c:c1-c]
+        self._optimistic = GridMap(self.grid.width,self.grid.height,self.grid.resolution,
+                                   self.grid.origin,free.tobytes())
+        return self._optimistic
+
+    def guidance_grid(self):
+        """A tighter sampled-orientation guide, never a reachability gate.
+
+        Its finite costs help avoid long-payload dead ends ignored by the
+        inscribed-disc relaxation. Search must fall back outside its coverage;
+        continuous poses are checked against full geometry, not this raster.
+        """
+        import numpy as np
+        self.check_cancelled()
+        if self._guidance is None:
+            free = np.zeros((self.grid.height,self.grid.width),dtype='uint8')
+            for heading in range(8):
+                self.check_cancelled()
+                grid = self.grid_at_heading(heading*math.pi/4)
+                free |= np.frombuffer(grid.free,dtype='uint8').reshape(free.shape)
+            self._guidance = GridMap(self.grid.width,self.grid.height,self.grid.resolution,
+                                     self.grid.origin,free.tobytes())
+        return self._guidance

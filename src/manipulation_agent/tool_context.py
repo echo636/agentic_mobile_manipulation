@@ -24,7 +24,7 @@ class ToolContext:
     def initialize(self): return self.harness.initialize()
     def refresh(self): return self.harness.refresh()
     def perform(self, primitive, target, revision, **options):
-        return self.harness.perform(primitive, target, revision, **options)
+        return self.harness.perform(primitive, target, revision, _parent_request_id=self.request_id, **options)
     def finish(self, outcome, reason): return self.harness.finish(outcome, reason)
     def update_plan(self, reason, subgoals): return self.harness.update_plan(reason, subgoals)
     def remember(self, key, text, revision): return self.harness.remember(key, text, revision)
