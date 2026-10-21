@@ -44,7 +44,7 @@ class CameraReadiness(unittest.TestCase):
                         self.assertEqual(sensors[name]['modalities'],['rgb'])
                         self.assertNotIn('focal_length',sensors[name]['sensor_kwargs'])
                     else:
-                        self.assertEqual(set(sensors[name]['modalities']),{'rgb','depth_linear','camera_params'})
+                        self.assertEqual(set(sensors[name]['modalities']),{'rgb','depth_linear'})
                         self.assertEqual(sensors[name]['sensor_kwargs']['focal_length'],10.)
 
     def test_gpu_rig_reuses_initialized_sensor_and_rejects_missing_preload(self):

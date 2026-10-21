@@ -31,7 +31,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             # scene. The same rig is positioned and warmed after task restore.
             sensors = list(config['env'].get('external_sensors') or [])
             names = {row.get('name') for row in sensors}
-            requested = [('mas_rgb_'+direction, ['rgb', 'depth_linear', 'camera_params'])
+            # camera_params is an auxiliary annotator, explicitly excluded
+            # from VisionSensor.all_modalities. Attach it during rig warmup.
+            requested = [('mas_rgb_'+direction, ['rgb', 'depth_linear'])
                          for direction in DIRECTIONS]
             if self.record_video:
                 requested.append(('mas_spectator', ['rgb']))
