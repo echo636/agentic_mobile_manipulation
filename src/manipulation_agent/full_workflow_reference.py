@@ -57,11 +57,18 @@ class FullWorkflowReference:
         if held is not None and held is not obj:ignored += [l.prim_path for l in held.links.values()]
         paths={l.prim_path for l in obj.links.values()}
         preferred=center.clone()
-        preferred[2]=max(float(low[2])+.005,min(float(high[2])-.005,float(eye[2])-.1))
+        # For low objects, prefer the actual top surface. Biasing every point
+        # 5 mm below the AABB top ranks a book's thin edge above its visible
+        # upper face, even when the supporting table occludes that edge.
+        preferred[2]=max(float(low[2])+.005,min(float(high[2]),float(eye[2])-.1))
         targets=[preferred,center]
         for x,y,z in ((.5,.5,.3),(.25,.5,.5),(.75,.5,.5),(.5,.25,.5),(.5,.75,.5),(.5,.5,1.)):
             targets.append(low+(high-low)*b.torch.tensor([x,y,z],device=low.device))
         rays=[(eye,target) for target in targets]
+        for x,y in ((.5,.5),(.25,.5),(.75,.5),(.5,.25),(.5,.75)):
+            target=low+(high-low)*b.torch.tensor([x,y,.5],device=low.device)
+            origin=target.clone();origin[2]=high[2]+.1
+            rays.append((origin,target))
         # A distant shelf can hide a cabinet's lower face from the current
         # eye ray while exposing only a top corner outside the approach RGB
         # frusta. Ray-cast real side surfaces at camera height as alternatives;
@@ -76,7 +83,7 @@ class FullWorkflowReference:
             hit=raytest(origin,end,ignore_bodies=ignored)
             if hit.get('hit') and hit.get('rigidBody') in paths:
                 point=[float(v) for v in hit['position']]
-                if all(sum((x-y)**2 for x,y in zip(point,old))>.0025 for old in candidates):candidates.append(point)
+                if all(sum((x-y)**2 for x,y in zip(point,old))>.0001 for old in candidates):candidates.append(point)
         if candidates:
             candidates.sort(key=lambda p:(abs(p[2]-float(preferred[2])),
                                           sum((p[i]-float(eye[i]))**2 for i in (0,1))))
