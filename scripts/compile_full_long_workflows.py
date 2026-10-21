@@ -227,7 +227,7 @@ def kitchen(inv,models):
 
 
 
-def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False):
+def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False,near_side_legs=False):
  """Six actual furniture components; the temporary central jig must be released."""
  b.fixture('parts',parts_xy,[1.7 if compact else 2.4,2.,.65]);b.fixture('jig',jig_xy,[.18,.18,.86])
  for role,category in [('table','desk_top'),('bracket','desk_bracket')]+[('leg'+str(i),'desk_leg') for i in range(1,5)]:b.native(role,category)
@@ -235,6 +235,11 @@ def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False):
  # Parts occupy separate strips; one table, one bracket and four structural legs.
  xy=[[-.62,0.],[.35,0.],[-.75,-.85],[-.05,-.85],[.65,-.85],[.65,.85]]
  if compact:xy=[[-.425,0.],[.425,0.],[-.4,-.85],[.4,-.85],[-.4,.85],[.4,.85]]
+ if near_side_legs:
+  # Two separated rows on the accessible north strip. The opposite edge
+  # required a 33 m garden loop for each leg despite a nearby assembly jig.
+  # Native 40 mm leg widths leave 90 mm between rows and 80 mm to the edge.
+  xy[2:]=[[-.4,.77],[.4,.77],[-.4,.9],[.4,.9]]
  for role,offset in zip(roles,xy):b.place(role,'parts',[parts_xy[i]+offset[i] for i in range(2)])
  clean={r:b.clean(r) for r in roles}
  assembled=ALL(b.rel('bracket','table','AttachedTo'),*[b.rel('leg'+str(i),'bracket','AttachedTo') for i in range(1,5)])
@@ -305,7 +310,7 @@ def garden(inv,models):
  b.phase('work_reset',[take('brush'),action('wipe','work'),put('tool_home',tool_slots['brush'])],['return_plants'])
  # Preserve the parts surface's west edge and native part sizes, opening the
  # east aisle for carrying pillows and entering the tool station from north.
- assembly,usable=table_parts(b,[13.65,5.7],[15.4,8.1],[14.65,12.85],compact=True);b.phase('assemble',assembly)
+ assembly,usable=table_parts(b,[13.65,5.7],[15.4,8.1],[14.65,12.85],compact=True,near_side_legs=True);b.phase('assemble',assembly)
  for row in assembly:
   if row['primitive']=='place_on_top' and row.get('role')=='tool_home':row['uv']=list(tool_slots['brush'])
  b.phase('seats',[take('brush'),action('wipe','pillow1'),action('wipe','pillow2'),put('tool_home',tool_slots['brush'])]+transfer('pillow1','seat1')+transfer('pillow2','seat2'),['clear'])
