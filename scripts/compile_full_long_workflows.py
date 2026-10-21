@@ -148,7 +148,9 @@ def kitchen(inv,models):
   'fork2':([8.95,-2.04],1.05,[0.,0.,0.,1.]),
   'knife':([9.09,-1.95],1.05,[0.,0.,.70710678,.70710678]),
   'cup1':([9.22,-1.80],.7,[0.,0.,0.,1.]),
-  'cup2':([9.22,-2.05],.7,[0.,0.,0.,1.]),
+  # Keep both low cups on the exposed shelf edge. The rear slot exhausted
+  # visibility candidates after the other five pieces had been removed.
+  'cup2':([9.00,-1.80],.7,[0.,0.,0.,1.]),
  }
  for r in ware:
   xy,height,orientation=cabinet_slots[r]

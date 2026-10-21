@@ -449,8 +449,8 @@
       "target": "cabinet",
       "place_on_support": true,
       "xy": [
-        9.22,
-        -2.05
+        9.0,
+        -1.8
       ],
       "support_probe_height": 0.7,
       "initial_relation": "Inside",
