@@ -21,7 +21,8 @@ class MemoryAdmissionTests(unittest.TestCase):
 
     def peer(self, current=8, peak=8, stage='ready'):
         return {'runtime_stage': stage, 'working_bytes': current * GIB,
-                'peak_bytes': peak * GIB, 'hard_limit_gib': 28}
+                'peak_bytes': peak * GIB, 'hard_limit_gib': 28,
+                'memory_admission_mode': 'observed_peak'}
 
     def test_third_light_instance_fits_despite_reclaimable_file_cache(self):
         result = self.decide([self.peer(), self.peer()], working=17, cache=30)
@@ -32,6 +33,8 @@ class MemoryAdmissionTests(unittest.TestCase):
         self.assertEqual(self.decide([self.peer(8, 24), self.peer()], 17)['status'], 'blocked')
         self.assertEqual(self.decide([self.peer(stage='starting'), self.peer()], 17)['status'], 'blocked')
         self.assertEqual(self.decide([self.peer(stage=None), self.peer()], 17)['status'], 'blocked')
+        legacy = {**self.peer(), 'memory_admission_mode': 'full_reservation'}
+        self.assertEqual(self.decide([legacy, self.peer()], 17)['status'], 'blocked')
 
     def test_unrelated_account_memory_and_missing_telemetry_are_not_ignored(self):
         self.assertEqual(self.decide([self.peer(), self.peer()], 25)['status'], 'blocked')

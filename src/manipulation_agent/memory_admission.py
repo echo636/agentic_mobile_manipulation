@@ -38,7 +38,8 @@ def admission_decision(account_current, account_stats, account_limit, peers, *,
         current = max(0, int(peer.get('working_bytes', 0)))
         peer_current += current
         peak = peer.get('peak_bytes')
-        measured = peer.get('runtime_stage') == 'ready' and isinstance(peak, int) and peak > 0
+        measured = (peer.get('memory_admission_mode') == 'observed_peak'
+                    and peer.get('runtime_stage') == 'ready' and isinstance(peak, int) and peak > 0)
         reserved = min(hard, max(12 * GIB, math.ceil(1.2 * peak + 2 * GIB))) if measured else hard
         reserved = max(reserved, current)
         growth += max(0, reserved - current)
@@ -55,7 +56,8 @@ def admission_decision(account_current, account_stats, account_limit, peers, *,
 
 
 def read_peer_memory(peer, account_path):
-    record = {k: peer[k] for k in ('unit', 'worker_id', 'runtime_stage', 'hard_limit_gib') if k in peer}
+    record = {k: peer[k] for k in ('unit', 'worker_id', 'runtime_stage', 'hard_limit_gib',
+                                  'memory_admission_mode') if k in peer}
     if not peer.get('unit'):
         return record
     try:
