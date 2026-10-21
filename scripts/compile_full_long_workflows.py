@@ -164,7 +164,14 @@ def kitchen(inv,models):
       xy=xy,support_probe_height=height,initial_relation='Inside',orientation=orientation))
  b.state('cabinet','Open',False,kwargs={'fully':True})
  b.state('fridge','Open',True,kwargs={'fully':True})
- for r in ['hotdog1','hotdog2']:b.state(r,'Inside',True,target='fridge',max_sampling_attempts=3);b.state(r,'Cooked',False)
+ # Put the two uncooked items on the accessible front shelf. Native random
+ # Inside sampling put the second one at the back of the bottom compartment,
+ # whose extracted low carry envelope could not leave the fridge corner.
+ for i,r in enumerate(['hotdog1','hotdog2']):
+  b.layout.append(dict(object=r,target='fridge',place_on_support=True,
+      xy=[7.68+.26*i,-1.81],support_probe_height=1.0,initial_relation='Inside',
+      orientation=[0.,0.,0.,1.]))
+  b.state(r,'Cooked',False)
  b.state('fridge','Open',False,kwargs={'fully':True})
  for r,t in [('box','storage'),('apple','stage'),('tea','stage'),('cookie','storage'),('sandwich','storage'),('can','table'),('brush','tool_home'),('broom','tool_home')]:b.place(r,t)
  # The countertop AABB includes its native sink cutout; use solid surface slots.

@@ -303,26 +303,6 @@
   ],
   "initial_layout": [
     {
-      "object": "hotdog1",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
-        0.15,
-        0.25
-      ],
-      "construction_staging": true
-    },
-    {
-      "object": "hotdog2",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
-        0.38,
-        0.25
-      ],
-      "construction_staging": true
-    },
-    {
       "object": "bin",
       "target": "floor",
       "place_on_support": true,
@@ -493,10 +473,20 @@
     },
     {
       "object": "hotdog1",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "fridge"
+      "target": "fridge",
+      "place_on_support": true,
+      "xy": [
+        7.68,
+        -1.81
+      ],
+      "support_probe_height": 1.0,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "hotdog1",
@@ -505,10 +495,20 @@
     },
     {
       "object": "hotdog2",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "fridge"
+      "target": "fridge",
+      "place_on_support": true,
+      "xy": [
+        7.9399999999999995,
+        -1.81
+      ],
+      "support_probe_height": 1.0,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "hotdog2",
@@ -727,8 +727,6 @@
     "prep_dust": "prep_dust",
     "storage_dust": "storage_dust",
     "floor_dust": "floor_dust",
-    "initial_hotdog1_Inside": "initial_hotdog1_Inside",
-    "initial_hotdog2_Inside": "initial_hotdog2_Inside",
     "initial_bin_OnTop": "initial_bin_OnTop",
     "initial_plate1_Inside": "initial_plate1_Inside",
     "initial_fork1_Inside": "initial_fork1_Inside",
@@ -738,6 +736,8 @@
     "initial_cup2_Inside": "initial_cup2_Inside",
     "initial_knife_Inside": "initial_knife_Inside",
     "initial_board_Inside": "initial_board_Inside",
+    "initial_hotdog1_Inside": "initial_hotdog1_Inside",
+    "initial_hotdog2_Inside": "initial_hotdog2_Inside",
     "initial_box_OnTop": "initial_box_OnTop",
     "initial_apple_OnTop": "initial_apple_OnTop",
     "initial_tea_OnTop": "initial_tea_OnTop",
@@ -1068,16 +1068,6 @@
         "state": "Inside",
         "target": "bin"
       },
-      "initial_hotdog1_Inside": {
-        "object": "hotdog1",
-        "state": "Inside",
-        "target": "fridge"
-      },
-      "initial_hotdog2_Inside": {
-        "object": "hotdog2",
-        "state": "Inside",
-        "target": "fridge"
-      },
       "initial_bin_OnTop": {
         "object": "bin",
         "state": "OnTop",
@@ -1122,6 +1112,16 @@
         "object": "board",
         "state": "Inside",
         "target": "cabinet"
+      },
+      "initial_hotdog1_Inside": {
+        "object": "hotdog1",
+        "state": "Inside",
+        "target": "fridge"
+      },
+      "initial_hotdog2_Inside": {
+        "object": "hotdog2",
+        "state": "Inside",
+        "target": "fridge"
       },
       "initial_box_OnTop": {
         "object": "box",
