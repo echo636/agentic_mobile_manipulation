@@ -360,13 +360,17 @@ class CustomTaskBackend(RGBBackend):
             pos = pos.clone()
             pos[:2] += xy-(low[:2]+high[:2])/2
             surface_height=float(support.aabb[1][2])
-            if getattr(support,'category',None) in ('floors','lawn','driveway'):
+            if ('support_probe_height' in operation or
+                    getattr(support,'category',None) in ('floors','lawn','driveway')):
                 from omnigibson.utils.sampling_utils import raytest
-                start=self.torch.tensor([float(xy[0]),float(xy[1]),surface_height+1.5],device=pos.device)
+                probe_height=operation.get('support_probe_height',surface_height+1.5)
+                start=self.torch.tensor([float(xy[0]),float(xy[1]),probe_height],device=pos.device)
                 end=start.clone();end[2]=float(support.aabb[0][2])-.2
                 hit=raytest(start,end,ignore_bodies=[link.prim_path for link in obj.links.values()])
                 if hit.get('rigidBody') not in {link.prim_path for link in support.links.values()}:
-                    raise RuntimeError(f"Initial floor point for {operation['object']} does not hit selected support: {hit.get('rigidBody')} at {xy.tolist()}")
+                    raise RuntimeError(f"Initial support point for {operation['object']} does not hit selected support: {hit.get('rigidBody')} at {xy.tolist()}")
+                if float(hit['normal'][2])<.9:
+                    raise RuntimeError('Initial support ray hit a nonhorizontal surface: '+operation['object'])
                 surface_height=float(hit['position'][2])
             pos[2] += surface_height-low[2]+.004
             obj.set_position_orientation(pos,ori);obj.keep_still()

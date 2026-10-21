@@ -100,7 +100,7 @@ class Builder:
   self.s['reference_plan']['orders']=dict(zip(['order_1','order_2'],orders));self.s['reference_plan']['negative_omissions']=dict(zip(['omit_process','omit_delivery','omit_reset'],negatives))
   last_relations={}
   for row in self.layout:
-   if row.get('place_on_support'):last_relations[row['object']]=('OnTop',row['target'])
+   if row.get('place_on_support'):last_relations[row['object']]=(row.get('initial_relation','OnTop'),row['target'])
    elif row.get('state')=='Inside' and row.get('value'):last_relations[row['object']]=('Inside',row['target'])
   for role,(state,target) in last_relations.items():
    if any(row.get('name')==self.roles[role] and row.get('fixed_base') for row in self.s['asset_imports']):continue
@@ -135,7 +135,15 @@ def kitchen(inv,models):
   b.imported('fork'+str(i),'setting_the_table','tablefork_'+str(246+i))
   b.imported('cup'+str(i),'setting_the_table','water_glass_bbpraa_0')
  b.state('cabinet','Open',True,kwargs={'fully':True});ware=['plate1','fork1','cup1','plate2','fork2','cup2','knife','board']
- for r in ware:b.state(r,'Inside',True,target='cabinet',max_sampling_attempts=3)
+ # Native Inside sampling can put flat plates above the fixed camera rig,
+ # where a shelf hides every selectable plate surface. Use real lower shelf
+ # hits for the plates; retain the closed-cabinet retrieval dependency.
+ for r in ware:
+  if r.startswith('plate'):
+   b.layout.append(dict(object=r,target='cabinet',place_on_support=True,
+       xy=[8.38,-1.8],support_probe_height=1.4 if r=='plate1' else 1.05,
+       initial_relation='Inside',orientation=[0.,0.,0.,1.]))
+  else:b.state(r,'Inside',True,target='cabinet',max_sampling_attempts=3)
  b.state('cabinet','Open',False,kwargs={'fully':True})
  b.state('fridge','Open',True,kwargs={'fully':True})
  for r in ['hotdog1','hotdog2']:b.state(r,'Inside',True,target='fridge',max_sampling_attempts=3);b.state(r,'Cooked',False)

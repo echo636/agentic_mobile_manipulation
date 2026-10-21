@@ -343,21 +343,11 @@
       "construction_staging": true
     },
     {
-      "object": "plate1",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
-        0.61,
-        0.25
-      ],
-      "construction_staging": true
-    },
-    {
       "object": "fork1",
       "target": "stage",
       "place_on_support": true,
       "support_uv": [
-        0.8400000000000001,
+        0.61,
         0.25
       ],
       "construction_staging": true
@@ -367,8 +357,8 @@
       "target": "stage",
       "place_on_support": true,
       "support_uv": [
-        0.15,
-        0.75
+        0.8400000000000001,
+        0.25
       ],
       "construction_staging": true
     },
@@ -377,17 +367,7 @@
       "target": "stage",
       "place_on_support": true,
       "support_uv": [
-        0.38,
-        0.75
-      ],
-      "construction_staging": true
-    },
-    {
-      "object": "plate2",
-      "target": "stage",
-      "place_on_support": true,
-      "support_uv": [
-        0.61,
+        0.15,
         0.75
       ],
       "construction_staging": true
@@ -397,7 +377,7 @@
       "target": "stage",
       "place_on_support": true,
       "support_uv": [
-        0.8400000000000001,
+        0.38,
         0.75
       ],
       "construction_staging": true
@@ -407,8 +387,8 @@
       "target": "stage",
       "place_on_support": true,
       "support_uv": [
-        0.15,
-        0.25
+        0.61,
+        0.75
       ],
       "construction_staging": true
     },
@@ -431,10 +411,20 @@
     },
     {
       "object": "plate1",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "cabinet"
+      "target": "cabinet",
+      "place_on_support": true,
+      "xy": [
+        8.38,
+        -1.8
+      ],
+      "support_probe_height": 1.4,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "fork1",
@@ -452,10 +442,20 @@
     },
     {
       "object": "plate2",
-      "state": "Inside",
-      "value": true,
-      "max_sampling_attempts": 3,
-      "target": "cabinet"
+      "target": "cabinet",
+      "place_on_support": true,
+      "xy": [
+        8.38,
+        -1.8
+      ],
+      "support_probe_height": 1.05,
+      "initial_relation": "Inside",
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
     },
     {
       "object": "fork2",
@@ -739,14 +739,14 @@
     "floor_dust": "floor_dust",
     "initial_knife_Inside": "initial_knife_Inside",
     "initial_hotdog1_Inside": "initial_hotdog1_Inside",
-    "initial_plate1_Inside": "initial_plate1_Inside",
     "initial_fork1_Inside": "initial_fork1_Inside",
     "initial_cup1_Inside": "initial_cup1_Inside",
     "initial_hotdog2_Inside": "initial_hotdog2_Inside",
-    "initial_plate2_Inside": "initial_plate2_Inside",
     "initial_fork2_Inside": "initial_fork2_Inside",
     "initial_cup2_Inside": "initial_cup2_Inside",
     "initial_bin_OnTop": "initial_bin_OnTop",
+    "initial_plate1_Inside": "initial_plate1_Inside",
+    "initial_plate2_Inside": "initial_plate2_Inside",
     "initial_board_Inside": "initial_board_Inside",
     "initial_box_OnTop": "initial_box_OnTop",
     "initial_apple_OnTop": "initial_apple_OnTop",
@@ -1088,11 +1088,6 @@
         "state": "Inside",
         "target": "fridge"
       },
-      "initial_plate1_Inside": {
-        "object": "plate1",
-        "state": "Inside",
-        "target": "cabinet"
-      },
       "initial_fork1_Inside": {
         "object": "fork1",
         "state": "Inside",
@@ -1108,11 +1103,6 @@
         "state": "Inside",
         "target": "fridge"
       },
-      "initial_plate2_Inside": {
-        "object": "plate2",
-        "state": "Inside",
-        "target": "cabinet"
-      },
       "initial_fork2_Inside": {
         "object": "fork2",
         "state": "Inside",
@@ -1127,6 +1117,16 @@
         "object": "bin",
         "state": "OnTop",
         "target": "floor"
+      },
+      "initial_plate1_Inside": {
+        "object": "plate1",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "initial_plate2_Inside": {
+        "object": "plate2",
+        "state": "Inside",
+        "target": "cabinet"
       },
       "initial_board_Inside": {
         "object": "board",
