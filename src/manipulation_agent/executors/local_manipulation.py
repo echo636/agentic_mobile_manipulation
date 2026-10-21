@@ -137,7 +137,9 @@ def stance_candidates(actual, origin, point, limits, visited=()):
     # around the object. The full reachable disk is covered by the grid fallback.
     distances = {.5, .75, 1., limits.preferred_reach_m, limits.reach_m}
     for distance in sorted(d for d in distances if d <= limits.reach_m):
-        distance = min(distance, limits.reach_m-1e-6)
+        # The base follower accepts a 2mm position residual. Keep selected
+        # endpoints 5mm inside reach so a valid arrival is also operation-ready.
+        distance = min(distance, limits.reach_m-.005)
         for i in range(16):
             yaw = toward+math.pi+i*math.pi/8
             points.append((float(point[0])+distance*math.cos(yaw),

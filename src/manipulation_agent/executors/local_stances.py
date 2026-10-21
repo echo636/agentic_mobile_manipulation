@@ -44,7 +44,7 @@ def local_stance_proposals(actual, origin, point, limits, collision, visited=(),
     xs = grid.origin[0] + cc * grid.resolution
     ys = grid.origin[1] + rr * grid.resolution
     reach = np.hypot(xs-float(point[0]), ys-float(point[1]))
-    domain = reach <= limits.reach_m
+    domain = reach <= limits.reach_m-.005
     travel = np.hypot(xs-actual[0], ys-actual[1])
     bearing = np.arctan2(ys-actual[1], xs-actual[0])
     turn = np.abs(np.arctan2(np.sin(bearing-actual[2]), np.cos(bearing-actual[2])))
