@@ -304,6 +304,11 @@ class OmniGibsonBackend:
         robot_cfg["controller_config"]["base"].pop("use_delta_commands")
         scene = task_cfg["scene_model"]
         template = instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json"
+        if getattr(self, "custom_spec", {}).get("reference_plan", {}).get("kind") == "full_workflow":
+            # Multi-room custom tasks require the native furnishings in every
+            # room used by their bindings, beyond the base atomic task's subset.
+            template = template.with_name(template.name.replace("-partial_rooms", ""))
+            config["scene"].update(load_room_instances=None, load_room_types=None)
         instance_path = template.parent / f'{scene}_task_{task}_instances' / f'{scene}_task_{task}_0_{self.instance}_template-tro_state.json'
         self.required_instance_bindings = set(json.loads(instance_path.read_text())) - {'robot_poses'}
         deferred = []
@@ -354,7 +359,11 @@ class OmniGibsonBackend:
                              "configured_scene": hashlib.sha256(encoded.encode()).hexdigest()}
         config["scene"].update(scene_file=str(patched), trav_map_resolution=0.05,
                               default_erosion_radius=0.57, waypoint_resolution=0.1)
-        config["env"].update(device=f"cuda:{gpu}", automatic_reset=False)
+        # GPU particle dynamics are independent of the tensor API device.
+        # Native USD loading and checked executors use CPU geometry tensors;
+        # Isaac 5.1 GPU views otherwise mix CUDA poses with CPU USD transforms.
+        tensor_device = "cpu" if getattr(self, "use_gpu_dynamics", False) else f"cuda:{gpu}"
+        config["env"].update(device=tensor_device, automatic_reset=False)
         if getattr(self,'private_viewer_grounding',False):
             # Set the initial product size; never resize it after rig creation.
             config.setdefault('render',{}).update(viewer_width=image_size,viewer_height=image_size)
