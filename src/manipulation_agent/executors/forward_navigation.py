@@ -233,7 +233,12 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
         candidates.setdefault(key,replace(p,final_yaw=yaw))
     def estimate(p):
         bearing=math.atan2(p.goal[1]-actual[1],p.goal[0]-actual[0])
-        return (math.dist(actual[:2],p.goal)/.5+
+        # The admitted guide already measures obstacle detours. Euclidean
+        # ranking can fill the bounded pool with headings at a nearby endpoint
+        # whose only guide goes around the house, dropping a short approach on
+        # the other side. This is ordering only; every route is still checked.
+        travel=max(math.dist(actual[:2],p.goal),p.geodesic_m)
+        return (travel/.5+
                 (abs(angle(bearing-actual[2]))+abs(angle(p.final_yaw-bearing)))/(math.pi/3))
     ordered=sorted(candidates.values(),key=lambda p:(estimate(p),p.score))[:max_candidates]
     budget=PlanningBudget(check_cancelled,seconds=planning_seconds)

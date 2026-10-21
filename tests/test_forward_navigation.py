@@ -479,6 +479,32 @@ class ForwardNavigationTests(unittest.TestCase):
 @unittest.skipUnless(importlib.util.find_spec('cv2'),'Requires OpenCV; no simulator is started')
 class HeadingCollisionTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec('scipy'),'Requires optional roadmap dependency')
+    def test_recorded_nearby_approach_avoids_forty_metre_house_detour(self):
+        import hashlib
+        import numpy as np
+        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        path=Path(__file__).parent/'fixtures/local_stances/garden_detour_r50.npz'
+        meta=json.loads(path.with_suffix('.json').read_text())
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),meta['sha256'])
+        with np.load(path,allow_pickle=False) as z:
+            free=z['free'];grid=GridMap(free.shape[1],free.shape[0],float(z['resolution']),
+                                      tuple(z['origin']),free.tobytes())
+            footprints=json.loads(str(z['layer_footprints_json']))
+            collision=HeadingCollisionChecker(grid,[(raw,row['footprint']) for raw,row in
+                zip(z['raw_layers'],footprints)],float(z['initial_layer_yaw']),z['support'])
+            actual=(*meta['start_xy'],float(z['initial_layer_yaw']))
+        options=[NavigationPlan(**{**p,'points':tuple(map(tuple,p['points'])),
+            'goal':tuple(p['goal']),'target':tuple(p['target'])}) for p in meta['endpoint_options']]
+        chosen,route,_=select_forward_route(options,actual,collision,planning_seconds=30.)
+        self.assertLess(route.distance_m,5.)
+        self.assertIn((chosen.goal,chosen.final_yaw),[(p.goal,p.final_yaw) for p in options])
+        poses=[actual]+[(*phase.goal,phase.final_yaw) for phase in route.phases]
+        self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])))
+        for a,b in zip(poses,poses[1:]):
+            if math.dist(a[:2],b[:2])>.002:
+                self.assertLess(abs(angle(math.atan2(b[1]-a[1],b[0]-a[0])-a[2])),1e-6)
+
+    @unittest.skipUnless(importlib.util.find_spec('scipy'),'Requires optional roadmap dependency')
     def test_loaded_fridge_departure_reaches_original_visible_stance(self):
         import numpy as np
         from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
