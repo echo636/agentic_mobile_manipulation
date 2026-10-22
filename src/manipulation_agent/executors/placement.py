@@ -606,6 +606,7 @@ class CheckedPlacement:
             if contents:RigidContactAPI.is_in_contact=assembly_contact
             sampling_done=False
             geometric_fallback=False
+            open_native_state=None
             try:
                 if assembly_search:
                     from .inside_sampling import sample_assembly_inside
@@ -616,10 +617,20 @@ class CheckedPlacement:
                     identities=scene_object_identities(self.og.sim)
                     particles=snapshot_particle_state(self.og.sim)
                     def native():
-                        nonlocal native_sampling,native_start,native_before
+                        nonlocal native_sampling,native_start,native_before,open_native_state
                         native_start=time.monotonic();native_before=self.sampling_physics_steps
                         native_sampling=True
-                        try:return held.states[Inside].set_value(target,True)
+                        try:
+                            sampled=held.states[Inside].set_value(target,True)
+                            if sampled:
+                                from .closure_clearance import check_closure_clearance
+                                closure=check_closure_clearance(self,target,[held,*[obj for obj,_ in contents]])
+                                if not closure['clear']:
+                                    open_native_state=self.og.sim.dump_state(serialized=False)
+                                    self._placement_record({'status':'native_closed_articulation_collision',
+                                        'held':held.name,'target':target.name,'closure':closure})
+                                    return False
+                            return sampled
                         finally:native_sampling=False
                     def restore():
                         if scene_object_identities(self.og.sim)!=identities or not particle_state_unchanged(particles):
@@ -627,7 +638,16 @@ class CheckedPlacement:
                         self.og.sim.load_state(checkpoint,serialized=False)
                         restore_particle_state(particles)
                     def geometric():
-                        return sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
+                        try:
+                            return sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
+                        except SkillError as exc:
+                            if exc.code!='sampling_budget_exhausted' or open_native_state is None:
+                                raise
+                            # A valid native Inside pose must not be lost just
+                            # because the optional closure preference ran out
+                            # of work. The caller restores that saved pose.
+                            self.deadline.check(changed=True)
+                            return False
                     if residents:
                         # Occupied containers need proposals on/around their
                         # existing contents. Do not first spend 30 seconds on a
@@ -649,6 +669,13 @@ class CheckedPlacement:
                     else:
                         sampled,geometric_fallback=inside_sample_with_fallback(
                             native,geometric,restore,self._placement_record)
+                if not sampled and open_native_state is not None:
+                    self.og.sim.load_state(open_native_state,serialized=False)
+                    sampled=True
+                    geometric_fallback=False
+                    self._placement_record({'status':'native_open_only_fallback',
+                        'held':held.name,'target':target.name,
+                        'note':'Inside is valid; closing may require rearranging contents'})
                 sampling_done=True
             finally:
                 if contents:RigidContactAPI.is_in_contact=original_contact

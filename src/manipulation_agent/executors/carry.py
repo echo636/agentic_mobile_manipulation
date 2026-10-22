@@ -86,7 +86,17 @@ class ControlledCarry(CompactCarry):
         payload=self._container_payload(obj) if state is Open else []
         particles=snapshot_particles(self.env.scene,[obj]) if state is Open else []
         edit=self._editable_carry_joints(obj) if state is Open else nullcontext()
+        samples=[]
+        def capture(phase):
+            if state is Open:
+                from .articulation_diagnostics import articulation_sample
+                samples.append(articulation_sample(self,obj,phase))
+        def report(status,**details):
+            if state is Open:
+                from .articulation_diagnostics import record_articulation
+                record_articulation(self,obj,primitive,samples,status=status,**details)
         with edit,self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
+            capture('before_setter')
             # Upstream symbolic OPEN samples a random opening and returns early
             # when already ajar. Fully open/close all annotated joints instead.
             prepared=getattr(getattr(self,'_local_operation',None),'articulation_plan',None) if state is Open else None
@@ -103,11 +113,17 @@ class ControlledCarry(CompactCarry):
             if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
             self._relocate_container_payload(payload)
             relocate_particles(self.env.scene,particles)
-            for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            capture('after_setter')
+            for step in range(min(30,max_steps)):
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                if step in (0,4,14,29):capture('settle_'+str(step+1))
             if bool(obj.states[state].get_value())!=wanted:
+                report('failed',reason='state_reopened_or_reclosed_after_settling',
+                       payload=[child.name for child,_,_ in payload])
                 raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
             self._verify_container_payload(obj,payload)
             verify_particles(self.env.scene,particles)
+            report('passed',payload=[child.name for child,_,_ in payload])
         return {'primitive':primitive,'implementation':'transactional_official_state_setter_with_link_payload',
                 'fully_open_or_closed':state is Open,'postcondition':'official_state_and_containment_after_settling',
                 'preserved_contained_objects':len(payload),'failure_policy':'restore_pre_action_state'}

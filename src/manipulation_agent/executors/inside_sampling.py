@@ -125,6 +125,19 @@ Rejected candidate poses never become committed actions or task evidence.
     attempted = 0
     dirty = False
     accepted = False
+    open_only = None
+
+    def accept_open_only():
+        nonlocal accepted
+        if open_only is None:
+            return False
+        sim.load_state(open_only['state'], serialized=False)
+        accepted = True
+        backend._placement_record({'status':'inside_candidate_accepted', 'held':held.name,
+            'target':target.name, **open_only['candidate'],
+            'closure_clearance':'open_only_fallback',
+            'note':'Inside is valid; closing may require rearranging contents'})
+        return True
 
     def check():
         backend.deadline.check(changed=dirty)
@@ -137,6 +150,8 @@ Rejected candidate poses never become committed actions or task evidence.
                                    'held': held.name, 'target': target.name, **candidate, **details})
 
     try:
+        from .closure_clearance import closed_geometry_proposals, closed_geometry_overlap
+        closure_geometry=closed_geometry_proposals(backend,target)
         backend._placement_record({'status':'inside_sampling_started', 'held':held.name, 'target':target.name,
                                    'held_pose':[root_pos.cpu().tolist(),root_quat.cpu().tolist()],
                                    'held_joints':held.get_joint_positions().cpu().tolist() if getattr(held,'n_joints',0) else [],
@@ -211,12 +226,24 @@ Rejected candidate poses never become committed actions or task evidence.
                                      for c,e,a,b in zip(center,extent,lo,hi))
                            for lo,hi in resident_bounds)/volume
             def location(candidate):return tuple(round(float(v)/.02) for v in candidate[1])
+            def top_height(candidate):
+                return float(candidate[1][2])+.5*extents[tuple(candidate[3].cpu().tolist())][2]
+            def closed_overlap(candidate):
+                return round(closed_geometry_overlap(closure_geometry,candidate[0],candidate[1],
+                    extents[tuple(candidate[3].cpu().tolist())]),6)
             first_support=[];remainder=[]
             for group in supported:
                 if resident_bounds:
-                    group=sorted(group,key=lambda c:(round(occupancy(c),6),visits.get(location(c),0)))
+                    group=sorted(group,key=lambda c:(closed_overlap(c),round(occupancy(c),6),
+                        top_height(c) if was_open is True else 0.,visits.get(location(c),0)))
+                elif was_open is True:
+                    group=sorted(group,key=lambda c:(closed_overlap(c),top_height(c)))
                 first_support.append(group[0]);remainder.append(group[1:])
                 key=location(group[0]);visits[key]=visits.get(key,0)+1
+            if was_open is True:
+                # Try low, flat arrangements before stacking tools into the
+                # lid's space. Height ranks proposals; only physics rejects.
+                first_support.sort(key=lambda c:(closed_overlap(c),top_height(c)))
             remainder+=other
             chunks=[[group[i:i+3] for i in range(0,len(group),3)] for group in remainder if group]
             tail=(c for layer in itertools.zip_longest(*chunks)
@@ -296,11 +323,27 @@ Rejected candidate poses never become committed actions or task evidence.
             if any(not obj.states[Inside].get_value(target) for obj in assembly[1:]):
                 reject('payload_outside_destination', candidate)
                 continue
+            from .closure_clearance import check_closure_clearance
+            closure = check_closure_clearance(backend, target, assembly)
+            if not closure['clear']:
+                # A lid-compatible placement is preferable, but Inside does
+                # not promise that an oversized object allows the lid to close.
+                # Keep a physically valid open placement if no better one is
+                # found within the existing bounded search.
+                if open_only is None:
+                    open_only={'state':sim.dump_state(serialized=False), 'candidate':candidate}
+                reject('closed_articulation_collision', candidate, closure=closure)
+                continue
             accepted = True
             backend._placement_record({'status':'inside_candidate_accepted', 'held':held.name,
                                        'target':target.name, **candidate})
             return True
-        return False
+        return accept_open_only()
+    except SkillError as exc:
+        if exc.code == 'sampling_budget_exhausted' and open_only is not None:
+            backend.deadline.check(changed=True)
+            return accept_open_only()
+        raise
     finally:
         if not accepted:
             if dirty: sim.load_state(initial, serialized=False)
