@@ -149,28 +149,51 @@ class OmniGibsonBackend:
     def _startup_stage(self, name):
         return startup_stage(self.output, name)
 
-    def _native_startup_progress(self):
+    def _native_startup_progress(self, phase='construct'):
         # The environment constructor can take longer than the idle watchdog,
         # while making steady progress through native object loading. Record
         # those operations in this process only, leaving installed OG untouched.
         from omnigibson.scenes import scene_base
         from omnigibson.objects.usd_object import USDObject
         from omnigibson.prims.prim_base import BasePrim
+        from omnigibson.envs.env_base import Environment
+        from omnigibson.tasks.behavior_task import BehaviorTask
 
-        def object_key(phase):
+        # These are finite startup passes, not counters or elapsed heartbeats.
+        # A scene can be loaded successfully and still spend many minutes in
+        # task setup, snapshots and state restoration before the first image.
+        if phase not in {'construct', 'initial_reset', 'load_instance', 'instance_reset'}:
+            raise ValueError('Unknown native startup phase: ' + phase)
+        prefix = 'native_' + phase + '_'
+
+        def fixed_key(name):
+            return lambda *a, **kw: prefix + name
+
+        def object_key(operation):
             return lambda obj, *a, **kw: (
-                f'native_object_{obj.name}_{phase}' if isinstance(obj, USDObject) else None)
+                f'{prefix}object_{obj.name}_{operation}' if isinstance(obj, USDObject) else None)
 
-        return instrument_startup_calls(self.output, [
+        calls = [
             (scene_base, 'create_object_from_init_info',
-             lambda info: 'native_object_' + info['args']['name'] + '_construct'),
-            (scene_base.Scene, 'load', lambda *a, **kw: 'native_scene_load'),
-            (scene_base.Scene, 'prebuild', lambda *a, **kw: 'native_scene_prebuild'),
-            (scene_base.Scene, 'initialize', lambda *a, **kw: 'native_scene_initialize'),
+             lambda info: prefix + 'object_' + info['args']['name'] + '_construct'),
             (USDObject, 'prebuild', object_key('prebuild')),
             (BasePrim, 'load', object_key('load')),
             (BasePrim, 'initialize', object_key('initialize')),
-        ])
+            (USDObject, 'dump_state', object_key('snapshot')),
+            (USDObject, '_load_state', object_key('restore')),
+        ]
+        for owner, label, methods in [
+            (scene_base.Scene, 'scene', ('load', 'prebuild', 'initialize', 'reset',
+                                       'save', 'update_initial_file', '_load_state')),
+            (Environment, 'environment', ('load', '_load_variables', '_load_scene',
+                '_load_objects', '_load_robots', '_load_task', '_load_external_sensors',
+                'post_play_load', 'load_observation_space', '_load_action_space', 'reset', 'get_obs')),
+            (BehaviorTask, 'task', ('load', 'update_activity', 'initialize_activity',
+                                   'post_play_load', 'reset')),
+        ]:
+            calls.extend((owner, method, fixed_key(label + '_' + method.lstrip('_')))
+                         for method in methods)
+        return instrument_startup_calls(self.output, calls)
 
     def __init__(self, task: str, instance: int, output: Path, *, seed: int = 0, max_steps: int = 20000,
                  inside_placement: str = "symbolic_raycast"):
@@ -260,7 +283,7 @@ class OmniGibsonBackend:
             self.evaluator = ResearchEvaluator(OmegaConf.create({
                 "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
             }))
-        with self._startup_stage('initial_reset'):
+        with self._startup_stage('initial_reset'), self._native_startup_progress('initial_reset'):
             self.evaluator.reset()
         with self._startup_stage('validate_runtime_task_bindings'):
             binding_check = validate_runtime_bindings(
@@ -269,9 +292,9 @@ class OmniGibsonBackend:
             if binding_check['status'] != 'passed':
                 raise ValueError('Official scene initialization left missing instance entities: ' +
                                  str(binding_check['missing_instances']))
-        with self._startup_stage('load_task_instance'):
+        with self._startup_stage('load_task_instance'), self._native_startup_progress('load_instance'):
             self.evaluator.load_task_instance(instance)
-        with self._startup_stage('instance_reset'):
+        with self._startup_stage('instance_reset'), self._native_startup_progress('instance_reset'):
             self.evaluator.reset()
         self.env, self.robot = self.evaluator.env, self.evaluator.robot
         from omnigibson.utils.asset_utils import get_task_instance_path

@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import threading
+import sys
+from types import ModuleType
 import unittest
 from unittest.mock import Mock, patch
 
@@ -67,6 +69,64 @@ class StartupProgressTests(unittest.TestCase):
         self.assertEqual(row['startup_deadline_unix'], 3600.)
         self.assertEqual(startup_progress_update(row, [
             dict(stage='native_object_table_load', status='passed', at_unix=3500.)], 3501.), {})
+
+    def test_task_snapshot_and_restore_after_scene_load_are_real_finite_progress(self):
+        from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+
+        class NativeBase:
+            def __getattr__(self, name):
+                raise AttributeError(name)
+
+        # Only the native call boundary is stubbed. Exercise the adapter's
+        # actual registration, watchdog transition and restoration of methods.
+        for name in ('load', 'prebuild', 'initialize', 'reset', 'save',
+                     'update_initial_file', '_load_state', 'dump_state',
+                     '_load_variables', '_load_scene', '_load_objects', '_load_robots',
+                     '_load_task', '_load_external_sensors', 'post_play_load',
+                     'load_observation_space', '_load_action_space', 'get_obs',
+                     'update_activity', 'initialize_activity'):
+            setattr(NativeBase, name, lambda *a, **kw: token)
+        token = object()
+        Scene, Object, Environment, Task = [type(n, (NativeBase,), {})
+                                           for n in ('Scene', 'Object', 'Environment', 'Task')]
+        modules = {}
+        for path, attrs in {
+            'omnigibson.scenes.scene_base': {'Scene': Scene, 'create_object_from_init_info': lambda info: token},
+            'omnigibson.objects.usd_object': {'USDObject': Object},
+            'omnigibson.prims.prim_base': {'BasePrim': NativeBase},
+            'omnigibson.envs.env_base': {'Environment': Environment},
+            'omnigibson.tasks.behavior_task': {'BehaviorTask': Task},
+        }.items():
+            module = ModuleType(path)
+            module.__dict__.update(attrs)
+            modules[path] = module
+        scenes = ModuleType('omnigibson.scenes')
+        scenes.scene_base = modules['omnigibson.scenes.scene_base']
+        modules['omnigibson.scenes'] = scenes
+        obj = Object(); obj.name = 'chair'
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(sys.modules, modules):
+            backend = OmniGibsonBackend.__new__(OmniGibsonBackend)
+            backend.output = Path(tmp)
+            row = self.row()
+            row.update(startup_timeout_seconds=1200., startup_deadline_unix=1300.)
+            # This previously invisible tail lasts 34 minutes after scene
+            # initialization. Each event is emitted by a real call boundary.
+            with backend._native_startup_progress():
+                for at, call in [(1000., Scene().initialize),
+                                 (2000., Environment()._load_task),
+                                 (3000., obj.dump_state)]:
+                    with patch('manipulation_agent.startup_progress.time.time', return_value=at):
+                        self.assertIs(call(), token)
+            with backend._native_startup_progress('instance_reset'):
+                with patch('manipulation_agent.startup_progress.time.time', return_value=4000.):
+                    self.assertIs(obj._load_state(), token)
+            events = [json.loads(s) for s in (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines()]
+            row.update(startup_progress_update(row, events, 4001.))
+            self.assertEqual(row['startup_deadline_unix'], 5200.)
+            self.assertEqual(startup_progress_update(row, events, 5199.), {})
+            self.assertNotIn('load', vars(Task))
+            self.assertNotIn('dump_state', vars(Object))
+            self.assertNotIn('episode_deadline_unix', row)
 
     def row(self):
         return {'run_id':'fixture','startup_watchdog_policy':STARTUP_POLICY,

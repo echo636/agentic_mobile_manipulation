@@ -48,6 +48,7 @@ def instrument_startup_calls(output, calls):
     try:
         for owner, name, key in calls:
             original = getattr(owner, name)
+            owned = name in vars(owner)
 
             def instrument(original, key):
                 @wraps(original)
@@ -60,11 +61,14 @@ def instrument_startup_calls(output, calls):
                 return wrapped
 
             setattr(owner, name, instrument(original, key))
-            originals.append((owner, name, original))
+            originals.append((owner, name, original, owned))
         yield
     finally:
-        for owner, name, original in reversed(originals):
-            setattr(owner, name, original)
+        for owner, name, original, owned in reversed(originals):
+            if owned:
+                setattr(owner, name, original)
+            else:
+                delattr(owner, name)
 
 
 def startup_progress_update(row, events, observed_at):

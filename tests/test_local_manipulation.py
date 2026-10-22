@@ -253,7 +253,10 @@ class CoordinationTests(unittest.TestCase):
 
     def test_committed_operation_recovers_clearance_without_repeating_effect(self):
         from manipulation_agent.executors.local_rgb import LocalRGBManipulation
+        from manipulation_agent.executors.carry_posture import CompactCarry
         b=Motor();b.point=(1.,0.,.7)
+        b._get_held=lambda:None
+        b._adapt_carry_for_navigation=CompactCarry._adapt_carry_for_navigation.__get__(b)
         free=[False];recoveries=[]
         collision=SimpleNamespace(motion_free=lambda *args:free[0])
         b._local_geometry=lambda op:(None,collision,None,None,None)
