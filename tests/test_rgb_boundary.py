@@ -39,6 +39,18 @@ class RGBBoundary(unittest.TestCase):
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
+    def test_cut_reports_only_action_form_and_piece_count(self):
+        for transition,count,expected in [
+                ('SlicingRule',2,{'form':'pieces','created_pieces':2}),
+                ('DicingRule',0,{'form':'loose_material'})]:
+            self.backend.execute_visual=lambda *a,**kw:{'transition':transition,'created_objects':count,
+                'private_object':'hidden_half_0','material_systems':['hidden_material']}
+            result=self.act('cut')
+            self.assertEqual(result['effect']['cut_result'],expected)
+            self.assertNotIn('hidden',json.dumps(result))
+            self.assertNotIn(transition,json.dumps(result))
+        self.backend.execute_visual=lambda *a,**kw:{'transition':'unknown_private_rule','created_objects':2}
+        self.assertNotIn('cut_result',self.act('cut')['effect'])
     def test_navigation_partial_approach_is_public_but_geometry_stays_private(self):
         for status in ('reached','approached','already_at_closest_approach'):
             self.backend.execute_visual=lambda *a,**kw:{'nav_status':status,'private_pose':[1,2,3],

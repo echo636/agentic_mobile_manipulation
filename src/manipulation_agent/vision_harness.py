@@ -243,6 +243,17 @@ class VisionHarness:
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
+        if primitive=='cut':
+            # Report the effect of this selected action, without disclosing
+            # object identities, recipe inventories, or task-goal state. A
+            # second cut of a half can dice it and destroy a requested half.
+            transition=details.get('transition')
+            if transition=='SlicingRule':
+                count=details.get('created_objects')
+                if type(count) is int and count>0:
+                    effect['cut_result']={'form':'pieces','created_pieces':count}
+            elif transition=='DicingRule':
+                effect['cut_result']={'form':'loose_material'}
         local=details.get('local_manipulation')
         if local:
             effect['local_adjustment']={'repositions':int(local['repositions']),
