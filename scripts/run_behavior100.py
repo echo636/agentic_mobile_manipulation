@@ -5,6 +5,7 @@ site paths; authentication stays in the existing local SSH/model clients.
 """
 import argparse
 import base64
+import errno
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import fcntl
@@ -602,8 +603,7 @@ class Batch:
                 def kill(self):
                     if self.poll() is None:os.kill(wrapper_pid,signal.SIGKILL)
             process=AdoptedProcess()
-        metadata_path=controller/'controller.json'
-        metadata=json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
+        metadata=self.read_controller_metadata(controller)
         pid=metadata.get('pid')
         identity=None
         def owned_model():
@@ -699,10 +699,57 @@ class Batch:
         remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-c',code])
         return self.c['ssh']+[remote]
 
+    def read_controller_metadata(self, controller):
+        """A telemetry read failure must not terminate a healthy model episode."""
+        key=str(controller)
+        cache=getattr(self._worker_local,'controller_metadata_cache',None)
+        if cache is None:
+            cache={}
+            self._worker_local.controller_metadata_cache=cache
+        degraded=getattr(self._worker_local,'controller_metadata_degraded',None)
+        if degraded is None:
+            degraded=set()
+            self._worker_local.controller_metadata_degraded=degraded
+        try:
+            metadata=json.loads((controller/'controller.json').read_text())
+        except (FileNotFoundError,json.JSONDecodeError):
+            return cache.get(key,{})
+        except OSError as exc:
+            if exc.errno not in {errno.EIO,errno.ESTALE,errno.ETIMEDOUT,errno.EAGAIN}:
+                raise
+            if key not in degraded:
+                degraded.add(key)
+                self.journal(f'Controller metadata temporarily unavailable: {key}; errno={exc.errno}; retain last observed clock and continue live health checks.')
+            return cache.get(key,{})
+        if not isinstance(metadata,dict):
+            return cache.get(key,{})
+        cache[key]=metadata
+        if key in degraded:
+            degraded.remove(key)
+            self.journal(f'Controller metadata read recovered: {key}.')
+        return metadata
+
+    def controller_directory(self, runid):
+        """Keep live client writes on local storage, with a stable evidence link."""
+        shared=self.root/'controllers'/runid
+        spool=self._config.get('controller_spool_dir')
+        if not spool:
+            return shared
+        local=(Path(spool)/runid).absolute()
+        if shared.is_symlink():
+            if shared.resolve()!=local.resolve():
+                raise RuntimeError('Controller evidence link points to another attempt')
+            return local
+        if shared.exists() or local.exists():
+            raise RuntimeError('Controller output exists; immutable attempt cannot be overwritten')
+        local.parent.mkdir(parents=True,exist_ok=True)
+        # The controller creates its own output directory. Its command receives
+        # the direct local path so later NAS failures cannot break client writes.
+        shared.symlink_to(local,target_is_directory=True)
+        return local
+
     def controller_metadata(self, row, controller):
-        path=controller/'controller.json'
-        try:metadata=json.loads(path.read_text())
-        except (FileNotFoundError,json.JSONDecodeError):return {}
+        metadata=self.read_controller_metadata(controller)
         deadline=metadata.get('episode_deadline_unix')
         started=metadata.get('execution_started_at_unix')
         policy=(metadata.get('execution_clock') or {}).get('budget_policy')
@@ -852,7 +899,7 @@ class Batch:
         runid=row['run_id'];port=self.c['base_port']+gpu
         unit=f"mas-b100-{row['index']:03d}-r{row.get('attempt',1)}-{self.c['batch_tag']}.service"
         remote_run=Path(self.c['data_root'])/'runs'/runid
-        controller=self.root/'controllers'/runid
+        controller=self.controller_directory(runid)
         own_unit=False;launch_requested=False;process=None;deadline=None;startup_deadline=None
         native_fault_capture=self.c.get('native_fault_capture',False) is True
         self.update(row,status='running',stage='asset_preflight',started_at=now(),gpu_index=gpu,

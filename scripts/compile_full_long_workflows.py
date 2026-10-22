@@ -11,6 +11,11 @@ NOT=lambda x:{'not':x}
 ALL=lambda *x:{'all':list(x)}
 ANY=lambda *x:{'any':list(x)}
 
+def interchangeable_pair(rel, objects, targets, state='OnTop'):
+ """One item per destination, without requiring an unobservable identity order."""
+ a,b=objects;x,y=targets
+ return ANY(ALL(rel(a,x,state),rel(b,y,state)),ALL(rel(a,y,state),rel(b,x,state)))
+
 def action(primitive,role=None,**kw):return dict(primitive=primitive,**({'role':role} if role else {}),**kw)
 def take(r):return action('grasp',r)
 def put(r,uv=(.5,.5),**kw):return action('place_on_top',r,uv=list(uv),**kw)
@@ -215,7 +220,7 @@ def kitchen(inv,models):
  b.phase('floor',[take('broom'),action('sweep','floor'),put('tool_home',(.7,.5))])
  food=['hotdog1','hotdog2','apple_half0','apple_half1'];packed=ALL(*[b.rel(r,'box','Inside') for r in food],*cooked,'apple_replaced')
  staged=b.rel('box','prep');delivered=b.rel('box','table');b.milestone('meal_packed',ALL(staged,packed));b.milestone('meal_delivered',ALL(delivered,packed),['meal_packed'])
- served=ALL(*[b.rel('hotdog'+str(i),'plate'+str(i)) for i in (1,2)],*[b.rel('apple_half'+str(i-1),'plate'+str(i)) for i in (1,2)],*[b.rel('plate'+str(i),'table') for i in (1,2)])
+ served=ALL(interchangeable_pair(b.rel,['hotdog1','hotdog2'],['plate1','plate2']),interchangeable_pair(b.rel,['apple_half0','apple_half1'],['plate1','plate2']),*[b.rel('plate'+str(i),'table') for i in (1,2)])
  b.milestone('meal_served',served,['meal_delivered']);b.milestone('carrier_released',ALL(b.rel('box','storage'),*[NOT(b.rel(r,'box','Inside')) for r in food]),['meal_served'])
  cold=ALL(b.rel('box','fridge','Inside'),b.rel('cookie','box','Inside'),b.rel('sandwich','box','Inside'));b.milestone('leftovers_chilled',cold,['carrier_released'])
  b.e['motion_guards'].append(dict(id='complete_meal_transport',object='box',since='meal_packed',until='meal_delivered',require=packed))
@@ -338,7 +343,7 @@ def garden(inv,models):
  for i in (1,2):b.guard('clean_display_'+str(i),ANY(NOT(b.rel('plant'+str(i),'display')),ALL(treated[i-1],clean['display'])))
  b.guard('assembled_before_food',ANY(NOT(ANY(*[b.rel(r,'table') for r in ['cup1','cup2','tea','plate']])),usable))
  b.terminal('plants_ready',ALL(*treated,*[b.rel('plant'+str(i),'display') for i in (1,2)]))
- b.terminal('guest_ready',ALL(*[b.rel('pillow'+str(i),'seat'+str(i)) for i in (1,2)],*[b.rel(r,'table') for r in ['cup1','cup2','tea','plate','book']],*[b.rel('apple_half'+str(i),'plate') for i in (0,1)],'apple_replaced',*[b.pred('lamp'+str(i)+'_on','lamp'+str(i),'ToggledOn') for i in (1,2)],*[b.rel('lamp'+str(i),'display') for i in (1,2)]))
+ b.terminal('guest_ready',ALL(interchangeable_pair(b.rel,['pillow1','pillow2'],['seat1','seat2']),*[b.rel(r,'table') for r in ['cup1','cup2','tea','plate','book']],*[b.rel('apple_half'+str(i),'plate') for i in (0,1)],'apple_replaced',*[b.pred('lamp'+str(i)+'_on','lamp'+str(i),'ToggledOn') for i in (1,2)],*[b.rel('lamp'+str(i),'display') for i in (1,2)]))
  b.terminal('reset',ALL(*clean.values(),*[b.rel(r,'tool_home') for r in ['trowel','shears','sprayer','brush','broom','board','knife']],b.rel('can','bin','Inside')))
  b.requirement('plants','两盆植物在独立作业台护理后放到当前干净的展示架；免处理植物整个过程保持原位且不沾药剂。',terminal=['plants_ready'],constraints=['protected_unchanged','clean_display_1','clean_display_2'])
  b.requirement('guests','两座垫清洁归座；装配合格的桌上摆两杯、茶瓶、果盘和书，整苹果真实切两半装盘，两盏灯归展示架并开启。',terminal=['guest_ready'],constraints=['assembled_before_food'])
@@ -524,7 +529,7 @@ def study(inv,models):
  b.e['state_guards'].append(dict(id='cabinet_clean_receives_garments',until=None,require=ANY(NOT(ANY(b.rel('shirt','cabinet','Inside'),b.rel('shorts','cabinet','Inside'))),clean['cabinet'])))
  b.terminal('room_reset',ALL(*[b.rel(r,'shelf') for r in ['book1','book2']],b.rel('toy','toy_box','Inside'),b.rel('pencil','drawer','Inside'),b.rel('keyboard','desk'),b.rel('monitor','desk'),'monitor_on',b.rel('lamp1','desk'),b.rel('lamp2','bedside'),*[NOT(b.pred('lamp'+str(i)+'_on','lamp'+str(i),'ToggledOn')) for i in (1,2)],*[b.rel(r,'tool_home') for r in ['brush','vacuum','rag']],*clean.values(),*bath_clean.values()))
  b.terminal('guest_package',ALL(dry,distributed,b.rel('carrier','source')))
- b.terminal('pictures_attached',ALL(b.rel('picture1','nail1','AttachedTo'),b.rel('picture2','nail2','AttachedTo')))
+ b.terminal('pictures_attached',interchangeable_pair(b.rel,['picture1','picture2'],['nail1','nail2'],'AttachedTo'))
  b.terminal('safe_appliances',ALL(*[NOT(r+'_'+state) for r in ['washer','dryer'] for state in ['open','on']],NOT('cabinet_open'),NOT('drawer_open')))
  b.requirement('rooms','两本书、一玩具、笔袋归位；显示器关闭后清洁，工作位恢复后开启；桌面、键盘、显示器、书架及两房地面清洁，两灯归位并关闭，清洁工具归还。',terminal=['room_reset'],constraints=['monitor_off_when_cleaned'])
  b.requirement('laundry','袜子和短裤在原生洗衣机完成去污并湿润，再在烘干机中变干；两件干净干燥衣物与杯、水瓶、肥皂、纸卷完整装箱交付，衣柜及卫浴当前清洁后分配，空箱回原位。',terminal=['guest_package','safe_appliances'],milestones=['washed','dried','amenities_packed','amenities_delivered','amenities_distributed','carrier_returned'],constraints=['complete_dry_delivery','cabinet_clean_receives_garments'])

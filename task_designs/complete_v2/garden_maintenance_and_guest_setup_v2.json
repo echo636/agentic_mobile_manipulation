@@ -1625,6 +1625,16 @@
       "hand_empty": {
         "object": "plant1",
         "state": "HandEmpty"
+      },
+      "pillow1_ontop_seat2": {
+        "object": "pillow1",
+        "state": "OnTop",
+        "target": "seat2"
+      },
+      "pillow2_ontop_seat1": {
+        "object": "pillow2",
+        "state": "OnTop",
+        "target": "seat1"
       }
     },
     "terminal": {
@@ -1678,8 +1688,22 @@
       },
       "guest_ready": {
         "all": [
-          "pillow1_ontop_seat1",
-          "pillow2_ontop_seat2",
+          {
+            "any": [
+              {
+                "all": [
+                  "pillow1_ontop_seat1",
+                  "pillow2_ontop_seat2"
+                ]
+              },
+              {
+                "all": [
+                  "pillow1_ontop_seat2",
+                  "pillow2_ontop_seat1"
+                ]
+              }
+            ]
+          },
           "cup1_ontop_table",
           "cup2_ontop_table",
           "tea_ontop_table",

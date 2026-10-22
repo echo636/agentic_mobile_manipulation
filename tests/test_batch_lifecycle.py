@@ -1,4 +1,5 @@
 import importlib.util
+import errno
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,44 @@ batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_controller_read_eio_during_live_poll_preserves_clock_and_recovers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,1);b.worker_state=Mock();output=Path(tmp)/'controller';output.mkdir()
+            row=b.rows[0];row['startup_deadline_unix']=time.time()-1
+            clock={'status':'running','pid':123,'execution_started_at_unix':time.time()-10,
+                   'episode_deadline_unix':None,'execution_clock':{'budget_policy':'unbounded'}}
+            (output/'controller.json').write_text(json.dumps(clock))
+            b.controller_metadata(row,output)
+            b.refresh_startup_progress=Mock();b.step_episode_closed=Mock(return_value=False)
+            b.stop_controller=Mock();b.cleanup_controller_after_finish=Mock()
+            process=Mock();process.poll.side_effect=[None,None,0];process.last_heartbeat=time.monotonic()
+            recovered={**clock,'status':'passed','formal_finish_observed':True}
+            with patch.object(Path,'read_text',side_effect=[OSError(errno.EIO,'NAS unavailable'),
+                    json.dumps(recovered),json.dumps(recovered)]),patch.object(batch.time,'sleep'):
+                result=b.wait_controller(row,process,output)
+            self.assertTrue(result['formal_finish_observed'])
+            self.assertEqual(row['execution_started_at_unix'],clock['execution_started_at_unix'])
+            self.assertIsNone(row['episode_deadline_unix'])
+            self.assertNotIn('startup_timed_out',row)
+            b.stop_controller.assert_not_called();b.cleanup_controller_after_finish.assert_not_called()
+            self.assertEqual(b.step_episode_closed.call_count,2)
+            self.assertEqual(b.journal.call_count,2)
+
+    def test_controller_spool_uses_direct_local_path_and_preserves_shared_lookup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,1);(b.root/'controllers').mkdir()
+            b._config['controller_spool_dir']=str(Path(tmp)/'local')
+            output=b.controller_directory('run1');output.mkdir()
+            (output/'controller.json').write_text('{"pid":123}')
+            shared=b.root/'controllers/run1'
+            self.assertEqual(output,Path(tmp)/'local/run1')
+            self.assertTrue(shared.is_symlink())
+            self.assertEqual(json.loads((shared/'controller.json').read_text()),{'pid':123})
+            self.assertEqual(b.controller_directory('run1'),output)
+            (Path(tmp)/'local/run2').mkdir()
+            with self.assertRaisesRegex(RuntimeError,'immutable'):
+                b.controller_directory('run2')
+
     def test_resource_requeue_preserves_evidence_and_new_attempt_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp,count=1)

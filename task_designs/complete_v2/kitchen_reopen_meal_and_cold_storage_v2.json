@@ -1166,6 +1166,26 @@
       "hand_empty": {
         "object": "box",
         "state": "HandEmpty"
+      },
+      "hotdog1_ontop_plate2": {
+        "object": "hotdog1",
+        "state": "OnTop",
+        "target": "plate2"
+      },
+      "hotdog2_ontop_plate1": {
+        "object": "hotdog2",
+        "state": "OnTop",
+        "target": "plate1"
+      },
+      "apple_half0_ontop_plate2": {
+        "object": "apple_half0",
+        "state": "OnTop",
+        "target": "plate2"
+      },
+      "apple_half1_ontop_plate1": {
+        "object": "apple_half1",
+        "state": "OnTop",
+        "target": "plate1"
       }
     },
     "terminal": {
@@ -1173,10 +1193,38 @@
         "all": [
           {
             "all": [
-              "hotdog1_ontop_plate1",
-              "hotdog2_ontop_plate2",
-              "apple_half0_ontop_plate1",
-              "apple_half1_ontop_plate2",
+              {
+                "any": [
+                  {
+                    "all": [
+                      "hotdog1_ontop_plate1",
+                      "hotdog2_ontop_plate2"
+                    ]
+                  },
+                  {
+                    "all": [
+                      "hotdog1_ontop_plate2",
+                      "hotdog2_ontop_plate1"
+                    ]
+                  }
+                ]
+              },
+              {
+                "any": [
+                  {
+                    "all": [
+                      "apple_half0_ontop_plate1",
+                      "apple_half1_ontop_plate2"
+                    ]
+                  },
+                  {
+                    "all": [
+                      "apple_half0_ontop_plate2",
+                      "apple_half1_ontop_plate1"
+                    ]
+                  }
+                ]
+              },
               "plate1_ontop_table",
               "plate2_ontop_table"
             ]
@@ -1341,10 +1389,38 @@
       "meal_served": {
         "when": {
           "all": [
-            "hotdog1_ontop_plate1",
-            "hotdog2_ontop_plate2",
-            "apple_half0_ontop_plate1",
-            "apple_half1_ontop_plate2",
+            {
+              "any": [
+                {
+                  "all": [
+                    "hotdog1_ontop_plate1",
+                    "hotdog2_ontop_plate2"
+                  ]
+                },
+                {
+                  "all": [
+                    "hotdog1_ontop_plate2",
+                    "hotdog2_ontop_plate1"
+                  ]
+                }
+              ]
+            },
+            {
+              "any": [
+                {
+                  "all": [
+                    "apple_half0_ontop_plate1",
+                    "apple_half1_ontop_plate2"
+                  ]
+                },
+                {
+                  "all": [
+                    "apple_half0_ontop_plate2",
+                    "apple_half1_ontop_plate1"
+                  ]
+                }
+              ]
+            },
             "plate1_ontop_table",
             "plate2_ontop_table"
           ]

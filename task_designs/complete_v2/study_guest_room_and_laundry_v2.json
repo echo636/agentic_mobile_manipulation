@@ -1400,6 +1400,16 @@
       "hand_empty": {
         "object": "desk",
         "state": "HandEmpty"
+      },
+      "picture1_attachedto_nail2": {
+        "object": "picture1",
+        "state": "AttachedTo",
+        "target": "nail2"
+      },
+      "picture2_attachedto_nail1": {
+        "object": "picture2",
+        "state": "AttachedTo",
+        "target": "nail1"
       }
     },
     "terminal": {
@@ -1487,9 +1497,19 @@
         ]
       },
       "pictures_attached": {
-        "all": [
-          "picture1_attachedto_nail1",
-          "picture2_attachedto_nail2"
+        "any": [
+          {
+            "all": [
+              "picture1_attachedto_nail1",
+              "picture2_attachedto_nail2"
+            ]
+          },
+          {
+            "all": [
+              "picture1_attachedto_nail2",
+              "picture2_attachedto_nail1"
+            ]
+          }
         ]
       },
       "safe_appliances": {
