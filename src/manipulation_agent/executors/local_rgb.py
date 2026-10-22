@@ -118,6 +118,8 @@ class LocalRGBManipulation:
         grid,collision,details,hulls,_=geometry
         actual=self._local_pose()
         if not collision.motion_free(actual,actual):
+            if self._refine_local_geometry(operation,point,grid,reason='coarse_start_collision'):
+                return self._local_reposition(primitive,obj,point,operation)
             self._local_clearance_recovery(operation,geometry)
             return
         preview=getattr(operation,'grasp_preview',None)
@@ -227,6 +229,9 @@ class LocalRGBManipulation:
                 candidate_outcomes=dict(Counter(row.get('reason',row['status']) for row in attempts)),
                 termination='selected' if selected else 'budget' if exhausted else 'candidates_exhausted')
         if selected is None:
+            if self._refine_local_geometry(operation,point,grid,
+                    reason='coarse_planning_budget' if exhausted else 'coarse_candidates_exhausted'):
+                return self._local_reposition(primitive,obj,point,operation)
             if exhausted:
                 if not eligible:
                     raise SkillError('local_adjustment_exhausted',
@@ -254,6 +259,38 @@ class LocalRGBManipulation:
         operation.grasp_preview=None
         operation.articulation_preview=None
         operation.articulation_plan=None
+
+    def _refine_local_geometry(self,operation,point,grid,*,reason):
+        """Retry one target's geometry at half-cell size before declaring failure.
+
+        Coarse cells include full occupied columns and an outward footprint
+        reserve. A physically open passage can disappear in that raster. Requery
+        a bounded local map; never remove obstacles or shrink robot geometry.
+        """
+        if getattr(operation,'navigation_sampling',None):return False
+        resolution=max(.0125,grid.resolution/2)
+        if resolution>=grid.resolution:return False
+        actual=self._local_pose()
+        margin=operation.limits.reach_m+.7
+        window=[min(actual[0],float(point[0]))-margin,
+                min(actual[1],float(point[1]))-margin,
+                max(actual[0],float(point[0]))+margin,
+                max(actual[1],float(point[1]))+margin]
+        cells=math.prod(math.ceil((window[i+2]-window[i])/resolution)+2 for i in (0,1))
+        if cells>250000:
+            operation.record('map_refinement_skipped',reason='window_size',cells=cells)
+            return False
+        operation.check()
+        operation.navigation_sampling={'resolution':resolution,'window':window}
+        operation.geometry=None
+        operation.grasp_preview=None
+        operation.articulation_preview=None
+        operation.articulation_plan=None
+        operation.carry_plan=None
+        operation.record('map_refinement',reason=reason,coarse_resolution_m=grid.resolution,
+                         resolution_m=resolution,world_window=window,
+                         unchanged_checks=['collision_geometry','target_identity','reach','loaded_departure'])
+        return True
 
     def _local_clearance_recovery(self,operation,geometry):
         from dataclasses import replace

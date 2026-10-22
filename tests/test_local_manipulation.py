@@ -116,6 +116,8 @@ class CoordinationTests(unittest.TestCase):
         b._local_grasp_preview=lambda *args:lambda pose:collision
         b._local_reposition=LocalRGBManipulation._local_reposition.__get__(b)
         b._admit_loaded_departure=LocalRGBManipulation._admit_loaded_departure.__get__(b)
+        # This fixture isolates budget propagation without a live map to refine.
+        b._refine_local_geometry=lambda *args,**kwargs:False
         # The unloaded stance is admitted, then the loaded departure search
         # exhausts its shared planning budget, as in the real plates episode.
         with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',

@@ -42,13 +42,52 @@ def clipped_body_projection(points, low, high):
     return np.asarray(clipped) if clipped else None
 
 
+def floor_support_window(raw, original_resolution, resolution, window):
+    """Resample floor support in a bounded world window, preserving its origin.
+
+    This only samples the supplied floor mask. Obstacle columns are queried
+    again at the requested resolution; enlarging a coarse occupancy image
+    cannot recover a narrow passage that the coarse columns marked blocked.
+    """
+    import numpy as np
+    full_h, full_w = raw.shape
+    full_origin = np.array([-full_w*original_resolution/2, -full_h*original_resolution/2])
+    if window is None:
+        if resolution != original_resolution:
+            raise ValueError('Navigation refinement requires a bounded window')
+        return raw, full_origin
+    if (len(window) != 4 or not all(math.isfinite(v) for v in window)
+            or any(window[i] >= window[i+2] for i in (0, 1))):
+        raise ValueError('Expected finite ordered navigation window bounds')
+    if not math.isfinite(resolution) or resolution <= 0:
+        raise ValueError('Navigation cell resolution must be positive')
+    first = np.floor((np.asarray(window[:2])-full_origin)/resolution).astype(int)
+    last = np.ceil((np.asarray(window[2:])-full_origin)/resolution).astype(int)
+    w, h = (last-first+1).tolist()
+    if w*h > 250000:
+        raise ValueError('Local navigation refinement exceeds the bounded map size')
+    origin = full_origin+first*resolution
+    cc = np.floor((origin[0]+np.arange(w)*resolution-full_origin[0])/original_resolution+.5).astype(int)
+    rr = np.floor((origin[1]+np.arange(h)*resolution-full_origin[1])/original_resolution+.5).astype(int)
+    support = np.zeros((h,w), dtype='uint8')
+    valid_r, valid_c = (rr>=0)&(rr<full_h), (cc>=0)&(cc<full_w)
+    support[np.ix_(valid_r,valid_c)] = raw[np.ix_(rr[valid_r],cc[valid_c])]
+    return support, origin
+
+
 def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=False, occupancy_overrides=None):
     import cv2
     import numpy as np
     import omnigibson.lazy as lazy
     from .gt_navigation import GridMap
     occupancy_overrides=occupancy_overrides or {}
-    scene=backend.env.scene;trav=scene.trav_map;resolution=float(trav.map_resolution)
+    scene=backend.env.scene;trav=scene.trav_map
+    original_resolution=float(trav.map_resolution)
+    # One local action owns its refinement. Grasp departure and articulation
+    # previews must use the same resolution as stance and route certification.
+    sampling=getattr(getattr(backend,'_local_operation',None),'navigation_sampling',{})
+    resolution=float(sampling.get('resolution',original_resolution))
+    window=sampling.get('window')
     floor_z=float(trav.floor_heights[floor]);base=backend.robot.get_position_orientation()[0].cpu().numpy()
     # The base is wider than the torso. A single base-width column falsely
     # blocks motion beside desks/chair backs. Match occupancy by height band.
@@ -104,14 +143,19 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     # because the payload adds another footprint at an existing height.
     bands=list(dict.fromkeys((lo,hi) for lo,hi,_,_ in layers))
     band_indices=[bands.index((lo,hi)) for lo,hi,_,_ in layers]
-    if floor not in cache:
+    cache_key=floor if window is None else (floor,resolution,tuple(window))
+    if cache_key not in cache:
         if not source.is_file():raise ValueError('GT floor support map unavailable: '+str(source))
         raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE);h,w=trav.floor_map[floor].shape
         raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
-        cache[floor]={'support':raw,'band_cache':{},'objects':{},'height':None,'bands':bands,
+        raw,origin=floor_support_window(raw,original_resolution,resolution,window)
+        cache[cache_key]={'support':raw,'origin':origin,'band_cache':{},'objects':{},'height':None,'bands':bands,
                       'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
-    cached=cache[floor];support=cached['support'];h,w=support.shape
-    origin=np.array([-w*resolution/2,-h*resolution/2])
+        # Keep full-floor caches and only four recent action-local windows.
+        refined=[key for key in cache if isinstance(key,tuple)]
+        for key in refined[:-4]:del cache[key]
+    cached=cache[cache_key];support=cached['support'];h,w=support.shape
+    origin=cached['origin']
     ignored_objects={backend.robot,*carried}
     ignored_links={link.prim_path for obj in ignored_objects if obj is not None for link in obj.links.values()}
     # A joint preview changes Fabric transforms before PhysX scene queries are
@@ -215,6 +259,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     backend._navigation_layer_heights=[(lo,hi) for lo,hi,_,_ in layers]
     backend._navigation_support=support.copy()
     return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
+        'resolution_m':resolution,'world_window':window,
         'chassis_footprint_world_offsets':chassis.tolist(),'kernel_shape':list(kernel.shape),
         'footprint':'current_yaw_height_matched_collision_hulls',
         'forward_clearance_reserve':'half_cell_translation_and_outward_quantized_yaw_sweep',
