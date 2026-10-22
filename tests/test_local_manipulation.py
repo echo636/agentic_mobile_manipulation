@@ -118,6 +118,19 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(len(b.executions),1)
         self.assertEqual(result['env_steps'],7)
         self.assertEqual(result['path_m'],0.)
+    def test_stationary_preparation_executes_only_after_readiness_is_confirmed(self):
+        b=Motor();prepared=[False]
+        b._local_ready=lambda *args:prepared[0]
+        def prepare(*args):prepared[0]=True
+        b._local_reposition=prepare
+        result=b.run()['local_manipulation']
+        self.assertEqual(b.pose,(0.,0.,0.))
+        self.assertEqual(len(b.executions),1)
+        self.assertIs(b.executions[0][0],b.target)
+        self.assertEqual(result['repositions'],1)
+        self.assertEqual(result['path_m'],0.)
+        self.assertEqual(b.refreshes,1)
+        self.assertTrue(next(e for e in b.events if e['phase']=='stationary_recheck')['ready'])
     def test_loaded_departure_search_timeout_returns_bounded_failure(self):
         from manipulation_agent.executors.gt_navigation import GridMap, SearchBudgetExhausted
         from manipulation_agent.executors.local_rgb import LocalRGBManipulation
