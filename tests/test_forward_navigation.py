@@ -30,6 +30,26 @@ class PointCollision:
 
 
 class ForwardNavigationTests(unittest.TestCase):
+    def test_connection_rejects_nearly_tangent_shortcut_before_feedback_drift(self):
+        import numpy as np
+        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        support = np.ones((5, 5), dtype='uint8')
+        support[1, 1] = 0
+        grid = GridMap(5, 5, 1., (0., 0.), support.tobytes())
+        collision = HeadingCollisionChecker(grid, [], 0., support)
+        # Pass one micrometre below the blocked cell's bottom-right corner.
+        start = (.75, -.250001, math.pi/4)
+        end = (2.25, 1.249999, math.pi/4)
+        self.assertTrue(collision.motion_free(start, end))
+        drifted = (start[0], start[1]+.000002, start[2])
+        self.assertFalse(collision.motion_free(drifted, end))
+        self.assertIsNone(checked_connection(start, end[:2], end[2], collision))
+        clear_start = (start[0], start[1]-.01, start[2])
+        clear_end = (end[0], end[1]-.01, end[2])
+        self.assertIsNotNone(checked_connection(clear_start, clear_end[:2], clear_end[2], collision))
+        # Reserving space during planning must not weaken live collision checks.
+        self.assertFalse(collision.motion_free(drifted, end))
+
     def test_connection_preserves_clear_long_turn_around_blocked_short_arc(self):
         class ShelfBesidePayload(PointCollision):
             block_other_side = False

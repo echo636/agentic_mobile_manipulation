@@ -176,7 +176,19 @@ class HeadingCollisionChecker:
                 return self._put(self.turns,turn_key,False,65536)
         return self._put(self.turns,turn_key,True,65536)
 
-    def _translation_free(self,key,start,end):
+    def translation_free_with_margin(self, start, end, margin=.002):
+        """Planning-only corridor reserve for measured pose feedback error.
+
+        Execution still uses motion_free with the original collision geometry.
+        A nearly tangent shortcut can otherwise pass at its nominal line and
+        fail after micrometre float32 pose-setting drift (kitchen r59).
+        """
+        if not 0. <= margin <= self.grid.resolution/2:
+            raise ValueError('Translation margin must fit within half a grid cell')
+        self.check_cancelled()
+        return self._translation_free(self._key(start[2],end[2]),start,end,clearance=margin)
+
+    def _translation_free(self,key,start,end,*,clearance=0.):
         """Erode only the segment's cells, reading the full obstacle halo.
 
         Rare continuous headings need no full-floor grid. The kernel and
@@ -203,7 +215,7 @@ class HeadingCollisionChecker:
             eroded=cv2.erode(raw[ra:rb,ca:cb],kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
             free &= eroded[r0-ra:r1-ra,c0-ca:c1-ca]
         segment=GridMap(c1-c0,r1-r0,self.grid.resolution,self.grid.world((r0,c0)),free.tobytes())
-        return segment.segment_free(start[:2],end[:2])
+        return segment.segment_free(start[:2],end[:2],clearance=clearance)
 
     def grid_at_heading(self, yaw):
         return self._sweep_grid(self._key(yaw, yaw))

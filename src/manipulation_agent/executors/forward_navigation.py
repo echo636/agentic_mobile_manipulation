@@ -72,7 +72,10 @@ def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: 
     checked = [poses[0]]
     for a, b in zip(poses, poses[1:]):
         check_cancelled()
-        if collision.motion_free(a, b):
+        free = collision.motion_free(a, b)
+        if free and math.dist(a[:2], b[:2]) > .002 and hasattr(collision, 'translation_free_with_margin'):
+            free = collision.translation_free_with_margin(a, b)
+        if free:
             checked.append(b)
             continue
         if math.dist(a[:2], b[:2]) > 1e-10:
