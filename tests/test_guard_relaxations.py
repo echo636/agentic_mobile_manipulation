@@ -44,6 +44,20 @@ class GuardRelaxationTests(unittest.TestCase):
         self.assertFalse(evidence['touching_selected_object'])
         self.assertTrue(all(evidence['checks'].values()))
 
+    def test_hollow_lower_patch_uses_rim_support_when_center_ray_misses(self):
+        import torch
+        backend, held, target, hit, sampling = self.support_fixture()
+        backend._collision_vertices = lambda obj: torch.tensor(
+            [[-.04,-.04,0.],[-.04,.04,0.],[.04,-.04,0.],[.04,.04,0.]]).numpy()
+        sampling.raytest = lambda start, *args, **kwargs: (
+            {'hit': False} if float(torch.linalg.norm(start[:2])) < .02 else hit)
+        with patch.dict('sys.modules', {'omnigibson.utils.sampling_utils': sampling}):
+            valid, evidence = backend._selected_surface_support(held, target, torch.zeros(3), True)
+            self.assertTrue(valid, evidence)
+            self.assertGreater(len(evidence['support_probes']), 1)
+            hit['rigidBody'] = '/other'
+            self.assertFalse(backend._selected_surface_support(held, target, torch.zeros(3), True)[0])
+
     def test_relaxed_contact_does_not_accept_wrong_surface_side_or_unsettled_object(self):
         import torch
         for fault in ('wrong_object', 'side_contact', 'wrong_shelf', 'moving', 'rotating', 'robot_support', 'still_held'):

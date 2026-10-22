@@ -503,30 +503,42 @@ class CheckedPlacement:
         No whole-box footprint, goal predicate mutation, or held-pose projection
         is used. The root/box center may lie outside a supported pan body.
         """
-        from .surface_geometry import bottom_anchor
+        from .surface_geometry import bottom_support_points
         from omnigibson.utils.sampling_utils import raytest
         if point is None:
             return False, {'available': False, 'reason': 'No selected surface point'}
-        anchor = self.torch.as_tensor(bottom_anchor(self._collision_vertices(held)),
+        probes = self.torch.as_tensor(bottom_support_points(self._collision_vertices(held)),
                                      dtype=point.dtype, device=point.device)
-        start = anchor + self.torch.tensor([0., 0., .03], device=point.device)
-        end = anchor - self.torch.tensor([0., 0., .04], device=point.device)
+        anchor = probes[0]
         ignored = [link.prim_path for obj in (held, self.robot, *payload) for link in obj.links.values()]
-        hit = raytest(start, end, ignore_bodies=ignored)
         target_paths = {link.prim_path for link in target.links.values()}
+        support_probes = []
+        for probe in probes:
+            start = probe + self.torch.tensor([0., 0., .03], device=point.device)
+            end = probe - self.torch.tensor([0., 0., .04], device=point.device)
+            hit = raytest(start, end, ignore_bodies=ignored)
+            gap = float(probe[2] - hit['position'][2]) if hit['hit'] else None
+            normal_z = float(hit['normal'][2]) if hit['hit'] else None
+            height_error = abs(float(hit['position'][2] - point[2])) if hit['hit'] else None
+            support_checks = {
+                'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
+                'upward_support': normal_z is not None and normal_z >= .9,
+                'bottom_near_support': gap is not None and -.01 <= gap <= .015,
+                'selected_shelf_height': height_error is not None and height_error <= .05}
+            support_probes.append({'position': probe.tolist(), 'checks': support_checks,
+                                   'support_hit_body': hit.get('rigidBody')})
+            # Every geometric condition must hold at the SAME lower patch.
+            # Stability, selected neighborhood and robot clearance remain
+            # independent requirements below; a rim hit alone is insufficient.
+            if all(support_checks.values()):
+                break
         contacts = self._placement_contacts(held, payload)
         robot_paths = {link.prim_path for link in self.robot.links.values()}
         speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
         angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
-        gap = float(anchor[2] - hit['position'][2]) if hit['hit'] else None
-        normal_z = float(hit['normal'][2]) if hit['hit'] else None
-        height_error = abs(float(hit['position'][2] - point[2])) if hit['hit'] else None
         selected_xy_distance = float(self.torch.linalg.norm(anchor[:2] - point[:2]))
         checks = {'released': self._get_held() is None,
-                  'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
-                  'upward_support': normal_z is not None and normal_z >= .9,
-                  'bottom_near_support': gap is not None and -.01 <= gap <= .015,
-                  'selected_shelf_height': height_error is not None and height_error <= .05,
+                  **support_checks,
                   'selected_surface_neighborhood': selected_xy_distance <= .20,
                   'settled': (bool(resting['stable']) if resting is not None
                               else speed <= .10 and angular_speed <= .5),
@@ -535,6 +547,7 @@ class CheckedPlacement:
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
+            'support_probes': support_probes,
             'resting_motion':resting,
             'support_hit_body': hit.get('rigidBody'), 'contact_bodies': contacts,
             'ignored_payload_names': [obj.name for obj in payload]}

@@ -24,6 +24,29 @@ def bottom_anchor(points):
     return anchor
 
 
+def bottom_support_points(points, maximum=17):
+    """Probe the lower shape as well as its center, which may lie in a hole.
+
+    Actual lower vertices are spread over the patch by farthest-point sampling.
+    A support hit is still only one part of physical settling verification.
+    """
+    import numpy as np
+    points = np.asarray(points, dtype=float)
+    anchor = bottom_anchor(points)
+    band = max(.002, min(.01, float(np.ptp(points[:, 2])) * .05))
+    bottom = np.unique(points[points[:, 2] <= anchor[2] + band], axis=0)
+    probes = [anchor]
+    distances = np.sum((bottom[:, :2]-anchor[:2])**2, axis=1)
+    while len(probes) < maximum and len(bottom):
+        index = int(np.argmax(distances))
+        if distances[index] < 1e-10:
+            break
+        probe = bottom[index]
+        probes.append(probe)
+        distances = np.minimum(distances, np.sum((bottom[:, :2]-probe[:2])**2, axis=1))
+    return np.asarray(probes)
+
+
 def rotated_surface_geometry(points_world, origin, yaw_degrees=None):
     """Rotate the current shape about its root by a relative world-Z yaw.
 
