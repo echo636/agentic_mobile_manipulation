@@ -35,6 +35,8 @@ def checked_open_goal(backend, obj, check):
     ignored.update(str(link.prim_path) for item in backend.env.scene.objects
                    for link in item.links.values() if link.is_meta_link)
     links=[link for link in obj.links.values() if not link.is_meta_link]
+    initial=obj.get_joint_positions().clone()
+    initial_poses={str(link.prim_path):tuple(v.clone() for v in link.get_position_orientation()) for link in links}
     trials=[]
     try:
         check()
@@ -50,23 +52,41 @@ def checked_open_goal(backend, obj, check):
             for a,b in zip(closed_poses[str(link.prim_path)],link.get_position_orientation()))}
         # Prefer the largest useful opening. A maximal joint angle is not an
         # obligation: a lid behind a box can intersect a wall at that angle.
-        for fraction in (1.,.875,.75,.625,.5,.375,.25,.125):
+        fractions=(1.,.875,.75,.625,.5,.375,.25,.125)
+        def candidates():
+            # Preserve the existing maximum-common-opening preference. If one
+            # independent leaf is blocked, try the other without moving it.
+            for fraction in fractions:
+                yield 'common',None,fraction,closed+(opened-closed)*fraction
+            active=(abs(opened-closed)>1e-5).nonzero().flatten().cpu().tolist()
+            if len(active)>1:
+                for index in active:
+                    for fraction in fractions:
+                        goal=initial.clone()
+                        goal[index]=closed[index]+(opened[index]-closed[index])*fraction
+                        # An opening attempt must not close a leaf that is
+                        # already more open than this candidate.
+                        before=float((initial[index]-closed[index])/(opened[index]-closed[index]))
+                        if fraction<=before+1e-6:continue
+                        yield 'independent_leaf',index,fraction,goal
+        for policy,index,fraction,goal in candidates():
             check()
             restore()
-            goal=closed+(opened-closed)*fraction
             obj.set_joint_positions(goal);obj.keep_still()
+            candidate_moving=moving if policy=='common' else {
+                str(link.prim_path) for link in links if any(
+                    not backend.torch.allclose(a,b,atol=1e-5,rtol=0.)
+                    for a,b in zip(initial_poses[str(link.prim_path)],link.get_position_orientation()))}
             backend._relocate_container_payload(payload)
             obj.states[Open].clear_cache()
             if not obj.states[Open].get_value():continue
-            # A hypothetical pose can overlap a wall. Integrating that pose
-            # can destabilize the articulation before rollback, or poison the
-            # CUDA context beyond what load_state can restore. Query geometry
-            # only; the admitted real operation still checks physical settling.
-            clearance=moving_link_clearance(backend,links,moving,ignored,check)
-            trials.append(dict(fraction=fraction,official_open=True,**clearance))
+            # Never integrate hypothetical overlapping endpoints. The actual
+            # operation still checks collision clearance and physical settling.
+            clearance=moving_link_clearance(backend,links,candidate_moving,ignored,check)
+            trials.append(dict(policy=policy,joint_index=index,fraction=fraction,official_open=True,**clearance))
             if clearance['clear']:
                 backend._placement_record(dict(status='articulation_open_endpoint_selected',target=obj.name,
-                    goal_joints=goal.cpu().tolist(),fraction=fraction,trials=trials,
+                    goal_joints=goal.cpu().tolist(),opening_policy=policy,joint_index=index,fraction=fraction,trials=trials,
                     criterion='open_with_clear_moving_collision_enclosures_without_physics'))
                 return goal
         backend._placement_record(dict(status='articulation_open_endpoint_unresolved',target=obj.name,trials=trials))

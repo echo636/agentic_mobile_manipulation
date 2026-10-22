@@ -15,20 +15,23 @@ from manipulation_agent.executors.articulation_clearance import moving_link_clea
 
 class EndpointTests(unittest.TestCase):
     def exercise(self, mode):
-        state = [torch.tensor([.2])]
+        initial = torch.tensor([.2, 0.] if mode == 'independent' else [.2])
+        state = [initial.clone()]
         initial_rng = random.getstate()
         open_type = object()
         class Link:
-            prim_path = '/door/leaf'
             is_meta_link = False
+            def __init__(self, index):
+                self.index = index
+                self.prim_path = '/door/leaf' + str(index)
             def get_position_orientation(self):
-                return torch.tensor([float(state[0][0]), 0., 0.]), torch.tensor([0., 0., 0., 1.])
-        link = Link()
+                return torch.tensor([float(state[0][self.index]), 0., 0.]), torch.tensor([0., 0., 0., 1.])
+        links = {str(i): Link(i) for i in range(len(initial))}
         def setter(value, fully):
             random.random()
-            state[0] = torch.tensor([float(value)])
+            state[0] = torch.full_like(initial, float(value))
             return True
-        obj = SimpleNamespace(name='door', prim_path='/door', links={'leaf': link},
+        obj = SimpleNamespace(name='door', prim_path='/door', links=links,
             get_joint_positions=lambda: state[0].clone(),
             set_joint_positions=lambda value: state.__setitem__(0, value.clone()), keep_still=lambda: None,
             states={open_type: SimpleNamespace(set_value=setter, clear_cache=lambda: None,
@@ -47,6 +50,8 @@ class EndpointTests(unittest.TestCase):
             attempted.append(float(state[0][0]))
             if mode == 'query_error':
                 raise RuntimeError('native query failed')
+            if mode == 'independent':
+                return {'clear': args[2] == {'/door/leaf1'}}
             return {'clear': mode == 'alternate' and float(state[0][0]) < .9}
         module = ModuleType('omnigibson.object_states')
         module.Open = open_type
@@ -54,18 +59,26 @@ class EndpointTests(unittest.TestCase):
              patch('manipulation_agent.executors.particle_payload.snapshot_particle_state', return_value=[]), \
              patch('manipulation_agent.executors.particle_payload.restore_particle_state'), \
              patch('manipulation_agent.executors.articulation_clearance.moving_link_clearance', side_effect=query):
-            if mode == 'alternate':
+            if mode == 'independent':
+                goal = checked_open_goal(backend, obj, lambda: None)
+                torch.testing.assert_close(goal, torch.tensor([.2, 1.]))
+                self.assertEqual(records[-1]['opening_policy'], 'independent_leaf')
+                self.assertEqual(records[-1]['joint_index'], 1)
+            elif mode == 'alternate':
                 self.assertEqual(checked_open_goal(backend, obj, lambda: None).tolist(), [.875])
             else:
                 with self.assertRaises(RuntimeError if mode == 'query_error' else SkillError):
                     checked_open_goal(backend, obj, lambda: None)
-        self.assertTrue(torch.equal(state[0], torch.tensor([.2])))
+        self.assertTrue(torch.equal(state[0], initial))
         self.assertEqual(random.getstate(), initial_rng)
         self.assertEqual(backend.frames_revision, -1)
         return attempted
 
     def test_blocked_full_angle_uses_smaller_clear_angle_without_physics(self):
         self.assertEqual(self.exercise('alternate'), [1., .875])
+
+    def test_blocked_leaf_can_stay_at_initial_pose_while_other_leaf_opens_without_physics(self):
+        self.exercise('independent')
 
     def test_no_clear_endpoint_restores_scene(self):
         self.assertEqual(len(self.exercise('all_blocked')), 8)
