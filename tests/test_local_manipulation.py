@@ -118,10 +118,10 @@ class CoordinationTests(unittest.TestCase):
         b._admit_loaded_departure=LocalRGBManipulation._admit_loaded_departure.__get__(b)
         # This fixture isolates budget propagation without a live map to refine.
         b._refine_local_geometry=lambda *args,**kwargs:False
-        # The unloaded stance is admitted, then the loaded departure search
-        # exhausts its shared planning budget, as in the real plates episode.
+        # The incoming route covers the unloaded stance; the loaded departure
+        # search must still propagate exhaustion before executing a grasp.
         with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
-                   side_effect=[True,SearchBudgetExhausted()]):
+                   side_effect=SearchBudgetExhausted()):
             with self.assertRaises(SkillError) as caught:b.run()
         self.assertEqual(caught.exception.code,'local_adjustment_exhausted')
         self.assertFalse(caught.exception.changed)
