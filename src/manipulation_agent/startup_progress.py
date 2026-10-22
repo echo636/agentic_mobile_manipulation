@@ -2,9 +2,11 @@
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from functools import wraps
+import errno
 import json
 import math
 from pathlib import Path
+import sys
 import time
 
 STARTUP_POLICY = 'stage_progress_v1'
@@ -15,9 +17,30 @@ def startup_event(output, stage, status, **extra):
     event = {'stage': stage, 'status': status, 'at_unix': at,
              'at': datetime.fromtimestamp(at, timezone.utc).isoformat(), **extra}
     output = Path(output)
-    output.mkdir(parents=True, exist_ok=True)
-    with (output / 'startup_stages.jsonl').open('a') as stream:
-        stream.write(json.dumps(event) + '\n')
+    # A transient NAS error in this observer must not replace the native
+    # constructor's outcome. Retries retain the operation's original time;
+    # they cannot act as watchdog heartbeats. Persistent failures stay visible
+    # in the owned unit's journal without claiming a recorded milestone.
+    for attempt in range(3):
+        try:
+            output.mkdir(parents=True, exist_ok=True)
+            with (output / 'startup_stages.jsonl').open('a') as stream:
+                # Separate a possible partial prior write before retrying.
+                stream.write(('\n' if attempt else '') + json.dumps(event) + '\n')
+            break
+        except OSError as exc:
+            if exc.errno not in {errno.EIO, errno.ESTALE, errno.ETIMEDOUT, errno.EAGAIN}:
+                raise
+            if attempt < 2:
+                event['storage_retries'] = attempt + 1
+                time.sleep(.5 * (attempt + 1))
+                continue
+            warning = {'event': 'startup_log_write_failed', 'errno': exc.errno,
+                       'path': str(output / 'startup_stages.jsonl'), 'milestone': event}
+            try:
+                print(json.dumps(warning), file=sys.stderr, flush=True)
+            except OSError:
+                pass
     return event
 
 

@@ -1,4 +1,6 @@
 import importlib.util
+import errno
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -19,6 +21,43 @@ batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class StartupProgressTests(unittest.TestCase):
+    def test_transient_nas_failure_retries_without_changing_milestone_time(self):
+        original = Path.open
+        failures = [True]
+        def open_once(path, *args, **kwargs):
+            if path.name == 'startup_stages.jsonl' and failures:
+                failures.pop()
+                raise OSError(errno.EIO, 'temporary NAS failure')
+            return original(path, *args, **kwargs)
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(Path, 'open', open_once), \
+                    patch('manipulation_agent.startup_progress.time.sleep'), \
+                    patch('manipulation_agent.startup_progress.time.time', return_value=123.):
+                event = startup_event(tmp, 'object_construct', 'passed')
+            records = [json.loads(s) for s in (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines() if s]
+            self.assertEqual(records, [event])
+            self.assertEqual(event['at_unix'], 123.)
+            self.assertEqual(event['storage_retries'], 1)
+
+    def test_exhausted_advisory_log_io_does_not_replace_native_outcome(self):
+        stderr = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(Path, 'open', side_effect=OSError(errno.EIO, 'NAS unavailable')), \
+                patch('manipulation_agent.startup_progress.time.sleep'), \
+                patch('sys.stderr', stderr):
+            with self.assertRaisesRegex(ValueError, 'native failure'):
+                with startup_stage(tmp, 'native_task'):
+                    raise ValueError('native failure')
+        warnings = [json.loads(s) for s in stderr.getvalue().splitlines()]
+        self.assertEqual([w['milestone']['status'] for w in warnings], ['running', 'failed'])
+        self.assertTrue(all(w['event'] == 'startup_log_write_failed' for w in warnings))
+
+    def test_nontransient_startup_storage_failure_is_not_hidden(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(Path, 'open', side_effect=PermissionError(errno.EACCES, 'bad output permissions')):
+            with self.assertRaises(PermissionError):
+                startup_event(tmp, 'native_task', 'running')
+
     def test_ready_bridge_wins_over_expired_idle_clock_but_unready_still_expires(self):
         b = batch.Batch.__new__(batch.Batch)
         b.manifest = {'agent_profile': 'skills'}
