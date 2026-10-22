@@ -109,10 +109,22 @@ class ReferenceTask:
             raise
         finally:
             backend._ground = original
-            row.update(seconds=time.time() - row['started_at'], env_step=backend.steps,
-                       predicates=backend._predicate_values())
-            self.calls.append(row)
-            self.log('action_finished', **row)
+            row.update(seconds=time.time() - row['started_at'], env_step=backend.steps)
+            try:
+                row['predicates'] = backend._predicate_values()
+            except Exception as exc:
+                # A damaged native scene may also fail when reading states.
+                # Retain the executor's original exception and count its call,
+                # even when this diagnostic snapshot cannot be collected.
+                row['predicate_error'] = {'type': type(exc).__name__, 'error': str(exc),
+                                          'code': getattr(exc, 'code', None)}
+                if row.get('status') != 'failed':
+                    row.update(status='failed', error=str(exc), code=getattr(exc, 'code', None),
+                               failure_stage='predicate_snapshot')
+                    raise
+            finally:
+                self.calls.append(row)
+                self.log('action_finished', **row)
 
     def floor(self, x, y):
         return self.action('navigate_to', 'floor', [x, y, 0.])

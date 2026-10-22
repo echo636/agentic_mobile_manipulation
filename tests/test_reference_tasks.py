@@ -299,6 +299,47 @@ class ReferenceRecoveryTests(unittest.TestCase):
     def displaced(self):
         return SkillError('postcondition_error', 'Operation displaced existing contents from the container')
 
+    def test_native_state_read_failure_retains_original_action_error_and_budget(self):
+        motor_error = SkillError('simulation_error', 'Native step failed')
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [motor_error], max_attempts=1,
+                                       fail_primitives=('wait',))
+            original_ground = reference.backend._ground
+            def broken_snapshot():
+                raise RuntimeError('Native state read failed')
+            reference.backend._predicate_values = broken_snapshot
+            with self.assertRaises(SkillError) as raised:
+                reference.action('wait', seconds=1.)
+            self.assertIs(raised.exception, motor_error)
+            self.assertIs(reference.backend._ground, original_ground)
+            self.assertEqual(len(reference.calls), 1)
+            call = reference.calls[0]
+            self.assertEqual(call['status'], 'failed')
+            self.assertEqual(call['error'], str(motor_error))
+            self.assertEqual(call['predicate_error']['error'], 'Native state read failed')
+            rows = [json.loads(line) for line in
+                    (Path(directory) / 'reference_trajectory.jsonl').read_text().splitlines()]
+            self.assertEqual([row['event'] for row in rows], ['action_started', 'action_finished'])
+            self.assertEqual(rows[-1]['code'], 'simulation_error')
+            with self.assertRaisesRegex(RuntimeError, 'budget exhausted'):
+                reference.action('wait', seconds=1.)
+
+    def test_successful_motor_with_failed_state_read_aborts_and_records_attempt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reference = self.reference(directory, [])
+            error = RuntimeError('Native state read failed')
+            def broken_snapshot():
+                raise error
+            reference.backend._predicate_values = broken_snapshot
+            with self.assertRaises(RuntimeError) as raised:
+                reference.action('wait', seconds=1.)
+            self.assertIs(raised.exception, error)
+            self.assertEqual(len(reference.calls), 1)
+            self.assertEqual(reference.calls[0]['status'], 'failed')
+            self.assertEqual(reference.calls[0]['failure_stage'], 'predicate_snapshot')
+            self.assertEqual(reference.calls[0]['result'], {'primitive': 'wait'})
+            self.assertNotIn('predicates', reference.calls[0])
+
     def test_popcorn_close_preserves_rejected_action_and_wait_budget(self):
         def escaped():
             return SkillError('postcondition_error', 'Contained particles left the carried container')
