@@ -118,6 +118,13 @@ class LocalRGBManipulation:
         grid,collision,details,hulls,_=geometry
         actual=self._local_pose()
         if not collision.motion_free(actual,actual):
+            posture=self._adapt_carry_for_navigation(geometry[4],grid,details,
+                operation.step_limit-(self.steps-operation.start_steps))
+            if posture is not None:
+                operation.record('carry_navigation_adapted',posture=posture)
+                operation.geometry=None
+                if self._local_ready(primitive,obj,point,operation):return
+                return self._local_reposition(primitive,obj,point,operation)
             if self._refine_local_geometry(operation,point,grid,reason='coarse_start_collision'):
                 return self._local_reposition(primitive,obj,point,operation)
             self._local_clearance_recovery(operation,geometry)
@@ -364,6 +371,12 @@ class LocalRGBManipulation:
         try:
             operation.check()
             geometry=self._local_geometry(operation)
+            if not geometry[1].motion_free(self._local_pose(),self._local_pose()):
+                posture=self._adapt_carry_for_navigation(geometry[4],geometry[0],geometry[2],
+                    operation.step_limit-(self.steps-operation.start_steps))
+                if posture is not None:
+                    operation.record('carry_navigation_adapted',posture=posture)
+                    geometry=self._local_geometry(operation)
             certificate=local_exit_certificate(self._local_pose(),geometry[1],check_cancelled=operation.check,allow_lateral=getattr(self.robot,'is_holonomic_base',False))
             if certificate is not None:return 'checked'
             if operation.repositions>=operation.limits.max_repositions:return 'blocked'

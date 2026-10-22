@@ -148,12 +148,14 @@ class LocalOperation:
                 if self.repositions >= self.limits.max_repositions:
                     raise SkillError('local_adjustment_exhausted', 'Local reposition limit reached')
                 before = tuple(self.backend._local_pose())
+                carry_before = getattr(self, 'carry_posture_revision', 0)
                 self.record('align')
                 self.backend._local_reposition(self.primitive, obj, point, self)
                 self.repositions += 1
                 after = tuple(self.backend._local_pose())
                 if (math.dist(before[:2], after[:2]) < .01 and
-                        abs(math.atan2(math.sin(after[2]-before[2]), math.cos(after[2]-before[2]))) < math.radians(2)):
+                        abs(math.atan2(math.sin(after[2]-before[2]), math.cos(after[2]-before[2]))) < math.radians(2)
+                        and getattr(self, 'carry_posture_revision', 0) == carry_before):
                     raise SkillError('local_adjustment_blocked', 'Local adjustment made no progress')
                 self.visited.append(before)
                 # Refresh only internal sensor packets; never re-ground an old

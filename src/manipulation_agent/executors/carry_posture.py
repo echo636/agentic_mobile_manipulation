@@ -94,6 +94,88 @@ class CompactCarry:
         self._carry_record(status='carry_posture',object=obj.name,posture=report)
         return report
 
+    def _adapt_carry_for_navigation(self, floor, grid, details, max_steps):
+        """Resolve a payload-only blocked start using a checked ideal carry offset.
+
+        Grasp admission uses 3-D destination/sweep checks. A safe offset there
+        can still intersect the navigation raster's larger reserves. Keep the
+        robot fixed and admit an alternative with BOTH existing checks, rather
+        than moving from a raster-invalid start or loosening collision checks.
+        """
+        obj=self._get_held()
+        if (obj is None or not self.ideal_carry or getattr(self,'demo_motion',False)
+                or max_steps<6):return None
+        local=getattr(self,'_local_operation',None)
+        if getattr(local,'carry_adaptation_attempted',False):return None
+        if local is not None:local.carry_adaptation_attempted=True
+        from .carry_geometry import PayloadSweep,instant_carry_destinations
+        from .live_gt_map import build_navigation_grid
+        from .heading_collision import HeadingCollisionChecker
+        from .forward_navigation import local_exit_certificate
+        from omnigibson.utils import transform_utils as T
+        check=local.check if local is not None else self.deadline.check
+        pose=self._local_pose()
+        robot_layers=[layer for layer,info in zip(self._navigation_layers,details['collision_layers'])
+                      if info['body_group']==0]
+        robot=HeadingCollisionChecker(grid,robot_layers,pose[2],self._navigation_support,check_cancelled=check)
+        if not robot.motion_free(pose,pose):return None
+        payload=[obj,*[child for child,_ in self._carry_contents]]
+        sweep=PayloadSweep(self,obj,payload,pose,check=check)
+        base,quat=self.robot.get_position_orientation()
+        position,orientation=obj.get_position_orientation()
+        relative=self._carry_relative
+        # Cover the whole assembly, candidate offset and 30-cm departure.
+        import numpy as np
+        extent=np.max([hi for _,hi in sweep.bounds],axis=0)-np.min([lo for lo,_ in sweep.bounds],axis=0)
+        radius=max(1.8,float(np.linalg.norm(extent[:2]))+1.1)
+        sampling={'resolution':float(self.env.scene.trav_map.map_resolution),
+                  'window':[pose[0]-radius,pose[1]-radius,pose[0]+radius,pose[1]+radius]}
+        if (math.ceil(2*radius/sampling['resolution'])+2)**2>250000:
+            self._carry_record(status='navigation_carry_admission_skipped',object=obj.name,
+                               reason='assembly_exceeds_bounded_map_window')
+            return None
+        names=('_navigation_layers','_navigation_support','_navigation_clearance',
+               '_navigation_layer_yaw','_navigation_layer_heights')
+        saved={name:getattr(self,name) for name in names if hasattr(self,name)}
+        candidates=[];accepted=None
+        try:
+            for destination in instant_carry_destinations(sweep.origin,(*pose[:2],float(base[2]),pose[2]),sweep.bounds):
+                check()
+                row={'destination':destination};candidates.append(row)
+                if not sweep.destination_clear(destination):
+                    row['status']='actual_collision';continue
+                new=self.torch.tensor(destination,dtype=position.dtype,device=position.device)
+                self._carry_relative=T.relative_pose_transform(new,orientation,base,quat)
+                self._carry_follow();self.og.sim.sync_physx_to_fabric()
+                candidate_grid,_=build_navigation_grid(self,floor,sampling=sampling)
+                collision=HeadingCollisionChecker(candidate_grid,self._navigation_layers,pose[2],
+                    self._navigation_support,check_cancelled=check)
+                if not collision.motion_free(pose,pose):
+                    row['status']='navigation_start_collision';continue
+                departure=local_exit_certificate(pose,collision,check_cancelled=check,
+                    allow_lateral=bool(getattr(self.robot,'is_holonomic_base',False)))
+                row['status']='accepted' if departure else 'no_checked_departure'
+                if departure:
+                    row['departure']=departure;accepted=destination;break
+        finally:
+            # Hypothetical offsets never advance physics. Failed/cancelled
+            # admission restores the selected assembly, including its particles.
+            self._carry_relative=relative
+            try:self._carry_follow();self.og.sim.sync_physx_to_fabric()
+            finally:
+                for name,value in saved.items():setattr(self,name,value)
+        self._carry_record(status='navigation_carry_admission',object=obj.name,candidates=candidates,
+                           accepted=accepted is not None)
+        if accepted is None:return None
+        plan={'pose':pose,'route':[tuple(map(float,position)),accepted],
+              'status':'navigation_compatible_offset','transfer_mode':'instant_pose_transfer'}
+        report=self._execute_prepared_carry(obj,plan,max_steps)
+        if local is not None:
+            local.carry_posture_revision=getattr(local,'carry_posture_revision',0)+1
+        self.frames_revision=-1
+        self._carry_record(status='navigation_carry_adapted',object=obj.name,posture=report)
+        return report
+
     def _compact_carry(self, max_steps):
         import numpy as np
         import omnigibson.lazy as lazy
