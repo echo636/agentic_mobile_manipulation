@@ -514,9 +514,17 @@ class CheckedPlacement:
             # object-state transition rules and the recorded replay.
             resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
             resting.add(*held.get_position_orientation())
+            payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
+                               for child, _, kind in dependencies if kind == 'OnTop'}
+            for child, _, _ in dependencies:
+                if id(child) in payload_resting:
+                    payload_resting[id(child)].add(*child.get_position_orientation())
             for _ in range(min(50, max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
                 resting.add(*held.get_position_orientation())
+                for child, _, _ in dependencies:
+                    if id(child) in payload_resting:
+                        payload_resting[id(child)].add(*child.get_position_orientation())
             adjacency = held.states[VerticalAdjacency].get_value()
             touching = bool(held.states[Touching].get_value(target))
             official_on_top = bool(held.states[OnTop].get_value(target))
@@ -530,7 +538,8 @@ class CheckedPlacement:
                 'grasp_released': self._get_held() is None})
             if not (supported if point is not None else official_on_top):
                 raise SkillError('postcondition_error', 'Object is not stably supported by the selected surface', changed=True)
-            self._verify_payload(dependencies)
+            self._verify_payload(dependencies, support_target=target,
+                                 support_resting={key: window.report() for key, window in payload_resting.items()})
         return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=(), *, resting=None):
