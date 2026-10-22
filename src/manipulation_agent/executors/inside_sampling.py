@@ -92,7 +92,7 @@ are proposals only, with unchanged collision and settling acceptance checks.
 
 
 def sample_assembly_inside(backend, held, target, contents, *, point=None, residents=(),
-                           max_candidates=108, max_seconds=30.):
+                           max_candidates=108, max_seconds=None):
     """Search all selected-container volumes and nearby supported orientations.
 
 Unlike sampling root origins uniformly, bounds refer to the whole assembly
@@ -145,7 +145,7 @@ Rejected candidate poses never become committed actions or task evidence.
         # The shared operation/cancellation guard still bounds preparation;
         # charging its wall time against the first trial produced zero-attempt
         # placement failures on loaded scenes.
-        if admission and attempted and time.monotonic()-start > max_seconds:
+        if admission and max_seconds is not None and attempted and time.monotonic()-start > max_seconds:
             raise SkillError('sampling_budget_exhausted', 'Assembly volume search exhausted its work budget', changed=dirty)
 
     def reject(reason, candidate, **details):
@@ -455,6 +455,8 @@ Rejected candidate poses never become committed actions or task evidence.
                 held.set_position_orientation(root_pos, root_quat)
                 backend._relocate_contents(held, contents)
         backend._placement_record({'status':'inside_sampling_summary', 'method':'assembly_volume_search',
+                                   'candidate_limit':max_candidates,'admission_seconds':max_seconds,
+                                   'budget_basis':'bounded_candidates_and_shared_operation_work',
                                    'accepted':accepted, 'attempted':attempted, 'rejections':counts,
                                    'empty_insets':empty_insets, 'domain_attempts':domain_attempts,
                                    'unique_xy_attempted':len(locations) if 'locations' in locals() else 0,

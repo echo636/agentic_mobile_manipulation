@@ -1313,4 +1313,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         try:
             self.finalize_video()
         finally:
-            super().close()
+            try:
+                self._close_placement_record()
+            finally:
+                super().close()

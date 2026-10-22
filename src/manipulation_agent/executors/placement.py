@@ -63,8 +63,23 @@ def placement_transaction(sim, record):
 
 class CheckedPlacement:
     def _placement_record(self, data):
-        with (self.output / 'placement_diagnostics.jsonl').open('a') as stream:
-            stream.write(json.dumps({'env_step': self.steps, **data}) + '\n')
+        # Each newline is flushed for live monitoring. Keep the descriptor open:
+        # closing every record forces costly shared-filesystem close-to-open
+        # consistency work even though the next record appends to the same file.
+        stream = getattr(self, '_placement_diagnostics_stream', None)
+        if stream is None or stream.closed:
+            stream = (self.output / 'placement_diagnostics.jsonl').open(
+                'a', encoding='utf-8', buffering=1)
+            self._placement_diagnostics_stream = stream
+        stream.write(json.dumps({'env_step': self.steps, **data}) + '\n')
+
+    def _close_placement_record(self):
+        stream = getattr(self, '_placement_diagnostics_stream', None)
+        if stream is not None:
+            try:
+                stream.close()
+            finally:
+                self._placement_diagnostics_stream = None
 
     def _checked_place_under(self, target, max_steps):
         """Place the carried item under the model-selected parent using OG's Under sampler."""
