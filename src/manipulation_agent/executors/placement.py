@@ -460,7 +460,7 @@ class CheckedPlacement:
         self.sampling_physics_steps += 1
         self.og.sim.step_physics()
 
-    def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None):
+    def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None, payload_resting=None):
         """Finish free settling with live contacts and fresh native state reads.
 
         Sampling can put a small object to sleep before its contact state has
@@ -481,6 +481,9 @@ class CheckedPlacement:
             self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if resting is not None:
                 resting.add(*held.get_position_orientation())
+            for child in payload:
+                window=(payload_resting or {}).get(id(child))
+                if window is not None:window.add(*child.get_position_orientation())
         for obj in objects:
             for state in obj.states.values():
                 state.clear_cache()
@@ -552,7 +555,13 @@ class CheckedPlacement:
             # object-state transition rules and the recorded replay.
             resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
             resting.add(*held.get_position_orientation())
-            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
+            payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
+                               for child, _, kind in dependencies if kind == 'OnTop'}
+            for child, _, _ in dependencies:
+                if id(child) in payload_resting:
+                    payload_resting[id(child)].add(*child.get_position_orientation())
+            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
+                                          payload_resting=payload_resting)
             adjacency = held.states[VerticalAdjacency].get_value()
             touching = any(path in self._placement_contacts(held,payload) for path in (link.prim_path for link in target.links.values()))
             official_on_top = bool(held.states[OnTop].get_value(target))
@@ -566,7 +575,8 @@ class CheckedPlacement:
                 'grasp_released': self._get_held() is None})
             if not (supported if point is not None else official_on_top):
                 raise SkillError('postcondition_error', 'Object is not stably supported by the selected surface', changed=True)
-            self._verify_payload(dependencies)
+            self._verify_payload(dependencies, support_target=target,
+                                 support_resting={key: window.report() for key, window in payload_resting.items()})
         return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=True, resting=None):

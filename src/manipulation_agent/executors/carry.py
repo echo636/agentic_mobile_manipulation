@@ -476,8 +476,8 @@ class ControlledCarry(CompactCarry):
                 'contained_particles':particle_count(particles,'contained'),
                 'supported_particles':particle_count(particles,'supported')}
 
-    def _verify_payload(self, dependencies):
-        from omnigibson.object_states import Inside,OnTop,AttachedTo
+    def _verify_payload(self, dependencies, *, support_target=None, support_resting=None):
+        from omnigibson.object_states import Inside,OnTop,Touching,AttachedTo
         verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
         for child,parent,kind in dependencies:
             if kind=='AttachedToParent':
@@ -485,6 +485,21 @@ class ControlledCarry(CompactCarry):
                 kind='AttachedTo'
             state={'Inside':Inside,'OnTop':OnTop,'AttachedTo':AttachedTo}[kind]
             if state not in child.states or not child.states[state].get_value(parent):
+                # Releasing an assembly on a surface can transfer a supported
+                # child's weight to that same surface. Requiring the old
+                # OnTop edge would reject an otherwise stable placement.
+                # Containment remains mandatory; sliding/falling elsewhere or
+                # an unmeasured resting state never qualifies.
+                resting=(support_resting or {}).get(id(child),{})
+                if (kind=='OnTop' and support_target is not None
+                        and resting.get('stable',False)
+                        and OnTop in child.states and Touching in child.states
+                        and child.states[OnTop].get_value(support_target)
+                        and child.states[Touching].get_value(support_target)):
+                    self._placement_record({'status':'payload_support_transferred',
+                        'child':child.name,'original_parent':parent.name,
+                        'support':support_target.name,'resting_motion':resting})
+                    continue
                 raise SkillError('postcondition_error','Carried payload lost its original support, containment or attachment after placement',changed=True)
 
     def _ideal_release(self,max_steps):
