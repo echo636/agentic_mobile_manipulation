@@ -146,14 +146,19 @@ class CheckedPlacement:
         return {'primitive': 'place_under', 'implementation': method,
                 'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
 
-    def _next_to_candidates(self, held, target, point, payload=()):
+    def _next_to_candidates(self, held, target, point, payload=(), yaw_degrees=None):
         """Find upward physical surfaces near the reference, without class filters."""
         import math
-        from .surface_geometry import bottom_anchor
+        from .surface_geometry import bottom_anchor, rotated_surface_geometry
+        from omnigibson.utils import transform_utils as T
         from omnigibson.utils.sampling_utils import raytest
         pose = held.get_position_orientation()
-        anchor = bottom_anchor(self._collision_vertices(held)) - pose[0].cpu().numpy()
+        _,anchor = rotated_surface_geometry(self._collision_vertices(held),pose[0].cpu().numpy(),yaw_degrees)
         anchor = self.torch.as_tensor(anchor, dtype=point.dtype, device=point.device)
+        orientation=pose[1].clone()
+        if yaw_degrees is not None:
+            rotation=T.euler2quat(self.torch.tensor([0.,0.,math.radians(yaw_degrees)],device=orientation.device))
+            orientation=T.quat_multiply(rotation,orientation)
         moving = (held, self.robot, *payload)
         ignored = [link.prim_path for obj in (*moving, target) for link in obj.links.values()]
         by_link = {link.prim_path: obj for obj in self.env.scene.objects
@@ -191,7 +196,7 @@ class CheckedPlacement:
                 continue
             root = self.torch.as_tensor(hit['position'], dtype=point.dtype, device=point.device) - anchor
             root[2] += clearance
-            candidates.append({'index': index, 'pose': (root, pose[1].clone()), 'support': support,
+            candidates.append({'index': index, 'pose': (root, orientation.clone()), 'support': support,
                 'support_position': hit['position'], 'radius_m': radius, 'angle_deg': angle,
                 'clearance_m': clearance})
         return candidates
@@ -213,7 +218,7 @@ class CheckedPlacement:
             'contact_bodies': contacts, 'speed_m_s': speed, 'angular_speed_rad_s': angular_speed,
             'position': held.get_position_orientation()[0].tolist()}
 
-    def _checked_place_next_to(self, target, max_steps, point):
+    def _checked_place_next_to(self, target, max_steps, point, yaw_degrees=None):
         """Try complete release/settle/verify cycles; preserve preceding placements."""
         from omnigibson.object_states import NextTo
         held = self._get_held()
@@ -226,7 +231,7 @@ class CheckedPlacement:
                 contents = list(self._carry_contents) if self.ideal_carry else []
                 payload = [obj for obj, _ in contents]
                 dependencies = list(getattr(self, '_carry_dependencies', []))
-                candidates = self._next_to_candidates(held, target, point, payload)
+                candidates = self._next_to_candidates(held, target, point, payload, yaw_degrees)
                 self._carry_detach()
                 trial_state = self.og.sim.dump_state(serialized=False)
                 accepted = None
@@ -281,6 +286,7 @@ class CheckedPlacement:
         finally:
             self.frames_revision = -1
         return {'primitive': 'place_next_to', 'implementation': 'generic_surface_search_and_free_settling',
+                'requested_yaw_degrees': yaw_degrees,
                 'postcondition': 'official_NextTo_and_OnTop_after_free_settling',
                 'failure_policy': 'restore_pre_action_state'}
 

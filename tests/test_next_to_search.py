@@ -84,5 +84,19 @@ class NextToCandidateRetry(unittest.TestCase):
         self.assertEqual(world['prior_item'], 'placed')
         self.assertIs(b._get_held(), held)
 
+    def test_oriented_pair_placement_still_requires_support_and_nextto(self):
+        b, held, target, world, steps, restored, checks, records = self.backend(1)
+        original=b._next_to_candidates
+        requests=[]
+        def candidates(*args):
+            requests.append(args[-1])
+            return original(*args)
+        b._next_to_candidates=candidates
+        result=b._checked_place_next_to(target,100,None,90.)
+        self.assertEqual(requests,[90.])
+        self.assertEqual(checks,[0,1,1])
+        self.assertEqual(result['requested_yaw_degrees'],90.)
+        self.assertEqual(world['prior_item'],'placed')
+
 
 if __name__ == '__main__': unittest.main()
