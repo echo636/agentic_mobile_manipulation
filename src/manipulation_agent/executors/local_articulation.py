@@ -53,11 +53,18 @@ class ArticulationSweep:
 
 def prepare_articulation(backend,obj,primitive,operation):
     from omnigibson.object_states import Open
-    from .particle_payload import snapshot_particle_state,restore_particle_state
+    from .particle_payload import snapshot_particle_state,restore_particle_state,particle_state_unchanged
     sim=backend.og.sim
     operation.check()
     state=sim.dump_state(serialized=False)
     particles=snapshot_particle_state(sim)
+    from .placement import scene_object_identities
+    identities=scene_object_identities(sim)
+    def restore():
+        if scene_object_identities(sim)!=identities or not particle_state_unchanged(particles):
+            raise SkillError('target_changed','Scene identities changed during articulation preview',changed=True)
+        sim.load_state(copy.deepcopy(state),serialized=False)
+        restore_particle_state(particles)
     rng=random.getstate();numpy_rng=np.random.get_state();torch_rng=backend.torch.random.get_rng_state()
     start=obj.get_joint_positions().clone();boxes=[]
     current_geometry=getattr(operation,'geometry',None) or backend._local_geometry(operation)
@@ -76,12 +83,16 @@ def prepare_articulation(backend,obj,primitive,operation):
     try:
         if live_cache is not missing:
             backend._live_gt_collision_cache=copy.deepcopy(live_cache)
-        if not obj.states[Open].set_value(primitive=='open',fully=True):
-            raise SkillError('local_adjustment_blocked','No stable articulated target state')
-        goal=obj.get_joint_positions().clone()
+        if primitive=='open':
+            from .articulation_goal import checked_open_goal
+            goal=checked_open_goal(backend,obj,operation.check)
+        else:
+            if not obj.states[Open].set_value(False,fully=True):
+                raise SkillError('local_adjustment_blocked','No stable articulated target state')
+            goal=obj.get_joint_positions().clone()
         count=max(1,math.ceil(float(abs(goal-start).max())/.025))
         if count>160:raise SkillError('local_adjustment_exhausted','Articulation preview exceeds bounded joint sweep')
-        sim.load_state(state,serialized=False);restore_particle_state(particles)
+        restore()
         previous=vertices();initial_vertices=previous
         with backend._editable_carry_joints(obj):
             for i in range(1,count+1):
@@ -98,19 +109,22 @@ def prepare_articulation(backend,obj,primitive,operation):
             future_geometry=backend._local_geometry(operation,occupancy_overrides=moved_links)
             plan={'primitive':primitive,'object_prim':str(obj.prim_path),
                   'start_joints':start.cpu().tolist(),'goal_joints':goal.cpu().tolist(),'samples':count}
-            sim.load_state(state,serialized=False);restore_particle_state(particles)
+            restore()
     finally:
-        sim.load_state(state,serialized=False);restore_particle_state(particles)
-        random.setstate(rng);np.random.set_state(numpy_rng);backend.torch.random.set_rng_state(torch_rng)
-        # Restore even on cancellation, without invoking an expired budget.
-        # Checkers own their occupancy arrays; the real operation must start
-        # from the cache of the actual pre-operation scene.
-        if live_cache is missing:
-            backend.__dict__.pop('_live_gt_collision_cache',None)
-        else:
-            backend._live_gt_collision_cache=live_cache
-        for name,value in saved.items():setattr(backend,name,value)
-        backend.frames_revision=-1
+        try:
+            restore()
+        finally:
+            random.setstate(rng);np.random.set_state(numpy_rng);backend.torch.random.set_rng_state(torch_rng)
+            # Restore even on cancellation, without invoking an expired budget.
+            # Checkers own their occupancy arrays; the real operation must start
+            # from the cache of the actual pre-operation scene.
+            if live_cache is missing:
+                backend.__dict__.pop('_live_gt_collision_cache',None)
+            else:
+                backend._live_gt_collision_cache=live_cache
+            for name,value in saved.items():setattr(backend,name,value)
+            backend.frames_revision=-1
+
     operation.record('articulation_preview',samples=count,swept_link_intervals=len(boxes),
                      object_prim=str(obj.prim_path),hypothetical_state_restored=True)
     return ArticulationSweep(backend,boxes,current_geometry[1]),future_geometry[1],plan

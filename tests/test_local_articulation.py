@@ -29,7 +29,11 @@ class ArticulationTests(unittest.TestCase):
         def setter(value,fully):
             random.random();q[0]=torch.ones(1) if value else torch.zeros(1);return True
         obj.states={Open:SimpleNamespace(set_value=setter)}
-        sim=SimpleNamespace(dump_state=lambda **kw:q[0].clone(),load_state=lambda state,**kw:q.__setitem__(0,state.clone()))
+        loads=[]
+        def load(state,**kw):
+            loads.append(state);q[0]=state.clone()
+        scene=SimpleNamespace(objects=[obj])
+        sim=SimpleNamespace(dump_state=lambda **kw:q[0].clone(),load_state=load,scenes=[scene])
         backend=SimpleNamespace(og=SimpleNamespace(sim=sim),torch=torch,steps=0,frames_revision=0,
             _container_payload=lambda obj:[],_relocate_container_payload=lambda p:None,
             _anchored_operation=lambda obj:nullcontext(),_editable_carry_joints=lambda obj:nullcontext(),
@@ -56,9 +60,15 @@ class ArticulationTests(unittest.TestCase):
         operation=SimpleNamespace(check=check,record=lambda *args,**kw:records.append((args,kw)))
         module=ModuleType('omnigibson.object_states');module.Open=Open
         rng=random.getstate()
+        def choose_goal(*args):
+            if fail=='identity':
+                scene.objects=[]
+                raise SkillError('target_changed','Endpoint physics replaced an object',changed=True)
+            return torch.ones(1)
         with patch.dict(sys.modules,{'omnigibson':ModuleType('omnigibson'),'omnigibson.object_states':module}),\
              patch('manipulation_agent.executors.particle_payload.snapshot_particle_state',return_value=[]),\
-             patch('manipulation_agent.executors.particle_payload.restore_particle_state'):
+             patch('manipulation_agent.executors.particle_payload.restore_particle_state'),\
+             patch('manipulation_agent.executors.articulation_goal.checked_open_goal',side_effect=choose_goal):
             if fail:
                 with self.assertRaises(SkillError):prepare_articulation(backend,obj,'open',operation)
             else:
@@ -70,6 +80,9 @@ class ArticulationTests(unittest.TestCase):
         self.assertIs(backend._live_gt_collision_cache,cache)
         self.assertEqual(cache['joint_signature'],0.)
         self.assertFalse(cache['free'].any())
+        if fail=='identity':
+            self.assertEqual(loads,[])
+            self.assertEqual(scene.objects,[])
         return samples
 
     def test_preview_restores_joints_rng_and_current_geometry(self):
@@ -77,6 +90,7 @@ class ArticulationTests(unittest.TestCase):
 
     def test_failed_preview_still_restores_scene(self):
         self.assertEqual(len(self.preview(fail=True)),2)
+        self.assertEqual(self.preview(fail='identity'),[])
 
     def test_cancellation_after_hypothetical_raster_update_restores_live_cache(self):
         self.assertGreater(len(self.preview(fail='geometry')),2)
