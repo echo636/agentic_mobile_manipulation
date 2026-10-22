@@ -678,7 +678,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             layer_footprints_json=json.dumps(map_details['collision_layers']))
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_results,
-                 'motion_policy':'turn_then_drive_forward_v1',
+                 'motion_policy':'checked_forward_reverse_v2',
                  'grid_artifact':str(map_file.relative_to(self.output)),
                  'selected_world_point':point.cpu().tolist(),
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
@@ -932,7 +932,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                 budget=PlanningBudget(self.deadline.check,seconds=10.)
                 collision=HeadingCollisionChecker(grid,self._navigation_layers,self._navigation_layer_yaw,
                     self._navigation_support,check_cancelled=budget.check)
-                record={'at':now(),'audience':'executor_private','motion_policy':'turn_then_drive_forward_v1',
+                record={'at':now(),'audience':'executor_private','motion_policy':'checked_forward_reverse_v2',
                         'navigation_plan_index':getattr(self,'_navigation_plan_index',None),
                         'start':[*previous,start_yaw],'goal':list(plan.goal),'final_yaw':plan.final_yaw,
                         'planning_seconds_limit':10.,'heading_state_limit':20000}
@@ -986,8 +986,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                         actual_xy=measured[:2].cpu().tolist();travelled+=math.dist(previous,actual_xy);previous=actual_xy
                         stream.write(json.dumps({'at':now(),'env_step':self.steps,'commanded_position':new_pos.tolist(),
                             'actual_position':measured.tolist(),'actual_orientation':measured_quat.tolist(),
-                            'commanded_yaw':yaw,'phase_index':phase_index,'motion_mode':plan.motion_mode,
-                            'follower':'turn_then_drive_forward' if forward else 'clearance_retreat',
+                            'commanded_yaw':yaw,'phase_index':phase_index,'motion_mode':phase.motion_mode,
+                            'follower':'checked_forward_reverse' if forward else 'clearance_retreat',
                             'audience':'executor_private'})+'\n')
             motion_steps=self.steps-before
             if self._base_target is not None:
@@ -1009,7 +1009,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             self._base_target=None
         return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
                 'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
-                'final_yaw_error_rad':final_yaw_error,'motion_policy':'turn_then_drive_forward_v1' if forward else 'clearance_retreat',
+                'final_yaw_error_rad':final_yaw_error,'motion_policy':'checked_forward_reverse_v2' if forward else 'clearance_retreat',
                 'forward_route_method':route.method if route else None,
                 'forward_planned_distance_m':route.distance_m if route else None,
                 'forward_planned_turn_degrees':math.degrees(route.turn_radians) if route else None,
@@ -1281,7 +1281,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
         result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
-            'motion_policy':'turn_then_drive_forward_v1',
+            'motion_policy':'checked_forward_reverse_v2',
             'forward_route':'checked_forward_point_projection_or_polyline_or_shared_bidirectional_continuous_pose_astar',
             'forward_candidate_budget':{'shared_seconds':10.,'point_projection_seconds':3.,'expanded_poses':20000},
             'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},

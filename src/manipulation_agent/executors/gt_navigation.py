@@ -490,8 +490,9 @@ class GreedyGridFollower:
             if distance>self.position_tolerance:
                 forward=dx*math.cos(yaw)+dy*math.sin(yaw)
                 sideways=abs(-dx*math.sin(yaw)+dy*math.cos(yaw))
-                if forward<0 or sideways>max(self.position_tolerance,distance*math.sin(self.heading_tolerance)):
-                    raise NavigationError('Forward follower would translate sideways or backwards')
+                direction=-1 if self.plan.motion_mode=='reverse' else 1
+                if direction*forward<0 or sideways>max(self.position_tolerance,distance*math.sin(self.heading_tolerance)):
+                    raise NavigationError('Drive follower would translate sideways or against the planned direction')
         if self.motion_check is not None and not self.motion_check((x,y,yaw),command):
             raise NavigationError('Next motion fails orientation-aware swept collision validation')
         if phase=='advance' and self.advance_index!=self.index:
