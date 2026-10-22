@@ -79,6 +79,16 @@ class CompleteWorkflowContracts(unittest.TestCase):
         for s in self.specs:
             self.assertFalse(any(r.get('state')=='Contains' and r.get('value') for r in s['initial_layout']))
 
+    def test_large_surface_approach_stays_near_requested_work_area(self):
+        flow=FullWorkflowReference.__new__(FullWorkflowReference)
+        flow.backend=SimpleNamespace(robot=SimpleNamespace(get_position_orientation=lambda:([0.,0.,0.],None)))
+        flow.ref=SimpleNamespace(action=Mock())
+        flow.surface_point=Mock(return_value=[5.,2.,.01])
+        slot=[5.,7.,.01]
+        flow.action(dict(primitive='place_on_top',role='floor',point=slot))
+        self.assertEqual([c.args for c in flow.ref.action.call_args_list],[
+            ('navigate_to','floor',slot),('place_on_top','floor',slot)])
+
     def test_fixed_wall_attachment_points_keep_authored_wall_positions(self):
         for spec in self.specs:
             fixed={row['name'] for row in spec['asset_imports'] if row.get('fixed_base')}

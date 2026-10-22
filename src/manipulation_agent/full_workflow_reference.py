@@ -5,6 +5,8 @@ no task-state setter, simulator teleport, or evaluator-dependent target is used.
 """
 from __future__ import annotations
 
+import math
+
 from .contracts import SkillError
 from .long_horizon import expression
 
@@ -136,6 +138,13 @@ class FullWorkflowReference:
                         approach_point=(self.surface_point(approach,'navigate_to',attempt)
                                         if approach!=role or any(k in row for k in ('uv','xy','point'))
                                         else point)
+                        # A floor (or long worktop) can span an entire room.
+                        # Its sampled surface must remain near the requested
+                        # work area, otherwise navigation repeatedly approaches
+                        # an unrelated region while local manipulation cannot
+                        # reach the actual placement slot.
+                        if approach==role and math.dist(approach_point[:2],point[:2])>1.:
+                            approach_point=point
                         # An exact placement slot may be behind the near edge
                         # of a distant shelf. Approach a real surface of that
                         # same object, then retain the requested placement slot.

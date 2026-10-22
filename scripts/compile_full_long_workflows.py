@@ -237,10 +237,13 @@ def kitchen(inv,models):
 def table_parts(b,parts_xy,jig_xy,destination_xy,compact=False,near_side_legs=False):
  """Six actual furniture components; the temporary central jig must be released."""
  # The 18 cm pedestal let the tabletop tip after two legs were attached.
- # A broad central support fits inside the native perimeter bracket and
- # leaves the four corner attachment sites and legs clear. The assembled
- # table must still leave this temporary support and stand on all four feet.
- b.fixture('parts',parts_xy,[1.7 if compact else 2.4,2.,.65]);b.fixture('jig',jig_xy,[.54,.90,.86])
+ # A 54x90 cm rectangle fits only when aligned with the bracket; a 30 degree
+ # placement collided with its inner frame and overturned the assembly.
+ # This square's half-diagonal plus the measured 22 mm attachment offset
+ # stays inside the narrowest 348 mm inner half-width at every yaw. It has
+ # over five times the area of the original 18 cm support. Fresh physical tests
+ # must still verify stability and extraction, then all four feet on floor.
+ b.fixture('parts',parts_xy,[1.7 if compact else 2.4,2.,.65]);b.fixture('jig',jig_xy,[.42,.42,.86])
  for role,category in [('table','desk_top'),('bracket','desk_bracket')]+[('leg'+str(i),'desk_leg') for i in range(1,5)]:b.native(role,category)
  roles=['table','bracket','leg1','leg2','leg3','leg4']
  # Parts occupy separate strips; one table, one bracket and four structural legs.
