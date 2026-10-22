@@ -26,6 +26,8 @@ def checked_open_goal(backend, obj, check):
     ignored=own|{str(link.prim_path) for item in [backend.robot,*[x[0] for x in payload]]
                  for link in item.links.values()}
     links=[link for link in obj.links.values() if not link.is_meta_link]
+    initial=obj.get_joint_positions().clone()
+    initial_poses={str(link.prim_path):tuple(v.clone() for v in link.get_position_orientation()) for link in links}
     trials=[]
     try:
         check()
@@ -41,11 +43,31 @@ def checked_open_goal(backend, obj, check):
             for a,b in zip(closed_poses[str(link.prim_path)],link.get_position_orientation()))}
         # Prefer the largest useful opening. A maximal joint angle is not an
         # obligation: a lid behind a box can intersect a wall at that angle.
-        for fraction in (1.,.875,.75,.625,.5,.375,.25,.125):
+        fractions=(1.,.875,.75,.625,.5,.375,.25,.125)
+        def candidates():
+            # Preserve the existing maximum-common-opening preference. If one
+            # independent leaf is blocked, try the other without moving it.
+            for fraction in fractions:
+                yield 'common',None,fraction,closed+(opened-closed)*fraction
+            active=(abs(opened-closed)>1e-5).nonzero().flatten().cpu().tolist()
+            if len(active)>1:
+                for index in active:
+                    for fraction in fractions:
+                        goal=initial.clone()
+                        goal[index]=closed[index]+(opened[index]-closed[index])*fraction
+                        # An opening attempt must not close a leaf that is
+                        # already more open than this candidate.
+                        before=float((initial[index]-closed[index])/(opened[index]-closed[index]))
+                        if fraction<=before+1e-6:continue
+                        yield 'independent_leaf',index,fraction,goal
+        for policy,index,fraction,goal in candidates():
             check()
             sim.load_state(copy.deepcopy(state),serialized=False);restore_particle_state(particles)
-            goal=closed+(opened-closed)*fraction
             obj.set_joint_positions(goal);obj.keep_still()
+            candidate_moving=moving if policy=='common' else {
+                str(link.prim_path) for link in links if any(
+                    not backend.torch.allclose(a,b,atol=1e-5,rtol=0.)
+                    for a,b in zip(initial_poses[str(link.prim_path)],link.get_position_orientation()))}
             backend._relocate_container_payload(payload)
             obj.states[Open].clear_cache()
             if not obj.states[Open].get_value():continue
@@ -58,17 +80,17 @@ def checked_open_goal(backend, obj, check):
                 check();sim.step_physics()
                 pairs=RigidContactAPI.get_contact_pairs(obj.scene.idx,query_set=[obj],with_set=None,current_only=True)
                 blocking.update((str(a),str(b)) for a,b in pairs if
-                    (str(a) in moving and str(b) not in ignored) or
-                    (str(b) in moving and str(a) not in ignored))
+                    (str(a) in candidate_moving and str(b) not in ignored) or
+                    (str(b) in candidate_moving and str(a) not in ignored))
             displacement=float(backend.torch.linalg.norm(obj.get_position_orientation()[0]-origin))
             obj.states[Open].clear_cache()
             usable=bool(obj.states[Open].get_value())
             clear=not blocking and usable and (backend._get_held() is obj or displacement<=.005)
-            trials.append(dict(fraction=fraction,blocking_contacts=sorted(blocking),
+            trials.append(dict(policy=policy,joint_index=index,fraction=fraction,blocking_contacts=sorted(blocking),
                                root_displacement_m=displacement,official_open=usable,clear=clear))
             if clear:
                 backend._placement_record(dict(status='articulation_open_endpoint_selected',target=obj.name,
-                    goal_joints=goal.cpu().tolist(),fraction=fraction,trials=trials,
+                    goal_joints=goal.cpu().tolist(),opening_policy=policy,joint_index=index,fraction=fraction,trials=trials,
                     criterion='open_with_no_external_moving_link_contact_or_root_impulse'))
                 return goal
         backend._placement_record(dict(status='articulation_open_endpoint_unresolved',target=obj.name,trials=trials))
