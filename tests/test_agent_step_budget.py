@@ -151,6 +151,19 @@ class StepSupervisorTests(unittest.TestCase):
             self.assertIn('None,max_agent_steps=50',command[-1])
             self.assertNotIn('1800',command[-1])
 
+    def test_unbounded_clock_and_adoption_preserve_each_original_policy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp);b.manifest.update(episode_budget_policy='unbounded',max_agent_steps=None)
+            self.assertIn('None,unbounded=True',b.execution_clock_command(Path(tmp)/'clock',1800)[-1])
+            old={'episode_budget_policy':'agent_steps','max_agent_steps':50}
+            self.assertIn('None,max_agent_steps=50',b.execution_clock_command(Path(tmp)/'old',None,row=old)[-1])
+            controller=Path(tmp)/'controller';controller.mkdir()
+            clock=write_execution_clock(Path(tmp)/'clock.json',None,unbounded=True)
+            (controller/'controller.json').write_text(json.dumps({'execution_clock':clock,**clock}))
+            row=b.rows[0];b.controller_metadata(row,controller)
+            self.assertEqual(row['budget_basis'],'unbounded')
+            self.assertIsNone(row['episode_deadline_unix'])
+
     def test_unavailable_remote_health_is_not_proof_of_termination(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp);row={'run_id':'fixture','port':1,'simulator_unit':'owned'}

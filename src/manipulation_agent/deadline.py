@@ -33,11 +33,15 @@ def tool_wait_seconds(execution_seconds):
 def validate_execution_clock(value):
     """Validate clock data without accepting a new start or extending its budget."""
     if not isinstance(value,dict):raise ValueError('Execution clock must be a JSON object')
-    if value.get('budget_policy') == 'agent_steps':
+    if value.get('budget_policy') in {'agent_steps', 'unbounded'}:
         started=value.get('execution_started_at_unix');steps=value.get('max_agent_steps')
         if (isinstance(started,bool) or not isinstance(started,(int,float)) or
-                not math.isfinite(started) or started<=0 or type(steps) is not int or steps<=0):
-            raise ValueError('Step clock requires a finite start and positive step limit')
+                not math.isfinite(started) or started<=0):
+            raise ValueError('Execution clock requires a finite positive start')
+        if value['budget_policy']=='agent_steps' and (type(steps) is not int or steps<=0):
+            raise ValueError('Step clock requires a positive step limit')
+        if value['budget_policy']=='unbounded' and steps is not None:
+            raise ValueError('Unbounded episodes must not carry an action limit')
         if value.get('episode_deadline_unix') is not None or value.get('execution_budget_seconds') is not None:
             raise ValueError('Step-only episodes must not carry a wall-clock deadline')
         return dict(value)
@@ -51,16 +55,18 @@ def validate_execution_clock(value):
     return dict(value)
 
 
-def write_execution_clock(path, duration_seconds, *, max_agent_steps=None):
+def write_execution_clock(path, duration_seconds, *, max_agent_steps=None, unbounded=False):
     """Atomically arm once, called privately after MCP handshake and before policy.
 
     Repeated calls return the existing clock, including when already expired.
     The model has neither this command nor access to its file.
     """
     step_only=max_agent_steps is not None
+    if unbounded and (duration_seconds is not None or step_only):
+        raise ValueError('Unbounded clock cannot include action or duration limits')
     if step_only and (duration_seconds is not None or type(max_agent_steps) is not int or max_agent_steps<=0):
         raise ValueError('Step-only clock requires positive max_agent_steps and no duration')
-    if not step_only and (isinstance(duration_seconds,bool) or not isinstance(duration_seconds,(int,float)) or not math.isfinite(duration_seconds) or duration_seconds<=0):
+    if not (step_only or unbounded) and (isinstance(duration_seconds,bool) or not isinstance(duration_seconds,(int,float)) or not math.isfinite(duration_seconds) or duration_seconds<=0):
         raise ValueError('Execution duration must be positive and finite')
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     with path.with_suffix(path.suffix+'.lock').open('a') as lock:
@@ -68,8 +74,9 @@ def write_execution_clock(path, duration_seconds, *, max_agent_steps=None):
         if path.exists():return validate_execution_clock(json.loads(path.read_text()))
         started=time.time()
         record=validate_execution_clock({'schema_version':1,'clock_kind':'policy_execution',
-            **({'budget_policy':'agent_steps','max_agent_steps':max_agent_steps} if step_only else {}),
-            'execution_started_at_unix':started,'episode_deadline_unix':None if step_only else started+duration_seconds,
+            **({'budget_policy':'unbounded','max_agent_steps':None} if unbounded else
+               {'budget_policy':'agent_steps','max_agent_steps':max_agent_steps} if step_only else {}),
+            'execution_started_at_unix':started,'episode_deadline_unix':None if step_only or unbounded else started+duration_seconds,
             'execution_budget_seconds':duration_seconds,'writer_pid':os.getpid()})
         temporary=None
         try:
@@ -121,12 +128,13 @@ class EpisodeDeadline:
         self._load_clock()
         return dict(self._clock) if self._clock is not None else None
 
-    def arm_local(self, duration_seconds, *, max_agent_steps=None):
+    def arm_local(self, duration_seconds, *, max_agent_steps=None, unbounded=False):
         """Standalone fallback at bridge readiness, never during construction."""
         if not self.managed:
             started=time.time()
             self._clock=validate_execution_clock({'clock_kind':'standalone_ready',
-                **({'budget_policy':'agent_steps','max_agent_steps':max_agent_steps} if max_agent_steps is not None else {}),
+                **({'budget_policy':'unbounded','max_agent_steps':max_agent_steps} if unbounded else
+                   {'budget_policy':'agent_steps','max_agent_steps':max_agent_steps} if max_agent_steps is not None else {}),
                 'execution_started_at_unix':started,'episode_deadline_unix':None if duration_seconds is None else started+duration_seconds,
                 'execution_budget_seconds':duration_seconds})
             self._unix=self._clock['episode_deadline_unix']

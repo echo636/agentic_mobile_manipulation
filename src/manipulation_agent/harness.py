@@ -43,6 +43,8 @@ class Harness:
         if clock:
             if clock.get('budget_policy')=='agent_steps' and clock['max_agent_steps']!=getattr(self,'agent_step_limit',None):
                 raise ValueError('Controller and simulator agent-step limits differ')
+            if clock.get('budget_policy')=='unbounded' and not getattr(self,'unbounded_episode',False):
+                raise ValueError('Controller and simulator unbounded policies differ')
             # Existing observation-job deadlines and wall-time diagnostics share
             # the execution origin too; simulator construction is excluded.
             self.started=time.monotonic()-max(0,time.time()-clock['execution_started_at_unix'])
@@ -57,7 +59,8 @@ class Harness:
     def start_standalone_clock(self):
         if not self.deadline.managed:
             self.started=time.monotonic()
-            self.deadline.arm_local(self.budget.wall_seconds,max_agent_steps=getattr(self,'agent_step_limit',None))
+            self.deadline.arm_local(self.budget.wall_seconds,max_agent_steps=getattr(self,'agent_step_limit',None),
+                                    unbounded=getattr(self,'unbounded_episode',False))
         self.sync_execution_clock()
 
     def call(self, name: str, arguments: dict, request_id: str, *, origin='controller') -> dict:
@@ -212,8 +215,8 @@ class Harness:
                   "evaluation_finished_after_deadline": self.deadline.unix is not None and evaluation_finished_at >= self.deadline.unix}
         if getattr(self.backend, 'diagnostic_write_failures', None):
             result['diagnostic_write_failures'] = self.backend.diagnostic_write_failures
-        if getattr(self,'agent_step_limit',None) is not None:
-            exhausted=self.agent_steps>=self.agent_step_limit
+        if getattr(self,'agent_step_limit',None) is not None or getattr(self,'unbounded_episode',False):
+            exhausted=self.agent_step_limit is not None and self.agent_steps>=self.agent_step_limit
             result.update(agent_steps=self.agent_steps,max_agent_steps=self.agent_step_limit,
                           agent_step_budget_exhausted=exhausted)
             if exhausted and not task_success:

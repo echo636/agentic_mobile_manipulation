@@ -299,6 +299,8 @@ def main():
     if manifest.get('require_task_notes'): args.append('--require-task-notes')
     if manifest.get('episode_budget_policy')=='agent_steps':
         args+=['--max-agent-steps',str(manifest['max_agent_steps'])]
+    elif manifest.get('episode_budget_policy')=='unbounded':
+        args+=['--unbounded-episode']
     os.execv(sys.executable,args)
 
 
