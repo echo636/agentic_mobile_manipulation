@@ -97,7 +97,8 @@ class LocalRGBManipulation:
         operation.geometry=geometry
         if not geometry[1].motion_free(pose,pose):return False
         if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=geometry[3],base_yaw=pose[2],
-                                      selected_container=primitive=='place_inside'):return False
+                                      selected_container=primitive in {'place_inside','place_next_to','place_under'},
+                                      tracked_target=True):return False
         if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
             if not self._admit_articulation(primitive,obj,pose,operation,operation.check):return False
         if primitive=='grasp' and self.ideal_carry and not self.demo_motion:
@@ -146,7 +147,8 @@ class LocalRGBManipulation:
                     visibility={}
                     if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=hulls,
                                                   base_yaw=pose[2],diagnostics=visibility,
-                                                  selected_container=primitive=='place_inside'):
+                                                  selected_container=primitive in {'place_inside','place_next_to','place_under'},
+                                                  tracked_target=True):
                         row.update(status='rejected',reason='target_not_visible',visibility=visibility);continue
                     if local_exit_certificate(pose,local,check_cancelled=preparation.check) is None:
                         row.update(status='rejected',reason='no_departure');continue

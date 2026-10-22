@@ -49,7 +49,7 @@ def camera_mount(direction, height, radius=0.35, pitch_degrees=20):
 
 
 def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04, radius=.35,
-                     pitch_degrees=20):
+                     pitch_degrees=20, require_in_frame=True):
     """Candidate camera rays inside the real square 90-degree RGB frusta.
 
     Uses the same four mount transforms as capture. Does not read scene truth,
@@ -62,6 +62,12 @@ def visible_rig_rays(xy, yaw, base_z, height, point, margin=.04, radius=.35,
         offset,basis=camera_mount(direction,height,radius=radius,
                                   pitch_degrees=pitch_degrees)
         origin=[sum(rotation[i][j]*offset[j] for j in range(3))+(*xy,base_z)[i] for i in range(3)]
+        if not require_in_frame:
+            # A target already bound from an RGB click can leave the camera
+            # frustum during approach. Retain geometric sight rays from the
+            # actual rig origins without claiming a new visible pixel.
+            rays.append((direction,origin,None))
+            continue
         world_basis=[[sum(rotation[i][k]*basis[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
         delta=[p-o for p,o in zip(point,origin)]
         local=[sum(world_basis[i][j]*delta[i] for i in range(3)) for j in range(3)]

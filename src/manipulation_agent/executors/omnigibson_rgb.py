@@ -535,7 +535,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         return hulls,report
 
     def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=None,
-                          self_hulls=(), base_yaw=None, diagnostics=None, selected_container=False):
+                          self_hulls=(), base_yaw=None, diagnostics=None, selected_container=False,
+                          tracked_target=False):
         """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
@@ -551,9 +552,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         yaw=base_yaw if base_yaw is not None else math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
         rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,
                               point.cpu().tolist(),margin=margin,radius=self.rig_radius,
-                              pitch_degrees=self.rig_pitch_degrees)
+                              pitch_degrees=self.rig_pitch_degrees,require_in_frame=not tracked_target)
         if diagnostics is not None:
-            diagnostics.update(in_frame_cameras=len(rays),self_occluded=0,scene_occluders=[])
+            diagnostics.update(in_frame_cameras=None if tracked_target else len(rays),
+                               tracked_target=tracked_target,sight_rays=len(rays),self_occluded=0,scene_occluders=[])
         c,s=math.cos(yaw),math.sin(yaw)
         base_z=float(self.robot.get_position_orientation()[0][2])
         def local(world):
@@ -565,8 +567,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                 continue
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
-            # Inside selects a container, not an exact shelf/surface point.
-            # Seeing the same selected container is sufficient for approach;
+            # Object-relative placements select a reference object, not an
+            # exact shelf/surface point. Its own surface is sufficient;
             # other scene occluders and own-body silhouettes still reject it.
             if hit.get('rigidBody') in selected_paths:
                 if diagnostics is not None:diagnostics['visible_selected_container']=True
