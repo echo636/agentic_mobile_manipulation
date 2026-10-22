@@ -67,7 +67,7 @@ def closed_geometry_overlap(geometry, volume, center, extent):
 
 
 def check_closure_clearance(backend, target, assembly):
-    from omnigibson.object_states import Open
+    from omnigibson.object_states import Inside, Open
     from omnigibson.utils.usd_utils import RigidContactAPI
     from .particle_payload import snapshot_particle_state, restore_particle_state, particle_state_unchanged
     from .placement import scene_object_identities
@@ -89,6 +89,13 @@ def check_closure_clearance(backend, target, assembly):
              for link in links}
     payload = backend._container_payload(target)
     paths = {str(link.prim_path) for obj in assembly for link in obj.links.values()}
+    # Existing support contact is expected when a sliding shelf carries its
+    # contents. Certify the same support again at the closed pose; never waive
+    # a new door/side collision just because both bodies already touched.
+    from .container_support import contacting_support
+    supports = {obj: contacting_support(backend, obj, [target]) for obj in assembly}
+    existing_pairs = {frozenset((str(a),str(b))) for a,b in RigidContactAPI.get_contact_pairs(
+        target.scene.idx, query_set=[target], with_set=list(assembly), current_only=True)}
     try:
         if not target.states[Open].set_value(False, fully=True):
             return {'applicable': True, 'clear': False, 'reason': 'closed_state_setter_rejected'}
@@ -105,12 +112,25 @@ def check_closure_clearance(backend, target, assembly):
         sim.step_physics()
         pairs = RigidContactAPI.get_contact_pairs(target.scene.idx, query_set=[target],
                                                   with_set=list(assembly), current_only=True)
+        supported_pairs = set()
+        for obj, support in supports.items():
+            if support is None:
+                continue
+            after = contacting_support(backend, obj, [target])
+            if after is not None and after[1] is support[1]:
+                supported_pairs.update(pair for link in obj.links.values() if not link.is_meta_link
+                    if (pair := frozenset((str(support[1].prim_path), str(link.prim_path)))) in existing_pairs)
         blocking = sorted((str(a), str(b)) for a, b in pairs
-                          if (str(a) in moving and str(b) in paths)
+                          if ((str(a) in moving and str(b) in paths)
                           or (str(b) in moving and str(a) in paths))
-        return {'applicable': True, 'clear': not blocking,
+                          and frozenset((str(a), str(b))) not in supported_pairs)
+        contained = all(obj.states[Inside].get_value(target) for obj in assembly)
+        return {'applicable': True, 'clear': not blocking and contained,
                 'moving_links': sorted(moving), 'blocking_contacts': blocking,
-                'reason': 'new_contents_contact_closed_articulation' if blocking else None}
+                'preserved_support_contacts': [sorted(pair) for pair in sorted(supported_pairs, key=lambda p:sorted(p))],
+                'contents_inside_closed_container': contained,
+                'reason': 'new_contents_contact_closed_articulation' if blocking else
+                          'contents_outside_closed_container' if not contained else None}
     finally:
         random.setstate(rng)
         np.random.set_state(numpy_rng)

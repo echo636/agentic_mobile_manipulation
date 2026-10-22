@@ -229,7 +229,7 @@ class ControlledCarry(CompactCarry):
                 'preserved_carried_objects':len(contents),'failure_policy':'restore_pre_action_state'}
 
     def _container_payload(self, container):
-        """Snapshot existing rigid contents relative to their actual fillable link.
+        """Snapshot rigid contents relative to their support or fillable link.
 
         This observes executor geometry only; no task bindings or goals are read.
         """
@@ -249,6 +249,12 @@ class ControlledCarry(CompactCarry):
                 raise SkillError('pre_condition_error','Cannot identify the supporting volume of existing contents')
             relative=T.relative_pose_transform(*child.get_position_orientation(),*link.get_position_orientation())
             payload.append((child,link,relative))
+        if payload and getattr(container,'n_joints',0):
+            from .container_support import support_frames
+            frames=support_frames(self,container,[child for child,_,_ in payload])
+            payload=[(child,frames.get(child,link),T.relative_pose_transform(
+                *child.get_position_orientation(),*frames.get(child,link).get_position_orientation()))
+                for child,link,_ in payload]
         return payload
 
     def _relocate_container_payload(self,payload):
@@ -267,10 +273,11 @@ class ControlledCarry(CompactCarry):
                     position=child.get_position_orientation()[0]
                     expected=T.pose_transform(*link.get_position_orientation(),*relative)[0]
                     lo,hi=child.aabb;center=(lo+hi)/2
-                    details.append({'object':child.name,'fillable_link':link.prim_path,
+                    details.append({'object':child.name,'anchor_link':link.prim_path,
                         'position':position.tolist(),'expected_link_relative_position':expected.tolist(),
                         'displacement_m':float(self.torch.linalg.vector_norm(position-expected)),
-                        'aabb_center_in_fillable_link':bool(link.check_points_in_volume(center.unsqueeze(0)).item()),
+                        'aabb_center_in_anchor_volume':bool(link.check_points_in_volume(center.unsqueeze(0)).item())
+                            if link.is_meta_link else None,
                         'linear_velocity':child.get_linear_velocity().tolist()})
                 self._carry_record(event='container_payload_violation',container=container.name,
                                    escaped_contents=details)
