@@ -510,8 +510,9 @@ class CheckedPlacement:
                 self._carry_detach()
                 trial_state = self.og.sim.dump_state(serialized=False)
                 accepted = None
-                # One second of free physics tests actual stability, not whether
-                # a rectangular footprint is 80% covered by the target.
+                # Start with one second of free physics. A supported body may
+                # still be settling; measure its motion instead of treating
+                # this first observation as a fixed stability deadline.
                 settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
                 for number, candidate in enumerate(candidates):
                     if number:
@@ -536,6 +537,29 @@ class CheckedPlacement:
                     touching = any(path in contacts for path in (link.prim_path for link in target.links.values()))
                     supported, support = self._selected_surface_support(
                         held, target, point, touching, payload, require_contact=False, resting=resting.report())
+                    elapsed_steps = settle_steps
+                    extension_steps = max(1, round(.25 / self.og.sim.get_physics_dt()))
+                    max_settle_steps = max(settle_steps, round(4. / self.og.sim.get_physics_dt()))
+                    while (not supported and elapsed_steps < max_settle_steps
+                           and support['checks'].get('settled') is False
+                           and all(value for key, value in support['checks'].items() if key != 'settled')):
+                        # Continue only a valid supported pose. Rolling off,
+                        # changing shelves or losing the selected support ends
+                        # this trial immediately; tolerances stay unchanged.
+                        count = min(extension_steps, max_settle_steps-elapsed_steps)
+                        for _ in range(count):
+                            self._placement_physics_step()
+                            resting.add(*held.get_position_orientation())
+                        elapsed_steps += count
+                        contacts = self._placement_contacts(held, payload)
+                        touching = any(link.prim_path in contacts for link in target.links.values())
+                        supported, support = self._selected_surface_support(
+                            held, target, point, touching, payload, require_contact=False, resting=resting.report())
+                    if elapsed_steps > settle_steps:
+                        self._placement_record({'status': 'surface_settling_extended',
+                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
+                            'physics_seconds': elapsed_steps*self.og.sim.get_physics_dt(),
+                            'supported': supported, 'support': support})
                     if not supported:
                         self._placement_record({'status': 'candidate_rejected', 'stage': 'free_settling',
                             'candidate': candidate['index'], 'target': target.name, 'held': held.name,
