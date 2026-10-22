@@ -781,6 +781,10 @@ class CheckedPlacement:
                                 'speed_m_s':float(self.torch.linalg.norm(held.get_linear_velocity()))})
         return False
 
+    def _inside_pose_overlap_ranker(self,held,assembly):
+        from .placement_overlap import assembly_overlap_ranker
+        return assembly_overlap_ranker(self,held,assembly)
+
     def _inside_overlap_ranker(self,assembly):
         """Cheap current-world envelope checks order, never reject, proposals."""
         import omnigibson.lazy as lazy

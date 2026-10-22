@@ -205,6 +205,17 @@ class AssemblySamplingTests(unittest.TestCase):
              patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',return_value={'clear':True}):
             self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
 
+    def test_lid_ranking_preserves_loaded_assembly_sampling(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        target.states[modules['omnigibson.object_states'].Open]=SimpleNamespace(get_value=lambda:True)
+        b._inside_overlap_ranker=lambda assembly:lambda center,extent:0
+        b._inside_pose_overlap_ranker=lambda held,assembly:lambda position,quat:0
+        with patch.dict('sys.modules',modules),\
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',return_value=([],{})),\
+             patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',return_value={'clear':True}):
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+        self.assertTrue(b.torch.allclose(contents[0][0].position,held.position+held.offset))
+
     def test_moving_drawer_volume_or_closing_container_is_rejected(self):
         for moving_drawer in (True,False):
             with self.subTest(moving_drawer=moving_drawer):

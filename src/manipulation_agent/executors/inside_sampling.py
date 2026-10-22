@@ -260,7 +260,12 @@ Rejected candidate poses never become committed actions or task evidence.
             def top_height(candidate):
                 return float(candidate[1][2])+.5*extents[tuple(candidate[3].cpu().tolist())][2]
             def closed_overlap(candidate):
-                return round(closed_geometry_overlap(closure_geometry,candidate[0],candidate[1],
+                # Support proposals start above their resting surface. The
+                # release clearance itself need not fit under a closed lid.
+                center=list(candidate[1])
+                if candidate[-1].startswith('support_'):
+                    center[2]-=.025+.5*9.81*sim.get_physics_dt()**2
+                return round(closed_geometry_overlap(closure_geometry,candidate[0],center,
                     extents[tuple(candidate[3].cpu().tolist())]),6)
             def priority(c):
                 return (closed_overlap(c),round(occupancy(c),6),top_height(c) if was_open is True else 0.)
@@ -283,14 +288,28 @@ Rejected candidate poses never become committed actions or task evidence.
                   for chunk in layer if chunk is not None for c in chunk)
             candidates=itertools.chain(support_rounds,tail)
         ranker=getattr(backend,'_inside_overlap_ranker',None)
+        pose_factory=getattr(backend,'_inside_pose_overlap_ranker',None)
+        pose_score=pose_factory(held,assembly) if pose_factory is not None else None
         if ranker is not None:
             score=ranker(assembly)
             def ranked_windows(source):
-                while window:=list(itertools.islice(source,64)):
+                # Cheap piece queries cover more positions/orientations before
+                # costly physics trials. The same work and candidate budgets
+                # still apply, and scores never remove a candidate.
+                while window:=list(itertools.islice(source,512 if pose_score is not None and was_open is True else 64)):
                     check()
                     # An envelope hit is only a ranking heuristic. Concave
                     # shapes must still get their precise physical trial.
-                    yield from sorted(window,key=lambda c:score(c[1],extents[tuple(c[3].cpu().tolist())]))
+                    def order(c):
+                        scene_overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
+                        if not payload_locked and was_open is True and closure_geometry is not None:
+                            # Closed-lid clearance precedes the room envelope:
+                            # a tall unobstructed pose can still prevent closing.
+                            # Quantize height so sub-mm geometry noise does not
+                            # override the diversified position order.
+                            return (closed_overlap(c),scene_overlap,round(top_height(c)/.01),round(occupancy(c),6))
+                        return (scene_overlap,)
+                    yield from sorted(window,key=order)
             candidates=ranked_windows(iter(candidates))
         generation_seconds=time.monotonic()-start
         seen=set();locations=set();duplicates=0
