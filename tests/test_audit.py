@@ -39,7 +39,7 @@ class ModelEvidenceAudit(unittest.TestCase):
         self.assertEqual(result['status'],'passed')
         self.assertNotIn('official_task_success',result['checks'])
         del self.run['evaluation']['input_hashes']['custom_initial_scene']
-        self.assertEqual(self.audit()['status'],'failed')
+        self.assertEqual(self.audit()['evidence_status'],'failed')
 
     def test_successful_simulator_does_not_hide_controller_mismatch(self):
         self.item['arguments'] = {'outcome':'achieved','reason':'different trace'}
@@ -55,7 +55,8 @@ class ModelEvidenceAudit(unittest.TestCase):
     def test_non_mcp_execution_invalidates_isolated_policy_claim(self):
         result=self.audit([{'type':'item.completed','item':{'type':'command_execution','id':'bad'}}])
         self.assertFalse(result['checks']['only_allowed_tools'])
-        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['evidence_status'],'failed')
+        self.assertEqual(result['status'],'passed')
 
     def test_forced_client_exit_does_not_claim_trace_misalignment(self):
         self.ctrl.update(status='failed',exit_code=-15)
@@ -63,7 +64,8 @@ class ModelEvidenceAudit(unittest.TestCase):
         self.assertEqual(result['evidence_alignment'],'passed')
         self.assertEqual(result['model_finish'],'passed')
         self.assertEqual(result['controller_exit'],'failed')
-        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['evidence_status'],'failed')
+        self.assertEqual(result['status'],'passed')
 
     def test_supervisor_finish_is_separate_from_model_trace_and_receipt(self):
         self.call.update(name='act',arguments={})
