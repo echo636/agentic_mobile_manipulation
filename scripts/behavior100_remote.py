@@ -165,8 +165,9 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
         checks['host_memory_including_peer_reservations'] = (
             host_available > required + 2*1024**3 + adaptive['peer_growth_reserve_bytes'])
         # An abandoned startup must be adopted/cleaned before another starts.
-        checks['peer_initialization_complete'] = not any(
-            peer.get('runtime_stage')=='starting' for peer in memory_policy['peers'])
+        if memory_policy.get('profile') != 'throughput':
+            checks['peer_initialization_complete'] = not any(
+                peer.get('runtime_stage')=='starting' for peer in memory_policy['peers'])
     runtime_storage = runtime_storage_readiness(runtime_storage_paths)
     checks['runtime_storage_headroom_16GiB'] = runtime_storage['status'] == 'passed'
     if not light:

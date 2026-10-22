@@ -1,5 +1,9 @@
 # Host memory admission
 
+For new workspace batches, see the throughput profile in
+[resource_admission.md](resource_admission.md). The policy below describes the
+legacy serialized profile retained by existing frozen configurations.
+
 The default legacy scheduler reserves each simulator's full memory limit for its whole lifetime. With a 56 GiB workload budget and 28 GiB per unit, this allows two instances even when each uses only 8 GiB.
 
 New batch configurations can enable `adaptive_memory_admission: true` and set `adaptive_host_slot_count: 4`. Slots then provide a candidate-count ceiling; GPU leases and measured memory admission still decide whether a candidate can start. All coordinators must use the same shared lease directory. Existing frozen batches retain their original behavior.
