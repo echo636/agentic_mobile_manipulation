@@ -86,7 +86,8 @@ def worker_configs(config):
     allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env',
                'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
                'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib', 'admission_delay_seconds',
-               'simulator_appdata_path', 'simulator_tmpdir', 'startup_memory_gib'}
+               'simulator_appdata_path', 'simulator_tmpdir', 'startup_memory_gib',
+               'validated_driver_version', 'driver_validation_evidence'}
     result=[]; ids=set(); devices=set(); ports=set()
     for lane in lanes:
         if set(lane)-allowed: raise ValueError('Unsupported worker fields')
@@ -103,6 +104,10 @@ def worker_configs(config):
             raise ValueError('Resource admission and hard simulator memory limit must agree')
         if not 12<=merged.get('startup_memory_gib',budget)<=budget:
             raise ValueError('Startup estimate must fit the simulator hard limit')
+        if merged.get('validated_driver_version'):
+            evidence=json.loads(Path(merged['driver_validation_evidence']).read_text())
+            if evidence.get('status')!='passed' or evidence.get('driver')!=merged['validated_driver_version']:
+                raise ValueError('Driver exception requires passed renderer evidence for that exact version')
         if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES','MAS_LOCAL_MANIPULATION'}:
             raise ValueError('Only reviewed recording and local manipulation options may be worker environment overrides')
         if 'MAS_LOCAL_MANIPULATION' in env and env['MAS_LOCAL_MANIPULATION'] not in ('0','1'):
@@ -136,6 +141,11 @@ def runtime_storage_args(config):
     paths = [config.get(key) for key in ('simulator_appdata_path', 'simulator_tmpdir')]
     return [arg for path in dict.fromkeys(p for p in paths if p)
             for arg in ('--runtime-storage-path', str(path))]
+
+
+def driver_admission_args(config):
+    version=config.get('validated_driver_version')
+    return ['--validated-driver-version',version] if version else []
 
 
 def controller_process_alive(pid, output):
@@ -514,6 +524,7 @@ class Batch:
               '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
               '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0))]
         args += runtime_storage_args(self.c)
+        args += driver_admission_args(self.c)
         args += self.memory_policy_args()
         lease=getattr(self._worker_local,'lease',None)
         if lease:args+=['--reserved-host-memory-gib',str(lease.other_reserved_gib(self._config.get('host_slot_memory_gib',28)))]
@@ -815,6 +826,9 @@ class Batch:
                     scheduler_source=getattr(self,'scheduler_info',self.source_info),
                     recording_options=self.c.get('simulator_env',{}),
                     native_fault_capture=native_fault_capture)
+        if self.c.get('driver_validation_evidence'):
+            self.update(row,driver_validation_evidence=self.c['driver_validation_evidence'],
+                        validated_driver_version=self.c['validated_driver_version'])
         self.journal(f'START {runid}; admitted worker {self.c["id"]}; unit {unit}.')
         try:
             asset_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'assets',
@@ -848,6 +862,7 @@ class Batch:
                 '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0)),
                 '--light']
             command += runtime_storage_args(self.c)
+            command += driver_admission_args(self.c)
             command += self.memory_policy_args()
             # Optional external first-fault capture; no in-process tracing thread.
             # GDB follows the helper's execv into vision_cli and preserves normal

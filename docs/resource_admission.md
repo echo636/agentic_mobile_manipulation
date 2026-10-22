@@ -21,6 +21,14 @@ slots; available GPU leases, live memory and the batch's own concurrency limit
 determine actual concurrency. These estimates permit overcommit and are not
 proof that a future task cannot grow beyond its observed peak.
 
+V05's two local 4090s are also candidates. Its renderer has passed on driver
+560.35.05; a worker may declare that exact `validated_driver_version` together
+with a passed `driver_validation_evidence` record. The default remote driver
+floor stays unchanged. Local transport preserves runner/MCP/rsync streaming and
+uses the same `local-v05` host identity and GPU UUID leases as earlier probes.
+The shared GPU lower bound is 12 GiB, used on V05 GPU 1; remote workers keep
+14 GiB. V05's actual 32 GiB account limit includes local model controllers.
+
 The remaining description documents the default legacy `observed_peak` profile,
 retained for frozen batches that have not opted into throughput admission.
 
