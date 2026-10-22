@@ -167,9 +167,13 @@ Rejected candidate poses never become committed actions or task evidence.
             'note':'Inside is valid; closing may require rearranging contents'})
         return True
 
-    def check():
+    def check(*, admission=True):
         backend.deadline.check(changed=dirty)
-        if time.monotonic()-start > max_seconds:
+        # Finite geometry preparation must produce at least one real trial.
+        # The shared operation/cancellation guard still bounds preparation;
+        # charging its wall time against the first trial produced zero-attempt
+        # placement failures on loaded scenes.
+        if admission and attempted and time.monotonic()-start > max_seconds:
             raise SkillError('sampling_budget_exhausted', 'Assembly volume search exhausted its work budget', changed=dirty)
 
     def reject(reason, candidate, **details):
@@ -189,32 +193,60 @@ Rejected candidate poses never become committed actions or task evidence.
         groups = []; extents = {}; support_query_cache={}
         resident_bounds=[tuple(v.cpu().tolist() for v in obj.aabb) for obj,_,_ in residents]
         payload_locked = bool(contents or getattr(backend,'_placement_particle_payload',(None,[]))[1])
+        # Proposal geometry is a rigid transform of the same held assembly.
+        # Reading live USD/Fabric bounds after every hypothetical setter was
+        # consuming the entire work allowance before even one physical trial.
+        # Read it once, then rotate vertices without modifying the simulator.
+        root_rotation=T.quat2mat(root_quat)
+        shape_parts=[]; held_parts=[]
+        for obj in assembly:
+            for link in getattr(obj,'links',{}).values():
+                if link.is_meta_link:continue
+                points=link.collision_boundary_points_world
+                if points is None or not len(points):continue
+                local=(points-root_pos)@root_rotation
+                shape_parts.append(local)
+                if obj is held:held_parts.append(local)
+        shape=torch.cat(shape_parts) if shape_parts else None
+        held_shape=torch.cat(held_parts) if held_parts else None
+        volume_geometry={}
+        for volume in volumes:
+            lo,hi=volume.visual_aabb
+            vp,vq=volume_poses[volume.prim_path]
+            rotation=T.quat2mat(vq)
+            points=getattr(volume,'visual_boundary_points_world',None)
+            local_volume=(points-vp)@rotation if points is not None else None
+            volume_geometry[volume.prim_path]=(lo,hi,vp,rotation,local_volume)
         for orientation_source, quat, angle in assembly_orientations(
                 held,root_quat,torch,T,reference_quat=target_quat,allow_reorientation=not payload_locked):
             check()
-            held.set_position_orientation(root_pos, quat)
-            backend._relocate_contents(held, contents)
-            bounds = [obj.aabb for obj in assembly]
-            if particles:
-                bounds.extend(particle_bounds(backend.env.scene, particles))
-            low = torch.stack([a for a, _ in bounds]).amin(dim=0)
-            high = torch.stack([b for _, b in bounds]).amax(dim=0)
+            bottom_offset=None
+            if shape is not None and held_shape is not None and not particles:
+                rotation=T.quat2mat(quat)
+                vertices=shape@rotation.T+root_pos
+                low,high=vertices.amin(dim=0),vertices.amax(dim=0)
+                from .surface_geometry import bottom_anchor
+                bottom_offset=bottom_anchor((held_shape@rotation.T).cpu().numpy())
+            else:
+                # Retain live bounds for geometry-less adapters and particle
+                # payloads, whose extent is not captured by rigid meshes.
+                held.set_position_orientation(root_pos, quat)
+                backend._relocate_contents(held, contents)
+                bounds = [obj.aabb for obj in assembly]
+                if particles:
+                    bounds.extend(particle_bounds(backend.env.scene, particles))
+                low = torch.stack([a for a, _ in bounds]).amin(dim=0)
+                high = torch.stack([b for _, b in bounds]).amax(dim=0)
+                vertices=None
             center_offset = (low+high)/2-root_pos
             extent = (high-low).cpu().tolist()
             extents[tuple(quat.cpu().tolist())]=extent
-            collision_points=[link.collision_boundary_points_world for obj in assembly
-                for link in getattr(obj,'links',{}).values() if not link.is_meta_link
-                and link.collision_boundary_points_world is not None]
-            vertices=torch.cat(collision_points) if collision_points else None
             for volume in volumes:
-                lo, hi = volume.visual_aabb
-                volume_points=getattr(volume,'visual_boundary_points_world',None)
-                if vertices is not None and volume_points is not None:
+                lo,hi,vp,rotation,local_volume=volume_geometry[volume.prim_path]
+                if vertices is not None and local_volume is not None:
                     # A rotated rectangular cavity is not its world AABB.
                     # Fit the oriented object in the volume's own coordinates,
                     # then express proposals as world AABB centers for Inside.
-                    vp,vq=volume_poses[volume.prim_path];rotation=T.quat2mat(vq)
-                    local_volume=(volume_points-vp)@rotation
                     local_shape=(vertices-root_pos)@rotation
                     local_lo,local_hi=local_volume.amin(dim=0),local_volume.amax(dim=0)
                     shape_lo,shape_hi=local_shape.amin(dim=0),local_shape.amax(dim=0)
@@ -238,6 +270,7 @@ Rejected candidate poses never become committed actions or task evidence.
                     if support is not None:
                         supported=support(held,target,volume,centers,center_offset,assembly[1:],check,
                                           point=point,query_cache=support_query_cache,
+                                          **({'bottom_offset':bottom_offset} if bottom_offset is not None else {}),
                                           **({'residents':residents} if residents else {}))
                         if supported:
                             # Reject impossible support projections before they
@@ -328,7 +361,7 @@ Rejected candidate poses never become committed actions or task evidence.
                 # Cheap piece queries cover more positions/orientations before
                 # costly physics trials. The same work and candidate budgets
                 # still apply, and scores never remove a candidate.
-                while window:=list(itertools.islice(source,512 if pose_score is not None and was_open is True else 64)):
+                while window:=list(itertools.islice(source,128 if pose_score is not None and was_open is True else 64)):
                     check()
                     # An envelope hit is only a ranking heuristic. Concave
                     # shapes must still get their precise physical trial.
@@ -385,16 +418,21 @@ Rejected candidate poses never become committed actions or task evidence.
                 continue
             limit = max(1, int(.5/sim.get_physics_dt()))
             for _ in range(limit):
-                check(); sim.step_physics()
+                # Admission time bounds additional proposals, not the outcome
+                # of an already admitted trial. On a busy simulator a valid
+                # first pose used to be rolled back mid-settle at 30 seconds.
+                # These loops remain bounded in physics steps; cancellation
+                # and the enclosing operation's work limits still apply.
+                check(admission=False); sim.step_physics()
                 if contact(): break
             else:
                 reject('no_support_contact', candidate)
                 continue
             for _ in range(5):
-                check(); sim.step_physics()
+                check(admission=False); sim.step_physics()
             for _ in range(limit):
                 if float(torch.linalg.norm(held.get_linear_velocity())) <= .001: break
-                check(); sim.step_physics()
+                check(admission=False); sim.step_physics()
             pos, orn = target.get_position_orientation()
             if float(torch.linalg.norm(pos-target_pos)) > .05 or float(T.get_orientation_diff_in_radian(orn,target_quat)) > math.radians(10):
                 reject('container_moved', candidate)

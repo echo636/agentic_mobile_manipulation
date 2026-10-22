@@ -18,6 +18,43 @@ batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_resource_requeue_preserves_evidence_and_new_attempt_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,count=1)
+            for name in ('records','preflight','logs','controllers'):(b.root/name).mkdir()
+            row=b.rows[0];row.update(run_id='fixture_task_r1',attempt=1,task='fixture',
+                status='running',stage='execution_finished',failure_stage='simulator_starting',
+                simulator_unit='owned.service',simulator_cleanup={'status':'passed'},
+                episode_budget_policy='unbounded',source_commit='frozen')
+            evidence={'status':'blocked','checks':{'gpu_capacity':False,'validated_driver_floor':True}}
+            (b.root/'preflight/fixture_task_r1_in_unit.json').write_text(json.dumps(evidence))
+            b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,'resource startup log',''))
+            self.assertTrue(b.requeue_resource_rejection(row))
+            self.assertEqual(row['run_id'],'fixture_task_r2')
+            self.assertEqual(row['status'],'planned')
+            self.assertEqual(row['episode_budget_policy'],'unbounded')
+            self.assertEqual(row['source_commit'],'frozen')
+            self.assertNotIn('simulator_unit',row)
+            self.assertIs(b.queue.get_nowait(),row)
+            prior=json.loads((b.root/'records/fixture_task_r1.json').read_text())
+            self.assertEqual(prior['failure_kind'],'infrastructure_resource_admission')
+            self.assertIsNone(prior['task_success'])
+            self.assertTrue(batch.prepolicy_failure(prior,b.root/'controllers/fixture_task_r1'))
+            selection=json.loads((b.root/'infrastructure_retries.json').read_text())
+            self.assertEqual(selection['0']['previous_run_ids'],['fixture_task_r1'])
+
+    def test_resource_retry_rejects_static_failure_and_policy_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);row={'failure_stage':'simulator_starting','actions':None}
+            gpu={'status':'blocked','checks':{'gpu_capacity':False}}
+            self.assertEqual(batch.startup_resource_rejection(row,root,gpu),['gpu_capacity'])
+            self.assertIsNone(batch.startup_resource_rejection(row,root,
+                {'status':'blocked','checks':{'gpu_capacity':False,'validated_driver_floor':False}}))
+            self.assertIsNone(batch.startup_resource_rejection({**row,'actions':1},root,gpu))
+            self.assertIsNone(batch.startup_resource_rejection({**row,'controller_wrapper_pid':55},root,gpu))
+            (root/'model_events.jsonl').write_text('{"item":{"type":"agent_message"}}\n')
+            self.assertIsNone(batch.startup_resource_rejection(row,root,gpu))
+
     def test_admission_prefers_real_057_headroom_without_claiming_busy_or_foreign_gpus(self):
         workers=[{'id':f's115-gpu{i}','gpu':i,'ssh':['ssh','s115'],'minimum_free_gpu_mib':18432}
                  for i in range(4)]

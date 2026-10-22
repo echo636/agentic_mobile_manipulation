@@ -876,7 +876,7 @@ class CheckedPlacement:
             return cache[key]
         return score
 
-    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None, residents=(),query_cache=None):
+    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None, residents=(),query_cache=None,bottom_offset=None):
         """Project assembly centers onto actual internal shelves and bottoms.
 
         All ray hits are needed: the closest hit alone can be the roof above
@@ -886,8 +886,10 @@ class CheckedPlacement:
         from .surface_geometry import bottom_anchor
         from omnigibson.utils.sampling_utils import raytest
         position=held.get_position_orientation()[0]
-        bottom=self.torch.as_tensor(bottom_anchor(self._collision_vertices(held)),
-                                   dtype=position.dtype,device=position.device)-position
+        bottom=(self.torch.as_tensor(bottom_offset,dtype=position.dtype,device=position.device)
+                if bottom_offset is not None else
+                self.torch.as_tensor(bottom_anchor(self._collision_vertices(held)),
+                                    dtype=position.dtype,device=position.device)-position)
         low,high=volume.visual_aabb
         ignored=[link.prim_path for obj in (held,self.robot,*payload) for link in obj.links.values()]
         target_paths={link.prim_path for link in target.links.values()}
