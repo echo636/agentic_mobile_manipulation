@@ -10,7 +10,7 @@ import torch
 
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.articulation_goal import checked_open_goal
-from manipulation_agent.executors.articulation_clearance import moving_link_clearance
+from manipulation_agent.executors.articulation_clearance import moving_link_clearance, collision_piece_enclosures
 
 
 class EndpointTests(unittest.TestCase):
@@ -104,6 +104,41 @@ class EndpointTests(unittest.TestCase):
             self.assertEqual(result['overlapping_enclosures'], [('/door/leaf', '/wall')])
             link.collision_meshes = {}
             self.assertFalse(moving_link_clearance(backend, [link], {'/door/leaf'}, set(), lambda: None)['clear'])
+
+    def test_asymmetric_panel_does_not_treat_principal_box_floor_hit_as_mesh_hit(self):
+        from scipy.spatial.transform import Rotation
+        # Flat lower edge above the floor; an asymmetric upper edge tilts PCA.
+        vertices = np.array([[x, y, z] for x, z in [(0., .01), (1., .01),
+                             (1., 2.), (0., 1.)] for y in (-.02, .02)])
+        transform = np.eye(4)
+        enclosures = collision_piece_enclosures(vertices, transform)
+        for _, (center, half, axes) in enclosures:
+            self.assertTrue((np.abs((vertices-center) @ axes) <= half+1e-8).all())
+        principal = dict(enclosures)['principal_axes']
+        self.assertLess(principal[0][2] - (np.abs(principal[2]) @ principal[1])[2], 0.)
+        mesh = SimpleNamespace(points=torch.tensor(vertices), scaled_transform=torch.eye(4),
+                               prim_path='/door/leaf/collision')
+        link = SimpleNamespace(prim_path='/door/leaf', collision_meshes={'leaf':mesh})
+        wall = [False]
+        def overlap(half, center, quat, callback, any_hit):
+            if np.asarray(center)[2] - (np.abs(Rotation.from_quat(quat).as_matrix()) @ half)[2] < 0.:
+                callback(SimpleNamespace(rigid_body='/floor'))
+            if wall[0]:
+                callback(SimpleNamespace(rigid_body='/wall'))
+        lazy = ModuleType('omnigibson.lazy')
+        lazy.omni = SimpleNamespace(physx=SimpleNamespace(get_physx_scene_query_interface=lambda:
+                                   SimpleNamespace(overlap_box=overlap)))
+        utils = ModuleType('omnigibson.utils')
+        utils.transform_utils = SimpleNamespace(mat2quat=lambda value:
+            torch.tensor(Rotation.from_matrix(value.numpy()).as_quat()))
+        with patch.dict(sys.modules, {'omnigibson':ModuleType('omnigibson'),
+                                     'omnigibson.lazy':lazy, 'omnigibson.utils':utils}):
+            args = (SimpleNamespace(torch=torch), [link], {'/door/leaf'}, set(), lambda:None)
+            self.assertTrue(moving_link_clearance(*args)['clear'])
+            wall[0] = True
+            result = moving_link_clearance(*args)
+            self.assertFalse(result['clear'])
+            self.assertEqual(result['overlapping_enclosures'], [('/door/leaf', '/wall')])
 
 
 if __name__ == '__main__':
