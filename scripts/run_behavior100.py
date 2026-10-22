@@ -187,6 +187,17 @@ def prepolicy_failure(record, controller):
     return all(e.get('item',{}).get('type') in (None,'error') for e in events)
 
 
+def startup_resource_rejection(record, controller, preflight):
+    """Only a documented dynamic resource race may requeue without a policy run."""
+    if not prepolicy_failure({**record,'status':'failed'},controller):return None
+    if preflight.get('status')!='blocked':return None
+    failed={key for key,value in preflight.get('checks',{}).items() if value is False}
+    dynamic={'gpu_capacity','cgroup_reclaimable_headroom','bridge_port_free',
+             'host_memory_including_peer_reservations','adaptive_account_memory',
+             'host_working_memory_headroom','data_disk_free_40GiB','runtime_storage_headroom_16GiB'}
+    return sorted(failed) if failed and failed<=dynamic else None
+
+
 def summarize(rows):
     counts = dict(Counter(r['status'] for r in rows))
     completed = sum(r['status'] in FINAL for r in rows)
@@ -1220,6 +1231,51 @@ class Batch:
         self.journal('READY adopted initialization '+row['run_id']+'; first model policy starts against the unchanged original simulator and source.')
         return process
 
+    def requeue_resource_rejection(self,row):
+        """Preserve the rejected attempt, then wait for admission again.
+
+        No episode exists when the in-unit check rejects startup. Archiving a
+        nonexistent directory used to turn this recoverable race into a final
+        task failure. Cleanup must be positively verified before another try.
+        """
+        if (row.get('simulator_cleanup') or {}).get('status')!='passed':return False
+        check_path=self.root/'preflight'/f"{row['run_id']}_in_unit.json"
+        try:preflight=json.loads(check_path.read_text())
+        except (OSError,ValueError):return False
+        failed=startup_resource_rejection(row,self.root/'controllers'/row['run_id'],preflight)
+        if not failed:return False
+        # Preserve startup logs even though there is no simulator episode.
+        log=self.ssh(['journalctl','--user','-u',row['simulator_unit'],'--no-pager','-o','short-iso'],timeout=60)
+        (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
+        identity_keys={'index','task','name','scene','instance','seed','split','instruction',
+            'instruction_sha256','instruction_source','bddl_sha256','asset_sha256',
+            'goal_predicates_offline_only','candidate_capabilities_offline_only',
+            'source_commit','source_tree','evaluation_revision','model_provider_profile',
+            'original_instruction','original_instruction_source','original_instruction_sha256',
+            'instruction_correction','task_instructions_changed','episode_budget_policy',
+            'max_agent_steps','custom_task_spec'}
+        with self.lock:
+            old={**row,'status':'failed','task_success':None,'failure_kind':'infrastructure_resource_admission',
+                 'resource_rejected_checks':failed,'archive_status':'not_applicable_before_simulator_start',
+                 'stage':'resource_admission_rejected','updated_at':now()}
+            write_json(self.root/'records'/f"{old['run_id']}.json",old)
+            previous=[*old.get('previous_attempts',[]),{k:v for k,v in old.items() if k!='previous_attempts'}]
+            runid=old['run_id'].rsplit('_r',1)[0]+'_r'+str(int(old.get('attempt',1))+1)
+            reason='In-unit dynamic resource rejection before simulator/controller startup: '+', '.join(failed)
+            path=self.root/'infrastructure_retries.json'
+            selections=json.loads(path.read_text()) if path.exists() else {}
+            selections[str(row['index'])]={'run_id':runid,'previous_run_ids':[p['run_id'] for p in previous],
+                                          'reason':reason}
+            write_json(path,selections)
+            identity={k:v for k,v in row.items() if k in identity_keys}
+            row.clear();row.update(identity,run_id=runid,status='planned',stage='queued',
+                attempt=len(previous)+1,previous_attempts=previous,retry_kind='infrastructure',retry_reason=reason)
+            write_json(self.root/'records'/f'{runid}.json',row)
+            self.update(row)
+            self.queue.put(row)
+        self.journal('RESOURCE RETRY '+old['run_id']+' -> '+runid+'; '+reason)
+        return True
+
     def run(self,limit=None):
         self.publish()
         self.queue=queue.Queue()
@@ -1296,6 +1352,10 @@ class Batch:
                     if row is None:time.sleep(poll)
                 # GPU and host capacity are free before any bulk copy or decode.
                 if row is not None:
+                    if cleared and self.requeue_resource_rejection(row):
+                        self.worker_state('waiting_for_resources')
+                        time.sleep(poll)
+                        continue
                     if cleared:self.worker_state('archive_pending')
                     submit_archive(row,paths,config)
                     if cleared:self.worker_state('available')
