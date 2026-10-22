@@ -622,6 +622,8 @@ class CheckedPlacement:
                         native_sampling=True
                         try:
                             sampled=held.states[Inside].set_value(target,True)
+                            if sampled and not self._inside_resting_check(held,target,contents,residents=residents):
+                                return False
                             if sampled:
                                 from .closure_clearance import check_closure_clearance
                                 closure=check_closure_clearance(self,target,[held,*[obj for obj,_ in contents]])
@@ -721,7 +723,66 @@ class CheckedPlacement:
                 'sampling_order':'geometry' if assembly_search else 'geometry_then_native' if residents else 'native_then_geometry',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
 
-    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None, residents=()):
+    def _inside_resting_check(self,held,target,contents,*,residents=()):
+        """Validate release with the same anchoring cadence as an actual action.
+
+        Raw samplers pin the target every physics substep. The real actuator
+        pins once per control interval. A wall pushing an open lid can appear
+        stable in the former and eject its contents in the latter.
+        """
+        from omnigibson.object_states import Inside
+        from .resting_motion import RestingMotionWindow
+        sim=self.og.sim;dt=sim.get_physics_dt();control_dt=sim.get_sim_step_dt()
+        resting=RestingMotionWindow(control_dt)
+        resting.add(*held.get_position_orientation())
+        # Bypass the sampler's per-substep pose projection, not PhysX. All
+        # controls, contacts and physics still run; these private trials do not
+        # advance task metrics, render frames or trigger transition rules.
+        physics_step=type(sim).step_physics.__get__(sim,type(sim))
+        def anchors():
+            if self._base_target is not None:self._restore_base_target()
+            self._restore_object_anchor();self._restore_stabilized_containers()
+            self._follow_placement_particles();self._relocate_container_payload(residents)
+        for _ in range(max(1,int(.75/control_dt))):
+            anchors();self._relocate_contents(held,contents)
+            try:
+                for _ in range(max(1,round(control_dt/dt))):
+                    self.deadline.check(changed=True)
+                    local=getattr(self,'_local_operation',None)
+                    if local is not None:local.check()
+                    self.sampling_physics_steps+=1;physics_step()
+                sim.sync_physx_to_fabric()
+            finally:anchors()
+            resting.add(*held.get_position_orientation())
+            if not held.states[Inside].get_value(target):break
+            if resting.report()['stable']:
+                if all(obj.states[Inside].get_value(target) for obj,_ in contents):return True
+        self._placement_record({'status':'inside_unstable_candidate','held':held.name,'target':target.name,
+                                'resting_motion':resting.report(),'anchoring_cadence_seconds':control_dt,
+                                'speed_m_s':float(self.torch.linalg.norm(held.get_linear_velocity()))})
+        return False
+
+    def _inside_overlap_ranker(self,assembly):
+        """Cheap current-world envelope checks order, never reject, proposals."""
+        import omnigibson.lazy as lazy
+        query=lazy.omni.physx.get_physx_scene_query_interface()
+        ignored={str(link.prim_path) for obj in [self.robot,*assembly] for link in obj.links.values()}
+        ignored.update(str(link.prim_path) for obj in self.env.scene.objects for link in obj.links.values() if link.is_meta_link)
+        cache={}
+        def score(center,extent):
+            key=tuple(round(float(v),5) for v in (*center,*extent))
+            if key not in cache:
+                collision=False
+                def hit(row):
+                    nonlocal collision
+                    if str(row.rigid_body) in ignored:return True
+                    collision=True;return False
+                query.overlap_box(tuple(float(v)/2 for v in extent),tuple(map(float,center)),(0.,0.,0.,1.),hit,False)
+                cache[key]=int(collision)
+            return cache[key]
+        return score
+
+    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None, residents=(),query_cache=None):
         """Project assembly centers onto actual internal shelves and bottoms.
 
         All ray hits are needed: the closest hit alone can be the roof above
@@ -769,8 +830,14 @@ class CheckedPlacement:
             check()
             ax=x-float(center_offset[0])+float(bottom[0])
             ay=y-float(center_offset[1])+float(bottom[1])
-            hits=raytest([ax,ay,float(high[2])+.05],[ax,ay,float(low[2])-.05],
-                         only_closest=False,ignore_bodies=ignored)
+            # Pose proposals only move ignored bodies. Reuse identical support
+            # rays across inset/full domains and orientations in this one scan.
+            key=(round(ax,6),round(ay,6),float(high[2]),float(low[2]))
+            hits=None if query_cache is None else query_cache.get(key)
+            if hits is None:
+                hits=raytest([ax,ay,float(high[2])+.05],[ax,ay,float(low[2])-.05],
+                             only_closest=False,ignore_bodies=ignored)
+                if query_cache is not None:query_cache[key]=hits
             for hit in sorted(hits,key=lambda h:(abs(float(h['position'][2]-point[2]))
                                                  if point is not None else float(h['position'][2]))):
                 if hit.get('rigidBody') not in support_paths or float(hit['normal'][2])<.9:continue

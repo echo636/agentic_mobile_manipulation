@@ -158,7 +158,7 @@ Rejected candidate poses never become committed actions or task evidence.
                                    'volumes':[link.prim_path for link in volumes]})
         # Compute envelopes once for each nearby resting/carried orientation. Merely
         # computing candidates must not step physics or load the whole scene.
-        groups = []; extents = {}
+        groups = []; extents = {}; support_query_cache={}
         resident_bounds=[tuple(v.cpu().tolist() for v in obj.aabb) for obj,_,_ in residents]
         payload_locked = bool(contents or getattr(backend,'_placement_particle_payload',(None,[]))[1])
         for orientation_source, quat, angle in assembly_orientations(
@@ -172,9 +172,31 @@ Rejected candidate poses never become committed actions or task evidence.
             center_offset = (low+high)/2-root_pos
             extent = (high-low).cpu().tolist()
             extents[tuple(quat.cpu().tolist())]=extent
+            collision_points=[link.collision_boundary_points_world for obj in assembly
+                for link in getattr(obj,'links',{}).values() if not link.is_meta_link
+                and link.collision_boundary_points_world is not None]
+            vertices=torch.cat(collision_points) if collision_points else None
             for volume in volumes:
                 lo, hi = volume.visual_aabb
-                domains = volume_center_domains(lo.cpu().tolist(), hi.cpu().tolist(), extent)
+                volume_points=getattr(volume,'visual_boundary_points_world',None)
+                if vertices is not None and volume_points is not None:
+                    # A rotated rectangular cavity is not its world AABB.
+                    # Fit the oriented object in the volume's own coordinates,
+                    # then express proposals as world AABB centers for Inside.
+                    vp,vq=volume_poses[volume.prim_path];rotation=T.quat2mat(vq)
+                    local_volume=(volume_points-vp)@rotation
+                    local_shape=(vertices-root_pos)@rotation
+                    local_lo,local_hi=local_volume.amin(dim=0),local_volume.amax(dim=0)
+                    shape_lo,shape_hi=local_shape.amin(dim=0),local_shape.amax(dim=0)
+                    local_middle=(shape_lo+shape_hi)/2
+                    domains=[]
+                    for label,centers in volume_center_domains(local_lo.cpu().tolist(),local_hi.cpu().tolist(),
+                                                               (shape_hi-shape_lo).cpu().tolist()):
+                        local_centers=torch.tensor(centers,dtype=root_pos.dtype,device=root_pos.device)
+                        world=(local_centers-local_middle)@rotation.T+vp+center_offset
+                        domains.append((label,[tuple(row) for row in world.cpu().tolist()]))
+                else:
+                    domains = volume_center_domains(lo.cpu().tolist(), hi.cpu().tolist(), extent)
                 if domains[0][0] != 'inset':
                     empty_insets += 1
                     backend._placement_record({'status':'inside_inset_unavailable',
@@ -185,7 +207,17 @@ Rejected candidate poses never become committed actions or task evidence.
                     support=getattr(backend,'_inside_support_centers',None)
                     if support is not None:
                         supported=support(held,target,volume,centers,center_offset,assembly[1:],check,
-                                          point=point,**({'residents':residents} if residents else {}))
+                                          point=point,query_cache=support_query_cache,
+                                          **({'residents':residents} if residents else {}))
+                        if supported:
+                            # Reject impossible support projections before they
+                            # consume the physical-candidate allowance. In the
+                            # archived tea-bottle run 87/108 trials never even
+                            # reached physics because their centers were out.
+                            points=torch.tensor(supported,dtype=root_pos.dtype,device=root_pos.device)
+                            points[:,2]-=.025+.5*9.81*sim.get_physics_dt()**2
+                            valid=volume.check_points_in_volume(points).cpu().tolist()
+                            supported=[center for center,keep in zip(supported,valid) if keep]
                         if supported:
                             groups.append([(volume,center,center_offset.clone(),quat.clone(),angle,
                                             orientation_source,'support_'+domain) for center in supported])
@@ -217,7 +249,6 @@ Rejected candidate poses never become committed actions or task evidence.
             # spends the whole budget without testing the remaining space. Rank
             # resident overlap only as a heuristic (AABBs are not rejection
             # certificates), then distribute ties over different positions.
-            visits={}
             def occupancy(candidate):
                 _,center,_,quat,*_=candidate
                 extent=extents[tuple(quat.cpu().tolist())]
@@ -225,30 +256,43 @@ Rejected candidate poses never become committed actions or task evidence.
                 return sum(math.prod(max(0.,min(c+e/2,b)-max(c-e/2,a))
                                      for c,e,a,b in zip(center,extent,lo,hi))
                            for lo,hi in resident_bounds)/volume
-            def location(candidate):return tuple(round(float(v)/.02) for v in candidate[1])
+            def location(candidate):return tuple(round(float(v)/.02) for v in candidate[1][:2])
             def top_height(candidate):
                 return float(candidate[1][2])+.5*extents[tuple(candidate[3].cpu().tolist())][2]
             def closed_overlap(candidate):
                 return round(closed_geometry_overlap(closure_geometry,candidate[0],candidate[1],
                     extents[tuple(candidate[3].cpu().tolist())]),6)
-            first_support=[];remainder=[]
+            def priority(c):
+                return (closed_overlap(c),round(occupancy(c),6),top_height(c) if was_open is True else 0.)
+            families={}
             for group in supported:
-                if resident_bounds:
-                    group=sorted(group,key=lambda c:(closed_overlap(c),round(occupancy(c),6),
-                        top_height(c) if was_open is True else 0.,visits.get(location(c),0)))
-                elif was_open is True:
-                    group=sorted(group,key=lambda c:(closed_overlap(c),top_height(c)))
-                first_support.append(group[0]);remainder.append(group[1:])
-                key=location(group[0]);visits[key]=visits.get(key,0)+1
-            if was_open is True:
-                # Try low, flat arrangements before stacking tools into the
-                # lid's space. Height ranks proposals; only physics rejects.
-                first_support.sort(key=lambda c:(closed_overlap(c),top_height(c)))
-            remainder+=other
-            chunks=[[group[i:i+3] for i in range(0,len(group),3)] for group in remainder if group]
+                for candidate in group:
+                    up=tuple(round(float(v),3) for v in T.quat2mat(candidate[3])[2])
+                    families.setdefault(up,{}).setdefault(location(candidate),[]).append(candidate)
+            streams=[]
+            for index,positions in enumerate(families.values()):
+                buckets=[sorted(group,key=priority) for group in positions.values()]
+                buckets.sort(key=lambda group:priority(group[0]))
+                offset=index%len(buckets);buckets=buckets[offset:]+buckets[:offset]
+                streams.append(iter(c for layer in itertools.zip_longest(*buckets) for c in layer if c is not None))
+            # Cover resting faces AND positions. A low flat pose may hit a
+            # divider everywhere while an upright pose fits its compartment.
+            support_rounds=(c for layer in itertools.zip_longest(*streams) for c in layer if c is not None)
+            chunks=[[group[i:i+3] for i in range(0,len(group),3)] for group in other if group]
             tail=(c for layer in itertools.zip_longest(*chunks)
                   for chunk in layer if chunk is not None for c in chunk)
-            candidates=itertools.chain(first_support,tail)
+            candidates=itertools.chain(support_rounds,tail)
+        ranker=getattr(backend,'_inside_overlap_ranker',None)
+        if ranker is not None:
+            score=ranker(assembly)
+            def ranked_windows(source):
+                while window:=list(itertools.islice(source,64)):
+                    check()
+                    # An envelope hit is only a ranking heuristic. Concave
+                    # shapes must still get their precise physical trial.
+                    yield from sorted(window,key=lambda c:score(c[1],extents[tuple(c[3].cpu().tolist())]))
+            candidates=ranked_windows(iter(candidates))
+        generation_seconds=time.monotonic()-start
         seen=set();locations=set();duplicates=0
         for volume, center, offset, quat, angle, orientation_source, domain in candidates:
             check()
@@ -323,6 +367,10 @@ Rejected candidate poses never become committed actions or task evidence.
             if any(not obj.states[Inside].get_value(target) for obj in assembly[1:]):
                 reject('payload_outside_destination', candidate)
                 continue
+            resting_check=getattr(backend,'_inside_resting_check',None)
+            if resting_check is not None and not resting_check(held,target,contents,residents=residents):
+                reject('unstable_after_release',candidate)
+                continue
             from .closure_clearance import check_closure_clearance
             closure = check_closure_clearance(backend, target, assembly)
             if not closure['clear']:
@@ -355,4 +403,5 @@ Rejected candidate poses never become committed actions or task evidence.
                                    'empty_insets':empty_insets, 'domain_attempts':domain_attempts,
                                    'unique_xy_attempted':len(locations) if 'locations' in locals() else 0,
                                    'duplicate_poses_skipped':duplicates if 'duplicates' in locals() else 0,
+                                   'generation_seconds':generation_seconds if 'generation_seconds' in locals() else None,
                                    'seconds':time.monotonic()-start, 'held':held.name, 'target':target.name})

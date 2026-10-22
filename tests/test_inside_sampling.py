@@ -200,7 +200,9 @@ class AssemblySamplingTests(unittest.TestCase):
         target.get_joint_positions=lambda:b.torch.tensor([state['steps']*.1])
         target.get_joint_dof_types=lambda:b.torch.tensor([True])
         target.states[modules['omnigibson.object_states'].Open]=SimpleNamespace(get_value=lambda:True)
-        with patch.dict('sys.modules',modules):
+        with patch.dict('sys.modules',modules),\
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',return_value=None),\
+             patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',return_value={'clear':True}):
             self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
 
     def test_moving_drawer_volume_or_closing_container_is_rejected(self):
@@ -212,7 +214,8 @@ class AssemblySamplingTests(unittest.TestCase):
                         target.position+b.torch.tensor([.1 if state['steps'] else 0.,0.,0.]),target.quat)
                 else:
                     target.states[modules['omnigibson.object_states'].Open]=SimpleNamespace(get_value=lambda:state['steps']==0)
-                with patch.dict('sys.modules',modules):
+                with patch.dict('sys.modules',modules),\
+                     patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',return_value=None):
                     self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
                 reason='container_volume_moved' if moving_drawer else 'container_closed_during_sampling'
                 self.assertEqual(records[-1]['rejections'][reason],1)
