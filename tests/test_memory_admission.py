@@ -77,6 +77,17 @@ class MemoryAdmissionTests(unittest.TestCase):
             admission_decision(0, {}, 64 * GIB, [], host_budget_gib=64,
                                candidate_gib=24, startup_gib=28)
 
+    def test_explicit_small_fixture_estimate_still_obeys_account_limit(self):
+        def decide(working, estimate):
+            return admission_decision(working*GIB, {}, 32*GIB, [], host_budget_gib=None,
+                candidate_gib=14, startup_gib=estimate, profile='throughput', account_margin_gib=1)
+        self.assertEqual(decide(22,8)['status'],'passed')
+        self.assertEqual(decide(24,8)['status'],'blocked')
+        self.assertEqual(decide(22,12)['status'],'blocked')
+        self.assertEqual(decide(22,8)['candidate_hard_limit_bytes'],14*GIB)
+        for invalid in (0,-1,float('nan'),float('inf'),True,15):
+            with self.assertRaises(ValueError):decide(0,invalid)
+
     def test_throughput_admits_alongside_a_legacy_initialization(self):
         peers = [self.peer(15, 15), self.peer(14, 14, stage='starting')]
         for peer in peers:

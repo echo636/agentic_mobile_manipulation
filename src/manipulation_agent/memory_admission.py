@@ -37,7 +37,10 @@ def admission_decision(account_current, account_stats, account_limit, peers, *,
             or (host_budget_gib is not None and (not math.isfinite(host_budget_gib) or host_budget_gib <= 0))):
         raise ValueError('Invalid adaptive memory budget')
     startup_gib = candidate_gib if startup_gib is None else startup_gib
-    if not 12 <= startup_gib <= candidate_gib:
+    # An explicit estimate may describe a sparse native fixture rather than a
+    # furnished task scene. Keep the hard limit and account growth accounting;
+    # the task runner still defaults to 12 GiB for ordinary episodes.
+    if isinstance(startup_gib,bool) or not 0 < startup_gib <= candidate_gib:
         raise ValueError('Invalid startup memory estimate')
     limit = None if host_budget_gib is None else host_budget_gib * GIB
     if account_limit is not None:
