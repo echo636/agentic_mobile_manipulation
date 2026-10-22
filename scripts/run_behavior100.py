@@ -850,7 +850,10 @@ class Batch:
             asset_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'assets',
                        '--manifest',str(self.root/'manifest.json'),'--index',str(row['index']),
                        '--data-root',self.c['data_root']]
-            checked=self.ssh(asset_cmd)
+            # Task assets include hashing shared-storage files. A short SSH
+            # telemetry timeout can expire before a healthy preflight finishes
+            # while other instances initialize; no simulator exists yet.
+            checked=self.ssh(asset_cmd,timeout=self._config.get('asset_preflight_timeout_seconds',180))
             if checked.returncode:raise RuntimeError('Task asset preflight command failed')
             asset_check=json.loads(checked.stdout)
             write_json(self.root/'preflight'/f'{runid}_assets.json',asset_check)
