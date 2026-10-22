@@ -1086,6 +1086,21 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
 
     @action_profile
     def execute_visual(self,primitive,target,max_steps,**kwargs):
+        from .scene_lifecycle import finish_pending_objects
+        before = self.steps
+        try:
+            result = self._execute_visual_action(primitive,target,max_steps,**kwargs)
+        except SkillError as exc:
+            if exc.code == 'target_changed':
+                # Placement transactions have already released their watch and
+                # carry state. Native transition products must finish their
+                # next-step initialization before observation or relation reads.
+                finish_pending_objects(self,max_steps-(self.steps-before))
+            raise
+        finish_pending_objects(self,max_steps-(self.steps-before))
+        return result
+
+    def _execute_visual_action(self,primitive,target,max_steps,**kwargs):
         if primitive in {'look','navigate_to','release','wait'} and getattr(self,'_demo_focus',None) is not None:
             self._demo_focus=None;self._spectator_anchor=None
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
