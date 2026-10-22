@@ -145,13 +145,27 @@ Rejected candidate poses never become committed actions or task evidence.
     accepted = False
     identity_changed = False
 
-    def restore():
+    def restore(state=initial, particle_state=initial_particles):
         nonlocal identity_changed
         if scene_object_identities(sim) != initial_objects or not particle_state_unchanged(initial_particles):
             identity_changed = True
             raise SkillError('target_changed', 'Scene identities changed during assembly sampling', changed=True)
-        sim.load_state(initial, serialized=False)
-        restore_particle_state(initial_particles)
+        sim.load_state(state, serialized=False)
+        restore_particle_state(particle_state)
+
+    open_only = None
+
+    def accept_open_only():
+        nonlocal accepted
+        if open_only is None:
+            return False
+        restore(open_only['state'], open_only['particles'])
+        accepted = True
+        backend._placement_record({'status':'inside_candidate_accepted', 'held':held.name,
+            'target':target.name, **open_only['candidate'],
+            'closure_clearance':'open_only_fallback',
+            'note':'Inside is valid; closing may require rearranging contents'})
+        return True
 
     def check():
         backend.deadline.check(changed=dirty)
@@ -164,6 +178,8 @@ Rejected candidate poses never become committed actions or task evidence.
                                    'held': held.name, 'target': target.name, **candidate, **details})
 
     try:
+        from .closure_clearance import closed_geometry_proposals, closed_geometry_overlap
+        closure_geometry=closed_geometry_proposals(backend,target)
         backend._placement_record({'status':'inside_sampling_started', 'held':held.name, 'target':target.name,
                                    'held_pose':[root_pos.cpu().tolist(),root_quat.cpu().tolist()],
                                    'held_joints':held.get_joint_positions().cpu().tolist() if getattr(held,'n_joints',0) else [],
@@ -240,14 +256,19 @@ Rejected candidate poses never become committed actions or task evidence.
                                      for c,e,a,b in zip(center,extent,lo,hi))
                            for lo,hi in resident_bounds)/volume
             def location(candidate):return tuple(round(float(v)/.02) for v in candidate[1])
+            def top_height(candidate):
+                return float(candidate[1][2])+.5*extents[tuple(candidate[3].cpu().tolist())][2]
+            def closed_overlap(candidate):
+                return round(closed_geometry_overlap(closure_geometry,candidate[0],candidate[1],
+                    extents[tuple(candidate[3].cpu().tolist())]),6)
             volume_bounds={v.prim_path:tuple(a.cpu().tolist() for a in v.visual_aabb) for v in volumes}
             settling_drop=.025+.5*9.81*sim.get_physics_dt()**2
             def support_rank(candidate):
                 volume,center,_,quat,*_=candidate
                 extent=extents[tuple(quat.cpu().tolist())]
                 lo,hi=volume_bounds[volume.prim_path]
-                return (round(envelope_protrusion(center,extent,lo,hi,settling_drop),6),
-                        round(occupancy(candidate),6),round(float(center[2]),6),
+                return (closed_overlap(candidate), round(envelope_protrusion(center,extent,lo,hi,settling_drop),6),
+                        round(occupancy(candidate),6),top_height(candidate) if was_open is True else round(float(center[2]),6),
                         visits.get(location(candidate),0))
             first_support=[];remainder=[]
             for group in supported:
@@ -345,13 +366,28 @@ Rejected candidate poses never become committed actions or task evidence.
                         raise
                     reject('particle_payload_postcondition', candidate, error=str(exc))
                     continue
+            from .closure_clearance import check_closure_clearance
+            closure = check_closure_clearance(backend, target, assembly)
+            if not closure['clear']:
+                # A lid-compatible placement is preferable, but Inside does
+                # not promise that an oversized object allows the lid to close.
+                # Keep a physically valid open placement if no better one is
+                # found within the existing bounded search.
+                if open_only is None:
+                    open_only={'state':sim.dump_state(serialized=False),
+                               'particles':snapshot_particle_state(sim), 'candidate':candidate}
+                reject('closed_articulation_collision', candidate, closure=closure)
+                continue
             accepted = True
             backend._placement_record({'status':'inside_candidate_accepted', 'held':held.name,
                                        'target':target.name, **candidate})
             return True
-        return False
+        return accept_open_only()
     except SkillError as exc:
-        identity_changed = exc.code == 'target_changed'
+        identity_changed = identity_changed or exc.code == 'target_changed'
+        if exc.code == 'sampling_budget_exhausted' and open_only is not None:
+            backend.deadline.check(changed=True)
+            return accept_open_only()
         raise
     finally:
         try:

@@ -65,40 +65,41 @@ def translation_samples(route, step_m):
 
 
 class CompactCarry:
-    def _execute_prepared_carry(self, obj, plan, max_steps):
-        """Execute precisely the admitted route, checking actual geometry anew."""
-        from omnigibson.utils import transform_utils as T
+    def _validate_carry_destination(self, obj, plan, payload, max_steps):
+        """Read-only validation before attaching or moving any assembly member."""
         from .carry_geometry import PayloadSweep
-        route=plan['route'];before=self.steps
-        step=.5*self.og.sim.get_sim_step_dt()
-        samples=sum(max(1,math.ceil(math.dist(a,b)/step)) for a,b in zip(route,route[1:]))
-        if samples+6>max_steps:
-            raise SkillError('local_adjustment_exhausted','Prepared carry route exceeds remaining step budget',changed=True)
+        if plan.get('transfer_mode') != 'instant_pose_transfer':
+            raise SkillError('target_changed','Carry preparation uses an obsolete transfer mode')
+        if max_steps < 6:
+            raise SkillError('local_adjustment_exhausted','Insufficient budget to stabilize carried object')
+        position=obj.get_position_orientation()[0]
+        if math.dist(position.cpu().tolist(),plan['route'][0])>.01:
+            raise SkillError('target_changed','Payload moved after carry preparation')
         local=getattr(self,'_local_operation',None)
         check=local.check if local is not None else self.deadline.check
-        payload=[obj,*[child for child,_ in self._carry_contents]]
         sweep=PayloadSweep(self,obj,payload,self._local_pose(),check=check)
+        check()
+        if not sweep.destination_clear(plan['route'][-1]):
+            self._carry_record(status='carry_destination_blocked',diagnostic=sweep.last_failure)
+            raise SkillError('local_adjustment_blocked','Prepared carry destination is obstructed')
+        return sweep
+
+    def _execute_prepared_carry(self, obj, plan, max_steps):
+        """Transfer directly to the checked endpoint; no extraction animation."""
+        from omnigibson.utils import transform_utils as T
+        before=self.steps
+        payload=[obj,*[child for child,_ in self._carry_contents]]
+        sweep=self._validate_carry_destination(obj,plan,payload,max_steps)
         position,orientation=obj.get_position_orientation()
-        if math.dist(position.cpu().tolist(),route[0])>.01:
-            raise SkillError('target_changed','Payload moved after carry preparation',changed=True)
-        base_pos,base_quat=self.robot.get_position_orientation()
+        destination=self.torch.as_tensor(plan['route'][-1],dtype=position.dtype,device=position.device)
+        self._carry_relative=T.relative_pose_transform(destination,orientation,*self.robot.get_position_orientation())
+        self._carry_follow()
         with self._anchored_operation():
-            for number,(a,b) in enumerate(zip(route,route[1:])):
-                previous=a
-                for xyz in translation_samples((a,b),step):
-                    check()
-                    if not sweep.clear(previous,xyz,extraction=number==0,
-                                       require_clear=number!=0 or math.dist(xyz,b)<1e-8):
-                        self._carry_record(status='prepared_carry_blocked',diagnostic=sweep.last_failure)
-                        raise SkillError('local_adjustment_blocked','Prepared payload route changed during execution',changed=True)
-                    new=position.clone();new[:]=self.torch.tensor(xyz,dtype=new.dtype,device=new.device)
-                    self._carry_relative=T.relative_pose_transform(new,orientation,base_pos,base_quat)
-                    self._carry_follow()
-                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                    previous=xyz
             for _ in range(6):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-        report={'status':plan['status'],'shared_prediction_and_execution':True,
-                'steps':self.steps-before,'planned_route':route,'collision_queries':sweep.queries}
+        report={'status':'instant_pose_transfer','shared_prediction_and_execution':True,
+                'steps':self.steps-before,'source_position':plan['route'][0],
+                'destination_position':plan['route'][-1], 'intermediate_trajectory_checked':False,
+                'destination_collision_checked':True,'collision_queries':sweep.queries}
         self._carry_record(status='carry_posture',object=obj.name,posture=report)
         return report
 

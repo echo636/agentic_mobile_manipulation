@@ -67,7 +67,7 @@ class ForwardBackendTests(unittest.TestCase):
 
     def test_adapter_turns_to_path_and_restores_endpoint_view(self):
         result=self.b._execute_gt_plan(self.grid,self.plan(),500)
-        self.assertEqual(result['motion_policy'],'turn_then_drive_forward_v1')
+        self.assertEqual(result['motion_policy'],'checked_forward_reverse_v2')
         self.assertFalse(result['physical_controller'])
         self.assertLess(result['final_position_error_m'],.002)
         self.assertLess(result['final_yaw_error_rad'],.001)

@@ -158,8 +158,12 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
             account_current=int(cg['memory.current']), account_stats=stats,
             account_limit=None if cg['memory.max']=='max' else int(cg['memory.max']))
         checks['adaptive_account_memory'] = adaptive['status']=='passed'
+        required = adaptive['candidate_reserve_bytes']
+        checks['cgroup_reclaimable_headroom'] = cg_free is None or cg_free > required
+        checks.pop('host_memory_available_40GiB')
+        checks['host_working_memory_headroom'] = host_available > required + 2*1024**3
         checks['host_memory_including_peer_reservations'] = (
-            host_available > 40*1024**3 + adaptive['peer_growth_reserve_bytes'])
+            host_available > required + 2*1024**3 + adaptive['peer_growth_reserve_bytes'])
         # An abandoned startup must be adopted/cleaned before another starts.
         checks['peer_initialization_complete'] = not any(
             peer.get('runtime_stage')=='starting' for peer in memory_policy['peers'])

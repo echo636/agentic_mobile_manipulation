@@ -100,17 +100,17 @@ class FailedGraspTests(unittest.TestCase):
         return b,obj,{'omnigibson.object_states':states,'omnigibson.utils':utils}
 
     def test_failed_support_check_drops_only_control_relationship(self):
-        b,obj,modules=self.fixture()
+        b,obj,modules=self.prepared_fixture()
         with patch.dict(sys.modules,modules), \
              patch('manipulation_agent.executors.carry.snapshot_particles',return_value=[]), \
-             patch('manipulation_agent.executors.carry.assembly_lift',return_value=.02), \
+             patch.object(b,'_execute_prepared_carry',side_effect=lambda *args:b._step(None)), \
              patch('manipulation_agent.executors.carry.verify_particles',
                    side_effect=SkillError('postcondition_error','foreign support')):
             with self.assertRaises(SkillError):b._ideal_grasp(obj,1)
         self.assertIsNone(b._ideal_held)
         self.assertEqual(b._carry_particles,[])
         self.assertEqual(b.frames_revision,-1)
-        self.assertAlmostEqual(float(obj.position[2]),1.05,places=5)
+        self.assertAlmostEqual(float(obj.position[2]),1.03,places=5)
 
     def test_already_held_cannot_bypass_particle_postconditions(self):
         b,obj,modules=self.fixture();b._ideal_held=obj
@@ -130,25 +130,25 @@ class FailedGraspTests(unittest.TestCase):
         b,obj,modules=self.fixture()
         b._local_pose=lambda:(0.,0.,0.)
         b._local_operation=SimpleNamespace(carry_plan={
-            'pose':(0.,0.,0.),'route':[(0.,0.,1.),(0.,0.,1.02)],'status':'compact'})
+            'pose':(0.,0.,0.),'route':[(0.,0.,1.),(0.,0.,1.02)],
+            'status':'instant_pose_transfer','transfer_mode':'instant_pose_transfer'})
+        b._validate_carry_destination=lambda *args:None
         b.og=SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda:.1))
         return b,obj,modules
 
-    def test_prepared_grasp_uses_checked_route_without_legacy_lift(self):
+    def test_prepared_grasp_executes_destination_transfer_without_initial_lift(self):
         b,obj,modules=self.prepared_fixture()
         with patch.dict(sys.modules,modules), \
              patch('manipulation_agent.executors.carry.snapshot_particles',return_value=[]), \
-             patch('manipulation_agent.executors.carry.assembly_lift') as lift, \
              patch('manipulation_agent.executors.carry.verify_particles'), \
-             patch.object(b,'_execute_prepared_carry',return_value={'status':'compact'}) as execute:
+             patch.object(b,'_execute_prepared_carry',return_value={'status':'instant_pose_transfer'}) as execute:
             result=b._ideal_grasp(obj,20)
-        lift.assert_not_called()
         execute.assert_called_once_with(obj,b._local_operation.carry_plan,20)
-        self.assertEqual(result['carry_posture']['status'],'compact')
+        self.assertEqual(result['carry_posture']['status'],'instant_pose_transfer')
         self.assertIs(b._ideal_held,obj)
         self.assertAlmostEqual(float(obj.position[2]),1.)
 
-    def test_interrupted_prepared_route_retains_carry_for_recovery(self):
+    def test_failed_instant_transfer_cannot_become_already_held_on_retry(self):
         b,obj,modules=self.prepared_fixture()
         with patch.dict(sys.modules,modules), \
              patch('manipulation_agent.executors.carry.snapshot_particles',return_value=[]), \
@@ -157,7 +157,8 @@ class FailedGraspTests(unittest.TestCase):
             with self.assertRaises(SkillError) as raised:b._ideal_grasp(obj,20)
         self.assertEqual(raised.exception.code,'local_adjustment_blocked')
         self.assertTrue(raised.exception.changed)
-        self.assertIs(b._ideal_held,obj)
+        self.assertIsNone(b._ideal_held)
+        self.assertEqual(b.frames_revision,-1)
 
     def test_prepared_route_does_not_bypass_particle_postconditions(self):
         b,obj,modules=self.prepared_fixture()

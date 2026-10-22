@@ -57,10 +57,10 @@ class LocalRGBManipulation:
         return grid,collision,details,hulls,floor
 
     def _local_grasp_preview(self,obj,operation,geometry):
-        """Plan the same lift/packing route used by actual ideal grasp."""
+        """Check the same instantaneous carry destination used by ideal grasp."""
         from .live_gt_map import build_navigation_grid
         from .heading_collision import HeadingCollisionChecker
-        from .carry_geometry import PayloadSweep, LoadedCollision, plan_lift_and_compact
+        from .carry_geometry import PayloadSweep, LoadedCollision, plan_instant_carry
         payload=[obj,*[child for child,_,_ in self._grasp_dependencies(obj)]]
         names=('_navigation_layers','_navigation_support','_navigation_clearance','_navigation_layer_yaw','_navigation_layer_heights')
         saved={name:getattr(self,name) for name in names}
@@ -78,8 +78,8 @@ class LocalRGBManipulation:
             key=tuple(round(float(v),6) for v in pose)
             if key in cache:return cache[key]
             sweep=PayloadSweep(self,obj,payload,pose,check=check)
-            route,status=plan_lift_and_compact(sweep.origin,(*pose[:2],base_z,pose[2]),
-                                              sweep.bounds,sweep.clear,check=check)
+            route,status=plan_instant_carry(sweep.origin,(*pose[:2],base_z,pose[2]),
+                                           sweep.bounds,sweep.destination_clear,check=check)
             if route is None:
                 operation.preview_failure={'reason':status,**(sweep.last_failure or {})}
                 return None
@@ -102,7 +102,8 @@ class LocalRGBManipulation:
                 operation.preview_failure=loaded.sweep.last_failure or {'stage':'loaded_departure'}
             return False
         if hasattr(loaded,'route'):
-            operation.carry_plan={'pose':tuple(pose),'route':loaded.route,'status':loaded.carry_status}
+            operation.carry_plan={'pose':tuple(pose),'route':loaded.route,'status':loaded.carry_status,
+                                  'transfer_mode':'instant_pose_transfer'}
         return True
 
     def _local_ready(self,primitive,obj,point,operation):
@@ -114,7 +115,8 @@ class LocalRGBManipulation:
         operation.geometry=geometry
         if not geometry[1].motion_free(pose,pose):return False
         if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=geometry[3],base_yaw=pose[2],
-                                      selected_container=primitive=='place_inside'):return False
+                                      selected_container=primitive in {'place_inside','place_next_to','place_under'},
+                                      tracked_target=True):return False
         if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
             if not self._admit_articulation(primitive,obj,pose,operation,operation.check):return False
         if primitive=='grasp' and self.ideal_carry and not self.demo_motion:
@@ -169,7 +171,8 @@ class LocalRGBManipulation:
                     visibility={}
                     if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=hulls,
                                                   base_yaw=pose[2],diagnostics=visibility,
-                                                  selected_container=primitive=='place_inside'):
+                                                  selected_container=primitive in {'place_inside','place_next_to','place_under'},
+                                                  tracked_target=True):
                         row.update(status='rejected',reason='target_not_visible',visibility=visibility);continue
                     if local_exit_certificate(pose,local,check_cancelled=preparation.check) is None:
                         row.update(status='rejected',reason='no_departure');continue

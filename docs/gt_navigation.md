@@ -252,3 +252,7 @@ controller state was substituted and no original instance was rewritten. The 32-
 retest retains this task and its failure in the denominator. Historical trash/toolbox
 camera audits both passed when rechecked on copies in the robot frame; original
 validation files were preserved.
+
+### 2026-10-22 reversible drive repair
+
+The current executor permits straight reverse driving with the same swept body/payload collision checks as forward travel. Route phases record forward/reverse separately; the follower rejects lateral motion and motion against the certified direction. Cheap backing-out connectors precede the pose search, and the roadmap and continuous search both include reverse edges. Archived forward-only evaluations retain their original source. A reproduced Loading The Car doorway failure has a checked 0.8 m reverse exit; its full task regression is separate evidence.

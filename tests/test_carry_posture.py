@@ -125,8 +125,8 @@ class CarryAdapterTests(unittest.TestCase):
         transforms.relative_pose_transform=lambda pos,ori,*_: (pos,ori)
         with patch.dict(sys.modules,modules):
             if prepared:
-                route=((1.3,0.,.2),(1.3,0.,.38),(.65,0.,.7))
-                report=b._execute_prepared_carry(held,{'route':route,'status':'compact'},step_limit)
+                route=((1.3,0.,.2),(.65,0.,.7))
+                report=b._execute_prepared_carry(held,{'route':route,'status':'instant_pose_transfer','transfer_mode':'instant_pose_transfer'},step_limit)
             else:report=b._compact_carry(step_limit)
         self.assertEqual(len(records),1)
         self.assertIs(b._get_held(),held)
@@ -138,10 +138,11 @@ class CarryAdapterTests(unittest.TestCase):
         self.assertGreater(b.steps,0);self.assertLessEqual(b.steps,180)
         self.assertLess(report['offset_after_m'],.7)
 
-    def test_prepared_route_is_executed_over_steps_and_keeps_attachment(self):
+    def test_prepared_destination_transfers_directly_and_keeps_attachment(self):
         b,report,pose=self.run_adapter(prepared=True)
         self.assertTrue(report['shared_prediction_and_execution'])
-        self.assertGreater(b.steps,6)
+        self.assertEqual(b.steps,6)
+        self.assertFalse(report['intermediate_trajectory_checked'])
         self.assertLess(math.dist(pose[0].tolist(),(.65,0.,.7)),1e-6)
 
     def test_collision_or_insufficient_steps_never_moves_or_drops(self):

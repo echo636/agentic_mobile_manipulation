@@ -101,7 +101,10 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
                 if enter<=leave+1e-12:
                     valid &= mask[r0+rr:r1+rr,c0+cc:c1+cc]
         source=indices[k][r0:r1,c0:c1][valid]
-        rows.append(source);cols.append(indices[k][r0+dr:r1+dr,c0+dc:c1+dc][valid])
+        destination=indices[k][r0+dr:r1+dr,c0+dc:c1+dc][valid]
+        rows.append(source);cols.append(destination)
+        weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
+        rows.append(destination);cols.append(source)
         weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
         for offset in (-1,1):
             check_cancelled()

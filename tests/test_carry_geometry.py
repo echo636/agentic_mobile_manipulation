@@ -67,6 +67,26 @@ class CarryGeometryTests(unittest.TestCase):
         with patch.dict(sys.modules,{'omnigibson':og,'omnigibson.lazy':lazy}):
             return PayloadSweep(backend,obj,payload,(0.,0.,0.)),backend,obj
 
+    def test_instant_carry_does_not_require_clear_extraction(self):
+        from manipulation_agent.executors.carry_geometry import plan_instant_carry
+        for options in ({'ceiling':True},{'compound_support':True,'support_roof':True},{'extra_payload':True}):
+            sweep,_,_=self.scene(**options)
+            route,status=plan_instant_carry(sweep.origin,(0.,0.,0.,0.),sweep.bounds,sweep.destination_clear)
+            self.assertEqual(status,'instant_pose_transfer')
+            self.assertEqual(len(route),2)
+            self.assertTrue(sweep.destination_clear(route[-1]))
+
+    def test_instant_destination_checks_robot_and_entire_payload(self):
+        from manipulation_agent.executors.carry_geometry import plan_instant_carry
+        sweep,_,_=self.scene(extra_payload=True)
+        self.assertFalse(sweep.destination_clear((.1,0.,.9)))
+        self.assertTrue(any(k.startswith('robot_link:') for k in sweep.last_failure['blockers']))
+        checks=[]
+        route,status=plan_instant_carry(sweep.origin,(0.,0.,0.,0.),sweep.bounds,
+                                      lambda end:checks.append(end) or False)
+        self.assertIsNone(route);self.assertEqual(status,'carry_destination_blocked')
+        self.assertGreater(len(checks),1)
+
     def test_supported_plate_can_lift_then_compact_above_counter(self):
         from manipulation_agent.executors.carry_geometry import plan_lift_and_compact
         sweep,_,_=self.scene()

@@ -224,7 +224,9 @@ class AssemblySamplingTests(unittest.TestCase):
         target.get_joint_positions=lambda:b.torch.tensor([state['steps']*.1])
         target.get_joint_dof_types=lambda:b.torch.tensor([True])
         target.states[modules['omnigibson.object_states'].Open]=SimpleNamespace(get_value=lambda:True)
-        with patch.dict('sys.modules',modules):
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',return_value=None), \
+             patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',return_value={'clear':True}):
             self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
 
     def test_moving_drawer_volume_or_closing_container_is_rejected(self):
@@ -236,7 +238,8 @@ class AssemblySamplingTests(unittest.TestCase):
                         target.position+b.torch.tensor([.1 if state['steps'] else 0.,0.,0.]),target.quat)
                 else:
                     target.states[modules['omnigibson.object_states'].Open]=SimpleNamespace(get_value=lambda:state['steps']==0)
-                with patch.dict('sys.modules',modules):
+                with patch.dict('sys.modules',modules), \
+                     patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',return_value=None):
                     self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
                 reason='container_volume_moved' if moving_drawer else 'container_closed_during_sampling'
                 self.assertEqual(records[-1]['rejections'][reason],1)
@@ -339,6 +342,35 @@ class AssemblySamplingTests(unittest.TestCase):
             with self.assertRaises(SkillError) as error:
                 sample_assembly_inside(b,held,target,contents,max_candidates=2)
         self.assertEqual(error.exception.code,'target_changed')
+        self.assertEqual(state['loads'],0)
+        self.assertTrue(records[-1]['identity_changed'])
+
+    def test_open_only_fallback_restores_its_particle_frames_with_the_pose(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        snapshots=[];restored=[]
+        def snapshot(sim):
+            saved={'position':held.position.clone()}
+            snapshots.append(saved)
+            return saved
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.particle_payload.snapshot_particle_state',side_effect=snapshot), \
+             patch('manipulation_agent.executors.particle_payload.particle_state_unchanged',return_value=True), \
+             patch('manipulation_agent.executors.particle_payload.restore_particle_state',side_effect=restored.append), \
+             patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',return_value={'clear':False}):
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=2))
+        self.assertEqual(len(snapshots),2)
+        self.assertIs(restored[-1],snapshots[1])
+        self.assertTrue(b.torch.equal(held.position,snapshots[1]['position']))
+        self.assertEqual(records[-2]['closure_clearance'],'open_only_fallback')
+
+    def test_open_only_fallback_never_restores_changed_particle_identities(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.particle_payload.particle_state_unchanged',return_value=False), \
+             patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',return_value={'clear':False}):
+            with self.assertRaises(SkillError) as caught:
+                sample_assembly_inside(b,held,target,contents,max_candidates=1)
+        self.assertEqual(caught.exception.code,'target_changed')
         self.assertEqual(state['loads'],0)
         self.assertTrue(records[-1]['identity_changed'])
 

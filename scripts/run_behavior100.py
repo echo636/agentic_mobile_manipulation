@@ -101,6 +101,8 @@ def worker_configs(config):
         if type(budget) is not int or not 12<=budget<=28: raise ValueError('Invalid memory budget')
         if merged.get('simulator_memory_max',str(budget)+'G')!=str(budget)+'G':
             raise ValueError('Resource admission and hard simulator memory limit must agree')
+        if not 12<=merged.get('startup_memory_gib',budget)<=budget:
+            raise ValueError('Startup estimate must fit the simulator hard limit')
         if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES','MAS_LOCAL_MANIPULATION'}:
             raise ValueError('Only reviewed recording and local manipulation options may be worker environment overrides')
         if 'MAS_LOCAL_MANIPULATION' in env and env['MAS_LOCAL_MANIPULATION'] not in ('0','1'):
@@ -249,7 +251,8 @@ class Batch:
 
     def __init__(self, config):
         self._config=config; self._worker_local=threading.local(); self.workers=worker_configs(config)
-        self.root=Path(config['batch']); self.source=Path(__file__).resolve().parents[1]
+        self.root=Path(config['batch']); self.scheduler_source=Path(__file__).resolve().parents[1]
+        self.source=Path(config.get('source_path',self.scheduler_source)).resolve()
         self.manifest=json.loads((self.root/'manifest.json').read_text()); self.reports=Path(config['reports'])
         self.lock=threading.RLock(); self.queue=queue.Queue(); self.rows=self.manifest['tasks']
         self.worker_states={};self._archive_pool=None
@@ -301,8 +304,18 @@ class Batch:
             if row is None or worker is None: raise RuntimeError('Unknown adoption target')
             if row['status']=='running' and (row.get('gpu_index')!=worker['gpu'] or row.get('simulator_interpreter')!=worker['sim_python']):
                 raise RuntimeError('Inflight task must retain its original execution lane')
-        self.source_info=source_version()
+        self.scheduler_info=source_version()
+        self.source_info=self.scheduler_info
+        if self.source!=self.scheduler_source:
+            probe=subprocess.run([sys.executable,'-c',
+                'import json; from manipulation_agent.records import source_version; print(json.dumps(source_version()))'],
+                cwd=self.source,env={**os.environ,'PYTHONPATH':str(self.source/'src')},
+                check=True,capture_output=True,text=True,timeout=30)
+            self.source_info=json.loads(probe.stdout)
+        if self.scheduler_info['dirty']:raise RuntimeError('Scheduler source must be a clean frozen checkout')
         if self.source_info['dirty']: raise RuntimeError('Batch source must be a clean frozen checkout')
+        if config.get('source_commit') and self.source_info['commit']!=config['source_commit']:
+            raise RuntimeError('Frozen executor commit mismatch')
         self.environment={**os.environ,'PYTHONPATH':str(self.source/'src')}
         missing=[k for k in config.get('required_controller_env',[]) if not self.environment.get(k)]
         if missing: raise RuntimeError('Required controller environment variables absent: '+','.join(missing))
@@ -331,6 +344,7 @@ class Batch:
     def publish(self):
         with self.lock:
             progress={'updated_at':now(),'source':self.source_info,'supervisor':{'host':os.uname().nodename,'pid':os.getpid(),'unit':os.environ.get('MAS_UNIT'),'interpreter':sys.executable},
+                      'scheduler_source':getattr(self,'scheduler_info',self.source_info),
                       'protocol':{k:v for k,v in self.manifest.items() if k!='tasks'},'summary':summarize(self.rows),'tasks':self.rows,'comparison':self.manifest.get('comparison'),
                       'workers':[{'id':w['id'],'host':w['ssh'][-1], 'gpu':w['gpu'],
                           'port':w['base_port']+w['gpu'], 'interpreter':w['sim_python'],
@@ -475,6 +489,7 @@ class Batch:
         lease=self._worker_local.lease
         policy={'peers':lease.active_peers(),
                 'candidate_gib':self.c.get('memory_budget_gib',28),
+                'startup_gib':self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)),
                 'host_budget_gib':self._config['host_worker_memory_budget_gib'][self.c['ssh'][-1]]}
         # GDB with startup-with-shell disabled does not round-trip quoted JSON
         # arguments. A single ASCII token survives both systemd and GDB argv.
@@ -484,7 +499,7 @@ class Batch:
     def resource_admission(self):
         """No task is claimed here; immutable host checks run once per worker."""
         self.worker_state('admitting')
-        args=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'preflight',
+        args=[self.c['sim_python'],str(getattr(self,'scheduler_source',self.source)/'scripts/behavior100_remote.py'),'preflight',
               '--manifest',str(self.root/'manifest.json'),'--gpu',str(self.c['gpu']),
               '--port',str(self.c['base_port']+self.c['gpu']),'--data-root',self.c['data_root'],
               '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
@@ -788,6 +803,7 @@ class Batch:
                     simulator_unit=unit,simulator_output=str(remote_run),controller_output=str(controller),
                     worker_id=self.c['id'],worker_host=self.c['ssh'][-1],runtime_source=str(self.source),
                     port=port,simulator_interpreter=self.c['sim_python'],source=self.source_info,
+                    scheduler_source=getattr(self,'scheduler_info',self.source_info),
                     recording_options=self.c.get('simulator_env',{}),
                     native_fault_capture=native_fault_capture)
         self.journal(f'START {runid}; admitted worker {self.c["id"]}; unit {unit}.')
@@ -816,7 +832,7 @@ class Batch:
             clock_path=remote_run/'execution_clock.json'
             grace=self._config.get('cleanup_grace_seconds',120)
             launcher=self.root/'launchers'/f'{runid}.sh';q=shlex.quote
-            command=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'simulate',
+            command=[self.c['sim_python'],str(getattr(self,'scheduler_source',self.source)/'scripts/behavior100_remote.py'),'simulate',
                 '--manifest',str(self.root/'manifest.json'),'--index',str(row['index']),'--run-id',runid,
                 '--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root'],
                 '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),

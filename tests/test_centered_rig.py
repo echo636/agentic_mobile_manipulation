@@ -5,6 +5,14 @@ from manipulation_agent.observations.rig import camera_mount, centered_head_heig
 
 
 class CenteredRigTests(unittest.TestCase):
+    def test_locked_high_target_keeps_sight_rays_after_leaving_rgb_frustum(self):
+        args=((0.,0.),0.,0.,1.81,(1.0,0.,2.4))
+        self.assertFalse(visible_rig_rays(*args,pitch_degrees=35))
+        tracked=visible_rig_rays(*args,pitch_degrees=35,require_in_frame=False)
+        self.assertEqual(len(tracked),4)
+        self.assertTrue(all(pixel is None for _,_,pixel in tracked))
+        self.assertEqual(tracked[0][1],[.35,0.,1.81])
+
     def test_forward_camera_keeps_near_container_inside_rgb_frame(self):
         target=(1.25,0.,.5)
         shallow=visible_rig_rays((0.,0.),0.,0.,1.81,target,

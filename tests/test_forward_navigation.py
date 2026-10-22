@@ -44,6 +44,8 @@ class ForwardNavigationTests(unittest.TestCase):
         drifted = (start[0], start[1]+.000002, start[2])
         self.assertFalse(collision.motion_free(drifted, end))
         self.assertIsNone(checked_connection(start, end[:2], end[2], collision))
+        reverse_start = (*start[:2], start[2]+math.pi)
+        self.assertIsNone(checked_connection(reverse_start, end[:2], end[2]+math.pi, collision))
         clear_start = (start[0], start[1]-.01, start[2])
         clear_end = (end[0], end[1]-.01, end[2])
         self.assertIsNotNone(checked_connection(clear_start, clear_end[:2], clear_end[2], collision))
@@ -284,7 +286,7 @@ class ForwardNavigationTests(unittest.TestCase):
         with self.assertRaises(NavigationError):
             plan_forward_route(plan([start[:2],target],math.pi/2),start,BentSlot(True),max_expansions=500)
 
-    def test_outward_facing_pocket_also_requires_a_forward_entry(self):
+    def test_outward_facing_pocket_admits_checked_reverse_entry(self):
         class Pocket(PointCollision):
             def motion_free(self,a,b):
                 if max(a[0],b[0])>.01:return False
@@ -294,7 +296,10 @@ class ForwardNavigationTests(unittest.TestCase):
                 return super().motion_free(a,b)
         collision=Pocket();pose=(0.,0.,math.pi)
         self.assertIsNotNone(local_exit_certificate(pose,collision))
-        self.assertIsNone(local_exit_certificate(pose,collision,incoming=True))
+        entry=local_exit_certificate(pose,collision,incoming=True)
+        self.assertEqual(entry['motion_mode'],'reverse')
+        self.assertEqual(entry['poses'][-1],pose)
+        self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(entry['poses'],entry['poses'][1:])))
 
     def test_complete_candidate_cost_avoids_unneeded_final_half_turn(self):
         from dataclasses import replace
@@ -305,7 +310,7 @@ class ForwardNavigationTests(unittest.TestCase):
         self.assertAlmostEqual(route.turn_radians,0.)
         self.assertFalse(details['globally_optimal'])
 
-    def test_local_exit_rejects_legal_but_forward_trapped_pose(self):
+    def test_local_exit_backs_out_of_forward_trap_but_rejects_closed_pocket(self):
         class Pocket(PointCollision):
             def motion_free(self,a,b):
                 if max(a[0],b[0])>.01:return False
@@ -314,12 +319,17 @@ class ForwardNavigationTests(unittest.TestCase):
         collision=Pocket();pose=(0.,0.,0.)
         self.assertTrue(collision.motion_free(pose,pose))
         self.assertTrue(collision.motion_free(pose,(-.2,0.,0.)))
-        self.assertIsNone(local_exit_certificate(pose,collision))
+        certificate=local_exit_certificate(pose,collision)
+        self.assertEqual(certificate['motion_mode'],'reverse')
+        class ClosedPocket(Pocket):
+            def motion_free(self,a,b):
+                return min(a[0],b[0])>-.1 and super().motion_free(a,b)
+        self.assertIsNone(local_exit_certificate(pose,ClosedPocket()))
         certificate=local_exit_certificate((-.4,0.,0.),collision)
         self.assertIsNotNone(certificate)
         self.assertGreaterEqual(certificate['displacement_m'],.3-1e-9)
 
-    def test_exit_keeps_narrow_forward_corridor_and_checks_full_motion(self):
+    def test_exit_keeps_narrow_corridor_and_checks_full_motion(self):
         class Corridor(PointCollision):
             def motion_free(self,a,b):
                 return abs(a[1])<.01 and abs(b[1])<.01 and abs(a[2])<.01 and abs(b[2])<.01 and super().motion_free(a,b)
@@ -327,7 +337,8 @@ class ForwardNavigationTests(unittest.TestCase):
         self.assertIsNotNone(result)
         for a,b in zip(result['poses'],result['poses'][1:]):
             self.assertTrue(collision.motion_free(a,b))
-            self.assertGreaterEqual((b[0]-a[0])*math.cos(a[2])+(b[1]-a[1])*math.sin(a[2]),-1e-9)
+            direction=-1 if result['motion_mode']=='reverse' else 1
+            self.assertGreaterEqual(direction*((b[0]-a[0])*math.cos(a[2])+(b[1]-a[1])*math.sin(a[2])),-1e-9)
 
     def test_local_half_turn_exit_keeps_clear_direction_under_yaw_residual(self):
         # One side of a stance blocks the counterclockwise turn. Only the
@@ -395,8 +406,9 @@ class ForwardNavigationTests(unittest.TestCase):
                 self.assertLessEqual(distance,.5/30+1e-9)
                 self.assertLessEqual(abs(angle(command[2]-actual[2])),math.pi/90+1e-9)
                 if distance>.002:
-                    self.assertGreater(dx*math.cos(actual[2])+dy*math.sin(actual[2]),0.)
-                    self.assertLess(abs(angle(math.atan2(dy,dx)-actual[2])),.16)
+                    direction=-1 if phase.motion_mode=='reverse' else 1
+                    self.assertGreater(direction*(dx*math.cos(actual[2])+dy*math.sin(actual[2])),0.)
+                    self.assertLess(abs(angle(math.atan2(direction*dy,direction*dx)-actual[2])),.16)
                 moves.append((actual,command))
                 actual = ((command[0]+6.103515625e-5,command[1],command[2]-.000105527829)
                           if noisy else command)
@@ -406,14 +418,19 @@ class ForwardNavigationTests(unittest.TestCase):
         self.assertLess(abs(angle(actual[2]-route.phases[-1].final_yaw)),.001)
         return moves
 
-    def test_side_and_rear_goals_turn_before_translation(self):
+    def test_side_goals_turn_and_rear_goals_back_up_before_translation(self):
         collision=PointCollision()
         for goal in [(0.,1.),(-1.,0.),(0.,.01)]:
             with self.subTest(goal=goal):
                 route=plan_forward_route(plan([(0.,0.),goal]),(0.,0.,0.),collision)
                 moves=self.follow(route,(0.,0.,0.),collision)
-                self.assertEqual(moves[0][0][:2],moves[0][1][:2])
-                self.assertGreater(abs(moves[0][1][2]),0.)
+                if goal[0]<0:
+                    self.assertEqual(route.phases[0].motion_mode,'reverse')
+                    self.assertAlmostEqual(moves[0][1][2],0.)
+                    self.assertLess(moves[0][1][0],0.)
+                else:
+                    self.assertEqual(moves[0][0][:2],moves[0][1][:2])
+                    self.assertGreater(abs(moves[0][1][2]),0.)
 
     def test_open_l_shaped_path_shortcuts_and_restores_final_view(self):
         collision=PointCollision()
@@ -520,9 +537,10 @@ class HeadingCollisionTests(unittest.TestCase):
         self.assertIn((chosen.goal,chosen.final_yaw),[(p.goal,p.final_yaw) for p in options])
         poses=[actual]+[(*phase.goal,phase.final_yaw) for phase in route.phases]
         self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])))
-        for a,b in zip(poses,poses[1:]):
+        for a,b,phase in zip(poses,poses[1:],route.phases):
             if math.dist(a[:2],b[:2])>.002:
-                self.assertLess(abs(angle(math.atan2(b[1]-a[1],b[0]-a[0])-a[2])),1e-6)
+                direction=-1 if phase.motion_mode=='reverse' else 1
+                self.assertLess(abs(angle(math.atan2(direction*(b[1]-a[1]),direction*(b[0]-a[0]))-a[2])),1e-6)
 
     @unittest.skipUnless(importlib.util.find_spec('scipy'),'Requires optional roadmap dependency')
     def test_loaded_fridge_departure_reaches_original_visible_stance(self):
@@ -543,11 +561,12 @@ class HeadingCollisionTests(unittest.TestCase):
         self.assertIn((chosen.goal,chosen.final_yaw),[(p.goal,p.final_yaw) for p in options])
         poses=[actual]+[(*phase.goal,phase.final_yaw) for phase in route.phases]
         self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])))
-        for a,b in zip(poses,poses[1:]):
+        for a,b,phase in zip(poses,poses[1:],route.phases):
             dx,dy=b[0]-a[0],b[1]-a[1]
             if math.hypot(dx,dy)>.002:
-                self.assertGreater(dx*math.cos(a[2])+dy*math.sin(a[2]),0.)
-                self.assertLess(abs(angle(math.atan2(dy,dx)-a[2])),1e-6)
+                direction=-1 if phase.motion_mode=='reverse' else 1
+                self.assertGreater(direction*(dx*math.cos(a[2])+dy*math.sin(a[2])),0.)
+                self.assertLess(abs(angle(math.atan2(direction*dy,direction*dx)-a[2])),1e-6)
         self.assertTrue(all(np.array_equal(before,after) for before,(after,_) in zip(raw_before,collision.layers)))
 
     def test_floor_projection_cannot_choose_closer_pose_across_wall(self):

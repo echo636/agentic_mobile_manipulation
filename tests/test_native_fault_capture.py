@@ -33,7 +33,8 @@ class NativeFaultCaptureTests(unittest.TestCase):
                 '--args',sys.executable,str(helper),*batch.memory_policy_args(),'--output',str(result_path)],
                 env=dict(os.environ,MAS_NATIVE_FAULT_DIR=str(folder/'fault')),capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-            self.assertEqual(json.loads(result_path.read_text()),{'peers':peers,'candidate_gib':28,'host_budget_gib':56})
+            self.assertEqual(json.loads(result_path.read_text()),
+                             {'peers':peers,'candidate_gib':28,'startup_gib':28,'host_budget_gib':56})
             self.assertFalse((folder/'fault').exists())
 
     @unittest.skipUnless(shutil.which('gdb'), 'GDB is unavailable')

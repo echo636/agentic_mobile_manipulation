@@ -1,7 +1,7 @@
-"""CPU-only forward driving: certify a polyline, or search XY + heading.
+"""Checked reversible driving: certify a polyline, or search XY + heading.
 
 The collision adapter owns geometry. Search never moves the robot. A route is
-made of checked in-place turns and forward translations, including the final
+made of checked in-place turns and straight forward/reverse translations, including the final
 orientation required by the visual approach planner.
 """
 from dataclasses import dataclass, replace
@@ -58,57 +58,65 @@ def arrival_heading_options(plan, actual, *, approach=False):
 
 
 def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: None):
-    """Checked turn / forward / turn, with bounded numeric pose correction."""
-    poses = [start]
+    """Checked turns and straight driving, with reverse and feedback clearance."""
     distance = math.dist(start[:2], xy)
     if distance > .002:
-        heading = math.atan2(xy[1]-start[1], xy[0]-start[0])
-        poses += [(*start[:2], heading), (*xy, heading)]
-    elif distance > 1e-10:
-        # Match the follower's 2 mm pose-feedback tolerance. A sub-micrometre
-        # grid snap must not require a large turn toward its numerical bearing.
-        poses.append((*xy, start[2]))
-    poses.append((*xy, final_yaw))
-    checked = [poses[0]]
-    for a, b in zip(poses, poses[1:]):
-        check_cancelled()
-        free = collision.motion_free(a, b)
-        if free and math.dist(a[:2], b[:2]) > .002 and hasattr(collision, 'translation_free_with_margin'):
-            free = collision.translation_free_with_margin(a, b)
-        if free:
-            checked.append(b)
-            continue
-        if math.dist(a[:2], b[:2]) > 1e-10:
-            return None
-        # The shorter rotation may sweep a payload into a nearby shelf even
-        # though the other direction is clear. Split the longer turn into
-        # two sub-turns, each strictly shorter than pi, so the follower and
-        # collision adapter execute the same certified direction. Never
-        # replace a blocked translation or a colliding stationary pose.
-        delta = angle(b[2]-a[2])
-        if abs(delta) < 1e-8:
-            return None
-        opposite = delta-math.copysign(2*math.pi, delta)
-        middle = (*a[:2], a[2]+opposite/2)
-        check_cancelled()
-        if not collision.motion_free(a, middle) or not collision.motion_free(middle, b):
-            return None
-        checked.extend((middle, b))
-    return checked
+        bearing = math.atan2(xy[1]-start[1], xy[0]-start[0])
+        headings = sorted((bearing, angle(bearing+math.pi)), key=lambda yaw:
+                          abs(angle(yaw-start[2]))+abs(angle(final_yaw-yaw)))
+        options = [[start, (*start[:2], yaw), (*xy, yaw), (*xy, final_yaw)] for yaw in headings]
+    else:
+        # Tiny pose-feedback corrections must not turn toward numerical noise.
+        options = [[start, *([(*xy, start[2])] if distance > 1e-10 else []), (*xy, final_yaw)]]
+    for poses in options:
+        checked = [poses[0]]
+        for a, b in zip(poses, poses[1:]):
+            check_cancelled()
+            free = collision.motion_free(a, b)
+            if free and math.dist(a[:2], b[:2]) > .002 and hasattr(collision, 'translation_free_with_margin'):
+                free = collision.translation_free_with_margin(a, b)
+            if free:
+                checked.append(b)
+                continue
+            if math.dist(a[:2], b[:2]) > 1e-10:
+                break
+            # If the short turn hits a shelf, certify the opposite rotation as
+            # two sub-turns shorter than pi, matching the runtime follower.
+            delta = angle(b[2]-a[2])
+            if abs(delta) < 1e-8:
+                break
+            opposite = delta-math.copysign(2*math.pi, delta)
+            middle = (*a[:2], a[2]+opposite/2)
+            check_cancelled()
+            if not collision.motion_free(a, middle) or not collision.motion_free(middle, b):
+                break
+            checked.extend((middle, b))
+        else:
+            return checked
+    return None
 
 
 def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, check_cancelled=lambda: None):
-    """Certify a bounded forward departure from a candidate terminal pose.
+    """Certify a bounded departure from a candidate terminal pose.
 
     This proves a local exit in current geometry, not reachability of every
     future target. With incoming=True, certify an arrival ending at this pose
-    instead. Both certificates contain only forward translations and checked
-    turns. No reverse/sideways movement is assumed. Small forward
+    instead. Both certificates contain straight forward/reverse translations and checked
+    turns, without sideways driving. Small forward
     staging legs also permit leaving a narrow stance before turning.
     """
     pose = tuple(map(float, pose))
     if not collision.motion_free(pose, pose):
         return None
+    # A differential-drive base can back out of a stance without first
+    # turning its body or load through the surrounding furniture.
+    sign=1 if incoming else -1
+    back=(pose[0]+sign*distance*math.cos(pose[2]),pose[1]+sign*distance*math.sin(pose[2]),pose[2])
+    a,b=(back,pose) if incoming else (pose,back)
+    check_cancelled()
+    if collision.motion_free(a,b):
+        return {'poses':[a,b],'displacement_m':distance,'distance_m':distance,
+                'motion_mode':'reverse','scope':('local_arrival' if incoming else 'local_departure')+'_in_current_collision_geometry'}
     direction = -1 if incoming else 1
     for staging in (0., .1, .2):
         check_cancelled()
@@ -198,9 +206,12 @@ def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose
         points = (a[:2], b[:2]) if length > 1e-8 else (b[:2],)
         phase = NavigationPlan(points, b[:2], plan.target, b[2], length,
                                plan.score, plan.candidates_considered,
-                               plan.candidates_reachable, 0., expanded, b[2])
+                               plan.candidates_reachable, 0., expanded, b[2],
+                               'reverse' if length>.002 and
+                               (b[0]-a[0])*math.cos(b[2])+(b[1]-a[1])*math.sin(b[2])<0 else 'forward')
         # Merge collinear forward cells, never merge across a turn.
         if (length > 1e-8 and phases and phases[-1].geodesic_m > 0
+                and phases[-1].motion_mode==phase.motion_mode
                 and abs(angle(phases[-1].final_yaw-b[2])) < 1e-8):
             previous = phases.pop()
             phase = replace(phase, points=(previous.points[0], b[:2]),
@@ -290,7 +301,7 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
 
 def plan_forward_route(plan, actual, collision, *, check_cancelled=lambda: None,
                        max_expansions=20000, alternatives=(), roadmap_seconds=5.):
-    """Preserve the selected goal and final yaw; never fall back to strafing.
+    """Preserve the selected goal and final yaw; allow checked reverse driving, never strafing.
 
 First certify the existing pruned path. If its corners cannot be turned, a
 continuous-pose A* searches for turning space. It can traverse a narrow corridor
@@ -321,7 +332,8 @@ without requiring enough clearance to rotate at every point in that corridor.
         poses = [actual]
         for xy in (*candidate.points[1:], candidate.goal):
             if math.dist(poses[-1][:2], xy) < 1e-8:continue
-            yaw = math.atan2(xy[1]-poses[-1][1], xy[0]-poses[-1][0])
+            yaw = (candidate.final_yaw if math.dist(xy,candidate.goal)<1e-8 else
+                   math.atan2(xy[1]-poses[-1][1],xy[0]-poses[-1][0]))
             segment = connector(poses[-1], xy, yaw)
             if segment is None:
                 poses = None
@@ -330,6 +342,17 @@ without requiring enough clearance to rotate at every point in that corridor.
         if poses is not None:
             final = connector(poses[-1], candidate.goal, candidate.final_yaw)
             if final is not None:return finish(poses+final[1:], 0, 'certified_polyline')
+
+    # Cheap, checked backing-out proposals solve doorway traps without a
+    # large pose search. All legs retain the same swept-volume checks.
+    for distance in (.1,.2,.3,.5,.8,1.2):
+        staging=(actual[0]-distance*math.cos(actual[2]),actual[1]-distance*math.sin(actual[2]),actual[2])
+        check_cancelled()
+        if not collision.motion_free(actual,staging):break
+        if hasattr(collision,'translation_free_with_margin') and not collision.translation_free_with_margin(actual,staging):break
+        for candidate in choices:
+            connection=connector(staging,candidate.goal,candidate.final_yaw)
+            if connection is not None:return finish([actual,*connection],0,'checked_reverse_staging')
 
     # A holonomic shortest guide can choose a corridor whose corner cannot
     # be turned by the loaded robot. Reuse the checked heading roadmap to
@@ -350,7 +373,7 @@ without requiring enough clearance to rotate at every point in that corridor.
 
     # Bidirectional continuous-pose search. Reverse edges are checked in their
     # original forward direction; reversing the resulting poses restores a
-    # forward-only executable path. Neither side is restricted to grid angles.
+    # executable forward/reverse path. Neither side is restricted to grid angles.
     class ReverseEdges:
         grid = collision.grid
         def motion_free(self,a,b):
@@ -590,15 +613,18 @@ def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions
         neighbors = [(*current[:2],angle(current[2]+offset)) for offset in (-math.pi/4,math.pi/4)]
         neighbors.append((current[0]+step*math.cos(current[2]),
                           current[1]+step*math.sin(current[2]),current[2]))
+        neighbors.append((current[0]-step*math.cos(current[2]),
+                          current[1]-step*math.sin(current[2]),current[2]))
         allowed = [collision.motion_free(current,p) for p in neighbors]
         for p,free in zip(neighbors,allowed):
             if free:offer(p,checked=True)
-        # Cross open stretches in one swept, forward-only edge. Retain the
+        # Cross open stretches in one swept, straight drive edge. Retain the
         # one-cell edge so a narrow turn or alignment site is not skipped.
-        if allowed[2]:
+        for direction,permitted in ((1,allowed[2]),(-1,allowed[3])):
+            if not permitted:continue
             for distance in (.3,.6,1.2):
-                destination=(current[0]+distance*math.cos(current[2]),
-                             current[1]+distance*math.sin(current[2]),current[2])
+                destination=(current[0]+direction*distance*math.cos(current[2]),
+                             current[1]+direction*distance*math.sin(current[2]),current[2])
                 if not collision.motion_free(current,destination):break
                 offer(destination,checked=True)
         if parent is None:
@@ -638,4 +664,5 @@ def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions
                 continue
             for length in lengths:
                 offer((current[0]+length*math.cos(yaw),current[1]+length*math.sin(yaw),yaw),turned)
+                offer((current[0]-length*math.cos(yaw),current[1]-length*math.sin(yaw),yaw),turned)
     raise NavigationError('No collision-free forward route to the selected approach')
