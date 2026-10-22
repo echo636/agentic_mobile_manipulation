@@ -323,25 +323,40 @@ class LocalRGBManipulation:
         operation.articulation_plan=None
 
     def _refine_local_geometry(self,operation,point,grid,*,reason):
-        """Refine target geometry down to 1.25 cm before declaring failure.
+        """Refine target geometry within the full-window cell budget.
 
         Coarse cells include full occupied columns and an outward footprint
         reserve. A physically open passage can disappear in that raster. Requery
         a bounded local map; never remove obstacles or shrink robot geometry.
         """
         if grid.resolution<=.0125:return False
-        resolution=max(.0125,grid.resolution/2)
-        if resolution>=grid.resolution:return False
+        desired=max(.0125,grid.resolution/2)
         actual=self._local_pose()
         margin=operation.limits.reach_m+.7
         window=[min(actual[0],float(point[0]))-margin,
                 min(actual[1],float(point[1]))-margin,
                 max(actual[0],float(point[0]))+margin,
                 max(actual[1],float(point[1]))+margin]
-        cells=math.prod(math.ceil((window[i+2]-window[i])/resolution)+2 for i in (0,1))
-        if cells>250000:
-            operation.record('map_refinement_skipped',reason='window_size',cells=cells)
-            return False
+        def cells(resolution):
+            return math.prod(math.ceil((window[i+2]-window[i])/resolution)+2 for i in (0,1))
+        resolution=desired
+        if cells(resolution)>250000:
+            # A requested halving can exceed the budget while a slightly
+            # coarser refinement still resolves the passage. Keep both the
+            # full approach window and the cell cap; choose its finest fit.
+            if cells(grid.resolution)>250000:
+                resolution=None
+            else:
+                low,high=desired,grid.resolution
+                for _ in range(40):
+                    mid=(low+high)/2
+                    if cells(mid)>250000:low=mid
+                    else:high=mid
+                resolution=high if high<grid.resolution-1e-6 else None
+            if resolution is None:
+                operation.record('map_refinement_skipped',reason='window_budget_saturated',
+                                 current_resolution_m=grid.resolution,world_window=window)
+                return False
         operation.check()
         operation.navigation_sampling={'resolution':resolution,'window':window}
         operation.geometry=None
@@ -350,7 +365,8 @@ class LocalRGBManipulation:
         operation.articulation_plan=None
         operation.carry_plan=None
         operation.record('map_refinement',reason=reason,coarse_resolution_m=grid.resolution,
-                         resolution_m=resolution,world_window=window,
+                         resolution_m=resolution,requested_resolution_m=desired,
+                         cells=cells(resolution),world_window=window,
                          unchanged_checks=['collision_geometry','target_identity','reach','loaded_departure'])
         return True
 
