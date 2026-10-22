@@ -20,6 +20,7 @@ class Motor:
         self.target=object()
         self.events=[];self.executions=[];self.refreshes=0
         self.deadline=SimpleNamespace(check=lambda **kw:None)
+        self.robot=SimpleNamespace(is_holonomic_base=False)
         self.binding=SimpleNamespace(grounding={'private':'selection'},describe=lambda:{'private':'target'})
         self.operation_error=None
         self.precondition_error=None
@@ -121,7 +122,7 @@ class CoordinationTests(unittest.TestCase):
         # The unloaded stance is admitted, then the loaded departure search
         # exhausts its shared planning budget, as in the real plates episode.
         with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
-                   side_effect=[True,SearchBudgetExhausted()]):
+                   side_effect=SearchBudgetExhausted()):
             with self.assertRaises(SkillError) as caught:b.run()
         self.assertEqual(caught.exception.code,'local_adjustment_exhausted')
         self.assertFalse(caught.exception.changed)

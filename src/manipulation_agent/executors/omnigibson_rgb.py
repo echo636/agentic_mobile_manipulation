@@ -946,7 +946,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                             raise SkillError('look_rotation_blocked','Measured start changed before checked rotation')
                         route=plan_forward_route(plan,(*previous,start_yaw),collision,check_cancelled=budget.check)
                     phases=route.phases
-                    record.update(status='planned',route=asdict(route))
+                    record.update(status='planned',route=asdict(route),
+                        motion_policy='checked_holonomic_v1' if any(p.motion_mode=='holonomic' for p in route.phases) else 'checked_forward_reverse_v2')
                 except Exception as exc:
                     record.update(status='failed',error_code=getattr(exc,'code',None),
                                   error_type=type(exc).__name__,error=str(exc))
@@ -962,8 +963,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             execution_grid=collision.grid if collision else grid
             with (self.output/'base_motion.jsonl').open('a') as stream:
                 for phase_index,phase in enumerate(phases):
+                    lateral=phase.motion_mode=='holonomic'
+                    if lateral and not getattr(self.robot,'is_holonomic_base',False):
+                        raise SkillError('unsupported_motion','Lateral route requires a holonomic robot base')
                     follower=GreedyGridFollower(execution_grid,phase,self.og.sim.get_sim_step_dt(),
-                        forward_only=forward,motion_check=collision.motion_free if collision else None)
+                        forward_only=forward and not lateral,motion_check=collision.motion_free if collision else None)
                     while True:
                         self.deadline.check()
                         actual_pos,actual_quat=self.robot.get_position_orientation()
@@ -987,7 +991,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                         stream.write(json.dumps({'at':now(),'env_step':self.steps,'commanded_position':new_pos.tolist(),
                             'actual_position':measured.tolist(),'actual_orientation':measured_quat.tolist(),
                             'commanded_yaw':yaw,'phase_index':phase_index,'motion_mode':phase.motion_mode,
-                            'follower':'checked_forward_reverse' if forward else 'clearance_retreat',
+                            'follower':'checked_holonomic' if lateral else 'checked_forward_reverse' if forward else 'clearance_retreat',
                             'audience':'executor_private'})+'\n')
             motion_steps=self.steps-before
             if self._base_target is not None:
@@ -1009,7 +1013,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             self._base_target=None
         return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
                 'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
-                'final_yaw_error_rad':final_yaw_error,'motion_policy':'checked_forward_reverse_v2' if forward else 'clearance_retreat',
+                'final_yaw_error_rad':final_yaw_error,'motion_policy':('checked_holonomic_v1' if route and any(p.motion_mode=='holonomic' for p in route.phases)
+                                else 'checked_forward_reverse_v2') if forward else 'clearance_retreat',
                 'forward_route_method':route.method if route else None,
                 'forward_planned_distance_m':route.distance_m if route else None,
                 'forward_planned_turn_degrees':math.degrees(route.turn_radians) if route else None,
@@ -1260,6 +1265,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
             'stance_candidates':'target_reach_rings_then_collision_free_target_disk_v2',
             'stance_domain':'selected_target_reach_disk',
+            'holonomic_local_approach':bool(getattr(self.robot,'is_holonomic_base',False)),
+            'map_refinement_min_resolution_m':.0125,
             'start_radius_limit_m':None,'path_distance_limit_m':None,
             'stance_failure_feedback':'allowlisted_local_search_stage',
             'target_lock':'private_selected_link_relative_surface',
@@ -1285,7 +1292,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'forward_route':'checked_forward_point_projection_or_polyline_or_shared_bidirectional_continuous_pose_astar',
             'forward_candidate_budget':{'shared_seconds':10.,'point_projection_seconds':3.,'expanded_poses':20000},
             'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},
-            'fixed_heading_exception':'contact_shedding_clearance_retreat_only',
+            'fixed_heading_exception':'contact_shedding_clearance_retreat_and_holonomic_local_approach',
             'carried_collision_footprint':True,'physical_controller':False,
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
             'geometry':'GT floor support and live height-matched collision hulls',

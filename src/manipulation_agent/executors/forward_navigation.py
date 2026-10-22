@@ -74,13 +74,27 @@ def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: 
     return None
 
 
-def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, check_cancelled=lambda: None):
+def checked_holonomic_connection(start, xy, final_yaw, collision, check_cancelled=lambda: None):
+    """Keep heading during translation; only a holonomic caller may use this."""
+    options = [[start, (*xy, start[2]), (*xy, final_yaw)],
+               [start, (*start[:2], final_yaw), (*xy, final_yaw)]]
+    for poses in sorted(options, key=motion_seconds):
+        for a, b in zip(poses, poses[1:]):
+            check_cancelled()
+            if not collision.motion_free(a, b):
+                break
+        else:
+            return poses
+    return checked_connection(start, xy, final_yaw, collision, check_cancelled)
+
+
+def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, check_cancelled=lambda: None, allow_lateral=False):
     """Certify a bounded reversible departure from a candidate terminal pose.
 
     This proves a local exit in current geometry, not reachability of every
     future target. With incoming=True, certify an arrival ending at this pose
     instead. Both certificates contain straight forward/reverse translations
-    and checked turns, without strafing. Small staging legs also permit
+    and checked turns. Holonomic callers may also certify a sideways leg. Small staging legs permit
     leaving a narrow stance before turning.
     """
     pose = tuple(map(float, pose))
@@ -95,6 +109,15 @@ def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, chec
     if collision.motion_free(a,b):
         return {'poses':[a,b],'displacement_m':distance,'distance_m':distance,
                 'motion_mode':'reverse','scope':('local_arrival' if incoming else 'local_departure')+'_in_current_collision_geometry'}
+    if allow_lateral:
+        for offset in (0., math.pi/2, -math.pi/2, math.pi/4, -math.pi/4, 3*math.pi/4, -3*math.pi/4):
+            check_cancelled()
+            yaw=pose[2]+offset
+            other=(pose[0]+distance*math.cos(yaw),pose[1]+distance*math.sin(yaw),pose[2])
+            a,b=(other,pose) if incoming else (pose,other)
+            if collision.motion_free(a,b):
+                return {'poses':[a,b],'displacement_m':distance,'distance_m':distance,
+                        'motion_mode':'holonomic','scope':('local_arrival' if incoming else 'local_departure')+'_in_current_collision_geometry'}
     direction = -1 if incoming else 1
     for staging in (0., .1, .2):
         check_cancelled()
@@ -122,7 +145,7 @@ def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, chec
     return None
 
 
-def simplify_forward_poses(poses, collision, *, check_cancelled=lambda: None, max_checks=128):
+def simplify_forward_poses(poses, collision, *, check_cancelled=lambda: None, max_checks=128, allow_lateral=False):
     """Remove checked detours only when full motion time decreases.
 
     This is bounded shortcutting of an existing valid path, not a continuous
@@ -145,7 +168,8 @@ def simplify_forward_poses(poses, collision, *, check_cancelled=lambda: None, ma
             if checks >= max_checks:
                 break
             checks += 1
-            candidate = checked_connection(compact[index], compact[end][:2], compact[end][2],
+            connector = checked_holonomic_connection if allow_lateral else checked_connection
+            candidate = connector(compact[index], compact[end][:2], compact[end][2],
                                            collision, check_cancelled)
             if candidate is None:
                 continue
@@ -159,11 +183,11 @@ def simplify_forward_poses(poses, collision, *, check_cancelled=lambda: None, ma
     return result, shortcuts
 
 
-def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose_graph", check_cancelled=lambda: None):
+def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose_graph", check_cancelled=lambda: None, allow_lateral=False):
     """Build follower phases from a fully certified pose chain."""
     actual=poses[0]
     # A certified route must survive expiration during optional smoothing.
-    try:poses, shortcuts = simplify_forward_poses(poses, collision, check_cancelled=check_cancelled)
+    try:poses, shortcuts = simplify_forward_poses(poses, collision, check_cancelled=check_cancelled, allow_lateral=allow_lateral)
     except SearchBudgetExhausted:shortcuts=0
     phases = []
     distance = 0.
@@ -177,12 +201,14 @@ def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose
         phase = NavigationPlan(points, b[:2], plan.target, b[2], length,
                                plan.score, plan.candidates_considered,
                                plan.candidates_reachable, 0., expanded, b[2],
+                               'holonomic' if allow_lateral and length>1e-8 else
                                'reverse' if length>.002 and
                                (b[0]-a[0])*math.cos(b[2])+(b[1]-a[1])*math.sin(b[2])<0 else 'forward')
         # Merge collinear forward cells, never merge across a turn.
         if (length > 1e-8 and phases and phases[-1].geodesic_m > 0
                 and phases[-1].motion_mode==phase.motion_mode
-                and abs(angle(phases[-1].final_yaw-b[2])) < 1e-8):
+                and abs(angle(phases[-1].final_yaw-b[2])) < 1e-8
+                and abs(phases[-1].geodesic_m+length-math.dist(phases[-1].points[0],b[:2])) < 1e-8):
             previous = phases.pop()
             phase = replace(phase, points=(previous.points[0], b[:2]),
                             geodesic_m=previous.geodesic_m+length)
