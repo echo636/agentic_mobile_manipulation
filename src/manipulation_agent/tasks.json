@@ -109,8 +109,13 @@
     },
     "collecting_childrens_toys": {
       "name": "Collecting Children's Toys",
-      "instruction": "Pick up the two dice from the bed, the two teddy bears from the floor, and the two board games (one from the desk and one from the bed), and place them all inside the same bookcase in the child's room.",
-      "scene_model": "house_single_floor"
+      "instruction": "Pick up the two dice from the bed, the two teddy bears from the floor, the toy train from the desk, and the two board games (one from the desk and one from the bed), and place them all inside the same bookcase in the child's room.",
+      "scene_model": "house_single_floor",
+      "instruction_source": "project_corrected_public_task_20261022",
+      "instruction_correction": {
+        "previous_instruction": "Pick up the two dice from the bed, the two teddy bears from the floor, and the two board games (one from the desk and one from the bed), and place them all inside the same bookcase in the child's room.",
+        "reason": "Public problem0.bddl requires train_set in the same bookcase; original text omitted it."
+      }
     },
     "putting_shoes_on_rack": {
       "name": "Putting Shoes On Rack",
@@ -324,8 +329,14 @@
     },
     "setting_the_table": {
       "name": "Setting The Table",
-      "instruction": null,
-      "scene_model": "house_single_floor"
+      "instruction": "Set two places at the dining-room breakfast table: place the two plates from the kitchen cabinet on the table, put one of the two cupcakes from the refrigerator on each plate, and arrange one fork and one table knife from the sink next to each plate.",
+      "scene_model": "house_single_floor",
+      "instruction_source": "project_corrected_public_task_20261022",
+      "instruction_correction": {
+        "previous_instruction": "Set the table.",
+        "reason": "Expand the generic label to the public task requirements, including two plate/cupcake/cutlery settings.",
+        "public_bddl_sha256": "777b6f105039dbb646c7a889ab28f16b55ca527235cb8da461a636c333267a37"
+      }
     },
     "unloading_the_car": {
       "name": "Unloading The Car",
