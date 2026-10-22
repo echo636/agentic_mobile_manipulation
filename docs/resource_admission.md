@@ -14,7 +14,8 @@ reserve at least their startup estimate. Unreadable telemetry keeps the full
 hard-limit fallback. Existing units are not modified or restarted.
 
 Null host budgets remove the additional fixed 56/112 GiB workload ceilings.
-Admission still checks the actual account cgroup limit minus 2 GiB and physical
+Admission still checks the actual account cgroup limit minus the configured
+account margin (new batches: 1 GiB; older batches: 2 GiB) and physical
 host memory available for the candidate and peer growth. Clean file cache is
 reclaimable. New batches require 14 GiB free GPU memory and allow up to 16 host
 slots; available GPU leases, live memory and the batch's own concurrency limit

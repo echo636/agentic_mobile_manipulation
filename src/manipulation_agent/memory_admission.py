@@ -20,7 +20,7 @@ def working_bytes(current, stats):
 
 def admission_decision(account_current, account_stats, account_limit, peers, *,
                        host_budget_gib, candidate_gib=28, startup_gib=None,
-                       profile='observed_peak'):
+                       profile='observed_peak', account_margin_gib=2):
     """Reserve growth above live working memory, including every legacy peer.
 
     Only sampled working-memory peaks count: memory.peak includes clean cache.
@@ -30,6 +30,8 @@ def admission_decision(account_current, account_stats, account_limit, peers, *,
     """
     if profile not in ('observed_peak', 'throughput'):
         raise ValueError('Invalid memory admission profile')
+    if not math.isfinite(account_margin_gib) or not 1 <= account_margin_gib <= 4:
+        raise ValueError('Invalid account memory margin')
     if (not 12 <= candidate_gib <= 28
             or (host_budget_gib is None and profile != 'throughput')
             or (host_budget_gib is not None and (not math.isfinite(host_budget_gib) or host_budget_gib <= 0))):
@@ -39,7 +41,7 @@ def admission_decision(account_current, account_stats, account_limit, peers, *,
         raise ValueError('Invalid startup memory estimate')
     limit = None if host_budget_gib is None else host_budget_gib * GIB
     if account_limit is not None:
-        account_budget = max(0, account_limit - 2 * GIB)
+        account_budget = max(0, account_limit - account_margin_gib * GIB)
         limit = account_budget if limit is None else min(limit, account_budget)
     base = working_bytes(account_current, account_stats)
     growth = 0
@@ -79,7 +81,8 @@ def admission_decision(account_current, account_stats, account_limit, peers, *,
             'projected_bytes': projected, 'usable_budget_bytes': limit,
             'peers': reservations,
             'profile': profile,
-            'policy': ('throughput_v1; live=1.1*working_peak+1GiB; startup=max(estimate,live); account_margin=2GiB'
+            'account_margin_gib': account_margin_gib,
+            'policy': (f'throughput_v1; live=1.1*working_peak+1GiB; startup=max(estimate,live); account_margin={account_margin_gib}GiB'
                        if profile == 'throughput' else
                        'working_peak_v2; ready=1.1*working_peak+1GiB_min12; startup=estimate; account_margin=2GiB'),
             'limitation': 'Observed peaks may grow later; no guarantee against aggregate OOM.'}
@@ -136,4 +139,5 @@ def host_memory_admission(policy, *, account_current, account_stats, account_lim
                               host_budget_gib=policy['host_budget_gib'],
                               candidate_gib=policy['candidate_gib'],
                               startup_gib=policy.get('startup_gib'),
-                              profile=policy.get('profile', 'observed_peak'))
+                              profile=policy.get('profile', 'observed_peak'),
+                              account_margin_gib=policy.get('account_margin_gib', 2))

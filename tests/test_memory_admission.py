@@ -104,6 +104,17 @@ class MemoryAdmissionTests(unittest.TestCase):
                     host_budget_gib=None, startup_gib=12, profile='throughput')
                 self.assertEqual(result['status'], 'blocked')
 
+    def test_v05_uses_one_account_margin_without_exceeding_32_gib(self):
+        args = dict(account_current=8.4*GIB, account_stats={}, account_limit=32*GIB,
+                    peers=[self.peer(1.5, 2, stage='starting')],
+                    host_budget_gib=None, startup_gib=12, profile='throughput')
+        self.assertEqual(admission_decision(**args)['status'], 'blocked')
+        result = admission_decision(**args, account_margin_gib=1)
+        self.assertEqual(result['status'], 'passed')
+        self.assertLess(result['projected_bytes'], 31*GIB)
+        args['account_current'] += GIB
+        self.assertEqual(admission_decision(**args, account_margin_gib=1)['status'], 'blocked')
+
     def test_throughput_gate_serializes_admission_without_waiting_on_legacy_init(self):
         with tempfile.TemporaryDirectory() as tmp:
             def runner(profile):

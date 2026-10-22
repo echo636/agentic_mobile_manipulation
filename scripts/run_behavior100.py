@@ -509,6 +509,7 @@ class Batch:
                 'candidate_gib':self.c.get('memory_budget_gib',28),
                 'startup_gib':self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)),
                 'profile':self._config.get('memory_admission_profile','observed_peak'),
+                'account_margin_gib':self._config.get('account_memory_margin_gib',2),
                 'host_budget_gib':self._config['host_worker_memory_budget_gib'][self.c['ssh'][-1]]}
         # GDB with startup-with-shell disabled does not round-trip quoted JSON
         # arguments. A single ASCII token survives both systemd and GDB argv.
