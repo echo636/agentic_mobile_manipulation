@@ -222,7 +222,8 @@ def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose
 
 
 def select_forward_route(options, actual, collision, *, target_slack=.1,
-                         check_cancelled=lambda: None, max_candidates=6, project_point=False):
+                         check_cancelled=lambda: None, max_candidates=6, project_point=False,
+                         allow_lateral=False):
     """Search acceptable endpoints together, allowing explicit endpoint slack.
 
     Candidates already have local entry/exit and optional visibility proofs.
@@ -242,7 +243,8 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
         bearing=math.atan2(p.goal[1]-actual[1],p.goal[0]-actual[0])
         return (math.dist(actual[:2],p.goal)/.5+
                 (abs(angle(bearing-actual[2]))+abs(angle(p.final_yaw-bearing)))/(math.pi/3))
-    ordered=sorted(candidates.values(),key=lambda p:(estimate(p),p.score))[:max_candidates]
+    acceptable=sorted(candidates.values(),key=lambda p:(estimate(p),p.score))
+    ordered=acceptable[:max_candidates]
     budget=PlanningBudget(check_cancelled,seconds=10.)
     attempts=[{'goal':p.goal,'final_yaw':p.final_yaw,'target_distance_m':p.score,
                'status':'shared_search'} for p in ordered]
@@ -268,6 +270,27 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
         route=plan_forward_route(ordered[0],actual,collision,check_cancelled=budget.check,
                                  max_expansions=20000,alternatives=ordered[1:])
     except NavigationError as exc:
+        if allow_lateral:
+            # Explicit navigate_to uses the same physical capability as local
+            # approach. A forward-only search failure is not an impossibility
+            # proof for a holonomic base. Keep the already certified endpoints
+            # and target slack; never replace an elevated target's visibility.
+            from .point_route_projection import project_forward_point
+            lateral_budget=PlanningBudget(check_cancelled,seconds=10.)
+            collision.check_cancelled=lateral_budget.check
+            try:
+                found=project_forward_point(acceptable,actual,collision,lateral_budget.check,
+                                            exact_endpoints=True,allow_lateral=True)
+                if found is not None:
+                    selected,poses,details=found
+                    route=route_from_poses(selected,poses,collision,allow_lateral=True,
+                        method='checked_holonomic_navigation_fallback',check_cancelled=lateral_budget.check)
+                    details.update(target_slack_m=target_slack,closest_candidate_m=closest,
+                        forward_failure=exc.code,holonomic_budget_seconds=10.,
+                        objective='checked_route_to_admitted_endpoint',unique_endpoints=len(acceptable))
+                    return selected,route,details
+            except (ImportError,SearchBudgetExhausted):
+                pass
         exc.attempts=attempts
         raise
     finally:

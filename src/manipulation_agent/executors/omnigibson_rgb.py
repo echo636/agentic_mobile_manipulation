@@ -585,6 +585,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         import numpy as np
         import omnigibson.utils.transform_utils as T
         from .gt_navigation import NavigationError, PlanningBudget, SearchBudgetExhausted, plan_navigation, STRATEGY
+        allow_lateral=bool(getattr(self.robot,'is_holonomic_base',False))
         trav=self.env.scene.trav_map
         position,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
@@ -637,7 +638,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                     grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius,
                     transition_allowed=guard,check_cancelled=self.deadline.check)
                 # Existing overlap may forbid turning. This explicitly logged
-                # contact-shedding retreat is the only fixed-heading exception.
+                # contact-shedding retreat has its own transition checks.
                 escape=replace(escape,travel_yaw=travel_yaw,final_yaw=travel_yaw,
                                motion_mode='clearance_retreat')
                 record.update(status='planned',plan=asdict(escape),**escape_details)
@@ -715,11 +716,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                             if mode=='approach' and not visible(xy,yaw):return False
                             if pose not in entries:
                                 entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
-                                                                    check_cancelled=budget.check)
+                                                                    check_cancelled=budget.check,allow_lateral=allow_lateral)
                             if entries[pose] is None:return False
                             if pose not in exits:
                                 exits[pose]=local_exit_certificate(pose,endpoint_collision,
-                                                                  check_cancelled=budget.check)
+                                                                  check_cancelled=budget.check,allow_lateral=allow_lateral)
                                 if exits[pose] is None:exit_rejections+=1
                             return exits[pose] is not None
                         proposed=replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
@@ -815,11 +816,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                                     attempt.update(status='rejected',reason='target_not_visible');continue
                             if pose not in entries:
                                 entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
-                                                                    check_cancelled=refinement.check)
+                                                                    check_cancelled=refinement.check,allow_lateral=allow_lateral)
                             if entries[pose] is None:
                                 attempt.update(status='rejected',reason='no_local_entry');continue
                             if pose not in exits:
-                                exits[pose]=local_exit_certificate(pose,endpoint_collision,check_cancelled=refinement.check)
+                                exits[pose]=local_exit_certificate(pose,endpoint_collision,
+                                    check_cancelled=refinement.check,allow_lateral=allow_lateral)
                             if exits[pose] is None:
                                 attempt.update(status='rejected',reason='no_local_exit');continue
                             options.append(replace(candidate,final_yaw=yaw,travel_yaw=yaw))
@@ -836,8 +838,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             with component(self,'navigation_route_selection'):
                 plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
                     target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
-                    project_point=mode=='point')
+                    project_point=mode=='point',allow_lateral=allow_lateral)
             details['forward_candidate_selection']=selection
+            if any(phase.motion_mode=='holonomic' for phase in prepared_route.phases):
+                details['motion_policy']='checked_holonomic_navigation_fallback'
             grid=endpoint_collision.grid_at_heading(plan.final_yaw)
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
             details['local_exit_certificate']=selection.get('local_exit_certificate',exits.get((*plan.goal,plan.final_yaw)))
@@ -1294,7 +1298,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'forward_route':'checked_forward_point_projection_or_polyline_or_shared_bidirectional_continuous_pose_astar',
             'forward_candidate_budget':{'shared_seconds':10.,'point_projection_seconds':3.,'expanded_poses':20000},
             'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},
-            'fixed_heading_exception':'contact_shedding_clearance_retreat_and_holonomic_local_approach',
+            'holonomic_navigation_fallback':{'enabled':bool(getattr(self.robot,'is_holonomic_base',False)),
+                'seconds':10.,'preserves_admitted_endpoint':True},
+            'fixed_heading_exception':'contact_shedding_clearance_retreat_and_capability_checked_holonomic_motion',
             'carried_collision_footprint':True,'physical_controller':False,
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
             'geometry':'GT floor support and live height-matched collision hulls',
