@@ -129,7 +129,7 @@ class LocalRGBManipulation:
     def _local_reposition(self,primitive,obj,point,operation):
         from collections import Counter
         from .gt_navigation import NavigationPlan, NavigationError, PlanningBudget, SearchBudgetExhausted
-        from .forward_navigation import (plan_forward_route, local_exit_certificate,
+        from .forward_navigation import (plan_forward_route,
                                          checked_connection, route_from_poses, angle)
         from .local_stances import local_stance_proposals
         geometry=getattr(operation,'geometry',None) or self._local_geometry(operation)
@@ -176,8 +176,11 @@ class LocalRGBManipulation:
                                                   selected_container=primitive in {'place_inside','place_next_to','place_under'},
                                                   tracked_target=True):
                         row.update(status='rejected',reason='target_not_visible',visibility=visibility);continue
-                    if local_exit_certificate(pose,local,check_cancelled=preparation.check) is None:
-                        row.update(status='rejected',reason='no_departure');continue
+                    # The checked incoming route is reversible for the current
+                    # body/payload. A separate short-exit sampler is neither
+                    # necessary nor a proof that a reachable stance is trapped.
+                    # Changes caused by grasp or articulation retain their own
+                    # future-geometry checks below.
                     if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
                         if not self._admit_articulation(primitive,obj,pose,operation,preparation.check):
                             row.update(status='rejected',reason='articulation_clearance');continue
