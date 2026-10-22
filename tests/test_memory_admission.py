@@ -61,6 +61,55 @@ class MemoryAdmissionTests(unittest.TestCase):
             admission_decision(0, {}, 64 * GIB, [], host_budget_gib=64,
                                candidate_gib=24, startup_gib=28)
 
+    def test_throughput_admits_alongside_a_legacy_initialization(self):
+        peers = [self.peer(15, 15), self.peer(14, 14, stage='starting')]
+        for peer in peers:
+            peer['memory_admission_mode'] = 'full_reservation'
+        result = admission_decision(30*GIB, {}, 64*GIB, peers,
+                                   host_budget_gib=None, startup_gib=12, profile='throughput')
+        self.assertEqual(result['status'], 'passed')
+        self.assertLess(result['projected_bytes'], 48*GIB)
+        self.assertEqual(result['usable_budget_bytes'], 62*GIB)
+
+    def test_concurrent_starts_reserve_future_growth_before_readiness(self):
+        peers = [self.peer(1, 1, stage='starting') for _ in range(3)]
+        for peer in peers:
+            peer['startup_memory_gib'] = 12
+        result = admission_decision(4*GIB, {}, 64*GIB, peers,
+                                   host_budget_gib=None, startup_gib=12, profile='throughput')
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(result['projected_bytes'], 49*GIB)
+        self.assertEqual([p['reserved_bytes'] for p in result['peers']], [12*GIB]*3)
+
+    def test_throughput_blocks_real_growth_and_unknown_telemetry(self):
+        for peers, working in [([self.peer(25, 25)]*2, 51), ([{}, {}], 0)]:
+            with self.subTest(working=working):
+                result = admission_decision(working*GIB, {}, 64*GIB, peers,
+                    host_budget_gib=None, startup_gib=12, profile='throughput')
+                self.assertEqual(result['status'], 'blocked')
+
+    def test_throughput_gate_serializes_admission_without_waiting_on_legacy_init(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            def runner(profile):
+                b = batch.Batch.__new__(batch.Batch)
+                b.root = Path(tmp)
+                b._config = {'adaptive_memory_admission': True, 'shared_lease_dir': tmp,
+                             'memory_admission_profile': profile}
+                b._worker_local = threading.local()
+                b._worker_local.config = {'id': 'a', 'ssh': ['ssh', 'host']}
+                b.worker_state = Mock()
+                return b
+            old, a, b = runner('observed_peak'), runner('throughput'), runner('throughput')
+            try:
+                self.assertTrue(old.acquire_startup_gate())
+                self.assertTrue(a.acquire_startup_gate())
+                self.assertFalse(b.acquire_startup_gate())
+                # A published startup can still be initializing when B admits.
+                a.release_startup_gate()
+                self.assertTrue(b.acquire_startup_gate())
+            finally:
+                for runner in (old, a, b):runner.release_startup_gate()
+
     def test_adaptive_slots_share_legacy_gpu_locks_and_peer_reservations(self):
         with tempfile.TemporaryDirectory() as tmp:
             def worker(i):

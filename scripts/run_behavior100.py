@@ -86,7 +86,7 @@ def worker_configs(config):
     allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env',
                'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
                'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib', 'admission_delay_seconds',
-               'simulator_appdata_path', 'simulator_tmpdir'}
+               'simulator_appdata_path', 'simulator_tmpdir', 'startup_memory_gib'}
     result=[]; ids=set(); devices=set(); ports=set()
     for lane in lanes:
         if set(lane)-allowed: raise ValueError('Unsupported worker fields')
@@ -120,9 +120,13 @@ def worker_configs(config):
         raise ValueError('adaptive_memory_admission must be boolean')
     if adaptive and not 1<=config.get('adaptive_host_slot_count',4)<=16:
         raise ValueError('Invalid adaptive host slot count')
+    profile=config.get('memory_admission_profile','observed_peak')
+    if profile not in ('observed_peak','throughput') or (profile=='throughput' and not adaptive):
+        raise ValueError('Invalid memory admission profile')
     for worker in result:
         limit=config.get('host_worker_memory_budget_gib',{}).get(worker['ssh'][-1],slot_size)
-        if worker.get('memory_budget_gib',28)>slot_size or limit<slot_size:
+        if limit is None and profile!='throughput':raise ValueError('Dynamic host budget requires throughput admission')
+        if worker.get('memory_budget_gib',28)>slot_size or (limit is not None and limit<slot_size):
             raise ValueError('Worker memory exceeds shared host slot capacity')
     return result
 
@@ -440,6 +444,7 @@ class Batch:
         directory=self._config.get('shared_lease_dir',str(self.root.parent/'resource_leases'))
         slot_size=self._config.get('host_slot_memory_gib',28)
         host_budget=self._config.get('host_worker_memory_budget_gib',{}).get(self.c['ssh'][-1],slot_size)
+        if host_budget is None:host_budget=slot_size*self._config.get('adaptive_host_slot_count',4)
         lease=WorkerLease(directory,self.c,host_budget_gib=host_budget,slot_memory_gib=slot_size,
                           owner={'batch':str(self.root),'coordinator_pid':os.getpid()},
                           adaptive_slot_count=self._config.get('adaptive_host_slot_count',4)
@@ -462,22 +467,25 @@ class Batch:
                     self.worker_state('waiting_for_lease',previous_unit=previous['unit'])
                     return None
             lease.record(released=False,run_id=adopting['run_id'] if adopting else None,
-                         unit=adopting.get('simulator_unit') if adopting else None)
+                         unit=adopting.get('simulator_unit') if adopting else None,
+                         startup_memory_gib=self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)))
         except BaseException:
             lease.release()
             raise
         return lease
 
     def acquire_startup_gate(self):
-        """Serialize admission through initialization across new coordinators."""
+        """Serialize reservation publication; legacy mode also holds through init."""
         if not self._config.get('adaptive_memory_admission'):
             return True
         directory=self._config['shared_lease_dir']
         host_key=hashlib.sha256(self.c['ssh'][-1].encode()).hexdigest()[:20]
-        gate=FileLease(Path(directory)/f'startup-{host_key}.lock',
+        throughput=self._config.get('memory_admission_profile')=='throughput'
+        prefix='admission' if throughput else 'startup'
+        gate=FileLease(Path(directory)/f'{prefix}-{host_key}.lock',
                        {'batch':str(self.root),'worker_id':self.c['id']})
         if not gate.acquire():
-            self.worker_state('waiting_for_initialization');return False
+            self.worker_state('waiting_for_admission' if throughput else 'waiting_for_initialization');return False
         self._worker_local.startup_gate=gate
         return True
 
@@ -493,6 +501,7 @@ class Batch:
         policy={'peers':lease.active_peers(),
                 'candidate_gib':self.c.get('memory_budget_gib',28),
                 'startup_gib':self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)),
+                'profile':self._config.get('memory_admission_profile','observed_peak'),
                 'host_budget_gib':self._config['host_worker_memory_budget_gib'][self.c['ssh'][-1]]}
         # GDB with startup-with-shell disabled does not round-trip quoted JSON
         # arguments. A single ASCII token survives both systemd and GDB argv.
@@ -885,6 +894,10 @@ class Batch:
             (self.root/'logs'/f'{runid}_launch.log').write_text(response.stdout+response.stderr)
             if response.returncode:raise RuntimeError('Simulator unit launch failed')
             own_unit=True
+            # The shared lease already publishes the starting unit and its
+            # estimate. Other coordinators can now admit another initialization.
+            if self._config.get('memory_admission_profile')=='throughput':
+                self.release_startup_gate()
             check=getattr(self._worker_local,'admission',{})
             state=self.unit_state(unit)
             self.update(row,stage='simulator_starting',simulator_owned=True,simulator_pid=int(state.get('MainPID',0)),

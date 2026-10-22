@@ -1,5 +1,29 @@
 # Simulator memory admission
 
+New workspace batches use `memory_admission_profile: throughput` following the
+2026-10-22 user request to maximize compute utilization. A shared host lock
+protects resource inspection and publication of a starting unit, then releases
+after systemd accepts the launch. Multiple instances may initialize together;
+the previous instance does not have to become ready first. GPU leases still
+prevent duplicate allocation, and every starting unit remains visible to peers.
+
+This profile uses a 12 GiB startup estimate, independent of the 28 GiB per-unit
+hard limit. Readable ready and initializing peers, including older batches, use
+their sampled working-memory peak plus 10% and 1 GiB. Initializing peers also
+reserve at least their startup estimate. Unreadable telemetry keeps the full
+hard-limit fallback. Existing units are not modified or restarted.
+
+Null host budgets remove the additional fixed 56/112 GiB workload ceilings.
+Admission still checks the actual account cgroup limit minus 2 GiB and physical
+host memory available for the candidate and peer growth. Clean file cache is
+reclaimable. New batches require 14 GiB free GPU memory and allow up to 16 host
+slots; available GPU leases, live memory and the batch's own concurrency limit
+determine actual concurrency. These estimates permit overcommit and are not
+proof that a future task cannot grow beyond its observed peak.
+
+The remaining description documents the default legacy `observed_peak` profile,
+retained for frozen batches that have not opted into throughput admission.
+
 GPU leases still prevent two project workers from taking the same device.
 Host admission uses account working memory (excluding clean file cache and
 reclaimable slab), plus only the growth reserved above each peer's working
