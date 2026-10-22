@@ -156,7 +156,16 @@ class LocalOperation:
                 if (math.dist(before[:2], after[:2]) < .01 and
                         abs(math.atan2(math.sin(after[2]-before[2]), math.cos(after[2]-before[2]))) < math.radians(2)
                         and getattr(self, 'carry_posture_revision', 0) == carry_before):
-                    raise SkillError('local_adjustment_blocked', 'Local adjustment made no progress')
+                    # Refined geometry can certify the current pose without
+                    # moving the base. Accept that only when the same locked
+                    # target now passes the full operation readiness check.
+                    self.check()
+                    obj, point = self.backend._resolve_local_target(self.binding)
+                    self.backend._manipulation_preconditions(self.primitive, obj)
+                    ready = self.backend._local_ready(self.primitive, obj, point, self)
+                    self.record('stationary_recheck', ready=ready)
+                    if not ready:
+                        raise SkillError('local_adjustment_blocked', 'Local adjustment made no progress')
                 self.visited.append(before)
                 # Refresh only internal sensor packets; never re-ground an old
                 # pixel in a new image. The bound link-relative point is used.

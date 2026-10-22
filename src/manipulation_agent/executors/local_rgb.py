@@ -8,6 +8,16 @@ from .local_manipulation import LocalLimits, LocalOperation, stance_candidates
 from .visual_target import LockedTarget
 
 
+# These effects act on the selected object as a whole. Its visible collision
+# surface is a valid approach reference even when it differs from the rendered
+# click point. Surface-specific placements and attachment points remain strict.
+OBJECT_REFERENCE_ACTIONS = frozenset({
+    'grasp', 'open', 'close', 'toggle_on', 'toggle_off', 'cut', 'soak',
+    'wipe', 'sweep', 'vacuum', 'spray', 'spread',
+    'place_inside', 'place_next_to', 'place_under',
+})
+
+
 class LocalRGBManipulation:
     def _local_pose(self):
         from .visual_target import rotate
@@ -115,7 +125,7 @@ class LocalRGBManipulation:
         operation.geometry=geometry
         if not geometry[1].motion_free(pose,pose):return False
         if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=geometry[3],base_yaw=pose[2],
-                                      selected_container=primitive in {'place_inside','place_next_to','place_under'},
+                                      selected_container=primitive in OBJECT_REFERENCE_ACTIONS,
                                       tracked_target=True):return False
         if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
             if not self._admit_articulation(primitive,obj,pose,operation,operation.check):return False
@@ -180,7 +190,7 @@ class LocalRGBManipulation:
                     visibility={}
                     if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=hulls,
                                                   base_yaw=pose[2],diagnostics=visibility,
-                                                  selected_container=primitive in {'place_inside','place_next_to','place_under'},
+                                                  selected_container=primitive in OBJECT_REFERENCE_ACTIONS,
                                                   tracked_target=True):
                         row.update(status='rejected',reason='target_not_visible',visibility=visibility);continue
                     # The checked incoming route is reversible for the current
