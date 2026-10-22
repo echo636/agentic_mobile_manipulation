@@ -1,22 +1,19 @@
 ---
 name: visual-manipulation
-description: Complete manipulation through RGB, callable workflow skills, bounded actions and visible verification.
+description: Choose manipulation skills and verify progress from RGB and action feedback.
 ---
-# Visual manipulation workflow
+# Manipulation workflow
 
-1. Call initialize({}) first and inspect its front/back/left/right RGB. It returns the prepared episode's current view without resetting the scene. The four fixed cameras show one simulation state without rotating the robot during capture. `look` turns the whole robot in place; use it only when the four current directions do not show what you need. Each successful `act` already returns fresh images. Perceive requested objects yourself; no oracle inventory or state is available.
-2. Read relevant skills from the available catalog. Read visual-exploration for search, pick-and-place before carrying, failure-recovery after failed actions. These documents guide your next action; they do not execute actions automatically.
-   For cleaning, spraying, soaking, or cutting, read references/material-actions.md before choosing a tool action.
-3. Choose one next action from visible evidence. The replay records your actual public messages and tool calls verbatim; there is no extra decision form or required language. Do not claim unseen success.
-4. Select a point in the latest returned image_ref (any direction) with the latest revision. In `target_locked_approach_v2`, if the intended target is clearly selectable, call the intended operation directly, including from the initial images. `navigate_to` is not a prerequisite for grasp/open/toggle or placement. Uncertainty about exact reach or the best stance belongs to the local executor; do not navigate merely to center the target, face it, or move slightly closer. Reserve macro navigation for another task area, exploration/reacquisition of a target that cannot be reliably selected, or a different approach justified by feedback. When travel is needed, select its destination in current RGB and reselect the object after moving. If one view crops or hides the target, check the other three current views before moving again. Do not guess a hidden target pixel. The executor cannot select objects for you.
-5. Execute one bounded action and inspect its returned RGB. In `target_locked_approach_v2`, the executor keeps the same selected object and surface while making a checked approach to a stance around the selected target, then performs the operation. You own the task plan and macro navigation; do not micromanage stance through repeated `navigate_to`. On `local_adjustment_blocked` or `local_adjustment_exhausted`, inspect RGB and reassess the approach. `initialize.control` identifies the protocol; legacy `explicit_navigation_v1` instead requires explicit navigation after `out_of_reach`. Keep useful progress, moved items and visual landmarks in your working notes. task_notes persists your own text; it does not inspect the scene or determine completion.
-6. Compare fresh visual evidence with the expected effect. A tool completing is only an operation report. Change the viewpoint or approach when uncertain, and read recovery guidance if needed.
-7. Verify the entire instruction from RGB and feedback. Finish achieved/blocked/aborted with a short evidence-based reason, and receive closed=true. The evaluator remains private.
+Initialize, inspect the four returned views, then choose the next action. Read `initialize.control` for the active protocol. In `target_locked_approach_v2`, directly request the operation when its target is clearly selectable; the executor handles approach and stance. Use macro navigation for exploration, another task area, or an approach change justified by feedback. Check the other current views before moving to recover a cropped target.
 
-Read references/evidence.md for observation and completion rules.
+Read these when relevant:
 
-## Complete-task verification
+- `visual-exploration`: finding objects and traveling between areas.
+- `pick-and-place`: carrying, placing and attaching objects.
+- [references/material-actions.md](references/material-actions.md): cleaning, treating, soaking or cutting, before using those actions.
+- `failure-recovery`: diagnosing a rejected or partially executed action.
+- [references/evidence.md](references/evidence.md): deciding whether uncertain results support completion.
 
-Before claiming achieved, account for every requested item/count, spatial relation, door state and appliance state using the latest returned four-camera RGB plus the actions actually executed. The images returned by the last act/look are available for this check; no additional observation call is required. Reinspect occluded items from a new viewpoint when needed. Successful act responses are not an independent task score. Washing or heating needs an appropriate process interval; use act with primitive=wait, target=null and wait_seconds of 0.1–20 simulation seconds, default 5, then inspect its returned RGB. Do not infer a completed process from one successful toggle or visual appearance alone. If required evidence remains missing, continue or report the unresolved part rather than claim full completion.
+After each action, inspect returned RGB and feedback. Confirm the intended object and effect; preserve useful progress in task notes. For heating, washing or drying, allow simulation time using `wait` with a null target. A successful toggle alone does not establish a finished process.
 
-The approach has no fixed distance limit relative to where the act call started. Stances must lie within operation reach of the selected target; full robot/payload collision checks, visibility, target locking and work budgets still apply. A visible target is not guaranteed feasible.
+Before `finish`, reconcile the instruction's quantities, destinations, relations and final device states with the latest relevant evidence. Continue unresolved work when possible. Report achieved only when all required results are supported; otherwise state what remains. Receive `closed=true` before final text.
