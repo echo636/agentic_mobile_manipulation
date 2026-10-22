@@ -67,6 +67,30 @@ class VisualPointOwnership(unittest.TestCase):
         point = self.torch.tensor([.5, 0., 0.])
         self.assertIs(query_visual_surface(self.backend([outer, inner]), point)[0], inner)
 
+    def test_float32_coincident_surfaces_resolve_toward_camera(self):
+        # Archived box-bottom/table ambiguity: RGB shows the upper surface,
+        # but rounded depth is closer to the lower one by a fraction of a µm.
+        table, _ = self.box('table', [9., 0., .3705012])
+        box, _ = self.box('box', [9., 0., .3705014])
+        camera = self.torch.tensor([9., 0., 2.])
+        for objects in ([table, box], [box, table]):
+            backend = self.backend(objects)
+            for z in (.8705011, .8705012, .8705014, .8705015):
+                point = self.torch.tensor([9., 0., z])
+                before = point.clone()
+                owner, diagnostic = query_visual_surface(backend, point, camera_position=camera)
+                self.assertIs(owner, box)
+                self.assertEqual(diagnostic['coincident_surface_resolution'], 'camera_frontmost')
+                self.torch.testing.assert_close(point, before, rtol=0, atol=0)
+
+    def test_camera_tie_break_does_not_override_distinct_measured_surface(self):
+        table, _ = self.box('table', [9., 0., 0.])
+        foreground, _ = self.box('foreground', [9., 0., .001])
+        owner, diagnostic = query_visual_surface(self.backend([foreground, table]),
+            self.torch.tensor([9., 0., .5]), camera_position=self.torch.tensor([9., 0., 2.]))
+        self.assertIs(owner, table)
+        self.assertIsNone(diagnostic['coincident_surface_resolution'])
+
     def test_world_metric_respects_nonuniform_scale_and_live_transform(self):
         stretched, mesh = self.box('stretched', [0., 0., 0.])
         mesh.scaled_transform[0, 0] = 100.

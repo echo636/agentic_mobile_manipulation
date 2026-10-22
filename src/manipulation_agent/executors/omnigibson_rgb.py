@@ -462,7 +462,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             from .visual_mesh_grounding import query_visual_surface
             try:
                 with component(self,'visual_grounding'):
-                    obj,visual=query_visual_surface(self,point,reject_particles=reject_particles)
+                    obj,visual=query_visual_surface(self,point,reject_particles=reject_particles,
+                                                    camera_position=start)
             except SkillError as exc:
                 diagnostic.update(status='failed',code=exc.code,detail=str(exc),
                                   visual_query=getattr(exc,'diagnostics',{}))
@@ -1257,6 +1258,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'depth_consistency_check':False, 'navigation_object_lookup':False,
             'pixel_sample':'renderer_pixel_center_index_plus_half',
             'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
+            'coincident_surface_resolution':'camera_frontmost_within_float32_roundoff',
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),

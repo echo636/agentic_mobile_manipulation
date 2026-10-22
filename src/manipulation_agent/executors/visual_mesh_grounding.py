@@ -3,12 +3,13 @@ from ..contracts import SkillError
 from types import SimpleNamespace
 
 
-def query_visual_surface(backend, point, *, reject_particles=False):
-    """Find the rendered mesh surface nearest the measured world-space point.
+def query_visual_surface(backend, point, *, reject_particles=False, camera_position=None):
+    """Find the rendered mesh surface at the measured world-space point.
 
     Do not cast another ray, replace the point, search neighboring pixels, or
     reject selections with a depth/mesh distance threshold. Bounds only supply
     a conservative lower bound for accelerating the exact surface query.
+    Numerically coincident surfaces use camera order within float32 roundoff.
     """
     import itertools
     import numpy as np
@@ -17,6 +18,21 @@ def query_visual_surface(backend, point, *, reject_particles=False):
     from omnigibson.utils.usd_utils import mesh_prim_to_trimesh_mesh
 
     world_point = point.detach().cpu().numpy().astype(float)
+    # Depth and world transforms are float32. Coincident surfaces (e.g. a thin
+    # box bottom resting on a table) can differ by less than one rounding unit.
+    # Absolute distance then selects the table underneath a visibly selected
+    # box. Only within numerical precision, resolve ownership toward the camera;
+    # the measured point stays unchanged and no additional ray is cast.
+    toward_camera = None
+    roundoff = 0.
+    if camera_position is not None:
+        camera = camera_position.detach().cpu().numpy().astype(float)
+        vector = camera - world_point
+        length = float(np.linalg.norm(vector))
+        if np.isfinite(camera).all() and np.isfinite(length) and length > 0:
+            toward_camera = vector / length
+            roundoff = 4 * np.finfo(np.float32).eps * max(1., float(np.abs(world_point).max()),
+                                                        float(np.abs(camera).max()))
     cache = getattr(backend, '_visual_mesh_cache', None)
     if cache is None:
         cache = backend._visual_mesh_cache = {}
@@ -93,9 +109,10 @@ def query_visual_surface(backend, point, *, reject_particles=False):
                 lower_bound = float(np.linalg.norm(np.maximum(np.maximum(lo-world_point, world_point-hi), 0.)))
                 candidates.append((lower_bound, obj, mesh, rigid, vertices, transform, purpose))
     best = None
+    coincident = []
     checked = 0
     for lower_bound, obj, mesh, rigid, vertices, transform, purpose in sorted(candidates, key=lambda row: row[0]):
-        if best is not None and lower_bound > best[0] + 1e-9:
+        if best is not None and lower_bound > max(best[0], roundoff) + 1e-9:
             break
         if rigid:
             source_mesh = particle_geometry.get(mesh.prim_path, mesh)
@@ -134,11 +151,20 @@ def query_visual_surface(backend, point, *, reject_particles=False):
         distances = np.where(finite, distances, np.inf)
         index = int(distances.argmin())
         distance = float(distances[index])
+        candidate = distance, obj, mesh.prim_path, nearest[index].tolist(), purpose
+        if distance <= roundoff and toward_camera is not None:
+            coincident.append(candidate)
         if best is None or distance < best[0]:
-            best = distance, obj, mesh.prim_path, nearest[index].tolist(), purpose
+            best = candidate
+    if len(coincident) > 1:
+        best = min(coincident, key=lambda row: (
+            -float(np.dot(np.asarray(row[3])-world_point, toward_camera)), row[0], row[2]))
     numerical_diagnostics = {'invalid_meshes_skipped': invalid_meshes,
                              'invalid_triangles_skipped': invalid_triangles,
-                             'invalid_surface_points_skipped': invalid_surface_points}
+                             'invalid_surface_points_skipped': invalid_surface_points,
+                             'coincident_surface_candidates': len(coincident),
+                             'coincident_surface_roundoff_m': roundoff,
+                             'coincident_surface_resolution': 'camera_frontmost' if len(coincident) > 1 else None}
     if best is None or best[1] is backend.robot:
         exc = SkillError('invalid_visual_target',
                          'Selected surface belongs to the robot' if best else 'No visible mesh surface')
