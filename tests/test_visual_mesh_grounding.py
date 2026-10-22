@@ -221,6 +221,46 @@ class VisualPointOwnership(unittest.TestCase):
             # Material actions continue to ground their supporting surface.
             self.assertIs(query_visual_surface(backend, torch.tensor([0., 0., .05]))[0], table)
 
+    def test_attached_material_uses_its_owner_instead_of_nearest_other_body(self):
+        torch = self.torch
+        support, _ = self.box('support', [0., 0., -.5])
+        decoy, _ = self.box('nearby_tool', [.52, 0., .03])
+        _, dust = self.box('dust', [0., 0., .03])
+        dust.scaled_transform[:3, :3] *= .02
+        system = SimpleNamespace(name='dust', particles={'p': dust}, particle_object=dust,
+                                 _particles_info={'p': {'obj': support}})
+        backend = self.backend([decoy, support])
+        point = torch.tensor([0., 0., .04])
+        # The archived failure mechanism: omitted material makes another body
+        # closer than the supporting surface. No model target change is needed.
+        self.assertIs(query_visual_surface(backend, point)[0], decoy)
+        backend.env.scene.active_systems = {'dust': system}
+        for reject_particles in (False, True):
+            before = point.clone()
+            owner, result = query_visual_surface(backend, point, reject_particles=reject_particles)
+            self.assertIs(owner, support)
+            self.assertEqual(result['surface_kind'], 'attached_material')
+            self.assertEqual(result['material_system'], 'dust')
+            self.assertLess(result['surface_point_distance_m'], 1e-7)
+            torch.testing.assert_close(point, before, rtol=0, atol=0)
+
+    def test_attached_material_does_not_override_a_different_visible_surface(self):
+        torch = self.torch
+        support, _ = self.box('support', [0., 0., -.5])
+        foreground, _ = self.box('foreground', [0., 0., 1.])
+        _, dust = self.box('dust', [0., 0., .03])
+        dust.scaled_transform[:3, :3] *= .02
+        backend = self.backend([support, foreground])
+        backend.env.scene.active_systems = {'dust': SimpleNamespace(name='dust',
+            particles={'p': dust}, particle_object=dust, _particles_info={'p': {'obj': support}})}
+        owner, result = query_visual_surface(backend, torch.tensor([0., 0., 1.5]))
+        self.assertIs(owner, foreground)
+        self.assertEqual(result['surface_kind'], 'object_mesh')
+        # A moved material mesh follows its live transform, not cached bounds
+        # in world space or its parent's original pose.
+        dust.scaled_transform[0, 3] = 2.
+        self.assertIs(query_visual_surface(backend, torch.tensor([2., 0., .04]))[0], support)
+
 
 if __name__ == '__main__':
     unittest.main()

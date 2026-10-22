@@ -50,8 +50,29 @@ def query_visual_surface(backend, point, *, reject_particles=False, camera_posit
     particle_owners = {}
     particle_transforms = {}
     particle_geometry = {}
+    attached_surfaces = {}
+    live_objects = {id(obj) for obj in objects}
+    for system in getattr(backend.env.scene, 'active_systems', {}).values():
+        particles = getattr(system, 'particles', None)
+        attachments = getattr(system, '_particles_info', None)
+        if not particles or not attachments:
+            continue
+        # MacroVisual particles (dust, stains) are rendered meshes attached to
+        # a specific object/link. They are absent from link.visual_meshes.
+        # Include those exact surfaces, with their recorded owner, in the same
+        # spatial query. Ignoring them can assign a dust pixel to an unrelated
+        # nearby object. Neither the measured point nor the selected pixel moves.
+        meshes = {}
+        for name, mesh in particles.items():
+            parent = attachments.get(name, {}).get('obj')
+            if id(parent) not in live_objects:
+                continue
+            meshes[name] = mesh
+            attached_surfaces[mesh.prim_path] = (parent, system.name)
+            particle_geometry[mesh.prim_path] = system.particle_object
+        if meshes:
+            objects.append(SimpleNamespace(links={'particles': SimpleNamespace(visual_meshes=meshes)}))
     if reject_particles:
-        import omnigibson.utils.transform_utils as T
         for system in getattr(backend.env.scene, 'active_systems', {}).values():
             particles = getattr(system, 'particles', None)
             view = getattr(system, 'particles_view', None)
@@ -63,6 +84,7 @@ def query_visual_surface(backend, point, *, reject_particles=False, camera_posit
             owner = SimpleNamespace(links={'particles': SimpleNamespace(visual_meshes=particles)})
             objects.append(owner)
             particle_owners[id(owner)] = system
+            import omnigibson.utils.transform_utils as T
             raw = view.get_transforms()
             rotations = T.quat2mat(raw[:, 3:]).detach().cpu().numpy()
             by_path = {mesh.prim_path: mesh for mesh in particles.values()}
@@ -107,7 +129,8 @@ def query_visual_surface(backend, point, *, reject_particles=False, camera_posit
                 corners = corners @ transform[:3, :3].T + transform[:3, 3]
                 lo, hi = corners.min(axis=0), corners.max(axis=0)
                 lower_bound = float(np.linalg.norm(np.maximum(np.maximum(lo-world_point, world_point-hi), 0.)))
-                candidates.append((lower_bound, obj, mesh, rigid, vertices, transform, purpose))
+                owner = attached_surfaces[path][0] if path in attached_surfaces else obj
+                candidates.append((lower_bound, owner, mesh, rigid, vertices, transform, purpose))
     best = None
     coincident = []
     checked = 0
@@ -185,4 +208,6 @@ def query_visual_surface(backend, point, *, reject_particles=False, camera_posit
                  'visual_mesh_purpose': purpose, 'guide_meshes_skipped': guides_skipped,
                  'surface_point_distance_m': distance, 'visual_meshes_tested': checked,
                  'method': 'nearest_visual_surface_to_backprojected_point',
+                 'surface_kind': 'attached_material' if path in attached_surfaces else 'object_mesh',
+                 'material_system': attached_surfaces[path][1] if path in attached_surfaces else None,
                  'depth_consistency_check': False, **numerical_diagnostics}
