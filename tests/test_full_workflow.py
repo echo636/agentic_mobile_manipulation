@@ -62,6 +62,19 @@ class CompleteWorkflowContracts(unittest.TestCase):
             for rule in s['replacements']:
                 self.assertEqual(s['initial_assertions']['intact_'+rule['parent']],{'not':rule['parent']+'_replaced'})
 
+    def test_approach_visible_shelf_surface_then_preserve_exact_placement_slot(self):
+        from manipulation_agent.contracts import SkillError
+        flow=FullWorkflowReference.__new__(FullWorkflowReference)
+        flow.backend=SimpleNamespace(robot=SimpleNamespace(get_position_orientation=lambda:([0.,0.,0.],None)))
+        flow.ref=SimpleNamespace(action=Mock(side_effect=[
+            SkillError('navigation_search_exhausted','occluded approach'),None,None]),log=Mock())
+        flow.surface_point=Mock(side_effect=[[3.,0.,.7],[3.,.4,.7]])
+        slot=[3.5,.6,.7]
+        flow.action(dict(primitive='place_on_top',role='shelf',point=slot))
+        self.assertEqual([c.args for c in flow.ref.action.call_args_list],[
+            ('navigate_to','shelf',[3.,0.,.7]),('navigate_to','shelf',[3.,.4,.7]),
+            ('place_on_top','shelf',slot)])
+
     def test_initial_materials_use_supported_filled_setter(self):
         for s in self.specs:
             self.assertFalse(any(r.get('state')=='Contains' and r.get('value') for r in s['initial_layout']))

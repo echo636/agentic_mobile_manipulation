@@ -10,7 +10,7 @@ from unittest.mock import patch
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Pinned simulator Python required')
 class CarryGeometryTests(unittest.TestCase):
     def scene(self, *, ceiling=False, wall=False, extra_payload=False, compound_support=False,
-              support_roof=False):
+              support_roof=False, low_ceiling=False, split_payload=False):
         import numpy as np
         import torch
         from manipulation_agent.executors.carry_geometry import PayloadSweep
@@ -39,11 +39,21 @@ class CarryGeometryTests(unittest.TestCase):
                 roof=Body('roof',[1.,-.2,1.08],[1.4,.2,1.09])
                 table.collider_boxes.append(roof.aabb)
         objects=[robot,obj,table];payload=[obj]
-        if ceiling:objects.append(Body('ceiling',[1.,-.2,1.05],[1.4,.2,1.15]))
+        if ceiling:objects.append(Body('ceiling',[1.,-.2,1.005],[1.4,.2,1.25]))
+        if low_ceiling:objects.append(Body('ceiling',[1.,-.2,1.10],[1.4,.2,1.25]))
+        if split_payload:
+            bracket=Body('bracket',[.8,-.4,.86],[1.6,.4,.89])
+            left=Body('left',[.8,-.4,.86],[1.,.4,.89])
+            right=Body('right',[1.4,-.4,.86],[1.6,.4,.89])
+            bracket.links['base'].collision_meshes={
+                'left':SimpleNamespace(aabb=left.aabb),'right':SimpleNamespace(aabb=right.aabb)}
+            objects.append(bracket);payload.append(bracket)
+            # The support occupies only the empty centre of this rigid link.
+            table.collider_boxes=[(torch.tensor([1.05,-.3,0.]),torch.tensor([1.35,.3,.9]))]
         if wall:objects.append(Body('wall',[.82,-.2,1.05],[.85,.2,1.4]))
         if extra_payload:
             child=Body('food',[1.2,-.05,1.],[1.4,.05,1.15]);objects.append(child);payload.append(child)
-            objects.append(Body('over_food',[1.32,-.1,1.24],[1.5,.1,1.4]))
+            objects.append(Body('over_food',[1.32,-.1,1.155],[1.5,.1,1.4]))
         def overlap(half,center,orientation,callback,any_hit):
             low=np.asarray(center)-half;high=np.asarray(center)+half
             for body in objects:
@@ -72,6 +82,28 @@ class CarryGeometryTests(unittest.TestCase):
         route,status=plan_lift_and_compact(sweep.origin,(0.,0.,0.,0.),sweep.bounds,sweep.clear)
         self.assertIsNone(route);self.assertEqual(status,'lift_blocked')
         self.assertIn('/ceiling',sweep.last_failure['blockers'])
+
+    def test_low_ceiling_uses_clear_short_lift_and_horizontal_extraction(self):
+        from manipulation_agent.executors.carry_geometry import plan_lift_and_compact
+        sweep,_,_=self.scene(low_ceiling=True)
+        route,status=plan_lift_and_compact(sweep.origin,(0.,0.,0.,0.),sweep.bounds,sweep.clear)
+        self.assertEqual(status,'compact')
+        self.assertAlmostEqual(route[1][2]-route[0][2],.08)
+        self.assertLess(route[-1][0],.7)
+        for i,(a,b) in enumerate(zip(route,route[1:])):
+            self.assertTrue(sweep.clear(a,b,extraction=i==0))
+
+    def test_separate_colliders_do_not_fill_empty_bracket_centre(self):
+        from manipulation_agent.executors.carry_geometry import plan_lift_and_compact
+        sweep,_,_=self.scene(split_payload=True)
+        self.assertEqual(len(sweep.bounds),3)
+        route,status=plan_lift_and_compact(sweep.origin,(0.,0.,0.,0.),sweep.bounds,sweep.clear)
+        self.assertIsNotNone(route)
+        self.assertTrue(sweep.clear(route[0],route[1],extraction=True))
+        # A real side collider still cannot enter the central pedestal.
+        start=(*sweep.origin[:2],sweep.origin[2]+.01)
+        self.assertFalse(sweep.clear(start,(start[0]+.1,*start[1:])))
+        self.assertIn('/table',sweep.last_failure['blockers'])
 
     def test_concave_support_aabb_does_not_block_free_vertical_extraction(self):
         from manipulation_agent.executors.carry_geometry import plan_lift_and_compact

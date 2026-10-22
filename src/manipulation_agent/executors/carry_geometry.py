@@ -29,12 +29,23 @@ class PayloadSweep:
         for item in payload:
             for link in item.links.values():
                 if link.is_meta_link:continue
-                points=link.collision_boundary_points_world
-                if points is None:raise ValueError('Payload collision geometry unavailable')
-                points=points.cpu().numpy()
-                if not len(points) or not np.isfinite(points).all():
-                    raise ValueError('Payload collision geometry invalid')
-                self.bounds.append((points.min(axis=0),points.max(axis=0)))
+                # A link can contain separate colliders around an empty centre
+                # (e.g. a desk bracket surrounding its assembly pedestal).
+                # Combining them fills that centre and invents collisions.
+                meshes=getattr(link,'collision_meshes',None)
+                if meshes:
+                    boxes=[tuple(v.detach().cpu().numpy() for v in mesh.aabb)
+                           for mesh in meshes.values()]
+                else:
+                    points=link.collision_boundary_points_world
+                    if points is None:raise ValueError('Payload collision geometry unavailable')
+                    points=points.cpu().numpy()
+                    if not len(points):raise ValueError('Payload collision geometry invalid')
+                    boxes=[(points.min(axis=0),points.max(axis=0))]
+                for lo,hi in boxes:
+                    if not np.isfinite([lo,hi]).all() or np.any(hi<lo):
+                        raise ValueError('Payload collision geometry invalid')
+                    self.bounds.append((lo,hi))
         if not self.bounds:raise ValueError('Empty payload collision geometry')
         actual=backend._local_pose()
         delta=pose[2]-actual[2];c,s=math.cos(delta),math.sin(delta)
@@ -114,15 +125,21 @@ class PayloadSweep:
 
 def plan_lift_and_compact(origin, base, bounds, clear, *, check=lambda: None):
     """One route definition for both preview and actual held-object movement."""
-    origin=tuple(map(float,origin));lifted=(*origin[:2],origin[2]+.18)
-    check()
-    if not clear(origin,lifted,extraction=True):return None,'lift_blocked'
-    lifted_bounds=translated_bounds(bounds,np.asarray(lifted)-origin)
-    route,status=compact_translation(lifted,base,lifted_bounds,clear,check=check)
-    # A large or blocked packing motion can still leave a valid lifted pose.
-    # Its departure must be checked separately before this route is admitted.
-    result=(origin,lifted,*tuple(route[1:] if route else ()))
-    return result,'compact' if route else 'lift_only_'+status
+    origin=tuple(map(float,origin));fallback=None
+    # A fixed 18 cm lift cannot extract food from a low microwave cavity.
+    # Smaller lifts still have to clear the support completely, then pass the
+    # same continuous sweeps and loaded-departure checks as the full lift.
+    for height in (.18,.08,.03,.01):
+        lifted=(*origin[:2],origin[2]+height)
+        check()
+        if not clear(origin,lifted,extraction=True):continue
+        lifted_bounds=translated_bounds(bounds,np.asarray(lifted)-origin)
+        route,status=compact_translation(lifted,base,lifted_bounds,clear,check=check)
+        result=(origin,lifted,*tuple(route[1:] if route else ()))
+        if route or status=='already_compact':return result,'compact'
+        # Its departure must be checked separately before admission.
+        if fallback is None:fallback=(result,'lift_only_'+status)
+    return fallback or (None,'lift_blocked')
 
 
 class LoadedCollision:

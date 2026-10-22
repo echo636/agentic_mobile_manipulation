@@ -134,7 +134,12 @@ class FullWorkflowReference:
                         # checked grasp of the original item; no state setter.
                         approach=row.get('approach_role',role)
                         approach_point=(self.surface_point(approach,'navigate_to',attempt)
-                                        if approach!=role else point)
+                                        if approach!=role or any(k in row for k in ('uv','xy','point'))
+                                        else point)
+                        # An exact placement slot may be behind the near edge
+                        # of a distant shelf. Approach a real surface of that
+                        # same object, then retain the requested placement slot.
+                        # Retried approaches sample a different checked surface.
                         self.ref.action('navigate_to',approach,approach_point)
                         if 'uv' not in row and 'xy' not in row and 'point' not in row:
                             point=self.surface_point(role,primitive,attempt)
