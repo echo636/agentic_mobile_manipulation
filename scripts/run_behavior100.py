@@ -543,7 +543,11 @@ class Batch:
         lease=getattr(self._worker_local,'lease',None)
         if lease:args+=['--reserved-host-memory-gib',str(lease.other_reserved_gib(self._config.get('host_slot_memory_gib',28)))]
         if getattr(self._worker_local,'static_ready',False):args.append('--light')
-        response=self.ssh(args)
+        # SSH normally starts in /home, while the simulator unit runs from its
+        # frozen source directory. Probe the actual working filesystem: a full
+        # home quota must not reject a run whose output/cache/temp are elsewhere.
+        response=self.ssh(['/bin/bash','-lc',
+                          'cd '+shlex.quote(str(self.source))+'\nexec '+shlex.join(args)])
         if response.returncode:
             self.worker_state('waiting_for_resources',reason='Resource query unavailable')
             return False
