@@ -38,7 +38,9 @@ def trace_dynamics(backend, output, limit=16):
                 joints=obj.get_joint_velocities() if obj.n_joints else backend.torch.zeros(1)
                 joint_speed=float(abs(joints).max())
                 rows.append(dict(name=obj.name,position=pos.tolist(),orientation=quat.tolist(),
-                                 linear_speed=linear,angular_speed=angular,joint_speed=joint_speed))
+                                 linear_speed=linear,angular_speed=angular,joint_speed=joint_speed,
+                                 joint_positions=obj.get_joint_positions().tolist() if obj.n_joints else [],
+                                 joint_velocities=joints.tolist() if obj.n_joints else []))
             except Exception as exc:errors.append(dict(name=obj.name,error=str(exc)))
         rows.sort(key=lambda r:max(r['linear_speed'],r['angular_speed'],r['joint_speed'])
                   if all(math.isfinite(r[k]) for k in ('linear_speed','angular_speed','joint_speed'))
@@ -55,6 +57,42 @@ def trace_dynamics(backend, output, limit=16):
         snapshot('after')
         return result
     backend._step=step
+
+
+def trace_initial_articulations(backend_class, output):
+    """Read requested and actual joints around restore/warmup, without setters."""
+    def snapshot(backend, phase, data=None):
+        expected={}
+        if data is not None:
+            scene=json.loads(Path(data).read_text()) if isinstance(data,str) else data
+            expected=scene['state']['registry']['object_registry']
+        rows=[]
+        names=set(backend.custom_spec['roles'].values())
+        for obj in backend.env.scene.objects:
+            if obj.name not in names or not obj.n_joints:continue
+            try:
+                row=dict(name=obj.name,positions=obj.get_joint_positions().tolist(),
+                         velocities=obj.get_joint_velocities().tolist())
+                if obj.name in expected:
+                    row['requested']={k:expected[obj.name][k] for k in ('joints','joint_pos','joint_vel')
+                                      if k in expected[obj.name]}
+                rows.append(row)
+            except Exception as exc:rows.append(dict(name=obj.name,error=str(exc)))
+        with (output/'diagnostic_initial_articulations.jsonl').open('a') as stream:
+            stream.write(json.dumps(dict(at_unix=time.time(),phase=phase,joints=rows))+'\n')
+    original_restore=backend_class._restore_custom_scene
+    original_refresh=backend_class._refresh_custom_contacts
+    def restore(backend, data):
+        result=original_restore(backend,data)
+        snapshot(backend,'after_custom_restore',data)
+        return result
+    def refresh(backend, stage):
+        snapshot(backend,stage+'_before_contacts')
+        result=original_refresh(backend,stage)
+        snapshot(backend,stage+'_after_contacts')
+        return result
+    backend_class._restore_custom_scene=restore
+    backend_class._refresh_custom_contacts=refresh
 
 
 def main():
@@ -95,6 +133,8 @@ def main():
         from manipulation_agent.reference_tasks import ReferenceTask
         from manipulation_agent.full_workflow_reference import FullWorkflowReference
         from manipulation_agent.long_horizon import expression
+        if plan.get('trace_initial_articulations',False):
+            trace_initial_articulations(CustomTaskBackend,args.output)
         backend = CustomTaskBackend.__new__(CustomTaskBackend)
         backend.__init__(args.spec, args.output, record_video=args.record_video,
                          inside_placement='official_volume', max_steps=100000)
