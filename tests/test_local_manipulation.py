@@ -20,6 +20,7 @@ class Motor:
         self.target=object()
         self.events=[];self.executions=[];self.refreshes=0
         self.deadline=SimpleNamespace(check=lambda **kw:None)
+        self.robot=SimpleNamespace(is_holonomic_base=False)
         self.binding=SimpleNamespace(grounding={'private':'selection'},describe=lambda:{'private':'target'})
         self.operation_error=None
         self.precondition_error=None

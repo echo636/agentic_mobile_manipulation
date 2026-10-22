@@ -97,7 +97,7 @@ class LocalRGBManipulation:
         loaded.check_cancelled=check
         if hasattr(loaded,'sweep'):loaded.sweep.check=check
         if hasattr(loaded,'robot_collision'):loaded.robot_collision.check_cancelled=check
-        if local_exit_certificate(pose,loaded,check_cancelled=check) is None:
+        if local_exit_certificate(pose,loaded,check_cancelled=check,allow_lateral=getattr(self.robot,'is_holonomic_base',False)) is None:
             if hasattr(loaded,'sweep'):
                 operation.preview_failure=loaded.sweep.last_failure or {'stage':'loaded_departure'}
             return False
@@ -244,10 +244,32 @@ class LocalRGBManipulation:
                     exhausted|=exc.code=='navigation_search_exhausted'
                     for _,row,_,_ in eligible:
                         row.update(status='rejected',reason=exc.code,detail=str(exc))
+            # R1Pro is holonomic: a narrow aisle may require a sideways drive
+            # while its long axis stays fixed. Preserve all endpoint proofs and
+            # use the same footprint sweeps; differential bases never enter here.
+            if selected is None and eligible and getattr(self.robot,'is_holonomic_base',False):
+                from .point_route_projection import project_forward_point
+                lateral_budget=PlanningBudget(operation.check,seconds=min(40.,12.*.05/grid.resolution))
+                collision.check_cancelled=lateral_budget.check
+                try:
+                    found=project_forward_point([entry[0] for entry in eligible],actual,collision,
+                        lateral_budget.check,exact_endpoints=True,allow_lateral=True)
+                    if found is not None:
+                        plan,poses,route_details=found
+                        route=route_from_poses(plan,poses,collision,allow_lateral=True,
+                            method='checked_holonomic_target_approach',check_cancelled=lateral_budget.check)
+                        selected=(plan,route)
+                        proposal_diagnostics['holonomic_roadmap']=route_details
+                except (ImportError,SearchBudgetExhausted):
+                    exhausted=True
+                    proposal_diagnostics['holonomic_planning_exhausted']=True
+                finally:
+                    collision.check_cancelled=operation.check
             if selected is not None:
                 for plan,row,carry,articulation in eligible:
                     if plan is selected[0]:
                         row['status']='selected'
+                        row.pop('reason',None);row.pop('detail',None)
                         operation.carry_plan=carry;operation.articulation_plan=articulation
                     elif row['status']=='route_candidate':row['status']='not_selected'
         except SearchBudgetExhausted:
@@ -294,13 +316,13 @@ class LocalRGBManipulation:
         operation.articulation_plan=None
 
     def _refine_local_geometry(self,operation,point,grid,*,reason):
-        """Retry one target's geometry at half-cell size before declaring failure.
+        """Refine target geometry down to 1.25 cm before declaring failure.
 
         Coarse cells include full occupied columns and an outward footprint
         reserve. A physically open passage can disappear in that raster. Requery
         a bounded local map; never remove obstacles or shrink robot geometry.
         """
-        if getattr(operation,'navigation_sampling',None):return False
+        if grid.resolution<=.0125:return False
         resolution=max(.0125,grid.resolution/2)
         if resolution>=grid.resolution:return False
         actual=self._local_pose()
@@ -357,7 +379,7 @@ class LocalRGBManipulation:
         swept,future,plan=preview
         swept.check_cancelled=future.check_cancelled=check
         if not swept.motion_free(pose,pose):return False
-        if local_exit_certificate(pose,future,check_cancelled=check) is None:return False
+        if local_exit_certificate(pose,future,check_cancelled=check,allow_lateral=getattr(self.robot,'is_holonomic_base',False)) is None:return False
         operation.articulation_plan=plan
         return True
 
@@ -372,14 +394,14 @@ class LocalRGBManipulation:
         try:
             operation.check()
             geometry=self._local_geometry(operation)
-            certificate=local_exit_certificate(self._local_pose(),geometry[1],check_cancelled=operation.check)
+            certificate=local_exit_certificate(self._local_pose(),geometry[1],check_cancelled=operation.check,allow_lateral=getattr(self.robot,'is_holonomic_base',False))
             if certificate is not None:return 'checked'
             if operation.repositions>=operation.limits.max_repositions:return 'blocked'
             if not geometry[1].motion_free(self._local_pose(),self._local_pose()):
                 self._local_clearance_recovery(operation,geometry)
                 operation.repositions+=1
                 geometry=self._local_geometry(operation)
-                if local_exit_certificate(self._local_pose(),geometry[1],check_cancelled=operation.check) is not None:
+                if local_exit_certificate(self._local_pose(),geometry[1],check_cancelled=operation.check,allow_lateral=getattr(self.robot,'is_holonomic_base',False)) is not None:
                     operation.record('departure_recovered',kind='clearance_retreat')
                     return 'checked'
                 if operation.repositions>=operation.limits.max_repositions:return 'blocked'
@@ -395,7 +417,7 @@ class LocalRGBManipulation:
                     budget.check()
                     if math.dist(actual[:2],pose[:2])>.75:continue
                     if not collision.motion_free(pose,pose):continue
-                    if local_exit_certificate(pose,collision,check_cancelled=budget.check) is None:continue
+                    if local_exit_certificate(pose,collision,check_cancelled=budget.check,allow_lateral=getattr(self.robot,'is_holonomic_base',False)) is None:continue
                     plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],pose[:2],pose[2],
                         math.dist(actual[:2],pose[:2]),0.,1,1,0.,0,pose[2],'forward')
                     try:route=plan_forward_route(plan,actual,collision,check_cancelled=budget.check,max_expansions=2000)
@@ -404,7 +426,7 @@ class LocalRGBManipulation:
                     result=self._execute_gt_plan(grid,plan,operation.step_limit-(self.steps-operation.start_steps),prepared_route=route)
                     self.navigation_distance+=result['actual_path_distance_m'];operation.repositions+=1
                     fresh=self._local_geometry(operation)
-                    return ('checked' if local_exit_certificate(self._local_pose(),fresh[1],check_cancelled=operation.check)
+                    return ('checked' if local_exit_certificate(self._local_pose(),fresh[1],check_cancelled=operation.check,allow_lateral=getattr(self.robot,'is_holonomic_base',False))
                             is not None else 'blocked')
             except NavigationError:return 'blocked'
             finally:collision.check_cancelled=operation.check

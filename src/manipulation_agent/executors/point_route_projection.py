@@ -19,12 +19,13 @@ def prepare_point_projection():
     return True
 
 
-def project_forward_point(options, actual, collision, check_cancelled, *, max_endpoint_checks=128, exact_endpoints=False):
+def project_forward_point(options, actual, collision, check_cancelled, *, max_endpoint_checks=128, exact_endpoints=False, allow_lateral=False):
     import numpy as np
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import dijkstra
-    from .forward_navigation import angle, checked_connection, local_exit_certificate
+    from .forward_navigation import angle, checked_connection, checked_holonomic_connection, local_exit_certificate
 
+    connector = checked_holonomic_connection if allow_lateral else checked_connection
     if not hasattr(collision,'grid_at_heading') or not hasattr(collision,'_sweep_grid'):
         return None
     departure=local_exit_certificate(actual,collision,check_cancelled=check_cancelled)
@@ -78,7 +79,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
                 check_cancelled()
                 node=int(indices[k][cell])
                 if node<0:continue
-                poses=checked_connection(start,grid.world(cell),angle(yaw),collision,check_cancelled)
+                poses=connector(start,grid.world(cell),angle(yaw),collision,check_cancelled)
                 if poses is not None:
                     joined=list(prefix)+poses[1:]
                     if node not in roots or path_cost(joined)<path_cost(roots[node]):roots[node]=joined
@@ -91,32 +92,34 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
     if departure is not None:
         before=set(roots);connect_roots(departure['poses'])
         departure_seed=bool(set(roots)-before)
+
     if not roots:return None
     rows=[];cols=[];weights=[]
     for k,yaw in enumerate(headings):
         check_cancelled()
-        dc,dr=directions[k]
-        r0,r1=max(0,-dr),min(grid.height,grid.height-dr)
-        c0,c1=max(0,-dc),min(grid.width,grid.width-dc)
-        mask=free[k]
-        valid=mask[r0:r1,c0:c1]&mask[r0+dr:r1+dr,c0+dc:c1+dc]
-        # Cell supercover of the stride, including corner tangencies.
-        for rr in range(min(0,dr),max(0,dr)+1):
-            for cc in range(min(0,dc),max(0,dc)+1):
-                enter,leave=0.,1.
-                for center,delta in ((rr,dr),(cc,dc)):
-                    if delta:
-                        bounds=sorted(((center-.5)/delta,(center+.5)/delta))
-                        enter=max(enter,bounds[0]);leave=min(leave,bounds[1])
-                    elif abs(center)>.5:leave=-1.
-                if enter<=leave+1e-12:
-                    valid &= mask[r0+rr:r1+rr,c0+cc:c1+cc]
-        source=indices[k][r0:r1,c0:c1][valid]
-        destination=indices[k][r0+dr:r1+dr,c0+dc:c1+dc][valid]
-        rows.append(source);cols.append(destination)
-        weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
-        rows.append(destination);cols.append(source)
-        weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
+        strides=((1,0),(0,1),(1,1),(-1,1)) if allow_lateral else (directions[k],)
+        for dc,dr in strides:
+            r0,r1=max(0,-dr),min(grid.height,grid.height-dr)
+            c0,c1=max(0,-dc),min(grid.width,grid.width-dc)
+            mask=free[k]
+            valid=mask[r0:r1,c0:c1]&mask[r0+dr:r1+dr,c0+dc:c1+dc]
+            # Cell supercover of the stride, including corner tangencies.
+            for rr in range(min(0,dr),max(0,dr)+1):
+                for cc in range(min(0,dc),max(0,dc)+1):
+                    enter,leave=0.,1.
+                    for center,delta in ((rr,dr),(cc,dc)):
+                        if delta:
+                            bounds=sorted(((center-.5)/delta,(center+.5)/delta))
+                            enter=max(enter,bounds[0]);leave=min(leave,bounds[1])
+                        elif abs(center)>.5:leave=-1.
+                    if enter<=leave+1e-12:
+                        valid &= mask[r0+rr:r1+rr,c0+cc:c1+cc]
+            source=indices[k][r0:r1,c0:c1][valid]
+            destination=indices[k][r0+dr:r1+dr,c0+dc:c1+dc][valid]
+            rows.append(source);cols.append(destination)
+            weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
+            rows.append(destination);cols.append(source)
+            weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
         for offset in (-1,1):
             check_cancelled()
             other=(k+offset)%len(headings)
@@ -164,11 +167,11 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
         for checked,(_,option_index,node,xy,yaw) in enumerate(sorted(terminals)[:max_endpoint_checks],1):
             check_cancelled()
             chosen=options[option_index]
-            terminal=checked_connection((*xy,yaw),chosen.goal,chosen.final_yaw,collision,check_cancelled)
+            terminal=connector((*xy,yaw),chosen.goal,chosen.final_yaw,collision,check_cancelled)
             if terminal is None:continue
             poses=reconstruct(node)+terminal[1:]
             if not all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])):continue
-            return chosen,poses,{'search':'shared_roadmap_to_admitted_stances','sampled_headings':len(headings),
+            return chosen,poses,{'search':'holonomic_roadmap_to_admitted_stances' if allow_lateral else 'shared_roadmap_to_admitted_stances','sampled_headings':len(headings),'holonomic_translations':allow_lateral,
                                 'continuous_pose_fallback':True,'graph_nodes':count,'graph_edges':graph.nnz,
                                 'projection_window':getattr(collision,'window',None),
                                 'reachable_poses':len(reachable),'endpoint_checks':checked,
@@ -184,9 +187,9 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
         check_cancelled()
         node=int(reachable[index]);cell=divmod(int(node_cells[node]),grid.width)
         goal=grid.world(cell);yaw=angle(headings[int(node_headings[node])]);pose=(*goal,yaw)
-        entry=local_exit_certificate(pose,collision,incoming=True,check_cancelled=check_cancelled)
+        entry=local_exit_certificate(pose,collision,incoming=True,check_cancelled=check_cancelled,allow_lateral=allow_lateral)
         if entry is None:continue
-        departure=local_exit_certificate(pose,collision,check_cancelled=check_cancelled)
+        departure=local_exit_certificate(pose,collision,check_cancelled=check_cancelled,allow_lateral=allow_lateral)
         if departure is None:continue
         poses=reconstruct(node)
         # Recheck the actual reconstructed trajectory, independently of the
@@ -195,7 +198,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
         distance=sum(math.dist(a[:2],b[:2]) for a,b in zip(poses,poses[1:]))
         chosen=replace(options[0],points=tuple(p[:2] for p in poses),goal=goal,final_yaw=yaw,
                        travel_yaw=yaw,score=float(target_distances[index]),geodesic_m=distance)
-        return chosen,poses,{'search':'forward_reachable_point_projection','sampled_headings':len(headings),
+        return chosen,poses,{'search':'holonomic_reachable_point_projection' if allow_lateral else 'forward_reachable_point_projection','sampled_headings':len(headings),'holonomic_translations':allow_lateral,
                             'continuous_pose_fallback':True,'graph_nodes':count,'graph_edges':graph.nnz,
                             'projection_window':getattr(collision,'window',None),
                             'reachable_poses':len(reachable),'endpoint_checks':checked,

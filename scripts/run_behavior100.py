@@ -544,7 +544,11 @@ class Batch:
         lease=getattr(self._worker_local,'lease',None)
         if lease:args+=['--reserved-host-memory-gib',str(lease.other_reserved_gib(self._config.get('host_slot_memory_gib',28)))]
         if getattr(self._worker_local,'static_ready',False):args.append('--light')
-        response=self.ssh(args)
+        # SSH normally starts in /home, while the simulator unit runs from its
+        # frozen source directory. Probe the actual working filesystem: a full
+        # home quota must not reject a run whose output/cache/temp are elsewhere.
+        response=self.ssh(['/bin/bash','-lc',
+                          'cd '+shlex.quote(str(self.source))+'\nexec '+shlex.join(args)])
         if response.returncode:
             self.worker_state('waiting_for_resources',reason='Resource query unavailable')
             return False
@@ -866,7 +870,10 @@ class Batch:
             asset_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'assets',
                        '--manifest',str(self.root/'manifest.json'),'--index',str(row['index']),
                        '--data-root',self.c['data_root']]
-            checked=self.ssh(asset_cmd)
+            # Task assets include hashing shared-storage files. A short SSH
+            # telemetry timeout can expire before a healthy preflight finishes
+            # while other instances initialize; no simulator exists yet.
+            checked=self.ssh(asset_cmd,timeout=self._config.get('asset_preflight_timeout_seconds',180))
             if checked.returncode:raise RuntimeError('Task asset preflight command failed')
             asset_check=json.loads(checked.stdout)
             write_json(self.root/'preflight'/f'{runid}_assets.json',asset_check)

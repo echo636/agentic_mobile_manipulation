@@ -506,7 +506,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             from .visual_mesh_grounding import query_visual_surface
             try:
                 with component(self,'visual_grounding'):
-                    obj,visual=query_visual_surface(self,point,reject_particles=reject_particles)
+                    obj,visual=query_visual_surface(self,point,reject_particles=reject_particles,
+                                                    camera_position=start)
             except SkillError as exc:
                 diagnostic.update(status='failed',code=exc.code,detail=str(exc),
                                   visual_query=getattr(exc,'diagnostics',{}))
@@ -628,6 +629,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         import numpy as np
         import omnigibson.utils.transform_utils as T
         from .gt_navigation import NavigationError, PlanningBudget, SearchBudgetExhausted, plan_navigation, STRATEGY
+        allow_lateral=bool(getattr(self.robot,'is_holonomic_base',False))
         trav=self.env.scene.trav_map
         position,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
@@ -680,7 +682,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                     grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius,
                     transition_allowed=guard,check_cancelled=self.deadline.check)
                 # Existing overlap may forbid turning. This explicitly logged
-                # contact-shedding retreat is the only fixed-heading exception.
+                # contact-shedding retreat has its own transition checks.
                 escape=replace(escape,travel_yaw=travel_yaw,final_yaw=travel_yaw,
                                motion_mode='clearance_retreat')
                 record.update(status='planned',plan=asdict(escape),**escape_details)
@@ -758,11 +760,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                             if mode=='approach' and not visible(xy,yaw):return False
                             if pose not in entries:
                                 entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
-                                                                    check_cancelled=budget.check)
+                                                                    check_cancelled=budget.check,allow_lateral=allow_lateral)
                             if entries[pose] is None:return False
                             if pose not in exits:
                                 exits[pose]=local_exit_certificate(pose,endpoint_collision,
-                                                                  check_cancelled=budget.check)
+                                                                  check_cancelled=budget.check,allow_lateral=allow_lateral)
                                 if exits[pose] is None:exit_rejections+=1
                             return exits[pose] is not None
                         proposed=replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
@@ -858,11 +860,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                                     attempt.update(status='rejected',reason='target_not_visible');continue
                             if pose not in entries:
                                 entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
-                                                                    check_cancelled=refinement.check)
+                                                                    check_cancelled=refinement.check,allow_lateral=allow_lateral)
                             if entries[pose] is None:
                                 attempt.update(status='rejected',reason='no_local_entry');continue
                             if pose not in exits:
-                                exits[pose]=local_exit_certificate(pose,endpoint_collision,check_cancelled=refinement.check)
+                                exits[pose]=local_exit_certificate(pose,endpoint_collision,
+                                    check_cancelled=refinement.check,allow_lateral=allow_lateral)
                             if exits[pose] is None:
                                 attempt.update(status='rejected',reason='no_local_exit');continue
                             options.append(replace(candidate,final_yaw=yaw,travel_yaw=yaw))
@@ -891,9 +894,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             with component(self,'navigation_route_selection'):
                 plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
                     target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
-                    project_point=mode=='point',
+                    project_point=mode=='point',allow_lateral=allow_lateral,
                     planning_seconds=getattr(self,'forward_route_planning_seconds',10.))
             details['forward_candidate_selection']=selection
+            if any(phase.motion_mode=='holonomic' for phase in prepared_route.phases):
+                details['motion_policy']='checked_holonomic_navigation_fallback'
             grid=endpoint_collision.grid_at_heading(plan.final_yaw)
             details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
             details['local_exit_certificate']=selection.get('local_exit_certificate',exits.get((*plan.goal,plan.final_yaw)))
@@ -1005,7 +1010,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                             raise SkillError('look_rotation_blocked','Measured start changed before checked rotation')
                         route=plan_forward_route(plan,(*previous,start_yaw),collision,check_cancelled=budget.check)
                     phases=route.phases
-                    record.update(status='planned',route=asdict(route))
+                    record.update(status='planned',route=asdict(route),
+                        motion_policy='checked_holonomic_v1' if any(p.motion_mode=='holonomic' for p in route.phases) else 'checked_forward_reverse_v2')
                 except Exception as exc:
                     record.update(status='failed',error_code=getattr(exc,'code',None),
                                   error_type=type(exc).__name__,error=str(exc))
@@ -1021,8 +1027,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             execution_grid=collision.grid if collision else grid
             with (self.output/'base_motion.jsonl').open('a') as stream:
                 for phase_index,phase in enumerate(phases):
+                    lateral=phase.motion_mode=='holonomic'
+                    if lateral and not getattr(self.robot,'is_holonomic_base',False):
+                        raise SkillError('unsupported_motion','Lateral route requires a holonomic robot base')
                     follower=GreedyGridFollower(execution_grid,phase,self.og.sim.get_sim_step_dt(),
-                        forward_only=forward,motion_check=collision.motion_free if collision else None)
+                        forward_only=forward and not lateral,motion_check=collision.motion_free if collision else None)
                     while True:
                         self.deadline.check()
                         actual_pos,actual_quat=self.robot.get_position_orientation()
@@ -1046,7 +1055,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                         stream.write(json.dumps({'at':now(),'env_step':self.steps,'commanded_position':new_pos.tolist(),
                             'actual_position':measured.tolist(),'actual_orientation':measured_quat.tolist(),
                             'commanded_yaw':yaw,'phase_index':phase_index,'motion_mode':phase.motion_mode,
-                            'follower':'checked_forward_reverse' if forward else 'clearance_retreat',
+                            'follower':'checked_holonomic' if lateral else 'checked_forward_reverse' if forward else 'clearance_retreat',
                             'audience':'executor_private'})+'\n')
             motion_steps=self.steps-before
             if self._base_target is not None:
@@ -1068,7 +1077,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             self._base_target=None
         return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
                 'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
-                'final_yaw_error_rad':final_yaw_error,'motion_policy':'checked_forward_reverse_v2' if forward else 'clearance_retreat',
+                'final_yaw_error_rad':final_yaw_error,'motion_policy':('checked_holonomic_v1' if route and any(p.motion_mode=='holonomic' for p in route.phases)
+                                else 'checked_forward_reverse_v2') if forward else 'clearance_retreat',
                 'forward_route_method':route.method if route else None,
                 'forward_planned_distance_m':route.distance_m if route else None,
                 'forward_planned_turn_degrees':math.degrees(route.turn_radians) if route else None,
@@ -1311,6 +1321,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'depth_consistency_check':False, 'navigation_object_lookup':False,
             'pixel_sample':'renderer_pixel_center_index_plus_half',
             'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
+            'coincident_surface_resolution':'camera_frontmost_within_float32_roundoff',
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         if self.ideal_carry:
@@ -1328,6 +1339,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
             'stance_candidates':'target_reach_rings_then_collision_free_target_disk_v2',
             'stance_domain':'selected_target_reach_disk',
+            'holonomic_local_approach':bool(getattr(self.robot,'is_holonomic_base',False)),
+            'map_refinement_min_resolution_m':.0125,
             'start_radius_limit_m':None,'path_distance_limit_m':None,
             'stance_failure_feedback':'allowlisted_local_search_stage',
             'target_lock':'private_selected_link_relative_surface',
@@ -1353,7 +1366,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'forward_route':'checked_forward_point_projection_or_polyline_or_shared_bidirectional_continuous_pose_astar',
             'forward_candidate_budget':{'shared_seconds':10.,'point_projection_seconds':3.,'expanded_poses':20000},
             'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},
-            'fixed_heading_exception':'contact_shedding_clearance_retreat_only',
+            'holonomic_navigation_fallback':{'enabled':bool(getattr(self.robot,'is_holonomic_base',False)),
+                'seconds':10.,'preserves_admitted_endpoint':True},
+            'fixed_heading_exception':'contact_shedding_clearance_retreat_and_capability_checked_holonomic_motion',
             'carried_collision_footprint':True,'physical_controller':False,
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
             'geometry':'GT floor support and live height-matched collision hulls',

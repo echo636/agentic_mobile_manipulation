@@ -60,7 +60,7 @@ def assembly_orientations(held, root_quat, torch, transforms, reference_quat=Non
     """Resting proposals preserve payloads; unladen items may turn onto a side.
 
 For payloads, compare local gravity and reject flips or large tilts. Unladen
-objects may try asset poses or principal faces when metadata is absent; these
+objects may try asset poses, principal faces or intermediate tilts when metadata is absent; these
 are proposals only, with unchanged collision and settling acceptance checks.
 """
     current = transforms.quat2mat(root_quat)
@@ -70,12 +70,16 @@ are proposals only, with unchanged collision and settling acceptance checks.
     if metadata is not None and not options:
         options = [{'rotation':[0.,0.,0.,1.], 'prob':1.}]
     if allow_reorientation and not metadata:
-        # Without asset resting metadata, principal faces are pose proposals.
-        # Only physical settling plus official containment may accept them.
+        # Long objects can lean against a container wall. Flat and upright
+        # faces alone miss those stable poses even in an empty bowl. These
+        # intermediate tilts are proposals, not an exemption from collision,
+        # settling or official containment. Loaded assemblies never use them.
         options = [{'rotation': transforms.euler2quat(torch.tensor(angles, device=root_quat.device)).tolist(),
                     'prob': 1., 'source': 'unladen_face_proposal'}
                    for angles in ((0.,0.,0.),(math.pi/2,0.,0.),(-math.pi/2,0.,0.),
-                                  (0.,math.pi/2,0.),(0.,-math.pi/2,0.),(math.pi,0.,0.))]
+                                  (0.,math.pi/2,0.),(0.,-math.pi/2,0.),(math.pi,0.,0.)) + tuple(
+                       angle for tilt in (math.pi/6, math.pi/4, math.pi/3)
+                       for angle in ((tilt,0.,0.),(-tilt,0.,0.),(0.,tilt,0.),(0.,-tilt,0.)))]
     bases = []
     for option in options:
         stable = torch.tensor(option['rotation'], dtype=root_quat.dtype, device=root_quat.device)
