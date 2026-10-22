@@ -717,9 +717,7 @@
       "object": "study_exit",
       "state": "Open",
       "value": true,
-      "kwargs": {
-        "fully": true
-      }
+      "initial_open_fraction": 0.9444444444444444
     },
     {
       "object": "guest_entry",

@@ -87,6 +87,12 @@ def validate_construction(spec):
         if rule.get('mode')!='single_object':
             raise ValueError('Unknown handling protocol')
     for move in spec.get('initial_layout', []):
+        if 'initial_open_fraction' in move:
+            fraction=move['initial_open_fraction']
+            if (move.get('state')!='Open' or move.get('value') is not True
+                    or type(fraction) not in (int,float) or not math.isfinite(fraction)
+                    or not .05<fraction<1.):
+                raise ValueError('Initial open fraction requires Open=True and a fraction between .05 and 1')
         attempts=move.get('max_sampling_attempts',1)
         if type(attempts) is not int or not 1<=attempts<=3:
             raise ValueError('Construction state sampling needs a bounded positive attempt count')

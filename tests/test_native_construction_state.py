@@ -1,8 +1,47 @@
-import copy,unittest
+import copy,math,unittest
 from types import SimpleNamespace as NS
 from manipulation_agent.executors.custom_task import complete_native_articulation_state
 
 class NativeConstructionStateTests(unittest.TestCase):
+ def test_initial_opening_respects_native_direction_and_keeps_limit_margin(self):
+  from manipulation_agent.executors.custom_task import initial_open_joint_targets
+  forward=NS(lower_limit=0.,upper_limit=math.pi/2)
+  reverse=NS(lower_limit=-1.,upper_limit=2.)
+  state=NS(relevant_joints_info=(False,[forward,reverse],[1,-1]))
+  targets=initial_open_joint_targets(state,85./90.)
+  self.assertAlmostEqual(math.degrees(targets[0][1]),85.)
+  self.assertAlmostEqual(targets[1][1],-5./6.)
+  for joint,position in targets:self.assertTrue(joint.lower_limit<position<joint.upper_limit)
+  for invalid in [True,0.,.05,1.,float('nan')]:
+   with self.assertRaises(ValueError):initial_open_joint_targets(state,invalid)
+
+ def test_initial_opening_cannot_guess_both_sided_or_unbounded_joints(self):
+  from manipulation_agent.executors.custom_task import initial_open_joint_targets
+  for info in [(True,[NS(lower_limit=0.,upper_limit=1.)],[1]),
+               (False,[NS(lower_limit=0.,upper_limit=float('inf'))],[1])]:
+   with self.assertRaises(ValueError):initial_open_joint_targets(NS(relevant_joints_info=info),.9)
+
+ def test_post_settle_validation_rejects_limit_bounce_without_repairing_it(self):
+  import json,sys
+  from pathlib import Path
+  from tempfile import TemporaryDirectory
+  from types import ModuleType
+  from unittest.mock import patch
+  from manipulation_agent.executors.custom_task import CustomTaskBackend
+  Open=type('Open',(),{});module=ModuleType('omnigibson');module.object_states=NS(Open=Open)
+  joint=NS(name='hinge',lower_limit=0.,upper_limit=math.pi/2,get_state=lambda:(math.radians(97.),7.2,0.))
+  obj=NS(name='door',states={Open:NS(relevant_joints_info=(False,[joint],[1]),get_value=lambda:True)})
+  with TemporaryDirectory() as directory,patch.dict(sys.modules,{'omnigibson':module}):
+   backend=NS(output=Path(directory),custom_spec={'initial_layout':[{'object':'door','initial_open_fraction':85./90.}]})
+   with self.assertRaisesRegex(RuntimeError,'settle open within'):
+    CustomTaskBackend._validate_initial_articulations(backend,{'door':obj})
+   record=json.loads((Path(directory)/'construction_articulation_validation.json').read_text())
+   self.assertEqual(record['status'],'failed')
+   self.assertAlmostEqual(math.degrees(record['joints'][0]['position']),97.)
+   joint.get_state=lambda:(math.radians(85.),0.,0.)
+   CustomTaskBackend._validate_initial_articulations(backend,{'door':obj})
+   self.assertEqual(json.loads((Path(directory)/'construction_articulation_validation.json').read_text())['status'],'passed')
+
  def test_contact_refresh_wakes_goal_supports_and_steps_whole_scene(self):
   from contextlib import nullcontext
   from pathlib import Path

@@ -477,7 +477,10 @@ def study(inv,models):
  # Access passages are open in the prepared scene, including the native
  # closet that actually supports the replacement articulated cabinet.
  for r in ['closet_door','shelf_door','study_exit','guest_entry','guest_partition','utility_entry','utility_exit','bath_entry']:
-  b.state(r,'Open',True,kwargs={'fully':True})
+  # Keep the hinged study door five degrees inside its native limit. A fully
+  # open endpoint settled at 97 degrees with a large velocity in the old
+  # frozen scene. The constructor verifies bounds and rest after settling.
+  b.state(r,'Open',True,**({'initial_open_fraction':85./90.} if r=='study_exit' else {'kwargs':{'fully':True}}))
  for r in ['washer','dryer']:b.state(r,'ToggledOn',False);b.state(r,'Open',False,kwargs={'fully':True});b.pred(r+'_open',r,'Open');b.pred(r+'_on',r,'ToggledOn')
  b.state('monitor','ToggledOn',True);b.pred('monitor_on','monitor','ToggledOn')
  for r in ['drawer','cabinet']:b.state(r,'Open',False,kwargs={'fully':True});b.pred(r+'_open',r,'Open')

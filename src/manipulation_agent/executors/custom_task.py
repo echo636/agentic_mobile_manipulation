@@ -5,6 +5,7 @@ import copy
 from contextlib import contextmanager, nullcontext
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 
@@ -47,6 +48,23 @@ def complete_native_articulation_state(state, objects, native_names):
                 states['AttachedTo']={'attached_obj_uuid':-1}
                 changes.append({'name':name,'initial_attachment':'detached'})
     return completed,changes
+
+
+def initial_open_joint_targets(open_state, fraction):
+    """Author a resting initial opening inside native limits, before policy time."""
+    if type(fraction) not in (float,int) or not math.isfinite(fraction) or not .05<fraction<1.:
+        raise ValueError('Initial open fraction must lie strictly between .05 and 1')
+    both_sides,joints,directions=open_state.relevant_joints_info
+    if both_sides or not joints or len(joints)!=len(directions):
+        raise ValueError('Initial open fraction needs unambiguous native opening directions')
+    targets=[]
+    for joint,direction in zip(joints,directions):
+        low,high=float(joint.lower_limit),float(joint.upper_limit)
+        if direction not in (-1,1) or not all(map(math.isfinite,(low,high))) or low>=high:
+            raise ValueError('Initial opening needs finite ordered native joint limits')
+        closed,opened=(low,high) if direction==1 else (high,low)
+        targets.append((joint,closed+fraction*(opened-closed)))
+    return targets
 
 
 @contextmanager
@@ -405,6 +423,7 @@ class CustomTaskBackend(RGBBackend):
         with self._startup_stage('construction_predicates_before_refresh'):
             before_refresh = self._predicate_values()
         self._refresh_custom_contacts('construction')
+        self._validate_initial_articulations(roles)
         initial_values = self._predicate_values()
         from ..long_horizon import expression
         failed=[label for label,condition in spec.get('initial_assertions',{}).items()
@@ -464,7 +483,18 @@ class CustomTaskBackend(RGBBackend):
                 limits=(construction_native_sampling_limit(sampling_macros)
                         if self.custom_spec.get('reference_plan',{}).get('kind')=='full_workflow' else nullcontext())
                 with limits:
-                    success=bool(obj.states[cls].set_value(*args, operation.get('value',True), **operation.get('kwargs',{})))
+                    if 'initial_open_fraction' in operation:
+                        # This is explicit scene authoring, never a policy action
+                        # or a repair while restoring an existing frozen task.
+                        if cls is not object_states.Open or operation.get('value') is not True:
+                            raise ValueError('Initial open fraction applies only to Open=True')
+                        state=obj.states[cls]
+                        for joint,position in initial_open_joint_targets(state,operation['initial_open_fraction']):
+                            joint.set_pos(position);joint.set_vel(0.)
+                        state.clear_cache()
+                        success=bool(state.get_value())
+                    else:
+                        success=bool(obj.states[cls].set_value(*args, operation.get('value',True), **operation.get('kwargs',{})))
                 successes.append(success)
                 if success:break
                 self.og.sim.step()
@@ -475,6 +505,26 @@ class CustomTaskBackend(RGBBackend):
                 raise RuntimeError('Custom layout setter failed: '+str(operation))
         if settle:
             for _ in range(operation.get('settle_steps',5)): self.og.sim.step()
+
+    def _validate_initial_articulations(self, roles):
+        from omnigibson import object_states
+        rows=[]
+        for operation in self.custom_spec.get('initial_layout',[]):
+            if 'initial_open_fraction' not in operation:continue
+            obj=roles[operation['object']]
+            state=obj.states[object_states.Open]
+            for joint,_ in initial_open_joint_targets(state,operation['initial_open_fraction']):
+                position,velocity=map(float,joint.get_state()[:2])
+                low,high=float(joint.lower_limit),float(joint.upper_limit)
+                passed=(all(map(math.isfinite,(position,velocity))) and
+                        low-1e-4<=position<=high+1e-4 and abs(velocity)<=.05 and bool(state.get_value()))
+                rows.append(dict(object=obj.name,joint=joint.name,position=position,velocity=velocity,
+                                 limits=[low,high],status='passed' if passed else 'failed'))
+        if not rows:return
+        failed=any(r['status']!='passed' for r in rows)
+        write_json(self.output/'construction_articulation_validation.json',dict(
+            status='failed' if failed else 'passed',scope='post-settle initial openings; no state repair',joints=rows))
+        if failed:raise RuntimeError('Initial articulation did not settle open within native joint limits')
 
     def _predicate_values(self):
         from omnigibson import object_states
