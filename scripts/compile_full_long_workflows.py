@@ -452,7 +452,12 @@ def study(inv,models):
  # Keep it against the hall's west wall, with the native shelves accessible.
  b.place('drawer','hall_floor',[18.4,16.]);b.place('cabinet','closet_floor',[20.28,24.15])
  b.s['robot_start']={'position':[22.9,14.2,.02],'orientation':[0.,0.,0.,1.]}
- b.fixture('tool_home',[21.8,14.85],[1.3,.4,.6]);b.fixture('delivery',[22.3,22.5],[1.,.7,.65]);b.fixture('desk_stage',[23.75,14.6],[.8,.8,.65])
+ b.fixture('tool_home',[21.8,14.85],[1.3,.4,.6]);b.fixture('delivery',[22.3,22.5],[1.,.7,.65])
+ # The former east staging table intersected the study door's swing and
+ # pushed its joint beyond the native limit after settling. Keep the same
+ # picture and keyboard work surface beside tool storage, leaving 0.8 m
+ # between its south edge and the bed for the robot's checked approach.
+ b.fixture('desk_stage',[20.68,14.75],[.8,.7,.65])
  # A dedicated supply surface accommodates the carrier and six guest items;
  # the original narrow countertop remains in the native utility room.
  b.fixture('source',[23.1,-1.05],[1.5,.8,.65])
