@@ -296,25 +296,41 @@ class HeadingCollisionChecker:
         grid=self.guidance_grid()
         if self._guidance_graph is None:
             free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width).astype(bool)
+            # This field orders continuous-pose search; it never certifies a
+            # motion. Building eight edges for every 5 cm cell of a whole
+            # building can consume the entire action budget before expansion.
+            # Pool at 20 cm for guidance, keeping any partly free block. Narrow
+            # passages remain proposals; full-resolution sweeps check every
+            # actual edge and Euclidean guidance remains available elsewhere.
+            stride=max(1,int(round(.20/grid.resolution)))
+            height=math.ceil(grid.height/stride);width=math.ceil(grid.width/stride)
+            if stride>1:
+                padded=np.zeros((height*stride,width*stride),dtype=bool)
+                padded[:grid.height,:grid.width]=free
+                free=padded.reshape(height,stride,width,stride).any(axis=(1,3))
             flat=np.flatnonzero(free)
             indices=np.full(free.shape,-1,dtype=np.int32)
             indices.ravel()[flat]=np.arange(len(flat),dtype=np.int32)
             rows=[];cols=[];weights=[]
             for dr,dc in ((-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)):
                 self.check_cancelled()
-                r0,r1=max(0,-dr),min(grid.height,grid.height-dr)
-                c0,c1=max(0,-dc),min(grid.width,grid.width-dc)
+                r0,r1=max(0,-dr),min(height,height-dr)
+                c0,c1=max(0,-dc),min(width,width-dc)
                 valid=free[r0:r1,c0:c1]&free[r0+dr:r1+dr,c0+dc:c1+dc]
                 if dr and dc:valid &= free[r0:r1,c0+dc:c1+dc]&free[r0+dr:r1+dr,c0:c1]
                 source=indices[r0:r1,c0:c1][valid]
                 rows.append(source);cols.append(indices[r0+dr:r1+dr,c0+dc:c1+dc][valid])
-                weights.append(np.full(len(source),grid.resolution*math.hypot(dr,dc)))
+                weights.append(np.full(len(source),stride*grid.resolution*math.hypot(dr,dc)))
             graph=coo_matrix((np.concatenate(weights),(np.concatenate(rows),np.concatenate(cols))),
                              shape=(len(flat),len(flat)+1)).tocsr()
-            self._guidance_graph=(graph,indices,flat)
-        graph,indices,flat=self._guidance_graph
-        goals={int(indices[cell]):float(cost) for cell,cost in seeds.items() if indices[cell]>=0}
-        distances=np.full((grid.height,grid.width),np.inf)
+            self._guidance_graph=(graph,indices,flat,stride)
+        graph,indices,flat,stride=self._guidance_graph
+        goals={}
+        for cell,cost in seeds.items():
+            if not grid.contains(cell):continue
+            node=int(indices[cell[0]//stride,cell[1]//stride])
+            if node>=0:goals[node]=min(goals.get(node,math.inf),float(cost))
+        distances=np.full(indices.shape,np.inf)
         if goals:
             virtual=coo_matrix((list(goals.values()),(np.zeros(len(goals),dtype=int),list(goals))),
                                shape=(1,len(flat)+1)).tocsr()
@@ -322,4 +338,4 @@ class HeadingCollisionChecker:
             field=dijkstra(vstack((graph,virtual),format='csr'),directed=True,indices=len(flat))
             distances.ravel()[flat]=field[:-1]
         self.check_cancelled()
-        return distances
+        return distances.repeat(stride,axis=0).repeat(stride,axis=1)[:grid.height,:grid.width]

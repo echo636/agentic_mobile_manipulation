@@ -75,13 +75,13 @@ def checked_connection(start, xy, final_yaw, collision, check_cancelled=lambda: 
 
 
 def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, check_cancelled=lambda: None):
-    """Certify a bounded forward departure from a candidate terminal pose.
+    """Certify a bounded reversible departure from a candidate terminal pose.
 
     This proves a local exit in current geometry, not reachability of every
     future target. With incoming=True, certify an arrival ending at this pose
-    instead. Both certificates contain only straight forward/reverse translations and checked
-    turns. No reverse/sideways movement is assumed. Small forward
-    staging legs also permit leaving a narrow stance before turning.
+    instead. Both certificates contain straight forward/reverse translations
+    and checked turns, without strafing. Small staging legs also permit
+    leaving a narrow stance before turning.
     """
     pose = tuple(map(float, pose))
     if not collision.motion_free(pose, pose):
@@ -408,7 +408,11 @@ def _continuous_pose_search(plan,actual,collision,check_cancelled,max_expansions
                 round((p[1]-grid.origin[1])/xy_bin),
                 round(angle(p[2])*yaw_bins/(2*math.pi)) % yaw_bins)
     def edge_cost(a, b):
-        return math.dist(a[:2], b[:2]) + .5*abs(angle(b[2]-a[2]))/(math.pi/3)
+        # First find a feasible route. Charging the full execution-time cost
+        # here delays the short turn/reverse shuffles needed to leave a tight
+        # stance behind long straight dead ends. Shortcutting and the follower
+        # still use actual linear/angular rates, including every reverse leg.
+        return math.dist(a[:2], b[:2]) + .1*abs(angle(b[2]-a[2]))/(math.pi/3)
 
     relaxed = (collision.guidance_grid() if hasattr(collision,'guidance_grid') else
                collision.optimistic_grid() if hasattr(collision,'optimistic_grid') else None)
