@@ -201,18 +201,29 @@ class CheckedPlacement:
                 'clearance_m': clearance})
         return candidates
 
-    def _next_to_check(self, held, target, support, payload=()):
+    def _next_to_check(self, held, target, support, payload=(), *, support_point=None):
         from omnigibson.object_states import NextTo, OnTop, Touching, VerticalAdjacency
         adjacency = held.states[VerticalAdjacency].get_value()
         contacts = self._placement_contacts(held, payload)
         speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
         angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
+        touching = bool(held.states[Touching].get_value(support))
+        official_on_top = OnTop in held.states and bool(held.states[OnTop].get_value(support))
+        # Whole-object OnTop rejects a lower shelf when the same furniture
+        # also has geometry above it. Check the candidate's actual support
+        # patch, just as selected-surface placement does, while retaining the
+        # official relation to the adjacent item.
+        supported, surface = (official_on_top, None)
+        if support_point is not None:
+            supported, surface = self._selected_surface_support(
+                held, support, support_point, touching, payload)
         checks = {'next_to': bool(held.states[NextTo].get_value(target)),
-                  'on_top': OnTop in held.states and bool(held.states[OnTop].get_value(support)),
+                  'supported': supported,
                   'released': self._get_held() is None,
                   'settled': speed <= .10 and angular_speed <= .5}
         return all(checks.values()), {'checks': checks,
-            'touching_support': bool(held.states[Touching].get_value(support)),
+            'touching_support': touching, 'official_on_top': official_on_top,
+            'selected_surface_support': surface,
             'support_below': support in adjacency.negative_neighbors,
             'support_above': support in adjacency.positive_neighbors,
             'contact_bodies': contacts, 'speed_m_s': speed, 'angular_speed_rad_s': angular_speed,
@@ -254,7 +265,10 @@ class CheckedPlacement:
                     # reset, velocity reset, or payload projection during settling.
                     for _ in range(settle_steps):
                         self._placement_physics_step()
-                    valid, details = self._next_to_check(held, target, candidate['support'], payload)
+                    support_point = self.torch.as_tensor(candidate['support_position'],
+                                                        dtype=point.dtype, device=point.device)
+                    valid, details = self._next_to_check(held, target, candidate['support'], payload,
+                                                         support_point=support_point)
                     if valid:
                         try:
                             self._verify_payload(dependencies)
@@ -266,7 +280,8 @@ class CheckedPlacement:
                         # Commit the physical result to the environment/replay,
                         # then verify again before leaving the candidate loop.
                         self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                        valid, details = self._next_to_check(held, target, candidate['support'], payload)
+                        valid, details = self._next_to_check(held, target, candidate['support'], payload,
+                                                             support_point=support_point)
                         if valid:
                             try:
                                 self._verify_payload(dependencies)
@@ -287,7 +302,7 @@ class CheckedPlacement:
             self.frames_revision = -1
         return {'primitive': 'place_next_to', 'implementation': 'generic_surface_search_and_free_settling',
                 'requested_yaw_degrees': yaw_degrees,
-                'postcondition': 'official_NextTo_and_OnTop_after_free_settling',
+                'postcondition': 'official_NextTo_and_selected_surface_support_after_free_settling',
                 'failure_policy': 'restore_pre_action_state'}
 
     def _collision_vertices(self, held):
