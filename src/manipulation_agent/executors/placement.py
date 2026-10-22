@@ -322,13 +322,9 @@ class CheckedPlacement:
 
     def _attached_placement_bodies(self, root):
         if not hasattr(root,'scene'):return [root]
-        from omnigibson.object_states import AttachedTo
-        from .carry import support_closure
-        candidates=[obj for obj in root.scene.objects if obj is not root and not getattr(obj,'fixed_base',True)]
-        def relation(child,parent):
-            state=child.states.get(AttachedTo)
-            return 'AttachedTo' if state is not None and state.get_value(parent) else None
-        return [root,*[child for child,_,_ in support_closure(root,candidates,relation)]]
+        from .carry import attachment_relation, support_closure
+        candidates=[obj for obj in root.scene.objects if obj is not root]
+        return [root,*[child for child,_,_ in support_closure(root,candidates,attachment_relation)]]
 
     def _collision_vertices(self, held):
         # Rigid attachments form one moving structure; a tabletop's lowest

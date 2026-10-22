@@ -1,4 +1,4 @@
-"""Attachment descendants must leave, travel and rest as one physical assembly."""
+"""An assembly must leave, travel and rest together whichever part is grasped."""
 import sys
 import types
 import unittest
@@ -46,5 +46,25 @@ class AttachedPayloadTests(unittest.TestCase):
   ControlledCarry._verify_payload(self.backend,edges)
   self.leg.states[Attached]=NS(get_value=lambda parent:False)
   with self.assertRaisesRegex(SkillError,'attachment'):ControlledCarry._verify_payload(self.backend,edges)
+
+ def test_grasping_a_leg_includes_ancestors_siblings_and_their_payload(self):
+  sibling=NS(name='sibling',fixed_base=False,states={Attached:NS(get_value=lambda p:p is self.bracket)},aabb=self.leg.aabb)
+  payload=NS(name='payload',fixed_base=False,states={OnTop:NS(get_value=lambda p:p is self.top),
+              Touching:NS(get_value=lambda p:p is self.top)},aabb=(torch.tensor([0.,0.,.76]),torch.tensor([.1,.1,.8])))
+  self.top.scene.objects.extend([sibling,payload])
+  edges=ControlledCarry._grasp_dependencies(self.backend,self.leg)
+  self.assertEqual([(a.name,b.name,k) for a,b,k in edges],
+                   [('bracket','leg','AttachedToParent'),('top','bracket','AttachedToParent'),('sibling','bracket','AttachedTo'),('payload','top','OnTop')])
+  ControlledCarry._verify_payload(self.backend,edges)
+  bodies=CheckedPlacement()._attached_placement_bodies(self.leg)
+  self.assertEqual({o.name for o in bodies},{'leg','bracket','top','sibling'})
+  self.leg.states[Attached]=NS(get_value=lambda p:False)
+  with self.assertRaisesRegex(SkillError,'attachment'):ControlledCarry._verify_payload(self.backend,edges)
+
+ def test_fixed_attachment_ancestor_rejects_grasp_and_placement_geometry(self):
+  self.top.fixed_base=True
+  with self.assertRaises(SkillError) as error:ControlledCarry._grasp_dependencies(self.backend,self.leg)
+  self.assertEqual(error.exception.code,'fixed_object')
+  with self.assertRaises(SkillError):CheckedPlacement()._attached_placement_bodies(self.leg)
 
 if __name__=='__main__':unittest.main()

@@ -1134,6 +1134,41 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
 
     @action_profile
     def execute_visual(self,primitive,target,max_steps,**kwargs):
+        complete=getattr(self,'_complete_pending_object_initialization',None)
+        try:
+            result=RGBBackend._execute_visual(self,primitive,target,max_steps,**kwargs)
+        except SkillError:
+            if complete is not None:complete()
+            raise
+        # Native transitions register replacement objects at the end of
+        # env.step; their states initialize on the next step. An aborted
+        # placement used to expose those objects to the next grasp. Finish
+        # the lifecycle after action contexts unwind, including tool errors.
+        # Do not attempt physics recovery after an unexpected native failure.
+        if complete is not None:complete()
+        return result
+
+    def _complete_pending_object_initialization(self):
+        sim=self.og.sim
+        for _ in range(8):
+            pending=tuple(getattr(sim,'_objects_to_initialize',()))
+            if not pending:return
+            before=self.steps
+            status='failed'
+            try:
+                # Use a real counted control step: no state flags are forged,
+                # no new objects are dropped, and callbacks run in native order.
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                status='passed'
+            finally:
+                with (self.output/'transition_initialization.jsonl').open('a') as stream:
+                    stream.write(json.dumps({'at':now(),'audience':'executor_private',
+                        'status':status,'start_step':before,'end_step':self.steps,
+                        'objects':[{'name':obj.name,'initialized':bool(obj.initialized)} for obj in pending]})+'\n')
+        if getattr(sim,'_objects_to_initialize',()):
+            raise RuntimeError('Native object initialization did not settle after eight control steps')
+
+    def _execute_visual(self,primitive,target,max_steps,**kwargs):
         if primitive in {'look','navigate_to','release','wait'} and getattr(self,'_demo_focus',None) is not None:
             self._demo_focus=None;self._spectator_anchor=None
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
