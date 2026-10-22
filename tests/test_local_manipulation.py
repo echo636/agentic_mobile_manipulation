@@ -106,6 +106,18 @@ class CoordinationTests(unittest.TestCase):
         b=Motor();b._local_reposition=lambda *args:None
         with self.assertRaises(SkillError) as cm:b.run()
         self.assertEqual(cm.exception.code,'local_adjustment_blocked');self.assertEqual(b.executions,[])
+    def test_checked_carry_adaptation_is_progress_without_base_motion(self):
+        b=Motor();b.point=(1.,0.,.7)
+        b._local_ready=lambda primitive,obj,point,op:getattr(op,'carry_posture_revision',0)>0
+        def adapt(primitive,obj,point,op):
+            op.carry_posture_revision=getattr(op,'carry_posture_revision',0)+1
+            b.steps+=6
+        b._local_reposition=adapt
+        result=b.run()['local_manipulation']
+        self.assertEqual(b.pose,(0.,0.,0.))
+        self.assertEqual(len(b.executions),1)
+        self.assertEqual(result['env_steps'],7)
+        self.assertEqual(result['path_m'],0.)
     def test_loaded_departure_search_timeout_returns_bounded_failure(self):
         from manipulation_agent.executors.gt_navigation import GridMap, SearchBudgetExhausted
         from manipulation_agent.executors.local_rgb import LocalRGBManipulation

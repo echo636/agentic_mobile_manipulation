@@ -647,6 +647,16 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             standoff=max(1.25,suggested)
         grid,map_details=build_navigation_grid(self,floor)
         self._navigation_layer_yaw=travel_yaw
+        carry_posture=None
+        if not grid.navigable(grid.cell(position[:2].cpu().tolist())):
+            carry_posture=self._adapt_carry_for_navigation(floor,grid,map_details,max_steps)
+            if carry_posture is not None:
+                max_steps-=carry_posture['steps']
+                grid,map_details=build_navigation_grid(self,floor)
+                position,orientation=self.robot.get_position_orientation()
+                rotation=T.quat2mat(orientation)
+                travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+                self._navigation_layer_yaw=travel_yaw
         recovery_results=[];recovery_states=set()
         while not grid.navigable(grid.cell(position[:2].cpu().tolist())):
             from .gt_navigation import plan_start_clearance_exit
@@ -703,10 +713,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                               refreshed_map_sha256=hashlib.sha256(grid.free).hexdigest())
             except NavigationError as exc:
                 record.update(status='failed',error_code=exc.code,error=str(exc))
-                raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
+                raise SkillError(exc.code,str(exc),changed=bool(recovery_results) or carry_posture is not None) from exc
             except SkillError as exc:
                 record.update(status='failed',error_code=exc.code,error=str(exc))
-                raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results)) from exc
+                raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results) or carry_posture is not None) from exc
             finally:
                 with (self.output/'navigation_recovery.jsonl').open('a') as stream:
                     stream.write(json.dumps(record)+'\n')
@@ -919,7 +929,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             if hasattr(exc, 'route_attempts'):
                 details['forward_candidate_selection']={'attempts':exc.route_attempts,'status':'failed'}
             if hasattr(exc,'attempts'):details['forward_candidate_attempts']=exc.attempts
-            raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
+            raise SkillError(exc.code,str(exc),changed=bool(recovery_results) or carry_posture is not None) from exc
         finally:
             with (self.output/'navigation_plans.jsonl').open('a') as stream:
                 stream.write(json.dumps(details)+'\n')
@@ -930,10 +940,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             # move the world before discovering that the actual route is blocked.
             result=self._execute_gt_plan(grid,plan,max_steps,prepared_route=prepared_route)
         except SkillError as exc:
-            raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results)) from exc
+            raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results) or carry_posture is not None) from exc
         self.navigation_distance+=result['actual_path_distance_m']
         for key in ('steps','motion_steps','actual_path_distance_m'):
             result[key]+=sum(phase.get(key,0) for phase in recovery_results)
+        if carry_posture is not None:result['steps']+=carry_posture['steps']
         actual,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
         actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))

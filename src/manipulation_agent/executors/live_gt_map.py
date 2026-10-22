@@ -97,7 +97,8 @@ def floor_support_window(raw, original_resolution, resolution, window):
     return support, origin
 
 
-def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=False, occupancy_overrides=None):
+def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=False, occupancy_overrides=None,
+                          sampling=None):
     import cv2
     import numpy as np
     import omnigibson.lazy as lazy
@@ -107,7 +108,8 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     original_resolution=float(trav.map_resolution)
     # One local action owns its refinement. Grasp departure and articulation
     # previews must use the same resolution as stance and route certification.
-    sampling=getattr(getattr(backend,'_local_operation',None),'navigation_sampling',{})
+    if sampling is None:
+        sampling=getattr(getattr(backend,'_local_operation',None),'navigation_sampling',{})
     resolution=float(sampling.get('resolution',original_resolution))
     window=sampling.get('window')
     floor_z=float(trav.floor_heights[floor]);base=backend.robot.get_position_orientation()[0].cpu().numpy()
