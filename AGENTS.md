@@ -19,3 +19,5 @@ For new atomic-action model experiments, reviews, and result publication, follow
 Keep operational steps, faults and fixes in journals and structured records; do not create an HTML report for every operation. The existing retest32_v7 replay URL shows only the historical 32 tasks; use a separate summary page for current comparisons. Preserve bookmarked replay links, distinguish cohorts, and publish compact display data rather than full evaluator payloads.
 
 Do not log credentials. Do not modify upstream source snapshots or unrelated environments. Use bounded actions, structured errors, serialized simulator access and immutable episode records. Preserve failure evidence.
+
+- 2026-10-22 用户明确成功口径：只要独立官方任务评估器判定成功就计任务成功；finish、客户端退出、录像和证据完整性单独记录，不能据此否定任务成功。用户授权 241（本机双4090）、134、112、115、118 全部机器的可用计算资源纳入后续调度，不局限于原先几台。
