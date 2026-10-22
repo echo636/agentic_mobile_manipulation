@@ -25,7 +25,12 @@ and current evidence are described in [atomic_actions.md](atomic_actions.md).
 
 ## Acceptance and review
 
-An individual run passes only when all of these are recorded and true:
+2026-10-22 user update: independent official evaluator success counts as task
+success. Controller finish/exit, call alignment and video/review quality are
+separate evidence checks; their failure must not invalidate an achieved task.
+Preserve each check and the raw exit code, including forced cleanup after finish.
+
+The complete evidence review records the following checks:
 
 1. The actual model controller terminates with a formal `finish`.
 2. Its ordered MCP calls match the simulator's recorded calls and arguments.

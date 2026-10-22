@@ -37,6 +37,8 @@ def main():
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
     p.add_argument('--max-agent-steps',type=int,default=None,
                    help='Count act/look attempts; disables episode wall-time and legacy physics/call limits')
+    p.add_argument('--unbounded-episode',action='store_true',
+                   help='Record action counts without an episode action, physics-step or wall-time cutoff')
     p.add_argument('--wall-seconds',type=float,default=1800,
                    help='Policy execution budget after bridge readiness (default: 1800 seconds)')
     p.add_argument('--model-max-turns', type=int, default=100, help='Native Responses loop only')
@@ -46,6 +48,9 @@ def main():
     a=p.parse_args()
     if a.max_agent_steps is not None:
         if a.max_agent_steps<=0:p.error('--max-agent-steps must be positive')
+        a.wall_seconds=None
+    if a.unbounded_episode:
+        if a.max_agent_steps is not None:p.error('--unbounded-episode conflicts with --max-agent-steps')
         a.wall_seconds=None
     if a.record_video is None: a.record_video = a.backend == 'omnigibson'
     if a.custom_task is not None:
@@ -84,7 +89,7 @@ def main():
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
                                                           wall_seconds=a.wall_seconds),profile=a.agent_profile,
                                   agent_step_limit=a.max_agent_steps,goal_skill=a.goal_skill,
-                                  require_task_notes=a.require_task_notes)
+                                  require_task_notes=a.require_task_notes,unbounded_episode=a.unbounded_episode)
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)

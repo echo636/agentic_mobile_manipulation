@@ -1,6 +1,7 @@
 """Finite startup milestones; elapsed heartbeats never renew the watchdog."""
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from functools import wraps
 import json
 import math
 from pathlib import Path
@@ -32,6 +33,38 @@ def startup_stage(output, name):
         raise
     else:
         startup_event(output, name, 'passed', elapsed_seconds=time.monotonic()-started)
+
+
+@contextmanager
+def instrument_startup_calls(output, calls):
+    """Temporarily report real constructor work without changing its outcome.
+
+    Each key identifies a finite scene/object operation. Repeated calls use the
+    same key, so they cannot renew the watchdog indefinitely. No timer heartbeat
+    or simulator state mutation is introduced. Only use during single-threaded
+    environment construction; restore all methods even if construction fails.
+    """
+    originals = []
+    try:
+        for owner, name, key in calls:
+            original = getattr(owner, name)
+
+            def instrument(original, key):
+                @wraps(original)
+                def wrapped(*args, **kwargs):
+                    stage = key(*args, **kwargs)
+                    if stage is None:
+                        return original(*args, **kwargs)
+                    with startup_stage(output, stage):
+                        return original(*args, **kwargs)
+                return wrapped
+
+            setattr(owner, name, instrument(original, key))
+            originals.append((owner, name, original))
+        yield
+    finally:
+        for owner, name, original in reversed(originals):
+            setattr(owner, name, original)
 
 
 def startup_progress_update(row, events, observed_at):

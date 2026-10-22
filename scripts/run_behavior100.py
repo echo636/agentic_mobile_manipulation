@@ -240,6 +240,9 @@ def render_dashboard(progress):
         page=page.replace('模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。',
             '模型通过 MCP 工具和任务分解 skill 操作当前理想执行器。每项上限 '+str(protocol['max_agent_steps'])+' 个 agent step（act/look 请求，失败计步，重复传输不计）；无任务执行时间上限。初始化与结束归档单独监控。')
         page=page.replace('动作数</th>','agent step / 执行动作</th>')
+    elif protocol.get('episode_budget_policy')=='unbounded':
+        page=page.replace('模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。',
+            '后续新启动任务不设动作数、回合控制步或执行时间上限；继续记录每次act/look。此前已启动任务保留原配置，逐项记录。初始化与结束归档单独监控。')
     total = s['total']
     official=sum(r['instruction_source']=='official_gallery' for r in progress['tasks'])
     page=page.replace('50 项使用官方原文，50 项按静态 BDDL 目标补写',f'{official} 项使用官方原文，{total-official} 项按静态 BDDL 目标补写')
@@ -669,12 +672,13 @@ class Batch:
                     termination_reason=reason,stage='complete',finished_at=now())
         self.journal(f"END {row['run_id']}: outcome={outcome}; reason={reason}; task_success={row.get('task_success')}; Q={row.get('q_score')}.")
 
-    def execution_clock_command(self, path, seconds, runtime=None):
+    def execution_clock_command(self, path, seconds, runtime=None, row=None):
         runtime=Path(runtime or self.source)
         manifest=getattr(self,'manifest',{})
-        if manifest.get('episode_budget_policy')=='agent_steps':seconds=None
-        options=(',max_agent_steps='+repr(manifest['max_agent_steps'])
-                 if manifest.get('episode_budget_policy')=='agent_steps' else '')
+        policy=(row or {}).get('episode_budget_policy',manifest.get('episode_budget_policy'))
+        if policy in {'agent_steps','unbounded'}:seconds=None
+        options=(',max_agent_steps='+repr((row or {}).get('max_agent_steps',manifest.get('max_agent_steps')))
+                 if policy=='agent_steps' else ',unbounded=True' if policy=='unbounded' else '')
         code=('import json; from manipulation_agent.deadline import write_execution_clock; '
               'print(json.dumps(write_execution_clock('+repr(str(path))+','+repr(seconds)+options+')))')
         remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-c',code])
@@ -686,13 +690,14 @@ class Batch:
         except (FileNotFoundError,json.JSONDecodeError):return {}
         deadline=metadata.get('episode_deadline_unix')
         started=metadata.get('execution_started_at_unix')
-        step_only=(metadata.get('execution_clock') or {}).get('budget_policy')=='agent_steps'
-        if isinstance(started,(int,float)) and (isinstance(deadline,(int,float)) or step_only):
+        policy=(metadata.get('execution_clock') or {}).get('budget_policy')
+        no_wall=policy in {'agent_steps','unbounded'}
+        if isinstance(started,(int,float)) and (isinstance(deadline,(int,float)) or no_wall):
             if row.get('execution_started_at_unix')!=started or row.get('episode_deadline_unix')!=deadline:
                 self.update(row,execution_started_at_unix=started,episode_deadline_unix=deadline,
                             execution_budget_seconds=metadata.get('execution_budget_seconds',row.get('episode_timeout_seconds')),
                             deadline_origin='model_start_after_mcp_handshake',
-                            budget_basis='agent_steps' if step_only else 'model_execution_excludes_initialization',stage='policy_running')
+                            budget_basis=policy if no_wall else 'model_execution_excludes_initialization',stage='policy_running')
                 self.worker_state('running',run_id=row['run_id'],deadline_unix=deadline)
         return metadata
 
@@ -813,6 +818,21 @@ class Batch:
             return  # Unreadable progress cannot extend the watchdog.
         if updates:self.update(row,**updates)
 
+    def wait_simulator_ready(self, row, unit, port):
+        """Check live readiness before deciding that the startup idle clock expired."""
+        while True:
+            self.refresh_startup_progress(row)
+            self.initializing_unit_state(unit)
+            health = self.health(port)
+            if health and health.get('ready') and not health.get('closed'):
+                if {t['name'] for t in health['tools']} != {t['name'] for t in tool_specs(self.manifest['agent_profile'])}:
+                    raise RuntimeError('Bridge tool profile mismatch')
+                return health
+            if time.time() >= row['startup_deadline_unix']:
+                self.update(row, startup_timed_out=True, termination_reason='startup_timeout')
+                raise TimeoutError('Simulator initialization made no milestone progress before watchdog expiry')
+            time.sleep(min(2, max(0, row['startup_deadline_unix'] - time.time())))
+
     def run_one(self, row, gpu):
         runid=row['run_id'];port=self.c['base_port']+gpu
         unit=f"mas-b100-{row['index']:03d}-r{row.get('attempt',1)}-{self.c['batch_tag']}.service"
@@ -849,7 +869,7 @@ class Batch:
                 raise RuntimeError('Output exists; immutable attempt cannot be overwritten')
             # Initialization has its own watchdog; the execution clock is
             # armed after MCP handshake, with no duration in step-only mode.
-            seconds=(None if self.manifest.get('episode_budget_policy')=='agent_steps' else
+            seconds=(None if self.manifest.get('episode_budget_policy') in {'agent_steps','unbounded'} else
                      self._config.get('episode_timeout_seconds',self.manifest.get('model_timeout_seconds',1800)))
             startup_seconds=self._config.get('startup_timeout_seconds',1800)
             started=time.time();startup_deadline=started+startup_seconds
@@ -894,7 +914,9 @@ class Batch:
                         startup_deadline_unix=startup_deadline,startup_timeout_seconds=startup_seconds,
                         startup_watchdog_policy=STARTUP_POLICY,
                         execution_clock_path=str(clock_path),deadline_origin='model_start_after_mcp_handshake',
-                        budget_basis='agent_steps' if self.manifest.get('episode_budget_policy')=='agent_steps' else 'model_execution_excludes_initialization',
+                        budget_basis=self.manifest.get('episode_budget_policy') if self.manifest.get('episode_budget_policy') in {'agent_steps','unbounded'} else 'model_execution_excludes_initialization',
+                        episode_budget_policy=self.manifest.get('episode_budget_policy'),
+                        max_agent_steps=self.manifest.get('max_agent_steps'),
                         episode_timeout_seconds=seconds,
                         cleanup_grace_seconds=grace,port=port,simulator_interpreter=self.c['sim_python'],
                         source=getattr(self,'source_info',None) or source_version())
@@ -915,19 +937,8 @@ class Batch:
                 port=port,simulator_started_at_unix=started,startup_deadline_unix=startup_deadline,
                 episode_timeout_seconds=seconds,cleanup_grace_seconds=grace)
             self.worker_state('starting',run_id=runid,startup_deadline_unix=startup_deadline)
-            while True:
-                self.refresh_startup_progress(row)
-                if time.time()>=row['startup_deadline_unix']:
-                    self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
-                    raise TimeoutError('Simulator initialization made no milestone progress before watchdog expiry')
-                state=self.initializing_unit_state(unit)
-                health=self.health(port)
-                if health and health.get('ready') and not health.get('closed'):
-                    if {t['name'] for t in health['tools']}!={t['name'] for t in tool_specs(self.manifest['agent_profile'])}:
-                        raise RuntimeError('Bridge tool profile mismatch')
-                    write_json(self.root/'logs'/f'{runid}_health.json',health)
-                    break
-                time.sleep(min(2,max(0,row['startup_deadline_unix']-time.time())))
+            health = self.wait_simulator_ready(row, unit, port)
+            write_json(self.root/'logs'/f'{runid}_health.json', health)
             self.update(row,stage='controller_starting',bridge_ready_at=now())
             if lease:lease.record(runtime_stage='ready')
             self.release_startup_gate()
@@ -938,7 +949,7 @@ class Batch:
                  '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
                  '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
                  '--timeout',str(seconds if seconds is not None else 0),'--execution-clock-command-json',
-                 json.dumps(self.execution_clock_command(clock_path,seconds)),
+                 json.dumps(self.execution_clock_command(clock_path,seconds,row=row)),
                  '--agent-profile',self.manifest['agent_profile'],'--goal-skill',self.manifest.get('goal_skill','hierarchical')]
             if self.manifest.get('model_reasoning_effort'):
                 cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
@@ -1119,7 +1130,7 @@ class Batch:
         try:
             path=controller/'controller.json'
             if path.exists():metadata=self.controller_metadata(row,controller)
-            if not row.get('episode_deadline_unix') and not row.get('execution_clock_path') and self.manifest.get('episode_budget_policy')!='agent_steps':
+            if not row.get('episode_deadline_unix') and not row.get('execution_clock_path') and self.manifest.get('episode_budget_policy') not in {'agent_steps','unbounded'}:
                 started=datetime.fromisoformat(metadata.get('started_at') or row['started_at']).timestamp()
                 row['episode_deadline_unix']=started+self.manifest['model_timeout_seconds']
             row.setdefault('cleanup_grace_seconds',self._config.get('cleanup_grace_seconds',120))
@@ -1205,7 +1216,7 @@ class Batch:
             cmd += ['--model-provider-profile',self.c['model_provider_profile']]
         if row.get('execution_clock_path'):
             cmd+=['--execution-clock-command-json',json.dumps(self.execution_clock_command(
-                row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime))]
+                row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime,row=row))]
         elif row.get('episode_deadline_unix'):cmd+=['--deadline-unix',str(row['episode_deadline_unix'])]
         with (self.root/'logs'/f"{row['run_id']}_controller.log").open('x') as log:
             process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,

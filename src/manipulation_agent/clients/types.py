@@ -91,6 +91,8 @@ class ClientRunResult:
     policy_finished_at_unix: float
     duration_seconds: float
     pid: int
+    finish_received: bool = False
+    cleanup_reason: str | None = None
 
 
 @dataclass

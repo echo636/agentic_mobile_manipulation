@@ -176,7 +176,7 @@ def main(argv=None, *, allow_client=False):
     for attempt in range(1,args.rate_limit_resumes+1):
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
-        if (process.returncode == 0 or process.timed_out or not thread_id or
+        if (process.returncode == 0 or process.finish_received or process.timed_out or not thread_id or
                 not rate_limit_error(segment_events) or
                 (remaining is not None and remaining <= args.resume_backoff_seconds+30)):
             break
@@ -204,6 +204,8 @@ def main(argv=None, *, allow_client=False):
         process.returncode=resumed.returncode
         process.timed_out=process.timed_out or resumed.timed_out
         process.policy_finished_at_unix=resumed.policy_finished_at_unix
+        process.finish_received=resumed.finish_received
+        process.cleanup_reason=resumed.cleanup_reason
         process.duration_seconds=time.monotonic()-policy_started_monotonic
     if continuations:
         metadata['rate_limit_continuations']=continuations
@@ -224,7 +226,10 @@ def main(argv=None, *, allow_client=False):
         'replay': 'model_events.jsonl' if client == 'codex' else 'model_events.compat.jsonl'}
     if deadline.unix is not None and policy_finished_at>=deadline.unix:
         metadata.update(timeout=True,termination_reason='episode_deadline_exceeded')
-    metadata.update(status="passed" if process.returncode == 0 and closed and not metadata.get('timeout') else "failed", exit_code=process.returncode,
+    logical_complete = closed and not metadata.get('timeout') and (process.returncode == 0 or process.finish_received)
+    metadata.update(status="passed" if logical_complete else "failed", exit_code=process.returncode,
+                    client_cleanup_reason=process.cleanup_reason,
+                    client_cleanup_status='forced_after_finish' if process.cleanup_reason else 'normal_exit',
                     duration_seconds=process.duration_seconds, finished_at=now(),
                     task_success=None, formal_finish_observed=closed, tools_called=calls,
                     validation_note="Client exit alone does not prove task success; join with simulator run.json")
@@ -235,7 +240,7 @@ def main(argv=None, *, allow_client=False):
                                      'reason':'Run-local summary export failed; raw controller events preserved'}
     write_json(args.output / "controller.json", metadata)
     print(json.dumps({k: metadata[k] for k in ("status", "exit_code", "model", "duration_seconds")}))
-    return process.returncode or (124 if metadata.get('timeout') else 0 if closed else 2)
+    return 0 if logical_complete else process.returncode or (124 if metadata.get('timeout') else 2)
 
 
 if __name__ == "__main__":

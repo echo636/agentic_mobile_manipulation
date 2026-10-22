@@ -18,7 +18,7 @@ from .task_notes import TaskNotes
 
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
-                 goal_skill='hierarchical', require_task_notes=False):
+                 goal_skill='hierarchical', require_task_notes=False, unbounded_episode=False):
         if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
         if require_task_notes and profile not in {'skills','workflow'}:
             raise ValueError('Task notes require skills or workflow profile')
@@ -28,6 +28,9 @@ class VisionHarness:
             raise ValueError('agent_step_limit must be a positive integer')
         if agent_step_limit is not None and budget.wall_seconds is not None:
             raise ValueError('Step-only episodes require wall_seconds=None')
+        if unbounded_episode and (agent_step_limit is not None or budget.wall_seconds is not None):
+            raise ValueError('Unbounded episodes require no action or wall-time limit')
+        self.unbounded_episode=unbounded_episode
         self.agent_step_limit=agent_step_limit;self.agent_steps=0
         self.agent_steps_exhausted_at=None
         self.backend,self.recorder,self.budget=backend,recorder,budget
@@ -38,7 +41,7 @@ class VisionHarness:
         # Only a clock supplied by the external episode supervisor replaces the
         # legacy counters; standalone / CPU callers retain their stated budgets.
         self.execution_deadline_only=self.deadline.managed
-        self.unrestricted_physics=self.execution_deadline_only or agent_step_limit is not None
+        self.unrestricted_physics=self.execution_deadline_only or agent_step_limit is not None or unbounded_episode
         self.legacy_limits_active=not self.unrestricted_physics
         self._video_finalized=False
         self.revision=self.actions=self.calls=0; self.closed=False
@@ -77,6 +80,14 @@ class VisionHarness:
                 'episode_wall_seconds':None,'legacy_limits_active':False,
                 'managed_action_step_limit':'no_physics_step_cutoff',
                 'finish_grace_seconds':FINISH_GRACE_SECONDS}
+        if unbounded_episode:
+            recorder.run.update(agent_steps=0,max_agent_steps=None)
+            recorder.run['execution_limit_policy']={
+                'clock':'execution_start_only_no_wall_deadline','episode_budget_policy':'unbounded',
+                'max_agent_steps':None,'counted_tools':['act','look'],
+                'failed_attempts_count':True,'cached_replays_count':False,
+                'episode_wall_seconds':None,'legacy_limits_active':False,
+                'managed_action_step_limit':'no_physics_step_cutoff'}
         write_json(recorder.output/'run.json',recorder.run)
         recorder.event('episode_started',{'observation':self.snapshot})
 
@@ -142,8 +153,8 @@ class VisionHarness:
         try:
             if self.closed: raise SkillError('episode_closed','The episode is closed')
             if name not in self.catalog: raise SkillError('unknown_tool','Tool is not enabled in this agent profile')
-            if self.agent_step_limit is not None and name in {'act','look'}:
-                if self.agent_steps>=self.agent_step_limit:
+            if (self.agent_step_limit is not None or self.unbounded_episode) and name in {'act','look'}:
+                if self.agent_step_limit is not None and self.agent_steps>=self.agent_step_limit:
                     raise SkillError('agent_step_budget_exhausted','No action steps remain. Review the latest RGB and call finish.')
                 # Charge each new agent action request, even if validation or
                 # execution fails. Cached transport retries returned above.
@@ -182,6 +193,10 @@ class VisionHarness:
                 # its fresh RGB have returned; never interrupt that action.
                 if self.agent_steps_exhausted_at is None:self.agent_steps_exhausted_at=time.monotonic()
                 result['execution_budget']['message']='No action steps remain. Review this observation and call finish.'
+        elif self.unbounded_episode and not self.closed:
+            result['execution_budget']={'scope':'unbounded','steps_used':self.agent_steps,
+                'steps_remaining':None,'max_steps':None,'counted_tools':['act','look'],
+                'wall_time_limit_seconds':None}
         elif remaining is not None and not self.closed:
             result['execution_budget'] = {
                 'remaining_seconds': round(remaining, 1),

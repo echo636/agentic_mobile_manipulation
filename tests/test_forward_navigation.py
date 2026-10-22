@@ -569,6 +569,23 @@ class HeadingCollisionTests(unittest.TestCase):
                 self.assertLess(abs(angle(math.atan2(direction*dy,direction*dx)-a[2])),1e-6)
         self.assertTrue(all(np.array_equal(before,after) for before,(after,_) in zip(raw_before,collision.layers)))
 
+    def test_coarse_guidance_preserves_fine_collision_and_seed_minimum(self):
+        import numpy as np
+        raw=np.ones((43,37),dtype='uint8')
+        raw[:,21]=0
+        checker=self.checker(raw,[[-.03,-.03],[.03,-.03],[.03,.03],[-.03,.03]])
+        # A thin wall can disappear in pooled guidance. It must remain a wall
+        # in the independent full-resolution motion check.
+        checker._guidance=GridMap(37,43,.05,(-1.,-1.),raw.tobytes())
+        a=(-.3,0.,0.);b=(.5,0.,0.)
+        self.assertFalse(checker.motion_free(a,b))
+        field=checker.guidance_distances({(4,4):9.,(5,5):2.,(42,36):.8})
+        self.assertEqual(field.shape,raw.shape)
+        self.assertAlmostEqual(field[4,4],2.)
+        self.assertAlmostEqual(field[42,36],.8)
+        self.assertTrue(np.isfinite(field[20,30]))
+        self.assertFalse(checker.motion_free(a,b))
+
     def test_floor_projection_cannot_choose_closer_pose_across_wall(self):
         import numpy as np
         from dataclasses import replace

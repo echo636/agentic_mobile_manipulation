@@ -1276,7 +1276,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         elif primitive=='place_under':
             result=self._checked_place_under(obj,max_steps)
         elif primitive=='place_next_to':
-            result=self._checked_place_next_to(obj,max_steps,point)
+            result=self._checked_place_next_to(obj,max_steps,point,kwargs.get('placement_yaw_degrees'))
         elif primitive=='place_inside' and self.inside_placement=='official_volume':
             result=self._checked_place_inside(obj,max_steps,point=point)
         else:
@@ -1364,7 +1364,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'erosion':{'implementation':'height-matched robot collision footprint',
                 'map_resolution_m':0.05},
             'segment_validation':'exact_grid_supercover_for_planner_and_follower',
-            'approach_visibility':'four-camera frusta and scene rays for all elevated goals, rechecked on arrival',
+            'approach_visibility':'RGB-bound target; tracked local targets may leave frustum but retain checked scene/self occlusion',
             'goal_selection':'jinkai candidate geometry with path-length-aware approach ranking',
             'pixel_grounding':'pixel-center backprojection; no neighboring-pixel substitution',
             'model_visible_gt':False}

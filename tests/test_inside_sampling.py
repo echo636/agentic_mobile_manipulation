@@ -228,6 +228,7 @@ class AssemblySamplingTests(unittest.TestCase):
              patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',return_value=None), \
              patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',return_value={'clear':True}):
             self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+        self.assertTrue(b.torch.allclose(contents[0][0].position,held.position+held.offset))
 
     def test_moving_drawer_volume_or_closing_container_is_rejected(self):
         for moving_drawer in (True,False):

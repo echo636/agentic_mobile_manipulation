@@ -146,14 +146,19 @@ class CheckedPlacement:
         return {'primitive': 'place_under', 'implementation': method,
                 'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
 
-    def _next_to_candidates(self, held, target, point, payload=()):
+    def _next_to_candidates(self, held, target, point, payload=(), yaw_degrees=None):
         """Find upward physical surfaces near the reference, without class filters."""
         import math
-        from .surface_geometry import bottom_anchor
+        from .surface_geometry import bottom_anchor, rotated_surface_geometry
+        from omnigibson.utils import transform_utils as T
         from omnigibson.utils.sampling_utils import raytest
         pose = held.get_position_orientation()
-        anchor = bottom_anchor(self._collision_vertices(held)) - pose[0].cpu().numpy()
+        _,anchor = rotated_surface_geometry(self._collision_vertices(held),pose[0].cpu().numpy(),yaw_degrees)
         anchor = self.torch.as_tensor(anchor, dtype=point.dtype, device=point.device)
+        orientation=pose[1].clone()
+        if yaw_degrees is not None:
+            rotation=T.euler2quat(self.torch.tensor([0.,0.,math.radians(yaw_degrees)],device=orientation.device))
+            orientation=T.quat_multiply(rotation,orientation)
         moving = (held, self.robot, *payload)
         ignored = [link.prim_path for obj in (*moving, target) for link in obj.links.values()]
         by_link = {link.prim_path: obj for obj in self.env.scene.objects
@@ -191,29 +196,40 @@ class CheckedPlacement:
                 continue
             root = self.torch.as_tensor(hit['position'], dtype=point.dtype, device=point.device) - anchor
             root[2] += clearance
-            candidates.append({'index': index, 'pose': (root, pose[1].clone()), 'support': support,
+            candidates.append({'index': index, 'pose': (root, orientation.clone()), 'support': support,
                 'support_position': hit['position'], 'radius_m': radius, 'angle_deg': angle,
                 'clearance_m': clearance})
         return candidates
 
-    def _next_to_check(self, held, target, support, payload=()):
+    def _next_to_check(self, held, target, support, payload=(), *, support_point=None):
         from omnigibson.object_states import NextTo, OnTop, Touching, VerticalAdjacency
         adjacency = held.states[VerticalAdjacency].get_value()
         contacts = self._placement_contacts(held, payload)
         speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
         angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
+        touching = bool(held.states[Touching].get_value(support))
+        official_on_top = OnTop in held.states and bool(held.states[OnTop].get_value(support))
+        # Whole-object OnTop rejects a lower shelf when the same furniture
+        # also has geometry above it. Check the candidate's actual support
+        # patch, just as selected-surface placement does, while retaining the
+        # official relation to the adjacent item.
+        supported, surface = (official_on_top, None)
+        if support_point is not None:
+            supported, surface = self._selected_surface_support(
+                held, support, support_point, touching, payload)
         checks = {'next_to': bool(held.states[NextTo].get_value(target)),
-                  'on_top': OnTop in held.states and bool(held.states[OnTop].get_value(support)),
+                  'supported': supported,
                   'released': self._get_held() is None,
                   'settled': speed <= .10 and angular_speed <= .5}
         return all(checks.values()), {'checks': checks,
-            'touching_support': bool(held.states[Touching].get_value(support)),
+            'touching_support': touching, 'official_on_top': official_on_top,
+            'selected_surface_support': surface,
             'support_below': support in adjacency.negative_neighbors,
             'support_above': support in adjacency.positive_neighbors,
             'contact_bodies': contacts, 'speed_m_s': speed, 'angular_speed_rad_s': angular_speed,
             'position': held.get_position_orientation()[0].tolist()}
 
-    def _checked_place_next_to(self, target, max_steps, point):
+    def _checked_place_next_to(self, target, max_steps, point, yaw_degrees=None):
         """Try complete release/settle/verify cycles; preserve preceding placements."""
         from omnigibson.object_states import NextTo
         held = self._get_held()
@@ -226,7 +242,7 @@ class CheckedPlacement:
                 contents = list(self._carry_contents) if self.ideal_carry else []
                 payload = [obj for obj, _ in contents]
                 dependencies = list(getattr(self, '_carry_dependencies', []))
-                candidates = self._next_to_candidates(held, target, point, payload)
+                candidates = self._next_to_candidates(held, target, point, payload, yaw_degrees)
                 self._carry_detach()
                 trial_state = self.og.sim.dump_state(serialized=False)
                 accepted = None
@@ -249,7 +265,10 @@ class CheckedPlacement:
                     # reset, velocity reset, or payload projection during settling.
                     for _ in range(settle_steps):
                         self._placement_physics_step()
-                    valid, details = self._next_to_check(held, target, candidate['support'], payload)
+                    support_point = self.torch.as_tensor(candidate['support_position'],
+                                                        dtype=point.dtype, device=point.device)
+                    valid, details = self._next_to_check(held, target, candidate['support'], payload,
+                                                         support_point=support_point)
                     if valid:
                         try:
                             self._verify_payload(dependencies)
@@ -261,7 +280,8 @@ class CheckedPlacement:
                         # Commit the physical result to the environment/replay,
                         # then verify again before leaving the candidate loop.
                         self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                        valid, details = self._next_to_check(held, target, candidate['support'], payload)
+                        valid, details = self._next_to_check(held, target, candidate['support'], payload,
+                                                             support_point=support_point)
                         if valid:
                             try:
                                 self._verify_payload(dependencies)
@@ -281,7 +301,8 @@ class CheckedPlacement:
         finally:
             self.frames_revision = -1
         return {'primitive': 'place_next_to', 'implementation': 'generic_surface_search_and_free_settling',
-                'postcondition': 'official_NextTo_and_OnTop_after_free_settling',
+                'requested_yaw_degrees': yaw_degrees,
+                'postcondition': 'official_NextTo_and_selected_surface_support_after_free_settling',
                 'failure_policy': 'restore_pre_action_state'}
 
     def _attached_placement_bodies(self, root):
@@ -543,38 +564,44 @@ class CheckedPlacement:
         No whole-box footprint, goal predicate mutation, or held-pose projection
         is used. The root/box center may lie outside a supported pan body.
         """
-        from .surface_geometry import bottom_anchor
+        from .surface_geometry import bottom_support_points
         from omnigibson.utils.sampling_utils import raytest
         if point is None:
             return False, {'available': False, 'reason': 'No selected surface point'}
-        anchor = self.torch.as_tensor(bottom_anchor(self._collision_vertices(held)),
+        probes = self.torch.as_tensor(bottom_support_points(self._collision_vertices(held)),
                                      dtype=point.dtype, device=point.device)
-        start = anchor + self.torch.tensor([0., 0., .03], device=point.device)
-        end = anchor - self.torch.tensor([0., 0., .04], device=point.device)
+        anchor = probes[0]
         ignored = [link.prim_path for obj in (held, self.robot, *payload) for link in obj.links.values()]
-        hit = raytest(start, end, ignore_bodies=ignored)
         target_paths = {link.prim_path for link in target.links.values()}
+        support_probes = []
+        for probe in probes:
+            start = probe + self.torch.tensor([0., 0., .03], device=point.device)
+            end = probe - self.torch.tensor([0., 0., .04], device=point.device)
+            hit = raytest(start, end, ignore_bodies=ignored)
+            gap = float(probe[2] - hit['position'][2]) if hit['hit'] else None
+            normal_z = float(hit['normal'][2]) if hit['hit'] else None
+            height_error = abs(float(hit['position'][2] - point[2])) if hit['hit'] else None
+            support_checks = {
+                'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
+                'upward_support': normal_z is not None and normal_z >= .9,
+                'bottom_near_support': gap is not None and -.01 <= gap <= .015,
+                'selected_shelf_height': height_error is not None and height_error <= .05}
+            support_probes.append({'position': probe.tolist(), 'checks': support_checks,
+                                   'support_hit_body': hit.get('rigidBody')})
+            # Every geometric condition must hold at the SAME lower patch.
+            # Stability, selected neighborhood and robot clearance remain
+            # independent requirements below; a rim hit alone is insufficient.
+            if all(support_checks.values()):
+                break
         contacts = self._placement_contacts(held, payload)
         selected_contact = bool(target_paths.intersection(contacts))
         robot_paths = {link.prim_path for link in self.robot.links.values()}
         speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
         angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
-        gap = float(anchor[2] - hit['position'][2]) if hit['hit'] else None
-        normal_z = float(hit['normal'][2]) if hit['hit'] else None
-        height_error = abs(float(hit['position'][2] - point[2])) if hit['hit'] else None
         selected_xy_distance = float(self.torch.linalg.norm(anchor[:2] - point[:2]))
         checks = {'released': self._get_held() is None,
-                  'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
-                  # Overlapping surfaces can return the requested object in a
-                  # ray while another counter carries the actual load. During
-                  # candidate sampling sleeping bodies may omit contacts, but
-                  # known foreign-only contacts are never sufficient. The
-                  # final check follows contact refresh and requires a real
-                  # contact with the selected object.
+                  **support_checks,
                   'selected_contact_consistent': selected_contact or (not require_contact and not contacts),
-                  'upward_support': normal_z is not None and normal_z >= .9,
-                  'bottom_near_support': gap is not None and -.01 <= gap <= .015,
-                  'selected_shelf_height': height_error is not None and height_error <= .05,
                   'selected_surface_neighborhood': selected_xy_distance <= .20,
                   'settled': (bool(resting['stable']) if resting is not None
                               else speed <= .10 and angular_speed <= .5),
@@ -584,6 +611,7 @@ class CheckedPlacement:
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
+            'support_probes': support_probes,
             'resting_motion':resting,
             'support_hit_body': hit.get('rigidBody'), 'contact_bodies': contacts,
             'ignored_payload_names': [obj.name for obj in payload]}
@@ -676,6 +704,8 @@ class CheckedPlacement:
                         native_sampling=True
                         try:
                             sampled=held.states[Inside].set_value(target,True)
+                            if sampled and not self._inside_resting_check(held,target,contents,residents=residents):
+                                return False
                             if sampled:
                                 from .closure_clearance import check_closure_clearance
                                 closure=check_closure_clearance(self,target,[held,*[obj for obj,_ in contents]])
@@ -783,7 +813,70 @@ class CheckedPlacement:
                 'sampling_order':'geometry' if assembly_search else 'geometry_then_native' if residents else 'native_then_geometry',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
 
-    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None, residents=()):
+    def _inside_resting_check(self,held,target,contents,*,residents=()):
+        """Validate release with the same anchoring cadence as an actual action.
+
+        Raw samplers pin the target every physics substep. The real actuator
+        pins once per control interval. A wall pushing an open lid can appear
+        stable in the former and eject its contents in the latter.
+        """
+        from omnigibson.object_states import Inside
+        from .resting_motion import RestingMotionWindow
+        sim=self.og.sim;dt=sim.get_physics_dt();control_dt=sim.get_sim_step_dt()
+        resting=RestingMotionWindow(control_dt)
+        resting.add(*held.get_position_orientation())
+        # Bypass the sampler's per-substep pose projection, not PhysX. All
+        # controls, contacts and physics still run; these private trials do not
+        # advance task metrics, render frames or trigger transition rules.
+        physics_step=type(sim).step_physics.__get__(sim,type(sim))
+        def anchors():
+            if self._base_target is not None:self._restore_base_target()
+            self._restore_object_anchor();self._restore_stabilized_containers()
+            self._follow_placement_particles();self._relocate_container_payload(residents)
+        for _ in range(max(1,int(.75/control_dt))):
+            anchors();self._relocate_contents(held,contents)
+            try:
+                for _ in range(max(1,round(control_dt/dt))):
+                    self.deadline.check(changed=True)
+                    local=getattr(self,'_local_operation',None)
+                    if local is not None:local.check()
+                    self.sampling_physics_steps+=1;physics_step()
+                sim.sync_physx_to_fabric()
+            finally:anchors()
+            resting.add(*held.get_position_orientation())
+            if not held.states[Inside].get_value(target):break
+            if resting.report()['stable']:
+                if all(obj.states[Inside].get_value(target) for obj,_ in contents):return True
+        self._placement_record({'status':'inside_unstable_candidate','held':held.name,'target':target.name,
+                                'resting_motion':resting.report(),'anchoring_cadence_seconds':control_dt,
+                                'speed_m_s':float(self.torch.linalg.norm(held.get_linear_velocity()))})
+        return False
+
+    def _inside_pose_overlap_ranker(self,held,assembly):
+        from .placement_overlap import assembly_overlap_ranker
+        return assembly_overlap_ranker(self,held,assembly)
+
+    def _inside_overlap_ranker(self,assembly):
+        """Cheap current-world envelope checks order, never reject, proposals."""
+        import omnigibson.lazy as lazy
+        query=lazy.omni.physx.get_physx_scene_query_interface()
+        ignored={str(link.prim_path) for obj in [self.robot,*assembly] for link in obj.links.values()}
+        ignored.update(str(link.prim_path) for obj in self.env.scene.objects for link in obj.links.values() if link.is_meta_link)
+        cache={}
+        def score(center,extent):
+            key=tuple(round(float(v),5) for v in (*center,*extent))
+            if key not in cache:
+                collision=False
+                def hit(row):
+                    nonlocal collision
+                    if str(row.rigid_body) in ignored:return True
+                    collision=True;return False
+                query.overlap_box(tuple(float(v)/2 for v in extent),tuple(map(float,center)),(0.,0.,0.,1.),hit,False)
+                cache[key]=int(collision)
+            return cache[key]
+        return score
+
+    def _inside_support_centers(self, held, target, volume, centers, center_offset, payload, check, point=None, residents=(),query_cache=None):
         """Project assembly centers onto actual internal shelves and bottoms.
 
         All ray hits are needed: the closest hit alone can be the roof above
@@ -831,8 +924,14 @@ class CheckedPlacement:
             check()
             ax=x-float(center_offset[0])+float(bottom[0])
             ay=y-float(center_offset[1])+float(bottom[1])
-            hits=raytest([ax,ay,float(high[2])+.05],[ax,ay,float(low[2])-.05],
-                         only_closest=False,ignore_bodies=ignored)
+            # Pose proposals only move ignored bodies. Reuse identical support
+            # rays across inset/full domains and orientations in this one scan.
+            key=(round(ax,6),round(ay,6),float(high[2]),float(low[2]))
+            hits=None if query_cache is None else query_cache.get(key)
+            if hits is None:
+                hits=raytest([ax,ay,float(high[2])+.05],[ax,ay,float(low[2])-.05],
+                             only_closest=False,ignore_bodies=ignored)
+                if query_cache is not None:query_cache[key]=hits
             for hit in sorted(hits,key=lambda h:(abs(float(h['position'][2]-point[2]))
                                                  if point is not None else float(h['position'][2]))):
                 if hit.get('rigidBody') not in support_paths or float(hit['normal'][2])<.9:continue

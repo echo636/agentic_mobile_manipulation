@@ -100,7 +100,9 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         'independent_task_success', 'official_task_success',
         'real_controller_finished', 'formal_finish_in_model_trace'})
     return {'schema_version': 2, 'audited_at': now(), 'run_id': run['run_id'], 'model': controller['model'],
-            'status': 'passed' if all(checks.values()) else 'failed',
+            'status': 'passed' if run.get('task_success') is True else 'failed',
+            'evidence_status': 'passed' if all(checks.values()) else 'failed',
+            'result_policy': 'independent_task_evaluator_only',
             'evidence_alignment': 'passed' if evidence_ok else 'failed',
             'model_finish': 'passed' if closed else 'failed',
             'controller_exit': 'passed' if checks['real_controller_finished'] else 'failed',

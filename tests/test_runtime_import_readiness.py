@@ -12,11 +12,24 @@ spec.loader.exec_module(remote)
 
 
 class ImportReadinessTests(unittest.TestCase):
+    def test_unbounded_manifest_with_null_caps_builds_valid_cli_arguments(self):
+        self.assertEqual(remote.episode_budget_args(dict(episode_budget_policy='unbounded',
+            max_actions=None, max_sim_steps=None, max_agent_steps=None)), ['--unbounded-episode'])
+        self.assertEqual(remote.episode_budget_args(dict(episode_budget_policy='agent_steps',
+            max_actions=600, max_sim_steps=1000000, max_agent_steps=600)),
+            ['--max-actions', '600', '--max-sim-steps', '1000000', '--max-agent-steps', '600'])
+
     def test_numeric_quota_headroom_and_unlimited_filesystems(self):
         text='Filesystem blocks quota limit grace files quota limit grace\n/dev/root 10485760 20971520 20971520 10 0 0\n/nas 999999999 0 0 10 0 0\n'
         self.assertEqual(remote.quota_headroom(text),10*1024**3)
         self.assertEqual(remote.quota_headroom('/dev/root 20971521* 20971520 20971520 10 0 0'),0)
         self.assertIsNone(remote.quota_headroom('no quota configured'))
+
+    def test_quota_checks_actual_write_mounts_and_keeps_default_strict(self):
+        quota='/dev/root 20971521* 20971520 20971520 10 0 0\n/dev/data 1024 10485760 10485760 10 0 0\n'
+        self.assertEqual(remote.quota_headroom(quota),0)
+        self.assertEqual(remote.quota_headroom(quota,devices=['/dev/data']),(10485760-1024)*1024)
+        self.assertEqual(remote.quota_headroom(quota,devices=['/dev/root','/dev/data']),0)
 
     def quota_preflight(self, quota_result):
         def query(args):

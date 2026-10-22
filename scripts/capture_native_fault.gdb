@@ -16,6 +16,7 @@ handle SIGUSR1 nostop noprint pass
 handle SIGSEGV stop print nopass
 handle SIGBUS stop print nopass
 handle SIGABRT stop print nopass
+handle SIGTRAP stop print nopass
 python
 import gdb
 import json
@@ -28,13 +29,22 @@ _fault_captured = False
 
 def capture_first_native_fault(event):
     global _fault_captured
-    codes = {'SIGSEGV': 139, 'SIGBUS': 135, 'SIGABRT': 134}
-    if not isinstance(event, gdb.SignalEvent) or event.stop_signal not in codes or _fault_captured:
+    codes = {'SIGSEGV': 139, 'SIGBUS': 135, 'SIGABRT': 134, 'SIGTRAP': 133}
+    signal = getattr(event, 'stop_signal', None)
+    # GDB 13 reports SIGTRAP as a generic StopEvent. There are no user
+    # breakpoints in this launcher; confirm the kernel signal before recording.
+    if signal is None and isinstance(event, gdb.StopEvent):
+        try:
+            if int(gdb.parse_and_eval('$_siginfo.si_signo')) == 5:
+                signal = 'SIGTRAP'
+        except gdb.error:
+            pass
+    if signal not in codes or _fault_captured:
         return
     _fault_captured = True
-    exit_code = codes[event.stop_signal]
+    exit_code = codes[signal]
     record = {'schema_version': 1, 'status': 'native_fault',
-              'signal': event.stop_signal, 'exit_code': exit_code,
+              'signal': signal, 'exit_code': exit_code,
               'at_unix': time.time(), 'inferior_pid': gdb.selected_inferior().pid,
               'gdb_pid': os.getpid(), 'gdb_version': gdb.VERSION,
               'scope': 'external_first_native_signal_no_core',

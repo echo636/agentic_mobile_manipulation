@@ -289,6 +289,39 @@ wire_api = "responses"
         self.assertEqual(result.returncode,7)
         self.assertFalse(result.timed_out)
 
+    def test_successful_finish_receipt_reaps_lingering_client_without_task_timeout(self):
+        event={'type':'item.completed','item':{'type':'mcp_tool_call','server':'manipulation',
+            'tool':'finish','result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}}
+        raw=json.dumps(event)+'\n'
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)
+            code='import sys,time; sys.stdin.read(); print('+repr(raw.rstrip())+',flush=True); time.sleep(60)'
+            result=run_process(PreparedProject([sys.executable,'-c',code],None,'task'),output,None,finish_exit_grace=.15)
+            self.assertFalse(result.timed_out)
+            self.assertTrue(result.finish_received)
+            self.assertEqual(result.cleanup_reason,'client_linger_after_successful_finish')
+            self.assertEqual(result.returncode,-signal.SIGTERM)
+            self.assertLess(result.duration_seconds,3)
+            self.assertEqual((output/'model_events.jsonl').read_text(),raw)
+            with self.assertRaises(ProcessLookupError):os.kill(result.pid,0)
+
+    def test_failed_requested_and_other_server_finish_do_not_trigger_cleanup(self):
+        base={'type':'item.completed','item':{'type':'mcp_tool_call','server':'manipulation',
+            'tool':'finish','result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}}
+        cases=[{**base,'type':'item.started'},
+            {**base,'item':{**base['item'],'server':'other'}},
+            {**base,'item':{**base['item'],'error':{'message':'failed'}}},
+            {**base,'item':{**base['item'],'result':{'content':[{'type':'text','text':'{"ok":false,"closed":true}'}]}}},
+            {**base,'item':{**base['item'],'result':{**base['item']['result'],'isError':True}}}]
+        for event in cases:
+            with self.subTest(event=event),tempfile.TemporaryDirectory() as folder:
+                code='import time; print('+repr(json.dumps(event))+',flush=True); time.sleep(.25)'
+                result=run_process(PreparedProject([sys.executable,'-c',code],None,None),Path(folder),3,finish_exit_grace=.01)
+                self.assertEqual(result.returncode,0)
+                self.assertFalse(result.finish_received)
+                self.assertIsNone(result.cleanup_reason)
+                self.assertFalse(parse_events(Path(folder)/'model_events.jsonl','codex').formal_finish_observed)
+
     def test_unavailable_client_does_not_start_mcp_or_model(self):
         source=Path(__file__).resolve().parents[1]/'scripts'/'run_codex_controller.py'
         spec=importlib.util.spec_from_file_location('client_controller',source)

@@ -172,7 +172,7 @@ class LifecycleTests(unittest.TestCase):
             b.stop_controller(child,output)
             self.assertIsNotNone(child.poll());self.assertLess(time.time()-deadline,2)
 
-    def test_score_survives_media_error_and_late_score_cannot_change_timeout(self):
+    def test_official_success_survives_media_error_and_timeout_diagnostics(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp);b._config.update(id='a',ssh=['ssh','host'])
             row=b.rows[0];row.update(execution_finished_at='now',controller_timeout=True)
@@ -182,7 +182,8 @@ class LifecycleTests(unittest.TestCase):
             b.finalize_episode(row,Path(tmp),Path(tmp),b._config)
             self.assertEqual(row['episode_outcome'],'success');self.assertEqual(row['archive_status'],'failed')
             late={**row,'deadline_expired_at_finish':True}
-            self.assertEqual(classify_episode_outcome(late),'timeout');self.assertEqual(late['q_score'],1)
+            self.assertEqual(classify_episode_outcome(late),'success');self.assertEqual(late['q_score'],1)
+            self.assertTrue(late['deadline_expired_at_finish'])
 
     def test_restart_archive_pending_never_relaunches_model(self):
         with tempfile.TemporaryDirectory() as tmp:

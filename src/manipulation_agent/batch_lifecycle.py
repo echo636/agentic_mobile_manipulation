@@ -72,6 +72,9 @@ def classify_episode_outcome(row):
     """
     if row.get('status') not in {'passed', 'failed', 'blocked'} and not row.get('execution_finished_at'):
         return None
+    # Official task success is independent of controller shutdown and media.
+    if row.get('task_success') is True:
+        return 'success'
     if row.get('startup_timed_out') or row.get('termination_reason')=='startup_timeout':
         return 'failure'
     if row.get('budget_basis')=='model_execution_excludes_initialization' and not isinstance(row.get('execution_started_at_unix'),(int,float)):

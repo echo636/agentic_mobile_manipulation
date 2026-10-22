@@ -43,23 +43,15 @@ def manifest_task(manifest, index):
     raise ValueError(f'Task index {index} is absent from this manifest')
 
 
-def quota_headroom(output, paths=()):
-    """Read numeric quotas for runtime filesystems; preserve unknown mappings."""
-    devices=None
-    if paths:
-        try:devices={Path(path).stat().st_dev for path in paths}
-        except OSError:pass
+def quota_headroom(output, *, devices=None):
+    """Read numeric `quota -w -v` block limits without guessing human units."""
     remaining=[]
     for line in output.splitlines():
         fields=line.split()
         if len(fields)<4 or not fields[0].startswith('/'):
             continue
-        if devices is not None:
-            try:
-                device=Path(fields[0])
-                if device.is_block_device() and device.stat().st_rdev not in devices:
-                    continue
-            except OSError:pass
+        if devices is not None and fields[0] not in devices:
+            continue
         try:
             used,soft,hard=(int(v.rstrip('*')) for v in fields[1:4])
         except ValueError:
@@ -67,6 +59,16 @@ def quota_headroom(output, paths=()):
         limit=min(v for v in (soft,hard) if v>0) if soft>0 or hard>0 else None
         if limit is not None:remaining.append(max(0,limit-used)*1024)
     return min(remaining) if remaining else None
+
+
+def episode_budget_args(manifest):
+    if manifest.get('episode_budget_policy') == 'unbounded':
+        return ['--unbounded-episode']
+    args = ['--max-actions', str(manifest['max_actions']),
+            '--max-sim-steps', str(manifest['max_sim_steps'])]
+    if manifest.get('episode_budget_policy') == 'agent_steps':
+        args += ['--max-agent-steps', str(manifest['max_agent_steps'])]
+    return args
 
 
 def source_import_readiness(data_root):
@@ -185,8 +187,17 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
     if not light:
         checks.update(video_encoder=encoding_check['exit_code'] == 0,
                       pinned_source_imports=imports['status'] == 'passed')
-    quota_paths=[data_root, *runtime_storage_paths]
-    quota_free=quota_headroom(queries['quota']['stdout'], quota_paths)
+    # A quota on /home must not veto an episode whose output and runtime writes
+    # are on separate mounts. Keep the complete diagnostic and validate every
+    # configured write filesystem. Fall back to all quotas if df is unavailable.
+    quota_devices = None
+    if runtime_storage_paths:
+        queries['quota_write_filesystems'] = command(['df', '--output=source', str(data_root),
+            os.getcwd(), *map(str, runtime_storage_paths)])
+        if queries['quota_write_filesystems']['exit_code'] == 0:
+            quota_devices = queries['quota_write_filesystems']['stdout'].splitlines()[1:]
+            quota_devices = [device.strip() for device in quota_devices if device.strip()]
+    quota_free=quota_headroom(queries['quota']['stdout'],devices=quota_devices)
     if quota_free is not None:
         checks['quota_headroom_2GiB']=quota_free>2*1024**3
     return {'at': datetime.now(timezone.utc).isoformat(), 'host': socket.gethostname(),
@@ -196,7 +207,7 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
             'driver_validation_basis':'exact_renderer_validated_version' if selected[4].strip()==validated_driver_version else 'default_version_floor',
             'required_working_memory_gib':memory_budget_gib,
             'quota_free_bytes':quota_free,
-            'quota_scope_paths':list(map(str,quota_paths)),
+            'quota_write_filesystems':quota_devices,
             'runtime_storage':runtime_storage,
             'adaptive_memory':adaptive,
             'host_available_bytes':host_available,'reserved_host_memory_gib':reserved_host_memory_gib,
@@ -313,14 +324,12 @@ def main():
           '--task',row['task'],'--instance',str(row['instance']),'--seed',str(row['seed']),
           '--instruction',row['instruction'],'--agent-profile',manifest['agent_profile'],'--record-video',
           '--port',str(a.port),'--controller','codex:'+manifest['model'],
-          '--max-actions',str(manifest['max_actions']),'--max-sim-steps',str(manifest['max_sim_steps']),
           '--output',str(a.data_root/'runs'/row['run_id'])]
+    args += episode_budget_args(manifest)
     args+=['--goal-skill',manifest.get('goal_skill','hierarchical')]
     if row.get('custom_task_spec'):
         args+=['--custom-task',row['custom_task_spec']]
     if manifest.get('require_task_notes'): args.append('--require-task-notes')
-    if manifest.get('episode_budget_policy')=='agent_steps':
-        args+=['--max-agent-steps',str(manifest['max_agent_steps'])]
     os.execv(sys.executable,args)
 
 

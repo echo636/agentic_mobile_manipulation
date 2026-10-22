@@ -51,6 +51,26 @@ def _text(content):
     return ""
 
 
+def successful_finish_event(event):
+    """Only a completed successful receipt closes the policy, never its request."""
+    if not isinstance(event, dict) or event.get('type') != 'item.completed':
+        return False
+    item = event.get('item') or {}
+    if not isinstance(item, dict) or item.get('type') != 'mcp_tool_call':
+        return False
+    if (item.get('server'), item.get('tool')) != ('manipulation', 'finish') or item.get('error'):
+        return False
+    result = item.get('result') or {}
+    if not isinstance(result, dict) or result.get('isError'):
+        return False
+    for block in result.get('content') or []:
+        if isinstance(block, dict) and block.get('type') == 'text':
+            value = _object(block.get('text'))
+            if isinstance(value, dict) and value.get('ok') is True and value.get('closed') is True:
+                return True
+    return False
+
+
 def parse_events(path: Path, client: str) -> ParsedEvents:
     rows = []; invalid = []; canonical = []; compat = []
     calls = {}; emitted = set(); completed = set(); turn = 0
@@ -182,11 +202,7 @@ def parse_events(path: Path, client: str) -> ParsedEvents:
         if event.get("type") != "item.completed" or item.get("type") != "mcp_tool_call":
             continue
         tools.append(item.get("tool"))
-        if item.get("server") == "manipulation" and item.get("tool") == "finish":
-            for block in (item.get("result") or {}).get("content", []):
-                if block.get("type") == "text":
-                    value = _object(block.get("text"))
-                    closed = closed or (isinstance(value, dict) and value.get("closed") is True)
+        closed = closed or successful_finish_event(event)
     return ParsedEvents(rows, canonical, compat, invalid, tools, closed)
 
 

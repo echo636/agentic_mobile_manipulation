@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 from manipulation_agent.startup_progress import (
     STARTUP_POLICY, startup_event, startup_stage, startup_progress_update,
+    instrument_startup_calls,
 )
 
 spec=importlib.util.spec_from_file_location('startup_batch',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
@@ -16,6 +17,57 @@ batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class StartupProgressTests(unittest.TestCase):
+    def test_ready_bridge_wins_over_expired_idle_clock_but_unready_still_expires(self):
+        b = batch.Batch.__new__(batch.Batch)
+        b.manifest = {'agent_profile': 'skills'}
+        b.refresh_startup_progress = Mock()
+        b.initializing_unit_state = Mock()
+        b.update = lambda row, **kw: row.update(kw)
+        ready = {'ready': True, 'closed': False, 'tools': batch.tool_specs('skills')}
+        b.health = Mock(return_value=ready)
+        row = self.row()
+        row['startup_deadline_unix'] = 0.
+        self.assertIs(b.wait_simulator_ready(row, 'owned.service', 1), ready)
+        self.assertNotIn('startup_timed_out', row)
+        b.health.return_value = None
+        with self.assertRaises(TimeoutError):
+            b.wait_simulator_ready(row, 'owned.service', 1)
+        self.assertTrue(row['startup_timed_out'])
+
+    def test_native_progress_preserves_return_values_and_restores_on_failure(self):
+        class Loader:
+            def load(self, name, *, fail=False):
+                if fail:
+                    raise ValueError('native failure')
+                return token
+        token = object()
+        original = Loader.load
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, 'native failure'):
+                with instrument_startup_calls(tmp, [
+                    (Loader, 'load', lambda obj, name, **kw: 'native_' + name)
+                ]):
+                    self.assertIs(Loader().load('chair'), token)
+                    Loader().load('table', fail=True)
+            self.assertIs(Loader.load, original)
+            events = [json.loads(s) for s in (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines()]
+            self.assertEqual([(e['stage'], e['status']) for e in events], [
+                ('native_chair', 'running'), ('native_chair', 'passed'),
+                ('native_table', 'running'), ('native_table', 'failed')])
+
+    def test_native_object_progress_spans_long_constructor_but_repeats_expire(self):
+        row = self.row()
+        row['startup_timeout_seconds'] = 1200.
+        row['startup_deadline_unix'] = 1300.
+        events = [dict(stage=stage, status='passed', at_unix=at) for stage, at in [
+            ('native_object_chair_load', 1000.),
+            ('native_object_table_load', 2100.),
+            ('construct_evaluator_and_environment', 2400.)]]
+        row.update(startup_progress_update(row, events, 2401.))
+        self.assertEqual(row['startup_deadline_unix'], 3600.)
+        self.assertEqual(startup_progress_update(row, [
+            dict(stage='native_object_table_load', status='passed', at_unix=3500.)], 3501.), {})
+
     def row(self):
         return {'run_id':'fixture','startup_watchdog_policy':STARTUP_POLICY,
                 'simulator_started_at_unix':100., 'startup_deadline_unix':1900.,

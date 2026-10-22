@@ -19,7 +19,7 @@ from pathlib import Path
 from .contracts import SkillError
 from .deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
 from .records import write_json
-from .startup_progress import startup_stage
+from .startup_progress import startup_stage, instrument_startup_calls
 from .goal_grounding import efficient_grounding, evaluate_once_per_literal
 from .task_bindings import audit_wildcard_bindings, validate_runtime_bindings
 
@@ -149,6 +149,29 @@ class OmniGibsonBackend:
     def _startup_stage(self, name):
         return startup_stage(self.output, name)
 
+    def _native_startup_progress(self):
+        # The environment constructor can take longer than the idle watchdog,
+        # while making steady progress through native object loading. Record
+        # those operations in this process only, leaving installed OG untouched.
+        from omnigibson.scenes import scene_base
+        from omnigibson.objects.usd_object import USDObject
+        from omnigibson.prims.prim_base import BasePrim
+
+        def object_key(phase):
+            return lambda obj, *a, **kw: (
+                f'native_object_{obj.name}_{phase}' if isinstance(obj, USDObject) else None)
+
+        return instrument_startup_calls(self.output, [
+            (scene_base, 'create_object_from_init_info',
+             lambda info: 'native_object_' + info['args']['name'] + '_construct'),
+            (scene_base.Scene, 'load', lambda *a, **kw: 'native_scene_load'),
+            (scene_base.Scene, 'prebuild', lambda *a, **kw: 'native_scene_prebuild'),
+            (scene_base.Scene, 'initialize', lambda *a, **kw: 'native_scene_initialize'),
+            (USDObject, 'prebuild', object_key('prebuild')),
+            (BasePrim, 'load', object_key('load')),
+            (BasePrim, 'initialize', object_key('initialize')),
+        ])
+
     def __init__(self, task: str, instance: int, output: Path, *, seed: int = 0, max_steps: int = 20000,
                  inside_placement: str = "symbolic_raycast"):
         self.deadline = getattr(self, 'deadline', None) or EpisodeDeadline.from_env()
@@ -231,7 +254,7 @@ class OmniGibsonBackend:
 
         with self._startup_stage('configure_native_fault_reporting'):
             configure_native_fault_reporting(output)
-        with self._startup_stage('construct_evaluator_and_environment'), efficient_grounding():
+        with self._startup_stage('construct_evaluator_and_environment'), efficient_grounding(), self._native_startup_progress():
             self.evaluator = ResearchEvaluator(OmegaConf.create({
                 "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
             }))

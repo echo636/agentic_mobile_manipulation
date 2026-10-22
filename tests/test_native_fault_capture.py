@@ -48,6 +48,7 @@ class NativeFaultCaptureTests(unittest.TestCase):
             'segv': ('import ctypes\nctypes.memset(0,0,1)',139,'SIGSEGV'),
             'bus': ('os.kill(os.getpid(),signal.SIGBUS)',135,'SIGBUS'),
             'abort': ('os.abort()',134,'SIGABRT'),
+            'trap': ('os.kill(os.getpid(),signal.SIGTRAP)',133,'SIGTRAP'),
         }
         artifact_root=os.environ.get('MAS_NATIVE_CAPTURE_TEST_ARTIFACTS')
         for name,(action,expected_exit,expected_signal) in cases.items():
