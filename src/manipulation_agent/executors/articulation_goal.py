@@ -50,15 +50,39 @@ def checked_open_goal(backend, obj, check):
         moving={str(link.prim_path) for link in links if any(
             not backend.torch.allclose(a,b,atol=1e-5,rtol=0.)
             for a,b in zip(closed_poses[str(link.prim_path)],link.get_position_orientation()))}
+        active=(abs(opened-closed)>1e-5).nonzero().flatten().cpu().tolist()
+        binding=getattr(getattr(backend,'_local_operation',None),'binding',None)
+        anchor=getattr(binding,'anchor',None) if getattr(binding,'obj',None) is obj else None
+        selected=[]
+        if anchor is not None and any(anchor is link for link in links) and str(anchor.prim_path) in moving:
+            # A click on a door (including its rigidly attached glass/handle)
+            # must not also pull out unrelated shelves or drawers. Discover
+            # its native joint ancestry by kinematic probes, without physics
+            # or assumptions about asset names, joint order or joint type.
+            for index in active:
+                check()
+                probe=closed.clone();probe[index]=opened[index]
+                obj.set_joint_positions(probe)
+                if any(not backend.torch.allclose(a,b,atol=1e-5,rtol=0.)
+                       for a,b in zip(closed_poses[str(anchor.prim_path)],anchor.get_position_orientation())):
+                    selected.append(index)
         # Prefer the largest useful opening. A maximal joint angle is not an
         # obligation: a lid behind a box can intersect a wall at that angle.
         fractions=(1.,.875,.75,.625,.5,.375,.25,.125)
         def candidates():
+            if selected:
+                for fraction in fractions:
+                    goal=initial.clone()
+                    for index in selected:
+                        before=float((initial[index]-closed[index])/(opened[index]-closed[index]))
+                        goal[index]=closed[index]+(opened[index]-closed[index])*max(fraction,before)
+                    yield 'selected_link',selected[0] if len(selected)==1 else None,fraction,goal
+                # A blocked selected leaf is not permission to open another.
+                return
             # Preserve the existing maximum-common-opening preference. If one
             # independent leaf is blocked, try the other without moving it.
             for fraction in fractions:
                 yield 'common',None,fraction,closed+(opened-closed)*fraction
-            active=(abs(opened-closed)>1e-5).nonzero().flatten().cpu().tolist()
             if len(active)>1:
                 for index in active:
                     for fraction in fractions:
@@ -87,6 +111,7 @@ def checked_open_goal(backend, obj, check):
             if clearance['clear']:
                 backend._placement_record(dict(status='articulation_open_endpoint_selected',target=obj.name,
                     goal_joints=goal.cpu().tolist(),opening_policy=policy,joint_index=index,fraction=fraction,trials=trials,
+                    selected_link=str(anchor.prim_path) if selected else None,selected_joint_indices=selected,
                     criterion='open_with_clear_moving_collision_enclosures_without_physics'))
                 return goal
         backend._placement_record(dict(status='articulation_open_endpoint_unresolved',target=obj.name,trials=trials))

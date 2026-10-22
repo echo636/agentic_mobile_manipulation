@@ -15,7 +15,7 @@ from manipulation_agent.executors.articulation_clearance import moving_link_clea
 
 class EndpointTests(unittest.TestCase):
     def exercise(self, mode):
-        initial = torch.tensor([.2, 0.] if mode == 'independent' else [.2])
+        initial = torch.tensor([.2, 0.] if mode in ('independent','selected','selected_blocked') else [.2])
         state = [initial.clone()]
         initial_rng = random.getstate()
         open_type = object()
@@ -45,6 +45,11 @@ class EndpointTests(unittest.TestCase):
             torch=torch, robot=SimpleNamespace(links={}), frames_revision=0,
             _container_payload=lambda obj: [], _relocate_container_payload=lambda payload: None,
             _placement_record=records.append)
+        if mode.startswith('selected'):
+            # The clicked glass/handle moves with leaf 0 even though it is a
+            # distinct rigid link. Leaf 1 represents an unrelated drawer.
+            glass=Link(0);glass.prim_path='/door/glass';links['glass']=glass
+            backend._local_operation=SimpleNamespace(binding=SimpleNamespace(obj=obj,anchor=glass))
         attempted = []
         def query(*args):
             attempted.append(float(state[0][0]))
@@ -52,6 +57,9 @@ class EndpointTests(unittest.TestCase):
                 raise RuntimeError('native query failed')
             if mode == 'independent':
                 return {'clear': args[2] == {'/door/leaf1'}}
+            if mode.startswith('selected'):
+                self.assertNotIn('/door/leaf1',args[2])
+                return {'clear': mode == 'selected'}
             return {'clear': mode == 'alternate' and float(state[0][0]) < .9}
         module = ModuleType('omnigibson.object_states')
         module.Open = open_type
@@ -64,6 +72,11 @@ class EndpointTests(unittest.TestCase):
                 torch.testing.assert_close(goal, torch.tensor([.2, 1.]))
                 self.assertEqual(records[-1]['opening_policy'], 'independent_leaf')
                 self.assertEqual(records[-1]['joint_index'], 1)
+            elif mode == 'selected':
+                goal=checked_open_goal(backend,obj,lambda:None)
+                torch.testing.assert_close(goal,torch.tensor([1.,0.]))
+                self.assertEqual(records[-1]['opening_policy'],'selected_link')
+                self.assertEqual(records[-1]['selected_joint_indices'],[0])
             elif mode == 'alternate':
                 self.assertEqual(checked_open_goal(backend, obj, lambda: None).tolist(), [.875])
             else:
@@ -79,6 +92,12 @@ class EndpointTests(unittest.TestCase):
 
     def test_blocked_leaf_can_stay_at_initial_pose_while_other_leaf_opens_without_physics(self):
         self.exercise('independent')
+
+    def test_clicked_glass_opens_its_door_without_moving_an_unrelated_drawer(self):
+        self.exercise('selected')
+
+    def test_blocked_selected_leaf_does_not_fall_back_to_another_leaf(self):
+        self.exercise('selected_blocked')
 
     def test_no_clear_endpoint_restores_scene(self):
         self.assertEqual(len(self.exercise('all_blocked')), 8)
