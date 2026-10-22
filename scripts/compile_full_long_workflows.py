@@ -387,7 +387,10 @@ def workshop(inv,models):
  # Keep the west edge fixed while narrowing the parts station: r25's loaded
  # collision maps split the garage into disconnected north/south work areas.
  # Native component dimensions remain unchanged in separated support slots.
- assembly,usable=table_parts(b,[-14.,13.5],[-12.25,15.],[-13.6,15.8],compact=True);b.phase('assemble',assembly,['inventory','clear_bench'])
+ # The widened central support blocked the east-side passage beside parts.
+ # Put it in the measured west work area, keeping its full stable dimensions
+ # and the independent requirement to remove the completed table onto its feet.
+ assembly,usable=table_parts(b,[-14.,13.5],[-14.3,15.3],[-13.6,15.8],compact=True);b.phase('assemble',assembly,['inventory','clear_bench'])
  # The shared assembly helper returns its brush to the same dedicated tool slot.
  for row in assembly:
   if row['primitive']=='place_on_top' and row.get('role')=='tool_home':row['uv']=list(tool_slots['brush'])
