@@ -57,7 +57,15 @@ class ControlledCarry(CompactCarry):
             local=getattr(self,'_local_operation',None)
             if local is not None:local.check()
             self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
-            try:return original_step(*args,**kwargs)
+            try:
+                result=original_step(*args,**kwargs)
+                # step_physics advances PhysX without refreshing Fabric mesh
+                # transforms. Object poses/velocities are current, but AABBs,
+                # support anchors and fillable geometry can still describe
+                # the preceding pose. Sampling must read one physical state.
+                sync=getattr(self.og.sim,'sync_physx_to_fabric',None)
+                if sync is not None:sync()
+                return result
             finally:self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
         self.og.sim.step_physics=anchored_physics
         try:yield
@@ -86,6 +94,11 @@ class ControlledCarry(CompactCarry):
         payload=self._container_payload(obj) if state is Open else []
         particles=snapshot_particles(self.env.scene,[obj]) if state is Open else []
         edit=self._editable_carry_joints(obj) if state is Open else nullcontext()
+        prepared=getattr(getattr(self,'_local_operation',None),'articulation_plan',None) if state is Open else None
+        open_goal=None
+        if primitive=='open' and prepared is None:
+            from .articulation_goal import checked_open_goal
+            open_goal=checked_open_goal(self,obj,self.deadline.check)
         samples=[]
         def capture(phase):
             if state is Open:
@@ -98,8 +111,7 @@ class ControlledCarry(CompactCarry):
         with edit,self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
             capture('before_setter')
             # Upstream symbolic OPEN samples a random opening and returns early
-            # when already ajar. Fully open/close all annotated joints instead.
-            prepared=getattr(getattr(self,'_local_operation',None),'articulation_plan',None) if state is Open else None
+            # when already ajar. Use a checked usable opening; close fully.
             if prepared is not None:
                 current=obj.get_joint_positions()
                 start=self.torch.as_tensor(prepared['start_joints'],dtype=current.dtype,device=current.device)
@@ -108,6 +120,10 @@ class ControlledCarry(CompactCarry):
                 obj.set_joint_positions(self.torch.as_tensor(prepared['goal_joints'],dtype=current.dtype,device=current.device))
                 obj.states[state].clear_cache();obj.state_updated()
                 accepted=bool(obj.states[state].get_value())==wanted
+            elif open_goal is not None:
+                obj.set_joint_positions(open_goal);obj.keep_still()
+                obj.states[state].clear_cache();obj.state_updated()
+                accepted=bool(obj.states[state].get_value())
             else:
                 accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
             if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
@@ -125,7 +141,8 @@ class ControlledCarry(CompactCarry):
             verify_particles(self.env.scene,particles)
             report('passed',payload=[child.name for child,_,_ in payload])
         return {'primitive':primitive,'implementation':'transactional_official_state_setter_with_link_payload',
-                'fully_open_or_closed':state is Open,'postcondition':'official_state_and_containment_after_settling',
+                'fully_open_or_closed':primitive=='close','opening_policy':'largest_checked_usable_endpoint' if primitive=='open' else None,
+                'postcondition':'official_state_and_containment_after_settling',
                 'preserved_contained_objects':len(payload),'failure_policy':'restore_pre_action_state'}
 
     def _checked_attach(self, parent, max_steps):

@@ -58,7 +58,8 @@ class ArticulationTests(unittest.TestCase):
         rng=random.getstate()
         with patch.dict(sys.modules,{'omnigibson':ModuleType('omnigibson'),'omnigibson.object_states':module}),\
              patch('manipulation_agent.executors.particle_payload.snapshot_particle_state',return_value=[]),\
-             patch('manipulation_agent.executors.particle_payload.restore_particle_state'):
+             patch('manipulation_agent.executors.particle_payload.restore_particle_state'),\
+             patch('manipulation_agent.executors.articulation_goal.checked_open_goal',return_value=torch.ones(1)):
             if fail:
                 with self.assertRaises(SkillError):prepare_articulation(backend,obj,'open',operation)
             else:

@@ -76,9 +76,13 @@ def prepare_articulation(backend,obj,primitive,operation):
     try:
         if live_cache is not missing:
             backend._live_gt_collision_cache=copy.deepcopy(live_cache)
-        if not obj.states[Open].set_value(primitive=='open',fully=True):
-            raise SkillError('local_adjustment_blocked','No stable articulated target state')
-        goal=obj.get_joint_positions().clone()
+        if primitive=='open':
+            from .articulation_goal import checked_open_goal
+            goal=checked_open_goal(backend,obj,operation.check)
+        else:
+            if not obj.states[Open].set_value(False,fully=True):
+                raise SkillError('local_adjustment_blocked','No stable articulated target state')
+            goal=obj.get_joint_positions().clone()
         count=max(1,math.ceil(float(abs(goal-start).max())/.025))
         if count>160:raise SkillError('local_adjustment_exhausted','Articulation preview exceeds bounded joint sweep')
         sim.load_state(state,serialized=False);restore_particle_state(particles)
