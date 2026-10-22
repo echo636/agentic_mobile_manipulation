@@ -262,6 +262,24 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertEqual(records[-1]['attempted'],1)
         self.assertTrue(records[-1]['accepted'])
 
+    def test_shared_io_latency_does_not_stop_default_candidate_coverage(self):
+        b,held,target,contents,state,records,modules=self.fixture()
+        with patch.dict('sys.modules',modules), patch(
+                'manipulation_agent.executors.inside_sampling.time.monotonic',
+                side_effect=lambda:60. if any(r.get('stage')=='initial_collision' for r in records) else 0.):
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=4))
+        self.assertEqual(records[-1]['attempted'],4)
+
+    def test_explicit_admission_deadline_still_stops_additional_candidates(self):
+        b,held,target,contents,state,records,modules=self.fixture()
+        with patch.dict('sys.modules',modules), patch(
+                'manipulation_agent.executors.inside_sampling.time.monotonic',
+                side_effect=lambda:60. if any(r.get('stage')=='initial_collision' for r in records) else 0.), \
+                self.assertRaises(SkillError) as caught:
+            sample_assembly_inside(b,held,target,contents,max_candidates=4,max_seconds=30.)
+        self.assertEqual(caught.exception.code,'sampling_budget_exhausted')
+        self.assertEqual(records[-1]['attempted'],1)
+
     def test_geometry_preparation_cannot_consume_every_trial(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         calls=iter([0.])
