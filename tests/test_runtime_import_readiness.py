@@ -18,6 +18,12 @@ class ImportReadinessTests(unittest.TestCase):
         self.assertEqual(remote.quota_headroom('/dev/root 20971521* 20971520 20971520 10 0 0'),0)
         self.assertIsNone(remote.quota_headroom('no quota configured'))
 
+    def test_quota_checks_actual_write_mounts_and_keeps_default_strict(self):
+        quota='/dev/root 20971521* 20971520 20971520 10 0 0\n/dev/data 1024 10485760 10485760 10 0 0\n'
+        self.assertEqual(remote.quota_headroom(quota),0)
+        self.assertEqual(remote.quota_headroom(quota,devices=['/dev/data']),(10485760-1024)*1024)
+        self.assertEqual(remote.quota_headroom(quota,devices=['/dev/root','/dev/data']),0)
+
     def quota_preflight(self, quota_result):
         def query(args):
             if args[0] == 'quota':
