@@ -833,7 +833,10 @@ class CheckedPlacement:
                         restore_particle_state(particles)
                     def geometric():
                         try:
-                            return sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
+                            fallback = (None if open_native_state is None else
+                                {'state':open_native_state, 'candidate':{'candidate':0, 'origin':'native_sampler'}})
+                            return sample_assembly_inside(self,held,target,contents,point=point,residents=residents,
+                                                          open_fallback=fallback)
                         except SkillError as exc:
                             if exc.code!='sampling_budget_exhausted' or open_native_state is None:
                                 raise
