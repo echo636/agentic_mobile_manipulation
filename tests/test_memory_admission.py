@@ -17,34 +17,49 @@ spec.loader.exec_module(batch)
 class MemoryAdmissionTests(unittest.TestCase):
     def decide(self, peers, working, cache=0):
         return admission_decision((working + cache) * GIB, {'file': cache * GIB}, 64 * GIB,
-                                  peers, host_budget_gib=56, candidate_gib=28)
+                                  peers, host_budget_gib=56, candidate_gib=28, startup_gib=16)
 
     def peer(self, current=8, peak=8, stage='ready'):
         return {'runtime_stage': stage, 'working_bytes': current * GIB,
-                'peak_bytes': peak * GIB, 'hard_limit_gib': 28,
+                'working_peak_bytes': peak * GIB, 'peak_bytes': 27 * GIB, 'hard_limit_gib': 28,
                 'memory_admission_mode': 'observed_peak'}
 
-    def test_third_light_instance_fits_despite_reclaimable_file_cache(self):
-        result = self.decide([self.peer(), self.peer()], working=17, cache=30)
+    def test_cached_total_peak_does_not_block_s118_second_instance(self):
+        result = self.decide([self.peer(current=9, peak=9)], working=10, cache=34)
         self.assertEqual(result['status'], 'passed')
-        self.assertEqual(result['projected_bytes'], 53 * GIB)
+        self.assertEqual(result['projected_bytes'], 29 * GIB)
+        self.assertEqual(result['candidate_hard_limit_bytes'], 28 * GIB)
 
-    def test_later_peak_and_legacy_peer_keep_full_required_headroom(self):
-        self.assertEqual(self.decide([self.peer(8, 24), self.peer()], 17)['status'], 'blocked')
-        self.assertEqual(self.decide([self.peer(stage='starting'), self.peer()], 17)['status'], 'blocked')
-        self.assertEqual(self.decide([self.peer(stage=None), self.peer()], 17)['status'], 'blocked')
-        legacy = {**self.peer(), 'memory_admission_mode': 'full_reservation'}
-        self.assertEqual(self.decide([legacy, self.peer()], 17)['status'], 'blocked')
+    def test_s115_third_instance_uses_startup_estimate(self):
+        result = self.decide([self.peer(), self.peer()], working=17, cache=45)
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(result['projected_bytes'], 41 * GIB)
 
-    def test_unrelated_account_memory_and_missing_telemetry_are_not_ignored(self):
-        self.assertEqual(self.decide([self.peer(), self.peer()], 25)['status'], 'blocked')
+    def test_genuine_working_peak_remains_reserved_after_usage_falls(self):
+        result = self.decide([self.peer(8, 24), self.peer(8, 24)], working=17)
+        self.assertEqual(result['status'], 'blocked')
+
+    def test_missing_or_starting_telemetry_does_not_gain_measured_discount(self):
+        self.assertEqual(self.decide([self.peer(stage='starting')]*2, 17)['status'], 'blocked')
         self.assertEqual(self.decide([{}, {}], 17)['status'], 'blocked')
-        result = self.decide([self.peer(current=15), self.peer(current=15)], 17)
-        self.assertEqual(result['status'], 'blocked')
+        unknown = self.peer(); unknown.pop('working_peak_bytes')
+        self.assertEqual(self.decide([unknown]*2, 17)['status'], 'blocked')
 
-    def test_account_hard_limit_wins_over_a_large_configured_budget(self):
-        result = admission_decision(45 * GIB, {}, 64 * GIB, [], host_budget_gib=112)
+    def test_unrelated_account_memory_is_counted_once(self):
+        result = self.decide([self.peer(), self.peer()], working=40)
         self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['projected_bytes'], 64 * GIB)
+
+    def test_account_hard_limit_and_single_margin_win_over_config(self):
+        result = admission_decision(47 * GIB, {}, 64 * GIB, [],
+                                   host_budget_gib=112, candidate_gib=28, startup_gib=16)
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['usable_budget_bytes'], 62 * GIB)
+
+    def test_startup_estimate_cannot_exceed_enforcement_limit(self):
+        with self.assertRaises(ValueError):
+            admission_decision(0, {}, 64 * GIB, [], host_budget_gib=64,
+                               candidate_gib=24, startup_gib=28)
 
     def test_adaptive_slots_share_legacy_gpu_locks_and_peer_reservations(self):
         with tempfile.TemporaryDirectory() as tmp:
