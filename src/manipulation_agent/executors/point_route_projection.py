@@ -35,7 +35,18 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
         radius=max(b-a for a,b in zip(low,high))/2+1.2
         collision=collision.local_window(centre,radius)
         collision.check_cancelled=check_cancelled
-    grid=collision.grid
+    # Heading collision keeps global raster coordinates, but the graph only
+    # needs the requested window. Full-floor index arrays per heading cost
+    # hundreds of MB for a two-metre local approach and can exhaust its budget
+    # before graph traversal. Keep the obstacle halo in the collision checker.
+    from .gt_navigation import GridMap
+    full_grid=collision.grid
+    full_shape=(full_grid.height,full_grid.width)
+    wr0,wr1,wc0,wc1=getattr(collision,'window',None) or (0,full_grid.height,0,full_grid.width)
+    def mask_of(raster):
+        return np.frombuffer(raster.free,dtype='uint8').reshape(full_shape)[wr0:wr1,wc0:wc1].astype(bool)
+    grid=GridMap(wc1-wc0,wr1-wr0,full_grid.resolution,full_grid.world((wr0,wc0)),
+                 mask_of(full_grid).astype('uint8').tobytes())
     shape=(grid.height,grid.width)
     directions=((1,0),(2,1),(1,1),(1,2),(0,1),(-1,2),(-1,1),(-2,1),
                 (-1,0),(-2,-1),(-1,-1),(-1,-2),(0,-1),(1,-2),(1,-1),(2,-1))
@@ -43,7 +54,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
     free=[];indices=[];node_cells=[];node_headings=[];count=0
     for k,yaw in enumerate(headings):
         check_cancelled()
-        mask=np.frombuffer(collision.grid_at_heading(yaw).free,dtype='uint8').reshape(shape).astype(bool)
+        mask=mask_of(collision.grid_at_heading(yaw))
         cells=np.flatnonzero(mask)
         index=np.full(shape,-1,dtype=np.int32)
         index.ravel()[cells]=np.arange(count,count+len(cells),dtype=np.int32)
@@ -93,7 +104,7 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
             other=(k+offset)%len(headings)
             delta=angle(headings[other]-yaw)
             swept=collision._sweep_grid(collision._key(yaw,yaw+delta))
-            valid=np.frombuffer(swept.free,dtype='uint8').reshape(shape).astype(bool)&mask&free[other]
+            valid=mask_of(swept)&mask&free[other]
             source=indices[k][valid]
             rows.append(source);cols.append(indices[other][valid]);weights.append(np.full(len(source),.5*abs(delta)/(math.pi/3)))
     rows.append(np.full(len(roots),count,dtype=np.int32));cols.append(np.array(list(roots),dtype=np.int32))

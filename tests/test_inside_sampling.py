@@ -239,6 +239,34 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertTrue(b.torch.equal(held.position,original[0]))
         self.assertEqual(records[-1]['rejections']['initial_collision'],3)
 
+    def test_slow_physics_finishes_admitted_trial(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        with patch.dict('sys.modules',modules), patch(
+                'manipulation_agent.executors.inside_sampling.time.monotonic',
+                side_effect=lambda:40. if state['steps'] else 0.):
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_seconds=30.))
+        self.assertEqual(records[-1]['attempted'],1)
+        self.assertTrue(records[-1]['accepted'])
+
+    def test_geometry_preparation_cannot_consume_every_trial(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        calls=iter([0.])
+        with patch.dict('sys.modules',modules), patch(
+                'manipulation_agent.executors.inside_sampling.time.monotonic',
+                side_effect=lambda:next(calls,40.)):
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_seconds=30.))
+        self.assertEqual(records[-1]['attempted'],1)
+
+    def test_external_deadline_still_interrupts_admitted_trial(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        def check(**kwargs):
+            if state['steps']:raise SkillError('execution_timeout','cancelled')
+        b.deadline.check=check
+        with patch.dict('sys.modules',modules), self.assertRaises(SkillError) as caught:
+            sample_assembly_inside(b,held,target,contents)
+        self.assertEqual(caught.exception.code,'execution_timeout')
+        self.assertEqual(float(held.position[0]),5.)
+
     def test_recorded_plate_larger_than_annotation_reaches_physics(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         held.extent=b.torch.tensor([.40778923,.40779799,.04712933])
