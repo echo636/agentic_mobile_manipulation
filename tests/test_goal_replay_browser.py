@@ -2,13 +2,49 @@
 import json
 from pathlib import Path
 import unittest
-from test_task_notes import tree
+from test_task_notes import tree, branching_tree
 from test_replay_browser import sync_playwright, fixture
 from manipulation_agent.replay import render_replay_page
 
 
 @unittest.skipUnless(sync_playwright,'optional Playwright browser dependency')
 class GoalReplayBrowserTests(unittest.TestCase):
+    def test_v2_uneven_tree_dependencies_and_malformed_notes_on_mobile(self):
+        data=fixture();state=branching_tree()
+        state['goals'][0]['goal']='<img src=x onerror=alert(1)>'
+        # Parentage comes from IDs, never list order.
+        state['goals'].reverse()
+        note={'version':1,'agent_step':0,'content':json.dumps(state)}
+        data['steps'][1].update(task_notes=note,is_motor_action=True,agent_step=1)
+        with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            try:
+                page=browser.new_page(viewport={'width':390,'height':844})
+                errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+                page.set_content(render_replay_page(data))
+                panel=page.locator('#tool-trace-feed .goal-notes')
+                self.assertEqual(panel.locator('.goal-inline-tree > .goal-children > .goal-child').count(),3)
+                self.assertEqual(panel.locator('[data-goal-id="work"] > .goal-children > .goal-child').count(),2)
+                self.assertEqual(panel.locator('[data-goal-id="prepare"] > .goal-children > [data-goal-id="access"]').count(),1)
+                self.assertEqual(panel.locator('[data-goal-id="supplies"] .goal-child').count(),0)
+                self.assertEqual(panel.locator('.goal-current').get_attribute('data-goal-id'),'access')
+                self.assertIn('supplies',panel.locator('[data-goal-id="process"] .goal-dependencies').inner_text())
+                self.assertIn('<img',panel.locator('.goal-root').inner_text())
+                self.assertEqual(panel.locator('img').count(),0)
+                self.assertTrue(page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+                for defect in ('duplicate','orphan','cycle'):
+                    malformed=branching_tree()
+                    if defect=='duplicate':malformed['goals'].append(dict(malformed['goals'][1]))
+                    if defect=='orphan':malformed['goals'][1]['parent_id']='missing'
+                    if defect=='cycle':malformed['goals'][1]['parent_id']='access'
+                    content=json.dumps(malformed)
+                    page.evaluate('(content)=>renderTaskNotes(document.querySelector("#tool-trace-feed .goal-notes"),{version:2,content})',content)
+                    self.assertEqual(panel.locator('.goal-child').count(),0,defect)
+                    self.assertTrue(panel.locator('.goal-warning').is_visible(),defect)
+                    self.assertEqual(panel.locator('.goal-plain').text_content(),content)
+                self.assertEqual(errors,[])
+            finally:browser.close()
+
     def test_independent_evidence_tracks_time_and_preserves_violations(self):
         evaluation={'score_type':'custom_joint_terminal_and_public_history_v1',
             'terminal_conditions':{'clean':False},'historical_conditions':{'delivered':True},
@@ -80,7 +116,7 @@ class GoalReplayBrowserTests(unittest.TestCase):
                 self.assertIn('受阻',panels.nth(1).inner_text())
                 self.assertEqual(panels.nth(1).locator('.goal-local ol li').count(),0)
                 self.assertTrue(panels.nth(0).locator('.goal-child').is_visible())
-                self.assertTrue(panels.nth(0).locator('.goal-support p').is_hidden())
+                self.assertTrue(all(p.is_hidden() for p in panels.nth(0).locator('.goal-support p').all()))
                 page.locator('#view-video').click();page.locator('#step-select').select_option('1')
                 notes=page.locator('#video-task-notes')
                 self.assertEqual(notes.get_attribute('data-version'),'1')

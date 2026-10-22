@@ -7,12 +7,21 @@ def goal_state(notes):
         value = json.loads(notes.get('content', ''))
     except (ValueError, TypeError):
         return None
-    if not isinstance(value, dict) or value.get('format') != 'goal-tree-v1':
+    if not isinstance(value, dict):
         return None
-    if not isinstance(value.get('L1'), dict) or not isinstance(value.get('L2'), list):
+    if value.get('format') == 'goal-tree-v2':
+        goals = value.get('goals')
+        if not isinstance(value.get('root_id'), str) or not isinstance(goals, list):
+            return None
+    elif value.get('format') == 'goal-tree-v1' and isinstance(value.get('L1'), dict):
+        goals = value.get('L2')
+        if not isinstance(goals, list):
+            return None
+    else:
         return None
     # Keep invalid authored text in the raw notes; only render recognized fields.
-    if any(not isinstance(g, dict) for g in value['L2']):
+    # Graph validity is a display concern, not a gate on the agent's notes.
+    if any(not isinstance(g, dict) for g in goals):
         return None
     return value
 

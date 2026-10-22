@@ -6,18 +6,16 @@ description: Track required results, dependencies, item coverage and evidence in
 
 Read [references/working-state.md](references/working-state.md) and write the initial goal tree before the first act/look. Notes record your beliefs, not simulator truth. Update when a result, active goal or important assumption changes.
 
-**L1 — required results.** Preserve the original instruction. Give its criteria stable IDs, including quantities, destinations, relations, ordering and final device states. Distinguish explicit requirements from interpretations. Infer ordinary outcomes for vague wording with minimal assumptions; do not add a hidden recipe or unrelated cleanup.
+**Define the end state.** Write the root goal in your own words: what should be true when the task is complete? Use the instruction to check coverage, rather than copying it as the goal. Give requirements stable IDs, preserving quantities, destinations, relations, final device states and any process or ordering constraints. Separate explicit requirements from assumptions; infer ordinary outcomes for vague wording without inventing a recipe or unrelated cleanup.
 
-**L2 — dependent subgoals.** Cover every criterion with a result-level child and an observable completion check. Record only necessary dependencies, allowing independent branches. Discovery or access alone does not establish the final result. Open access before dependent transfers, complete processing before clearing its setup, and postpone final closure until transfers finish.
+**Expand where useful.** Any goal may have children, and any child may be decomposed again. Depth and child counts can differ across branches; there is no fixed number of levels or nodes. Stop expanding when a result is clear enough to act on and check. Children must jointly cover their parent's required result, with observable checks. Discovery or access alone does not establish delivery or processing.
+
+Use `parent_id` for decomposition and `depends_on` for prerequisites, including across branches. Keep dependencies acyclic and limited to necessary ordering. Choose a ready unfinished goal; a blocked branch need not stop independent work. Put only its immediate actions and next check in `active`, outside the goal tree. Choose pixels from current observations.
 
 For groups, track distinct members by visual description, last location and pending/placed/verified state. One handled member does not complete a group; items found so far do not establish the total. Record uninspected locations and uncertain identities or destination roles.
 
-**L3 — next local plan.** Select an unfinished child whose prerequisites hold. Keep only its immediate actions and next check in `active`; choose pixels from current observations. Use the manipulation skill's approach rule rather than adding navigation to every transfer.
+After feedback, check the actual result. Completed children do not automatically prove their parent: verify its check too. Processing needs evidence beyond starting a device. Supported continuity and action feedback may establish occluded contents; reopen or reinspect results and affected ancestors when later handling could have disturbed them.
 
-After feedback, compare the actual effect with the child's check. A completed operation may establish only part of the requested result. Processing needs evidence beyond starting a device. Supported continuity and action feedback may establish occluded contents; reopen or reinspect when later handling could have disturbed them.
+Save notes when goals complete or block, focus changes, or members or assumptions change. Keep stable IDs and actual evidence IDs; explain revised or retired goals without losing coverage. Expand or revise the tree as observations warrant, rather than prewriting every action.
 
-Save notes when a child completes or blocks, focus changes, a new member appears, or an assumption changes. Record what returned evidence supports, with its actual evidence ID. Keep stable IDs; reopen undone results and explain retired or revised goals without losing requirement coverage.
-
-On failure, change the unsupported assumption or local plan. Temporary staging is not completed storage. Preserve the original relation, mark blocked children, and continue ready independent work.
-
-Before finish, reconcile every criterion and member with evidence. Record verified, unresolved and uncertain results in the final notes. Claim achieved only when no required result or group scope remains unresolved.
+On failure, revise the unsupported assumption or local plan while preserving requirements. Temporary staging is not completed storage. Before finish, reconcile the root, every requirement and member with evidence; record unresolved or uncertain results rather than claiming completion.

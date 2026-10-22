@@ -20,6 +20,27 @@ def tree(status='active'):
         'uncertainties':[],'change':'initial' if status=='active' else 'observed result'}
 
 
+def branching_tree():
+    """Uneven branches and a dependency across branches, including four levels."""
+    goals = [
+        ('root', None, 'The workspace is ready'),
+        ('work', 'root', 'Work completed'),
+        ('supplies', 'root', 'Supplies ready'),
+        ('storage', 'root', 'Storage restored'),
+        ('prepare', 'work', 'Preparation complete'),
+        ('process', 'work', 'Processing complete'),
+        ('access', 'prepare', 'Work area accessible'),
+        ('closed', 'storage', 'Cabinet closed'),
+    ]
+    return {'format': 'goal-tree-v2', 'root_id': 'root',
+        'requirements': [{'id': 'r1', 'condition': 'Workspace ready', 'basis': 'explicit'}],
+        'goals': [dict(id=id, parent_id=parent, goal=goal, covers=['r1'],
+            depends_on=['supplies'] if id == 'process' else [], status='pending',
+            check='Visible result', evidence=[]) for id, parent, goal in goals],
+        'active': {'goal_id': 'access', 'steps': ['Inspect access'], 'next_check': 'Access visible'},
+        'assumptions': [], 'uncertainties': [], 'change': 'Initial decomposition'}
+
+
 class TaskNotesTests(unittest.TestCase):
     def harness(self,path,mode='hierarchical'):
         r=Recorder(path,{'backend':'mock','observation_mode':'rgb_only','instruction':'fixture'})
@@ -94,6 +115,25 @@ class TaskNotesTests(unittest.TestCase):
             h=self.harness(Path(tmp)/'episode')
             self.write(h,json.dumps(tree('done')),0,'claim')
             h.call('finish',{'outcome':'achieved','reason':'fixture claim'},'finish')
+            self.assertIs(h.recorder.run['task_success'],False)
+
+    def test_v2_preserves_uneven_authored_tree_and_independent_scoring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            h=self.harness(Path(tmp)/'episode')
+            initial=branching_tree()
+            self.write(h,json.dumps(initial),0,'plan')
+            final=branching_tree()
+            for goal in final['goals']:
+                goal['status']='done'
+            final['active']=None
+            self.write(h,json.dumps(final),1,'claim')
+            h.call('finish',{'outcome':'achieved','reason':'fixture claim'},'finish')
+            replay=build_replay(h.recorder.output)
+            writes=[s for s in replay['steps'] if s['tool']=='task_notes']
+            self.assertEqual(writes[0]['goal_state'],initial)
+            self.assertEqual(writes[1]['goal_state'],final)
+            self.assertEqual(writes[1]['task_notes_before']['version'],1)
+            self.assertEqual(replay['planning_metrics']['goal_tree_versions'],2)
             self.assertIs(h.recorder.run['task_success'],False)
 
     def test_no_hierarchy_is_fabricated_from_control_prose(self):
