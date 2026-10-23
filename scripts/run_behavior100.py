@@ -5,6 +5,7 @@ site paths; authentication stays in the existing local SSH/model clients.
 """
 import argparse
 import base64
+import errno
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import fcntl
@@ -35,6 +36,9 @@ from manipulation_agent.clients.events import parse_events
 from manipulation_agent.batch_storage import BatchStorage
 
 FINAL = {'passed','failed','blocked'}
+TRANSIENT_STORAGE_ERRORS = {errno.EIO, errno.ESTALE, errno.ETIMEDOUT,
+                            errno.ENOTCONN, errno.ECONNRESET, errno.EHOSTUNREACH,
+                            errno.EAGAIN}
 
 
 def inline_systemd_launcher(script):
@@ -303,7 +307,7 @@ class Batch:
                 previous=[]
                 for runid in selection.get('previous_run_ids',[r['run_id']]):
                     record=json.loads((self.root/'records'/f'{runid}.json').read_text())
-                    if not prepolicy_failure(record,self.root/'controllers'/runid):
+                    if not prepolicy_failure(record,Path(record.get('controller_output',self.root/'controllers'/runid))):
                         raise RuntimeError('Only failed attempts before any policy output may be retried here')
                     previous.append({k:v for k,v in record.items() if k!='previous_attempts'})
                 r.update(run_id=selection['run_id'],attempt=len(previous)+1,previous_attempts=previous,retry_reason=selection['reason'])
@@ -596,7 +600,11 @@ class Batch:
                     if self.poll() is None:os.kill(wrapper_pid,signal.SIGKILL)
             process=AdoptedProcess()
         metadata_path=controller/'controller.json'
-        metadata=json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
+        try:metadata=json.loads(metadata_path.read_text())
+        except (FileNotFoundError,json.JSONDecodeError):metadata={}
+        except OSError as exc:
+            if exc.errno not in TRANSIENT_STORAGE_ERRORS:raise
+            metadata=getattr(self,'_controller_metadata_cache',{}).get(str(controller),{})
         pid=metadata.get('pid')
         identity=None
         def owned_model():
@@ -694,8 +702,23 @@ class Batch:
 
     def controller_metadata(self, row, controller):
         path=controller/'controller.json'
+        cache=getattr(self,'_controller_metadata_cache',None)
+        if cache is None:cache=self._controller_metadata_cache={}
         try:metadata=json.loads(path.read_text())
         except (FileNotFoundError,json.JSONDecodeError):return {}
+        except OSError as exc:
+            if exc.errno not in TRANSIENT_STORAGE_ERRORS:raise
+            if (row.get('controller_storage') or {}).get('status')!='degraded':
+                self.update(row,controller_storage={'status':'degraded','errno':exc.errno,
+                    'error':str(exc),'at':now(),'path':str(path)})
+            # An unreadable status file does not mean the live model stopped.
+            # Preserve its already observed execution clock while storage heals.
+            metadata=cache.get(str(controller),{})
+        else:
+            cache[str(controller)]=metadata
+            if (row.get('controller_storage') or {}).get('status')=='degraded':
+                self.update(row,controller_storage={'status':'passed','recovered_at':now(),
+                                                    'path':str(path)})
         deadline=metadata.get('episode_deadline_unix')
         started=metadata.get('execution_started_at_unix')
         policy=(metadata.get('execution_clock') or {}).get('budget_policy')
@@ -716,6 +739,10 @@ class Batch:
             self.refresh_startup_progress(row)
             deadline=row.get('episode_deadline_unix')
             cutoff=deadline or (None if row.get('execution_started_at_unix') else row['startup_deadline_unix'])
+            if not row.get('execution_started_at_unix') and (row.get('controller_storage') or {}).get('status')=='degraded':
+                # A missing first clock due to EIO is not evidence that startup
+                # stalled. Continue checking the process and simulator lifecycle.
+                cutoff=None
             closing=self.step_episode_closed(row)
             if closing:
                 reason=self.closure_timeout(row)
@@ -826,15 +853,25 @@ class Batch:
             return  # Unreadable progress cannot extend the watchdog.
         if updates:self.update(row,**updates)
 
+    def controller_paths(self, runid):
+        controller=self.storage.spool/'controllers'/runid
+        controller.parent.mkdir(parents=True,exist_ok=True)
+        log=self.storage.spool/'logs'/f'{runid}_controller.log'
+        log.parent.mkdir(parents=True,exist_ok=True)
+        return controller,log
+
     def run_one(self, row, gpu):
         runid=row['run_id'];port=self.c['base_port']+gpu
         unit=f"mas-b100-{row['index']:03d}-r{row.get('attempt',1)}-{self.c['batch_tag']}.service"
         remote_run=Path(self.c['data_root'])/'runs'/runid
-        controller=self.root/'controllers'/runid
+        # Model events, project files and status updates must not depend on NAS
+        # publication during execution. Archive this local directory afterwards.
+        controller,controller_log=self.controller_paths(runid)
         own_unit=False;launch_requested=False;process=None;deadline=None;startup_deadline=None
         native_fault_capture=self.c.get('native_fault_capture',False) is True
         self.update(row,status='running',stage='asset_preflight',started_at=now(),gpu_index=gpu,
                     simulator_unit=unit,simulator_output=str(remote_run),controller_output=str(controller),
+                    controller_log=str(controller_log),controller_storage_policy='local_during_execution',
                     worker_id=self.c['id'],worker_host=self.c['ssh'][-1],runtime_source=str(self.source),
                     port=port,simulator_interpreter=self.c['sim_python'],source=self.source_info,
                     scheduler_source=getattr(self,'scheduler_info',self.source_info),
@@ -963,7 +1000,7 @@ class Batch:
             if self.c.get('model_provider_profile'):
                 cmd += ['--model-provider-profile',self.c['model_provider_profile']]
             if self.c.get('isolate_client_storage'):cmd.append('--isolate-client-storage')
-            with (self.root/'logs'/f'{runid}_controller.log').open('w') as log:
+            with controller_log.open('w') as log:
                 process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,env=self.environment)
                 self.update(row,controller_wrapper_pid=process.pid,controller_host=os.uname().nodename,
                             controller_interpreter=sys.executable)
@@ -1032,6 +1069,15 @@ class Batch:
 
     def archive(self,row,controller,remote_run):
         dest=self.root/'runs'/row['run_id'];dest.mkdir(exist_ok=True)
+        archived_controller=self.root/'controllers'/row['run_id']
+        if controller!=archived_controller and controller.is_dir():
+            # Only the archival worker touches shared storage here. Failure
+            # retains the local raw evidence and cannot cancel a live episode.
+            shutil.copytree(controller,archived_controller,dirs_exist_ok=True,symlinks=True)
+            self.update(row,controller_archive_output=str(archived_controller))
+        if row.get('controller_log'):
+            source_log=Path(row['controller_log'])
+            if source_log.is_file():shutil.copyfile(source_log,self.root/'logs'/source_log.name)
         log=self.ssh(['journalctl','--user','-u',row['simulator_unit'],'--no-pager','-o','short-iso'],timeout=60)
         (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
         # rsync needs the SSH command without the final host argument.
@@ -1136,7 +1182,7 @@ class Batch:
             return controller,remote_run
         try:
             path=controller/'controller.json'
-            if path.exists():metadata=self.controller_metadata(row,controller)
+            metadata=self.controller_metadata(row,controller)
             if not row.get('episode_deadline_unix') and not row.get('execution_clock_path') and self.manifest.get('episode_budget_policy') not in {'agent_steps','unbounded'}:
                 started=datetime.fromisoformat(metadata.get('started_at') or row['started_at']).timestamp()
                 row['episode_deadline_unix']=started+self.manifest['model_timeout_seconds']
@@ -1149,6 +1195,7 @@ class Batch:
                 self.refresh_startup_progress(row)
                 deadline=row.get('episode_deadline_unix')
                 cutoff=deadline or (None if row.get('execution_started_at_unix') else row['startup_deadline_unix'])
+                if not row.get('execution_started_at_unix') and (row.get('controller_storage') or {}).get('status')=='degraded':cutoff=None
                 closing=self.step_episode_closed(row)
                 if closing:
                     reason=self.closure_timeout(row)

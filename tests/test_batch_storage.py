@@ -18,6 +18,61 @@ spec.loader.exec_module(batch)
 
 
 class BatchStorageTests(unittest.TestCase):
+    def test_live_controller_files_are_local_when_shared_storage_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state=self.make_store(folder)
+            b=batch.Batch.__new__(batch.Batch);b.storage=state;b.root=state.root
+            mkdir=Path.mkdir
+            def unavailable(path,*args,**kwargs):
+                if path.is_relative_to(state.root):raise OSError(errno.EIO,'shared mount unavailable')
+                return mkdir(path,*args,**kwargs)
+            try:
+                with patch.object(Path,'mkdir',unavailable):
+                    controller,log=b.controller_paths('episode')
+                    controller.mkdir()
+                    (controller/'controller.json').write_text('{"status":"running"}')
+                    log.write_text('controller started\n')
+                self.assertTrue(controller.is_relative_to(state.spool))
+                self.assertFalse(controller.is_relative_to(state.root))
+                self.assertEqual(json.loads((controller/'controller.json').read_text())['status'],'running')
+            finally:state.close(.1)
+
+    def test_metadata_eio_preserves_observed_clock_and_recovers(self):
+        with tempfile.TemporaryDirectory() as folder:
+            controller=Path(folder);path=controller/'controller.json'
+            metadata={'status':'running','execution_started_at_unix':time.time(),
+                      'execution_clock':{'budget_policy':'unbounded'}}
+            path.write_text(json.dumps(metadata))
+            b=batch.Batch.__new__(batch.Batch);b.update=lambda row,**v:row.update(v)
+            b.worker_state=Mock();row={'run_id':'episode'}
+            self.assertEqual(b.controller_metadata(row,controller),metadata)
+            with patch.object(Path,'read_text',side_effect=OSError(errno.EIO,'shared mount unavailable')):
+                self.assertEqual(b.controller_metadata(row,controller),metadata)
+            self.assertEqual(row['execution_started_at_unix'],metadata['execution_started_at_unix'])
+            self.assertEqual(row['controller_storage']['status'],'degraded')
+            metadata['status']='passed';path.write_text(json.dumps(metadata))
+            self.assertEqual(b.controller_metadata(row,controller)['status'],'passed')
+            self.assertEqual(row['controller_storage']['status'],'passed')
+            self.assertNotIn('failure',row)
+
+    def test_first_metadata_eio_does_not_kill_a_live_controller_as_startup_timeout(self):
+        with tempfile.TemporaryDirectory() as folder:
+            b=batch.Batch.__new__(batch.Batch);b.update=lambda row,**v:row.update(v)
+            b.worker_state=Mock();b.refresh_startup_progress=Mock()
+            b.step_episode_closed=Mock(return_value=False);b.stop_controller=Mock()
+            row={'run_id':'episode','startup_deadline_unix':time.time()-10}
+            process=subprocess.Popen([sys.executable,'-c','import time;time.sleep(.15)'])
+            sleep=time.sleep
+            try:
+                with patch.object(Path,'read_text',side_effect=OSError(errno.EIO,'shared mount unavailable')), \
+                     patch.object(batch.time,'sleep',side_effect=lambda seconds:sleep(min(seconds,.01))):
+                    b.wait_controller(row,process,Path(folder))
+                self.assertEqual(process.returncode,0)
+                b.stop_controller.assert_not_called()
+                self.assertNotIn('startup_timed_out',row)
+            finally:
+                if process.poll() is None:process.kill();process.wait()
+
     def make_store(self, folder):
         root = Path(folder) / 'shared'; root.mkdir(exist_ok=True)
         reports = root / 'reports'

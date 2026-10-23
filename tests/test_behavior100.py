@@ -196,6 +196,7 @@ class BatchEvidenceTests(unittest.TestCase):
             for directory in ('logs','preflight'):(root/directory).mkdir()
             runner=batch.Batch.__new__(batch.Batch)
             runner.root=root;runner.source=Path(__file__).resolve().parents[1];runner.source_info={'commit':'fixture'}
+            runner.storage=Mock(spool=root/'local-spool')
             runner._worker_local=threading.local()
             runner._config={'id':'fixture','base_port':31000,'batch_tag':'test','data_root':'/fixture',
                             'sim_python':'/fixture/python','ssh':['ssh','fixture']}
@@ -215,6 +216,7 @@ class BatchEvidenceTests(unittest.TestCase):
     def test_simulator_launch_sends_retained_script_instead_of_shared_path(self):
         with tempfile.TemporaryDirectory() as folder:
             runner=self.make_queue_runner(folder)
+            runner.storage=Mock(spool=Path(folder)/'local-spool')
             for directory in ('logs','preflight','launchers'):(runner.root/directory).mkdir()
             runner.source=Path('/source snapshot')
             runner.manifest={'simulator_runtime_max_seconds':1800}
