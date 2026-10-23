@@ -16,8 +16,9 @@ class TransitionReadinessTests(unittest.TestCase):
             halves=[NS(name='half_'+str(i),initialized=False) for i in range(2)]
             sim=NS(_objects_to_initialize=[])
             backend=NS(og=NS(sim=sim),steps=17,output=Path(directory),
+                       deadline=NS(check=lambda **kw:None),
                        robot=NS(get_joint_positions=lambda:[],q_to_action=lambda q:'hold'))
-            backend._complete_pending_object_initialization=lambda:RGBBackend._complete_pending_object_initialization(backend)
+            backend._complete_pending_object_initialization=lambda remaining=8:RGBBackend._complete_pending_object_initialization(backend,remaining)
             unwound=[]
             def placement(*args,**kwargs):
                 try:
@@ -51,14 +52,17 @@ class TransitionReadinessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             sim=NS(_objects_to_initialize=[])
             backend=NS(og=NS(sim=sim),steps=0,output=Path(directory),
+                       deadline=NS(check=lambda **kw:None),
                        robot=NS(get_joint_positions=lambda:[],q_to_action=lambda q:None))
             backend._step=lambda action:self.fail('Ready scene advanced physics')
             RGBBackend._complete_pending_object_initialization(backend)
             sim._objects_to_initialize=[NS(name='pending',initialized=False)]
             def native_step(action):backend.steps+=1
             backend._step=native_step
-            with self.assertRaisesRegex(RuntimeError,'initialization did not settle'):
+            with self.assertRaises(SkillError) as error:
                 RGBBackend._complete_pending_object_initialization(backend)
+            self.assertEqual(error.exception.code,'scene_initialization_pending')
+            self.assertEqual(backend.steps,8)
             self.assertFalse(sim._objects_to_initialize[0].initialized)
 
 

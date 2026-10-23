@@ -107,8 +107,29 @@ are proposals only, with unchanged collision and settling acceptance checks.
     return result
 
 
+def closure_preference_available(backend):
+    """Keep a verified Inside result instead of spending its commit allowance.
+
+    Closing is a preference of Inside, not its postcondition. Reserve the
+    worst next trial (two half-second settles, a .75-second resting check,
+    contact steps and closure preview) before exploring another pose. The
+    real action still performs its ordinary free settling and verification.
+    Cancellation and the operation's hard limits remain unchanged.
+    """
+    local = getattr(backend, '_local_operation', None)
+    if local is None:
+        return True
+    remaining = (local.limits.max_sampling_steps -
+                 (backend.sampling_physics_steps-local.start_sampling))
+    reserve = math.ceil(2./backend.og.sim.get_physics_dt())+10
+    active_route = 0. if local.route_started is None else local.clock()-local.route_started
+    work_seconds = local.clock()-local.started-local.route_wall_seconds-active_route
+    return (remaining > reserve and local.step_limit-(backend.steps-local.start_steps) > 50
+            and local.limits.wall_seconds-work_seconds > 30.)
+
+
 def sample_assembly_inside(backend, held, target, contents, *, point=None, residents=(),
-                           max_candidates=108, max_seconds=None):
+                           max_candidates=108, max_seconds=None, open_fallback=None):
     """Search all selected-container volumes and nearby supported orientations.
 
 Unlike sampling root origins uniformly, bounds refer to the whole assembly
@@ -157,7 +178,10 @@ Rejected candidate poses never become committed actions or task evidence.
         sim.load_state(state, serialized=False)
         restore_particle_state(particle_state)
 
-    open_only = None
+    # The native sampler may already have found a stable, valid Inside pose.
+    # Carry that result into the optional search rather than losing it when
+    # another sampler reaches the enclosing operation's work limit.
+    open_only = open_fallback
 
     def accept_open_only():
         nonlocal accepted
@@ -173,6 +197,10 @@ Rejected candidate poses never become committed actions or task evidence.
 
     def check(*, admission=True):
         backend.deadline.check(changed=dirty)
+        if open_only is not None and not closure_preference_available(backend):
+            raise SkillError('placement_preference_exhausted',
+                             'Retain verified Inside pose before optional closure search consumes commit work',
+                             changed=dirty)
         # Finite geometry preparation must produce at least one real trial.
         # The shared operation/cancellation guard still bounds preparation;
         # charging its wall time against the first trial produced zero-attempt
@@ -494,8 +522,11 @@ Rejected candidate poses never become committed actions or task evidence.
         return accept_open_only()
     except SkillError as exc:
         identity_changed = identity_changed or exc.code == 'target_changed'
-        if exc.code == 'sampling_budget_exhausted' and open_only is not None:
+        if exc.code in {'sampling_budget_exhausted', 'placement_preference_exhausted'} and open_only is not None:
             backend.deadline.check(changed=True)
+            backend._placement_record({'status':'inside_closure_preference_stopped',
+                'held':held.name, 'target':target.name, 'reason':exc.code,
+                'retained_verified_inside':True})
             return accept_open_only()
         raise
     finally:

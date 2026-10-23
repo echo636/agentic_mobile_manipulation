@@ -299,6 +299,36 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertEqual(caught.exception.code,'execution_timeout')
         self.assertEqual(float(held.position[0]),5.)
 
+    def test_verified_native_inside_survives_optional_search_near_work_limit(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide='all')
+        original=held.get_position_orientation()
+        held.position=b.torch.tensor([0.,0.,.2])
+        saved_particles=[object()]
+        fallback={'state':b.og.sim.dump_state(), 'particles':saved_particles,
+                  'candidate':{'candidate':0,'origin':'native_sampler'}}
+        held.set_position_orientation(*original)
+        b.steps=0;b.sampling_physics_steps=960
+        b._local_operation=SimpleNamespace(start_sampling=0,start_steps=0,step_limit=600,
+            clock=lambda:10.,started=0.,route_started=None,route_wall_seconds=0.,
+            limits=SimpleNamespace(max_sampling_steps=1200,wall_seconds=300.))
+        with patch.dict('sys.modules',modules), patch(
+                'manipulation_agent.executors.particle_payload.restore_particle_state') as restore_particles:
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,open_fallback=fallback))
+        restore_particles.assert_called_once_with(saved_particles)
+        self.assertEqual(float(held.position[0]),0.)
+        self.assertEqual(records[-1]['attempted'],0)
+        self.assertTrue(records[-1]['accepted'])
+        self.assertEqual(b.sampling_physics_steps,960)
+
+    def test_verified_inside_fallback_does_not_swallow_external_cancellation(self):
+        b,held,target,contents,state,records,modules=self.fixture()
+        fallback={'state':b.og.sim.dump_state(), 'particles':[], 'candidate':{'candidate':0}}
+        b.deadline.check=lambda **kwargs:(_ for _ in ()).throw(SkillError('episode_cancelled','cancelled'))
+        with patch.dict('sys.modules',modules),self.assertRaises(SkillError) as caught:
+            sample_assembly_inside(b,held,target,contents,open_fallback=fallback)
+        self.assertEqual(caught.exception.code,'episode_cancelled')
+        self.assertFalse(any(r.get('status')=='inside_candidate_accepted' for r in records))
+
     def test_recorded_plate_larger_than_annotation_reaches_physics(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         held.extent=b.torch.tensor([.40778923,.40779799,.04712933])
