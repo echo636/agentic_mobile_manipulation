@@ -706,6 +706,22 @@ class Batch:
         remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-c',code])
         return self.c['ssh']+[remote]
 
+    def collect_runtime_preflight(self, row):
+        """Keep in-unit admission evidence when its manifest lives on a worker disk."""
+        manifest = Path(row.get('runtime_manifest', self.root / 'manifest.json'))
+        if manifest == self.root / 'manifest.json':
+            return
+        names = [row['run_id'] + suffix for suffix in ('_in_unit.json', '_assets_in_unit.json')]
+        code = ('import json;from pathlib import Path;p=Path(' + repr(str(manifest.parent / 'preflight')) + ');'
+                'print(json.dumps({n:json.loads((p/n).read_text()) for n in ' + repr(names) + ' if (p/n).exists()}))')
+        result = self.ssh(['/usr/bin/python3', '-S', '-c', code], timeout=20)
+        if result.returncode:
+            raise RuntimeError('Worker admission evidence is temporarily unavailable')
+        for name, data in json.loads(result.stdout).items():
+            if name not in names:
+                raise ValueError('Unexpected worker admission artifact')
+            write_json(self.root / 'preflight' / name, data)
+
     def read_controller_metadata(self, controller):
         """A telemetry read failure must not terminate a healthy model episode."""
         key=str(controller)
@@ -1054,6 +1070,11 @@ class Batch:
                 except Exception as finish_error:
                     self.update(row,finish_failure=f'{type(finish_error).__name__}: {finish_error}')
         finally:
+            try:
+                self.collect_runtime_preflight(row)
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+                self.journal({'event': 'worker_preflight_collection_unavailable',
+                              'run_id': runid, 'error_type': type(exc).__name__})
             # An SSH timeout may hide a successful remote systemd launch. The
             # declared unit remains reserved until cleanup is positively verified.
             if launch_requested:own_unit=True
@@ -1321,7 +1342,8 @@ class Batch:
             'source_commit','source_tree','evaluation_revision','model_provider_profile',
             'original_instruction','original_instruction_source','original_instruction_sha256',
             'instruction_correction','task_instructions_changed','episode_budget_policy',
-            'max_agent_steps','custom_task_spec'}
+            'max_agent_steps','custom_task_spec','custom_task_spec_sha256',
+            'custom_instance_id','custom_instance_sha256','instruction_language'}
         with self.lock:
             old={**row,'status':'failed','task_success':None,'failure_kind':'infrastructure_resource_admission',
                  'resource_rejected_checks':failed,'archive_status':'not_applicable_before_simulator_start',

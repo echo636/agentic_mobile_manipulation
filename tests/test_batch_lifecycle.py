@@ -19,6 +19,19 @@ batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_staged_worker_admission_is_collected_before_resource_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b = self.runner(tmp, 1)
+            for name in ('preflight', 'worker/preflight'):
+                (Path(tmp) / name).mkdir(parents=True)
+            row = b.rows[0]
+            row.update(run_id='staged_r1', runtime_manifest=str(Path(tmp) / 'worker/manifest.json'))
+            evidence = {'status': 'blocked', 'checks': {'gpu_capacity': False}}
+            (Path(tmp) / 'worker/preflight/staged_r1_in_unit.json').write_text(json.dumps(evidence))
+            b.ssh = lambda args, **kwargs: subprocess.run(args, capture_output=True, text=True, **kwargs)
+            b.collect_runtime_preflight(row)
+            self.assertEqual(json.loads((Path(tmp) / 'preflight/staged_r1_in_unit.json').read_text()), evidence)
+
     def test_controller_read_eio_during_live_poll_preserves_clock_and_recovers(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp,1);b.worker_state=Mock();output=Path(tmp)/'controller';output.mkdir()
