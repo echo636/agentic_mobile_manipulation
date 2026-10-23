@@ -270,6 +270,8 @@ def assets(manifest, data_root):
 def main():
     p=argparse.ArgumentParser(); p.add_argument('mode', choices=['preflight', 'assets', 'simulate'])
     p.add_argument('--manifest',type=Path,required=True); p.add_argument('--index',type=int)
+    p.add_argument('--executor-source',type=Path,
+                   help='Verified frozen executor path, independent of the scheduler helper')
     p.add_argument('--gpu',type=int); p.add_argument('--port',type=int); p.add_argument('--unit'); p.add_argument('--run-id')
     p.add_argument('--data-root',type=Path,required=True)
     p.add_argument('--min-free-gpu-mib',type=int,default=0)
@@ -330,6 +332,13 @@ def main():
     if row.get('custom_task_spec'):
         args+=['--custom-task',row['custom_task_spec']]
     if manifest.get('require_task_notes'): args.append('--require-task-notes')
+    if a.executor_source is not None:
+        # exec starts a new interpreter. Keep its imports on the selected
+        # executor even when this launch helper came from a newer scheduler.
+        executor_import = str(a.executor_source / 'src')
+        existing = [path for path in os.environ.get('PYTHONPATH', '').split(os.pathsep)
+                    if path and path != executor_import]
+        os.environ['PYTHONPATH'] = os.pathsep.join([executor_import, *existing])
     os.execv(sys.executable,args)
 
 

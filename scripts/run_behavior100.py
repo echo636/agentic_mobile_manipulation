@@ -88,7 +88,8 @@ def worker_configs(config):
                'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
                'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib', 'admission_delay_seconds',
                'simulator_appdata_path', 'simulator_tmpdir', 'startup_memory_gib',
-               'validated_driver_version', 'driver_validation_evidence'}
+               'validated_driver_version', 'driver_validation_evidence',
+               'runtime_source_path', 'runtime_scheduler_path', 'runtime_manifest_path', 'runtime_staging'}
     result=[]; ids=set(); devices=set(); ports=set()
     for lane in lanes:
         if set(lane)-allowed: raise ValueError('Unsupported worker fields')
@@ -277,6 +278,18 @@ class Batch:
     @property
     def c(self):
         return getattr(self._worker_local, 'config', self._config)
+
+    @property
+    def remote_source(self):
+        return Path(self.c.get('runtime_source_path', self.source))
+
+    @property
+    def remote_scheduler(self):
+        return Path(self.c.get('runtime_scheduler_path', getattr(self, 'scheduler_source', self.source)))
+
+    @property
+    def remote_manifest(self):
+        return Path(self.c.get('runtime_manifest_path', self.root / 'manifest.json'))
 
     def __init__(self, config):
         self._config=config; self._worker_local=threading.local(); self.workers=worker_configs(config)
@@ -528,8 +541,8 @@ class Batch:
     def resource_admission(self):
         """No task is claimed here; immutable host checks run once per worker."""
         self.worker_state('admitting')
-        args=[self.c['sim_python'],str(getattr(self,'scheduler_source',self.source)/'scripts/behavior100_remote.py'),'preflight',
-              '--manifest',str(self.root/'manifest.json'),'--gpu',str(self.c['gpu']),
+        args=[self.c['sim_python'],str(self.remote_scheduler/'scripts/behavior100_remote.py'),'preflight',
+              '--manifest',str(self.remote_manifest),'--gpu',str(self.c['gpu']),
               '--port',str(self.c['base_port']+self.c['gpu']),'--data-root',self.c['data_root'],
               '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
               '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0))]
@@ -543,7 +556,7 @@ class Batch:
         # frozen source directory. Probe the actual working filesystem: a full
         # home quota must not reject a run whose output/cache/temp are elsewhere.
         response=self.ssh(['/bin/bash','-lc',
-                          'cd '+shlex.quote(str(self.source))+'\nexec '+shlex.join(args)])
+                          'cd '+shlex.quote(str(self.remote_source))+'\nexec '+shlex.join(args)])
         if response.returncode:
             self.worker_state('waiting_for_resources',reason='Resource query unavailable')
             return False
@@ -682,7 +695,7 @@ class Batch:
         self.journal(f"END {row['run_id']}: outcome={outcome}; reason={reason}; task_success={row.get('task_success')}; Q={row.get('q_score')}.")
 
     def execution_clock_command(self, path, seconds, runtime=None, row=None):
-        runtime=Path(runtime or self.source)
+        runtime=Path(runtime or self.remote_source)
         manifest=getattr(self,'manifest',{})
         policy=(row or {}).get('episode_budget_policy',manifest.get('episode_budget_policy'))
         if policy in {'agent_steps','unbounded'}:seconds=None
@@ -898,7 +911,8 @@ class Batch:
         native_fault_capture=self.c.get('native_fault_capture',False) is True
         self.update(row,status='running',stage='asset_preflight',started_at=now(),gpu_index=gpu,
                     simulator_unit=unit,simulator_output=str(remote_run),controller_output=str(controller),
-                    worker_id=self.c['id'],worker_host=self.c['ssh'][-1],runtime_source=str(self.source),
+                    worker_id=self.c['id'],worker_host=self.c['ssh'][-1],runtime_source=str(self.remote_source),
+                    runtime_manifest=str(self.remote_manifest),runtime_staging=self.c.get('runtime_staging'),
                     port=port,simulator_interpreter=self.c['sim_python'],source=self.source_info,
                     scheduler_source=getattr(self,'scheduler_info',self.source_info),
                     recording_options=self.c.get('simulator_env',{}),
@@ -908,8 +922,8 @@ class Batch:
                         validated_driver_version=self.c['validated_driver_version'])
         self.journal(f'START {runid}; admitted worker {self.c["id"]}; unit {unit}.')
         try:
-            asset_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'assets',
-                       '--manifest',str(self.root/'manifest.json'),'--index',str(row['index']),
+            asset_cmd=[self.c['sim_python'],str(self.remote_source/'scripts/behavior100_remote.py'),'assets',
+                       '--manifest',str(self.remote_manifest),'--index',str(row['index']),
                        '--data-root',self.c['data_root']]
             # Task assets include hashing shared-storage files. A short SSH
             # telemetry timeout can expire before a healthy preflight finishes
@@ -935,8 +949,9 @@ class Batch:
             clock_path=remote_run/'execution_clock.json'
             grace=self._config.get('cleanup_grace_seconds',120)
             launcher=self.root/'launchers'/f'{runid}.sh';q=shlex.quote
-            command=[self.c['sim_python'],str(getattr(self,'scheduler_source',self.source)/'scripts/behavior100_remote.py'),'simulate',
-                '--manifest',str(self.root/'manifest.json'),'--index',str(row['index']),'--run-id',runid,
+            command=[self.c['sim_python'],str(self.remote_scheduler/'scripts/behavior100_remote.py'),'simulate',
+                '--executor-source',str(self.remote_source),
+                '--manifest',str(self.remote_manifest),'--index',str(row['index']),'--run-id',runid,
                 '--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root'],
                 '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
                 '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0)),
@@ -950,7 +965,7 @@ class Batch:
             fault_env=''
             if native_fault_capture:
                 command=['/usr/bin/gdb','--batch','-q','-nx','-x',
-                    str(self.source/'scripts/capture_native_fault.gdb'),'--args',*command]
+                    str(self.remote_source/'scripts/capture_native_fault.gdb'),'--args',*command]
                 fault_env='\nexport MAS_NATIVE_FAULT_DIR='+q(str(remote_run))
             overrides=''.join('\nexport '+key+'='+q(str(value)) for key,value in self.c.get('simulator_env',{}).items())
             appdata=self.c.get('simulator_appdata_path',self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))
@@ -959,13 +974,13 @@ class Batch:
             launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+
                 '\nsource '+q(self.c['sim_env'])+overrides+fault_env+'\nunset MAS_EPISODE_DEADLINE_UNIX'+
                 '\nexport MAS_EXECUTION_CLOCK_PATH='+q(str(clock_path))+
-                '\nexport PYTHONPATH='+q(str(self.source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(appdata)+
+                '\nexport PYTHONPATH='+q(str(self.remote_source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(appdata)+
                 '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"'+scratch+'\nexec '+shlex.join(command)+'\n')
             launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
                 '-p','MemoryMax='+self.c.get('simulator_memory_max',str(self.c.get('memory_budget_gib',28))+'G'),
                 '-p','CPUQuota=800%',
                 '-p','TasksMax=2048','-p','LimitCORE=0','-p','TimeoutStopSec=30',
-                '-p','KillMode=control-group','-p','SuccessExitStatus=2','-p','WorkingDirectory='+str(self.source)]
+                '-p','KillMode=control-group','-p','SuccessExitStatus=2','-p','WorkingDirectory='+str(self.remote_source)]
             launch+=inline_systemd_launcher(launcher.read_text())
             lease=getattr(self._worker_local,'lease',None)
             if lease:lease.record(run_id=runid,unit=unit,released=False,runtime_stage='starting')
@@ -1002,7 +1017,7 @@ class Batch:
             if lease:lease.record(runtime_stage='ready')
             self.release_startup_gate()
             self.worker_state('controller_starting',run_id=runid,startup_deadline_unix=row['startup_deadline_unix'])
-            remote=shlex.join(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],
+            remote=shlex.join(['env','PYTHONPATH='+str(self.remote_source/'src'),self.c['sim_python'],
                 '-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
             cmd=[sys.executable,str(self.source/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
                  '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
@@ -1065,7 +1080,7 @@ class Batch:
             timeout=self._config.get('finish_stage_timeout_seconds',600)
             code=("from manipulation_agent.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{row["port"]}')+
                 ",'finish',{'outcome':'aborted','reason':'Controller ended or episode deadline reached'},'batch-supervisor-finish',timeout="+str(timeout)+",origin='supervisor'))")
-            result=self.ssh(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],'-c',code],timeout=timeout+5)
+            result=self.ssh(['env','PYTHONPATH='+str(Path(row.get('runtime_source', self.remote_source))/'src'),self.c['sim_python'],'-c',code],timeout=timeout+5)
             (self.root/'logs'/f'{row["run_id"]}_forced_finish.log').write_text(result.stdout+result.stderr)
             self.update(row,supervisor_finish_exit_code=result.returncode)
         fallback_end=time.time()+self._config.get('finish_stage_timeout_seconds',600)
