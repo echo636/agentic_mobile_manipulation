@@ -106,7 +106,17 @@ def checked_open_goal(backend, obj, check):
             if not obj.states[Open].get_value():continue
             # Never integrate hypothetical overlapping endpoints. The actual
             # operation still checks collision clearance and physical settling.
-            clearance=moving_link_clearance(backend,links,candidate_moving,ignored,check)
+            # Reopening the selected fully open leaf yields the identical
+            # joint state. There is no swept geometry to certify; requiring a
+            # queried collision piece would reject every repeated open call.
+            # Keep missing/disabled geometry rejection for any actual motion.
+            unchanged=(fraction==1. and not candidate_moving
+                       and backend.torch.equal(goal,initial))
+            clearance=(dict(clear=True,method='unchanged_open_joint_state',
+                            queried_collision_pieces=0,overlapping_enclosures=[],
+                            missing_collision_geometry=[])
+                       if unchanged else
+                       moving_link_clearance(backend,links,candidate_moving,ignored,check))
             trials.append(dict(policy=policy,joint_index=index,fraction=fraction,official_open=True,**clearance))
             if clearance['clear']:
                 backend._placement_record(dict(status='articulation_open_endpoint_selected',target=obj.name,
