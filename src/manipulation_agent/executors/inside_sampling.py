@@ -356,24 +356,29 @@ Rejected candidate poses never become committed actions or task evidence.
         pose_score=pose_factory(held,assembly) if pose_factory is not None else None
         if ranker is not None:
             score=ranker(assembly)
+            ranking = {'scored': 0, 'clear': 0, 'deferred': 0,
+                       'strategy': 'clear_poses_before_overlap_fallback' if pose_score is not None and not payload_locked
+                                   else 'bounded_window'}
             def ranked_windows(source):
-                # Cheap piece queries cover more positions/orientations before
-                # costly physics trials. The same work and candidate budgets
-                # still apply, and scores never remove a candidate.
+                # Piece-box overlap is conservative: retain every proposal.
+                # Spend cheap queries across the finite geometry generator
+                # before exhausting physics on the first overlapping window.
+                deferred=[]
                 while window:=list(itertools.islice(source,128 if pose_score is not None and was_open is True else 64)):
                     check()
-                    # An envelope hit is only a ranking heuristic. Concave
-                    # shapes must still get their precise physical trial.
-                    def order(c):
-                        scene_overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
+                    ranked=[]
+                    for c in window:
+                        overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
+                        priority=(overlap,)
                         if not payload_locked and was_open is True and closure_geometry is not None:
-                            # Closed-lid clearance precedes the room envelope:
-                            # a tall unobstructed pose can still prevent closing.
-                            # Quantize height so sub-mm geometry noise does not
-                            # override the diversified position order.
-                            return (closed_overlap(c),scene_overlap,round(top_height(c)/.01),round(occupancy(c),6))
-                        return (scene_overlap,)
-                    yield from sorted(window,key=order)
+                            priority+=(closed_overlap(c),round(top_height(c)/.01),round(occupancy(c),6))
+                        ranking['scored']+=1
+                        ranking['clear']+=int(not overlap)
+                        if pose_score is not None and not payload_locked and overlap:
+                            deferred.append((priority,c));ranking['deferred']+=1
+                        else:ranked.append((priority,c))
+                    yield from (c for _,c in sorted(ranked,key=lambda pair:pair[0]))
+                yield from (c for _,c in sorted(deferred,key=lambda pair:pair[0]))
             candidates=ranked_windows(iter(candidates))
         generation_seconds=time.monotonic()-start
         seen=set();locations=set();duplicates=0
@@ -496,5 +501,6 @@ Rejected candidate poses never become committed actions or task evidence.
                                    'empty_insets':empty_insets, 'domain_attempts':domain_attempts,
                                    'unique_xy_attempted':len(locations) if 'locations' in locals() else 0,
                                    'duplicate_poses_skipped':duplicates if 'duplicates' in locals() else 0,
+                                   'proposal_ranking':ranking if 'ranking' in locals() else None,
                                    'generation_seconds':generation_seconds if 'generation_seconds' in locals() else None,
                                    'seconds':time.monotonic()-start, 'held':held.name, 'target':target.name})
