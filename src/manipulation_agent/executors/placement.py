@@ -343,7 +343,7 @@ class CheckedPlacement:
             raise SkillError('invalid_geometry', 'Carried object collision geometry is not finite')
         return result
 
-    def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=()):
+    def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=(), *, offsets=None):
         """Propose root poses at the selected collision surface, with the actual shape.
 
         Surface rays ignore the moving assembly at its OLD pose. Space at the
@@ -362,8 +362,9 @@ class CheckedPlacement:
             orientation = T.quat_multiply(rotation, orientation)
         ignored = [link.prim_path for obj in (held, self.robot, *payload) for link in obj.links.values()]
         target_paths = {link.prim_path for link in target.links.values()}
-        offsets = [(0., 0.)] + [(x, y) for radius in (.04, .08, .12)
-                               for x, y in ((radius, 0), (-radius, 0), (0, radius), (0, -radius))]
+        if offsets is None:
+            offsets = [(0., 0.)] + [(x, y) for radius in (.04, .08, .12)
+                                   for x, y in ((radius, 0), (-radius, 0), (0, radius), (0, -radius))]
         candidates = []
         # Stay above contact offsets even after the first physics step, as in
         # OG's standard kinematic sampler. This is clearance, not support area.
@@ -406,6 +407,53 @@ class CheckedPlacement:
         candidates.extend(self._open_rim_candidates(held,target,point,vertices,anchor,orientation,
                           offsets,payload,clearance,start_index=len(offsets)))
         return candidates
+
+    def _surface_fallback_candidates(self, held, target, point, yaw_degrees=None, payload=()):
+        """Cover nearby diagonal positions and yaw after ordinary trials fail.
+
+        The selected object, shelf and 20 cm verification neighborhood stay
+        unchanged. Loaded items rotate only around gravity; an explicit yaw
+        remains binding. Overlap scores order proposals without rejecting any.
+        """
+        import math
+        from omnigibson.utils import transform_utils as T
+        current = T.quat2mat(held.get_position_orientation()[1])
+        reference = T.quat2mat(target.get_position_orientation()[1])
+        aligned = math.degrees(math.atan2(float(reference[1, 0]), float(reference[0, 0])) -
+                               math.atan2(float(current[1, 0]), float(current[0, 0])))
+        angles = [yaw_degrees] if yaw_degrees is not None else [None, 90., aligned, aligned + 90.]
+        offsets = [(0., 0.)] + sorted(
+            [(x * .04, y * .04) for x in range(-4, 5) for y in range(-4, 5)
+             if 0 < (x * .04) ** 2 + (y * .04) ** 2 <= .18 ** 2],
+            key=lambda xy: xy[0] ** 2 + xy[1] ** 2)
+        proposals, seen = [], set()
+        for angle in angles:
+            self.deadline.check()
+            local = getattr(self, '_local_operation', None)
+            if local is not None:
+                local.check()
+            for candidate in self._surface_candidates(held, target, point, angle, payload, offsets=offsets):
+                position, orientation = candidate['pose']
+                key = tuple(round(float(v), 5) for v in (*position, *orientation))
+                if key in seen:
+                    continue
+                seen.add(key)
+                candidate.update(index=len(proposals), proposal_yaw_degrees=angle)
+                proposals.append(candidate)
+        ranker = self._inside_pose_overlap_ranker(held, [held, *payload])
+
+        def rank(candidate):
+            position, orientation = candidate['pose']
+            score = ranker(position.tolist(), orientation) if ranker is not None else 0.
+            candidate['proposal_overlap_score'] = score
+            distance = sum(v * v for v in candidate['offset_xy_m'])
+            return score, round(distance, 6), abs(candidate['proposal_yaw_degrees'] or 0.)
+
+        proposals.sort(key=rank)
+        self._placement_record({'status': 'surface_proposal_coverage', 'target': target.name, 'held': held.name,
+            'proposals': len(proposals), 'zero_overlap': sum(not c['proposal_overlap_score'] for c in proposals),
+            'angles_degrees': angles, 'unchanged_support_and_collision_acceptance': True})
+        return proposals
 
     def _collision_triangles(self, obj):
         """World triangles for support proposals; PhysX still verifies each hit."""
@@ -563,11 +611,28 @@ class CheckedPlacement:
                 self._carry_detach()
                 trial_state = self.og.sim.dump_state(serialized=False)
                 accepted = None
+                def candidate_stream():
+                    yield from candidates
+                    # Restore the detached assembly's original pose before
+                    # generating alternatives. Failed trials may have tilted
+                    # it; those poses must not redefine a requested yaw.
+                    self.og.sim.load_state(trial_state, serialized=False)
+                    start_index = 1 + max((c['index'] for c in candidates), default=-1)
+                    for index, candidate in enumerate(self._surface_fallback_candidates(
+                            held, target, point, yaw_degrees, payload)):
+                        candidate['index'] = start_index + index
+                        yield candidate
+
                 # Start with one second of free physics. A supported body may
                 # still be settling; measure its motion instead of treating
                 # this first observation as a fixed stability deadline.
                 settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
-                for number, candidate in enumerate(candidates):
+                tried_poses = set()
+                for number, candidate in enumerate(candidate_stream()):
+                    pose_key = tuple(round(float(v), 5) for vector in candidate['pose'] for v in vector)
+                    if pose_key in tried_poses:
+                        continue
+                    tried_poses.add(pose_key)
                     if number:
                         self.og.sim.load_state(trial_state, serialized=False)
                     held.set_position_orientation(*candidate['pose'])

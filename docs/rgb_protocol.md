@@ -106,6 +106,13 @@ The production observer supplies only RGB to the model and does not require a
 segmentation annotator. Same-frame renderer instance labels can be enabled in
 private regression probes to check object ownership.
 
+`place_on_top` first tries its ordinary nearby poses. If they all fail, it
+also covers diagonal positions and yaw aligned with the selected support.
+An explicitly requested yaw stays fixed. These alternatives retain the same
+selected object, shelf, 20 cm neighborhood, collision checks, settling checks
+and payload verification. Cheap overlap scores order candidates without
+discarding them, and rejected trials restore the scene before the next trial.
+
 `place_next_to` selects a reference object from RGB, then searches nearby upward
 physical surfaces without a floor/lawn category whitelist. When the reference's
 supporting surface can be identified geometrically, candidates use that support

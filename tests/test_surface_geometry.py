@@ -136,6 +136,14 @@ class PlacementRejectionTransactions(unittest.TestCase):
         backend._surface_candidates = lambda *args: [
             {'index': i, 'pose': ([float(i+5), 0., 1.], [0.,0.,0.,1.]), 'clearance_m': .025}
             for i in range(2)]
+        def fallback(*args):
+            # Generate alternatives from the original scene, not a failed
+            # collision trial. A repeated pose must not be simulated twice.
+            self.assertEqual(world, initial)
+            return [
+                {'index': i, 'pose': ([x, 0., 1.], [0.,0.,0.,1.]), 'clearance_m': .025}
+                for i, x in enumerate((5., 7.))]
+        backend._surface_fallback_candidates = fallback
         def step():
             physics.append(copy.deepcopy(world))
             world['neighbor'][0] += 1.  # Candidate collisions must not move other objects permanently.
@@ -152,14 +160,14 @@ class PlacementRejectionTransactions(unittest.TestCase):
             with self.assertRaises(SkillError) as error:
                 backend._try_place_on_top(held, SimpleNamespace(name='table'), 50, [0.,0.,1.])
         self.assertEqual(error.exception.code, 'sampling_error')
-        self.assertEqual(len(physics), 2)
+        self.assertEqual(len(physics), 3)
         self.assertEqual(world, initial)
         self.assertIs(backend._ideal_held, held)
         self.assertIs(backend._carry_relative, relation)
         self.assertEqual(backend._carry_dependencies, dependencies)
-        self.assertEqual(len(loads), 2)  # Restore between trials, then outer transaction rollback.
+        self.assertEqual(len(loads), 4)  # Two new trials, fallback generation, outer rollback.
         self.assertEqual([r['stage'] for r in records if r['status'] == 'candidate_rejected'],
-                         ['raised_pose_collision', 'raised_pose_collision'])
+                         ['raised_pose_collision'] * 3)
         self.assertEqual(records[-1]['status'], 'rolled_back')
 
 
