@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 import time
 
-STARTUP_POLICY = 'stage_progress_v1'
+STARTUP_POLICY = 'stage_progress_v2'
 
 
 def startup_event(output, stage, status, **extra):
@@ -47,7 +47,7 @@ def startup_event(output, stage, status, **extra):
 @contextmanager
 def startup_stage(output, name):
     started = time.monotonic()
-    startup_event(output, name, 'running', elapsed_seconds=0.0)
+    entered = startup_event(output, name, 'running', elapsed_seconds=0.0)
     try:
         yield
     except BaseException as exc:
@@ -55,7 +55,8 @@ def startup_stage(output, name):
                       error_type=type(exc).__name__, error=str(exc))
         raise
     else:
-        startup_event(output, name, 'passed', elapsed_seconds=time.monotonic()-started)
+        startup_event(output, name, 'passed', elapsed_seconds=time.monotonic()-started,
+                      operation_started_at_unix=entered['at_unix'])
 
 
 @contextmanager
@@ -63,9 +64,9 @@ def instrument_startup_calls(output, calls):
     """Temporarily report real constructor work without changing its outcome.
 
     Each key identifies a finite scene/object operation within its native call
-    path. Saving and resetting the same object are separate passes; repeating
-    the same path still cannot renew the watchdog indefinitely. No counters,
-    timer heartbeats or simulator state mutation are introduced. Only use during
+    path. A completed invocation carries its matching entry time, so repeated
+    native restoration passes count as real work. Polls and incomplete repeated
+    entries are never progress. No simulator state is changed. Only use during
     single-threaded construction; restore all methods even if it fails.
     """
     originals = []
@@ -109,9 +110,10 @@ def instrument_startup_calls(output, calls):
 def startup_progress_update(row, events, observed_at):
     """Pure transition: only fresh, unique milestones renew an unarmed attempt.
 
-    Persisted legacy attempts keep their original deadline. A repeated milestone,
-    heartbeat, malformed event, or event after a genuine idle expiry cannot keep
-    a stuck constructor alive. Execution always takes over with its fixed clock.
+    Persisted legacy attempts keep their original deadline. Replayed records,
+    heartbeats and incomplete repeated entries cannot renew it. A repeated native
+    operation counts only after its matching entry and successful return; large
+    scenes legitimately restore the same objects more than once.
     """
     if row.get('startup_watchdog_policy') != STARTUP_POLICY or row.get('episode_deadline_unix'):
         return {}
@@ -120,6 +122,7 @@ def startup_progress_update(row, events, observed_at):
     idle = row['startup_timeout_seconds']
     seen = set(row.get('startup_seen_milestones', []))
     latest = None
+    entries = set()
     for event in events:
         if not isinstance(event, dict):
             continue
@@ -127,7 +130,14 @@ def startup_progress_update(row, events, observed_at):
         if (not isinstance(stage, str) or not stage or status not in {'running', 'passed'}
                 or isinstance(at, bool) or not isinstance(at, (int, float)) or not math.isfinite(at)):
             continue
+        if status == 'running':
+            entries.add((stage, at))
         key = stage + ':' + status
+        started = event.get('operation_started_at_unix')
+        if (status == 'passed' and isinstance(started, (int, float))
+                and not isinstance(started, bool) and began <= started <= at
+                and (stage, started) in entries):
+            key += ':' + str(started)
         if key in seen or not began <= at <= min(observed_at + 5, deadline):
             continue
         seen.add(key)

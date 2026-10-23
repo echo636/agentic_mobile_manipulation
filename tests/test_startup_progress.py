@@ -109,7 +109,7 @@ class StartupProgressTests(unittest.TestCase):
         self.assertEqual(startup_progress_update(row, [
             dict(stage='native_object_table_load', status='passed', at_unix=3500.)], 3501.), {})
 
-    def test_repeated_objects_in_distinct_native_passes_renew_but_same_pass_does_not(self):
+    def test_repeated_native_pass_renews_only_after_completed_operations(self):
         clock = [200.]
         class Loader:
             def restore(self, name):
@@ -134,12 +134,20 @@ class StartupProgressTests(unittest.TestCase):
                 events = [json.loads(s) for s in path.read_text().splitlines()]
                 row.update(startup_progress_update(row, events, 2201.))
                 self.assertEqual(row['startup_deadline_unix'], 3200.)
-                self.assertIn('native_load/object_chair_restore:passed', row['startup_seen_milestones'])
-                self.assertIn('native_reset/object_chair_restore:passed', row['startup_seen_milestones'])
+                self.assertTrue(any(k.startswith('native_load/object_chair_restore:passed:')
+                                    for k in row['startup_seen_milestones']))
+                self.assertTrue(any(k.startswith('native_reset/object_chair_restore:passed:')
+                                    for k in row['startup_seen_milestones']))
                 clock[0] = 2300.
                 loader.run('reset', (2800., 3100.))
                 repeated = [json.loads(s) for s in path.read_text().splitlines()]
-                self.assertEqual(startup_progress_update(row, repeated, 3101.), {})
+                row.update(startup_progress_update(row, repeated, 3101.))
+                self.assertEqual(row['startup_deadline_unix'], 4100.)
+                self.assertEqual(startup_progress_update(row, repeated, 4101.), {})
+                # A new entry without a matching successful return is not work.
+                self.assertEqual(startup_progress_update(row, repeated + [
+                    dict(stage='native_reset/object_chair_restore', status='running', at_unix=4000.),
+                ], 4001.), {})
 
     def test_recursive_startup_calls_do_not_generate_unbounded_scope_keys(self):
         class Loader:
