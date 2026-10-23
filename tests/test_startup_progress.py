@@ -109,6 +109,57 @@ class StartupProgressTests(unittest.TestCase):
         self.assertEqual(startup_progress_update(row, [
             dict(stage='native_object_table_load', status='passed', at_unix=3500.)], 3501.), {})
 
+    def test_repeated_objects_in_distinct_native_passes_renew_but_same_pass_does_not(self):
+        clock = [200.]
+        class Loader:
+            def restore(self, name):
+                return name
+            def run(self, phase, times):
+                for name, at in zip(('chair', 'table'), times):
+                    clock[0] = at
+                    self.restore(name)
+        row = self.row()
+        row.update(startup_timeout_seconds=1000., startup_deadline_unix=1100.)
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch('manipulation_agent.startup_progress.time.time', side_effect=lambda: clock[0]):
+            with instrument_startup_calls(tmp, [
+                (Loader, 'run', lambda obj, phase, times: 'native_' + phase),
+                (Loader, 'restore', lambda obj, name: 'object_' + name + '_restore'),
+            ]):
+                loader = Loader()
+                loader.run('load', (300., 400.))
+                clock[0] = 800.
+                loader.run('reset', (1500., 2200.))
+                path = Path(tmp) / 'startup_stages.jsonl'
+                events = [json.loads(s) for s in path.read_text().splitlines()]
+                row.update(startup_progress_update(row, events, 2201.))
+                self.assertEqual(row['startup_deadline_unix'], 3200.)
+                self.assertIn('native_load/object_chair_restore:passed', row['startup_seen_milestones'])
+                self.assertIn('native_reset/object_chair_restore:passed', row['startup_seen_milestones'])
+                clock[0] = 2300.
+                loader.run('reset', (2800., 3100.))
+                repeated = [json.loads(s) for s in path.read_text().splitlines()]
+                self.assertEqual(startup_progress_update(row, repeated, 3101.), {})
+
+    def test_recursive_startup_calls_do_not_generate_unbounded_scope_keys(self):
+        class Loader:
+            def recurse(self, depth):
+                if depth:
+                    self.recurse(depth - 1)
+                return self.leaf()
+            def leaf(self):
+                return 'loaded'
+        with tempfile.TemporaryDirectory() as tmp:
+            with instrument_startup_calls(tmp, [
+                (Loader, 'recurse', lambda *a: 'native_recurse'),
+                (Loader, 'leaf', lambda *a: 'native_leaf'),
+            ]):
+                self.assertEqual(Loader().recurse(4), 'loaded')
+                self.assertEqual(Loader().leaf(), 'loaded')
+            events = [json.loads(s) for s in (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines()]
+            self.assertEqual({e['stage'] for e in events},
+                             {'native_recurse', 'native_recurse/native_leaf', 'native_leaf'})
+
     def test_task_snapshot_and_restore_after_scene_load_are_real_finite_progress(self):
         from manipulation_agent.omnigibson_backend import OmniGibsonBackend
 

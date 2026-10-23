@@ -62,12 +62,14 @@ def startup_stage(output, name):
 def instrument_startup_calls(output, calls):
     """Temporarily report real constructor work without changing its outcome.
 
-    Each key identifies a finite scene/object operation. Repeated calls use the
-    same key, so they cannot renew the watchdog indefinitely. No timer heartbeat
-    or simulator state mutation is introduced. Only use during single-threaded
-    environment construction; restore all methods even if construction fails.
+    Each key identifies a finite scene/object operation within its native call
+    path. Saving and resetting the same object are separate passes; repeating
+    the same path still cannot renew the watchdog indefinitely. No counters,
+    timer heartbeats or simulator state mutation are introduced. Only use during
+    single-threaded construction; restore all methods even if it fails.
     """
     originals = []
+    scope = []
     try:
         for owner, name, key in calls:
             original = getattr(owner, name)
@@ -79,8 +81,18 @@ def instrument_startup_calls(output, calls):
                     stage = key(*args, **kwargs)
                     if stage is None:
                         return original(*args, **kwargs)
-                    with startup_stage(output, stage):
-                        return original(*args, **kwargs)
+                    # A later task reset may restore objects already visited by
+                    # scene loading. Flat keys suppressed all of that genuine
+                    # progress and falsely expired large scenes. Keep the finite
+                    # parent call path, collapsing recursive repeats so recursion
+                    # cannot manufacture a new watchdog key on every iteration.
+                    qualified = '/'.join(dict.fromkeys((*scope, stage)))
+                    scope.append(stage)
+                    try:
+                        with startup_stage(output, qualified):
+                            return original(*args, **kwargs)
+                    finally:
+                        scope.pop()
                 return wrapped
 
             setattr(owner, name, instrument(original, key))
