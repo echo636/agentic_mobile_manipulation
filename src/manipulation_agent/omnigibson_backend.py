@@ -223,7 +223,7 @@ class OmniGibsonBackend:
             from omegaconf import OmegaConf
             from gello.utils.og_teleop_cfg import DISABLED_TRANSITION_RULES
 
-        if instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
+        if not getattr(self, "catalog_spec", None) and instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
             raise ValueError("Instance must belong to this pinned source's public test split")
         gm.HEADLESS = True
         gm.RENDER_VIEWER_CAMERA = bool(getattr(self,'private_viewer_grounding',False))
@@ -279,35 +279,38 @@ class OmniGibsonBackend:
 
         with self._startup_stage('configure_native_fault_reporting'):
             configure_native_fault_reporting(output)
-        with self._startup_stage('construct_evaluator_and_environment'), efficient_grounding(), self._native_startup_progress():
-            self.evaluator = ResearchEvaluator(OmegaConf.create({
-                "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
-            }))
-        with self._startup_stage('initial_reset'), self._native_startup_progress('initial_reset'):
-            self.evaluator.reset()
-        with self._startup_stage('validate_runtime_task_bindings'):
-            binding_check = validate_runtime_bindings(
-                self.evaluator.env.task.object_scope, self.required_instance_bindings)
-            write_json(output / 'runtime_task_binding_validation.json', binding_check)
-            if binding_check['status'] != 'passed':
-                raise ValueError('Official scene initialization left missing instance entities: ' +
-                                 str(binding_check['missing_instances']))
-        with self._startup_stage('load_task_instance'), self._native_startup_progress('load_instance'):
-            self.evaluator.load_task_instance(instance)
-        with self._startup_stage('instance_reset'), self._native_startup_progress('instance_reset'):
-            self.evaluator.reset()
-        self.env, self.robot = self.evaluator.env, self.evaluator.robot
-        from omnigibson.utils.asset_utils import get_task_instance_path
-        import bddl
-        scene = self.env.task.scene_name
-        filename = self.env.task.get_cached_activity_scene_filename(
-            scene_model=scene, activity_name=task, activity_definition_id=0, activity_instance_id=instance)
-        instance_path = Path(get_task_instance_path(scene, f"{scene}_task_{task}_instances/{filename}-tro_state", mode="public_test"))
-        self.input_hashes["task_instance_state"] = hashlib.sha256(instance_path.read_bytes()).hexdigest()
-        definition_path = Path(bddl.__file__).parent / "activity_definitions" / task / "problem0.bddl"
-        self.input_hashes["bddl_definition"] = hashlib.sha256(definition_path.read_bytes()).hexdigest()
-        write_json(output / "dependency_versions.json", {d.metadata["Name"]: d.version for d in metadata.distributions() if d.metadata["Name"]})
-        self.task_metric = next(m for m in self.evaluator.metrics if isinstance(m, TaskMetric))
+        if getattr(self, 'catalog_spec', None):
+            self._load_catalog_environment(config)
+        else:
+            with self._startup_stage('construct_evaluator_and_environment'), efficient_grounding(), self._native_startup_progress():
+                self.evaluator = ResearchEvaluator(OmegaConf.create({
+                    "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
+                }))
+            with self._startup_stage('initial_reset'), self._native_startup_progress('initial_reset'):
+                self.evaluator.reset()
+            with self._startup_stage('validate_runtime_task_bindings'):
+                binding_check = validate_runtime_bindings(
+                    self.evaluator.env.task.object_scope, self.required_instance_bindings)
+                write_json(output / 'runtime_task_binding_validation.json', binding_check)
+                if binding_check['status'] != 'passed':
+                    raise ValueError('Official scene initialization left missing instance entities: ' +
+                                     str(binding_check['missing_instances']))
+            with self._startup_stage('load_task_instance'), self._native_startup_progress('load_instance'):
+                self.evaluator.load_task_instance(instance)
+            with self._startup_stage('instance_reset'), self._native_startup_progress('instance_reset'):
+                self.evaluator.reset()
+            self.env, self.robot = self.evaluator.env, self.evaluator.robot
+            from omnigibson.utils.asset_utils import get_task_instance_path
+            import bddl
+            scene = self.env.task.scene_name
+            filename = self.env.task.get_cached_activity_scene_filename(
+                scene_model=scene, activity_name=task, activity_definition_id=0, activity_instance_id=instance)
+            instance_path = Path(get_task_instance_path(scene, f"{scene}_task_{task}_instances/{filename}-tro_state", mode="public_test"))
+            self.input_hashes["task_instance_state"] = hashlib.sha256(instance_path.read_bytes()).hexdigest()
+            definition_path = Path(bddl.__file__).parent / "activity_definitions" / task / "problem0.bddl"
+            self.input_hashes["bddl_definition"] = hashlib.sha256(definition_path.read_bytes()).hexdigest()
+            write_json(output / "dependency_versions.json", {d.metadata["Name"]: d.version for d in metadata.distributions() if d.metadata["Name"]})
+            self.task_metric = next(m for m in self.evaluator.metrics if isinstance(m, TaskMetric))
         with self._startup_stage('construct_symbolic_primitives'):
             from omnigibson.action_primitives.symbolic_semantic_action_primitives import SymbolicSemanticActionPrimitives
             self.primitives = SymbolicSemanticActionPrimitives(self.env, self.robot)
@@ -315,8 +318,9 @@ class OmniGibsonBackend:
         with self._startup_stage('initial_goal_evaluation'):
             self.initial_goals = self._goal_options()
         # Keep original task-instance files intact. Evaluator performs its official restoration.
-        self.task_metadata = {"task": task, "instance": instance, "split": "public_test",
-                              "scene": self.env.task.scene_name, "seed": seed}
+        if not getattr(self, 'catalog_spec', None):
+            self.task_metadata = {"task": task, "instance": instance, "split": "public_test",
+                                  "scene": self.env.task.scene_name, "seed": seed}
         self._prepare_task_instance()
 
     def _prepare_task_instance(self):
@@ -324,6 +328,8 @@ class OmniGibsonBackend:
         pass
 
     def _config(self, task: str, gpu: int, max_steps: int) -> dict:
+        if getattr(self, 'catalog_spec', None):
+            return self._catalog_config(gpu, max_steps)
         import yaml
         from omnigibson.eval.utils.eval_utils import generate_basic_environment_config
         root = Path(os.environ["OMNIGIBSON_DATA_PATH"])

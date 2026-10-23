@@ -223,6 +223,26 @@ def assets(manifest, data_root):
     catalog = yaml.safe_load(config.read_text())
     rows = []
     for task in manifest['tasks']:
+        if task.get('catalog_task_spec'):
+            from manipulation_agent.catalog_tasks import load_catalog_spec
+            from manipulation_agent.asset_preflight import inspect_model_assets
+            path = Path(task['catalog_task_spec'])
+            if hashlib.sha256(path.read_bytes()).hexdigest() != task['catalog_task_spec_sha256']:
+                raise ValueError('Frozen catalog specification changed')
+            spec = load_catalog_spec(path)
+            scene = json.loads((path.parent / spec['frozen_instance']['path']).read_text())
+            models = {(obj['args']['category'], obj['args']['model'])
+                      for obj in scene['objects_info']['init_info'].values()
+                      if obj['class_name'] == 'DatasetObject'}
+            check = inspect_model_assets(models, data_root / 'data/omnigibson/behavior-1k-assets')
+            definition = data_root / 'src/BEHAVIOR-1K/bddl3/bddl/activity_definitions' / spec['task'] / 'problem0.bddl'
+            matches = (hashlib.sha256(definition.read_bytes()).hexdigest() == spec['bddl_sha256'] == task['bddl_sha256']
+                       and spec['task'] == task['task'] and spec['scene'] == task['scene'])
+            layout = data_root / 'data/omnigibson/behavior-1k-assets/scenes' / spec['scene'] / 'layout'
+            rows.append({'task': task['task'], 'status': 'passed' if matches and check['status']=='passed' and layout.is_dir() else 'failed',
+                         'runtime_assets': check, 'definition_matches': matches,
+                         'scope': 'sampled_full_catalog_instance; not public challenge split'})
+            continue
         custom = None
         if task.get('custom_task_spec'):
             custom_path = Path(task['custom_task_spec'])
@@ -331,6 +351,8 @@ def main():
     args+=['--goal-skill',manifest.get('goal_skill','hierarchical')]
     if row.get('custom_task_spec'):
         args+=['--custom-task',row['custom_task_spec']]
+    if row.get('catalog_task_spec'):
+        args+=['--catalog-task',row['catalog_task_spec']]
     if manifest.get('require_task_notes'): args.append('--require-task-notes')
     if a.executor_source is not None:
         # exec starts a new interpreter. Keep its imports on the selected

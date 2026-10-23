@@ -1343,7 +1343,8 @@ class Batch:
             'original_instruction','original_instruction_source','original_instruction_sha256',
             'instruction_correction','task_instructions_changed','episode_budget_policy',
             'max_agent_steps','custom_task_spec','custom_task_spec_sha256',
-            'custom_instance_id','custom_instance_sha256','instruction_language'}
+            'custom_instance_id','custom_instance_sha256','instruction_language',
+            'catalog_task_spec','catalog_task_spec_sha256','catalog_instance_sha256'}
         with self.lock:
             old={**row,'status':'failed','task_success':None,'failure_kind':'infrastructure_resource_admission',
                  'resource_rejected_checks':failed,'archive_status':'not_applicable_before_simulator_start',

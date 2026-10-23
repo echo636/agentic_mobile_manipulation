@@ -33,7 +33,9 @@ def build_bundle(config, worker):
     assert all(not i['dirty'] and i['identity_method'] == 'verified_source_freeze'
                for i in identities.values()), 'Only frozen, verified sources may be staged'
     assert identities['executor']['commit'] == config['source_commit']
-    destination = Path(worker['simulator_tmpdir']).parents[2] / 'dispatch' / config['batch_tag']
+    staging_root = worker.get('runtime_staging_root')
+    destination = (Path(staging_root) if staging_root else
+                   Path(worker['simulator_tmpdir']).parents[2] / 'dispatch') / config['batch_tag']
     source_target = destination / 'executor'
     scheduler_target = destination / ('scheduler' if 'scheduler' in sources else 'executor')
     manifest = json.loads((Path(config['batch']) / 'manifest.json').read_text())
@@ -41,13 +43,14 @@ def build_bundle(config, worker):
     files = {}
     relocated = []
     for row in manifest['tasks']:
-        if not row.get('custom_task_spec'):
+        spec_key = 'catalog_task_spec' if row.get('catalog_task_spec') else 'custom_task_spec'
+        if not row.get(spec_key):
             continue
-        original = Path(row['custom_task_spec'])
+        original = Path(row[spec_key])
         spec_bytes = original.read_bytes()
-        assert digest(spec_bytes) == row['custom_task_spec_sha256']
+        assert digest(spec_bytes) == row[spec_key + '_sha256']
         spec = json.loads(spec_bytes)
-        for key in ('frozen_instance', 'construction_seed'):
+        for key in ('frozen_instance', 'construction_seed', 'sampling_record'):
             if not spec.get(key):
                 continue
             entry = spec[key]
@@ -59,11 +62,11 @@ def build_bundle(config, worker):
             entry['path'] = str(destination / name)
         name = 'inputs/task_' + str(row['index']) + '.json'
         files[name] = (json.dumps(spec, ensure_ascii=False, indent=2) + '\n').encode()
-        row['custom_task_spec'] = str(destination / name)
-        row['custom_task_spec_sha256'] = digest(files[name])
+        row[spec_key] = str(destination / name)
+        row[spec_key + '_sha256'] = digest(files[name])
         relocated.append({'task': row['task'], 'original_spec_sha256': digest(spec_bytes),
-                          'runtime_spec_sha256': row['custom_task_spec_sha256'],
-                          'physical_instance_sha256': row.get('custom_instance_sha256')})
+                          'runtime_spec_sha256': row[spec_key + '_sha256'],
+                          'physical_instance_sha256': row.get('catalog_instance_sha256') or row.get('custom_instance_sha256')})
     files['manifest.json'] = (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode()
     for label, path in sources.items():
         # This is a small, known frozen release, not an asset/cache traversal.
@@ -97,7 +100,8 @@ raw = sys.stdin.buffer.read()
 assert hashlib.sha256(raw).hexdigest() == expected
 target.parent.mkdir(parents=True, exist_ok=True)
 fstype = subprocess.check_output(['findmnt', '-T', str(target.parent), '-n', '-o', 'FSTYPE'], text=True).strip()
-assert fstype not in ('nfs', 'nfs4', 'cifs', 'smb3'), 'Staging destination must be a local disk'
+assert fstype in ('ext4', 'xfs', 'btrfs', 'zfs'), ('Staging destination must be a verified local disk; '
+    'set worker.runtime_staging_root to a local filesystem, got ' + fstype)
 marker = target / 'bundle_sha256'
 if target.exists():
     assert marker.read_text().strip() == expected, 'Do not overwrite another frozen runtime'
