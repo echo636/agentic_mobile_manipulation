@@ -136,6 +136,82 @@ class LifecycleTests(unittest.TestCase):
                 with self.assertRaises(OSError):lease.release(cleared=True)
             fresh=WorkerLease(tmp,w,host_budget_gib=28);self.assertTrue(fresh.acquire());fresh.release()
 
+    def test_orphan_remote_owner_does_not_starve_host_or_disappear_from_memory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker={'id':'old','gpu':0,'ssh':['ssh','host'],'expected_gpu_uuid':'physical0'}
+            code='''import json,sys\nfrom manipulation_agent.batch_lifecycle import WorkerLease\nl=WorkerLease(sys.argv[1],json.loads(sys.argv[2]),host_budget_gib=56)\nassert l.acquire(); l.record(unit="still-running.service",run_id="original",released=False)\n'''
+            subprocess.run([sys.executable,'-c',code,tmp,json.dumps(worker)],check=True)
+            old=WorkerLease(tmp,worker,host_budget_gib=56,owner_active=lambda owner:True)
+            before={p:p.read_bytes() for p in Path(tmp).glob('*.json')}
+            self.assertFalse(old.acquire())  # Remote GPU is still owned.
+            current=WorkerLease(tmp,{**worker,'id':'new','gpu':1,'expected_gpu_uuid':'physical1'},
+                                host_budget_gib=56,owner_active=lambda owner:True)
+            self.assertTrue(current.acquire())
+            try:
+                self.assertTrue(current.host.path.name.endswith('-1.lock'))
+                self.assertEqual([p['unit'] for p in current.active_peers()],['still-running.service'])
+                self.assertEqual(current.other_reserved_gib(),28)
+                self.assertEqual({p:p.read_bytes() for p in before},before)
+                current.owner_active=lambda owner:False
+                self.assertEqual(current.active_peers(),[])
+                self.assertEqual(current.other_reserved_gib(),0)
+            finally:
+                current.release()
+
+    def test_orphan_owner_query_failure_releases_gpu_and_host_locks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker={'id':'old','gpu':0,'ssh':['ssh','host'],'expected_gpu_uuid':'physical0'}
+            old=WorkerLease(tmp,worker,host_budget_gib=56)
+            self.assertTrue(old.acquire());old.record(unit='live.service',run_id='old',released=False)
+            old.release()
+            current=WorkerLease(tmp,{**worker,'gpu':1,'expected_gpu_uuid':'physical1'},host_budget_gib=56,
+                                owner_active=Mock(side_effect=TimeoutError('unit query')))
+            with self.assertRaises(TimeoutError):current.acquire()
+            for path in Path(tmp).glob('*.lock'):
+                probe=FileLease(path,{})
+                self.assertTrue(probe.acquire());probe.release()
+            current.owner_active=lambda owner:True
+            self.assertTrue(current.acquire())
+            try:
+                current.owner_active=Mock(side_effect=TimeoutError('peer query'))
+                with self.assertRaises(TimeoutError):current.active_peers()
+                probe=FileLease(Path(tmp)/f'host-{current.host_key}-0.lock',{})
+                self.assertTrue(probe.acquire());probe.release()
+            finally:
+                current.release()
+
+    def test_orphan_adoption_requires_same_run_and_unit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker={'id':'a','gpu':0,'ssh':['ssh','host']}
+            old=WorkerLease(tmp,worker,host_budget_gib=28)
+            self.assertTrue(old.acquire());old.record(unit='live.service',run_id='original',released=False)
+            old.release()
+            current=WorkerLease(tmp,worker,host_budget_gib=28,owner_active=lambda owner:None)
+            self.assertFalse(current.acquire())  # Unknown unit state is not free.
+            self.assertFalse(current.acquire(adopting={'run_id':'original','simulator_unit':'other.service'}))
+            self.assertTrue(current.acquire(adopting={'run_id':'original','simulator_unit':'live.service'}))
+            current.release()
+
+    def test_batch_skips_live_orphan_and_keeps_its_memory_policy(self):
+        import base64
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b._config.update(adaptive_memory_admission=True,adaptive_host_slot_count=4,
+                             host_worker_memory_budget_gib={'host':56})
+            old=WorkerLease(b._config['shared_lease_dir'],b.workers[0],host_budget_gib=56)
+            self.assertTrue(old.acquire());old.record(unit='live.service',run_id='old',released=False)
+            old.release()
+            b._worker_local.config={**b.workers[0],'id':'new','gpu':1,'expected_gpu_uuid':'physical1'}
+            b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123'})
+            lease=b.acquire_worker_lease();self.assertIsNotNone(lease)
+            b._worker_local.lease=lease
+            try:
+                policy=json.loads(base64.b64decode(b.memory_policy_args()[1]))
+                self.assertEqual([p['unit'] for p in policy['peers']],['live.service'])
+                self.assertTrue(lease.host.path.name.endswith('-1.lock'))
+            finally:
+                lease.release(cleared=True)
+
     def test_resource_wait_does_not_claim_or_start_deadline(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp);checks=0
