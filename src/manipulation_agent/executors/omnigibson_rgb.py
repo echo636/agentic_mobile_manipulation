@@ -42,6 +42,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         self._carry_particles=[]
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False
+        self.renderer_pixel_owner = os.environ.get('MAS_RENDERER_PIXEL_OWNER','0') == '1'
         self.record_video = record_video
         self.video = None
         self.video_render_stride = int(os.environ.get("MAS_VIDEO_RENDER_STRIDE", "2"))
@@ -104,7 +105,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         with self._startup_stage('surround_camera_setup_and_warmup'):
             for direction in DIRECTIONS:
                 sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
-                    modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
+                    modalities=['rgb','depth_linear']+(['seg_instance'] if self.renderer_pixel_owner else []),
+                    image_width=self.image_size,image_height=self.image_size,
                     focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
                 with self._startup_stage(f'surround_camera_{direction}_load'):
                     sensor.load(None)
@@ -300,6 +302,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                         if depth is None or tuple(depth.shape[:2])!=(self.image_size,self.image_size):
                             pending[view]='depth_render_product_not_ready'
                             continue
+                        if getattr(self,'renderer_pixel_owner',False):
+                            labels=data.get('seg_instance')
+                            if labels is None or tuple(labels.shape[:2])!=(self.image_size,self.image_size):
+                                pending[view]='private_instance_render_product_not_ready'
+                                continue
                         intrinsics[view]=intrinsic
                     pixels[view] = rgb[...,:3].astype(np.uint8)
                     packets[view] = (data,info)
@@ -400,10 +407,16 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                    'intrinsic':self._sensor_intrinsics[view],'width':pixels.shape[1],'height':pixels.shape[0]}
             data,info=self._sensor_packets[view]
             frame['depth_linear']=data['depth_linear'].detach().cpu().clone()
-            np.savez_compressed(private_folder/f'{ref}.npz',depth_linear=frame['depth_linear'].numpy())
+            arrays={'depth_linear':frame['depth_linear'].numpy()}
+            if getattr(self,'renderer_pixel_owner',False):
+                frame['instance_ids']=data['seg_instance'].detach().cpu().clone()
+                frame['instance_labels']={str(k):v for k,v in info['seg_instance'].items()}
+                arrays['instance_ids']=frame['instance_ids'].numpy()
+            np.savez_compressed(private_folder/f'{ref}.npz',**arrays)
             (private_folder/f'{ref}.json').write_text(json.dumps({'audience':'executor_private_only',
                 'image_ref':ref,'rgb_sha256':digest,
-                'position':position.tolist(),'orientation':orientation.tolist(),'intrinsic':frame['intrinsic'].tolist()}))
+                'position':position.tolist(),'orientation':orientation.tolist(),'intrinsic':frame['intrinsic'].tolist(),
+                **({'instance_labels':frame['instance_labels']} if 'instance_labels' in frame else {})}))
             self.current_frames[ref]=frame
             self.image_files[ref]=path
             images.append({'image_ref':ref,'view':view,'width':pixels.shape[1],'height':pixels.shape[0],
@@ -460,10 +473,17 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         obj=None
         if require_object:
             from .visual_mesh_grounding import query_visual_surface
+            ownership={}
+            if 'instance_ids' in frame and 'instance_labels' in frame:
+                label=frame['instance_labels'].get(str(int(frame['instance_ids'][py,px])))
+                if isinstance(label,str):
+                    selected=next((o for o in [*self.env.scene.objects,self.robot]
+                                   if label in (o.name,str(o.prim_path))),None)
+                    if selected is not None:ownership['renderer_object']=selected
             try:
                 with component(self,'visual_grounding'):
                     obj,visual=query_visual_surface(self,point,reject_particles=reject_particles,
-                                                    camera_position=start)
+                                                    camera_position=start,**ownership)
             except SkillError as exc:
                 diagnostic.update(status='failed',code=exc.code,detail=str(exc),
                                   visual_query=getattr(exc,'diagnostics',{}))
@@ -1288,7 +1308,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'depth_consistency_check':False, 'navigation_object_lookup':False,
             'pixel_sample':'renderer_pixel_center_index_plus_half',
             'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
-            'coincident_surface_resolution':'camera_frontmost_within_float32_roundoff',
+            'coincident_surface_resolution':('same_frame_renderer_instance_within_float32_roundoff'
+                if getattr(self,'renderer_pixel_owner',False) else 'camera_frontmost_within_float32_roundoff'),
+            'private_instance_labels':getattr(self,'renderer_pixel_owner',False),
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
@@ -1342,7 +1364,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'pixel_grounding':'pixel-center backprojection; no neighboring-pixel substitution',
             'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
-        result['private_grounding_provider']='selected-pixel depth point to nearest visible mesh surface; no segmentation annotator'
+        result['private_grounding_provider']=('selected-pixel depth point to nearest visible mesh surface; same-capture private instance labels resolve numerical ties'
+            if getattr(self,'renderer_pixel_owner',False) else
+            'selected-pixel depth point to nearest visible mesh surface; no segmentation annotator')
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':self.rig_pitch_degrees,
             'mount_radius_m':self.rig_radius,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),

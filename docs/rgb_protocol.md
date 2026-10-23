@@ -102,9 +102,13 @@ The previous depth/mesh agreement tolerance is not restored: measured surface
 distance is a private diagnostic, not a threshold that rejects an otherwise valid
 selection. The nearest mesh point does not replace the measured action position.
 Depth, calibration, mesh ownership and query diagnostics remain executor-private.
-The production observer supplies only RGB to the model and does not require a
-segmentation annotator. Same-frame renderer instance labels can be enabled in
-private regression probes to check object ownership.
+The production observer supplies only RGB to the model. Optional
+`MAS_RENDERER_PIXEL_OWNER=1` captures executor-private instance ownership with
+the same RGB/depth packet. It resolves only numerically coincident geometry
+candidates; unrelated or missing labels retain the geometric result. The exact
+clicked pixel and backprojected point never change. Labels remain in private
+frame records and are not returned to the model. The default remains disabled
+while full-task startup and regression are being validated.
 
 `place_on_top` first tries its ordinary nearby poses. If they all fail, it
 also covers diagonal positions and yaw aligned with the selected support.
