@@ -231,7 +231,7 @@ class CheckedPlacement:
         supported, surface = (official_on_top, None)
         if support_point is not None:
             supported, surface = self._selected_surface_support(
-                held, support, support_point, touching, payload)
+                held, support, support_point, touching, payload, require_neighborhood=False)
         checks = {'next_to': bool(held.states[NextTo].get_value(target)),
                   'supported': supported,
                   'released': self._get_held() is None,
@@ -666,7 +666,8 @@ class CheckedPlacement:
                                  support_resting={key: window.report() for key, window in payload_resting.items()})
         return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
-    def _selected_surface_support(self, held, target, point, touching, payload=(), *, resting=None):
+    def _selected_surface_support(self, held, target, point, touching, payload=(), *, resting=None,
+                                  require_neighborhood=True):
         """Check the actual lower collider patch after gravity, including lower shelves.
 
         No whole-box footprint, goal predicate mutation, or held-pose projection
@@ -718,7 +719,11 @@ class CheckedPlacement:
         selected_xy_distance = float(self.torch.linalg.norm(anchor[:2] - point[:2]))
         checks = {'released': self._get_held() is None,
                   **support_checks,
-                  'selected_surface_neighborhood': selected_xy_distance <= .20,
+                  # NextTo selects the reference object. Its generated landing
+                  # point is only a proposal; the official NextTo relation
+                  # bounds the final location. Point-selected OnTop keeps its
+                  # neighborhood requirement, including after sliding/tilting.
+                  'selected_surface_neighborhood': not require_neighborhood or selected_xy_distance <= .20,
                   'settled': (bool(resting['stable']) if resting is not None
                               else speed <= .10 and angular_speed <= .5),
                   'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
@@ -726,6 +731,7 @@ class CheckedPlacement:
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
+            'selected_neighborhood_required': require_neighborhood,
             'support_probes': support_probes,
             'resting_motion':resting,
             'support_hit_body': hit.get('rigidBody'), 'contact_bodies': contacts,
