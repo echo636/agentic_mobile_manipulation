@@ -123,6 +123,16 @@ rejects it. These poses precede marginal edge-centered poses, while preserving
 the requested yaw, selected support, neighborhood, collision, settling and
 payload checks. The independent task evaluator is unchanged.
 
+The pinned simulator's `MaxTemperature` dependency indices are repaired in
+the adapter before scene creation. Removing a cut source must remove its own
+maximum-temperature row; the `Temperature` removal callback alone shifts the
+remaining temperature indices. Shifting in both places associated surviving
+food with another object's temperature. The adapter preserves current and
+historical temperature values; native heating and maximum tracking perform
+their ordinary updates. It does not set Cooked, change thresholds or modify
+the task evaluator. The process-local repair is recorded separately, and
+installed simulator files remain unchanged.
+
 `place_next_to` selects a reference object from RGB, then searches nearby upward
 physical surfaces without a floor/lawn category whitelist. When the reference's
 supporting surface can be identified geometrically, candidates use that support
