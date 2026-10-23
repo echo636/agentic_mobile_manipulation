@@ -21,6 +21,62 @@ batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class StartupProgressTests(unittest.TestCase):
+    def test_scoped_writer_is_live_and_closes_after_nested_constructor_failure(self):
+        opened = []
+        original_open = Path.open
+
+        def tracked_open(path, mode='r', *args, **kwargs):
+            stream = original_open(path, mode, *args, **kwargs)
+            if mode == 'a':
+                opened.append(stream)
+            return stream
+
+        class Loader:
+            def load(self):
+                with instrument_startup_calls(tmp, []):
+                    startup_event(tmp, 'nested', 'passed')
+                records = [json.loads(line) for line in
+                           (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines()]
+                self_seen.extend(event['stage'] for event in records)
+                raise ValueError('native failure')
+
+        self_seen = []
+        with tempfile.TemporaryDirectory() as tmp, patch.object(Path, 'open', tracked_open):
+            with self.assertRaisesRegex(ValueError, 'native failure'):
+                with instrument_startup_calls(tmp, [(Loader, 'load', lambda *a: 'load')]):
+                    Loader().load()
+            self.assertEqual(self_seen, ['load', 'nested'])
+            self.assertEqual(len(opened), 1)
+            self.assertTrue(opened[0].closed)
+            startup_event(tmp, 'after_scope', 'passed')
+            self.assertEqual(len(opened), 2)
+            self.assertTrue(opened[1].closed)
+
+    def test_scoped_writer_reopens_after_transient_write_failure(self):
+        original_open = Path.open
+        opened = []
+
+        def fail_once(path, mode='r', *args, **kwargs):
+            stream = original_open(path, mode, *args, **kwargs)
+            if mode == 'a':
+                opened.append(stream)
+                if len(opened) == 1:
+                    failed_stream = Mock(wraps=stream)
+                    failed_stream.write.side_effect = OSError(errno.ESTALE, 'stale handle')
+                    return failed_stream
+            return stream
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(Path, 'open', fail_once), \
+                patch('manipulation_agent.startup_progress.time.sleep'):
+            with instrument_startup_calls(tmp, []):
+                event = startup_event(tmp, 'restore', 'passed')
+                records = [json.loads(line) for line in
+                           (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines() if line]
+                self.assertEqual(records, [event])
+                self.assertEqual(event['storage_retries'], 1)
+            self.assertEqual(len(opened), 2)
+            self.assertTrue(all(stream.closed for stream in opened))
+
     def test_transient_nas_failure_retries_without_changing_milestone_time(self):
         original = Path.open
         failures = [True]

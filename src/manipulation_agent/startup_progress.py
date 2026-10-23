@@ -1,5 +1,6 @@
 """Finite startup milestones; elapsed heartbeats never renew the watchdog."""
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from functools import wraps
 import errno
@@ -10,6 +11,38 @@ import sys
 import time
 
 STARTUP_POLICY = 'stage_progress_v2'
+_startup_streams = ContextVar('startup_streams', default=None)
+
+
+def _close_startup_stream(output, stream):
+    try:
+        stream.close()
+    except OSError as exc:
+        # Each event was already flushed. Report a close error without replacing
+        # the constructor's result (or its original exception).
+        try:
+            print(json.dumps({'event': 'startup_log_close_failed', 'errno': exc.errno,
+                              'path': str(output / 'startup_stages.jsonl')}),
+                  file=sys.stderr, flush=True)
+        except OSError:
+            pass
+
+
+def _write_startup_event(output, line):
+    streams = _startup_streams.get()
+    if streams is None:
+        output.mkdir(parents=True, exist_ok=True)
+        with (output / 'startup_stages.jsonl').open('a') as stream:
+            stream.write(line)
+        return
+    if output not in streams:
+        output.mkdir(parents=True, exist_ok=True)
+        streams[output] = (output / 'startup_stages.jsonl').open('a', buffering=1)
+    stream = streams[output]
+    stream.write(line)
+    # Keep progress visible to the remote watchdog after every event. Reusing
+    # the descriptor only removes repeated NAS mkdir/open/close operations.
+    stream.flush()
 
 
 def startup_event(output, stage, status, **extra):
@@ -23,12 +56,13 @@ def startup_event(output, stage, status, **extra):
     # in the owned unit's journal without claiming a recorded milestone.
     for attempt in range(3):
         try:
-            output.mkdir(parents=True, exist_ok=True)
-            with (output / 'startup_stages.jsonl').open('a') as stream:
-                # Separate a possible partial prior write before retrying.
-                stream.write(('\n' if attempt else '') + json.dumps(event) + '\n')
+            # Separate a possible partial prior write before retrying.
+            _write_startup_event(output, ('\n' if attempt else '') + json.dumps(event) + '\n')
             break
         except OSError as exc:
+            streams = _startup_streams.get()
+            if streams is not None and output in streams:
+                _close_startup_stream(output, streams.pop(output))
             if exc.errno not in {errno.EIO, errno.ESTALE, errno.ETIMEDOUT, errno.EAGAIN}:
                 raise
             if attempt < 2:
@@ -71,6 +105,9 @@ def instrument_startup_calls(output, calls):
     """
     originals = []
     scope = []
+    # Construction invokes thousands of nested object operations. Keep append
+    # handles only for this instrumentation scope; nested scopes share them.
+    stream_token = _startup_streams.set({}) if _startup_streams.get() is None else None
     try:
         for owner, name, key in calls:
             original = getattr(owner, name)
@@ -105,6 +142,11 @@ def instrument_startup_calls(output, calls):
                 setattr(owner, name, original)
             else:
                 delattr(owner, name)
+        if stream_token is not None:
+            streams = _startup_streams.get()
+            _startup_streams.reset(stream_token)
+            for output, stream in streams.items():
+                _close_startup_stream(output, stream)
 
 
 def startup_progress_update(row, events, observed_at):
