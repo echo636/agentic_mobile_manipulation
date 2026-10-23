@@ -167,7 +167,7 @@ class WorkerLease:
     independent of the number of candidate GPU workers configured by an arm.
     """
     def __init__(self, directory, worker, *, host_budget_gib, slot_memory_gib=28, owner=None,
-                 adaptive_slot_count=None):
+                 adaptive_slot_count=None, owner_active=None):
         self.directory = Path(directory)
         self.worker = worker
         self.owner = dict(owner or {}, worker_id=worker['id'], host=worker['ssh'][-1],
@@ -186,21 +186,48 @@ class WorkerLease:
         self.host_key = hashlib.sha256(worker['ssh'][-1].encode()).hexdigest()[:20]
         self.gpu_key = _gpu_lease_key(worker)
         self.host = self.gpu = None
+        self.owner_active = owner_active
+        self.blocked_owner = None
 
-    def acquire(self):
+    def _owner_is_active(self, previous):
+        if previous.get('released') or not previous.get('unit'):
+            return False
+        # An available flock does not prove that a remote simulator exited.
+        # Without a checker, or with an inconclusive response, retain ownership.
+        return self.owner_active is None or self.owner_active(previous) is not False
+
+    def acquire(self, *, adopting=None):
+        def occupied(previous):
+            if (adopting and previous.get('run_id') == adopting.get('run_id')
+                    and previous.get('unit') == adopting.get('simulator_unit')
+                    and previous.get('unit')):
+                return False
+            active = self._owner_is_active(previous)
+            if active:
+                self.blocked_owner = previous
+            return active
+
+        self.blocked_owner = None
         gpu = FileLease(self.directory / ('gpu-' + self.gpu_key + '.lock'), self.owner.copy())
         if not gpu.acquire():
             return False
         try:
+            if occupied(gpu.previous_owner):
+                return False
             for slot in range(self.slot_count):
                 host = FileLease(self.directory / f'host-{self.host_key}-{slot}.lock', self.owner.copy())
                 if host.acquire():
-                    self.gpu, self.host = gpu, host
-                    return True
-        except BaseException:
-            gpu.release()
-            raise
-        gpu.release()
+                    try:
+                        if occupied(host.previous_owner):
+                            continue
+                        self.gpu, self.host = gpu, host
+                        return True
+                    finally:
+                        if self.host is not host:
+                            host.release()
+        finally:
+            if self.gpu is not gpu:
+                gpu.release()
         return False
 
     @property
@@ -213,33 +240,31 @@ class WorkerLease:
                 lease.record(**details)
 
     def other_reserved_gib(self, slot_memory_gib=28):
-        reserved=0
-        for slot in range(self.slot_count):
-            path=self.directory / f'host-{self.host_key}-{slot}.lock'
-            if self.host and path==self.host.path:continue
-            with path.open('a+') as stream:
-                try:fcntl.flock(stream,fcntl.LOCK_EX|fcntl.LOCK_NB)
-                except BlockingIOError:reserved+=slot_memory_gib
-                else:fcntl.flock(stream,fcntl.LOCK_UN)
-        return reserved
+        return slot_memory_gib * len(self.active_peers())
 
     def active_peers(self):
-        """Read locked peer metadata while the caller holds the startup gate."""
+        """Count live remote owners even if their coordinator lost its flock.
+
+        The startup gate protects new reservations. Probe locks are released
+        without changing metadata, including when owner inspection fails.
+        """
         peers = []
         for path in self.directory.glob(f'host-{self.host_key}-*.lock'):
             if self.host and path == self.host.path:
                 continue
-            with path.open('a+') as stream:
+            probe = FileLease(path, {})
+            if not probe.acquire():
                 try:
-                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    try:
-                        peer = json.loads(path.with_suffix('.json').read_text())
-                    except (OSError, ValueError):
-                        peer = {}  # Unknown held slot retains a full reservation.
-                    peers.append(peer)
-                else:
-                    fcntl.flock(stream, fcntl.LOCK_UN)
+                    peer = json.loads(path.with_suffix('.json').read_text())
+                except (OSError, ValueError):
+                    peer = {}  # Unknown held slot retains a full reservation.
+                peers.append(peer)
+            else:
+                try:
+                    if self._owner_is_active(probe.previous_owner):
+                        peers.append(probe.previous_owner)
+                finally:
+                    probe.release()
         return peers
 
     def release(self, *, cleared=False):

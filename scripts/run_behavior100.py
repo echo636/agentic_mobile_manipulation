@@ -467,27 +467,21 @@ class Batch:
         slot_size=self._config.get('host_slot_memory_gib',28)
         host_budget=self._config.get('host_worker_memory_budget_gib',{}).get(self.c['ssh'][-1],slot_size)
         if host_budget is None:host_budget=slot_size*self._config.get('adaptive_host_slot_count',4)
+        def owner_active(previous):
+            state=self.unit_state(previous['unit'])
+            return state.get('ActiveState') not in {'inactive','failed'} or state.get('MainPID')!='0'
         lease=WorkerLease(directory,self.c,host_budget_gib=host_budget,slot_memory_gib=slot_size,
                           owner={'batch':str(self.root),'coordinator_pid':os.getpid()},
                           adaptive_slot_count=self._config.get('adaptive_host_slot_count',4)
-                          if self._config.get('adaptive_memory_admission') else None)
-        if not lease.acquire():
-            self.worker_state('waiting_for_lease')
+                          if self._config.get('adaptive_memory_admission') else None,
+                          owner_active=owner_active)
+        if not lease.acquire(adopting=adopting):
+            self.worker_state('waiting_for_lease',previous_unit=(lease.blocked_owner or {}).get('unit'))
             return None
         # A supervisor crash releases flock, but its remote simulator may live.
         # Do not reuse that slot until its unit is terminal, or explicitly adopt
         # exactly that existing attempt without starting another model.
         try:
-            for previous in lease.previous_owners:
-                if previous.get('released') or not previous.get('unit'):
-                    continue
-                if adopting and previous.get('run_id')==adopting['run_id']:
-                    continue
-                state=self.unit_state(previous['unit'])
-                if state.get('ActiveState') not in {'inactive','failed'} or state.get('MainPID')!='0':
-                    lease.release()
-                    self.worker_state('waiting_for_lease',previous_unit=previous['unit'])
-                    return None
             lease.record(released=False,run_id=adopting['run_id'] if adopting else None,
                          unit=adopting.get('simulator_unit') if adopting else None,
                          startup_memory_gib=self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)))
