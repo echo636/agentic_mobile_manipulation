@@ -6,7 +6,6 @@ positions rather than discarding the whole neighbourhood after eight spokes.
 Every proposal still needs visibility, departure, operation-specific checks and
 a swept, forward route before it may move the robot.
 """
-from collections import deque
 import math
 
 from .local_manipulation import stance_candidates
@@ -52,9 +51,10 @@ def local_stance_proposals(actual, origin, point, limits, collision, visited=(),
     diagnostics['geometry_domain_cells'] = int(domain.sum())
     diagnostics['geometry_domain'] = 'target_reach_disk'
     diagnostics['geometry_free_poses'] = 0
-    buckets = {}
-    # The target window accelerates endpoint checks. Route planning uses the
-    # full collision map and may travel outside this candidate window.
+    chunks = []
+    # Keep dense geometry in arrays. Building a Python pose/key/list entry for
+    # every cell and heading used most of the preparation budget before the
+    # caller could inspect even one candidate on a fine map.
     checker = getattr(collision, 'collision', collision)
     headings = [actual[2], *(i*math.pi/12 for i in range(24))]
     for yaw in headings:
@@ -63,36 +63,51 @@ def local_stance_proposals(actual, origin, point, limits, collision, visited=(),
         free = np.frombuffer(oriented.free, dtype='uint8').reshape(grid.height, grid.width)
         rows, cols = np.nonzero(domain & (free[rr, cc] != 0))
         diagnostics['geometry_free_poses'] += len(rows)
-        for index, (r, c) in enumerate(zip(rows, cols)):
-            if index % 128 == 0:
+        x, y = xs[rows, cols], ys[rows, cols]
+        keep = np.ones(len(rows), dtype=bool)
+        for previous in visited:
+            if abs(math.atan2(math.sin(yaw-previous[2]), math.cos(yaw-previous[2]))) < math.radians(10):
+                keep &= np.hypot(x-previous[0], y-previous[1]) >= .05
+        # Exclude the already emitted radial poses before grouping, preserving
+        # their effect on bucket ordering without rounding every free pose.
+        yaw_key = round(math.atan2(math.sin(yaw), math.cos(yaw)), 6)
+        for previous in seen:
+            if previous[2] == yaw_key:
+                keep &= ~((np.round(x, 6) == previous[0]) & (np.round(y, 6) == previous[1]))
+        rows, cols, x, y = rows[keep], cols[keep], x[keep], y[keep]
+        final_turn = np.abs(np.arctan2(np.sin(yaw-bearing[rows, cols]),
+                                       np.cos(yaw-bearing[rows, cols])))
+        score = scores[rows, cols] + final_turn/(math.pi/3)
+        chunks.append(np.column_stack((score, x, y, np.full(len(x), yaw),
+            np.floor((x-origin[0])/.2), np.floor((y-origin[1])/.2),
+            np.full(len(x), round(yaw/(math.pi/4)) % 8))))
+    check_cancelled()
+    candidates = np.concatenate(chunks)
+    if len(candidates):
+        # Lexicographic bucket/score/pose ordering matches the original list
+        # sorting. Yield one pose per bucket per round to retain spatial and
+        # heading diversity, converting only poses the caller actually sees.
+        order = np.lexsort(tuple(candidates[:, i] for i in (3, 2, 1, 0, 6, 5, 4)))
+        candidates = candidates[order]
+        edges = np.flatnonzero(np.any(np.diff(candidates[:, 4:], axis=0) != 0, axis=1)) + 1
+        starts = np.r_[0, edges]
+        ends = np.r_[edges, len(candidates)]
+        groups = sorted(zip(starts, ends), key=lambda pair: tuple(candidates[pair[0], :4]))
+        while groups:
+            following = []
+            for index, end in groups:
                 check_cancelled()
-            pose = (float(xs[r, c]), float(ys[r, c]), yaw)
-            if key(pose) in seen:
-                continue
-            if any(math.dist(pose[:2], p[:2]) < .05 and
-                   abs(math.atan2(math.sin(yaw-p[2]), math.cos(yaw-p[2]))) < math.radians(10)
-                   for p in visited):
-                continue
-            seen.add(key(pose))
-            final_turn = abs(math.atan2(math.sin(yaw-bearing[r, c]), math.cos(yaw-bearing[r, c])))
-            score = float(scores[r, c]) + final_turn/(math.pi/3)
-            # Round-robin nearby position/heading buckets, so an occluded patch
-            # cannot consume all raycasts before another approach is considered.
-            bucket = (math.floor((pose[0]-origin[0])/.2),
-                      math.floor((pose[1]-origin[1])/.2),
-                      round(yaw/(math.pi/4)) % 8)
-            buckets.setdefault(bucket, []).append((score, pose))
-    ordered = [deque(sorted(group)) for group in buckets.values()]
-    ordered.sort(key=lambda group: group[0])
-    while ordered:
-        following = []
-        for group in ordered:
-            check_cancelled()
-            _, pose = group.popleft()
-            yield pose, 'free_space'
-            if group:
-                following.append(group)
-        ordered = following
+                while index < end:
+                    pose = tuple(map(float, candidates[index, 1:4]))
+                    index += 1
+                    pose_key = key(pose)
+                    if pose_key not in seen:
+                        seen.add(pose_key)
+                        yield pose, 'free_space'
+                        break
+                if index < end:
+                    following.append((index, end))
+            groups = following
 
     for pose in radial[48:]:
         check_cancelled()
