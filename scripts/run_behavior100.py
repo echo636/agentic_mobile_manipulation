@@ -112,10 +112,12 @@ def worker_configs(config):
             evidence=json.loads(Path(merged['driver_validation_evidence']).read_text())
             if evidence.get('status')!='passed' or evidence.get('driver')!=merged['validated_driver_version']:
                 raise ValueError('Driver exception requires passed renderer evidence for that exact version')
-        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES','MAS_LOCAL_MANIPULATION'}:
-            raise ValueError('Only reviewed recording and local manipulation options may be worker environment overrides')
-        if 'MAS_LOCAL_MANIPULATION' in env and env['MAS_LOCAL_MANIPULATION'] not in ('0','1'):
-            raise ValueError('MAS_LOCAL_MANIPULATION must be an explicit string 0 or 1')
+        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES',
+                     'MAS_LOCAL_MANIPULATION','MAS_RENDERER_PIXEL_OWNER'}:
+            raise ValueError('Only reviewed recording, local manipulation and pixel ownership options may be worker environment overrides')
+        for flag in ('MAS_LOCAL_MANIPULATION', 'MAS_RENDERER_PIXEL_OWNER'):
+            if flag in env and env[flag] not in ('0','1'):
+                raise ValueError(flag+' must be an explicit string 0 or 1')
         if merged.get('simulator_appdata_path') and not Path(merged['simulator_appdata_path']).is_absolute():
             raise ValueError('Simulator appdata path must be absolute')
         if merged.get('simulator_tmpdir') and not Path(merged['simulator_tmpdir']).is_absolute():
