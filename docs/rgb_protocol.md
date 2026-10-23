@@ -116,6 +116,12 @@ An explicitly requested yaw stays fixed. These alternatives retain the same
 selected object, shelf, 20 cm neighborhood, collision checks, settling checks
 and payload verification. Cheap overlap scores order candidates without
 discarding them, and rejected trials restore the scene before the next trial.
+For a selected open-container rim, nearby poses may span that same rim with
+the bottom center over the cavity. An actual upward rim hit and nearby points
+inside the annotated cavity identify the compartment; an upward obstruction
+rejects it. These poses precede marginal edge-centered poses, while preserving
+the requested yaw, selected support, neighborhood, collision, settling and
+payload checks. The independent task evaluator is unchanged.
 
 `place_next_to` selects a reference object from RGB, then searches nearby upward
 physical surfaces without a floor/lawn category whitelist. When the reference's

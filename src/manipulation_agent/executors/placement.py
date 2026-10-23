@@ -404,9 +404,14 @@ class CheckedPlacement:
             'yaw_degrees': yaw_degrees, 'collision_vertex_count': len(vertices),
             'rotated_geometry_extent': (vertices.max(axis=0)-vertices.min(axis=0)).tolist(),
             'bottom_anchor_offset': anchor.tolist(), 'candidate_count': len(candidates)})
-        candidates.extend(self._open_rim_candidates(held,target,point,vertices,anchor,orientation,
-                          offsets,payload,clearance,start_index=len(offsets)))
-        return candidates
+        rim_candidates = self._open_rim_candidates(held,target,point,vertices,anchor,orientation,
+                          offsets,payload,clearance,start_index=len(offsets))
+        # A rim click can balance an object's center just outside the box.
+        # Try nearby poses with the lower patch centered inside that same
+        # open cavity first; each still needs actual collision and settling.
+        if any(c.get('selected_rim_surface') for c in rim_candidates):
+            return rim_candidates + candidates
+        return candidates + rim_candidates
 
     def _surface_fallback_candidates(self, held, target, point, yaw_degrees=None, payload=()):
         """Cover nearby diagonal positions and yaw after ordinary trials fail.
@@ -484,11 +489,11 @@ class CheckedPlacement:
                              offsets,payload,clearance,*,start_index):
         """Propose support on the open rim surrounding the selected cavity.
 
-        A click inside an open container selects its basin, but a wider item
-        can rest across the rim. This fallback uses the SAME annotated cavity
-        and actual upward collision faces. An upward obstruction rejects the
-        extension, so a lower shelf cannot silently become the shelf above it.
-        Ordinary selected-surface candidates retain priority and verification.
+        A wider item may span the rim of the selected basin or rim surface.
+        This uses the SAME annotated cavity and actual upward collision faces.
+        An upward obstruction rejects the extension, so a lower shelf cannot
+        silently become the shelf above it. Basin clicks retain ordinary-pose
+        priority; rim clicks prefer centers over the identified cavity.
         """
         from .surface_geometry import bottom_support_points
         from omnigibson.utils.sampling_utils import raytest
@@ -501,15 +506,29 @@ class CheckedPlacement:
         proposals=[];seen=set()
         for volume in volumes:
             low,high=volume.visual_aabb
-            # Only the selected cavity's bottom may extend to its open rim.
-            # A remote compartment or another shelf is not a valid substitute.
-            if abs(float(point[2]-low[2]))>.05:continue
+            floor_selected = abs(float(point[2]-low[2])) <= .05
+            rim_selected = abs(float(point[2]-high[2])) <= .05
+            if not (floor_selected or rim_selected):continue
             inside=point.clone();inside[2]=low[2]+min(.02,float(high[2]-low[2])/4)
-            if not bool(volume.check_points_in_volume(inside.reshape(1,3))[0]):continue
-            ceiling=point.clone();ceiling[2]=max(float(point[2])+.03,float(low[2])+.01)
+            if floor_selected:
+                if not bool(volume.check_points_in_volume(inside.reshape(1,3))[0]):continue
+            else:
+                # Identify an actual upward rim beside this exact cavity.
+                # Bounds alone never admit a neighboring compartment.
+                start=point+point.new_tensor([0.,0.,.06]);end=point-point.new_tensor([0.,0.,.06])
+                selected_hit=raytest(start,end,ignore_bodies=ignored)
+                if not (selected_hit.get('hit') and selected_hit.get('rigidBody') in target_paths
+                        and float(selected_hit['normal'][2])>=.9
+                        and abs(float(selected_hit['position'][2]-high[2]))<=.05):continue
+                import math
+                nearby=[inside]+[inside+inside.new_tensor([radius*math.cos(angle*math.pi/4),
+                    radius*math.sin(angle*math.pi/4),0.]) for radius in (.01,.02,.04,.05) for angle in range(8)]
+                if not bool(volume.check_points_in_volume(self.torch.stack(nearby)).any()):continue
+            ceiling=point.clone() if floor_selected else inside.clone()
+            if floor_selected:ceiling[2]=max(float(point[2])+.03,float(low[2])+.01)
             top=ceiling.clone();top[2]=high[2]+.06
-            if float(top[2])<=float(ceiling[2]) or raytest(ceiling,top,ignore_bodies=ignored)['hit']:
-                continue
+            if float(top[2])<=float(ceiling[2]):continue
+            if floor_selected and raytest(ceiling,top,ignore_bodies=ignored)['hit']:continue
             for dx,dy in offsets:
                 center=point+point.new_tensor([dx,dy,0.])
                 probe_inside=inside.clone();probe_inside[:2]=center[:2]
@@ -539,7 +558,7 @@ class CheckedPlacement:
                     'support_position':list(map(float,hit['position'])),'offset_xy_m':[dx,dy],
                     'bottom_anchor_offset':anchor.tolist(),'clearance_m':clearance,
                     'verification_point':verification,'surface_kind':'open_fillable_rim',
-                    'selected_cavity':volume.prim_path})
+                    'selected_cavity':volume.prim_path,'selected_rim_surface':not floor_selected})
         if proposals:
             self._placement_record({'status':'rim_candidates_constructed','target':target.name,'held':held.name,
                 'selected_point':point.tolist(),'candidate_count':len(proposals),
