@@ -13,7 +13,7 @@ import numpy as np
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.deadline import EpisodeDeadline
 from manipulation_agent.executors.gt_navigation import GridMap, NavigationError
-from manipulation_agent.executors.forward_navigation import select_forward_route
+from manipulation_agent.executors.forward_navigation import ForwardRoute, select_forward_route
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 
 
@@ -33,6 +33,7 @@ class TargetVisibilityTests(unittest.TestCase):
         b=self.backend=RGBBackend.__new__(RGBBackend)
         b.output=Path(temp.name);b.deadline=EpisodeDeadline();b.navigation_distance=0.
         b.yaw=0.
+        b._get_held=lambda:None
         b.position=Tensor([.5,1.,0.]);b.robot=SimpleNamespace(
             get_position_orientation=lambda:(b.position,None))
         b.env=SimpleNamespace(scene=SimpleNamespace(trav_map=SimpleNamespace(floor_heights=[0.])))
@@ -58,8 +59,12 @@ class TargetVisibilityTests(unittest.TestCase):
                 return_value=SimpleNamespace(motion_free=lambda a,b:True,
                                              grid_at_heading=lambda yaw:self.build_grid.return_value[0]))
         self.collision=p.start();self.addCleanup(p.stop)
+        def select_fixture_route(options,actual,*args,**kwargs):
+            selected=min(options,key=lambda p:p.score)
+            route=ForwardRoute((selected,),selected.geodesic_m,0,'visibility_fixture',start=actual)
+            return selected,route,{'fixture':True}
         p=patch('manipulation_agent.executors.forward_navigation.select_forward_route',
-                side_effect=lambda options,*a,**kw:(min(options,key=lambda p:p.score),None,{'fixture':True}))
+                side_effect=select_fixture_route)
         self.route_selection=p.start();self.addCleanup(p.stop)
         p=patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(grid,
             {'chassis_footprint_world_offsets':[],'collision_layers':[],'dynamic_collision_check':True}))
