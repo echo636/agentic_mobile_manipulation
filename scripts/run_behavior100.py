@@ -89,7 +89,8 @@ def worker_configs(config):
                'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib', 'admission_delay_seconds',
                'simulator_appdata_path', 'simulator_tmpdir', 'startup_memory_gib',
                'validated_driver_version', 'driver_validation_evidence',
-               'runtime_source_path', 'runtime_scheduler_path', 'runtime_manifest_path', 'runtime_staging'}
+               'runtime_source_path', 'runtime_scheduler_path', 'runtime_manifest_path', 'runtime_staging',
+               'runtime_staging_root'}
     result=[]; ids=set(); devices=set(); ports=set()
     for lane in lanes:
         if set(lane)-allowed: raise ValueError('Unsupported worker fields')
@@ -118,6 +119,8 @@ def worker_configs(config):
             raise ValueError('Simulator appdata path must be absolute')
         if merged.get('simulator_tmpdir') and not Path(merged['simulator_tmpdir']).is_absolute():
             raise ValueError('Simulator temporary directory must be absolute')
+        if merged.get('runtime_staging_root') and not Path(merged['runtime_staging_root']).is_absolute():
+            raise ValueError('Runtime staging root must be absolute')
         ids.add(worker_id);devices.add((host,gpu));ports.add((host,port));result.append(merged)
     # Workers are candidates, not simultaneous reservations. Shared host/GPU
     # leases below constrain actual admission across both comparison arms.
