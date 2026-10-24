@@ -221,11 +221,17 @@ class LifecycleTests(unittest.TestCase):
             b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,json.dumps(check),''))
             try:
                 self.assertTrue(batch.Batch.resource_admission(b))
+                self.assertEqual(b.ssh.call_args.kwargs['timeout'],210)
                 self.assertEqual(held.gpu.owner['run_id'],'other-arm')
                 held.release(cleared=True)
                 # Once genuinely free, the higher-headroom peer can be selected.
                 self.assertFalse(batch.Batch.resource_admission(b))
                 self.assertEqual(b.worker_states[current['id']]['preferred_worker'],'peer')
+                b._config['resource_preflight_timeout_seconds']=150
+                b.ssh.side_effect=subprocess.TimeoutExpired('read-only-resource-probe',150)
+                self.assertFalse(batch.Batch.resource_admission(b))
+                self.assertEqual(b.worker_states[current['id']]['query_timeout_seconds'],150)
+                self.assertFalse(b.journal.call_args.args[0]['task_claimed'])
             finally:
                 held.release();own.release()
 

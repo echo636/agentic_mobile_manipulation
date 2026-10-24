@@ -585,8 +585,21 @@ class Batch:
         # SSH normally starts in /home, while the simulator unit runs from its
         # frozen source directory. Probe the actual working filesystem: a full
         # home quota must not reject a run whose output/cache/temp are elsewhere.
-        response=self.ssh(['/bin/bash','-lc',
-                          'cd '+shlex.quote(str(self.remote_source))+'\nexec '+shlex.join(args)])
+        # Full admission runs six bounded host commands (up to 30s each).
+        # The general 40s transport timeout can truncate a healthy composite
+        # check before it reports resources. This is separate from episode time.
+        query_timeout=self._config.get('resource_preflight_timeout_seconds',210)
+        try:
+            response=self.ssh(['/bin/bash','-lc',
+                              'cd '+shlex.quote(str(self.remote_source))+'\nexec '+shlex.join(args)],
+                              timeout=query_timeout)
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            self.worker_state('waiting_for_resources',reason='Resource query unavailable',
+                              query_error=type(exc).__name__,query_timeout_seconds=query_timeout)
+            self.journal({'event':'resource_query_unavailable','worker':self.c['id'],
+                          'reason':type(exc).__name__,'timeout_seconds':query_timeout,
+                          'task_claimed':False})
+            return False
         if response.returncode:
             self.worker_state('waiting_for_resources',reason='Resource query unavailable')
             return False
