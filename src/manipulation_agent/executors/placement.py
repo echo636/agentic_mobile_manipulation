@@ -236,7 +236,10 @@ class CheckedPlacement:
                   'supported': supported,
                   'released': self._get_held() is None,
                   'settled': speed <= .10 and angular_speed <= .5}
+        contact = self._placement_contact_report(held, payload)
+        checks['no_deep_penetration'] = contact['admissible']
         return all(checks.values()), {'checks': checks,
+            'contact_geometry': contact,
             'touching_support': touching, 'official_on_top': official_on_top,
             'selected_surface_support': surface,
             'support_below': support in adjacency.negative_neighbors,
@@ -272,10 +275,13 @@ class CheckedPlacement:
                     self._placement_physics_step()
                     contacts = self._placement_contacts(held, payload)
                     if contacts:
-                        self._placement_record({'status': 'candidate_rejected', 'primitive': 'place_next_to',
-                            'stage': 'raised_pose_collision', 'candidate': candidate['index'],
-                            'target': target.name, 'held': held.name, 'contact_bodies': contacts})
-                        continue
+                        contact = self._placement_contact_report(held, payload)
+                        self._placement_record({'status': 'initial_contact_admitted' if contact['admissible'] else 'candidate_rejected',
+                            'primitive': 'place_next_to', 'stage': 'raised_pose_collision',
+                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
+                            'contact_geometry': contact})
+                        if not contact['admissible']:
+                            continue
                     # Gravity and contacts determine the final pose. No pose
                     # reset, velocity reset, or payload projection during settling.
                     for _ in range(settle_steps):
@@ -597,6 +603,10 @@ class CheckedPlacement:
                                                   with_set=None, current_only=True)
         return sorted({other for _, other in pairs if other not in paths})
 
+    def _placement_contact_report(self, held, payload=()):
+        from .placement_contacts import contact_report
+        return contact_report(self, held, payload)
+
     def _placement_physics_step(self):
         """A hypothetical candidate must not update task metrics or record video."""
         deadline = getattr(self, 'deadline', None)
@@ -661,10 +671,13 @@ class CheckedPlacement:
                     self._placement_physics_step()
                     contacts = self._placement_contacts(held, payload)
                     if contacts:
-                        self._placement_record({'status': 'candidate_rejected', 'stage': 'raised_pose_collision',
+                        contact = self._placement_contact_report(held, payload)
+                        self._placement_record({'status': 'initial_contact_admitted' if contact['admissible'] else 'candidate_rejected',
+                            'stage': 'raised_pose_collision',
                             'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'contact_bodies': contacts, 'clearance_m': candidate['clearance_m']})
-                        continue
+                            'contact_geometry': contact, 'clearance_m': candidate['clearance_m']})
+                        if not contact['admissible']:
+                            continue
                     resting = RestingMotionWindow(self.og.sim.get_physics_dt())
                     resting.add(*held.get_position_orientation())
                     for _ in range(settle_steps):
@@ -812,7 +825,10 @@ class CheckedPlacement:
                   'settled': (bool(resting['stable']) if resting is not None
                               else speed <= .10 and angular_speed <= .5),
                   'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
+        contact = self._placement_contact_report(held, payload)
+        checks['no_deep_penetration'] = contact['admissible']
         return all(checks.values()), {'checks': checks, 'touching_selected_object': touching,
+            'contact_geometry': contact,
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
@@ -1052,7 +1068,13 @@ class CheckedPlacement:
             resting.add(*held.get_position_orientation())
             if not held.states[Inside].get_value(target):break
             if resting.report()['stable']:
-                if all(obj.states[Inside].get_value(target) for obj,_ in contents):return True
+                if all(obj.states[Inside].get_value(target) for obj,_ in contents):
+                    contact = self._placement_contact_report(held, [obj for obj,_ in contents])
+                    if contact['admissible']:
+                        return True
+                    self._placement_record({'status':'inside_resting_contact_rejected',
+                        'held':held.name,'target':target.name,'contact_geometry':contact})
+                    return False
         self._placement_record({'status':'inside_unstable_candidate','held':held.name,'target':target.name,
                                 'resting_motion':resting.report(),'anchoring_cadence_seconds':control_dt,
                                 'speed_m_s':float(self.torch.linalg.norm(held.get_linear_velocity()))})

@@ -131,34 +131,18 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(result['path_m'],0.)
         self.assertEqual(b.refreshes,1)
         self.assertTrue(next(e for e in b.events if e['phase']=='stationary_recheck')['ready'])
-    def test_loaded_departure_search_timeout_returns_bounded_failure(self):
-        from manipulation_agent.executors.gt_navigation import GridMap, SearchBudgetExhausted
+    def test_valid_pickup_does_not_require_future_exit_search(self):
         from manipulation_agent.executors.local_rgb import LocalRGBManipulation
-        b=Motor();b.ideal_carry=True;b.demo_motion=False
-        grid=GridMap(41,41,.1,(-2.,-2.),bytes([1])*41**2)
-        collision=SimpleNamespace(grid=grid,motion_free=lambda *args:True)
-        b._local_geometry=lambda operation:(grid,collision,{'held_object_footprint_included':False},[],0)
-        b._approach_visible=lambda *args,**kwargs:True
-        b._local_grasp_preview=lambda *args:lambda pose:collision
-        b._local_reposition=LocalRGBManipulation._local_reposition.__get__(b)
-        b._admit_loaded_departure=LocalRGBManipulation._admit_loaded_departure.__get__(b)
-        # This fixture isolates budget propagation without a live map to refine.
-        b._refine_local_geometry=lambda *args,**kwargs:False
-        # The unloaded stance is admitted, then the loaded departure search
-        # exhausts its shared planning budget, as in the real plates episode.
+        b=Motor();operation=SimpleNamespace()
+        prepared=SimpleNamespace(route=((1.,0.,.7),(.6,0.,.8)),carry_status='instant_pose_transfer')
         with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
-                   side_effect=SearchBudgetExhausted()):
-            with self.assertRaises(SkillError) as caught:b.run()
-        self.assertEqual(caught.exception.code,'local_adjustment_exhausted')
-        self.assertFalse(caught.exception.changed)
-        self.assertEqual(b.steps,0);self.assertEqual(b.executions,[])
-        limit=next(e for e in b.events if e['phase']=='stance_search')
-        self.assertTrue(limit['candidate_preparation_exhausted'])
-        self.assertEqual(limit['route_candidates'],0)
-        self.assertEqual(limit['attempts'],0)
-        self.assertEqual(caught.exception.stage,'local_candidate_preparation_budget')
-        self.assertEqual(b.events[-1]['phase'],'failed')
-        self.assertEqual(b.events[-1]['error_code'],'local_adjustment_exhausted')
+                   side_effect=AssertionError('Future exit must not veto a valid pickup')):
+            self.assertTrue(LocalRGBManipulation._admit_loaded_departure(
+                b,b.pose,lambda pose:prepared,operation,lambda:None))
+        self.assertEqual(operation.carry_plan['route'],prepared.route)
+        self.assertFalse(LocalRGBManipulation._admit_loaded_departure(
+            b,b.pose,lambda pose:None,SimpleNamespace(),lambda:None))
+
     def test_motion_accounting_has_no_start_radius_or_distance_cap(self):
         b=Motor();op=LocalOperation(b,'grasp',b.binding,100,{})
         for x in (3.,0.,5.):op.admit_pose((x,0.,0.))
@@ -302,6 +286,7 @@ class CoordinationTests(unittest.TestCase):
         free=[False];recoveries=[]
         collision=SimpleNamespace(motion_free=lambda *args:free[0])
         b._local_geometry=lambda op:(None,collision,None,None,None)
+        b._adapt_carry_for_navigation=lambda *args:None
         def recovery(op,geometry):
             recoveries.append(op);free[0]=True;b.steps+=1
         b._local_clearance_recovery=recovery

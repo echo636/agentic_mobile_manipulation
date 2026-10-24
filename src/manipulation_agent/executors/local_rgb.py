@@ -50,18 +50,9 @@ class LocalRGBManipulation:
 
     def _local_grasp_preview(self,obj,operation,geometry):
         """Check the same instantaneous carry destination used by ideal grasp."""
-        from .live_gt_map import build_navigation_grid
-        from .heading_collision import HeadingCollisionChecker
-        from .carry_geometry import PayloadSweep, LoadedCollision, plan_instant_carry
+        from types import SimpleNamespace
+        from .carry_geometry import PayloadSweep, plan_instant_carry
         payload=[obj,*[child for child,_,_ in self._grasp_dependencies(obj)]]
-        names=('_navigation_layers','_navigation_support','_navigation_clearance','_navigation_layer_yaw','_navigation_layer_heights')
-        saved={name:getattr(self,name) for name in names}
-        try:
-            grid,_=build_navigation_grid(self,geometry[4],prospective_carry=payload,robot_only=True)
-            robot_collision=HeadingCollisionChecker(grid,self._navigation_layers,self._local_pose()[2],
-                self._navigation_support,check_cancelled=operation.check)
-        finally:
-            for name,value in saved.items():setattr(self,name,value)
         base_z=float(self.robot.get_position_orientation()[0][2])
         cache={}
         def checker_at(pose):
@@ -75,24 +66,18 @@ class LocalRGBManipulation:
             if route is None:
                 operation.preview_failure={'reason':status,**(sweep.last_failure or {})}
                 return None
-            checker=LoadedCollision(robot_collision,sweep,pose,route)
-            checker.carry_status=status
+            checker=SimpleNamespace(route=route,carry_status=status)
             cache[key]=checker
             return checker
         return checker_at
 
     def _admit_loaded_departure(self,pose,preview,operation,check):
-        from .forward_navigation import local_exit_certificate
+        # A valid pickup must not depend on a short sampled exit being found.
+        # The real post-action geometry is checked by _local_departure, and
+        # later navigation retains its swept collision checks.
         operation.preview_check=check
         loaded=preview(pose)
         if loaded is None:return False
-        loaded.check_cancelled=check
-        if hasattr(loaded,'sweep'):loaded.sweep.check=check
-        if hasattr(loaded,'robot_collision'):loaded.robot_collision.check_cancelled=check
-        if local_exit_certificate(pose,loaded,check_cancelled=check,allow_lateral=getattr(self.robot,'is_holonomic_base',False)) is None:
-            if hasattr(loaded,'sweep'):
-                operation.preview_failure=loaded.sweep.last_failure or {'stage':'loaded_departure'}
-            return False
         if hasattr(loaded,'route'):
             operation.carry_plan={'pose':tuple(pose),'route':loaded.route,'status':loaded.carry_status,
                                   'transfer_mode':'instant_pose_transfer'}
@@ -114,7 +99,7 @@ class LocalRGBManipulation:
         if primitive=='grasp' and self.ideal_carry and not self.demo_motion:
             operation.grasp_preview=self._local_grasp_preview(obj,operation,geometry)
             if not self._admit_loaded_departure(pose,operation.grasp_preview,operation,operation.check):
-                operation.record('check_departure',status='rejected',reason='no_loaded_departure')
+                operation.record('check_carry_destination',status='rejected',reason='carry_destination_blocked')
                 return False
         return True
 
@@ -179,7 +164,7 @@ class LocalRGBManipulation:
                             row.update(status='rejected',reason='articulation_clearance');continue
                     if preview is not None:
                         if not self._admit_loaded_departure(pose,preview,operation,preparation.check):
-                            row.update(status='rejected',reason='no_loaded_departure',
+                            row.update(status='rejected',reason='carry_destination_blocked',
                                        diagnostic=getattr(operation,'preview_failure',None));continue
                     plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],tuple(map(float,point[:2])),pose[2],
                         math.dist(actual[:2],pose[:2]),math.dist(pose[:2],point[:2]),len(attempts),1,0.,0,pose[2],'forward')
@@ -287,6 +272,7 @@ class LocalRGBManipulation:
                                  ('no_departure','local_departure_clearance'),
                                  ('articulation_clearance','local_articulation_clearance'),
                                  ('no_loaded_departure','local_loaded_departure'),
+                                 ('carry_destination_blocked','local_carry_destination'),
                                  ('navigation_unreachable','local_route')]:
                 if reason in reasons:stage=value
             raise SkillError('local_adjustment_blocked','No checked reachable visible stance within target operation reach',
@@ -374,7 +360,6 @@ class LocalRGBManipulation:
 
     def _admit_articulation(self,primitive,obj,pose,operation,check):
         from .local_articulation import prepare_articulation
-        from .forward_navigation import local_exit_certificate
         preview=getattr(operation,'articulation_preview',None)
         if preview is None:
             preview=prepare_articulation(self,obj,primitive,operation)
@@ -382,7 +367,9 @@ class LocalRGBManipulation:
         swept,future,plan=preview
         swept.check_cancelled=future.check_cancelled=check
         if not swept.motion_free(pose,pose):return False
-        if local_exit_certificate(pose,future,check_cancelled=check,allow_lateral=getattr(self.robot,'is_holonomic_base',False)) is None:return False
+        # Keep the body's current and final clearance; finding an exit after
+        # opening/closing is a separate navigation problem, not this effect.
+        if not future.motion_free(pose,pose):return False
         operation.articulation_plan=plan
         return True
 

@@ -421,8 +421,12 @@ Rejected candidate poses never become committed actions or task evidence.
                 return RigidContactAPI.is_in_contact(scene_idx=held.scene.idx, query_set=[held],
                                                      with_set=None, ignore_set=None, current_only=True)
             if contact():
-                reject('initial_collision', candidate, contact_bodies=backend._placement_contacts(held, assembly[1:]))
-                continue
+                geometry = backend._placement_contact_report(held, assembly[1:])
+                if not geometry['admissible']:
+                    reject('initial_collision', candidate, contact_geometry=geometry)
+                    continue
+                backend._placement_record({'status':'initial_contact_admitted',
+                    'held':held.name,'target':target.name,**candidate,'contact_geometry':geometry})
             limit = max(1, int(.5/sim.get_physics_dt()))
             for _ in range(limit):
                 # Admission time bounds additional proposals, not the outcome
