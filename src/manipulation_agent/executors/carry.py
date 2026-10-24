@@ -210,7 +210,12 @@ class ControlledCarry(CompactCarry):
         contents=list(self._carry_contents)
         dependencies=list(self._carry_dependencies)
         try:
-            with self._placement_context(parent):
+            # The new fixed joint must move the connected bodies together.
+            # Repeatedly projecting only the parent's pose fights the native
+            # constraint solver and can inject energy into the whole assembly.
+            # Keep the robot anchor, rollback and parent identity checks while
+            # allowing the attached objects to respond to contacts and gravity.
+            with self._placement_context(watch=(parent,)):
                 self._carry_detach()
                 accepted=state.set_value(parent,True,bypass_alignment_checking=True,
                                          check_physics_stability=False,can_joint_break=False)
