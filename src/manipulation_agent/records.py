@@ -9,6 +9,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -54,9 +55,19 @@ def _finite_diagnostic(value, path, warnings):
 
 
 def write_json(path: Path, value: dict) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
-    tmp.replace(path)
+    # A shared fixed .tmp name can be truncated/replaced by another writer.
+    # Publish a complete fresh inode, never an overwritten staging file.
+    text = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False)
+    tmp = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    replaced = False
+    try:
+        with tmp.open("x", encoding="utf-8") as stream:
+            stream.write(text)
+        tmp.replace(path)
+        replaced = True
+    finally:
+        if not replaced:
+            tmp.unlink(missing_ok=True)
 
 
 def read_run(output: Path) -> dict:

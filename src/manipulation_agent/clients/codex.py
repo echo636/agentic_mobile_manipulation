@@ -91,11 +91,23 @@ class CodexAdapter(ClientAdapter):
                 private_http = False
             if not (endpoint.scheme == 'https' or private_http) or not endpoint.netloc or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
                 raise ValueError('Provider endpoint must be HTTPS or private-network HTTP without embedded credentials')
+            if config.model_provider_gateway is not None:
+                gateway = urlsplit(config.model_provider_gateway)
+                if (gateway.scheme != 'http' or gateway.hostname not in {'127.0.0.1', '::1'}
+                        or gateway.username or gateway.password or gateway.query or gateway.fragment
+                        or gateway.path not in {'', '/'}):
+                    raise ValueError('Provider gateway must be a loopback HTTP base URL without credentials or path')
+                provider['base_url'] = config.model_provider_gateway.rstrip('/')
             command += ['-c', 'model_provider=' + json.dumps(profile)]
             for key in ('name', 'base_url', 'requires_openai_auth', 'wire_api'):
                 command += ['-c', f'model_providers.{profile}.{key}=' + json.dumps(provider[key])]
             if env_key is not None:
                 command += ['-c', f'model_providers.{profile}.env_key=' + json.dumps(env_key)]
+            for key in ('request_max_retries', 'stream_max_retries', 'stream_idle_timeout_ms'):
+                if key in provider:
+                    if type(provider[key]) is not int or provider[key] < 0:
+                        raise ValueError('Provider retry and timeout options must be nonnegative integers')
+                    command += ['-c', f'model_providers.{profile}.{key}=' + str(provider[key])]
         native_sessions = None
         storage = None
         prefix = []

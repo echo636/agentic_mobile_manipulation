@@ -253,6 +253,41 @@ class CoordinationTests(unittest.TestCase):
             else:b.sampling_physics_steps=1200
             with self.subTest(cause=cause),self.assertRaises(SkillError) as cm:op.check()
             self.assertEqual(cm.exception.code,'local_adjustment_exhausted')
+
+    def test_verified_inside_commit_survives_spent_search_and_slow_rendering(self):
+        b=Motor();clock=[0.]
+        op=LocalOperation(b,'place_inside',b.binding,100,{},clock=lambda:clock[0])
+        # Archived failure: a valid saved Inside pose survived optional search,
+        # then even eight rendered settling steps exhausted the search clock.
+        clock[0]=301.;b.sampling_physics_steps=1200
+        with op.verified_placement_commit(50):
+            for _ in range(50):
+                op.check();b.steps+=1;clock[0]+=3.
+            with self.assertRaises(SkillError) as caught:op.check()
+            self.assertEqual(caught.exception.stage,'local_commit_budget')
+        self.assertIsNone(op.commit_limits)
+        with self.assertRaises(SkillError) as caught:op.check()
+        self.assertEqual(caught.exception.stage,'local_work_budget')
+
+    def test_verified_commit_keeps_caller_cap_and_prohibits_more_search(self):
+        b=Motor();op=LocalOperation(b,'place_inside',b.binding,49,{})
+        with self.assertRaises(SkillError):
+            with op.verified_placement_commit(50):self.fail('must reject before motion')
+        op=LocalOperation(b,'place_inside',b.binding,100,{})
+        with self.assertRaises(SkillError) as caught:
+            with op.verified_placement_commit(50):
+                b.sampling_physics_steps+=1;op.check()
+        self.assertEqual(caught.exception.stage,'local_commit_budget')
+        self.assertIsNone(op.commit_limits)
+
+    def test_verified_commit_keeps_episode_cancellation(self):
+        b=Motor();op=LocalOperation(b,'place_inside',b.binding,100,{})
+        def stop(**kw):raise SkillError('episode_cancelled','external cancellation')
+        with self.assertRaises(SkillError) as caught:
+            with op.verified_placement_commit(50):
+                b.deadline.check=stop;op.check()
+        self.assertEqual(caught.exception.code,'episode_cancelled')
+        self.assertEqual(b.steps,0);self.assertIsNone(op.commit_limits)
     def test_cancellation_precedes_effect(self):
         b=Motor()
         def stop(**kw):raise SkillError('episode_cancelled','stop')

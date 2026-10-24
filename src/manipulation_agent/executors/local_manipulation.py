@@ -4,6 +4,7 @@ One brain action owns one controller. Internal motions do not consume MCP
 turns, change public image revisions, or select another task/object.
 """
 from dataclasses import asdict, dataclass
+from contextlib import contextmanager
 import math
 import time
 from ..contracts import SkillError
@@ -46,6 +47,7 @@ class LocalOperation:
         self.changed = False
         self.route_started = None
         self.route_wall_seconds = 0.
+        self.commit_limits = None
 
     def record(self, phase, **data):
         self.backend._local_record(phase=phase, primitive=self.primitive,
@@ -57,6 +59,13 @@ class LocalOperation:
         used = self.backend.steps-self.start_steps
         sampled = getattr(self.backend, 'sampling_physics_steps', 0)-self.start_sampling
         self.changed |= changed or used > 0 or sampled > 0
+        if self.commit_limits is not None:
+            step_end, sampling_end = self.commit_limits
+            if used >= step_end or sampled > sampling_end:
+                raise SkillError('local_adjustment_exhausted',
+                                 'Verified placement commit exceeded its reserved steps',
+                                 changed=self.changed, stage='local_commit_budget')
+            return
         # Certified route execution has its own step bound and follower stall
         # checks. Rendering/I/O time must not consume the planning/manipulation
         # wall budget; external cancellation still applies on every step.
@@ -64,7 +73,35 @@ class LocalOperation:
         work_seconds = self.clock()-self.started-self.route_wall_seconds-active_route
         if (work_seconds >= self.limits.wall_seconds or used >= self.step_limit
                 or sampled >= self.limits.max_sampling_steps):
-            raise SkillError('local_adjustment_exhausted', 'Local operation work limit reached', changed=self.changed)
+            raise SkillError('local_adjustment_exhausted', 'Local operation work limit reached',
+                             changed=self.changed, stage='local_work_budget')
+
+    @contextmanager
+    def verified_placement_commit(self, steps):
+        """Finish a verified pose with bounded environment steps, without searching.
+
+        A search deadline cannot predict render/I/O time for a fixed sequence
+        of physics steps. Once a stable candidate exists, mandatory settling
+        keeps its own finite bound. Caller/operation step caps and episode
+        cancellation still apply; no more sampling is allowed in this phase.
+        """
+        if self.commit_limits is not None or steps <= 0:
+            raise ValueError('Expected a non-nested finite placement commit')
+        self.backend.deadline.check(changed=self.changed)
+        used = self.backend.steps-self.start_steps
+        end = used+steps
+        if end > min(self.step_limit, self.caller_step_limit):
+            raise SkillError('local_adjustment_exhausted',
+                             'Insufficient control steps to commit verified placement',
+                             changed=self.changed, stage='local_commit_budget')
+        sampled = getattr(self.backend, 'sampling_physics_steps', 0)-self.start_sampling
+        self.commit_limits = end, sampled
+        self.record('verified_placement_commit', reserved_steps=steps,
+                    search_sampling_steps=sampled, wall_policy='bounded_steps_with_episode_cancellation')
+        try:
+            yield
+        finally:
+            self.commit_limits = None
 
     def reserve_route(self, route, dt, *, settling_steps=10):
         """Budget a certified route before motion, retaining the caller's cap.

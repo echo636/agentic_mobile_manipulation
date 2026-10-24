@@ -91,6 +91,27 @@ class VisualPointOwnership(unittest.TestCase):
         self.assertIs(owner, table)
         self.assertIsNone(diagnostic['coincident_surface_resolution'])
 
+    def test_same_capture_owner_resolves_only_numerically_coincident_surfaces(self):
+        table, _ = self.box('table', [9., 0., .3705012])
+        box, _ = self.box('box', [9., 0., .3705014])
+        unrelated, _ = self.box('unrelated', [12., 0., 0.])
+        backend=self.backend([table,box,unrelated])
+        point=self.torch.tensor([9.,0.,.8705012]);camera=self.torch.tensor([9.,0.,2.])
+        before=point.clone()
+        owner, diagnostic=query_visual_surface(backend,point,camera_position=camera,renderer_object=table)
+        self.assertIs(owner,table)
+        self.assertEqual(diagnostic['coincident_surface_resolution'],'same_frame_renderer_instance')
+        self.torch.testing.assert_close(point,before,rtol=0,atol=0)
+        self.assertIs(query_visual_surface(backend,point,camera_position=camera,renderer_object=unrelated)[0],box)
+
+    def test_renderer_label_does_not_override_a_distinct_depth_surface(self):
+        measured, _ = self.box('measured', [0.,0.,0.])
+        other, _ = self.box('other', [0.,0.,.01])
+        owner, diagnostic=query_visual_surface(self.backend([measured,other]),self.torch.tensor([0.,0.,.5]),
+            camera_position=self.torch.tensor([0.,0.,2.]),renderer_object=other)
+        self.assertIs(owner,measured)
+        self.assertIsNone(diagnostic['coincident_surface_resolution'])
+
     def test_world_metric_respects_nonuniform_scale_and_live_transform(self):
         stretched, mesh = self.box('stretched', [0., 0., 0.])
         mesh.scaled_transform[0, 0] = 100.

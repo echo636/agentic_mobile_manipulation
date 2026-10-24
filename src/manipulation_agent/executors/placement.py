@@ -1,7 +1,7 @@
 """Transactional ideal placement; all geometry stays inside the motor adapter."""
 import json
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 from ..contracts import SkillError
 from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
@@ -356,7 +356,7 @@ class CheckedPlacement:
             raise SkillError('invalid_geometry', 'Carried object collision geometry is not finite')
         return result
 
-    def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=()):
+    def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=(), *, offsets=None):
         """Propose root poses at the selected collision surface, with the actual shape.
 
         Surface rays ignore the moving assembly at its OLD pose. Space at the
@@ -375,8 +375,9 @@ class CheckedPlacement:
             orientation = T.quat_multiply(rotation, orientation)
         ignored = [link.prim_path for obj in (held, self.robot, *payload) for link in obj.links.values()]
         target_paths = {link.prim_path for link in target.links.values()}
-        offsets = [(0., 0.)] + [(x, y) for radius in (.04, .08, .12)
-                               for x, y in ((radius, 0), (-radius, 0), (0, radius), (0, -radius))]
+        if offsets is None:
+            offsets = [(0., 0.)] + [(x, y) for radius in (.04, .08, .12)
+                                   for x, y in ((radius, 0), (-radius, 0), (0, radius), (0, -radius))]
         candidates = []
         # Stay above contact offsets even after the first physics step, as in
         # OG's standard kinematic sampler. This is clearance, not support area.
@@ -416,9 +417,61 @@ class CheckedPlacement:
             'yaw_degrees': yaw_degrees, 'collision_vertex_count': len(vertices),
             'rotated_geometry_extent': (vertices.max(axis=0)-vertices.min(axis=0)).tolist(),
             'bottom_anchor_offset': anchor.tolist(), 'candidate_count': len(candidates)})
-        candidates.extend(self._open_rim_candidates(held,target,point,vertices,anchor,orientation,
-                          offsets,payload,clearance,start_index=len(offsets)))
-        return candidates
+        rim_candidates = self._open_rim_candidates(held,target,point,vertices,anchor,orientation,
+                          offsets,payload,clearance,start_index=len(offsets))
+        # A rim click can balance an object's center just outside the box.
+        # Try nearby poses with the lower patch centered inside that same
+        # open cavity first; each still needs actual collision and settling.
+        if any(c.get('selected_rim_surface') for c in rim_candidates):
+            return rim_candidates + candidates
+        return candidates + rim_candidates
+
+    def _surface_fallback_candidates(self, held, target, point, yaw_degrees=None, payload=()):
+        """Cover nearby diagonal positions and yaw after ordinary trials fail.
+
+        The selected object, shelf and 20 cm verification neighborhood stay
+        unchanged. Loaded items rotate only around gravity; an explicit yaw
+        remains binding. Overlap scores order proposals without rejecting any.
+        """
+        import math
+        from omnigibson.utils import transform_utils as T
+        current = T.quat2mat(held.get_position_orientation()[1])
+        reference = T.quat2mat(target.get_position_orientation()[1])
+        aligned = math.degrees(math.atan2(float(reference[1, 0]), float(reference[0, 0])) -
+                               math.atan2(float(current[1, 0]), float(current[0, 0])))
+        angles = [yaw_degrees] if yaw_degrees is not None else [None, 90., aligned, aligned + 90.]
+        offsets = [(0., 0.)] + sorted(
+            [(x * .04, y * .04) for x in range(-4, 5) for y in range(-4, 5)
+             if 0 < (x * .04) ** 2 + (y * .04) ** 2 <= .18 ** 2],
+            key=lambda xy: xy[0] ** 2 + xy[1] ** 2)
+        proposals, seen = [], set()
+        for angle in angles:
+            self.deadline.check()
+            local = getattr(self, '_local_operation', None)
+            if local is not None:
+                local.check()
+            for candidate in self._surface_candidates(held, target, point, angle, payload, offsets=offsets):
+                position, orientation = candidate['pose']
+                key = tuple(round(float(v), 5) for v in (*position, *orientation))
+                if key in seen:
+                    continue
+                seen.add(key)
+                candidate.update(index=len(proposals), proposal_yaw_degrees=angle)
+                proposals.append(candidate)
+        ranker = self._inside_pose_overlap_ranker(held, [held, *payload])
+
+        def rank(candidate):
+            position, orientation = candidate['pose']
+            score = ranker(position.tolist(), orientation) if ranker is not None else 0.
+            candidate['proposal_overlap_score'] = score
+            distance = sum(v * v for v in candidate['offset_xy_m'])
+            return score, round(distance, 6), abs(candidate['proposal_yaw_degrees'] or 0.)
+
+        proposals.sort(key=rank)
+        self._placement_record({'status': 'surface_proposal_coverage', 'target': target.name, 'held': held.name,
+            'proposals': len(proposals), 'zero_overlap': sum(not c['proposal_overlap_score'] for c in proposals),
+            'angles_degrees': angles, 'unchanged_support_and_collision_acceptance': True})
+        return proposals
 
     def _collision_triangles(self, obj):
         """World triangles for support proposals; PhysX still verifies each hit."""
@@ -449,11 +502,11 @@ class CheckedPlacement:
                              offsets,payload,clearance,*,start_index):
         """Propose support on the open rim surrounding the selected cavity.
 
-        A click inside an open container selects its basin, but a wider item
-        can rest across the rim. This fallback uses the SAME annotated cavity
-        and actual upward collision faces. An upward obstruction rejects the
-        extension, so a lower shelf cannot silently become the shelf above it.
-        Ordinary selected-surface candidates retain priority and verification.
+        A wider item may span the rim of the selected basin or rim surface.
+        This uses the SAME annotated cavity and actual upward collision faces.
+        An upward obstruction rejects the extension, so a lower shelf cannot
+        silently become the shelf above it. Basin clicks retain ordinary-pose
+        priority; rim clicks prefer centers over the identified cavity.
         """
         from .surface_geometry import bottom_support_points
         from omnigibson.utils.sampling_utils import raytest
@@ -466,15 +519,29 @@ class CheckedPlacement:
         proposals=[];seen=set()
         for volume in volumes:
             low,high=volume.visual_aabb
-            # Only the selected cavity's bottom may extend to its open rim.
-            # A remote compartment or another shelf is not a valid substitute.
-            if abs(float(point[2]-low[2]))>.05:continue
+            floor_selected = abs(float(point[2]-low[2])) <= .05
+            rim_selected = abs(float(point[2]-high[2])) <= .05
+            if not (floor_selected or rim_selected):continue
             inside=point.clone();inside[2]=low[2]+min(.02,float(high[2]-low[2])/4)
-            if not bool(volume.check_points_in_volume(inside.reshape(1,3))[0]):continue
-            ceiling=point.clone();ceiling[2]=max(float(point[2])+.03,float(low[2])+.01)
+            if floor_selected:
+                if not bool(volume.check_points_in_volume(inside.reshape(1,3))[0]):continue
+            else:
+                # Identify an actual upward rim beside this exact cavity.
+                # Bounds alone never admit a neighboring compartment.
+                start=point+point.new_tensor([0.,0.,.06]);end=point-point.new_tensor([0.,0.,.06])
+                selected_hit=raytest(start,end,ignore_bodies=ignored)
+                if not (selected_hit.get('hit') and selected_hit.get('rigidBody') in target_paths
+                        and float(selected_hit['normal'][2])>=.9
+                        and abs(float(selected_hit['position'][2]-high[2]))<=.05):continue
+                import math
+                nearby=[inside]+[inside+inside.new_tensor([radius*math.cos(angle*math.pi/4),
+                    radius*math.sin(angle*math.pi/4),0.]) for radius in (.01,.02,.04,.05) for angle in range(8)]
+                if not bool(volume.check_points_in_volume(self.torch.stack(nearby)).any()):continue
+            ceiling=point.clone() if floor_selected else inside.clone()
+            if floor_selected:ceiling[2]=max(float(point[2])+.03,float(low[2])+.01)
             top=ceiling.clone();top[2]=high[2]+.06
-            if float(top[2])<=float(ceiling[2]) or raytest(ceiling,top,ignore_bodies=ignored)['hit']:
-                continue
+            if float(top[2])<=float(ceiling[2]):continue
+            if floor_selected and raytest(ceiling,top,ignore_bodies=ignored)['hit']:continue
             for dx,dy in offsets:
                 center=point+point.new_tensor([dx,dy,0.])
                 probe_inside=inside.clone();probe_inside[:2]=center[:2]
@@ -504,7 +571,7 @@ class CheckedPlacement:
                     'support_position':list(map(float,hit['position'])),'offset_xy_m':[dx,dy],
                     'bottom_anchor_offset':anchor.tolist(),'clearance_m':clearance,
                     'verification_point':verification,'surface_kind':'open_fillable_rim',
-                    'selected_cavity':volume.prim_path})
+                    'selected_cavity':volume.prim_path,'selected_rim_surface':not floor_selected})
         if proposals:
             self._placement_record({'status':'rim_candidates_constructed','target':target.name,'held':held.name,
                 'selected_point':point.tolist(),'candidate_count':len(proposals),
@@ -604,11 +671,28 @@ class CheckedPlacement:
                 self._carry_detach()
                 trial_state = self.og.sim.dump_state(serialized=False)
                 accepted = None
+                def candidate_stream():
+                    yield from candidates
+                    # Restore the detached assembly's original pose before
+                    # generating alternatives. Failed trials may have tilted
+                    # it; those poses must not redefine a requested yaw.
+                    self.og.sim.load_state(trial_state, serialized=False)
+                    start_index = 1 + max((c['index'] for c in candidates), default=-1)
+                    for index, candidate in enumerate(self._surface_fallback_candidates(
+                            held, target, point, yaw_degrees, payload)):
+                        candidate['index'] = start_index + index
+                        yield candidate
+
                 # Start with one second of free physics. A supported body may
                 # still be settling; measure its motion instead of treating
                 # this first observation as a fixed stability deadline.
                 settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
-                for number, candidate in enumerate(candidates):
+                tried_poses = set()
+                for number, candidate in enumerate(candidate_stream()):
+                    pose_key = tuple(round(float(v), 5) for vector in candidate['pose'] for v in vector)
+                    if pose_key in tried_poses:
+                        continue
+                    tried_poses.add(pose_key)
                     if number:
                         self.og.sim.load_state(trial_state, serialized=False)
                     held.set_position_orientation(*candidate['pose'])
@@ -737,16 +821,23 @@ class CheckedPlacement:
             gap = float(probe[2] - hit['position'][2]) if hit['hit'] else None
             normal_z = float(hit['normal'][2]) if hit['hit'] else None
             height_error = abs(float(hit['position'][2] - point[2])) if hit['hit'] else None
+            selected_xy_distance = float(self.torch.linalg.norm(probe[:2] - point[:2]))
             support_checks = {
                 'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
                 'upward_support': normal_z is not None and normal_z >= .9,
                 'bottom_near_support': gap is not None and -.01 <= gap <= .015,
-                'selected_shelf_height': height_error is not None and height_error <= .05}
+                'selected_shelf_height': height_error is not None and height_error <= .05,
+                # The supporting patch must be near the click. An object's
+                # globally lowest vertex can be elsewhere (e.g. a tilted log
+                # or a pan handle); it is not the selected contact witness.
+                # NextTo instead bounds the final pose by its own relation.
+                'selected_surface_neighborhood': not require_neighborhood or selected_xy_distance <= .20}
             support_probes.append({'position': probe.tolist(), 'source': source, 'checks': support_checks,
+                                   'selected_xy_distance_m': selected_xy_distance,
                                    'support_hit_body': hit.get('rigidBody')})
             # Every geometric condition must hold at the SAME lower patch.
-            # Stability, selected neighborhood and robot clearance remain
-            # independent requirements below; a rim hit alone is insufficient.
+            # Keep looking when a support exists outside the selected area.
+            # Stability and robot clearance remain independent requirements.
             if all(support_checks.values()):
                 break
         contacts = self._placement_contacts(held, payload)
@@ -754,15 +845,9 @@ class CheckedPlacement:
         robot_paths = {link.prim_path for link in self.robot.links.values()}
         speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
         angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
-        selected_xy_distance = float(self.torch.linalg.norm(anchor[:2] - point[:2]))
         checks = {'released': self._get_held() is None,
                   **support_checks,
                   'selected_contact_consistent': selected_contact or (not require_contact and not contacts),
-                  # NextTo selects the reference object. Its generated landing
-                  # point is only a proposal; the official NextTo relation
-                  # bounds the final location. Point-selected OnTop keeps its
-                  # neighborhood requirement, including after sliding/tilting.
-                  'selected_surface_neighborhood': not require_neighborhood or selected_xy_distance <= .20,
                   'settled': (bool(resting['stable']) if resting is not None
                               else speed <= .10 and angular_speed <= .5),
                   'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
@@ -771,6 +856,8 @@ class CheckedPlacement:
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
+            'support_probe': probe.tolist(),
+            'bottom_anchor_xy_distance_m': float(self.torch.linalg.norm(anchor[:2] - point[:2])),
             'selected_neighborhood_required': require_neighborhood,
             'support_probes': support_probes,
             'resting_motion':resting,
@@ -943,12 +1030,20 @@ class CheckedPlacement:
                 # Freezing an airborne sampler pose falsely validates Inside
                 # and can leave food in a shelf or tools obstructing a lid.
                 self._relocate_contents(held,contents)
-                for _ in range(min(50,max_steps)):
-                    # Environment.step does not dispatch through the patched
-                    # sim.step_physics method used by the official sampler.
-                    preserve_payload_poses()
-                    try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                    finally:preserve_payload_poses()
+                settling_steps=min(50,max_steps)
+                local=getattr(self,'_local_operation',None)
+                # Every accepted sampler pose has already passed free-release
+                # resting checks. Optional closure search must not use up the
+                # mandatory environment-step verification of that valid pose.
+                commit=(local.verified_placement_commit(settling_steps) if local is not None
+                        else nullcontext())
+                with commit:
+                    for _ in range(settling_steps):
+                        # Environment.step does not dispatch through the patched
+                        # sim.step_physics method used by the official sampler.
+                        preserve_payload_poses()
+                        try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                        finally:preserve_payload_poses()
             finally:
                 self.og.sim.step_physics=original_step
             if not held.states[Inside].get_value(target):

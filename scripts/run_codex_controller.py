@@ -12,6 +12,8 @@ import time
 import shutil
 import signal
 import sys
+import itertools
+import re
 from dataclasses import asdict
 
 from manipulation_agent.clients import ClientConfig, get_adapter
@@ -26,17 +28,18 @@ from manipulation_agent.deadline import EpisodeDeadline, validate_execution_cloc
 
 
 def rate_limit_error(events):
-    # Judge the final failure. An earlier transient error must not mask a later
-    # permanent account/authentication failure and trigger repeated resumes.
-    errors = [event for event in events if event.get('type') in {'error', 'turn.failed'}]
-    if not errors:
+    """Resume only after the latest terminal provider failure is transient."""
+    terminal = next((event for event in reversed(events)
+                     if event.get('type') in {'error', 'turn.failed', 'turn.completed'}), None)
+    if terminal is None or terminal.get('type') != 'turn.failed':
         return False
-    final = str(errors[-1].get('message') or errors[-1].get('error') or '')
-    if any(marker in final for marker in ('PERMANENT_', '401 Unauthorized', '403 Forbidden',
-                                          'refresh token was revoked')):
+    message = str(terminal.get('message') or terminal.get('error') or '')
+    if any(marker in message for marker in ('PERMANENT_', '401 Unauthorized', '403 Forbidden',
+                                            'refresh token was revoked')):
         return False
-    return any(marker in final for marker in ('429 Too Many Requests', '502 Bad Gateway',
-        '503 Service Unavailable', 'API_KEY_CONCURRENCY_QUEUE_FULL', 'API_KEY_CONCURRENCY_QUEUE_TIMEOUT'))
+    return (bool(re.search(r'\b(?:429 Too Many Requests|(?:status|HTTP) (?:429|500|502|503|504)\b)', message))
+            or 'API_KEY_CONCURRENCY_QUEUE_' in message
+            or 'stream disconnected before completion' in message)
 
 
 def codex_thread_id(events):
@@ -68,8 +71,9 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
-    p.add_argument('--rate-limit-resumes', type=int, default=0,
-                   help='Resume the same Codex session after transient provider 429/502/503 errors, retaining its MCP episode')
+    p.add_argument('--model-provider-gateway', help='Optional loopback request queue for this provider')
+    p.add_argument('--rate-limit-resumes', '--provider-error-resumes', type=int, default=None,
+                   help='Same-session transient provider recovery count; -1 is unbounded (default for unbounded Codex episodes)')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
@@ -83,8 +87,10 @@ def main(argv=None, *, allow_client=False):
               EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env())
     if args.timeout<0:p.error('--timeout must be nonnegative')
     if args.timeout==0:args.timeout=None
-    if args.rate_limit_resumes < 0 or args.resume_backoff_seconds < 1:
-        p.error('Rate-limit resume count must be nonnegative and backoff positive')
+    if args.rate_limit_resumes is None:
+        args.rate_limit_resumes = -1 if client == 'codex' and args.timeout is None else 0
+    if args.rate_limit_resumes < -1 or args.resume_backoff_seconds < 1:
+        p.error('Provider resume count must be -1 or nonnegative and backoff positive')
     if args.rate_limit_resumes and client != 'codex':
         p.error('Rate-limit resume is supported only for Codex')
     args.output.mkdir(parents=True, exist_ok=False)
@@ -93,7 +99,7 @@ def main(argv=None, *, allow_client=False):
     config = ClientConfig(client, args.model, args.instruction, args.mcp_command,
                           json.loads(args.mcp_args_json), args.output, args.timeout,
                           args.agent_profile, args.isolate_client_storage,
-                          args.reasoning_effort, args.model_provider_profile)
+                          args.reasoning_effort, args.model_provider_profile, args.model_provider_gateway)
     capability = adapter.probe()
     if capability.status != 'available':
         write_json(args.output / 'controller.json', {
@@ -127,6 +133,9 @@ def main(argv=None, *, allow_client=False):
                 "client_version": capability.version, "client_capability": asdict(capability)}
     if project.client_storage is not None:
         metadata['client_storage'] = project.client_storage
+    metadata['provider_recovery'] = dict(max_resumes=args.rate_limit_resumes,
+        backoff_seconds=args.resume_backoff_seconds, gateway=args.model_provider_gateway,
+        scope='Same model thread and live MCP episode; terminal transient provider errors only')
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
@@ -181,13 +190,17 @@ def main(argv=None, *, allow_client=False):
     thread_id=codex_thread_id(first_events) if client == 'codex' else None
     segment_events=first_events
     continuations=[]
-    for attempt in range(1,args.rate_limit_resumes+1):
+    for attempt in itertools.count(1):
+        if args.rate_limit_resumes != -1 and attempt > args.rate_limit_resumes:
+            break
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
         if (process.returncode == 0 or process.finish_received or process.timed_out or not thread_id or
                 not rate_limit_error(segment_events) or
                 (remaining is not None and remaining <= args.resume_backoff_seconds+30)):
             break
+        metadata['provider_recovery'].update(state='waiting', next_attempt=attempt)
+        write_json(args.output/'controller.json',metadata)
         time.sleep(args.resume_backoff_seconds)
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
@@ -209,6 +222,8 @@ def main(argv=None, *, allow_client=False):
         continuations.append({'attempt':attempt,'thread_id':thread_id,
                               'returncode':resumed.returncode,'timed_out':resumed.timed_out,
                               'raw_events':str(segment_path.relative_to(args.output))})
+        metadata['provider_recovery'].update(state='resumed', attempts=continuations)
+        write_json(args.output/'controller.json',metadata)
         process.returncode=resumed.returncode
         process.timed_out=process.timed_out or resumed.timed_out
         process.policy_finished_at_unix=resumed.policy_finished_at_unix

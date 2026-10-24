@@ -3,13 +3,15 @@ from ..contracts import SkillError
 from types import SimpleNamespace
 
 
-def query_visual_surface(backend, point, *, reject_particles=False, camera_position=None):
+def query_visual_surface(backend, point, *, reject_particles=False, camera_position=None,
+                         renderer_object=None):
     """Find the rendered mesh surface at the measured world-space point.
 
     Do not cast another ray, replace the point, search neighboring pixels, or
     reject selections with a depth/mesh distance threshold. Bounds only supply
     a conservative lower bound for accelerating the exact surface query.
-    Numerically coincident surfaces use camera order within float32 roundoff.
+    Numerically coincident surfaces use optional same-capture instance ownership,
+    falling back to camera order within float32 roundoff.
     """
     import itertools
     import numpy as np
@@ -179,15 +181,25 @@ def query_visual_surface(backend, point, *, reject_particles=False, camera_posit
             coincident.append(candidate)
         if best is None or distance < best[0]:
             best = candidate
+    resolution = None
     if len(coincident) > 1:
-        best = min(coincident, key=lambda row: (
-            -float(np.dot(np.asarray(row[3])-world_point, toward_camera)), row[0], row[2]))
+        # Optional same-capture instance ownership resolves numerical overlap
+        # without moving the depth point or selecting a neighboring surface.
+        # A label outside this geometric tie cannot redirect the operation.
+        rendered = [row for row in coincident if row[1] is renderer_object]
+        if rendered:
+            best = min(rendered, key=lambda row: (row[0], row[2]))
+            resolution = 'same_frame_renderer_instance'
+        else:
+            best = min(coincident, key=lambda row: (
+                -float(np.dot(np.asarray(row[3])-world_point, toward_camera)), row[0], row[2]))
+            resolution = 'camera_frontmost'
     numerical_diagnostics = {'invalid_meshes_skipped': invalid_meshes,
                              'invalid_triangles_skipped': invalid_triangles,
                              'invalid_surface_points_skipped': invalid_surface_points,
                              'coincident_surface_candidates': len(coincident),
                              'coincident_surface_roundoff_m': roundoff,
-                             'coincident_surface_resolution': 'camera_frontmost' if len(coincident) > 1 else None}
+                             'coincident_surface_resolution': resolution}
     if best is None or best[1] is backend.robot:
         exc = SkillError('invalid_visual_target',
                          'Selected surface belongs to the robot' if best else 'No visible mesh surface')

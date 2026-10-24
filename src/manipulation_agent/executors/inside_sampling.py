@@ -113,7 +113,8 @@ def closure_preference_available(backend):
     Closing is a preference of Inside, not its postcondition. Reserve the
     worst next trial (two half-second settles, a .75-second resting check,
     contact steps and closure preview) before exploring another pose. The
-    real action still performs its ordinary free settling and verification.
+    real action still performs its ordinary free settling and verification
+    under a separate finite commit-step allowance.
     Cancellation and the operation's hard limits remain unchanged.
     """
     local = getattr(backend, '_local_operation', None)
@@ -373,6 +374,7 @@ Rejected candidate poses never become committed actions or task evidence.
                     families.setdefault(up,{}).setdefault(location(candidate),[]).append(candidate)
             streams=[]
             for index,positions in enumerate(families.values()):
+                check()
                 buckets=[sorted(group,key=priority) for group in positions.values()]
                 buckets.sort(key=lambda group:priority(group[0]))
                 offset=index%len(buckets);buckets=buckets[offset:]+buckets[:offset]
@@ -389,24 +391,30 @@ Rejected candidate poses never become committed actions or task evidence.
         pose_score=pose_factory(held,assembly) if pose_factory is not None else None
         if ranker is not None:
             score=ranker(assembly)
+            ranking = {'scored': 0, 'clear': 0, 'deferred': 0,
+                       'strategy': 'clear_poses_before_overlap_fallback' if pose_score is not None and not payload_locked
+                                   else 'bounded_window'}
             def ranked_windows(source):
-                # Cheap piece queries cover more positions/orientations before
-                # costly physics trials. The same work and candidate budgets
-                # still apply, and scores never remove a candidate.
+                # Piece-box overlap is conservative: retain every proposal.
+                # Spend cheap queries across the finite geometry generator
+                # before exhausting physics on the first overlapping window.
+                deferred=[]
                 while window:=list(itertools.islice(source,128 if pose_score is not None and was_open is True else 64)):
                     check()
-                    # An envelope hit is only a ranking heuristic. Concave
-                    # shapes must still get their precise physical trial.
-                    def order(c):
-                        scene_overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
+                    ranked=[]
+                    for c in window:
+                        check()
+                        overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
+                        priority=(overlap,)
                         if not payload_locked and was_open is True and closure_geometry is not None:
-                            # Closed-lid clearance precedes the room envelope:
-                            # a tall unobstructed pose can still prevent closing.
-                            # Quantize height so sub-mm geometry noise does not
-                            # override the diversified position order.
-                            return (closed_overlap(c),scene_overlap,round(top_height(c)/.01),round(occupancy(c),6))
-                        return (scene_overlap,)
-                    yield from sorted(window,key=order)
+                            priority+=(closed_overlap(c),round(top_height(c)/.01),round(occupancy(c),6))
+                        ranking['scored']+=1
+                        ranking['clear']+=int(not overlap)
+                        if pose_score is not None and not payload_locked and overlap:
+                            deferred.append((priority,c));ranking['deferred']+=1
+                        else:ranked.append((priority,c))
+                    yield from (c for _,c in sorted(ranked,key=lambda pair:pair[0]))
+                yield from (c for _,c in sorted(deferred,key=lambda pair:pair[0]))
             candidates=ranked_windows(iter(candidates))
         generation_seconds=time.monotonic()-start
         seen=set();locations=set();duplicates=0
@@ -522,7 +530,9 @@ Rejected candidate poses never become committed actions or task evidence.
         return accept_open_only()
     except SkillError as exc:
         identity_changed = identity_changed or exc.code == 'target_changed'
-        if exc.code in {'sampling_budget_exhausted', 'placement_preference_exhausted'} and open_only is not None:
+        exhausted = exc.code in {'sampling_budget_exhausted', 'placement_preference_exhausted'} or (
+            exc.code == 'local_adjustment_exhausted' and exc.stage == 'local_work_budget')
+        if exhausted and open_only is not None:
             backend.deadline.check(changed=True)
             backend._placement_record({'status':'inside_closure_preference_stopped',
                 'held':held.name, 'target':target.name, 'reason':exc.code,
