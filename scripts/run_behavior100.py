@@ -890,19 +890,35 @@ class Batch:
             return
         self._worker_local.startup_progress_poll=(row['run_id'],current)
         path=Path(row['simulator_output'])/'startup_stages.jsonl'
-        code=("import json; from pathlib import Path; p=Path("+repr(str(path))+
-              "); result=[]\n"
-              "for line in (p.read_text().splitlines() if p.exists() else []):\n"
-              " try: result.append(json.loads(line))\n"
-              " except ValueError: pass\n"
-              "print(json.dumps(result))")
+        offset=row.get('startup_log_offset',0)
+        identity=row.get('startup_log_identity')
+        code=("import json,os; from pathlib import Path; p=Path("+repr(str(path))+
+              "); result=[]; offset=0; identity=None\n"
+              "if p.exists():\n"
+              " with p.open('rb') as stream:\n"
+              "  stat=os.fstat(stream.fileno()); identity=[stat.st_dev,stat.st_ino]\n"
+              "  if identity=="+repr(identity)+" and stat.st_size>="+repr(offset)+": stream.seek("+repr(offset)+")\n"
+              "  begin=stream.tell(); data=stream.read(); complete=data.rfind(b'\\n')+1; offset=begin+complete\n"
+              "  for line in data[:complete].splitlines():\n"
+              "   try: result.append(json.loads(line))\n"
+              "   except ValueError: pass\n"
+              "print(json.dumps(dict(events=result,offset=offset,identity=identity)))")
         try:
             result=self.ssh(['/usr/bin/python3','-c',code],timeout=15)
-            if result.returncode:return
-            events=json.loads(result.stdout)
-            if not isinstance(events,list):return
-            updates=startup_progress_update(row,events,time.time())
-        except (subprocess.TimeoutExpired,OSError,ValueError):
+            if result.returncode:
+                raise OSError('Remote startup reader exited with code '+str(result.returncode))
+            payload=json.loads(result.stdout)
+            events=payload['events']
+            if not isinstance(events,list):raise ValueError('Invalid startup events')
+            tracking={**row,'startup_pending_operations':row.get('startup_pending_operations',[])}
+            updates=startup_progress_update(tracking,events,time.time())
+            for key,value in [('startup_log_offset',payload['offset']),
+                              ('startup_log_identity',payload['identity'])]:
+                if row.get(key)!=value:updates[key]=value
+            if row.get('startup_progress_read_error'):
+                updates['startup_progress_read_error']=None
+        except (subprocess.TimeoutExpired,OSError,ValueError,KeyError) as exc:
+            self.update(row,startup_progress_read_error={'at':now(),'type':type(exc).__name__})
             return  # Unreadable progress cannot extend the watchdog.
         if updates:self.update(row,**updates)
 

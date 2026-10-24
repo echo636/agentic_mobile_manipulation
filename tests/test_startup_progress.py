@@ -392,6 +392,64 @@ class StartupProgressTests(unittest.TestCase):
             before=row.copy();b._worker_local.startup_progress_poll=None;b.refresh_startup_progress(row)
             self.assertEqual(row,before)
 
+    def test_incremental_reader_pairs_completed_operations_across_polls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b = batch.Batch.__new__(batch.Batch); b._worker_local = threading.local()
+            b.update = lambda row, **kw: row.update(kw)
+            responses = []
+            def read(args, **kw):
+                result = subprocess.run(args, capture_output=True, text=True, timeout=kw['timeout'])
+                responses.append(json.loads(result.stdout))
+                return result
+            b.ssh = read
+            at = batch.time.time()
+            row = self.row()
+            row.update(simulator_output=tmp, simulator_started_at_unix=at-100,
+                       startup_deadline_unix=at+1700)
+            path = Path(tmp) / 'startup_stages.jsonl'
+            def append(event):
+                with path.open('a') as stream: stream.write(json.dumps(event)+'\n')
+            for i in range(1000):
+                append(dict(stage='object_'+str(i), status='passed', at_unix=at-10))
+            append(dict(stage='restore', status='running', at_unix=at-5))
+            b.refresh_startup_progress(row)
+            self.assertEqual(len(responses[-1]['events']), 1001)
+            self.assertIn(('restore', at-5), row['startup_pending_operations'])
+            completion = dict(stage='restore', status='passed', at_unix=at-4,
+                              operation_started_at_unix=at-5)
+            encoded = json.dumps(completion)
+            with path.open('a') as stream: stream.write(encoded[:20])
+            before_offset = row['startup_log_offset']
+            b._worker_local.startup_progress_poll = None; b.refresh_startup_progress(row)
+            self.assertEqual(row['startup_log_offset'], before_offset)
+            self.assertEqual(responses[-1]['events'], [])
+            with path.open('a') as stream: stream.write(encoded[20:]+'\n')
+            b._worker_local.startup_progress_poll = None; b.refresh_startup_progress(row)
+            self.assertEqual(responses[-1]['events'], [completion])
+            self.assertEqual(row['startup_pending_operations'], [])
+            append(dict(stage='restore', status='running', at_unix=at-3))
+            b._worker_local.startup_progress_poll = None; b.refresh_startup_progress(row)
+            # Repeated entry alone is not completed work or watchdog progress.
+            self.assertEqual(row['startup_deadline_unix'], at-4+1800)
+            append(dict(stage='restore', status='passed', at_unix=at-2,
+                        operation_started_at_unix=at-3))
+            b._worker_local.startup_progress_poll = None; b.refresh_startup_progress(row)
+            self.assertEqual(row['startup_deadline_unix'], at-2+1800)
+            # Replaced/truncated files can be reread, but old events cannot renew.
+            path.write_text(json.dumps(completion)+'\n')
+            b._worker_local.startup_progress_poll = None; b.refresh_startup_progress(row)
+            self.assertEqual(row['startup_deadline_unix'], at-2+1800)
+
+    def test_remote_read_failure_is_visible_without_renewing_deadline(self):
+        b = batch.Batch.__new__(batch.Batch); b._worker_local = threading.local()
+        b.update = lambda row, **kw: row.update(kw)
+        b.ssh = Mock(side_effect=subprocess.TimeoutExpired('reader', 15))
+        row = self.row(); row['simulator_output'] = '/fixture'
+        before = row['startup_deadline_unix']
+        b.refresh_startup_progress(row)
+        self.assertEqual(row['startup_deadline_unix'], before)
+        self.assertEqual(row['startup_progress_read_error']['type'], 'TimeoutExpired')
+
     def test_controller_handshake_uses_refreshed_deadline_but_clock_metadata_takes_over(self):
         b=batch.Batch.__new__(batch.Batch);b._worker_local=threading.local()
         b.update=lambda row,**kw:row.update(kw)

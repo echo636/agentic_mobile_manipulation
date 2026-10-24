@@ -164,7 +164,8 @@ def startup_progress_update(row, events, observed_at):
     idle = row['startup_timeout_seconds']
     seen = set(row.get('startup_seen_milestones', []))
     latest = None
-    entries = set()
+    pending = row.get('startup_pending_operations')
+    entries = {tuple(item) for item in pending or []}
     for event in events:
         if not isinstance(event, dict):
             continue
@@ -180,13 +181,17 @@ def startup_progress_update(row, events, observed_at):
                 and not isinstance(started, bool) and began <= started <= at
                 and (stage, started) in entries):
             key += ':' + str(started)
+            entries.discard((stage, started))
         if key in seen or not began <= at <= min(observed_at + 5, deadline):
             continue
         seen.add(key)
         deadline = max(deadline, at + idle)
         if latest is None or at >= latest['at_unix']:
             latest = {'stage': stage, 'status': status, 'at_unix': at}
-    if latest is None:
-        return {}
-    return {'startup_deadline_unix': deadline, 'startup_seen_milestones': sorted(seen),
-            'startup_last_progress': latest}
+    updates = {}
+    if pending is not None and sorted(entries) != [tuple(item) for item in pending]:
+        updates['startup_pending_operations'] = sorted(entries)
+    if latest is not None:
+        updates.update(startup_deadline_unix=deadline, startup_seen_milestones=sorted(seen),
+                       startup_last_progress=latest)
+    return updates
