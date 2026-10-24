@@ -101,7 +101,8 @@ def closure_preference_available(backend):
     Closing is a preference of Inside, not its postcondition. Reserve the
     worst next trial (two half-second settles, a .75-second resting check,
     contact steps and closure preview) before exploring another pose. The
-    real action still performs its ordinary free settling and verification.
+    real action still performs its ordinary free settling and verification
+    under a separate finite commit-step allowance.
     Cancellation and the operation's hard limits remain unchanged.
     """
     local = getattr(backend, '_local_operation', None)
@@ -340,6 +341,7 @@ Rejected candidate poses never become committed actions or task evidence.
                     families.setdefault(up,{}).setdefault(location(candidate),[]).append(candidate)
             streams=[]
             for index,positions in enumerate(families.values()):
+                check()
                 buckets=[sorted(group,key=priority) for group in positions.values()]
                 buckets.sort(key=lambda group:priority(group[0]))
                 offset=index%len(buckets);buckets=buckets[offset:]+buckets[:offset]
@@ -368,6 +370,7 @@ Rejected candidate poses never become committed actions or task evidence.
                     check()
                     ranked=[]
                     for c in window:
+                        check()
                         overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
                         priority=(overlap,)
                         if not payload_locked and was_open is True and closure_geometry is not None:
@@ -481,7 +484,9 @@ Rejected candidate poses never become committed actions or task evidence.
             return True
         return accept_open_only()
     except SkillError as exc:
-        if exc.code in {'sampling_budget_exhausted', 'placement_preference_exhausted'} and open_only is not None:
+        exhausted = exc.code in {'sampling_budget_exhausted', 'placement_preference_exhausted'} or (
+            exc.code == 'local_adjustment_exhausted' and exc.stage == 'local_work_budget')
+        if exhausted and open_only is not None:
             backend.deadline.check(changed=True)
             backend._placement_record({'status':'inside_closure_preference_stopped',
                 'held':held.name, 'target':target.name, 'reason':exc.code,

@@ -1,7 +1,7 @@
 """Transactional ideal placement; all geometry stays inside the motor adapter."""
 import json
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 from ..contracts import SkillError
 from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
@@ -784,30 +784,31 @@ class CheckedPlacement:
             gap = float(probe[2] - hit['position'][2]) if hit['hit'] else None
             normal_z = float(hit['normal'][2]) if hit['hit'] else None
             height_error = abs(float(hit['position'][2] - point[2])) if hit['hit'] else None
+            selected_xy_distance = float(self.torch.linalg.norm(probe[:2] - point[:2]))
             support_checks = {
                 'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
                 'upward_support': normal_z is not None and normal_z >= .9,
                 'bottom_near_support': gap is not None and -.01 <= gap <= .015,
-                'selected_shelf_height': height_error is not None and height_error <= .05}
+                'selected_shelf_height': height_error is not None and height_error <= .05,
+                # The supporting patch must be near the click. An object's
+                # globally lowest vertex can be elsewhere (e.g. a tilted log
+                # or a pan handle); it is not the selected contact witness.
+                # NextTo instead bounds the final pose by its own relation.
+                'selected_surface_neighborhood': not require_neighborhood or selected_xy_distance <= .20}
             support_probes.append({'position': probe.tolist(), 'source': source, 'checks': support_checks,
+                                   'selected_xy_distance_m': selected_xy_distance,
                                    'support_hit_body': hit.get('rigidBody')})
             # Every geometric condition must hold at the SAME lower patch.
-            # Stability, selected neighborhood and robot clearance remain
-            # independent requirements below; a rim hit alone is insufficient.
+            # Keep looking when a support exists outside the selected area.
+            # Stability and robot clearance remain independent requirements.
             if all(support_checks.values()):
                 break
         contacts = self._placement_contacts(held, payload)
         robot_paths = {link.prim_path for link in self.robot.links.values()}
         speed = float(self.torch.linalg.norm(held.get_linear_velocity()))
         angular_speed = float(self.torch.linalg.norm(held.get_angular_velocity()))
-        selected_xy_distance = float(self.torch.linalg.norm(anchor[:2] - point[:2]))
         checks = {'released': self._get_held() is None,
                   **support_checks,
-                  # NextTo selects the reference object. Its generated landing
-                  # point is only a proposal; the official NextTo relation
-                  # bounds the final location. Point-selected OnTop keeps its
-                  # neighborhood requirement, including after sliding/tilting.
-                  'selected_surface_neighborhood': not require_neighborhood or selected_xy_distance <= .20,
                   'settled': (bool(resting['stable']) if resting is not None
                               else speed <= .10 and angular_speed <= .5),
                   'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
@@ -815,6 +816,8 @@ class CheckedPlacement:
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
+            'support_probe': probe.tolist(),
+            'bottom_anchor_xy_distance_m': float(self.torch.linalg.norm(anchor[:2] - point[:2])),
             'selected_neighborhood_required': require_neighborhood,
             'support_probes': support_probes,
             'resting_motion':resting,
@@ -977,12 +980,20 @@ class CheckedPlacement:
                 # Freezing an airborne sampler pose falsely validates Inside
                 # and can leave food in a shelf or tools obstructing a lid.
                 self._relocate_contents(held,contents)
-                for _ in range(min(50,max_steps)):
-                    # Environment.step does not dispatch through the patched
-                    # sim.step_physics method used by the official sampler.
-                    preserve_payload_poses()
-                    try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                    finally:preserve_payload_poses()
+                settling_steps=min(50,max_steps)
+                local=getattr(self,'_local_operation',None)
+                # Every accepted sampler pose has already passed free-release
+                # resting checks. Optional closure search must not use up the
+                # mandatory environment-step verification of that valid pose.
+                commit=(local.verified_placement_commit(settling_steps) if local is not None
+                        else nullcontext())
+                with commit:
+                    for _ in range(settling_steps):
+                        # Environment.step does not dispatch through the patched
+                        # sim.step_physics method used by the official sampler.
+                        preserve_payload_poses()
+                        try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                        finally:preserve_payload_poses()
             finally:
                 self.og.sim.step_physics=original_step
             if not held.states[Inside].get_value(target):
