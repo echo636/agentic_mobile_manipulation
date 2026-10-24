@@ -9,11 +9,14 @@ from .records import now,write_json
 
 
 def check_server(command,args,expected,output,timeout=90):
-    start=time.monotonic();record={'status':'running','started_at':now(),'read_only':True,'tool_calls':0}
+    start=time.monotonic();record={'status':'running','started_at':now(),'read_only':True,'tool_calls':0,
+                                 'phase':'process_start','timings':{}}
     process=None;selector=None
     try:
         with (output/'mcp_preflight.stderr.log').open('wb') as stderr:
             process=subprocess.Popen([command,*args],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=stderr,bufsize=0)
+            record.update(process_pid=process.pid,phase='initialize')
+            record['timings']['process_started']=time.monotonic()-start
             selector=selectors.DefaultSelector();selector.register(process.stdout,selectors.EVENT_READ);buffer=b''
             def send(value):process.stdin.write((json.dumps(value)+'\n').encode())
             def receive(identifier):
@@ -34,11 +37,16 @@ def check_server(command,args,expected,output,timeout=90):
                         if len(buffer)>4*1024**2:raise RuntimeError('MCP handshake response exceeds bounded size')
                 raise TimeoutError('MCP initialization/tool discovery timed out')
             send({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'mas-readonly-preflight','version':'1'}}})
-            initialized=receive(1);send({'jsonrpc':'2.0','method':'notifications/initialized'})
+            initialized=receive(1)
+            record['timings']['initialized']=time.monotonic()-start
+            record['phase']='tools_list'
+            send({'jsonrpc':'2.0','method':'notifications/initialized'})
             send({'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}});tools=receive(2)['tools']
+            record['timings']['tools_received']=time.monotonic()-start
+            record['phase']='schema_validation'
             wanted={t['name']:t['inputSchema'] for t in expected};found={t['name']:t['inputSchema'] for t in tools}
             if wanted!=found:raise RuntimeError('MCP tool names or schemas differ from frozen controller catalog')
-            record.update(status='passed',protocol_version=initialized.get('protocolVersion'),tool_names=sorted(found),
+            record.update(status='passed',phase='complete',protocol_version=initialized.get('protocolVersion'),tool_names=sorted(found),
                           schema_sha256=hashlib.sha256(json.dumps(found,sort_keys=True).encode()).hexdigest())
             selector.close()
     except Exception as exc:

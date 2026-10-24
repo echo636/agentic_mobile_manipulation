@@ -47,6 +47,33 @@ def codex_thread_id(events):
                  if event.get('type') == 'thread.started' and event.get('thread_id')), None)
 
 
+def preflight_server(command, args, expected, output, deadline, *, attempt_timeout=90):
+    """Retry one transport timeout before policy start; never issue tool calls.
+
+    Keep each attempt and its stderr. Schema/process failures remain immediate
+    failures, and legacy episode deadlines still bound each attempt.
+    """
+    attempts = []
+    for attempt in (1, 2):
+        attempt_output = output / 'mcp_preflight_attempts' / str(attempt)
+        attempt_output.mkdir(parents=True, exist_ok=False)
+        try:
+            result = check_server(command, args, expected, attempt_output,
+                                  timeout=deadline.remaining(attempt_timeout))
+        except TimeoutError:
+            if attempt == 2 or deadline.expired:
+                raise
+        else:
+            result['attempts'] = [*attempts, str(attempt_output.relative_to(output))]
+            return result
+        finally:
+            attempts.append(str(attempt_output.relative_to(output)))
+            for name in ('mcp_preflight.json', 'mcp_preflight.stderr.log'):
+                path = attempt_output / name
+                if path.exists():
+                    shutil.copyfile(path, output / name)
+
+
 def main(argv=None, *, allow_client=False):
     argv = list(sys.argv[1:] if argv is None else argv)
     probing = allow_client and '--probe' in argv
@@ -151,8 +178,8 @@ def main(argv=None, *, allow_client=False):
             # access to /dev/null. A host-only handshake misses mount failures.
             prefix=project.mcp_prefix
             mcp_command=prefix[0];mcp_args=prefix[1:]+['--',args.mcp_command,*mcp_args]
-        metadata['mcp_preflight']=check_server(mcp_command,mcp_args,tool_specs(args.agent_profile),args.output,
-                                               timeout=deadline.remaining(90))
+        metadata['mcp_preflight']=preflight_server(mcp_command,mcp_args,tool_specs(args.agent_profile),
+                                                  args.output,deadline)
         metadata['mcp_preflight']['inside_client_storage_namespace']=native_sessions is not None
     except Exception as exc:
         if deadline.expired:return expired_before_policy('mcp_handshake')

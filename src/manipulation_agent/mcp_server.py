@@ -13,10 +13,23 @@ from copy import deepcopy
 import hashlib
 import ipaddress
 import json
+import sys
+import time
 import uuid
 import urllib.request
 from urllib.parse import quote
 
+_startup_started = time.monotonic()
+
+
+def _startup(stage):
+    if __name__ == '__main__':
+        print('MAS_MCP_STARTUP ' + json.dumps({
+            'stage': stage, 'seconds': time.monotonic() - _startup_started,
+        }), file=sys.stderr, flush=True)
+
+
+_startup('proxy_import')
 from .bridge import rpc
 from .deadline import tool_wait_seconds
 
@@ -45,16 +58,19 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
     It also preserves the existing nullable-default compatibility for old act
     clients; generating a Pydantic signature here would coerce or drop inputs.
     """
+    _startup('sdk_import')
     from mcp import types
     from mcp.server.fastmcp import FastMCP
     from mcp.server.fastmcp.tools import Tool
     from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase, FuncMetadata
     from pydantic import ConfigDict
 
+    _startup('bridge_health')
     host = loopback_host(host)
     health = json.loads(await asyncio.to_thread(fetch, url.rstrip('/') + '/healthz'))
     if not health.get('ready'):
         raise RuntimeError('Simulator bridge is not ready')
+    _startup('catalog_registration')
     catalog = health['tools']
     rpc_timeout=health.get('rpc_timeout_seconds',tool_wait_seconds(1800))
     if len({spec['name'] for spec in catalog}) != len(catalog):
@@ -108,6 +124,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
 
 async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431):
     server = await create_server(url, host=host, port=port)
+    _startup('serving')
     if transport == 'stdio':
         await server.run_stdio_async()
     elif transport == 'sse':
