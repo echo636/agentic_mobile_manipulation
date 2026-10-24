@@ -2,7 +2,22 @@
 
 Write the complete replacement JSON string with `task_notes(operation="write", content=..., expected_version=...)`. Start at version 0; each reply supplies the next version. After missing context or a version conflict, read with `operation="read", content=null, expected_version=null`. Maximum content length: 12000 characters.
 
-Use this structure:
+Tree shape follows the task. This example has a root, two intermediate layers on one branch, and leaves at different depths. The current action plan is stored separately in `active` (labels illustrate structure, not task content):
+
+```text
+g0 Task end state (root)
+├─ g1 Contributing result A (intermediate)
+│  ├─ g11 Finer result A1 (intermediate)
+│  │  ├─ g111 Directly pursuable result A1a (leaf)
+│  │  └─ g112 Directly pursuable result A1b (leaf)
+│  └─ g12 Directly pursuable result A2 (leaf)
+├─ g2 Directly pursuable result B (leaf)
+└─ g3 Directly pursuable result C (leaf)
+```
+
+Here `g111.parent_id` is `g11`, and `g11.parent_id` is `g1`. If A2 requires B, set `g12.depends_on` to `["g2"]` while keeping `g12.parent_id` as `g1`. Do not copy the example's depth or counts; expand any leaf if it later needs decomposition.
+
+Use the following fields. Only two goal records are shown for brevity; put **every node**, including intermediate parents and deeper descendants, in the flat `goals` list:
 
 ```json
 {
@@ -25,9 +40,9 @@ Use this structure:
 }
 ```
 
-This is a minimal shape, not a depth or branching limit. Add any number of goals with `parent_id` pointing to an existing goal: for example, siblings under `g0`, children under `g1`, and further descendants where useful. IDs are unique; only the root has a null parent. Parent links form one tree. Dependencies reference goal IDs and may cross branches; they do not set parentage. Keep both relations acyclic.
+IDs are unique; only the root has a null parent. Every other `parent_id` references an existing goal; parent links form one tree. Dependencies reference goal IDs and may cross branches. Keep both relations acyclic. Parentage alone does not require sibling execution order; children do not wait for their parent to be done.
 
-Statuses are `pending`, `active`, `done`, `blocked`, `retired`. Any executable goal can be active. With none ready, set `active.goal_id` to null and `steps` to an empty list.
+Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the leaf currently being pursued; its ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list.
 
 Keep a compact member ledger in `evidence`, using visual descriptions, last locations, completion states and actual returned evidence IDs. Update entries rather than appending an action transcript. A spilled item reopens its goal; placing it temporarily on a bench leaves its storage requirement pending.
 
