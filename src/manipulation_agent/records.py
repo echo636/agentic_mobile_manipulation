@@ -17,6 +17,24 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+class JsonlAppend:
+    """Episode-owned append handle; every complete row is flushed for live readers."""
+    def __init__(self, path):
+        self.path = Path(path)
+        self.stream = None
+
+    def append(self, row):
+        if self.stream is None:
+            self.stream = self.path.open('a', encoding='utf-8')
+        self.stream.write(json.dumps(row) + '\n')
+        self.stream.flush()
+
+    def close(self):
+        stream, self.stream = self.stream, None
+        if stream is not None:
+            stream.close()
+
+
 def _finite_diagnostic(value, path, warnings):
     """Keep invalid private numbers as null plus their exact path and value.
 

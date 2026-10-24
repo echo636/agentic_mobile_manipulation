@@ -20,11 +20,17 @@ class CodexAdapter(ClientAdapter):
     def prepare_resume(self, project, thread_id, prompt):
         """Resume one recorded Codex thread against the same MCP episode."""
         UUID(thread_id)
-        if project.mcp_prefix or project.argv[:2] != ['codex', 'exec']:
-            raise ValueError('This Codex resume path requires an unwrapped exec project')
+        prefix = project.mcp_prefix
+        argv = project.argv
+        if prefix:
+            if argv[:len(prefix)+1] != [*prefix, '--']:
+                raise ValueError('Codex resume namespace prefix differs from original project')
+            argv = argv[len(prefix)+1:]
+        if argv[:2] != ['codex', 'exec']:
+            raise ValueError('Codex resume requires an exec project')
         command = ['codex', 'exec', 'resume']
         workspace = project.cwd
-        args = project.argv[2:]
+        args = argv[2:]
         index = 0
         while index < len(args):
             flag = args[index]
@@ -40,7 +46,11 @@ class CodexAdapter(ClientAdapter):
                 command.append(flag)
                 index += 1
         command += [thread_id, '-']
-        return PreparedProject(command, workspace, prompt, env_overlay=project.env_overlay)
+        if prefix:
+            command = [*prefix, '--', *command]
+        return PreparedProject(command, workspace, prompt, env_overlay=project.env_overlay,
+            native_sessions=project.native_sessions, client_storage=project.client_storage,
+            mcp_prefix=prefix)
 
     def prepare_project(self, config, instructions, tool_names):
         workspace = config.output / "empty_workspace"

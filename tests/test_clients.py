@@ -139,6 +139,18 @@ command = "ignored"
                           resumed.argv)
             for feature in ('shell_tool', 'plugins', 'multi_agent'):
                 self.assertIn(feature, resumed.argv)
+            # A service retry must see the same private session mount, without
+            # falling back to the user's global Codex sessions or credentials.
+            from dataclasses import replace
+            prefix = ['bwrap', '--bind', '/private/sessions', '/existing/sessions']
+            isolated = replace(original, argv=[*prefix, '--', *original.argv],
+                mcp_prefix=prefix, native_sessions=Path('/private/sessions'),
+                client_storage={'auth_copied': False})
+            continued = adapter.prepare_resume(isolated, thread_id, 'Continue from RGB.')
+            self.assertEqual(continued.argv, [*prefix, '--', *resumed.argv])
+            self.assertEqual(continued.native_sessions, isolated.native_sessions)
+            self.assertEqual(continued.client_storage, isolated.client_storage)
+            self.assertEqual(continued.mcp_prefix, prefix)
 
     def test_codex_accepts_private_http_provider_without_url_credentials(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'CODEX_HOME': folder}):

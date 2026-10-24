@@ -15,7 +15,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from collections import deque
 
-from .records import now, write_json
+from .records import JsonlAppend, now, write_json
 
 ENCODER_STALL_SECONDS = 90
 
@@ -46,6 +46,7 @@ class EpisodeVideo:
         self.width = 2 * size; self.height = self.rows * size + 80
         self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
         self.closed = False; self.process = None; self.log = None
+        self.timeline = JsonlAppend(output/'video_frames.jsonl')
         self.encoder_pool = None; self.encoder_pending = deque()
         self._encoder_stop = threading.Event()
         self._encoded_frames = 0
@@ -97,6 +98,10 @@ class EpisodeVideo:
         """Isolate failed recording and keep already written evidence intact."""
         self.closed = True
         self.recording_failure = {'failure_type':type(exc).__name__, 'failure':str(exc)}
+        try:
+            self.timeline.close()
+        except OSError as close_error:
+            self.manifest['timeline_close_error'] = str(close_error)
         self._encoder_stop.set()
         if self.process is not None:
             if self.process.poll() is None:
@@ -221,8 +226,7 @@ class EpisodeVideo:
                'kind':kind, 'at':now(), 'camera_capture_env_step':env_step if capture_env_step is None else capture_env_step,
                'repeated_camera_frame':bool(repeated), **self.context,
                'rgb_sha256':dict(self._camera_hashes)}
-        with (self.output/'video_frames.jsonl').open('a') as stream:
-            stream.write(json.dumps(row)+'\n')
+        self.timeline.append(row)
         if kind == 'env_step': self.env_steps.append(env_step)
         self.count += 1
         # Preserve completed fragments and a progress checkpoint after a native
@@ -233,6 +237,10 @@ class EpisodeVideo:
             write_json(self.output/'video.json', self.manifest)
 
     def finish(self, final_env_step):
+        try:
+            self.timeline.close()
+        except OSError as exc:
+            self._disable_encoder(exc)
         if self.recording_failure is not None:
             self.manifest.update(final_env_step=final_env_step,
                 encoded_frames_completed=self._encoded_frames)

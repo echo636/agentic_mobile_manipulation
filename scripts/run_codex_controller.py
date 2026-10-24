@@ -26,9 +26,17 @@ from manipulation_agent.deadline import EpisodeDeadline, validate_execution_cloc
 
 
 def rate_limit_error(events):
-    return any(event.get('type') in {'error', 'turn.failed'} and
-               '429 Too Many Requests' in str(event.get('message') or event.get('error') or '')
-               for event in events)
+    # Judge the final failure. An earlier transient error must not mask a later
+    # permanent account/authentication failure and trigger repeated resumes.
+    errors = [event for event in events if event.get('type') in {'error', 'turn.failed'}]
+    if not errors:
+        return False
+    final = str(errors[-1].get('message') or errors[-1].get('error') or '')
+    if any(marker in final for marker in ('PERMANENT_', '401 Unauthorized', '403 Forbidden',
+                                          'refresh token was revoked')):
+        return False
+    return any(marker in final for marker in ('429 Too Many Requests', '502 Bad Gateway',
+        '503 Service Unavailable', 'API_KEY_CONCURRENCY_QUEUE_FULL', 'API_KEY_CONCURRENCY_QUEUE_TIMEOUT'))
 
 
 def codex_thread_id(events):
@@ -61,7 +69,7 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
     p.add_argument('--rate-limit-resumes', type=int, default=0,
-                   help='Resume the same Codex session after a provider 429, retaining its MCP episode')
+                   help='Resume the same Codex session after transient provider 429/502/503 errors, retaining its MCP episode')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
@@ -188,7 +196,7 @@ def main(argv=None, *, allow_client=False):
         segment_dir=args.output/'continuations'/str(attempt)
         segment_dir.mkdir(parents=True,exist_ok=False)
         resume_prompt=('Continue the same robot task in the same simulator episode. '
-                       'A temporary model service rate limit interrupted the previous turn. '
+                       'A temporary model service error interrupted the previous turn. '
                        'Use the prior conversation and current RGB tool feedback; continue choosing '
                        'actions yourself, then call finish. Do not restart the task or claim success '
                        'without visual evidence.')

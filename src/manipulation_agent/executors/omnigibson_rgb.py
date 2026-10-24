@@ -11,7 +11,7 @@ from ..contracts import SkillError
 from ..deadline import EpisodeDeadline
 from ..omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, centered_head_height, look_at_orientation
-from ..records import now
+from ..records import JsonlAppend, now
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
@@ -232,9 +232,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         self._spectator_anchor = (pos.clone(),yaw)
         # The caller positions every camera before a shared render barrier.
         # Rendering here would draw the old surround-camera poses unnecessarily.
-        with (self.output/'spectator_poses.jsonl').open('a') as stream:
-            stream.write(json.dumps({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
-                                     'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})+'\n')
+        if getattr(self, '_spectator_log', None) is None:
+            self._spectator_log = JsonlAppend(self.output/'spectator_poses.jsonl')
+        self._spectator_log.append({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
+                                   'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})
 
     def _prepare_spectator(self):
         try:
@@ -1436,4 +1437,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             try:
                 self._close_placement_record()
             finally:
-                super().close()
+                try:
+                    if getattr(self, '_spectator_log', None) is not None:
+                        self._spectator_log.close()
+                finally:
+                    super().close()

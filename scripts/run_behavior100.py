@@ -1065,6 +1065,9 @@ class Batch:
             if self.c.get('model_provider_profile'):
                 cmd += ['--model-provider-profile',self.c['model_provider_profile']]
             if self.c.get('isolate_client_storage'):cmd.append('--isolate-client-storage')
+            if self.c.get('provider_transient_resumes'):
+                cmd += ['--rate-limit-resumes',str(self.c['provider_transient_resumes']),
+                        '--resume-backoff-seconds',str(self.c.get('provider_resume_backoff_seconds',90))]
             with (self.root/'logs'/f'{runid}_controller.log').open('w') as log:
                 process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,env=self.environment)
                 self.update(row,controller_wrapper_pid=process.pid,controller_host=os.uname().nodename,
@@ -1332,6 +1335,9 @@ class Batch:
             cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
         if self.c.get('model_provider_profile'):
             cmd += ['--model-provider-profile',self.c['model_provider_profile']]
+        if self.c.get('provider_transient_resumes'):
+            cmd += ['--rate-limit-resumes',str(self.c['provider_transient_resumes']),
+                    '--resume-backoff-seconds',str(self.c.get('provider_resume_backoff_seconds',90))]
         if row.get('execution_clock_path'):
             cmd+=['--execution-clock-command-json',json.dumps(self.execution_clock_command(
                 row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime,row=row))]
