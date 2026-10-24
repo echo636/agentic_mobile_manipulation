@@ -1,30 +1,56 @@
-"""Detect an explicitly unrecoverable native renderer before waiting for RGB."""
+"""Read native renderer failures without calling Python from native log threads."""
 from pathlib import Path
+import re
 
 from ..records import now, write_json
 
 
 class RendererHealth:
     def __init__(self, output):
-        import carb.logging
+        from isaacsim import SimulationApp
 
         self.output = Path(output)
         self.failure = None
         self.recorded = False
-        self.logging = carb.logging.acquire_logging()
-        self.handle = self.logging.add_logger(self._on_log)
+        self.stream = None
+        self.pending = b''
+        self.closed = False
+        self.log_path = self.output.resolve() / 'native_runtime.log'
+        # OG clears sys.argv before launching Kit. Use the supported launcher
+        # extra_args instead, scoped to this adapter's process. Keep native
+        # logging: a Python logger acquires the GIL on every native log thread
+        # and can block a native call that waits for that thread while holding it.
+        self.launcher_defaults = SimulationApp.DEFAULT_LAUNCHER_CONFIG
+        self.previous_args = self.launcher_defaults.get('extra_args', [])
+        self.extra_args = [arg for arg in self.previous_args
+                           if not arg.startswith('--/log/file=')]
+        self.extra_args.append('--/log/file=' + str(self.log_path))
+        self.launcher_defaults['extra_args'] = self.extra_args
 
-    def _on_log(self, source, level, filename, line, message):
-        # Allocation errors alone can be recoverable. This native message says
-        # scene creation failed permanently; waiting for fresh annotations can
-        # otherwise spin forever inside Replicator's synchronous capture.
-        # The logging callback only stores evidence, never calls into Kit or IO.
-        if (self.failure is None and source == 'omni.hydra'
-                and 'Rendering will not resume until a new scene is loaded.' in message):
-            self.failure = {'at': now(), 'source': source, 'message': message[:2048],
-                            'code': 'native_renderer_scene_unavailable'}
+    def _read_native_log(self):
+        if self.closed or self.failure is not None:
+            return
+        if self.stream is None:
+            try:
+                self.stream = self.log_path.open('rb')
+            except FileNotFoundError:
+                return  # Kit has not opened its log during early construction.
+        while chunk := self.stream.read(65536):
+            lines = (self.pending + chunk).split(b'\n')
+            self.pending = lines.pop()
+            for line in lines:
+                # Allocation errors alone can be recoverable. Match only the
+                # renderer's explicit permanent scene failure, not other sources.
+                match = re.search(rb'\[(?:Error|Fatal)\] \[omni\.hydra\] (.*)', line)
+                if match and b'Rendering will not resume until a new scene is loaded.' in match[1]:
+                    self.failure = {'at': now(), 'source': 'omni.hydra',
+                        'message': match[1].decode('utf-8', errors='replace')[:2048],
+                        'native_log': str(self.log_path),
+                        'code': 'native_renderer_scene_unavailable'}
+                    return
 
     def check(self):
+        self._read_native_log()
         if self.failure is None:
             return
         if not self.recorded:
@@ -37,6 +63,9 @@ class RendererHealth:
                            'see renderer_failure.json')
 
     def close(self):
-        if self.handle is not None:
-            self.logging.remove_logger(self.handle)
-            self.handle = None
+        self.closed = True
+        if self.stream is not None:
+            self.stream.close()
+            self.stream = None
+        if self.launcher_defaults.get('extra_args') is self.extra_args:
+            self.launcher_defaults['extra_args'] = self.previous_args
