@@ -42,6 +42,7 @@ class ClientConfig:
     isolate_client_storage: bool = False
     reasoning_effort: str | None = None
     model_provider_profile: str | None = None
+    model_provider_gateway: str | None = None
 
     def __post_init__(self):
         if self.client not in {"codex", "opencode", "kimi"}:
@@ -56,6 +57,8 @@ class ClientConfig:
             raise ValueError('Unsupported reasoning effort')
         if self.client != 'codex' and (self.reasoning_effort is not None or self.model_provider_profile is not None):
             raise ValueError('Model provider and reasoning effort overrides are supported only for Codex')
+        if self.model_provider_gateway is not None and (self.client != 'codex' or not self.model_provider_profile):
+            raise ValueError('A provider gateway requires an explicit Codex provider profile')
 
     @property
     def prompt(self) -> str:

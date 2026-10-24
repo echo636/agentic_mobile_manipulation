@@ -20,11 +20,13 @@ class CodexAdapter(ClientAdapter):
     def prepare_resume(self, project, thread_id, prompt):
         """Resume one recorded Codex thread against the same MCP episode."""
         UUID(thread_id)
-        if project.mcp_prefix or project.argv[:2] != ['codex', 'exec']:
-            raise ValueError('This Codex resume path requires an unwrapped exec project')
+        prefix = project.mcp_prefix
+        original = project.argv[len(prefix)+1:] if prefix else project.argv
+        if original[:2] != ['codex', 'exec']:
+            raise ValueError('This Codex resume path requires an exec project')
         command = ['codex', 'exec', 'resume']
         workspace = project.cwd
-        args = project.argv[2:]
+        args = original[2:]
         index = 0
         while index < len(args):
             flag = args[index]
@@ -40,7 +42,11 @@ class CodexAdapter(ClientAdapter):
                 command.append(flag)
                 index += 1
         command += [thread_id, '-']
-        return PreparedProject(command, workspace, prompt, env_overlay=project.env_overlay)
+        if prefix:
+            command = [*prefix, '--', *command]
+        return PreparedProject(command, workspace, prompt, env_overlay=project.env_overlay,
+                               native_sessions=project.native_sessions, client_storage=project.client_storage,
+                               mcp_prefix=prefix)
 
     def prepare_project(self, config, instructions, tool_names):
         workspace = config.output / "empty_workspace"
@@ -81,11 +87,23 @@ class CodexAdapter(ClientAdapter):
                 private_http = False
             if not (endpoint.scheme == 'https' or private_http) or not endpoint.netloc or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
                 raise ValueError('Provider endpoint must be HTTPS or private-network HTTP without embedded credentials')
+            if config.model_provider_gateway is not None:
+                gateway = urlsplit(config.model_provider_gateway)
+                if (gateway.scheme != 'http' or gateway.hostname not in {'127.0.0.1', '::1'}
+                        or gateway.username or gateway.password or gateway.query or gateway.fragment
+                        or gateway.path not in {'', '/'}):
+                    raise ValueError('Provider gateway must be a loopback HTTP base URL without credentials or path')
+                provider['base_url'] = config.model_provider_gateway.rstrip('/')
             command += ['-c', 'model_provider=' + json.dumps(profile)]
             for key in ('name', 'base_url', 'requires_openai_auth', 'wire_api'):
                 command += ['-c', f'model_providers.{profile}.{key}=' + json.dumps(provider[key])]
             if env_key is not None:
                 command += ['-c', f'model_providers.{profile}.env_key=' + json.dumps(env_key)]
+            for key in ('request_max_retries', 'stream_max_retries', 'stream_idle_timeout_ms'):
+                if key in provider:
+                    if type(provider[key]) is not int or provider[key] < 0:
+                        raise ValueError('Provider retry and timeout options must be nonnegative integers')
+                    command += ['-c', f'model_providers.{profile}.{key}=' + str(provider[key])]
         native_sessions = None
         storage = None
         prefix = []

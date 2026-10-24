@@ -140,6 +140,33 @@ command = "ignored"
             for feature in ('shell_tool', 'plugins', 'multi_agent'):
                 self.assertIn(feature, resumed.argv)
 
+    def test_codex_resume_retains_isolated_native_session_mount(self):
+        with tempfile.TemporaryDirectory() as folder:
+            adapter = get_adapter('codex')
+            original = adapter.prepare_project(self.config(Path(folder)), 'Policy', ['act', 'finish'])
+            prefix = ['/usr/bin/bwrap', '--bind', '/episode/sessions', '/native/sessions']
+            original.argv = [*prefix, '--', *original.argv]
+            original.mcp_prefix = prefix
+            original.native_sessions = Path('/episode/sessions')
+            resumed = adapter.prepare_resume(original, '01a12027-d1b5-7c40-a929-4936344a9ad5', 'Continue.')
+            self.assertEqual(resumed.argv[:len(prefix)+4], [*prefix, '--', 'codex', 'exec', 'resume'])
+            self.assertEqual(resumed.native_sessions, original.native_sessions)
+            self.assertEqual(resumed.mcp_prefix, prefix)
+            self.assertEqual(resumed.cwd, Path(folder, 'empty_workspace'))
+
+    def test_provider_gateway_changes_transport_only(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {}, clear=True), \
+                patch('pathlib.Path.home', return_value=Path(folder)):
+            root = Path(folder, '.codex'); root.mkdir()
+            (root/'config.toml').write_text('[model_providers.relay]\nname="Relay"\n'
+                'base_url="https://example.invalid/v1"\nwire_api="responses"\nstream_max_retries=8\n')
+            prepared = get_adapter('codex').prepare_project(self.config(Path(folder),
+                model_provider_profile='relay', model_provider_gateway='http://127.0.0.1:18081'), 'Policy', ['act'])
+            self.assertIn('model_providers.relay.base_url="http://127.0.0.1:18081"', prepared.argv)
+            self.assertIn('model_providers.relay.stream_max_retries=8', prepared.argv)
+            self.assertIn('provider/model', prepared.argv)
+            self.assertEqual(prepared.stdin, self.config(Path(folder)).prompt)
+
     def test_codex_accepts_private_http_provider_without_url_credentials(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'CODEX_HOME': folder}):
             config_file = Path(folder, 'config.toml')
