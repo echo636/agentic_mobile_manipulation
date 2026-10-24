@@ -118,7 +118,7 @@ class AssemblySamplingTests(unittest.TestCase):
         backend=SimpleNamespace(torch=torch,og=SimpleNamespace(sim=sim),deadline=SimpleNamespace(check=lambda **kw:None),
             _relocate_contents=lambda root, contents:child.set_position_orientation(root.position+held.offset,root.quat),
             _placement_record=records.append,_placement_contacts=lambda *args:['fixture_obstacle'],
-            _placement_contact_report=lambda *args:{'admissible':False,'reason':'deep_penetration'})
+            _placement_contact_report=lambda *args, **kwargs:{'admissible':False,'reason':'deep_penetration'})
         states=ModuleType('omnigibson.object_states');states.Inside=Inside;states.Open=type('Open',(),{})
         utils=ModuleType('omnigibson.utils')
         def quat_multiply(a,b):

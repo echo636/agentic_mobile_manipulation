@@ -177,7 +177,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b=CheckedPlacement();b.robot=robot;b.torch=torch;b._get_held=lambda:None
         b._collision_vertices=lambda obj:torch.tensor([[-.2,-.2,0.],[.2,.2,0.],[-.2,-.2,.02],[.2,.2,.02]]).numpy()
         b._placement_contacts=lambda *args:[]
-        b._placement_contact_report=lambda *args:{'admissible':True}
+        b._placement_contact_report=lambda *args, **kwargs:{'admissible':True}
         sampling=types.ModuleType('omnigibson.utils.sampling_utils');seen=[];support=['/table']
         def raytest(start,end,ignore_bodies):
             seen.append(ignore_bodies)

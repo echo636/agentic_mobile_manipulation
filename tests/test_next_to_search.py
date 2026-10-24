@@ -124,7 +124,7 @@ class NextToShelfSupport(unittest.TestCase):
             get_position_orientation=lambda: (torch.tensor([1., 2., .65]), torch.tensor([0., 0., 0., 1.])))
         b._get_held = lambda: None if state['released'] else held
         b._placement_contacts = lambda *args: ['shelf/base_link']
-        b._placement_contact_report = lambda *args: {'admissible': True}
+        b._placement_contact_report = lambda *args, **kwargs: {'admissible': True}
         def physical_support(item, furniture, selected_point, touching, payload, *, require_neighborhood):
             self.assertIs(item, held); self.assertIs(furniture, support)
             self.assertTrue(torch.equal(selected_point, point))

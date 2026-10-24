@@ -236,7 +236,7 @@ class CheckedPlacement:
                   'supported': supported,
                   'released': self._get_held() is None,
                   'settled': speed <= .10 and angular_speed <= .5}
-        contact = self._placement_contact_report(held, payload)
+        contact = self._placement_contact_report(held, payload, allow_sleeping=True)
         checks['no_deep_penetration'] = contact['admissible']
         return all(checks.values()), {'checks': checks,
             'contact_geometry': contact,
@@ -603,9 +603,9 @@ class CheckedPlacement:
                                                   with_set=None, current_only=True)
         return sorted({other for _, other in pairs if other not in paths})
 
-    def _placement_contact_report(self, held, payload=()):
+    def _placement_contact_report(self, held, payload=(), *, allow_sleeping=False):
         from .placement_contacts import contact_report
-        return contact_report(self, held, payload)
+        return contact_report(self, held, payload, allow_sleeping=allow_sleeping)
 
     def _placement_physics_step(self):
         """A hypothetical candidate must not update task metrics or record video."""
@@ -825,7 +825,7 @@ class CheckedPlacement:
                   'settled': (bool(resting['stable']) if resting is not None
                               else speed <= .10 and angular_speed <= .5),
                   'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
-        contact = self._placement_contact_report(held, payload)
+        contact = self._placement_contact_report(held, payload, allow_sleeping=True)
         checks['no_deep_penetration'] = contact['admissible']
         return all(checks.values()), {'checks': checks, 'touching_selected_object': touching,
             'contact_geometry': contact,
@@ -1069,7 +1069,7 @@ class CheckedPlacement:
             if not held.states[Inside].get_value(target):break
             if resting.report()['stable']:
                 if all(obj.states[Inside].get_value(target) for obj,_ in contents):
-                    contact = self._placement_contact_report(held, [obj for obj,_ in contents])
+                    contact = self._placement_contact_report(held, [obj for obj,_ in contents], allow_sleeping=True)
                     if contact['admissible']:
                         return True
                     self._placement_record({'status':'inside_resting_contact_rejected',
