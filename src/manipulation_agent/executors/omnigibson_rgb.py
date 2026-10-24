@@ -269,6 +269,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         dispatcher; additional arbitrary render ticks are not that guarantee.
         This is called only by the simulator owner, for calibrated observations.
         """
+        self._check_renderer_health()
         import numpy as np
         import omnigibson.lazy as lazy
         timeline = lazy.omni.timeline.get_timeline_interface()
@@ -290,6 +291,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             with self.og.sim.editing_usd():
                 lazy.omni.replicator.core.orchestrator.step(
                     delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
+        self._check_renderer_health()
         after = state()
         changed = [key for key in ('env_step', 'sim_step_index') if before[key] != after[key]]
         changed += [key for key in ('sim_time', 'timeline_time')
@@ -309,6 +311,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
 
         Wait with render-only ticks; never advance physics to warm up recording.
         """
+        self._check_renderer_health()
         import numpy as np
         self._position_rig()
         sensors = dict(self.rig)
@@ -316,9 +319,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         # Flush render-product latency after camera poses change, with physics frozen.
         for _ in range(flushes - 1):
             with component(self,'render'):self.og.sim.render()
+            self._check_renderer_health()
         shapes = {}; readiness_failures=[]
         for attempt in range(30):
             with component(self,'render'):self.og.sim.render()
+            self._check_renderer_health()
             if require_calibration:
                 self._wait_for_rgb_annotations()
             pixels = {}; packets = {}; intrinsics={}; pending={}
@@ -363,6 +368,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         raise RuntimeError('Camera render products did not become ready: '+json.dumps({'rgb_shapes':shapes,'calibration':pending}))
 
     def _step(self, action):
+        self._check_renderer_health()
         self.deadline.check(changed=True)
         local=getattr(self,'_local_operation',None)
         if local is not None:local.check()

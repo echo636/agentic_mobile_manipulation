@@ -282,13 +282,17 @@ class OmniGibsonBackend:
 
         with self._startup_stage('configure_native_fault_reporting'):
             configure_native_fault_reporting(output)
+        from .executors.renderer_health import RendererHealth
+        self._renderer_health = RendererHealth(output)
         if getattr(self, 'catalog_spec', None):
             self._load_catalog_environment(config)
+            self._check_renderer_health()
         else:
             with self._startup_stage('construct_evaluator_and_environment'), efficient_grounding(), self._native_startup_progress():
                 self.evaluator = ResearchEvaluator(OmegaConf.create({
                     "task": {"name": task}, "mode": "public_test", "env_wrapper": None, "write_video": False,
                 }))
+            self._check_renderer_health()
             with self._startup_stage('initial_reset'), self._native_startup_progress('initial_reset'):
                 self.evaluator.reset()
             with self._startup_stage('validate_runtime_task_bindings'):
@@ -329,6 +333,11 @@ class OmniGibsonBackend:
     def _prepare_task_instance(self):
         """Extension point before RGB sensors and the first agent observation."""
         pass
+
+    def _check_renderer_health(self):
+        health = getattr(self, '_renderer_health', None)
+        if health is not None:
+            health.check()
 
     def _config(self, task: str, gpu: int, max_steps: int) -> dict:
         if getattr(self, 'catalog_spec', None):
@@ -674,5 +683,8 @@ class OmniGibsonBackend:
                 "task_instance": self.task_metadata, "official_submission_eligible": False}
 
     def close(self) -> None:
+        health = getattr(self, '_renderer_health', None)
+        if health is not None:
+            health.close()
         self.env.close()
         self.og.shutdown()
