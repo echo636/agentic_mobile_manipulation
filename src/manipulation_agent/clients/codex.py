@@ -84,6 +84,11 @@ class CodexAdapter(ClientAdapter):
                 # An explicitly selected API-key provider must never fall back
                 # to the user's ChatGPT subscription login.
                 provider['requires_openai_auth'] = False
+                # The CLI also loads its shared credential cache for background
+                # work. A revoked subscription refresh must not abort an
+                # independent, explicitly configured API-key episode. Keep
+                # credentials process-local; never edit the user's auth file.
+                command += ['-c', 'cli_auth_credentials_store="ephemeral"']
             endpoint = urlsplit(provider['base_url'])
             try:
                 private_http = endpoint.scheme == 'http' and ip_address(endpoint.hostname).is_private

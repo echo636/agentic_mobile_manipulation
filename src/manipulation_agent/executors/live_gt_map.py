@@ -97,6 +97,109 @@ def floor_support_window(raw, original_resolution, resolution, window):
     return support, origin
 
 
+def repair_floor_support(raw, origin, resolution, floor_z, floor_links, query, check):
+    """Recover omitted floor cells from current structural floor collisions.
+
+    The asset's no-object traversal image can still seal an open doorway.
+    A black pixel is not proof of missing floor. Add a cell only when its
+    centre and corners hit upward-facing structural floor at this elevation.
+    This supplies support only; ordinary height-layer queries still check all
+    walls, doors and furniture before any robot pose or motion is admitted.
+    """
+    import numpy as np
+    support = raw.copy()
+    details = {'method': 'structural_floor_rays_for_missing_cells',
+               'added_cells': 0, 'ray_queries': 0}
+    if not floor_links:
+        return support, details
+    rows, cols = np.nonzero(raw == 0)
+    half = resolution/2
+    offsets = ((0., 0.), (-half, -half), (-half, half),
+               (half, -half), (half, half))
+    for index, (row, col) in enumerate(zip(rows, cols)):
+        if index % 256 == 0:
+            check()
+        x, y = origin[0]+col*resolution, origin[1]+row*resolution
+        for dx, dy in offsets:
+            hit = query.raycast_closest((float(x+dx), float(y+dy), floor_z+.025),
+                                        (0., 0., -1.), .05)
+            details['ray_queries'] += 1
+            if (not hit.get('hit') or hit.get('rigidBody') not in floor_links
+                    or hit['normal'][2] < .98
+                    or abs(hit['position'][2]-floor_z) > .02):
+                break
+        else:
+            support[row, col] = 1
+            details['added_cells'] += 1
+    return support, details
+
+
+def rasterize_collision_cells(query, raw, dirty, origin, resolution, low, high,
+                              ignored_links, check):
+    """Skip empty tiles using enclosing PhysX queries; retain exact leaf cells.
+
+    A clear enclosing box proves every child column clear. A hit only causes
+    subdivision, never marks the whole tile blocked. Thus thin obstacles and
+    narrow passages retain the original per-cell collision decision.
+    """
+    import numpy as np
+    queries = 0
+
+    def visit(r0, r1, c0, c1):
+        nonlocal queries
+        mask = dirty[r0:r1, c0:c1]
+        if not mask.any():
+            return
+        if queries % 2048 == 0:
+            check()
+        leaf = r1-r0 == 1 and c1-c0 == 1
+        # Enclose the exact child cells despite floating-point centre rounding.
+        margin = 0. if leaf else 1e-6
+        half = ((c1-c0)*resolution/2+margin, (r1-r0)*resolution/2+margin,
+                (high-low)/2+margin)
+        center = (float(origin[0]+(c0+c1-1)*resolution/2),
+                  float(origin[1]+(r0+r1-1)*resolution/2), (high+low)/2)
+        blocked = False
+        query_error = None
+
+        def hit_callback(hit):
+            nonlocal blocked, query_error
+            try:
+                if str(hit.rigid_body) not in ignored_links:
+                    blocked = True
+                    return False
+                return True
+            except Exception as exc:
+                query_error = exc
+                return False
+
+        query.overlap_box(half, center, (0., 0., 0., 1.), hit_callback, False)
+        queries += 1
+        if query_error is not None:
+            raise RuntimeError('PhysX overlap callback failed') from query_error
+        if not blocked or leaf:
+            raw[r0:r1, c0:c1][mask] = 0 if blocked else 1
+            return
+        if r1-r0 >= c1-c0:
+            mid = (r0+r1)//2
+            visit(r0, mid, c0, c1)
+            visit(mid, r1, c0, c1)
+        else:
+            mid = (c0+c1)//2
+            visit(r0, r1, c0, mid)
+            visit(r0, r1, mid, c1)
+
+    rows, cols = np.nonzero(dirty)
+    if not len(rows):
+        return 0
+    # Bounded tiles avoid one broad query spanning a whole building. Start
+    # at dirty extents so a small incremental update stays small.
+    for r in range(int(rows.min()), int(rows.max())+1, 32):
+        for c in range(int(cols.min()), int(cols.max())+1, 32):
+            visit(r, min(r+32, raw.shape[0]), c, min(c+32, raw.shape[1]))
+    return queries
+
+
 def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=False, occupancy_overrides=None,
                           sampling=None):
     import cv2
@@ -176,11 +279,28 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     cache_key=floor if window is None else (floor,resolution,tuple(window))
     if cache_key not in cache:
         if not source.is_file():raise ValueError('GT floor support map unavailable: '+str(source))
-        raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE);h,w=trav.floor_map[floor].shape
-        raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
+        # Repair at the original resolution once per structural floor, before
+        # local resampling. Repeated refinement must not perpetuate an old
+        # traversal silhouette or repeat a full-scene support query.
+        support_cache=getattr(backend,'_live_floor_support_cache',None)
+        if support_cache is None: support_cache=backend._live_floor_support_cache={}
+        h,w=trav.floor_map[floor].shape
+        support_key=(floor,original_resolution,h,w)
+        if support_key not in support_cache:
+            raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE)
+            raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
+            floor_links={str(link.prim_path) for obj in scene.objects
+                         if getattr(obj,'category',None) in {'floor','floors'}
+                         for link in obj.links.values() if not link.is_meta_link}
+            raw,support_details=repair_floor_support(raw,(-w*original_resolution/2,-h*original_resolution/2),
+                original_resolution,floor_z,floor_links,lazy.omni.physx.get_physx_scene_query_interface(),
+                backend.deadline.check)
+            support_cache[support_key]=(raw,support_details)
+        raw,support_details=support_cache[support_key]
         raw,origin=floor_support_window(raw,original_resolution,resolution,window)
         cache[cache_key]={'support':raw,'origin':origin,'band_cache':{},'objects':{},'height':None,'bands':bands,
-                      'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest()}
+                      'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),
+                      'support_repair':support_details}
         # Keep full-floor caches and only four recent action-local windows.
         refined=[key for key in cache if isinstance(key,tuple)]
         for key in refined[:-4]:del cache[key]
@@ -228,29 +348,12 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
                 hi=np.ceil((record['hi']-origin)/resolution).astype(int)+2
                 dirty[max(0,lo[1]):min(h,hi[1]),max(0,lo[0]):min(w,hi[0])]=True
         dirty &= support.astype(bool);updated |= dirty
-        for row,col in np.argwhere(dirty):
-            if updated_queries%2048==0:
-                backend.deadline.check()
-                local=getattr(backend,'_local_operation',None)
-                if local is not None:local.check()
-            xy=origin+np.array([col,row])*resolution
-            blocked=False;query_error=None
-            def hit_callback(hit):
-                nonlocal blocked,query_error
-                try:
-                    if str(hit.rigid_body) not in ignored_links:
-                        blocked=True
-                        return False
-                    return True
-                except Exception as exc:
-                    query_error=exc
-                    return False
-            query.overlap_box((resolution/2,resolution/2,(high-low)/2),
-                              (float(xy[0]),float(xy[1]),floor_z+(high+low)/2),
-                              (0.,0.,0.,1.),hit_callback,False)
-            if query_error is not None:raise RuntimeError('PhysX overlap callback failed') from query_error
-            raw[row,col]=0 if blocked else 1
-            updated_queries+=1
+        def check():
+            backend.deadline.check()
+            local=getattr(backend,'_local_operation',None)
+            if local is not None:local.check()
+        updated_queries += rasterize_collision_cells(query, raw, dirty, origin, resolution,
+            floor_z+low, floor_z+high, ignored_links, check)
         for points in projected.values():
             xy=clipped_body_projection(points,floor_z+low,floor_z+high)
             if xy is None:continue
@@ -289,6 +392,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     backend._navigation_layer_heights=[(lo,hi) for lo,hi,_,_ in layers]
     backend._navigation_support=support.copy()
     return grid,{'source':str(source),'source_sha256':cached['source_sha256'],
+        'support_repair':cached.get('support_repair'),
         'resolution_m':resolution,'world_window':window,
         'chassis_footprint_world_offsets':chassis.tolist(),'kernel_shape':list(kernel.shape),
         'footprint':'current_yaw_height_matched_collision_hulls',
@@ -301,6 +405,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         'hypothetical_projected_links':list(projected),
         'occupancy_height_bands':len(bands),
         'query_height_m':height,'updated_cells':count,'updated_queries':updated_queries,'query_seconds':time.monotonic()-started,
+        'raster_queries':'enclosing_empty_tiles_with_exact_obstacle_leaf_columns',
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
         'held_object_footprint_included':bool(carried_hulls),

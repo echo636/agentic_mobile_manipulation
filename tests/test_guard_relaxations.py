@@ -29,6 +29,7 @@ class GuardRelaxationTests(unittest.TestCase):
         backend._get_held = lambda: None
         backend._collision_vertices = lambda obj: torch.tensor([[-.01, -.13, 5.96e-8], [.01, .13, 5.96e-8], [-.01, -.13, .4565], [.01, .13, .4565]]).numpy()
         backend._placement_contacts = lambda *args: []
+        backend._placement_contact_report = lambda *args, **kwargs: {'admissible': True}
         hit = {'hit': True, 'rigidBody': '/cabinet', 'position': torch.zeros(3),
                'normal': torch.tensor([0., 0., 1.])}
         sampling = ModuleType('omnigibson.utils.sampling_utils')

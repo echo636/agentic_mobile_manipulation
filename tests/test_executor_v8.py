@@ -66,7 +66,7 @@ class MotorContractRegression(unittest.TestCase):
         states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):
             with self.assertRaises(SkillError) as failure:
-                RGBBackend.execute_visual.__wrapped__(backend,'attach',object(),700)
+                RGBBackend._execute_visual_action(backend,'attach',object(),700)
         self.assertEqual(failure.exception.code,'out_of_reach')
 
     @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
@@ -84,7 +84,7 @@ class MotorContractRegression(unittest.TestCase):
         backend._execute_bound_manipulation=RGBBackend._execute_bound_manipulation.__get__(backend)
         states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):
-            result=RGBBackend.execute_visual.__wrapped__(backend,'hang',object(),30)
+            result=RGBBackend._execute_visual_action(backend,'hang',object(),30)
         self.assertEqual(result['primitive'],'hang')
         self.assertEqual(result['selected'],'wall_nail')
 
@@ -177,6 +177,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b=CheckedPlacement();b.robot=robot;b.torch=torch;b._get_held=lambda:None
         b._collision_vertices=lambda obj:torch.tensor([[-.2,-.2,0.],[.2,.2,0.],[-.2,-.2,.02],[.2,.2,.02]]).numpy()
         b._placement_contacts=lambda *args:[]
+        b._placement_contact_report=lambda *args, **kwargs:{'admissible':True}
         sampling=types.ModuleType('omnigibson.utils.sampling_utils');seen=[];support=['/table']
         def raytest(start,end,ignore_bodies):
             seen.append(ignore_bodies)
@@ -221,12 +222,12 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b._placement_context=lambda *args, **kwargs:nullcontext()
         b._surface_candidates=lambda *a:[{'index':0,'pose':(torch.zeros(3),torch.tensor([0.,0.,0.,1.])),
             'clearance_m':.025,'support_position':[0.,0.,0.]}]
-        b.og=types.SimpleNamespace(sim=types.SimpleNamespace(dump_state=lambda **kw:{},get_physics_dt=lambda:1.))
+        b.og=types.SimpleNamespace(sim=types.SimpleNamespace(dump_state=lambda **kw:{},get_physics_dt=lambda:1.,get_sim_step_dt=lambda:1.))
         b._placement_physics_step=lambda:None;b._placement_contacts=lambda *args:[]
         b._carry_detach=lambda:None;b._relocate_contents=lambda *a:None;b._step=lambda action:None
         b.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
         checks=iter([(True,{}),(False,{'selected_height_error_m':.692})])
-        b._selected_surface_support=lambda *a:next(checks)
+        b._selected_surface_support=lambda *a,**kw:next(checks)
         b._placement_record=lambda data:None;b._get_held=lambda:None;b._verify_payload=lambda x:None
         with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.action_primitives.action_primitive_set_base':errors}):
             with self.assertRaisesRegex(SkillError,'selected surface'):

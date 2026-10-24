@@ -155,10 +155,14 @@ class LiveGridTests(unittest.TestCase):
                 # Robot geometry is always ignored, even when PhysX reports it
                 # before a real blocker. Walls remain and the door can open.
                 if callback(SimpleNamespace(rigid_body='/robot/base')):
-                    x,y,z=origin
-                    if abs(x)<.049 and abs(y)>.4:callback(SimpleNamespace(rigid_body='/wall/base'))
-                    elif abs(x)<.049 and physical_angle[0]==0:callback(SimpleNamespace(rigid_body='/door/leaf'))
-                    elif physical_angle[0]!=0 and abs(x)<=.4 and .35<=y<=.45:callback(SimpleNamespace(rigid_body='/door/leaf'))
+                    lo,hi=np.asarray(origin)-half_extent,np.asarray(origin)+half_extent
+                    bodies=[('/wall/base',[-.024,-1.,0.],[.024,-.425,1.8]),
+                            ('/wall/base',[-.024,.425,0.],[.024,1.,1.8])]
+                    bodies.append(('/door/leaf',[-.024,-.425,0.],[.024,.425,1.8]) if physical_angle[0]==0
+                                  else ('/door/leaf',[-.4,.35,0.],[.4,.45,1.8]))
+                    for path,lower,upper in bodies:
+                        if np.all(hi>=lower) and np.all(lo<=upper):
+                            if callback(SimpleNamespace(rigid_body=path)) is False:break
             fake=ModuleType('omnigibson');lazy=ModuleType('omnigibson.lazy');fake.lazy=lazy
             lazy.omni=SimpleNamespace(physx=SimpleNamespace(get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap)))
             trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((40,40))])

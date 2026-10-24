@@ -430,8 +430,14 @@
     },
     "store_honey": {
       "name": "Store Honey",
-      "instruction": null,
-      "scene_model": "Rs_int"
+      "instruction": "Store the jar of honey inside the cabinet in the entryway.",
+      "scene_model": "Rs_int",
+      "instruction_source": "project_corrected_public_task_20261022",
+      "instruction_correction": {
+        "previous_instruction": "Put away the honey.",
+        "reason": "Public problem0.bddl places the goal cabinet in the entryway. The previous experiment override incorrectly described a lower kitchen cabinet.",
+        "public_bddl_sha256": "ee21ac0bcb27d37c33732529d8d79f0fb57bb9ca832218cd5b91efe114197f04"
+      }
     },
     "tidying_bathroom": {
       "name": "Tidying Bathroom",

@@ -149,6 +149,7 @@ class PlacementRejectionTransactions(unittest.TestCase):
             world['neighbor'][0] += 1.  # Candidate collisions must not move other objects permanently.
         backend._placement_physics_step = step
         backend._placement_contacts = lambda *args: ['/obstacle/link']
+        backend._placement_contact_report = lambda *args, **kwargs: {'admissible': False, 'reason': 'deep_penetration'}
         backend._step = lambda *args: self.fail('Rejected candidates must not advance task metrics')
         states = ModuleType('omnigibson.object_states')
         for name in ('OnTop', 'Touching', 'VerticalAdjacency'):
