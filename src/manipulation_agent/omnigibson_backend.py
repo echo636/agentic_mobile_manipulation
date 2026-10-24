@@ -215,6 +215,9 @@ class OmniGibsonBackend:
             import omnigibson as og
             from .executors.usd_diagnostics import install_usd_caller_metadata
             write_json(output/'usd_caller_diagnostics.json',install_usd_caller_metadata())
+            from .executors.particle_quaternions import install_particle_quaternion_serialization
+            write_json(output/'particle_quaternion_serialization.json',
+                       install_particle_quaternion_serialization())
             from omnigibson.macros import gm
             from omnigibson.eval.evaluator import Evaluator, resolve_instance_ids
             from omnigibson.eval.utils.eval_utils import NUM_PUBLIC_TEST_INSTANCES
