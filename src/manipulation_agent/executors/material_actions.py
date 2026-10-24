@@ -233,6 +233,9 @@ class CheckedMaterialActions:
             raise SkillError('execution_error', 'Cutting transition produced no valid result')
         scene.transition_rule_api.execute_transition(added_obj_attrs=output.add,
                                                     removed_objs=output.remove)
+        if output.add:
+            from .topology_rebuild import rebuild_cut_topology
+            rebuild_cut_topology(self)
         self.frames_revision = -1
         for _ in range(min(6, max_steps)):
             self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
