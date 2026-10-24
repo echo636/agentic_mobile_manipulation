@@ -101,6 +101,7 @@ command = "ignored"
             self.assertIn('model_reasoning_effort="low"', configs)
             self.assertIn('model_provider="example"', configs)
             self.assertIn('model_providers.example.base_url="https://example.invalid/v1"', configs)
+            self.assertNotIn('cli_auth_credentials_store="ephemeral"', configs)
             self.assertFalse(any('unrelated' in value for value in configs))
 
     def test_api_provider_uses_env_key_without_subscription_fallback(self):
@@ -112,6 +113,7 @@ command = "ignored"
                 self.config(Path(folder),model_provider_profile='relay'),'Policy',['finish'])
             self.assertIn('model_providers.relay.env_key="TEST_RELAY_KEY"',prepared.argv)
             self.assertIn('model_providers.relay.requires_openai_auth=false',prepared.argv)
+            self.assertIn('cli_auth_credentials_store="ephemeral"',prepared.argv)
             self.assertNotIn('credential-not-for-argv',str(prepared))
             del os.environ['TEST_RELAY_KEY']
             second=Path(folder,'second');second.mkdir()
