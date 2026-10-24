@@ -113,7 +113,7 @@ DERIVED = {
     'clean_up_broken_glass': 'Put all three pieces of broken glass inside the trash can.',
     'packing_meal_for_delivery': 'Put the three wrapped hamburgers into the three paper bags, one hamburger per bag, and place all three bags on top of the storage container.',
     'store_batteries': 'Put all three batteries inside the same cabinet; either cabinet is acceptable.',
-    'store_honey': 'Put the jar of honey inside the cabinet.',
+    'store_honey': 'Store the jar of honey inside the cabinet in the entryway.',
     'tidying_bathroom': 'Put the bar of soap on the soap dish, the tissue dispenser on the sink, the toilet paper on the toilet, and the cork inside the trash can.',
     'putting_dirty_dishes_in_sink': 'Put both bowls and both plates inside the sink.',
     'make_gift_bags_for_baby_showers': 'Place both gift bags on the coffee table. Put one toy die and one wafer into each bag.',
