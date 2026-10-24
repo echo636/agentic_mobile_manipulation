@@ -18,13 +18,21 @@ from .records import now
 
 def atomic_text(path: Path, text: str, *, durable: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    with temporary.open("w", encoding="utf-8") as stream:
-        stream.write(text)
-        if durable:
-            stream.flush()
-            os.fsync(stream.fileno())
-    temporary.replace(path)
+    # Fresh, exclusively created inode: concurrent publishers and a shared
+    # filesystem's delayed truncation must never reuse another write's buffer.
+    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    replaced = False
+    try:
+        with temporary.open("x", encoding="utf-8") as stream:
+            stream.write(text)
+            if durable:
+                stream.flush()
+                os.fsync(stream.fileno())
+        temporary.replace(path)
+        replaced = True
+    finally:
+        if not replaced:
+            temporary.unlink(missing_ok=True)
     if durable:
         fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:

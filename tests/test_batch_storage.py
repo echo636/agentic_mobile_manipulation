@@ -8,6 +8,7 @@ import tempfile
 import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock, patch
 
 from manipulation_agent import batch_storage as storage
@@ -18,6 +19,47 @@ spec.loader.exec_module(batch)
 
 
 class BatchStorageTests(unittest.TestCase):
+    def test_concurrent_json_publishers_use_separate_staging_files(self):
+        from manipulation_agent.records import write_json
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'record.json'
+            payloads=[{'writer':0,'data':'a'*2000},{'writer':1,'data':'b'*100}]
+            barrier=threading.Barrier(2);staging=[];replace=Path.replace
+            def together(source,destination):
+                if destination==path:
+                    staging.append(source);barrier.wait(timeout=5)
+                return replace(source,destination)
+            with patch.object(Path,'replace',together), ThreadPoolExecutor(max_workers=2) as pool:
+                futures=[pool.submit(write_json,path,payloads[0]),
+                         pool.submit(storage.atomic_text,path,storage.encode(payloads[1]))]
+                for future in futures:future.result(timeout=10)
+            self.assertEqual(len(set(staging)),2)
+            self.assertIn(json.loads(path.read_text()),payloads)
+            self.assertEqual(list(Path(folder).iterdir()),[path])
+
+    def test_corrupt_shared_record_recovers_exact_local_score_without_requeue(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state=self.make_store(folder)
+            (state.root/'manifest.json').write_text(json.dumps(state.manifest))
+            final=self.submit(state,finished=True)
+            self.assertTrue(state.close(2))
+            (state.root/'records/episode.json').write_text(json.dumps(final)+'old trailing data')
+            config={'batch':str(state.root),'reports':str(state.reports),
+                    'supervisor_spool_dir':str(state.spool),'workers':[
+                        {'id':'fixture','gpu':0,'ssh':['ssh','host'],
+                         'base_port':36000,'sim_python':sys.executable}]}
+            with patch.object(batch,'source_version',return_value={'commit':'fixture','dirty':False}), \
+                    patch.object(batch.shutil,'which',return_value='/fixture/codex'), \
+                    patch.object(batch.subprocess,'run',return_value=subprocess.CompletedProcess([],0)):
+                restarted=batch.Batch(config)
+            try:
+                self.assertEqual(restarted.rows[0],final)
+                self.assertFalse(restarted.rows[0]['task_success'])
+                self.assertNotIn('adopt_inflight',config)
+                self.assertTrue(restarted.storage.flush(2))
+                self.assertEqual(json.loads((state.root/'records/episode.json').read_text()),final)
+            finally:restarted.storage.close(1)
+
     def test_final_publication_failure_requests_restart_and_preserves_result(self):
         with tempfile.TemporaryDirectory() as folder:
             state = self.make_store(folder)

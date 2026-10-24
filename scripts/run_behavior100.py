@@ -317,6 +317,12 @@ class Batch:
             local=recovered.get(r['run_id'])
             try:r.update(json.loads(saved.read_text()))
             except FileNotFoundError:pass
+            except json.JSONDecodeError as exc:
+                # A complete identity-checked local checkpoint is authoritative
+                # when publication on shared storage produced invalid JSON.
+                # Never guess a score or retry a task from a partial record.
+                if not local:raise
+                self.storage.journal(f'Recover invalid shared record {saved.name} from durable local checkpoint: {exc.msg}')
             except OSError:
                 if not local:raise
             if local and local.get('updated_at','')>r.get('updated_at',''):
