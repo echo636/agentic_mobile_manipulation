@@ -201,6 +201,9 @@ class NavigationPlan:
     expanded_cells: int
     travel_yaw: float | None = None
     motion_mode: str = 'forward'
+    # Preserve the certified arc of an in-place turn. At exactly pi, tiny
+    # feedback residuals can otherwise select the opposite half-circle.
+    turn_start_yaw: float | None = None
 
 
 def _connected_goal_search(grid, start, hint, acceptable, max_expansions, horizon, check_cancelled,
@@ -413,6 +416,12 @@ class GreedyGridFollower:
         self.advance_index=None;self.advance_best=None;self.advance_stall=0
         self.turn_target=None;self.turn_best=None;self.turn_stall=0
         self.turn_progress=0.
+        self.turn_yaw=getattr(plan,'turn_start_yaw',None)
+        self.turn_goal_yaw=None
+        if self.turn_yaw is not None:
+            if not math.isfinite(self.turn_yaw) or len(plan.points)!=1:
+                raise ValueError('A certified turn requires one point and a finite starting yaw')
+            self.turn_goal_yaw=self.turn_yaw+self.angle(plan.final_yaw-self.turn_yaw)
 
     @staticmethod
     def angle(delta):return math.atan2(math.sin(delta),math.cos(delta))
@@ -448,6 +457,10 @@ class GreedyGridFollower:
     def next_pose(self, actual):
         x,y,yaw=map(float,actual)
         if not all(math.isfinite(v) for v in (x,y,yaw)):raise NavigationError('Non-finite actual robot pose')
+        if self.turn_yaw is not None:
+            # Unwrap measured feedback along the checked arc, including the
+            # +/-pi representation boundary and small endpoint overshoots.
+            self.turn_yaw+=self.angle(yaw-self.turn_yaw)
         if not self.grid.navigable(self.grid.cell((x,y))):raise NavigationError('Robot left the traversable grid during execution','navigation_invalid_start')
         if self.last_actual is not None:
             error=math.dist((x,y),self.last_command[:2])
@@ -457,7 +470,8 @@ class GreedyGridFollower:
             self.index+=1
         if self.index>=len(self.plan.points):
             distance=math.dist((x,y),self.plan.goal)
-            delta=self.angle(self.plan.final_yaw-yaw)
+            delta=(self.angle(self.plan.final_yaw-yaw) if self.turn_yaw is None
+                   else self.turn_goal_yaw-self.turn_yaw)
             if distance<=self.position_tolerance and abs(delta)<=self.final_yaw_tolerance:return None
             phase='turn';heading=self.plan.final_yaw
             # Hold the fixed endpoint during final orientation. Reusing actual

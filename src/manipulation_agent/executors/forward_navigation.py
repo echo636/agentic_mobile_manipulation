@@ -203,7 +203,8 @@ def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose
                                plan.candidates_reachable, 0., expanded, b[2],
                                'holonomic' if allow_lateral and length>1e-8 else
                                'reverse' if length>.002 and
-                               (b[0]-a[0])*math.cos(b[2])+(b[1]-a[1])*math.sin(b[2])<0 else 'forward')
+                               (b[0]-a[0])*math.cos(b[2])+(b[1]-a[1])*math.sin(b[2])<0 else 'forward',
+                               turn_start_yaw=a[2] if length<=1e-8 else None)
         # Merge collinear forward cells, never merge across a turn.
         if (length > 1e-8 and phases and phases[-1].geodesic_m > 0
                 and phases[-1].motion_mode==phase.motion_mode
@@ -215,7 +216,8 @@ def route_from_poses(plan, poses, collision, *, expanded=0, method="checked_pose
         phases.append(phase)
         distance += length
     if not phases:
-        phases.append(replace(plan, points=(plan.goal,), travel_yaw=plan.final_yaw))
+        phases.append(replace(plan, points=(plan.goal,), travel_yaw=plan.final_yaw,
+                              turn_start_yaw=actual[2]))
     turns = sum(abs(angle(b[2]-a[2])) for a, b in zip(poses, poses[1:]))
     return ForwardRoute(tuple(phases), distance, expanded, method,
                         shortcuts, turns, motion_seconds(poses),actual)
