@@ -18,6 +18,40 @@ batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_health_transport_failure_does_not_close_live_episode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for error in (subprocess.TimeoutExpired('ssh-health',40),OSError('unavailable')):
+                b=self.runner(tmp)
+                b.ssh=Mock(side_effect=error)
+                b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123'})
+                row={'run_id':'live','port':1234,'simulator_unit':'owned.service'}
+                self.assertFalse(b.step_episode_closed(row))
+                self.assertNotIn('episode_closure',row)
+                self.assertEqual(b.journal.call_args.args[0]['event'],'health_query_unavailable')
+
+    def test_health_outage_preserves_closure_and_recognizes_confirmed_exit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b.ssh=Mock(side_effect=subprocess.TimeoutExpired('ssh-health',40))
+            b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123'})
+            known={'phase':'result_ready','task_success':True}
+            row={'run_id':'closing','port':1234,'simulator_unit':'owned.service','episode_closure':known.copy()}
+            self.assertTrue(b.step_episode_closed(row))
+            self.assertEqual(row['episode_closure'],known)
+            b.unit_state.return_value={'ActiveState':'inactive','MainPID':'0'}
+            other={'run_id':'exited','port':1234,'simulator_unit':'owned.service'}
+            self.assertTrue(b.step_episode_closed(other))
+            self.assertEqual(other['episode_closure']['phase'],'simulator_exited')
+
+    def test_invalid_health_reply_is_unavailable_and_later_recovers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            for reply in ('{truncated','[]','null'):
+                b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,reply,''))
+                self.assertIsNone(b.health(1234))
+            b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,'{"ready":true,"closed":false}',''))
+            self.assertEqual(b.health(1234),{'ready':True,'closed':False})
+
     def test_resource_requeue_preserves_evidence_and_new_attempt_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp,count=1)

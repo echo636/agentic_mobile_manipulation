@@ -426,8 +426,23 @@ class Batch:
         return state
 
     def health(self, port):
-        p=self.ssh(['curl','--noproxy','*','-fsS','--max-time','3',f'http://127.0.0.1:{port}/healthz'])
-        return json.loads(p.stdout) if p.returncode==0 else None
+        # This is an observation, not a simulator operation. Failure to obtain
+        # it must not escape into run_one's controller-stop / forced-finish path.
+        # Callers retain the last closure state and check unit liveness; the
+        # existing startup and post-finish watchdogs still apply.
+        try:
+            p=self.ssh(['curl','--noproxy','*','-fsS','--max-time','3',f'http://127.0.0.1:{port}/healthz'])
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            self.journal({'event':'health_query_unavailable','port':port,
+                          'reason':type(exc).__name__})
+            return None
+        if p.returncode:return None
+        try:health=json.loads(p.stdout)
+        except (ValueError,TypeError):
+            self.journal({'event':'health_query_unavailable','port':port,
+                          'reason':'invalid_json'})
+            return None
+        return health if isinstance(health,dict) else None
 
     def cleanup_owned_unit(self, row):
         """Verify this lane is reusable; episode evidence never decides that."""
