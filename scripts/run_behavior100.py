@@ -31,6 +31,7 @@ from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
 from manipulation_agent.startup_progress import STARTUP_POLICY, startup_progress_update
+from manipulation_agent.startup_logs import startup_reader_code
 from manipulation_agent.closure import closure_watchdog
 from manipulation_agent.clients.events import parse_events
 from manipulation_agent.batch_storage import BatchStorage
@@ -916,20 +917,7 @@ class Batch:
                 and current<row['startup_deadline_unix']):
             return
         self._worker_local.startup_progress_poll=(row['run_id'],current)
-        path=Path(row['simulator_output'])/'startup_stages.jsonl'
-        offset=row.get('startup_log_offset',0)
-        identity=row.get('startup_log_identity')
-        code=("import json,os; from pathlib import Path; p=Path("+repr(str(path))+
-              "); result=[]; offset=0; identity=None\n"
-              "if p.exists():\n"
-              " with p.open('rb') as stream:\n"
-              "  stat=os.fstat(stream.fileno()); identity=[stat.st_dev,stat.st_ino]\n"
-              "  if identity=="+repr(identity)+" and stat.st_size>="+repr(offset)+": stream.seek("+repr(offset)+")\n"
-              "  begin=stream.tell(); data=stream.read(); complete=data.rfind(b'\\n')+1; offset=begin+complete\n"
-              "  for line in data[:complete].splitlines():\n"
-              "   try: result.append(json.loads(line))\n"
-              "   except ValueError: pass\n"
-              "print(json.dumps(dict(events=result,offset=offset,identity=identity)))")
+        code=startup_reader_code(row['simulator_output'], row)
         try:
             result=self.ssh(['/usr/bin/python3','-c',code],timeout=15)
             if result.returncode:
@@ -938,9 +926,15 @@ class Batch:
             events=payload['events']
             if not isinstance(events,list):raise ValueError('Invalid startup events')
             tracking={**row,'startup_pending_operations':row.get('startup_pending_operations',[])}
+            # Merge independent logs chronologically so an early native event
+            # can bridge a long constructor before its later return milestone.
+            events.sort(key=lambda event: event.get('at_unix', 0)
+                        if isinstance(event, dict) and isinstance(event.get('at_unix'), (int, float)) else 0)
             updates=startup_progress_update(tracking,events,time.time())
             for key,value in [('startup_log_offset',payload['offset']),
-                              ('startup_log_identity',payload['identity'])]:
+                              ('startup_log_identity',payload['identity']),
+                              ('startup_native_log_offset',payload['native_offset']),
+                              ('startup_native_log_identity',payload['native_identity'])]:
                 if row.get(key)!=value:updates[key]=value
             if row.get('startup_progress_read_error'):
                 updates['startup_progress_read_error']=None
