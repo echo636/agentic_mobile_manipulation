@@ -1184,7 +1184,11 @@ class Batch:
             cmd=[sys.executable,str(self.source/'scripts'/script)]
             if script=='validate_async_observation.py': cmd.extend(['--allow-sync-only','--run-dir'])
             cmd.append(str(dest))
-            p=subprocess.run(cmd,capture_output=True,text=True,timeout=300,env=self.environment)
+            # Full video decoding scales with an unbounded episode's frame
+            # count. A fixed five-minute deadline discarded valid long-run
+            # replays after the simulator had already finished and scored.
+            timeout=300 if script=='validate_async_observation.py' else None
+            p=subprocess.run(cmd,capture_output=True,text=True,timeout=timeout,env=self.environment)
             (dest/(script+'.log')).write_text(p.stdout+p.stderr)
             # Failed validation never gets converted to success merely because the file exists.
             if not (dest/filename).exists(): write_json(dest/filename,{'status':'failed','reason':'Validator could not complete','exit_code':p.returncode})
