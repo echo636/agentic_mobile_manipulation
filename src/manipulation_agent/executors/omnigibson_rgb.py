@@ -43,6 +43,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False
         self.renderer_pixel_owner = os.environ.get('MAS_RENDERER_PIXEL_OWNER','0') == '1'
+        self._renderer_owner_annotators = {}
         self.record_video = record_video
         self.video = None
         self.video_render_stride = int(os.environ.get("MAS_VIDEO_RENDER_STRIDE", "2"))
@@ -105,7 +106,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         with self._startup_stage('surround_camera_setup_and_warmup'):
             for direction in DIRECTIONS:
                 sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
-                    modalities=['rgb','depth_linear']+(['seg_instance'] if self.renderer_pixel_owner else []),
+                    modalities=['rgb','depth_linear'],
                     image_width=self.image_size,image_height=self.image_size,
                     focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
                 with self._startup_stage(f'surround_camera_{direction}_load'):
@@ -117,6 +118,19 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                 # degenerate projection. Attach all before the shared barrier.
                 with self._startup_stage(f'surround_camera_{direction}_camera_params'):
                     sensor.initialize_sensors(names='camera_params')
+                if self.renderer_pixel_owner:
+                    # OG's seg_instance also enables semantic segmentation. In
+                    # Isaac Sim 5.1 its OgnInstanceSegmentation node can crash
+                    # while indexing the semantic mapping during render. Pixel
+                    # ownership needs only the renderer's mesh path, not that
+                    # semantic grouping or OG's particle/category remapping.
+                    import omnigibson.lazy as lazy
+                    with self._startup_stage(f'surround_camera_{direction}_private_owner'):
+                        with self.og.sim.editing_usd():
+                            annotator = lazy.omni.replicator.core.AnnotatorRegistry.get_annotator(
+                                'instance_id_segmentation_fast')
+                            annotator.attach([sensor.render_product])
+                        self._renderer_owner_annotators[direction] = annotator
                 self.rig[direction] = sensor
             self._position_rig()
             for frame in range(20):
@@ -303,10 +317,18 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
                             pending[view]='depth_render_product_not_ready'
                             continue
                         if getattr(self,'renderer_pixel_owner',False):
-                            labels=data.get('seg_instance')
-                            if labels is None or tuple(labels.shape[:2])!=(self.image_size,self.image_size):
+                            with component(self,'sensor_readback'):
+                                owner=self._renderer_owner_annotators[view].get_data()
+                            ids=owner.get('data') if isinstance(owner,dict) else None
+                            labels=owner.get('info',{}).get('idToLabels') if isinstance(owner,dict) else None
+                            if (ids is None or tuple(ids.shape)!=(self.image_size,self.image_size)
+                                or not isinstance(labels,dict)):
                                 pending[view]='private_instance_render_product_not_ready'
                                 continue
+                            # Copy while the same render barrier is still in
+                            # force. The model receives only the RGB packet.
+                            data['_renderer_instance_ids']=self.torch.as_tensor(ids).clone()
+                            info['_renderer_instance_labels']={str(k):v for k,v in labels.items()}
                         intrinsics[view]=intrinsic
                     pixels[view] = rgb[...,:3].astype(np.uint8)
                     packets[view] = (data,info)
@@ -409,8 +431,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             frame['depth_linear']=data['depth_linear'].detach().cpu().clone()
             arrays={'depth_linear':frame['depth_linear'].numpy()}
             if getattr(self,'renderer_pixel_owner',False):
-                frame['instance_ids']=data['seg_instance'].detach().cpu().clone()
-                frame['instance_labels']={str(k):v for k,v in info['seg_instance'].items()}
+                frame['instance_ids']=data['_renderer_instance_ids'].detach().cpu().clone()
+                frame['instance_labels']=dict(info['_renderer_instance_labels'])
                 arrays['instance_ids']=frame['instance_ids'].numpy()
             np.savez_compressed(private_folder/f'{ref}.npz',**arrays)
             (private_folder/f'{ref}.json').write_text(json.dumps({'audience':'executor_private_only',
@@ -477,8 +499,13 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             if 'instance_ids' in frame and 'instance_labels' in frame:
                 label=frame['instance_labels'].get(str(int(frame['instance_ids'][py,px])))
                 if isinstance(label,str):
-                    selected=next((o for o in [*self.env.scene.objects,self.robot]
-                                   if label in (o.name,str(o.prim_path))),None)
+                    # Raw renderer IDs identify visual meshes below the object
+                    # root. Match an ancestor at a path boundary, so e.g. obj_1
+                    # cannot claim pixels rendered by obj_10.
+                    matches=[o for o in [*self.env.scene.objects,self.robot]
+                             if label in (o.name,str(o.prim_path))
+                             or label.startswith(str(o.prim_path)+'/')]
+                    selected=max(matches,key=lambda o:len(str(o.prim_path)),default=None)
                     if selected is not None:ownership['renderer_object']=selected
             try:
                 with component(self,'visual_grounding'):
@@ -1311,6 +1338,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             'coincident_surface_resolution':('same_frame_renderer_instance_within_float32_roundoff'
                 if getattr(self,'renderer_pixel_owner',False) else 'camera_frontmost_within_float32_roundoff'),
             'private_instance_labels':getattr(self,'renderer_pixel_owner',False),
+            'private_owner_annotator':('instance_id_segmentation_fast'
+                if getattr(self,'renderer_pixel_owner',False) else None),
             'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
         result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
