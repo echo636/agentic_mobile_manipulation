@@ -107,6 +107,21 @@ class LifecycleTests(unittest.TestCase):
             (root/'model_events.jsonl').write_text('{"item":{"type":"agent_message"}}\n')
             self.assertIsNone(batch.startup_resource_rejection(row,root,gpu))
 
+    def test_asset_retry_requires_prelaunch_timeout_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,1)
+            base={'run_id':'fixture_r1','failure_stage':'asset_preflight',
+                  'asset_preflight_unavailable':{'status':'unavailable',
+                      'error_type':'TimeoutExpired','launch_requested':False}}
+            for changes in ({'failure_stage':'simulator_starting'},
+                            {'simulator_pid':123},{'simulator_started_at_unix':0},
+                            {'controller_wrapper_pid':123},{'actions':1},
+                            {'asset_preflight_unavailable':{'status':'failed'}},
+                            {'asset_preflight_unavailable':{**base['asset_preflight_unavailable'],
+                                                           'launch_requested':True}}):
+                with self.subTest(changes=changes):
+                    self.assertFalse(b.requeue_resource_rejection({**base,**changes}))
+
     def test_admission_prefers_real_057_headroom_without_claiming_busy_or_foreign_gpus(self):
         workers=[{'id':f's115-gpu{i}','gpu':i,'ssh':['ssh','s115'],'minimum_free_gpu_mib':18432}
                  for i in range(4)]

@@ -963,7 +963,17 @@ class Batch:
             # Task assets include hashing shared-storage files. A short SSH
             # telemetry timeout can expire before a healthy preflight finishes
             # while other instances initialize; no simulator exists yet.
-            checked=self.ssh(asset_cmd,timeout=self._config.get('asset_preflight_timeout_seconds',180))
+            asset_timeout=self._config.get('asset_preflight_timeout_seconds',180)
+            try:
+                checked=self.ssh(asset_cmd,timeout=asset_timeout)
+            except subprocess.TimeoutExpired:
+                # This command only inspects assets. A timeout says nothing
+                # about their validity, and no simulator launch was requested.
+                unavailable={'status':'unavailable','error_type':'TimeoutExpired',
+                             'timeout_seconds':asset_timeout,'launch_requested':False}
+                write_json(self.root/'preflight'/f'{runid}_assets.json',unavailable)
+                self.update(row,asset_preflight_unavailable=unavailable)
+                raise
             if checked.returncode:raise RuntimeError('Task asset preflight command failed')
             asset_check=json.loads(checked.stdout)
             write_json(self.root/'preflight'/f'{runid}_assets.json',asset_check)
@@ -1356,15 +1366,30 @@ class Batch:
         nonexistent directory used to turn this recoverable race into a final
         task failure. Cleanup must be positively verified before another try.
         """
-        if (row.get('simulator_cleanup') or {}).get('status')!='passed':return False
-        check_path=self.root/'preflight'/f"{row['run_id']}_in_unit.json"
-        try:preflight=json.loads(check_path.read_text())
-        except (OSError,ValueError):return False
-        failed=startup_resource_rejection(row,self.root/'controllers'/row['run_id'],preflight)
-        if not failed:return False
-        # Preserve startup logs even though there is no simulator episode.
-        log=self.ssh(['journalctl','--user','-u',row['simulator_unit'],'--no-pager','-o','short-iso'],timeout=60)
-        (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
+        unavailable=row.get('asset_preflight_unavailable') or {}
+        asset_timeout=(row.get('failure_stage')=='asset_preflight'
+            and unavailable.get('status')=='unavailable'
+            and unavailable.get('error_type')=='TimeoutExpired'
+            and unavailable.get('launch_requested') is False
+            and not any(row.get(k) is not None for k in
+                        ('simulator_started_at_unix','episode_started_at_unix','simulator_pid'))
+            and prepolicy_failure({**row,'status':'failed'},self.root/'controllers'/row['run_id']))
+        if asset_timeout:
+            failed=['asset_preflight_timeout']
+            reason='Read-only asset preflight timed out before any simulator launch request'
+            failure_kind='infrastructure_asset_preflight_unavailable'
+        else:
+            if (row.get('simulator_cleanup') or {}).get('status')!='passed':return False
+            check_path=self.root/'preflight'/f"{row['run_id']}_in_unit.json"
+            try:preflight=json.loads(check_path.read_text())
+            except (OSError,ValueError):return False
+            failed=startup_resource_rejection(row,self.root/'controllers'/row['run_id'],preflight)
+            if not failed:return False
+            # Preserve startup logs even though there is no simulator episode.
+            log=self.ssh(['journalctl','--user','-u',row['simulator_unit'],'--no-pager','-o','short-iso'],timeout=60)
+            (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
+            reason='In-unit dynamic resource rejection before simulator/controller startup: '+', '.join(failed)
+            failure_kind='infrastructure_resource_admission'
         identity_keys={'index','task','name','scene','instance','seed','split','instruction',
             'instruction_sha256','instruction_source','bddl_sha256','asset_sha256',
             'goal_predicates_offline_only','candidate_capabilities_offline_only',
@@ -1375,13 +1400,12 @@ class Batch:
             'custom_instance_id','custom_instance_sha256','instruction_language',
             'catalog_task_spec','catalog_task_spec_sha256','catalog_instance_sha256'}
         with self.lock:
-            old={**row,'status':'failed','task_success':None,'failure_kind':'infrastructure_resource_admission',
+            old={**row,'status':'failed','task_success':None,'failure_kind':failure_kind,
                  'resource_rejected_checks':failed,'archive_status':'not_applicable_before_simulator_start',
                  'stage':'resource_admission_rejected','updated_at':now()}
             write_json(self.root/'records'/f"{old['run_id']}.json",old)
             previous=[*old.get('previous_attempts',[]),{k:v for k,v in old.items() if k!='previous_attempts'}]
             runid=old['run_id'].rsplit('_r',1)[0]+'_r'+str(int(old.get('attempt',1))+1)
-            reason='In-unit dynamic resource rejection before simulator/controller startup: '+', '.join(failed)
             path=self.root/'infrastructure_retries.json'
             selections=json.loads(path.read_text()) if path.exists() else {}
             selections[str(row['index'])]={'run_id':runid,'previous_run_ids':[p['run_id'] for p in previous],
@@ -1403,10 +1427,14 @@ class Batch:
         selected=planned if limit is None else planned[:limit]
         required_rows=list(self.rows) if limit is None else [r for r in self.rows if r['status']!='planned' or r in selected]
         for row in selected:self.queue.put(row)
-        archived=[];archive_lock=threading.Lock()
+        archived=[];archive_lock=threading.Lock();active_assignments=set();host_cooldowns={}
         archive_slots=threading.BoundedSemaphore(self._config.get('max_pending_archives',4))
         capacity=threading.BoundedSemaphore(self._config.get('max_active_workers',len(self.workers)))
         poll=self._config.get('resource_poll_seconds',30)
+        def work_pending():
+            # Keep other candidates alive while the last queued task is in
+            # preflight: it may need a different host after a transient failure.
+            with self.lock:return not self.queue.empty() or bool(active_assignments)
         def submit_archive(row,paths,config):
             if paths is None:return
             archive_slots.acquire()
@@ -1419,10 +1447,14 @@ class Batch:
             inflight=[r for r in self.rows if (r['status']=='running' or (r.get('simulator_cleanup') or {}).get('status')=='blocked') and
                 self._config.get('adopt_inflight',{}).get(r['run_id'])==config['id'] and
                 not (r.get('execution_finished_at') and (r.get('simulator_cleanup') or {}).get('status')=='passed')]
-            while inflight or not self.queue.empty():
+            while inflight or work_pending():
                 adopting=inflight[0] if inflight else None
                 if not adopting and self.drain_requested():
                     self.worker_state('drained');return
+                with self.lock:cooldown=host_cooldowns.get(config['ssh'][-1],0)
+                if not adopting and time.monotonic()<cooldown:
+                    self.worker_state('waiting_for_resources',reason='Recent asset preflight timeout on this host')
+                    time.sleep(poll);continue
                 if not adopting and getattr(self,'storage',None) and self.storage.status()['local_checkpoint_error']:
                     self.worker_state('waiting_for_local_storage');time.sleep(poll);continue
                 if not capacity.acquire(blocking=False):
@@ -1438,8 +1470,11 @@ class Batch:
                     else:
                         if not self.resource_admission():continue
                         if self.drain_requested():continue
-                        try:row=self.queue.get_nowait()
-                        except queue.Empty:return
+                        with self.lock:
+                            if time.monotonic()<host_cooldowns.get(config['ssh'][-1],0):continue
+                            try:row=self.queue.get_nowait()
+                            except queue.Empty:continue
+                            active_assignments.add(config['id'])
                         cleared=False;paths=self.run_one(row,config['gpu'])
                     if (row.get('simulator_cleanup') or {}).get('status')=='blocked':
                         try:self.capture_result(row,Path(row['simulator_output']))
@@ -1472,14 +1507,21 @@ class Batch:
                     if row is None:time.sleep(poll)
                 # GPU and host capacity are free before any bulk copy or decode.
                 if row is not None:
-                    if cleared and self.requeue_resource_rejection(row):
-                        self.worker_state('waiting_for_resources')
-                        time.sleep(poll)
-                        continue
-                    if cleared:self.worker_state('archive_pending')
-                    submit_archive(row,paths,config)
-                    if cleared:self.worker_state('available')
-                    time.sleep(self._config.get('worker_yield_seconds',1))
+                    try:
+                        unavailable=row.get('asset_preflight_unavailable')
+                        if cleared and unavailable:
+                            with self.lock:
+                                host_cooldowns[config['ssh'][-1]]=time.monotonic()+self._config.get('asset_preflight_retry_cooldown_seconds',60)
+                        if cleared and self.requeue_resource_rejection(row):
+                            self.worker_state('waiting_for_resources')
+                            time.sleep(poll)
+                            continue
+                        if cleared:self.worker_state('archive_pending')
+                        submit_archive(row,paths,config)
+                        if cleared:self.worker_state('available')
+                        time.sleep(self._config.get('worker_yield_seconds',1))
+                    finally:
+                        with self.lock:active_assignments.discard(config['id'])
             self.worker_state('idle')
         with ThreadPoolExecutor(max_workers=self._config.get('archive_workers',2)) as archive_pool:
             self._archive_pool=archive_pool

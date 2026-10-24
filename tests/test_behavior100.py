@@ -212,6 +212,46 @@ class BatchEvidenceTests(unittest.TestCase):
             self.assertIn('assets',runner.ssh.call_args.args[0])
             self.assertEqual(json.loads((root/'preflight/fixture_r1_assets.json').read_text()),asset)
 
+    def test_asset_timeout_requeues_last_task_to_another_host_without_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            common={'base_port':31000,'batch_tag':'test','data_root':'/fixture',
+                    'sim_python':'/fixture/python'}
+            workers=[{**common,'id':name,'gpu':i,'ssh':['ssh',name]}
+                     for i,name in enumerate(('slow','healthy'))]
+            runner=self.make_queue_runner(folder,workers,count=1)
+            for name in ('logs','preflight','controllers','records'):(runner.root/name).mkdir()
+            runner.source=Path(__file__).resolve().parents[1]
+            runner._config['asset_preflight_retry_cooldown_seconds']=.2
+            row=runner.rows[0]
+            row.update(index=0,task='fixture',run_id='fixture_r1',attempt=1,
+                       instruction='Restore the room.',instruction_sha256='original',
+                       episode_budget_policy='unbounded')
+            started=threading.Event();peer_checked=threading.Event();attempts=[]
+            def admission():
+                if runner.c['id']=='healthy':
+                    self.assertTrue(started.wait(2));peer_checked.set()
+                return True
+            runner.resource_admission=admission
+            runner.ssh=Mock(side_effect=subprocess.TimeoutExpired(['read-only-assets'],180))
+            def run_one(record,gpu):
+                attempts.append((record['run_id'],runner.c['id']))
+                if len(attempts)==1:
+                    started.set();self.assertTrue(peer_checked.wait(2))
+                    return batch.Batch.run_one(runner,record,gpu)
+                record.update(status='passed',task_success=True)
+            runner.run_one=run_one
+            runner.run()
+            self.assertEqual(attempts,[('fixture_r1','slow'),('fixture_r2','healthy')])
+            runner.ssh.assert_called_once()
+            self.assertIn('assets',runner.ssh.call_args.args[0])
+            self.assertEqual(row['instruction_sha256'],'original')
+            self.assertEqual(row['episode_budget_policy'],'unbounded')
+            prior=json.loads((runner.root/'records/fixture_r1.json').read_text())
+            self.assertEqual(prior['failure_kind'],'infrastructure_asset_preflight_unavailable')
+            self.assertIsNone(prior['task_success'])
+            self.assertFalse(prior['asset_preflight_unavailable']['launch_requested'])
+            self.assertEqual(prior['failure_stage'],'asset_preflight')
+
     def test_simulator_launch_sends_retained_script_instead_of_shared_path(self):
         with tempfile.TemporaryDirectory() as folder:
             runner=self.make_queue_runner(folder)
