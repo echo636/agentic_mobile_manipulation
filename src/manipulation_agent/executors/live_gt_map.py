@@ -75,6 +75,72 @@ def floor_support_window(raw, original_resolution, resolution, window):
     return support, origin
 
 
+def rasterize_collision_cells(query, raw, dirty, origin, resolution, low, high,
+                              ignored_links, check):
+    """Skip empty tiles using enclosing PhysX queries; retain exact leaf cells.
+
+    A clear enclosing box proves every child column clear. A hit only causes
+    subdivision, never marks the whole tile blocked. Thus thin obstacles and
+    narrow passages retain the original per-cell collision decision.
+    """
+    import numpy as np
+    queries = 0
+
+    def visit(r0, r1, c0, c1):
+        nonlocal queries
+        mask = dirty[r0:r1, c0:c1]
+        if not mask.any():
+            return
+        if queries % 2048 == 0:
+            check()
+        leaf = r1-r0 == 1 and c1-c0 == 1
+        # Enclose the exact child cells despite floating-point centre rounding.
+        margin = 0. if leaf else 1e-6
+        half = ((c1-c0)*resolution/2+margin, (r1-r0)*resolution/2+margin,
+                (high-low)/2+margin)
+        center = (float(origin[0]+(c0+c1-1)*resolution/2),
+                  float(origin[1]+(r0+r1-1)*resolution/2), (high+low)/2)
+        blocked = False
+        query_error = None
+
+        def hit_callback(hit):
+            nonlocal blocked, query_error
+            try:
+                if str(hit.rigid_body) not in ignored_links:
+                    blocked = True
+                    return False
+                return True
+            except Exception as exc:
+                query_error = exc
+                return False
+
+        query.overlap_box(half, center, (0., 0., 0., 1.), hit_callback, False)
+        queries += 1
+        if query_error is not None:
+            raise RuntimeError('PhysX overlap callback failed') from query_error
+        if not blocked or leaf:
+            raw[r0:r1, c0:c1][mask] = 0 if blocked else 1
+            return
+        if r1-r0 >= c1-c0:
+            mid = (r0+r1)//2
+            visit(r0, mid, c0, c1)
+            visit(mid, r1, c0, c1)
+        else:
+            mid = (c0+c1)//2
+            visit(r0, r1, c0, mid)
+            visit(r0, r1, mid, c1)
+
+    rows, cols = np.nonzero(dirty)
+    if not len(rows):
+        return 0
+    # Bounded tiles avoid one broad query spanning a whole building. Start
+    # at dirty extents so a small incremental update stays small.
+    for r in range(int(rows.min()), int(rows.max())+1, 32):
+        for c in range(int(cols.min()), int(cols.max())+1, 32):
+            visit(r, min(r+32, raw.shape[0]), c, min(c+32, raw.shape[1]))
+    return queries
+
+
 def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=False, occupancy_overrides=None,
                           sampling=None):
     import cv2
@@ -200,29 +266,12 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
                 hi=np.ceil((record['hi']-origin)/resolution).astype(int)+2
                 dirty[max(0,lo[1]):min(h,hi[1]),max(0,lo[0]):min(w,hi[0])]=True
         dirty &= support.astype(bool);updated |= dirty
-        for row,col in np.argwhere(dirty):
-            if updated_queries%2048==0:
-                backend.deadline.check()
-                local=getattr(backend,'_local_operation',None)
-                if local is not None:local.check()
-            xy=origin+np.array([col,row])*resolution
-            blocked=False;query_error=None
-            def hit_callback(hit):
-                nonlocal blocked,query_error
-                try:
-                    if str(hit.rigid_body) not in ignored_links:
-                        blocked=True
-                        return False
-                    return True
-                except Exception as exc:
-                    query_error=exc
-                    return False
-            query.overlap_box((resolution/2,resolution/2,(high-low)/2),
-                              (float(xy[0]),float(xy[1]),floor_z+(high+low)/2),
-                              (0.,0.,0.,1.),hit_callback,False)
-            if query_error is not None:raise RuntimeError('PhysX overlap callback failed') from query_error
-            raw[row,col]=0 if blocked else 1
-            updated_queries+=1
+        def check():
+            backend.deadline.check()
+            local=getattr(backend,'_local_operation',None)
+            if local is not None:local.check()
+        updated_queries += rasterize_collision_cells(query, raw, dirty, origin, resolution,
+            floor_z+low, floor_z+high, ignored_links, check)
         for points in projected.values():
             xy=clipped_body_projection(points,floor_z+low,floor_z+high)
             if xy is None:continue
@@ -270,6 +319,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         'hypothetical_projected_links':list(projected),
         'occupancy_height_bands':len(bands),
         'query_height_m':height,'updated_cells':count,'updated_queries':updated_queries,'query_seconds':time.monotonic()-started,
+        'raster_queries':'enclosing_empty_tiles_with_exact_obstacle_leaf_columns',
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
         'held_object_footprint_included':bool(carried_hulls),
