@@ -1452,6 +1452,11 @@ def main():
         finally:
             if not batch.storage.close(config.get('publication_flush_seconds',30)):
                 print('Supervisor metadata sync pending; durable local checkpoint: '+str(batch.storage.spool),file=sys.stderr)
+                # Restart-on-failure must retry the durable final checkpoint.
+                # A clean exit stranded completed tasks at the last published
+                # stage (often "archiving") after a final NAS write failed.
+                # Batch recovery retains terminal rows; it does not rerun them.
+                raise SystemExit(75)
 
 
 if __name__=='__main__':main()

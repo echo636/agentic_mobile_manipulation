@@ -18,6 +18,31 @@ spec.loader.exec_module(batch)
 
 
 class BatchStorageTests(unittest.TestCase):
+    def test_final_publication_failure_requests_restart_and_preserves_result(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = self.make_store(folder)
+            config = Path(folder) / 'config.json'
+            config.write_text(json.dumps({'batch': str(state.root), 'publication_flush_seconds': .03}))
+            runner = Mock(storage=state)
+            runner.publish.side_effect = lambda: self.submit(state, finished=True)
+            with patch.object(batch, 'Batch', return_value=runner), \
+                    patch.object(sys, 'argv', ['runner', '--config', str(config), '--publish-only']), \
+                    patch.object(state, '_publish', side_effect=OSError(errno.EIO, 'NAS unavailable')):
+                with self.assertRaises(SystemExit) as stopped:
+                    batch.main()
+            self.assertEqual(stopped.exception.code, 75)
+            runner.run.assert_not_called()
+            final = state.recovered_rows()['episode']
+            restored = storage.BatchStorage(state.root, state.reports, state.manifest,
+                spool=state.spool, renderer=lambda progress: '<html>recovered</html>')
+            try:
+                self.assertTrue(restored.flush(3))
+                self.assertEqual(json.loads((state.root / 'progress.json').read_text())['tasks'][0], final)
+                self.assertEqual(final['status'], 'failed')
+                self.assertFalse(final['task_success'])
+            finally:
+                restored.close(1)
+
     def test_live_controller_files_are_local_when_shared_storage_is_unavailable(self):
         with tempfile.TemporaryDirectory() as folder:
             state=self.make_store(folder)
