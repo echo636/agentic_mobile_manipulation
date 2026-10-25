@@ -185,7 +185,9 @@ def checked_initial_inside(env, output):
     OnTop._set_value = sample
     BDDLSampler._sample_initial_conditions_final = final_conditions
     try:
-        yield adapter
+        from .initial_reachability import metric_initial_reachability
+        with metric_initial_reachability(adapter._placement_record):
+            yield adapter
     finally:
         for relation, original in originals.items():
             relation._set_value = original
