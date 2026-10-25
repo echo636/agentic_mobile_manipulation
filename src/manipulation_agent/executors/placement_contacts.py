@@ -38,6 +38,9 @@ def contact_report(backend, held, payload=(), *, allow_sleeping=False):
         view = RigidContactAPI._CONTACT_VIEW[scene]
         _, _, _, separations, counts, starts = view.get_contact_data(
             dt=backend.og.sim.get_physics_dt())
+        report['contact_buffer_capacity'] = len(separations)
+        report['reported_scene_contact_points'] = int(counts.sum())
+        report['contact_buffer_saturated'] = int(counts.sum()) >= len(separations)
         row_map = RigidContactAPI._PATH_TO_ROW_IDX[scene]
         col_map = RigidContactAPI._PATH_TO_COL_IDX[scene]
         minimum = math.inf

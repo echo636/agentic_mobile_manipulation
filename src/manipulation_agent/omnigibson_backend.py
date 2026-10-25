@@ -221,6 +221,8 @@ class OmniGibsonBackend:
             from .executors.inside_fabric import install_inside_sampling_fabric_sync
             write_json(output/'inside_sampling_fabric_sync.json',
                        install_inside_sampling_fabric_sync())
+            from .executors.contact_manifold_capacity import install_contact_manifold_capacity
+            write_json(output/'contact_manifold_capacity.json', install_contact_manifold_capacity())
             from .executors.temperature_indices import install_temperature_index_repair
             install_temperature_index_repair(output)
             from .executors.cloth_import import install_nested_cloth_import
