@@ -38,8 +38,10 @@ class EndpointTests(unittest.TestCase):
             states={open_type: SimpleNamespace(set_value=setter, clear_cache=lambda: None,
                                                get_value=lambda: float(state[0][0]) > .05)})
         scene = SimpleNamespace(objects=[obj])
-        sim = SimpleNamespace(scenes=[scene], dump_state=lambda **kw: state[0].clone(),
-            load_state=lambda value, **kw: state.__setitem__(0, value.clone()),
+        obj.dump_state=lambda **kw:state[0].clone()
+        obj.load_state=lambda value, **kw:state.__setitem__(0,value.clone())
+        sim = SimpleNamespace(scenes=[scene], dump_state=lambda **kw:self.fail('Endpoint copied the whole scene'),
+            load_state=lambda value, **kw:self.fail('Endpoint reloaded the whole scene'),
             step_physics=lambda: self.fail('Hypothetical endpoint advanced the live physics world'))
         records = []
         backend = SimpleNamespace(og=SimpleNamespace(sim=sim), env=SimpleNamespace(scene=scene),

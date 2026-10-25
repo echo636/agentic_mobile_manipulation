@@ -1,9 +1,8 @@
 """Choose a usable open endpoint without forcing a door or lid into the room.
 
-Private endpoint probes restore the scene and do not execute model actions.
+Private endpoint probes restore edited objects and do not execute model actions.
 Robot stance and departure remain the responsibility of local_articulation.
 """
-import copy
 import random
 
 from ..contracts import SkillError
@@ -12,21 +11,12 @@ from ..contracts import SkillError
 def checked_open_goal(backend, obj, check):
     from omnigibson.object_states import Open
     from .articulation_clearance import moving_link_clearance
-    from .particle_payload import snapshot_particle_state, restore_particle_state, particle_state_unchanged
+    from .articulation_snapshot import preview_restore
     import numpy as np
 
-    sim=backend.og.sim
-    state=copy.deepcopy(sim.dump_state(serialized=False))
-    particles=snapshot_particle_state(sim)
-    from .placement import scene_object_identities
-    identities=scene_object_identities(sim)
-    def restore():
-        if scene_object_identities(sim)!=identities or not particle_state_unchanged(particles):
-            raise SkillError('target_changed','Scene identities changed during articulation preview',changed=True)
-        sim.load_state(copy.deepcopy(state),serialized=False)
-        restore_particle_state(particles)
-    rng=random.getstate();numpy_rng=np.random.get_state();torch_rng=backend.torch.random.get_rng_state()
     payload=backend._container_payload(obj)
+    restore=preview_restore(backend,obj,payload)
+    rng=random.getstate();numpy_rng=np.random.get_state();torch_rng=backend.torch.random.get_rng_state()
     own={str(link.prim_path) for link in obj.links.values()}
     # Robot clearance is evaluated at prospective stances after this endpoint
     # is selected. Contents move with a drawer and may touch their own support.

@@ -32,9 +32,12 @@ class ArticulationTests(unittest.TestCase):
         loads=[]
         def load(state,**kw):
             loads.append(state);q[0].copy_(state)
-        scene=SimpleNamespace(objects=[obj])
-        sim=SimpleNamespace(dump_state=lambda **kw:q[0] if borrowed_snapshot else q[0].clone(),
-                            load_state=load,scenes=[scene])
+        obj.dump_state=lambda **kw:q[0] if borrowed_snapshot else q[0].clone()
+        obj.load_state=load
+        unrelated=SimpleNamespace(load_state=lambda *args,**kw:self.fail('Preview reloaded an unrelated object'))
+        scene=SimpleNamespace(objects=[obj,unrelated])
+        sim=SimpleNamespace(dump_state=lambda **kw:self.fail('Preview copied the entire scene'),
+                            load_state=lambda *args,**kw:self.fail('Preview reloaded the entire scene'),scenes=[scene])
         backend=SimpleNamespace(og=SimpleNamespace(sim=sim),torch=torch,steps=0,frames_revision=0,
             _container_payload=lambda obj:[],_relocate_container_payload=lambda p:None,
             _anchored_operation=lambda obj:nullcontext(),_editable_carry_joints=lambda obj:nullcontext(),
@@ -98,6 +101,30 @@ class ArticulationTests(unittest.TestCase):
 
     def test_cancellation_after_hypothetical_raster_update_restores_live_cache(self):
         self.assertGreater(len(self.preview(fail='geometry')),2)
+
+    def test_preview_restores_carried_assembly_and_only_its_particle_system(self):
+        import torch
+        from manipulation_agent.executors.articulation_snapshot import preview_restore
+        values={name:torch.tensor([float(index)]) for index,name in enumerate(('door','content','held','carried'))}
+        originals={name:value.clone() for name,value in values.items()}
+        objects={name:SimpleNamespace(
+            dump_state=lambda name=name,**kw:values[name],
+            load_state=lambda state,name=name,**kw:values[name].copy_(state)) for name in values}
+        unrelated=SimpleNamespace(load_state=lambda *a,**kw:self.fail('Unrelated object was restored'))
+        scene=SimpleNamespace(objects=[*objects.values(),unrelated])
+        sim=SimpleNamespace(scenes=[scene])
+        system=object();other=object()
+        particle_states=[(scene,system,(),None,None),(scene,other,(),None,None)]
+        backend=SimpleNamespace(og=SimpleNamespace(sim=sim),_get_held=lambda:objects['held'],
+            _carry_contents=[(objects['carried'],None)],_carry_particles=[SimpleNamespace(system=system)])
+        with patch('manipulation_agent.executors.particle_payload.snapshot_particle_state',return_value=particle_states),\
+             patch('manipulation_agent.executors.particle_payload.particle_state_unchanged',return_value=True),\
+             patch('manipulation_agent.executors.particle_payload.restore_particle_state') as restore_particles:
+            restore=preview_restore(backend,objects['door'],[(objects['content'],None,None)],follows_carry=True)
+            for value in values.values():value.add_(10)
+            restore()
+        for name,value in values.items():torch.testing.assert_close(value,originals[name])
+        restore_particles.assert_called_once_with([particle_states[0]])
 
     def test_door_sweep_blocks_stance_even_when_endpoints_clear(self):
         import numpy as np

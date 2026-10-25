@@ -53,21 +53,10 @@ class ArticulationSweep:
 
 def prepare_articulation(backend,obj,primitive,operation):
     from omnigibson.object_states import Open
-    from .particle_payload import snapshot_particle_state,restore_particle_state,particle_state_unchanged
-    sim=backend.og.sim
+    from .articulation_snapshot import preview_restore
     operation.check()
-    # Native rigid-body velocity snapshots borrow the physics tensor buffers.
-    # Freeze them before any hypothetical setter / keep_still call can mutate
-    # those buffers; copying only at restore time would preserve the trial.
-    state=copy.deepcopy(sim.dump_state(serialized=False))
-    particles=snapshot_particle_state(sim)
-    from .placement import scene_object_identities
-    identities=scene_object_identities(sim)
-    def restore():
-        if scene_object_identities(sim)!=identities or not particle_state_unchanged(particles):
-            raise SkillError('target_changed','Scene identities changed during articulation preview',changed=True)
-        sim.load_state(copy.deepcopy(state),serialized=False)
-        restore_particle_state(particles)
+    payload=backend._container_payload(obj)
+    restore=preview_restore(backend,obj,payload,follows_carry=True)
     rng=random.getstate();numpy_rng=np.random.get_state();torch_rng=backend.torch.random.get_rng_state()
     start=obj.get_joint_positions().clone();boxes=[]
     current_geometry=getattr(operation,'geometry',None) or backend._local_geometry(operation)
@@ -78,7 +67,6 @@ def prepare_articulation(backend,obj,primitive,operation):
     live_cache=getattr(backend,'_live_gt_collision_cache',missing)
     names=('_navigation_layers','_navigation_support','_navigation_clearance','_navigation_layer_yaw','_navigation_layer_heights')
     saved={name:getattr(backend,name,None) for name in names}
-    payload=backend._container_payload(obj)
     def vertices():
         return {str(link.prim_path):link.collision_boundary_points_world.cpu().numpy().copy()
                 for item in [obj,*[record[0] for record in payload]] for link in item.links.values()
