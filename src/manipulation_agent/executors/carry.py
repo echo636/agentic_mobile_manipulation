@@ -149,6 +149,11 @@ class ControlledCarry(CompactCarry):
             if state is Open:
                 from .articulation_diagnostics import articulation_sample
                 samples.append(articulation_sample(self,obj,phase))
+                # A native CUDA/process fault cannot reach report(). Persist
+                # each boundary while its joint/contact evidence is available.
+                self._placement_record(dict(status='articulation_phase',
+                    request_id=getattr(self,'_active_request_id',None),
+                    target=obj.name,primitive=primitive,**samples[-1]))
         def report(status,**details):
             if state is Open:
                 from .articulation_diagnostics import record_articulation

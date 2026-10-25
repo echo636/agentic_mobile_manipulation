@@ -101,6 +101,10 @@ def rebuild_cut_topology(backend):
             with gm.unlocked():
                 gm.ENABLE_OBJECT_STATES = enabled_states
                 gm.ENABLE_TRANSITION_RULES = enabled_transitions
+        record['clock_after'] = float(sim.current_time)
+        record['native_steps_after'] = int(sim.current_time_step_index)
+        record['timeline_after'] = float(context._timeline.get_current_time())
+        record['env_step_after'] = backend.steps
         if (backend.steps != control_steps or float(sim.current_time) != clock
                 or int(sim.current_time_step_index) != native_steps
                 or abs(float(context._timeline.get_current_time())-timeline_time) >= 1e-9):

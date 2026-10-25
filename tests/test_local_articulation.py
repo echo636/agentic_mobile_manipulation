@@ -12,7 +12,7 @@ from manipulation_agent.contracts import SkillError
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Pinned simulator Python required')
 class ArticulationTests(unittest.TestCase):
-    def preview(self,fail=False):
+    def preview(self,fail=False,borrowed_snapshot=False):
         import numpy as np
         import torch
         from manipulation_agent.executors.local_articulation import prepare_articulation
@@ -23,7 +23,7 @@ class ArticulationTests(unittest.TestCase):
             def collision_boundary_points_world(self):
                 return torch.tensor([[x+float(q[0][0]),y,z] for x in (0.,.05) for y in (0.,1.) for z in (.1,1.)])
         def set_joints(value):
-            samples.append(float(value[0]));q[0]=value.clone()
+            samples.append(float(value[0]));q[0].copy_(value)
         obj=SimpleNamespace(prim_path='/door',links={'leaf':Link()},
             get_joint_positions=lambda:q[0].clone(),set_joint_positions=set_joints)
         def setter(value,fully):
@@ -31,9 +31,10 @@ class ArticulationTests(unittest.TestCase):
         obj.states={Open:SimpleNamespace(set_value=setter)}
         loads=[]
         def load(state,**kw):
-            loads.append(state);q[0]=state.clone()
+            loads.append(state);q[0].copy_(state)
         scene=SimpleNamespace(objects=[obj])
-        sim=SimpleNamespace(dump_state=lambda **kw:q[0].clone(),load_state=load,scenes=[scene])
+        sim=SimpleNamespace(dump_state=lambda **kw:q[0] if borrowed_snapshot else q[0].clone(),
+                            load_state=load,scenes=[scene])
         backend=SimpleNamespace(og=SimpleNamespace(sim=sim),torch=torch,steps=0,frames_revision=0,
             _container_payload=lambda obj:[],_relocate_container_payload=lambda p:None,
             _anchored_operation=lambda obj:nullcontext(),_editable_carry_joints=lambda obj:nullcontext(),
@@ -87,6 +88,9 @@ class ArticulationTests(unittest.TestCase):
 
     def test_preview_restores_joints_rng_and_current_geometry(self):
         self.assertGreater(len(self.preview()),1)
+
+    def test_preview_freezes_borrowed_native_state_before_mutating_it(self):
+        self.assertGreater(len(self.preview(borrowed_snapshot=True)),1)
 
     def test_failed_preview_still_restores_scene(self):
         self.assertEqual(len(self.preview(fail=True)),2)

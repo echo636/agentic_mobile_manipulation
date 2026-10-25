@@ -56,7 +56,10 @@ def prepare_articulation(backend,obj,primitive,operation):
     from .particle_payload import snapshot_particle_state,restore_particle_state,particle_state_unchanged
     sim=backend.og.sim
     operation.check()
-    state=sim.dump_state(serialized=False)
+    # Native rigid-body velocity snapshots borrow the physics tensor buffers.
+    # Freeze them before any hypothetical setter / keep_still call can mutate
+    # those buffers; copying only at restore time would preserve the trial.
+    state=copy.deepcopy(sim.dump_state(serialized=False))
     particles=snapshot_particle_state(sim)
     from .placement import scene_object_identities
     identities=scene_object_identities(sim)
