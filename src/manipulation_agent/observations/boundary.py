@@ -53,6 +53,10 @@ ERROR_MESSAGES = {
     "episode_cancelled":"Episode closure was requested; the active action stopped before final scoring.",
     "sampling_budget_exhausted":"The executor exhausted its placement sampling budget.",
     "unsupported_relation":"The selected objects do not support the requested operation.",
+    "same_transfer_vessel":"The material source and receiving vessel are the same object. A transfer requires two different vessels.",
+    "invalid_transfer_destination":"The selected receiving object has no supported volume for loose material. Select the receiving vessel itself.",
+    "material_dispenser_off":"The material dispenser is switched off. Enable it with toggle_on before dispensing.",
+    "material_source_empty":"The selected source has no accessible loose material or ready dispenser. Pour and scoop transfer loose material; rigid objects use grasp and placement.",
 }
 
 # Only fixed stages/messages cross the RGB boundary; exception text and private

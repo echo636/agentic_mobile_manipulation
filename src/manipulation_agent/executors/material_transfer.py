@@ -121,8 +121,10 @@ class CheckedMaterialTransfer:
         if held is None:
             raise SkillError('empty_hand', 'Carry a material source or receiving vessel first')
         source, destination = (held, target) if primitive == 'pour' else (target, held)
-        if source is destination or ContainedParticles not in destination.states:
-            raise SkillError('unsupported_relation', 'Selected transfer requires a different receiving vessel')
+        if source is destination:
+            raise SkillError('same_transfer_vessel', 'Material source and destination are the same vessel')
+        if ContainedParticles not in destination.states:
+            raise SkillError('invalid_transfer_destination', 'Selected receiver has no supported material volume')
         for obj in (source, destination):
             if Open in obj.states and not obj.states[Open].get_value():
                 raise SkillError('container_closed', 'Open the material source and receiving vessel before transfer')
@@ -182,9 +184,9 @@ class CheckedMaterialTransfer:
         if not systems:
             from omnigibson.object_states import ToggledOn
             if modifier is not None and ToggledOn in source.states and not source.states[ToggledOn].get_value():
-                raise SkillError('pre_condition_error',
+                raise SkillError('material_dispenser_off',
                     'The material dispenser is switched off; enable it with toggle_on before dispensing')
-            raise SkillError('pre_condition_error', 'Selected source has no accessible loose material or ready dispenser')
+            raise SkillError('material_source_empty', 'Selected source has no accessible loose material or ready dispenser')
         changes = []
         # No physics until all carry tracking reflects the actual transfer.
         # Once material can cook/mix during stepping, do not roll it back into
