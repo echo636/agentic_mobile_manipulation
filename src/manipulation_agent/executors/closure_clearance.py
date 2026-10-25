@@ -78,8 +78,8 @@ def check_closure_clearance(backend, target, assembly):
         return {'applicable': False, 'clear': True}
     backend.deadline.check(changed=True)
     sim = backend.og.sim
-    state = sim.dump_state(serialized=False)
     particles = snapshot_particle_state(sim)
+    state = sim.dump_state(serialized=False)
     identities = scene_object_identities(sim)
     rng = random.getstate()
     numpy_rng = np.random.get_state()

@@ -149,9 +149,9 @@ Rejected candidate poses never become committed actions or task evidence.
     from .placement import scene_object_identities
     torch, sim = backend.torch, backend.og.sim
     start = time.monotonic()
+    initial_particles = snapshot_particle_state(sim)
     initial = sim.dump_state(serialized=False)
     initial_objects = scene_object_identities(sim)
-    initial_particles = snapshot_particle_state(sim)
     root_pos, root_quat = (v.clone() for v in held.get_position_orientation())
     target_pos, target_quat = (v.clone() for v in target.get_position_orientation())
     was_open = bool(target.states[Open].get_value()) if Open in target.states else None
@@ -498,7 +498,15 @@ Rejected candidate poses never become committed actions or task evidence.
                 continue
             backend._relocate_contents(held, contents)
             if not held.states[Inside].get_value(target):
-                reject('official_inside_false', candidate)
+                low, high = held.aabb
+                actual_center = (low + high) / 2
+                reject('official_inside_false', candidate,
+                    settled_pose=[v.cpu().tolist() for v in held.get_position_orientation()],
+                    settled_aabb=[low.cpu().tolist(), high.cpu().tolist()],
+                    center_in_selected_volume=bool(volume.check_points_in_volume(actual_center.unsqueeze(0)).item()),
+                    uncached_inside=bool(held.states[Inside]._get_value(target)),
+                    linear_velocity=held.get_linear_velocity().cpu().tolist(),
+                    physics_time_index=sim.current_time_step_index)
                 continue
             if any(not obj.states[Inside].get_value(target) for obj in assembly[1:]):
                 reject('payload_outside_destination', candidate)

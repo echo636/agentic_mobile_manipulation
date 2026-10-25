@@ -962,9 +962,9 @@ class CheckedPlacement:
                     sampled=sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
                 else:
                     from .inside_sampling import sample_assembly_inside
+                    particles=snapshot_particle_state(self.og.sim)
                     checkpoint=self.og.sim.dump_state(serialized=False)
                     identities=scene_object_identities(self.og.sim)
-                    particles=snapshot_particle_state(self.og.sim)
                     def native():
                         nonlocal native_sampling,native_start,native_before,open_native_state
                         native_start=time.monotonic();native_before=self.sampling_physics_steps

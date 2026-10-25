@@ -49,7 +49,23 @@ def checked_initial_inside(env, output):
         previous = adapter.sampling_active
         adapter.sampling_active = True
         try:
-            return original_final(sampler, *args, **kwargs)
+            error = original_final(sampler, *args, **kwargs)
+            if error:
+                # Task loading resets the scene after a failed sampler. Capture
+                # the physical failure here, while the actual trial scene still
+                # exists, rather than saving the reset off-scene import poses.
+                from ..records import write_json
+                checkpoint_dir = output / 'partial_initial_instance'
+                try:
+                    env.task.save_task(env, save_dir=str(checkpoint_dir), task_relevant_only=False)
+                    write_json(output / 'partial_initial_checkpoint.json', {
+                        'status': 'passed', 'sampling_error': str(error),
+                        'files': sorted(p.name for p in checkpoint_dir.glob('*.json')),
+                        'interpretation': 'Incomplete construction checkpoint; no valid episode or task success'})
+                except Exception as exc:
+                    write_json(output / 'partial_initial_checkpoint.json', {
+                        'status': 'failed', 'sampling_error': str(error), 'error': str(exc)})
+            return error
         finally:
             adapter.sampling_active = previous
 
