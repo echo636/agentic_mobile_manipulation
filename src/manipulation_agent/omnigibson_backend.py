@@ -223,6 +223,8 @@ class OmniGibsonBackend:
                        install_inside_sampling_fabric_sync())
             from .executors.temperature_indices import install_temperature_index_repair
             install_temperature_index_repair(output)
+            from .executors.cloth_import import install_nested_cloth_import
+            write_json(output/'cloth_import_compatibility.json', install_nested_cloth_import(output))
             from omnigibson.macros import gm
             from omnigibson.eval.evaluator import Evaluator, resolve_instance_ids
             from omnigibson.eval.utils.eval_utils import NUM_PUBLIC_TEST_INSTANCES
