@@ -53,6 +53,16 @@ class CatalogRGBBackend(RGBBackend):
         config['scene'].update(scene_file=str(scene_file), scene_model=spec['scene'],
             include_robots=True, trav_map_resolution=0.05, default_erosion_radius=0.57,
             waypoint_resolution=0.1)
+        # The frozen file already contains exactly the sampled scene. Reusing
+        # the sampler's room/category filters drops embedded robots and sampled
+        # movable objects whose serialized init args have no room annotation.
+        # Match InteractiveTraversableScene's own saved-scene reload policy.
+        filters = {key: config['scene'].get(key) for key in (
+            'load_room_types', 'load_room_instances', 'load_object_categories',
+            'not_load_object_categories', 'load_task_relevant_only')}
+        config['scene'].update(load_room_types=None, load_room_instances=None,
+            load_object_categories=None, not_load_object_categories=None,
+            load_task_relevant_only=False)
         config['env'].update(device='cpu', automatic_reset=False)
         config['task'].update(type='BehaviorTask', activity_name=spec['task'],
             activity_definition_id=0, activity_instance_id=0, online_object_sampling=False,
@@ -65,7 +75,9 @@ class CatalogRGBBackend(RGBBackend):
             'bddl_definition': spec['bddl_sha256'],
             'configured_scene': hashlib.sha256(encoded.encode()).hexdigest()}
         write_json(self.output / 'scene_compatibility.json', {'changes': migrations,
-            'original_template_unmodified': True, 'scope': 'sampled_full_catalog_instance'})
+            'original_template_unmodified': True, 'scope': 'sampled_full_catalog_instance',
+            'sampling_filters_removed_for_frozen_reload': filters,
+            'frozen_object_count': len(data['objects_info']['init_info'])})
         return config
 
     def _load_catalog_environment(self, config):
