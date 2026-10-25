@@ -538,6 +538,13 @@ class ControlledCarry(CompactCarry):
                         'child':child.name,'original_parent':parent.name,
                         'support':support_target.name,'resting_motion':resting})
                     continue
+                self._placement_record({'status':'payload_relation_failed',
+                    'child':child.name,'parent':parent.name,'relation':kind,
+                    'child_position':child.get_position_orientation()[0].tolist(),
+                    'parent_position':parent.get_position_orientation()[0].tolist(),
+                    'child_orientation':child.get_position_orientation()[1].tolist(),
+                    'parent_orientation':parent.get_position_orientation()[1].tolist(),
+                    'child_linear_velocity':child.get_linear_velocity().tolist()})
                 raise SkillError('postcondition_error','Carried payload lost its original support, containment or attachment after placement',changed=True)
 
     def _ideal_release(self,max_steps):

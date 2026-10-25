@@ -658,6 +658,19 @@ class CheckedPlacement:
             for state in obj.states.values():
                 state.clear_cache()
 
+    def _surface_candidate_payload(self, held, target, dependencies, resting):
+        """Reject a settled trial that spills its load before committing it.
+
+        Sample physics bypasses Environment.step; invalidate native predicate
+        caches before checking the same relations used at final verification.
+        """
+        for obj in {held,target,*(child for child,_,_ in dependencies),
+                    *(parent for _,parent,_ in dependencies)}:
+            for state in obj.states.values():
+                state.clear_cache()
+        self._verify_payload(dependencies, support_target=target,
+                             support_resting={key:window.report() for key,window in resting.items()})
+
     def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
@@ -721,9 +734,16 @@ class CheckedPlacement:
                             continue
                     resting = RestingMotionWindow(self.og.sim.get_physics_dt())
                     resting.add(*held.get_position_orientation())
+                    candidate_payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_physics_dt())
+                                                 for child,_,kind in dependencies if kind=='OnTop'}
+                    def sample_motion():
+                        resting.add(*held.get_position_orientation())
+                        for child,_,_ in dependencies:
+                            if id(child) in candidate_payload_resting:
+                                candidate_payload_resting[id(child)].add(*child.get_position_orientation())
                     for _ in range(settle_steps):
                         self._placement_physics_step()
-                        resting.add(*held.get_position_orientation())
+                        sample_motion()
                     contacts = self._placement_contacts(held, payload)
                     touching = any(path in contacts for path in (link.prim_path for link in target.links.values()))
                     candidate_point=candidate.get('verification_point',point)
@@ -741,7 +761,7 @@ class CheckedPlacement:
                         count = min(extension_steps, max_settle_steps-elapsed_steps)
                         for _ in range(count):
                             self._placement_physics_step()
-                            resting.add(*held.get_position_orientation())
+                            sample_motion()
                         elapsed_steps += count
                         contacts = self._placement_contacts(held, payload)
                         touching = any(link.prim_path in contacts for link in target.links.values())
@@ -756,6 +776,15 @@ class CheckedPlacement:
                         self._placement_record({'status': 'candidate_rejected', 'stage': 'free_settling',
                             'candidate': candidate['index'], 'target': target.name, 'held': held.name,
                             'support': support, 'contact_bodies': contacts})
+                        continue
+                    try:
+                        self._surface_candidate_payload(held,target,dependencies,candidate_payload_resting)
+                    except SkillError as exc:
+                        if exc.code!='postcondition_error':
+                            raise
+                        self._placement_record({'status':'candidate_rejected','stage':'payload_relations',
+                            'candidate':candidate['index'],'target':target.name,'held':held.name,
+                            'reason':str(exc)})
                         continue
                     accepted = candidate
                     verification_point=candidate_point
