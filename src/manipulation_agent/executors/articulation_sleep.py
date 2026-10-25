@@ -28,13 +28,7 @@ class ArticulationSleepPolicy:
         self.record['isaacsim'] = version
         if version != '5.1.0.0':
             return
-        import omni.kit.app
         from omnigibson.prims.entity_prim import EntityPrim
-
-        extension = omni.kit.app.get_app().get_extension_manager().get_enabled_extension_id('omni.physx')
-        self.record['physx_extension'] = extension
-        if extension != 'omni.physx-107.3.26':
-            raise RuntimeError('GPU articulation sleep workaround requires validated PhysX 107.3.26')
         original_post_load = EntityPrim._post_load
         original_sleep = EntityPrim.sleep
         threshold = EntityPrim.sleep_threshold
@@ -71,6 +65,13 @@ class ArticulationSleepPolicy:
     def validate_scene(self, scene):
         if not self.record['enabled']:
             return
+        # OmniGibson creates Kit lazily during Environment construction. Hooks
+        # must exist before that construction, but IApp is only available now.
+        import omni.kit.app
+        extension = omni.kit.app.get_app().get_extension_manager().get_enabled_extension_id('omni.physx')
+        self.record['physx_extension'] = extension
+        if extension != 'omni.physx-107.3.26':
+            raise RuntimeError('GPU articulation sleep workaround requires validated PhysX 107.3.26')
         objects = [dict(name=obj.name, links=len(obj.links),
                         threshold=float(obj.sleep_threshold), asleep=bool(obj.is_asleep))
                    for obj in scene.objects if obj.articulated]
