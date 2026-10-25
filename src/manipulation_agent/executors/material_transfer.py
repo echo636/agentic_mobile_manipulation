@@ -130,7 +130,8 @@ class CheckedMaterialTransfer:
                 source.set_position_orientation(*pose)
 
     def _checked_transfer(self, primitive, target, max_steps):
-        from omnigibson.object_states import ContainedParticles, ModifiedParticles
+        from omnigibson.object_states import ContainedParticles
+        from omnigibson.object_states.saturated import ModifiedParticles
         source, destination = self._transfer_preconditions(primitive, target)
         scene = self.env.scene
         # Nested bowls/bags own their contents; pouring an outer tray must not
