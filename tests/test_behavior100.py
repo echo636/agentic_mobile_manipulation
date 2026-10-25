@@ -107,6 +107,65 @@ class BatchEvidenceTests(unittest.TestCase):
                     self.assertEqual(row['status'],'failed')
                     for key,value in failure.items():self.assertEqual(row[key],value)
 
+    def test_lower_capacity_adopts_every_existing_execution_before_new_starts(self):
+        with tempfile.TemporaryDirectory() as folder:
+            # Put the fresh lane first to exercise reservation before adoption.
+            workers=[{'id':name,'gpu':i,'ssh':['ssh','fixture']}
+                     for i,name in enumerate(('fresh','a','b','c'))]
+            runner=self.make_queue_runner(folder,workers=workers,count=1)
+            runner._config.update(max_active_workers=1,
+                adopt_inflight={name:name for name in ('a','b','c')})
+            runner.rows.extend({'run_id':name,'status':'running'} for name in ('a','b','c'))
+            entered=threading.Barrier(4)
+            release={name:threading.Event() for name in ('a','b','c')}
+            completed={name:threading.Event() for name in ('a','b','c')}
+            errors=[]
+            runner.acquire_startup_gate=Mock(return_value=True)
+            runner.release_startup_gate=Mock()
+            runner.requeue_resource_rejection=Mock(return_value=False)
+            def adopt(row):
+                entered.wait(timeout=3)
+                if not release[row['run_id']].wait(3):
+                    raise RuntimeError('Test did not release adopted execution')
+                row.update(status='passed',simulator_cleanup={'status':'passed'})
+            runner.adopt_one=Mock(side_effect=adopt)
+            def state(stage,**kwargs):
+                if stage=='available' and runner.c['id'] in completed:
+                    completed[runner.c['id']].set()
+            runner.worker_state=Mock(side_effect=state)
+            runner.run_one=Mock(side_effect=lambda row,gpu:row.update(status='passed'))
+            def run():
+                try:runner.run()
+                except Exception as exc:errors.append(exc)
+            thread=threading.Thread(target=run)
+            thread.start()
+            try:
+                entered.wait(timeout=3)
+                runner.run_one.assert_not_called()
+                for name in ('a','b'):
+                    release[name].set()
+                    self.assertTrue(completed[name].wait(3))
+                # One inherited execution still fills the reduced capacity.
+                runner.run_one.assert_not_called()
+            finally:
+                for event in release.values():event.set()
+                thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(errors,[])
+            self.assertEqual(runner.adopt_one.call_count,3)
+            runner.run_one.assert_called_once()
+
+    def test_failed_adoption_keeps_capacity_reserved_for_retry(self):
+        capacity=batch.ExecutionCapacity(1,['existing'])
+        self.assertFalse(capacity.acquire('new'))
+        self.assertTrue(capacity.acquire('existing',adopting=True))
+        capacity.release('existing',preserve=True)
+        self.assertFalse(capacity.acquire('new'))
+        self.assertTrue(capacity.acquire('existing',adopting=True))
+        capacity.release('existing')
+        self.assertTrue(capacity.acquire('new'))
+        capacity.release('new')
+
     def test_explicit_drain_stops_new_admission(self):
         for before_start in (False,True):
             with self.subTest(before_start=before_start),tempfile.TemporaryDirectory() as folder:

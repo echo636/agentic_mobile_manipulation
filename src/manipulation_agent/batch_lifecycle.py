@@ -5,7 +5,43 @@ import json
 import math
 import os
 from pathlib import Path
+import threading
 import time
+
+
+class ExecutionCapacity:
+    """Reserve inherited executions before admitting work under a lower limit.
+
+    Every inherited execution must remain supervised, including when their
+    count already exceeds the new limit. Failed adoption admission retains its
+    reservation until the same execution can be reconciled.
+    """
+    def __init__(self, limit, inherited=()):
+        if type(limit) is not int or limit < 1:
+            raise ValueError('Execution capacity must be a positive integer')
+        self.limit = limit
+        self.reserved = set(inherited)
+        self.active = set()
+        self.lock = threading.Lock()
+
+    def acquire(self, key, *, adopting=False):
+        with self.lock:
+            if key in self.active:
+                raise RuntimeError('Execution capacity already acquired: ' + key)
+            if adopting:
+                if key not in self.reserved:
+                    raise RuntimeError('Inherited execution was not reserved: ' + key)
+                self.reserved.remove(key)
+            elif len(self.reserved) + len(self.active) >= self.limit:
+                return False
+            self.active.add(key)
+            return True
+
+    def release(self, key, *, preserve=False):
+        with self.lock:
+            self.active.remove(key)
+            if preserve:
+                self.reserved.add(key)
 
 
 def preferred_gpu_worker(workers, states, host, gpu_csv, *, gpu_available=None):
