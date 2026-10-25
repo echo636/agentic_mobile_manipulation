@@ -1,8 +1,8 @@
-"""Reuse checked container placement during sampled-instance construction.
+"""Reuse checked placement during sampled-instance construction.
 
 This policy is only installed by the offline constructor, never by the actor.
 It preserves previously placed residents and provides geometric proposals when
-the native random Inside sampler fails. Initial predicates remain mandatory.
+native Inside / OnTop sampling fails. Initial predicates remain mandatory.
 """
 from contextlib import contextmanager
 import time
@@ -34,15 +34,15 @@ class _InitialPlacementAdapter(CheckedPlacement, ControlledCarry):
 
 @contextmanager
 def checked_initial_inside(env, output):
-    """Process-local initial sampler extension with native acceptance checks."""
-    from omnigibson.object_states import Inside
+    """Process-local placement extension; historical name kept for constructors."""
+    from omnigibson.object_states import Inside, OnTop
     from omnigibson.utils.bddl_utils import BDDLSampler
     from .inside_sampling import sample_assembly_inside
     from .particle_payload import snapshot_particle_state, restore_particle_state
     from .particle_payload import particle_state_unchanged
     adapter = _InitialPlacementAdapter(env, output)
     sim = adapter.og.sim
-    original = Inside._set_value
+    originals = {Inside: Inside._set_value, OnTop: OnTop._set_value}
     original_final = BDDLSampler._sample_initial_conditions_final
 
     def final_conditions(sampler, *args, **kwargs):
@@ -78,7 +78,9 @@ def checked_initial_inside(env, output):
         # placements; pinning them changes the feasibility probe and can trigger
         # repeated whole-room retries. Extend only the final construction pass
         # (or an explicitly enabled post-reset repair of its initial literals).
-        if not new_value or not adapter.sampling_active:
+        relation = Inside if isinstance(state, Inside) else OnTop
+        original = originals[relation]
+        if not new_value or not adapter.sampling_active or state.obj is adapter.robot:
             return original(state, target, new_value, **kwargs)
         held = state.obj
         residents = [row for row in adapter._container_payload(target) if row[0] is not held]
@@ -119,7 +121,7 @@ def checked_initial_inside(env, output):
 
         sim.step_physics = step
         adapter._placement_record({'status': 'initial_inside_started', 'held': held.name,
-            'target': target.name, 'residents': [obj.name for obj, _, _ in residents],
+            'target': target.name, 'relation': relation.__name__, 'residents': [obj.name for obj, _, _ in residents],
             'object_extent': held.aabb_extent.tolist(),
             'fillable_bounds': [[v.tolist() for v in link.visual_aabb] for link in target.links.values()
                                 if link.is_meta_link and link.meta_link_type in {'fillable', 'openfillable'}]})
@@ -135,8 +137,12 @@ def checked_initial_inside(env, output):
             restore()
             native = False
             try:
-                accepted = sample_assembly_inside(adapter, held, target, [], residents=residents,
-                                                  max_candidates=108, max_seconds=45.)
+                if relation is Inside:
+                    accepted = sample_assembly_inside(adapter, held, target, [], residents=residents,
+                                                      max_candidates=108, max_seconds=45.)
+                else:
+                    from .initial_surface import sample_initial_surface
+                    accepted = sample_initial_surface(adapter, held, target)
             except SkillError as exc:
                 if exc.code != 'sampling_budget_exhausted':
                     raise
@@ -146,10 +152,13 @@ def checked_initial_inside(env, output):
             if accepted and kwargs.get('use_trav_map', False):
                 from omnigibson.utils.object_state_utils import (
                     get_reachability_sampling_context, is_pose_reachable_for_predicate)
-                context = get_reachability_sampling_context(target, 'inside')
+                predicate = 'inside' if relation is Inside else 'onTop'
+                context = get_reachability_sampling_context(target, predicate)
                 accepted = is_pose_reachable_for_predicate(held.get_position_orientation()[0],
-                                                           target, 'inside', context)
+                                                           target, predicate, context)
                 if not accepted:
+                    adapter._placement_record({'status': 'initial_reachability_rejected',
+                        'held': held.name, 'target': target.name, 'relation': predicate})
                     restore()
             return bool(accepted)
         finally:
@@ -157,10 +166,12 @@ def checked_initial_inside(env, output):
             adapter._object_anchor = prior_anchor
 
     Inside._set_value = sample
+    OnTop._set_value = sample
     BDDLSampler._sample_initial_conditions_final = final_conditions
     try:
         yield adapter
     finally:
-        Inside._set_value = original
+        for relation, original in originals.items():
+            relation._set_value = original
         BDDLSampler._sample_initial_conditions_final = original_final
         adapter._close_placement_record()
