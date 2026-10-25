@@ -24,6 +24,7 @@ class _InitialPlacementAdapter(CheckedPlacement, ControlledCarry):
         self._base_target = self._object_anchor = self._local_operation = None
         self._placement_particle_payload = (None, [])
         self._stabilized_containers = {}
+        self.sampling_active = False
 
     def _restore_stabilized_containers(self):
         # Construction pins only the selected container and its prior residents.
@@ -35,18 +36,33 @@ class _InitialPlacementAdapter(CheckedPlacement, ControlledCarry):
 def checked_initial_inside(env, output):
     """Process-local initial sampler extension with native acceptance checks."""
     from omnigibson.object_states import Inside
+    from omnigibson.utils.bddl_utils import BDDLSampler
     from .inside_sampling import sample_assembly_inside
     from .particle_payload import snapshot_particle_state, restore_particle_state
     from .particle_payload import particle_state_unchanged
     adapter = _InitialPlacementAdapter(env, output)
     sim = adapter.og.sim
     original = Inside._set_value
+    original_final = BDDLSampler._sample_initial_conditions_final
+
+    def final_conditions(sampler, *args, **kwargs):
+        previous = adapter.sampling_active
+        adapter.sampling_active = True
+        try:
+            return original_final(sampler, *args, **kwargs)
+        finally:
+            adapter.sampling_active = previous
 
     class NativeWorkLimit(Exception):
         pass
 
     def sample(state, target, new_value, **kwargs):
-        if not new_value:
+        # The earlier fixture-assignment pass probes alternative parents in
+        # temporary scenes. Incidental contents there are not committed initial
+        # placements; pinning them changes the feasibility probe and can trigger
+        # repeated whole-room retries. Extend only the final construction pass
+        # (or an explicitly enabled post-reset repair of its initial literals).
+        if not new_value or not adapter.sampling_active:
             return original(state, target, new_value, **kwargs)
         held = state.obj
         residents = [row for row in adapter._container_payload(target) if row[0] is not held]
@@ -125,8 +141,10 @@ def checked_initial_inside(env, output):
             adapter._object_anchor = prior_anchor
 
     Inside._set_value = sample
+    BDDLSampler._sample_initial_conditions_final = final_conditions
     try:
         yield adapter
     finally:
         Inside._set_value = original
+        BDDLSampler._sample_initial_conditions_final = original_final
         adapter._close_placement_record()

@@ -10,13 +10,15 @@ from manipulation_agent.executors.placement_contacts import contact_report
 
 class PlacementContactPolicy(unittest.TestCase):
     def report(self, separation, *, truncated=False, internal=False, sleeping=False,
-               no_points=False, allow_sleeping=False):
+               no_points=False, allow_sleeping=False, fresh_force=None):
         body = SimpleNamespace(scene=SimpleNamespace(idx=0),
             links={'body': SimpleNamespace(prim_path='/item', is_asleep=sleeping)})
         other = '/item' if internal else '/support'
         view = SimpleNamespace(get_contact_data=lambda **kw:(
             None, None, None, np.array([[separation]]),
             np.array([[0 if no_points else 2 if truncated else 1]]), np.array([[0]])))
+        if fresh_force is not None:
+            view.get_contact_force_matrix=lambda **kw:np.array([[fresh_force]])
         api = SimpleNamespace(get_contact_pairs=lambda *a, **kw:{('/item', other)},
             _CONTACT_VIEW={0:view}, _PATH_TO_ROW_IDX={0:{'/item':0}},
             _PATH_TO_COL_IDX={0:{other:0}})
@@ -51,3 +53,12 @@ class PlacementContactPolicy(unittest.TestCase):
         self.assertFalse(self.report(0., no_points=True, allow_sleeping=True)['admissible'])
         self.assertFalse(self.report(-.04, sleeping=True, allow_sleeping=True)['admissible'])
         self.assertFalse(self.report(0., truncated=True, sleeping=True, allow_sleeping=True)['admissible'])
+
+    def test_cached_stationary_pair_requires_no_fresh_force_and_final_resting_check(self):
+        self.assertFalse(self.report(0.,no_points=True,fresh_force=[0.,0.,0.])['admissible'])
+        result=self.report(0.,no_points=True,allow_sleeping=True,fresh_force=[0.,0.,0.])
+        self.assertTrue(result['admissible'])
+        self.assertEqual(result['cached_pairs_without_current_force'],[['/item','/support']])
+        self.assertFalse(self.report(0.,no_points=True,allow_sleeping=True,fresh_force=[0.,0.,.001])['admissible'])
+        self.assertFalse(self.report(0.,no_points=True,allow_sleeping=True,fresh_force=[float('nan'),0.,0.])['admissible'])
+        self.assertFalse(self.report(-.04,allow_sleeping=True,fresh_force=[0.,0.,0.])['admissible'])

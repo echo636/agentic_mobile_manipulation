@@ -30,6 +30,7 @@ def contact_report(backend, held, payload=(), *, allow_sleeping=False):
     report = {'admissible': True, 'contact_bodies': sorted({b for _, b in external}),
               'contact_points': 0, 'minimum_separation_m': None,
               'sleeping_pairs_without_current_points': [],
+              'cached_pairs_without_current_force': [],
               'max_penetration_m': 0., 'penetration_limit_m': MAX_PLACEMENT_PENETRATION_M}
     if not external:
         return report
@@ -46,6 +47,18 @@ def contact_report(backend, held, payload=(), *, allow_sleeping=False):
             if count == 0 and allow_sleeping and bool(getattr(links[a], 'is_asleep', False)):
                 report['sleeping_pairs_without_current_points'].append([a, b])
                 continue
+            if count == 0 and allow_sleeping:
+                # OG's "current" pair cache retains the last awake contact
+                # for motionless bodies, independently of PhysX is_sleeping.
+                # A cached pair with no fresh force AND no fresh manifold is
+                # not evidence of an unmeasured new penetration. This path is
+                # restricted to the final resting/support check; admission of
+                # a newly teleported pose still requires measured separation.
+                fresh = view.get_contact_force_matrix(dt=backend.og.sim.get_physics_dt())[row, col]
+                values = fresh.flatten().tolist()
+                if values and all(math.isfinite(float(v)) and float(v) == 0. for v in values):
+                    report['cached_pairs_without_current_force'].append([a, b])
+                    continue
             if count <= 0 or start < 0 or start+count > len(separations):
                 raise ValueError('Missing or truncated contact separations')
             values = separations[start:start+count].flatten()
@@ -60,6 +73,8 @@ def contact_report(backend, held, payload=(), *, allow_sleeping=False):
                           admissible=minimum >= -MAX_PLACEMENT_PENETRATION_M)
         if report['sleeping_pairs_without_current_points']:
             report['evidence'] = 'cached_sleeping_contact_with_separate_resting_support_check'
+        if report['cached_pairs_without_current_force']:
+            report['evidence'] = 'cached_pair_without_fresh_force_with_separate_resting_support_check'
         if not report['admissible']:
             report['reason'] = 'deep_penetration'
     except (AttributeError, KeyError, IndexError, RuntimeError, ValueError) as exc:
