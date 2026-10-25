@@ -1,7 +1,6 @@
 """Receiving poses for actual convex macro-particle colliders, not outer spheres."""
 import math
 import time
-import uuid
 
 
 def convex_sphere_overlap(mesh, equations, centers, radii):
@@ -21,16 +20,16 @@ def convex_sphere_overlap(mesh, equations, centers, radii):
 def macro_receiving_poses(scene, destination, system, limit, *, diagnostics):
     """Query the same convex mesh geometry used by native macro rigid bodies.
 
-    A temporary invisible mesh supplies hypothetical poses to PhysX queries.
-    It has no collision/rigid-body API, never enters an object registry, and is
-    removed before physics advances. Micro particles need explicit sphere/mesh
-    tests because PhysX scene queries do not include their PBD shapes.
+    Borrow the existing, nonphysical visual template for hypothetical queries
+    and restore its pose/scale before any physics. Adding or deleting even an
+    unregistered USD mesh invalidates articulation views in the pinned engine.
+    Micro particles need explicit sphere/mesh tests because PhysX scene queries
+    do not include their PBD shapes.
     """
     import numpy as np
     import torch
     import trimesh
     from scipy.spatial import ConvexHull
-    import omnigibson as og
     from omnigibson import lazy
     from omnigibson.object_states import ContainedParticles
     from omnigibson.utils import transform_utils as T
@@ -63,20 +62,13 @@ def macro_receiving_poses(scene, destination, system, limit, *, diagnostics):
     micro_centers = np.asarray(micro_centers).reshape(-1, 3)
     micro_radii = np.asarray(micro_radii)
     query = lazy.omni.physx.get_physx_scene_query_interface()
-    proxy_path = '/World/mas_material_query_' + uuid.uuid4().hex
+    template_pose = tuple(x.clone() for x in template.get_position_orientation())
+    template_scale = template.scale.clone()
     accepted, accepted_rotations = [], []
     deadline = time.monotonic() + 15.
     try:
-        with og.sim.editing_usd():
-            proxy = lazy.pxr.UsdGeom.Mesh.Define(og.sim.stage, proxy_path)
-            proxy.CreatePointsAttr().Set(points.tolist())
-            proxy.CreateFaceVertexCountsAttr().Set([3] * len(hull.simplices))
-            proxy.CreateFaceVertexIndicesAttr().Set(hull.simplices.flatten().tolist())
-            proxy.CreateVisibilityAttr().Set('invisible')
-            transform = lazy.pxr.UsdGeom.Xformable(proxy.GetPrim())
-            translate = transform.AddTranslateOp()
-            orient = transform.AddOrientOp(lazy.pxr.UsdGeom.XformOp.PrecisionFloat)
-        encoded = lazy.pxr.PhysicsSchemaTools.encodeSdfPath(lazy.pxr.Sdf.Path(proxy_path))
+        template.scale = template_scale * system.max_scale
+        encoded = lazy.pxr.PhysicsSchemaTools.encodeSdfPath(lazy.pxr.Sdf.Path(template.prim_path))
         for euler in ((0., 0., 0.), (math.pi/2, 0., 0.), (0., math.pi/2, 0.),
                       (-math.pi/2, 0., 0.), (0., -math.pi/2, 0.), (math.pi, 0., 0.)):
             quaternion = T.euler2quat(torch.tensor(euler, dtype=torch.float32))
@@ -114,10 +106,9 @@ def macro_receiving_poses(scene, destination, system, limit, *, diagnostics):
                     if blocked:
                         # An enclosing box is only a fast clearance proof.
                         # Its overlap must be refined using the real hull.
-                        with og.sim.editing_usd():
-                            translate.Set(lazy.pxr.Gf.Vec3d(*map(float, center)))
-                            x,y,qz,w = map(float, quaternion.tolist())
-                            orient.Set(lazy.pxr.Gf.Quatf(w, lazy.pxr.Gf.Vec3f(x,y,qz)))
+                        origin = center - rotation @ system._particle_offset.cpu().numpy()
+                        template.set_position_orientation(
+                            torch.as_tensor(origin, dtype=torch.float32), quaternion)
                         blocked = query.overlap_mesh_any(*encoded)
                     if not blocked:
                         accepted.append(center.copy())
@@ -132,8 +123,8 @@ def macro_receiving_poses(scene, destination, system, limit, *, diagnostics):
         diagnostics['termination'] = 'candidate_poses_exhausted'
         return _pose_result(accepted, accepted_rotations)
     finally:
-        with og.sim.editing_usd():
-            og.sim.stage.RemovePrim(proxy_path)
+        template.scale = template_scale
+        template.set_position_orientation(*template_pose)
 
 
 def _pose_result(positions, orientations):
