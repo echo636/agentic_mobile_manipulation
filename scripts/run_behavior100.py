@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import now, write_json, read_run, source_version
 from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
+from manipulation_agent.batch_lifecycle import ExecutionCapacity, FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
 from manipulation_agent.startup_progress import STARTUP_POLICY, startup_progress_update
 from manipulation_agent.startup_logs import startup_reader_code
 from manipulation_agent.closure import closure_watchdog
@@ -1552,7 +1552,12 @@ class Batch:
         for row in selected:self.queue.put(row)
         archived=[];archive_lock=threading.Lock();active_assignments=set();host_cooldowns={}
         archive_slots=threading.BoundedSemaphore(self._config.get('max_pending_archives',4))
-        capacity=threading.BoundedSemaphore(self._config.get('max_active_workers',len(self.workers)))
+        inherited=[r for r in self.rows if
+            (r['status']=='running' or (r.get('simulator_cleanup') or {}).get('status')=='blocked') and
+            r['run_id'] in self._config.get('adopt_inflight',{}) and
+            not (r.get('execution_finished_at') and (r.get('simulator_cleanup') or {}).get('status')=='passed')]
+        capacity=ExecutionCapacity(self._config.get('max_active_workers',len(self.workers)),
+                                   [r['run_id'] for r in inherited])
         poll=self._config.get('resource_poll_seconds',30)
         def work_pending():
             # Keep other candidates alive while the last queued task is in
@@ -1567,9 +1572,7 @@ class Batch:
         def worker(config):
             self._worker_local.config=config;self._worker_local.defer_archive=True
             time.sleep(config.get('admission_delay_seconds',0))
-            inflight=[r for r in self.rows if (r['status']=='running' or (r.get('simulator_cleanup') or {}).get('status')=='blocked') and
-                self._config.get('adopt_inflight',{}).get(r['run_id'])==config['id'] and
-                not (r.get('execution_finished_at') and (r.get('simulator_cleanup') or {}).get('status')=='passed')]
+            inflight=[r for r in inherited if self._config['adopt_inflight'][r['run_id']]==config['id']]
             while inflight or work_pending():
                 adopting=inflight[0] if inflight else None
                 if not adopting and self.drain_requested():
@@ -1580,7 +1583,8 @@ class Batch:
                     time.sleep(poll);continue
                 if not adopting and getattr(self,'storage',None) and self.storage.status()['local_checkpoint_error']:
                     self.worker_state('waiting_for_local_storage');time.sleep(poll);continue
-                if not capacity.acquire(blocking=False):
+                capacity_key=adopting['run_id'] if adopting else config['id']
+                if not capacity.acquire(capacity_key,adopting=adopting is not None):
                     self.worker_state('waiting_for_capacity');time.sleep(poll);continue
                 lease=None;row=None;paths=None;cleared=True
                 try:
@@ -1626,7 +1630,8 @@ class Batch:
                         if row is not None:self.update(row,lease_metadata_cleanup_error=f'{type(exc).__name__}: {exc}')
                         self.journal('LEASE METADATA CLEANUP '+config['id']+': '+str(exc))
                     finally:
-                        self._worker_local.lease=None;self.release_startup_gate();capacity.release()
+                        self._worker_local.lease=None;self.release_startup_gate()
+                        capacity.release(capacity_key,preserve=adopting is not None and adopting in inflight)
                     if row is None:time.sleep(poll)
                 # GPU and host capacity are free before any bulk copy or decode.
                 if row is not None:
