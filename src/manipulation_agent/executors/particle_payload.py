@@ -187,6 +187,55 @@ def relocate_particles(scene, payload):
         view.set_velocities(velocities, indices=all_indices)
 
 
+def particle_link_motion(payload):
+    """Select only material whose owning frame was moved by an ideal setter.
+
+    Opening an outer door does not transport every grain stored in its body.
+    Conversely a translating drawer (including nested vessels) must move its
+    existing material with it. Quaternion sign changes are the same pose.
+    """
+    import torch
+    before = {id(record.link): tuple(v.clone() for v in record.link.get_position_orientation())
+              for record in payload}
+
+    def moved():
+        changed = set()
+        for record in payload:
+            position, orientation = record.link.get_position_orientation()
+            old_position, old_orientation = before[id(record.link)]
+            rotation_delta = min(float(torch.linalg.vector_norm(orientation - old_orientation)),
+                                 float(torch.linalg.vector_norm(orientation + old_orientation)))
+            if float(torch.linalg.vector_norm(position - old_position)) > 1e-5 or rotation_delta > 1e-5:
+                changed.add(id(record.link))
+        return [record for record in payload if id(record.link) in changed]
+    return moved
+
+
+def particle_containment_observation(scene, payload, outer=None):
+    """Private post-physics evidence; never changes particles or evaluation."""
+    from omnigibson.object_states import ContainedParticles
+    outer_state = getattr(outer, 'states', {}).get(ContainedParticles)
+    rows = []
+    for record in payload:
+        try:
+            indices = _indices(scene, record)
+        except SkillError as exc:
+            # Background material may legitimately cook or mix while the
+            # door moves. Telemetry must not turn that into an action guard.
+            rows.append({'container': record.container.name, 'material': record.system.name,
+                         'captured_particles': len(record.paths), 'identity_status': exc.code})
+            continue
+        centers = record.system.get_particles_position_orientation()[0][indices]
+        inside = record.link.check_points_in_volume(centers)
+        rows.append({'container': record.container.name, 'link': record.link.prim_path,
+                     'material': record.system.name, 'captured_particles': len(indices),
+                     'particles_in_owner_volume': int(inside.sum()),
+                     'outside_owner_positions': centers[~inside][:5].tolist(),
+                     'particles_in_outer_volume': (int(outer_state.link.check_points_in_volume(centers).sum())
+                                                   if outer_state is not None else None)})
+    return rows
+
+
 def particle_bounds(scene, payload):
     """World envelopes of captured collision spheres, with identity checks."""
     result = []

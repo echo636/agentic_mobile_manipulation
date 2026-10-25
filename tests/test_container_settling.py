@@ -17,6 +17,8 @@ class ContainerSettlingTests(unittest.TestCase):
                 pass
         box, child = Body(0.), Body(1.)
         backend = RGBBackend.__new__(RGBBackend)
+        backend.steps = 0
+        backend._complete_pending_object_initialization = None
         backend._performance_write_failed = True
         backend._get_held = lambda: None
         backend._anchored_operation = lambda: nullcontext()

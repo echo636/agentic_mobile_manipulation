@@ -142,7 +142,9 @@ class ControlledCarry(CompactCarry):
         # Open.set_value teleports articulated joints. Drawer contents must move
         # with their supporting volume, not be left at the previous world pose.
         payload=self._container_payload(obj) if state is Open else []
-        particles=snapshot_particles(self.env.scene,[obj]) if state is Open else []
+        particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in payload]]) if state is Open else []
+        from .particle_payload import particle_link_motion, particle_containment_observation
+        moved_particles=particle_link_motion(particles)
         edit=self._editable_carry_joints(obj) if state is Open else nullcontext()
         settling=self._settling_container_contents() if state is Open else nullcontext()
         prepared=getattr(getattr(self,'_local_operation',None),'articulation_plan',None) if state is Open else None
@@ -184,7 +186,12 @@ class ControlledCarry(CompactCarry):
                 accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
             if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
             self._relocate_container_payload(payload)
-            relocate_particles(self.env.scene,particles)
+            transported_particles=moved_particles()
+            # A door setter moves only its articulated support frames. Leave
+            # material in stationary shelves/bottles to ordinary physics rather
+            # than resetting its velocities or demanding zero natural settling.
+            relocate_particles(self.env.scene,transported_particles)
+            verify_particles(self.env.scene,transported_particles)
             capture('after_setter')
             for step in range(min(30,max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
@@ -194,7 +201,15 @@ class ControlledCarry(CompactCarry):
                        payload=[child.name for child,_,_ in payload])
                 raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
             self._verify_container_payload(obj,payload)
-            verify_particles(self.env.scene,particles)
+            if particles:
+                self._placement_record({'status':'articulation_particle_settle',
+                    'target':obj.name,'primitive':primitive,
+                    'transported_particles':particle_count(transported_particles),
+                    'particles':particle_containment_observation(self.env.scene,particles,outer=obj)})
+            # Still require containment for material this setter actually
+            # transported. Unmoved background material is not an open/close
+            # postcondition and is never restored to conceal its real settling.
+            verify_particles(self.env.scene,transported_particles)
             report('passed',payload=[child.name for child,_,_ in payload])
         return {'primitive':primitive,'implementation':'transactional_official_state_setter_with_link_payload',
                 'fully_open_or_closed':primitive=='close','opening_policy':'largest_checked_usable_endpoint' if primitive=='open' else None,

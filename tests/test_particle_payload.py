@@ -90,6 +90,23 @@ class ParticlePayloadTests(unittest.TestCase):
         with self.assertRaises(SkillError):
             particle_bounds(self.scene, payload)
 
+    def test_stationary_vessel_does_not_ride_outer_door_but_moving_drawer_does(self):
+        from manipulation_agent.executors.particle_payload import particle_link_motion
+        particles = snapshot_particles(self.scene, [self.bag])
+        moved = particle_link_motion(particles)
+        self.assertEqual(moved(), [])
+        # A serializer may flip quaternion signs without moving the vessel.
+        self.pose[1] *= -1
+        self.assertEqual(moved(), [])
+        before = self.raw.clone()
+        self.pose[0][0] += .3
+        transferred = moved()
+        self.assertEqual(len(transferred), 1)
+        relocate_particles(self.scene, transferred)
+        self.torch.testing.assert_close(self.raw[0, :3], before[0, :3] + self.torch.tensor([.3, 0., 0.]))
+        self.torch.testing.assert_close(self.raw[1], before[1])
+        verify_particles(self.scene, transferred)
+
     def test_bag_support_does_not_substitute_for_destination_containment(self):
         self.surface_scene()
         payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
