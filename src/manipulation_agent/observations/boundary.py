@@ -52,7 +52,7 @@ ERROR_MESSAGES = {
     "episode_timeout":"The episode wall-clock deadline has expired; no further action can start.",
     "episode_cancelled":"Episode closure was requested; the active action stopped before final scoring.",
     "sampling_budget_exhausted":"The executor exhausted its placement sampling budget.",
-    "unsupported_relation":"The selected object does not support this placement or attachment operation.",
+    "unsupported_relation":"The selected objects do not support the requested operation.",
 }
 
 # Only fixed stages/messages cross the RGB boundary; exception text and private
