@@ -426,8 +426,8 @@ class Batch:
     def unit_state(self, unit):
         try:
             p=self.ssh(['systemctl','--user','show',unit,'-p','ActiveState','-p','MainPID','-p','ExecMainStatus','-p','Result','-p','Description','-p','MemoryPeak'])
-        except subprocess.TimeoutExpired:
-            return {'query_status':'unavailable','reason':'ssh_timeout'}
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            return {'query_status':'unavailable','reason':type(exc).__name__}
         if p.returncode:
             return {'query_status':'unavailable','returncode':p.returncode}
         return dict(line.split('=',1) for line in p.stdout.splitlines() if '=' in line)
@@ -441,6 +441,46 @@ class Batch:
             self.journal({'event':'startup_unit_query_unavailable','unit':unit,'query':state})
             return None
         return state
+
+    def confirm_simulator_launch(self, row, launch):
+        """Reconcile a lost launch reply without launching the episode twice."""
+        try:
+            response=self.ssh(launch)
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            response=None
+            self.update(row,launch_acknowledgment={'status':'unavailable','reason':type(exc).__name__})
+        else:
+            (self.root/'logs'/f"{row['run_id']}_launch.log").write_text(response.stdout+response.stderr)
+            if response.returncode not in (0,255):
+                raise RuntimeError('Simulator unit launch failed')
+        while True:
+            state=self.unit_state(row['simulator_unit'])
+            if state.get('ActiveState') in {'active','activating','deactivating'}:
+                if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}":
+                    raise RuntimeError('Simulator launch ownership mismatch')
+                if int(state.get('MainPID') or 0)>0:
+                    self.update(row,launch_acknowledgment={'status':'passed',
+                        'recovered_missing_reply':response is None or response.returncode!=0})
+                    return state
+            if state.get('Description')==f"BEHAVIOR100 owned {row['run_id']}" and state.get('ActiveState') in {'inactive','failed'}:
+                raise RuntimeError('Owned simulator exited during launch: '+str(state))
+            # A lost SSH reply does not prove the remote systemd request failed.
+            # Keep the declared unit leased until confirmed or its existing
+            # initialization watchdog expires; never resend the launch blindly.
+            if time.time()>=row['startup_deadline_unix']:
+                raise TimeoutError('Simulator launch could not be confirmed before startup watchdog expiry')
+            self.journal({'event':'launch_confirmation_pending','unit':row['simulator_unit'],'query':state})
+            time.sleep(4)
+
+    def adopted_unit_state(self, row):
+        """Unavailable transport cannot be interpreted as an absent process."""
+        while True:
+            state=self.unit_state(row['simulator_unit'])
+            if state.get('ActiveState') in {'active','activating','deactivating','inactive','failed'}:
+                return state
+            self.update(row,adoption_transport={'status':'unavailable','at':now(),'query':state})
+            self.journal({'event':'adoption_waiting_for_unit_query','run_id':row['run_id']})
+            time.sleep(4)
 
     def health(self, port):
         # This is an observation, not a simulator operation. Failure to obtain
@@ -922,12 +962,14 @@ class Batch:
             evidence_error=type(exc).__name__
         status=metadata.get('status')
         if status in {None,'running'}:
-            status='terminated' if row.get('controller_cleanup') else 'exited_without_final_metadata'
+            status=('not_started' if not metadata and not row.get('controller_wrapper_pid') and not row.get('controller_pid')
+                    else 'terminated' if row.get('controller_cleanup') else 'exited_without_final_metadata')
         fields={'controller_pid':metadata.get('pid'),'controller_status':status,
                 'controller_timeout':bool(metadata.get('timeout')),
                 'model_duration_seconds':metadata.get('duration_seconds'),
                 'controller_finish_acknowledged':receipt}
         self.update(row,**fields)
+        controller.mkdir(parents=True,exist_ok=True)
         write_json(controller/'controller_closure.json',{
             'at':now(),'formal_finish_observed':receipt,'process_status':status,
             'exit_code':metadata.get('exit_code'),'cleanup':row.get('controller_cleanup'),
@@ -1099,16 +1141,13 @@ class Batch:
                         cleanup_grace_seconds=grace,port=port,simulator_interpreter=self.c['sim_python'],
                         source=getattr(self,'source_info',None) or source_version())
             launch_requested=True
-            response=self.ssh(launch)
-            (self.root/'logs'/f'{runid}_launch.log').write_text(response.stdout+response.stderr)
-            if response.returncode:raise RuntimeError('Simulator unit launch failed')
+            state=self.confirm_simulator_launch(row,launch)
             own_unit=True
             # The shared lease already publishes the starting unit and its
             # estimate. Other coordinators can now admit another initialization.
             if self._config.get('memory_admission_profile')=='throughput':
                 self.release_startup_gate()
             check=getattr(self._worker_local,'admission',{})
-            state=self.unit_state(unit)
             self.update(row,stage='simulator_starting',simulator_owned=True,simulator_pid=int(state.get('MainPID',0)),
                 gpu_uuid=check.get('gpu_uuid',self.c.get('expected_gpu_uuid')),simulator_host=check.get('host'),
                 simulator_interpreter=self.c['sim_python'],source=getattr(self,'source_info',None) or source_version(),
@@ -1319,7 +1358,16 @@ class Batch:
     def adopt_one(self, row):
         """Resume supervision of this exact attempt; never restart its model."""
         controller=Path(row['controller_output']);remote_run=Path(row['simulator_output'])
-        state=self.unit_state(row['simulator_unit']);process=None;metadata={}
+        if (row.get('stage')=='asset_preflight' and not row.get('simulator_started_at_unix')
+                and not row.get('controller_wrapper_pid') and not row.get('controller_pid')):
+            # Restart interrupted only a read-only asset check. No launch was
+            # submitted, so there is no simulator/controller to finish or stop.
+            self.update(row,status='planned',stage='queued',
+                prelaunch_coordinator_recovery={'at':now(),'previous_stage':'asset_preflight'})
+            self.queue.put(row)
+            self.journal('REQUEUE PRELAUNCH '+row['run_id']+'; no simulator or model had been launched.')
+            return None
+        state=self.adopted_unit_state(row);process=None;metadata={}
         if state.get('ActiveState') in {'active','activating','deactivating'}:
             if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}":
                 raise RuntimeError('Inflight simulator ownership check failed')

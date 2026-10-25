@@ -70,6 +70,57 @@ class LifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'immutable'):
                 b.controller_directory('run2')
 
+    def test_lost_launch_reply_recovers_same_owned_unit_without_resending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b.ssh=Mock(side_effect=subprocess.TimeoutExpired('launch',40))
+            b.unit_state=Mock(side_effect=[{'query_status':'unavailable'},
+                {'ActiveState':'active','MainPID':'123','Description':'BEHAVIOR100 owned same-run'}])
+            row={'run_id':'same-run','simulator_unit':'same.service','startup_deadline_unix':time.time()+60}
+            with patch.object(batch.time,'sleep'):
+                result=b.confirm_simulator_launch(row,['systemd-run','same.service'])
+            self.assertEqual(result['MainPID'],'123')
+            self.assertTrue(row['launch_acknowledgment']['recovered_missing_reply'])
+            b.ssh.assert_called_once()
+
+    def test_launch_confirmation_does_not_accept_foreign_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b.ssh=Mock(side_effect=subprocess.TimeoutExpired('launch',40))
+            b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123','Description':'foreign'})
+            row={'run_id':'same-run','simulator_unit':'same.service','startup_deadline_unix':time.time()+60}
+            with self.assertRaisesRegex(RuntimeError,'ownership mismatch'):
+                b.confirm_simulator_launch(row,['systemd-run','same.service'])
+
+    def test_adoption_waits_for_known_unit_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b.unit_state=Mock(side_effect=[{'query_status':'unavailable'},
+                {'ActiveState':'active','MainPID':'123'}])
+            row={'run_id':'original','simulator_unit':'same.service'}
+            with patch.object(batch.time,'sleep'):
+                self.assertEqual(b.adopted_unit_state(row)['MainPID'],'123')
+
+    def test_restart_during_prelaunch_requeues_without_stopping_or_scoring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp);b.unit_state=Mock();b.cleanup_owned_unit=Mock();b.record_controller_end=Mock()
+            row={'run_id':'original','status':'running','stage':'asset_preflight',
+                'controller_output':str(Path(tmp)/'never-started'),'simulator_output':str(Path(tmp)/'episode')}
+            self.assertIsNone(b.adopt_one(row))
+            self.assertEqual(row['status'],'planned')
+            self.assertIs(b.queue.get_nowait(),row)
+            b.unit_state.assert_not_called();b.cleanup_owned_unit.assert_not_called();b.record_controller_end.assert_not_called()
+            self.assertNotIn('task_success',row)
+
+    def test_controller_not_started_can_record_closure_without_a_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp);b.manifest={}
+            row={'run_id':'original'};controller=Path(tmp)/'not-created'
+            b.record_controller_end(row,controller,{})
+            record=json.loads((controller/'controller_closure.json').read_text())
+            self.assertEqual(record['process_status'],'not_started')
+            self.assertFalse(record['formal_finish_observed'])
+
     def test_health_transport_failure_does_not_close_live_episode(self):
         with tempfile.TemporaryDirectory() as tmp:
             for error in (subprocess.TimeoutExpired('ssh-health',40),OSError('unavailable')):
@@ -486,10 +537,12 @@ class LifecycleTests(unittest.TestCase):
     def test_ambiguous_remote_launch_still_attempts_owned_cleanup(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp,1)
+            b.storage=Mock(spool=Path(tmp))
             for d in ('logs','preflight','launchers'):(Path(tmp)/d).mkdir()
             b.source=Path('/source');b.source_info={'commit':'fixture'}
             b._config.update(id='a',gpu=0,ssh=['ssh','host'],base_port=31000,batch_tag='test',
-                             data_root='/fixture',sim_python='/fixture/python',sim_env='/fixture/env')
+                             data_root='/fixture',sim_python='/fixture/python',sim_env='/fixture/env',
+                             startup_timeout_seconds=0)
             b.manifest={};b.unit_state=Mock(return_value={'ActiveState':'inactive','MainPID':'0'})
             def ssh(args,**kwargs):
                 if 'assets' in args:return subprocess.CompletedProcess(args,0,'{"status":"passed"}','')
