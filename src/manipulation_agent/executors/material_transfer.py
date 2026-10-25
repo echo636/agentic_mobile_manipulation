@@ -95,13 +95,18 @@ def free_volume_positions(scene, destination, system, limit, *, diagnostics=None
     return empty()
 
 
-def move_particle_centers(system, indices, positions):
+def move_particle_centers(system, indices, positions, orientations=None):
     """Translate selected existing particles without changing count or identity."""
     import torch
     view = physical_particle_view(system)
     transforms = view.get_transforms().clone()
     centers = system.get_particles_position_orientation()[0]
-    transforms[indices, :3] += positions - centers[indices]
+    if orientations is None:
+        transforms[indices, :3] += positions - centers[indices]
+    else:
+        from omnigibson.utils import transform_utils as T
+        transforms[indices, :3] = positions - T.quat2mat(orientations) @ system._particle_offset
+        transforms[indices, 3:] = orientations
     velocities = view.get_velocities().clone()
     velocities[indices] = 0
     all_indices = torch.arange(len(transforms), device=transforms.device)
@@ -199,6 +204,16 @@ class CheckedMaterialTransfer:
                 self._placement_record({'status': 'material_volume_sampling', 'primitive': primitive,
                     'source': source.name, 'destination': destination.name, 'material': name,
                     'accepted': len(positions), **sampling})
+                orientations = None
+                if (not len(positions) and not generating and available
+                        and getattr(system, 'particles_view', None) is not None):
+                    from .material_geometry import macro_receiving_poses
+                    geometry = {}
+                    positions, orientations = macro_receiving_poses(
+                        scene, destination, system, min(512, available), diagnostics=geometry)
+                    self._placement_record({'status': 'material_geometry_sampling', 'primitive': primitive,
+                        'source': source.name, 'destination': destination.name, 'material': name,
+                        'accepted': len(positions), **geometry})
                 if not len(positions):
                     continue
                 before = int(system.n_particles)
@@ -211,7 +226,7 @@ class CheckedMaterialTransfer:
                                if path not in old_paths]
                 else:
                     indices = selected[:len(positions)]
-                    move_particle_centers(system, indices, positions)
+                    move_particle_centers(system, indices, positions, orientations)
                     if int(system.n_particles) != before:
                         raise SkillError('execution_error', 'Transfer unexpectedly changed the material count', changed=True)
                 centers = system.get_particles_position_orientation()[0][indices]
