@@ -82,15 +82,21 @@ class CatalogRGBBackend(RGBBackend):
 
     def _load_catalog_environment(self, config):
         from .articulation_sleep import ArticulationSleepPolicy
+        from .macro_particle_size import MacroParticleSizePolicy
         self._articulation_sleep_policy = ArticulationSleepPolicy(gpu_dynamics=self.use_gpu_dynamics)
         try:
+            self._macro_particle_size_policy = MacroParticleSizePolicy()
             self._load_catalog_environment_with_sleep_policy(config)
             self._articulation_sleep_policy.validate_scene(self.env.scene)
         except BaseException:
             self._articulation_sleep_policy.close()
+            if getattr(self, '_macro_particle_size_policy', None) is not None:
+                self._macro_particle_size_policy.close()
             raise
         finally:
             write_json(self.output / 'articulation_sleep_policy.json', self._articulation_sleep_policy.describe())
+            if getattr(self, '_macro_particle_size_policy', None) is not None:
+                write_json(self.output / 'macro_particle_size_policy.json', self._macro_particle_size_policy.describe())
 
     def _load_catalog_environment_with_sleep_policy(self, config):
         # Challenge-100 teleoperation disables several system cooking/mixing
@@ -139,11 +145,13 @@ class CatalogRGBBackend(RGBBackend):
         result = super().provenance()
         result.update(catalog_task=True, evaluator='official_BehaviorTask_BDDL_conditions',
                       transition_policy='official_simulator_defaults_without_challenge100_teleop_rule_suppression',
-                      articulation_sleep_policy=self._articulation_sleep_policy.describe())
+                      articulation_sleep_policy=self._articulation_sleep_policy.describe(),
+                      macro_particle_size_policy=self._macro_particle_size_policy.describe())
         return result
 
     def close(self):
         policy = getattr(self, '_articulation_sleep_policy', None)
+        particle_policy = getattr(self, '_macro_particle_size_policy', None)
         try:
             if policy is not None:
                 write_json(self.output / 'articulation_sleep_policy.json', policy.describe())
@@ -151,3 +159,5 @@ class CatalogRGBBackend(RGBBackend):
         finally:
             if policy is not None:
                 policy.close()
+            if particle_policy is not None:
+                particle_policy.close()
