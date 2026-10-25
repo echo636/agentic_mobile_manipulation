@@ -966,16 +966,27 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                 raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
                 support=self._navigation_support,
                 layer_footprints_json=json.dumps(map_details['collision_layers']))
-            with component(self,'navigation_route_selection'):
-                plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
-                    target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
-                    project_point=mode=='point',allow_lateral=allow_lateral,
-                    planning_seconds=getattr(self,'forward_route_planning_seconds',10.))
             from .navigation_refinement import refine_navigation_detour
+            # A coarse guide that goes around the house can exhaust continuous
+            # route certification before a post-selection refinement is reached.
+            # Try native local geometry first, keeping ordinary route selection
+            # as the fallback if no improved certified route is found.
             with component(self,'navigation_detour_refinement'):
                 grid,map_details,plan,prepared_route,endpoint_collision,selection,detour=refine_navigation_detour(
                     self,floor,grid,map_details,(*initial_xy,travel_yaw),
-                    options,plan,prepared_route,endpoint_collision,selection)
+                    options,plan,None,endpoint_collision,{})
+            if prepared_route is None:
+                if detour is not None:details['guide_refinement']=detour
+                with component(self,'navigation_route_selection'):
+                    plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
+                        target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
+                        project_point=mode=='point',allow_lateral=allow_lateral,
+                        planning_seconds=getattr(self,'forward_route_planning_seconds',10.))
+                if detour is None:
+                    with component(self,'navigation_detour_refinement'):
+                        grid,map_details,plan,prepared_route,endpoint_collision,selection,detour=refine_navigation_detour(
+                            self,floor,grid,map_details,(*initial_xy,travel_yaw),
+                            options,plan,prepared_route,endpoint_collision,selection)
             if detour is not None:
                 details['detour_refinement']=detour
                 if detour['status']=='refined_route_selected':

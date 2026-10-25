@@ -10,14 +10,19 @@ from manipulation_agent.executors.navigation_refinement import refine_navigation
 
 class DetourFallbackTests(unittest.TestCase):
     def test_failed_fine_search_restores_all_execution_geometry(self):
+        self.check_failed_refinement(SimpleNamespace(distance_m=20., estimated_motion_seconds=45.))
+
+    def test_failed_refinement_before_certification_returns_uncertified_guide(self):
+        self.check_failed_refinement(None)
+
+    def check_failed_refinement(self, route):
         original = {name: object() for name in ('_navigation_layers', '_navigation_support',
                     '_navigation_clearance', '_navigation_layer_yaw')}
         backend = SimpleNamespace(**original, robot=SimpleNamespace(is_holonomic_base=False),
                                   deadline=SimpleNamespace(check=lambda: None), output=Path('/unused'))
         coarse = SimpleNamespace(resolution=.05)
         detail = {'coarse': True}
-        plan = SimpleNamespace(goal=(2., 0.), final_yaw=0., score=0.)
-        route = SimpleNamespace(distance_m=20., estimated_motion_seconds=45.)
+        plan = SimpleNamespace(goal=(2., 0.), final_yaw=0., score=0., geodesic_m=20.)
         collision, selection = object(), object()
         def build(*args, **kwargs):
             for name in original:

@@ -45,14 +45,16 @@ def refine_navigation_detour(backend, floor, grid, map_details, actual,
     swept body/payload checks retain their normal semantics.
     """
     direct = math.dist(actual[:2], plan.goal)
-    if route.distance_m <= max(3*direct, direct+4.) or grid.resolution <= .0125:
+    coarse_distance = route.distance_m if route is not None else plan.geodesic_m
+    if coarse_distance <= max(3*direct, direct+4.) or grid.resolution <= .0125:
         return grid, map_details, plan, route, collision, selection, None
     from .live_gt_map import build_navigation_grid
     attributes = ('_navigation_layers', '_navigation_support', '_navigation_clearance',
                   '_navigation_layer_yaw')
     original = {key: getattr(backend, key) for key in attributes}
     accepted = False
-    record = {'reason': 'long_coarse_grid_detour', 'coarse_distance_m': route.distance_m,
+    record = {'reason': 'long_coarse_grid_detour' if route is not None else 'long_coarse_grid_guide',
+              'coarse_distance_m': coarse_distance,
               'direct_distance_m': direct, 'coarse_resolution_m': grid.resolution,
               'attempts': [], 'status': 'kept_coarse_route'}
     allow_lateral = bool(getattr(backend.robot, 'is_holonomic_base', False))
@@ -107,8 +109,9 @@ def refine_navigation_detour(backend, floor, grid, map_details, actual,
                     check_cancelled=budget.check, planning_seconds=10., allow_lateral=allow_lateral)
                 row.update(distance_m=refined_route.distance_m,
                            motion_seconds=refined_route.estimated_motion_seconds)
-                if (refined_route.distance_m >= route.distance_m-.5 or
-                        refined_route.estimated_motion_seconds >= route.estimated_motion_seconds):
+                if (refined_route.distance_m >= coarse_distance-.5 or
+                        (route is not None and
+                         refined_route.estimated_motion_seconds >= route.estimated_motion_seconds)):
                     row.update(status='rejected', reason='no_motion_improvement')
                     continue
                 entry, departure = next(value for pose, value in certificates.items()
