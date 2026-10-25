@@ -125,6 +125,12 @@ class ControlledCarry(CompactCarry):
                 self._object_anchor=None
                 self.frames_revision=-1
                 return
+            # The scene's fixed-base constraint already holds this root.
+            # Rewriting an articulated root and zeroing its velocities around
+            # every physics step can invalidate the native GPU solver state.
+            # Let its door joints settle under their existing constraints.
+            if obj.fixed_base:
+                return
             obj.set_position_orientation(*pose);obj.keep_still()
 
     def _ideal_state_action(self, primitive, obj, max_steps):
