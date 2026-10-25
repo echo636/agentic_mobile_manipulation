@@ -153,6 +153,14 @@ command = "ignored"
             self.assertEqual(continued.native_sessions, isolated.native_sessions)
             self.assertEqual(continued.client_storage, isolated.client_storage)
             self.assertEqual(continued.mcp_prefix, prefix)
+            forked = adapter.prepare_fork(isolated, thread_id, 'Continue from RGB.')
+            expected = [*prefix, '--', *resumed.argv]
+            expected[len(prefix) + 3] = 'fork'
+            self.assertEqual(forked.argv, expected)
+            self.assertEqual(forked.native_sessions, isolated.native_sessions)
+            self.assertEqual(forked.client_storage, isolated.client_storage)
+            self.assertEqual(forked.env_overlay, isolated.env_overlay)
+            self.assertEqual(forked.cwd, continued.cwd)
 
     def test_codex_resume_retains_isolated_native_session_mount(self):
         with tempfile.TemporaryDirectory() as folder:

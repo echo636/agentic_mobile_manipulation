@@ -1178,6 +1178,8 @@ class Batch:
             if self.c.get('provider_transient_resumes'):
                 cmd += ['--rate-limit-resumes',str(self.c['provider_transient_resumes']),
                         '--resume-backoff-seconds',str(self.c.get('provider_resume_backoff_seconds',90))]
+            if self.c.get('provider_permanent_route_forks'):
+                cmd += ['--permanent-route-forks',str(self.c['provider_permanent_route_forks'])]
             with controller_log.open('w') as log:
                 process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,env=self.environment)
                 self.update(row,controller_wrapper_pid=process.pid,controller_host=os.uname().nodename,

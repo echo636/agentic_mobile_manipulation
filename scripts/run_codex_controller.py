@@ -47,6 +47,31 @@ def codex_thread_id(events):
                  if event.get('type') == 'thread.started' and event.get('thread_id')), None)
 
 
+def provider_recovery_mode(events, *, resumes, forks, max_resumes, max_forks):
+    """Only the observed unavailable sticky route may fork; auth failures cannot."""
+    terminal = next((event for event in reversed(events)
+                     if event.get('type') in {'error', 'turn.failed', 'turn.completed'}), None)
+    if not terminal or terminal.get('type') != 'turn.failed':
+        return None
+    message = str(terminal.get('message') or terminal.get('error') or '')
+    if (forks < max_forks and 'OPENAI_PERMANENT_STICKY_ACCOUNT_UNAVAILABLE' in message
+            and not any(value in message for value in ('401 Unauthorized', '403 Forbidden',
+                                                       'refresh token was revoked'))):
+        pending = set()
+        for event in events:
+            item = event.get('item') or {}
+            if item.get('type') != 'mcp_tool_call':
+                continue
+            if event.get('type') == 'item.started':
+                pending.add(item.get('id'))
+            elif event.get('type') == 'item.completed':
+                pending.discard(item.get('id'))
+        return None if pending else 'fork'
+    if rate_limit_error(events) and (max_resumes == -1 or resumes < max_resumes):
+        return 'resume'
+    return None
+
+
 def preflight_server(command, args, expected, output, deadline, *, attempt_timeout=90):
     """Retry one transport timeout before policy start; never issue tool calls.
 
@@ -102,6 +127,8 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--rate-limit-resumes', '--provider-error-resumes', type=int, default=None,
                    help='Same-session transient provider recovery count; -1 is unbounded (default for unbounded Codex episodes)')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
+    p.add_argument('--permanent-route-forks', type=int, default=0,
+                   help='Opt-in native-history forks for an unavailable sticky route; retains the same live robot episode')
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
     if client == 'codex' and args.reasoning_effort is None:args.reasoning_effort='low'
@@ -120,6 +147,8 @@ def main(argv=None, *, allow_client=False):
         p.error('Provider resume count must be -1 or nonnegative and backoff positive')
     if args.rate_limit_resumes and client != 'codex':
         p.error('Rate-limit resume is supported only for Codex')
+    if args.permanent_route_forks < 0 or (args.permanent_route_forks and client != 'codex'):
+        p.error('Permanent route forks require Codex and a nonnegative count')
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
@@ -161,8 +190,9 @@ def main(argv=None, *, allow_client=False):
     if project.client_storage is not None:
         metadata['client_storage'] = project.client_storage
     metadata['provider_recovery'] = dict(max_resumes=args.rate_limit_resumes,
+        max_permanent_route_forks=args.permanent_route_forks,
         backoff_seconds=args.resume_backoff_seconds, gateway=args.model_provider_gateway,
-        scope='Same model thread and live MCP episode; terminal transient provider errors only')
+        scope='Same live MCP episode; transient same-thread resumes and explicitly enabled native-history route forks')
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
@@ -217,16 +247,17 @@ def main(argv=None, *, allow_client=False):
     thread_id=codex_thread_id(first_events) if client == 'codex' else None
     segment_events=first_events
     continuations=[]
+    resume_count = fork_count = 0
     for attempt in itertools.count(1):
-        if args.rate_limit_resumes != -1 and attempt > args.rate_limit_resumes:
-            break
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
+        mode = provider_recovery_mode(segment_events, resumes=resume_count, forks=fork_count,
+            max_resumes=args.rate_limit_resumes, max_forks=args.permanent_route_forks)
         if (process.returncode == 0 or process.finish_received or process.timed_out or not thread_id or
-                not rate_limit_error(segment_events) or
+                mode is None or
                 (remaining is not None and remaining <= args.resume_backoff_seconds+30)):
             break
-        metadata['provider_recovery'].update(state='waiting', next_attempt=attempt)
+        metadata['provider_recovery'].update(state='waiting', next_attempt=attempt, next_mode=mode)
         write_json(args.output/'controller.json',metadata)
         time.sleep(args.resume_backoff_seconds)
         remaining=(None if metadata['effective_timeout_seconds'] is None else
@@ -236,17 +267,20 @@ def main(argv=None, *, allow_client=False):
         segment_dir=args.output/'continuations'/str(attempt)
         segment_dir.mkdir(parents=True,exist_ok=False)
         resume_prompt=('Continue the same robot task in the same simulator episode. '
-                       'A temporary model service error interrupted the previous turn. '
+                       'A model service error interrupted the previous turn. '
                        'Use the prior conversation and current RGB tool feedback; continue choosing '
                        'actions yourself, then call finish. Do not restart the task or claim success '
                        'without visual evidence.')
-        resume_project=adapter.prepare_resume(project,thread_id,resume_prompt)
+        resume_project=(adapter.prepare_fork(project,thread_id,resume_prompt) if mode == 'fork'
+                        else adapter.prepare_resume(project,thread_id,resume_prompt))
         resumed=adapter.run(resume_project,segment_dir,remaining,on_start)
         segment_path=segment_dir/'model_events.jsonl'
         segment_events=adapter.parse(segment_path).raw_events
         with raw_events.open('ab') as combined,segment_path.open('rb') as segment:
             combined.write(segment.read())
-        continuations.append({'attempt':attempt,'thread_id':thread_id,
+        continued_thread = codex_thread_id(segment_events)
+        continuations.append({'attempt':attempt,'mode':mode,'parent_thread_id':thread_id,
+                              'thread_id':continued_thread or thread_id,
                               'returncode':resumed.returncode,'timed_out':resumed.timed_out,
                               'raw_events':str(segment_path.relative_to(args.output))})
         metadata['provider_recovery'].update(state='resumed', attempts=continuations)
@@ -257,6 +291,15 @@ def main(argv=None, *, allow_client=False):
         process.finish_received=resumed.finish_received
         process.cleanup_reason=resumed.cleanup_reason
         process.duration_seconds=time.monotonic()-policy_started_monotonic
+        if mode == 'fork':
+            fork_count += 1
+            if not continued_thread or continued_thread == thread_id:
+                metadata['provider_recovery']['state']='fork_identity_unconfirmed'
+                write_json(args.output/'controller.json',metadata)
+                break
+            thread_id = continued_thread
+        else:
+            resume_count += 1
     if continuations:
         metadata['rate_limit_continuations']=continuations
     policy_finished_at = process.policy_finished_at_unix

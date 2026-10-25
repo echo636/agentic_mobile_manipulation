@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import re
 import tomllib
+from dataclasses import replace
 from uuid import UUID
 from ipaddress import ip_address, AddressValueError
 from urllib.parse import urlsplit
@@ -16,6 +17,15 @@ from ..deadline import tool_wait_seconds
 
 class CodexAdapter(ClientAdapter):
     name = "codex"
+
+    def prepare_fork(self, project, thread_id, prompt):
+        """Keep native conversation history and the live MCP endpoint in a new thread."""
+        continued = self.prepare_resume(project, thread_id, prompt)
+        offset = len(continued.mcp_prefix) + 1 if continued.mcp_prefix else 0
+        argv = list(continued.argv)
+        assert argv[offset:offset + 3] == ['codex', 'exec', 'resume']
+        argv[offset + 2] = 'fork'
+        return replace(continued, argv=argv)
 
     def prepare_resume(self, project, thread_id, prompt):
         """Resume one recorded Codex thread against the same MCP episode."""
