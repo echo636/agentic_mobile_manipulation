@@ -69,12 +69,15 @@ are proposals only, with unchanged collision and settling acceptance checks.
     options = sorted((metadata or {}).values(), key=lambda value: -value.get('prob', 0))
     if metadata is not None and not options:
         options = [{'rotation':[0.,0.,0.,1.], 'prob':1.}]
-    if allow_reorientation and not metadata:
+    if allow_reorientation:
         # Long objects can lean against a container wall. Flat and upright
         # faces alone miss those stable poses even in an empty bowl. These
         # intermediate tilts are proposals, not an exemption from collision,
         # settling or official containment. Loaded assemblies never use them.
-        options = [{'rotation': transforms.euler2quat(torch.tensor(angles, device=root_quat.device)).tolist(),
+        # Asset resting metadata describes flat-plane support. Container walls
+        # can support additional poses even when that metadata is present.
+        # Preserve metadata preference without excluding upright/leaning fits.
+        options += [{'rotation': transforms.euler2quat(torch.tensor(angles, device=root_quat.device)).tolist(),
                     'prob': 1., 'source': 'unladen_face_proposal'}
                    for angles in ((0.,0.,0.),(math.pi/2,0.,0.),(-math.pi/2,0.,0.),
                                   (0.,math.pi/2,0.),(0.,-math.pi/2,0.),(math.pi,0.,0.)) + tuple(

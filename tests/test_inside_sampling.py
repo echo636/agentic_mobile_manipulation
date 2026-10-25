@@ -163,6 +163,19 @@ class AssemblySamplingTests(unittest.TestCase):
             self.assertEqual(label,'carried_pose')
             self.assertTrue(b.torch.allclose(transforms.quat2mat(quat)[2],transforms.quat2mat(carried)[2],atol=1e-6))
 
+    def test_flat_resting_metadata_does_not_exclude_container_supported_leaning(self):
+        from scipy.spatial.transform import Rotation
+        b,held,_,_,_,_,modules=self.fixture()
+        transforms=modules['omnigibson.utils'].transform_utils
+        transforms.euler2quat=lambda e:b.torch.tensor(Rotation.from_euler('xyz',e.numpy()).as_quat(),dtype=e.dtype)
+        held.orientations={'flat':{'rotation':[0.,0.,0.,1.],'prob':1.}}
+        carried=b.torch.tensor([0.,0.,0.,1.])
+        candidates=assembly_orientations(held,carried,b.torch,transforms,allow_reorientation=True)
+        self.assertTrue(any(abs(float(transforms.quat2mat(q)[2,2]))<.01 for _,q,_ in candidates))
+        self.assertTrue(any(.4<abs(float(transforms.quat2mat(q)[2,2]))<.9 for _,q,_ in candidates))
+        loaded=assembly_orientations(held,carried,b.torch,transforms,allow_reorientation=False)
+        self.assertTrue(all(float(transforms.quat2mat(q)[2,2])>.99 for _,q,_ in loaded))
+
     def test_rotated_destination_adds_aligned_yaw_without_tipping(self):
         b,held,_,_,_,_,modules=self.fixture()
         transforms=modules['omnigibson.utils'].transform_utils

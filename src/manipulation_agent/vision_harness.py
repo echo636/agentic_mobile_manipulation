@@ -243,6 +243,15 @@ class VisionHarness:
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
+        if primitive in {'pour','scoop'}:
+            materials=details.get('materials',[])
+            if materials:
+                remaining=details.get('source_has_more_material')
+                effect['transfer']={
+                    'portion_transferred':True,
+                    'source_has_more_material':remaining if isinstance(remaining,bool) else None,
+                    'held_object_retained':True,
+                    'message':'A material portion was transferred. One operation need not empty the source; inspect the returned RGB.'}
         local=details.get('local_manipulation')
         if local:
             effect['local_adjustment']={'repositions':int(local['repositions']),

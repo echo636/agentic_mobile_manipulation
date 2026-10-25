@@ -39,6 +39,16 @@ class RGBBoundary(unittest.TestCase):
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
+    def test_transfer_reports_partial_source_without_private_material_identity(self):
+        for remaining, expected in ((0,False),(12,True),(None,None)):
+            self.backend.execute_visual=lambda *a,**kw:{'materials':[{
+                'material':'PRIVATE_MATERIAL_SYSTEM','moved_particles':512,
+                'source_remaining_particles':remaining}], 'source_has_more_material':expected, 'private_pose':[1,2,3]}
+            result=self.act('pour')
+            self.assertIs(result['effect']['transfer']['source_has_more_material'],expected)
+            self.assertTrue(result['effect']['transfer']['held_object_retained'])
+            self.assertNotIn('PRIVATE_MATERIAL_SYSTEM',json.dumps(result))
+            self.assertNotIn('moved_particles',json.dumps(result))
     def test_navigation_partial_approach_is_public_but_geometry_stays_private(self):
         for status in ('reached','approached','already_at_closest_approach'):
             self.backend.execute_visual=lambda *a,**kw:{'nav_status':status,'private_pose':[1,2,3],

@@ -44,6 +44,8 @@ def free_volume_positions(scene, destination, system, limit):
     xy = torch.cartesian_prod(axes[0], axes[1]).reshape(-1, 2)
     xy = xy[((xy - (low[:2] + high[:2]) / 2)**2).sum(dim=1).argsort()]
     for z in axes[2]:
+        if time.monotonic() >= deadline:
+            break
         points = torch.cat((xy, z.expand(len(xy), 1)), dim=1)
         points = points[link.check_points_in_volume(points)]
         for start in range(0, len(points), 256):
@@ -212,6 +214,10 @@ class CheckedMaterialTransfer:
                 'retained_particles': inside, 'source_remaining_particles': item['source_remaining'],
                 'identities_changed_during_settling': transformed,
                 'generated_by_authored_source': item['generated']})
+        moved = {item['system'].name: item['count'] for item in changes if not item['generated']}
+        finite_left = sum(len(record.paths) for record in captured) - sum(moved.values())
+        source_has_more = True if finite_left > 0 else None if emitted else False
         return {'primitive': primitive, 'implementation': 'checked_physical_material_portion',
+                'source_has_more_material': source_has_more,
                 'materials': materials, 'postcondition': 'actual_transfer_then_physical_settling',
                 'held_vessel_retained': True}
