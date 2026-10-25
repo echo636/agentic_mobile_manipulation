@@ -23,7 +23,15 @@ def _state_mismatches(left, right, torch, path='state'):
         equal = (isinstance(right, np.ndarray) and left.shape == right.shape
                  and np.allclose(left, right, rtol=0., atol=1e-5, equal_nan=False))
     elif isinstance(left, float):
-        equal = isinstance(right, (int, float)) and math.isfinite(left) and abs(left-right) <= 1e-5
+        # Native MaxTemperature starts at -inf until its first state update.
+        # New cut products are snapshotted before that update. Two identical
+        # sentinels are preserved state, not a changed temperature. Keep every
+        # other nonfinite scalar (including NaN and +inf) rejected.
+        initial_temperature = (isinstance(right, (int, float))
+                               and path.endswith('/MaxTemperature/max_temperature')
+                               and left == right == -math.inf)
+        equal = initial_temperature or (isinstance(right, (int, float))
+                and math.isfinite(left) and abs(left-right) <= 1e-5)
     else:
         equal = left == right
     return [] if equal else [path]
@@ -72,6 +80,10 @@ def rebuild_cut_topology(backend):
               'objects': [obj.name for obj in pending], 'env_step': control_steps,
               'clock': clock, 'native_steps': native_steps, 'timeline': timeline_time,
               'audience': 'executor_private'}
+    record['pending_max_temperature'] = {
+        obj.name: repr(snapshot.get(obj.scene.idx, {}).get('registry', {}).get('object_registry', {})
+                       .get(obj.name, {}).get('non_kin', {}).get('MaxTemperature', {}).get('max_temperature'))
+        for obj in pending}
     backend._placement_record(record)
     try:
         try:
