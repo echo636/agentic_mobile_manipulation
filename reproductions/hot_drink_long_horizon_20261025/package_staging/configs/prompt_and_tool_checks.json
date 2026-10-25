@@ -1,0 +1,86 @@
+{
+  "with_long_horizon_s0": {
+    "prompt_sha256": "a82a89ee5af73025cc214348f56ed516d4a8488a0c5240f1cacc1d5ebf58f0ca",
+    "tools": [
+      "initialize",
+      "look",
+      "act",
+      "update_plan",
+      "remember",
+      "recall",
+      "list_skills",
+      "read_skill",
+      "finish"
+    ]
+  },
+  "with_long_horizon_s11": {
+    "prompt_sha256": "a82a89ee5af73025cc214348f56ed516d4a8488a0c5240f1cacc1d5ebf58f0ca",
+    "tools": [
+      "initialize",
+      "look",
+      "act",
+      "update_plan",
+      "remember",
+      "recall",
+      "list_skills",
+      "read_skill",
+      "finish"
+    ]
+  },
+  "with_long_horizon_s22": {
+    "prompt_sha256": "a82a89ee5af73025cc214348f56ed516d4a8488a0c5240f1cacc1d5ebf58f0ca",
+    "tools": [
+      "initialize",
+      "look",
+      "act",
+      "update_plan",
+      "remember",
+      "recall",
+      "list_skills",
+      "read_skill",
+      "finish"
+    ]
+  },
+  "without_long_horizon_s0": {
+    "prompt_sha256": "6207210460880abda9a862fdffbf1006c667f566521faa0245aab33d3281f1ac",
+    "tools": [
+      "initialize",
+      "look",
+      "act",
+      "update_plan",
+      "remember",
+      "recall",
+      "list_skills",
+      "read_skill",
+      "finish"
+    ]
+  },
+  "without_long_horizon_s11": {
+    "prompt_sha256": "6207210460880abda9a862fdffbf1006c667f566521faa0245aab33d3281f1ac",
+    "tools": [
+      "initialize",
+      "look",
+      "act",
+      "update_plan",
+      "remember",
+      "recall",
+      "list_skills",
+      "read_skill",
+      "finish"
+    ]
+  },
+  "without_long_horizon_s22": {
+    "prompt_sha256": "6207210460880abda9a862fdffbf1006c667f566521faa0245aab33d3281f1ac",
+    "tools": [
+      "initialize",
+      "look",
+      "act",
+      "update_plan",
+      "remember",
+      "recall",
+      "list_skills",
+      "read_skill",
+      "finish"
+    ]
+  }
+}

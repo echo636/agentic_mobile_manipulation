@@ -1,0 +1,38 @@
+{
+  "bundle_sha256": "5dcce20f01e9c4d37cd45e46a28093152fc1a5321ddd87df060b71cbf7b00996",
+  "skills": [
+    {
+      "name": "failure-recovery",
+      "description": "Recover from incorrect visual targets, rejected actions and partial execution without oracle state or endless retries.",
+      "resources": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "pick-and-place",
+      "description": "Grasp, transport and place visible items; handle container contents, staging, doors and destination selection.",
+      "resources": [
+        "SKILL.md",
+        "references/placement.md",
+        "references/staging-and-doors.md",
+        "references/target-selection.md"
+      ]
+    },
+    {
+      "name": "visual-exploration",
+      "description": "Search and revisit places using current RGB, bounded turns, visible navigation points and conversation history.",
+      "resources": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "visual-manipulation",
+      "description": "Complete manipulation through RGB, callable workflow skills, bounded actions and visible verification.",
+      "resources": [
+        "SKILL.md",
+        "references/evidence.md",
+        "references/material-actions.md"
+      ]
+    }
+  ]
+}

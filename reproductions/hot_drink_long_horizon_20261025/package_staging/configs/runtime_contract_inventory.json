@@ -1,0 +1,36 @@
+{
+  "forced_by_runner": {
+    "MAS_DEMO_MOTION": "0",
+    "MAS_HIGH_LEVEL_HARNESS": "1",
+    "MAS_SEMANTIC_MAGIC": "0",
+    "MAS_CUSTOM_NATIVE_BDDL": "0",
+    "MAS_CPU_DYNAMICS": "0 at startup; upstream env_base switches physics after water init",
+    "OG_SWITCH_TO_CPU_AFTER_WATER": "1",
+    "OG_DISABLE_CONTACT_CACHE": "1 during initialization, removed and cache reinitialized after CPU switch",
+    "OG_KINEMATIC_NAV_TELEPORT": "0",
+    "MAS_NAV_RELAXED": "0",
+    "OG_SKIP_PHYSICS_STEPS": "0",
+    "MAS_RGB_IMAGE_SIZE": "512",
+    "MAS_RGB_PITCH_DEGREES": "35",
+    "MAS_VIDEO_RENDER_STRIDE": "3",
+    "MAS_LONG_HORIZON_PLANNING_SKILL": "1 in both launchers to retain planning profile; source directory/prompt controls document availability"
+  },
+  "must_supply_as_paths": [
+    "OMNIGIBSON_DATA_PATH",
+    "OMNIGIBSON_APPDATA_PATH",
+    "PYTHONPATH",
+    "CODEX_HOME"
+  ],
+  "not_fully_historically_recorded": "Runner copies os.environ. OG_DISABLE_FABRIC, OG_DIRECT_SIM_STEP, camera and rendering overrides etc may be inherited; absence cannot be inferred from the manifest alone. Do not claim historical environment is fully frozen.",
+  "budget": {
+    "actions": 120,
+    "sim_steps": 20000,
+    "wall_deadline": null,
+    "initialization_seconds": 900,
+    "closure_seconds": 180,
+    "unfinished_restarts": 3,
+    "rate_limit_resumes": 3,
+    "resume_backoff_seconds": 120,
+    "provider_history_restarts": 2
+  }
+}

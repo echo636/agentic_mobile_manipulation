@@ -1,0 +1,749 @@
+diff --git a/OmniGibson/omnigibson/action_primitives/curobo.py b/OmniGibson/omnigibson/action_primitives/curobo.py
+index 351f3f7..5d69000 100644
+--- a/OmniGibson/omnigibson/action_primitives/curobo.py
++++ b/OmniGibson/omnigibson/action_primitives/curobo.py
+@@ -61,6 +61,67 @@ def create_world_mesh_collision(tensor_args, obb_cache_size=10, mesh_cache_size=
+     return lazy.curobo.geom.sdf.utils.create_collision_checker(world_cfg)
+ 
+ 
++def _ensure_graph_rollouts_use_requested_device():
++    """Work around CuRobo versions that omit ``tensor_args`` in graph rollouts.
++
++    CuRobo's ``GraphConfig.load_from_robot_config`` used by the bundled
++    release calls ``ArmBaseConfig.from_dict`` without forwarding its device.
++    The graph safety rollout then defaults to ``cuda:0`` even when the motion
++    generator is configured for another GPU.  Reuse the collision checker's
++    device when that argument is omitted so graph validation and arm planning
++    share one device.
++    """
++    from curobo.rollout.arm_base import ArmBaseConfig
++
++    if getattr(ArmBaseConfig, "_omnigibson_tensor_args_patch", False):
++        return
++
++    original_from_dict = ArmBaseConfig.from_dict.__func__
++
++    @classmethod
++    def from_dict_with_device(
++        cls,
++        robot_cfg,
++        model_data_dict,
++        cost_data_dict,
++        constraint_data_dict,
++        convergence_data_dict,
++        world_coll_checker_dict=None,
++        world_model_dict=None,
++        world_coll_checker=None,
++        tensor_args=None,
++    ):
++        if tensor_args is None and world_coll_checker is not None:
++            tensor_args = world_coll_checker.tensor_args
++        if tensor_args is None:
++            return original_from_dict(
++                cls,
++                robot_cfg,
++                model_data_dict,
++                cost_data_dict,
++                constraint_data_dict,
++                convergence_data_dict,
++                world_coll_checker_dict,
++                world_model_dict,
++                world_coll_checker=world_coll_checker,
++            )
++        return original_from_dict(
++            cls,
++            robot_cfg,
++            model_data_dict,
++            cost_data_dict,
++            constraint_data_dict,
++            convergence_data_dict,
++            world_coll_checker_dict,
++            world_model_dict,
++            world_coll_checker=world_coll_checker,
++            tensor_args=tensor_args,
++        )
++
++    ArmBaseConfig.from_dict = from_dict_with_device
++    ArmBaseConfig._omnigibson_tensor_args_patch = True
++
++
+ class CuRoboMotionGenerator:
+     """
+     Class for motion generator using CuRobo backend
+@@ -106,6 +167,7 @@ class CuRoboMotionGenerator:
+         self.robot = robot
+         self.robot_joint_names = list(robot.joints.keys())
+         self.batch_size = batch_size
++        self.last_collision_stats = {"total": 0, "colliding": 0}
+ 
+         # Load robot config and usd paths and make sure paths point correctly
+         robot_cfg_path_dict = robot.curobo_path if robot_cfg_path is None else robot_cfg_path
+@@ -180,6 +242,11 @@ class CuRoboMotionGenerator:
+ 
+             robot_cfg_obj = lazy.curobo.types.robot.RobotConfig.from_dict(robot_cfg_dict, self._tensor_args)
+ 
++            # Some CuRobo 3.9 builds construct the graph safety rollout with
++            # the default device.  Patch that compatibility seam before the
++            # graph is created so it follows this generator's tensor device.
++            _ensure_graph_rollouts_use_requested_device()
++
+             if robot.is_holonomic_base:
+                 self.update_joint_limits(robot_cfg_obj, emb_sel)
+ 
+@@ -202,6 +269,15 @@ class CuRoboMotionGenerator:
+                 fixed_iters_trajopt=True,
+                 finetune_trajopt_iters=100,
+                 finetune_dt_scale=1.05,
++                # MotionGenConfig otherwise constructs TrajEvaluatorConfig with
++                # its default TensorDeviceType (cuda:0), even when the rest of
++                # CuRobo was explicitly placed on another GPU.  That later
++                # breaks warmup in torch.clamp with cuda:0 / cuda:N tensors.
++                traj_evaluator_config=lazy.curobo.wrap.reacher.evaluator.TrajEvaluatorConfig.from_basic(
++                    dof=robot_cfg_obj.kinematics.dof,
++                    min_dt=og.sim.get_sim_step_dt(),
++                    tensor_args=self._tensor_args,
++                ),
+             )
+             if motion_cfg_kwargs is not None:
+                 motion_kwargs.update(motion_cfg_kwargs)
+@@ -281,6 +357,12 @@ class CuRoboMotionGenerator:
+             m = lazy.curobo.util.usd_helper.get_mesh_attrs(
+                 prim, cache=self.usd_help._xform_cache, transform=robot_transform.numpy()
+             )
++            # ``UsdHelper.get_mesh_attrs`` constructs meshes with CuRobo's
++            # default TensorDeviceType (cuda:0).  This motion generator may
++            # intentionally run on another GPU, so carry the generator's
++            # device into the returned mesh before building the collision
++            # world.
++            m.tensor_args = self._tensor_args
+             obstacles["mesh"].append(m)
+ 
+         for obj in self.robot.scene.objects:
+@@ -306,6 +388,7 @@ class CuRoboMotionGenerator:
+                         vertices=collision_mesh.points.numpy(),
+                         faces=collision_mesh.faces.numpy(),
+                         scale=collision_mesh.get_world_scale().numpy(),
++                        tensor_args=self._tensor_args,
+                     )
+                     obstacles["mesh"].append(m)
+ 
+@@ -390,6 +473,11 @@ class CuRoboMotionGenerator:
+         # Detach objects before returning
+         self._detach_objects_from_robot(attached_info, emb_sel)
+ 
++        self.last_collision_stats = {
++            "total": int(collision_results.numel()),
++            "colliding": int(collision_results.sum().item()),
++        }
++
+         # Return results
+         return collision_results  # shape (B,)
+ 
+diff --git a/OmniGibson/omnigibson/controllers/controller_base.py b/OmniGibson/omnigibson/controllers/controller_base.py
+index 9a08492..02acc03 100644
+--- a/OmniGibson/omnigibson/controllers/controller_base.py
++++ b/OmniGibson/omnigibson/controllers/controller_base.py
+@@ -604,9 +604,9 @@ class BaseController(Serializable, Registerable, Recreatable):
+         self._load_state(controller_idx=controller_idx, state=state)
+ 
+     def serialize(self, state, controller_idx: int):
+-        goal_set_tensor = th.tensor([float(state["goal_set"])], dtype=th.float32)
+         goals = state["goals"]
+         goal_flat = th.cat([v.flatten() for v in goals.values()]) if goals else th.zeros(self.goal_dim)
++        goal_set_tensor = th.tensor([float(state["goal_set"])], dtype=th.float32, device=goal_flat.device)
+         return th.cat([goal_set_tensor, goal_flat])
+ 
+     def deserialize(self, state, controller_idx: int):
+diff --git a/OmniGibson/omnigibson/controllers/joint_controller.py b/OmniGibson/omnigibson/controllers/joint_controller.py
+index 422bf71..ab3b061 100644
+--- a/OmniGibson/omnigibson/controllers/joint_controller.py
++++ b/OmniGibson/omnigibson/controllers/joint_controller.py
+@@ -220,10 +220,12 @@ class JointController(LocomotionController, ManipulationController, GripperContr
+     def serialize(self, state, controller_idx):
+         state_flat = super().serialize(state=state, controller_idx=controller_idx)
+         filter_part = (
+-            th.tensor([])
++            th.tensor([], device=state_flat.device)
+             if self._control_filter is None or state.get("control_filter") is None
+             else self._control_filter.serialize(state["control_filter"], controller_idx)
+         )
++        if isinstance(filter_part, th.Tensor):
++            filter_part = filter_part.to(device=state_flat.device)
+         return th.cat([state_flat, filter_part])
+ 
+     def deserialize(self, state, controller_idx):
+diff --git a/OmniGibson/omnigibson/envs/env_base.py b/OmniGibson/omnigibson/envs/env_base.py
+index aa6da92..f3f656d 100644
+--- a/OmniGibson/omnigibson/envs/env_base.py
++++ b/OmniGibson/omnigibson/envs/env_base.py
+@@ -1,3 +1,4 @@
++import os
+ import random
+ import string
+ from collections import OrderedDict
+@@ -430,6 +431,37 @@ class Environment(gym.Env, GymObservable, Recreatable):
+         # Run any additional task post-loading behavior
+         self.task.post_play_load(env=self)
+ 
++        # Diagnostic escape hatch for the custom hot-drink fixture.  The
++        # generated instance carries a preloaded water particle state; on the
++        # shared GPU node that state can poison the first PhysX tensor step.
++        # Keep the system object and BDDL bindings, but remove only its initial
++        # particles so we can test whether the rigid simulation is healthy.
++        if os.environ.get("OG_CLEAR_WATER_PARTICLES"):
++            water = self.scene.get_system("water", force_init=False)
++            if water is not None and water.initialized:
++                mode = os.environ.get("OG_CLEAR_WATER_PARTICLES")
++                inst = getattr(water, "default_particle_instancer", None)
++                if mode == "keep_one" and inst is not None and inst.n_particles > 1:
++                    water.remove_particles(
++                        th.arange(1, inst.n_particles, device=inst.particle_positions.device)
++                    )
++                else:
++                    water.remove_all_particles()
++                if os.environ.get("OG_CLEAR_WATER_SYSTEM"):
++                    self.scene.clear_system("water")
++
++        # Some custom tasks need GPU dynamics only while their particle systems
++        # are created.  Allow the rigid-body controller to run on the CPU after
++        # that initialization, which avoids GPU articulation-view failures while
++        # preserving the water system and its symbolic task state.
++        if os.environ.get("OG_SWITCH_TO_CPU_AFTER_WATER"):
++            og.sim.stop()
++            with gm.unlocked():
++                gm.USE_GPU_DYNAMICS = False
++            with og.sim.editing_usd():
++                og.sim._set_physics_engine_settings()
++            og.sim.play()
++
+         # Save the state for objects from load_robots / load_objects / load_task
+         self.scene.update_initial_file()
+ 
+diff --git a/OmniGibson/omnigibson/objects/usd_object.py b/OmniGibson/omnigibson/objects/usd_object.py
+index 73a9ca6..3101b0d 100644
+--- a/OmniGibson/omnigibson/objects/usd_object.py
++++ b/OmniGibson/omnigibson/objects/usd_object.py
+@@ -1096,16 +1096,13 @@ class USDObject(EntityPrim, Registerable, metaclass=ABCMeta):
+         state_flat = super().serialize(state=state)
+ 
+         # Iterate over all states and serialize them individually
+-        non_kin_state_flat = (
+-            th.cat(
+-                [
+-                    self._states[REGISTERED_OBJECT_STATES[state_name]].serialize(state_dict)
+-                    for state_name, state_dict in state["non_kin"].items()
+-                ]
+-            )
+-            if len(state["non_kin"]) > 0
+-            else th.empty(0)
+-        )
++        if len(state["non_kin"]) > 0:
++            non_kin_state_flat = th.cat([
++                self._states[REGISTERED_OBJECT_STATES[state_name]].serialize(state_dict).to(state_flat.device)
++                for state_name, state_dict in state["non_kin"].items()
++            ])
++        else:
++            non_kin_state_flat = th.empty(0, device=state_flat.device)
+ 
+         # Combine these two arrays
+         return th.cat([state_flat, non_kin_state_flat])
+diff --git a/OmniGibson/omnigibson/prims/entity_prim.py b/OmniGibson/omnigibson/prims/entity_prim.py
+index f1e0fba..db13c07 100644
+--- a/OmniGibson/omnigibson/prims/entity_prim.py
++++ b/OmniGibson/omnigibson/prims/entity_prim.py
+@@ -1016,11 +1016,14 @@ class EntityPrim(XFormPrim):
+         if og.sim.is_stopped():
+             this_position, this_orientation = XFormPrim.get_position_orientation(self, frame=frame)
+             root_link_position, root_link_orientation = self.root_link.get_position_orientation(frame=frame)
++            # Scene transforms may come from CUDA-backed PhysX while the root
++            # link cache is still on CPU. Compare on CPU to avoid a device
++            # mismatch during startup.
+             assert th.allclose(
+-                this_position, root_link_position, atol=1e-2
++                this_position.detach().cpu(), root_link_position.detach().cpu(), atol=1e-2
+             ), "Position mismatch between entity prim and root link"
+             assert th.allclose(
+-                this_orientation, root_link_orientation, atol=1e-2
++                this_orientation.detach().cpu(), root_link_orientation.detach().cpu(), atol=1e-2
+             ), "Orientation mismatch between entity prim and root link"
+             XFormPrim.set_position_orientation(self, position=position, orientation=orientation, frame=frame)
+             if self.kinematic_only:
+@@ -1548,8 +1551,8 @@ class EntityPrim(XFormPrim):
+         if recorded_sleep:
+             pos, orn = state["root_link"]["pos"], state["root_link"]["ori"]
+             cur_pos, cur_orn = self.get_position_orientation()
+-            same_pos = bool(th.allclose(cur_pos, pos, rtol=0.0, atol=1e-7))
+-            same_orn = bool((1.0 - th.abs(th.dot(cur_orn, orn))) < 1e-7)
++            same_pos = bool(th.allclose(cur_pos.detach().cpu(), pos.detach().cpu(), rtol=0.0, atol=1e-7))
++            same_orn = bool((1.0 - th.abs(th.dot(cur_orn.detach().cpu(), orn.detach().cpu()))) < 1e-7)
+ 
+         # Load base link state and joint states
+         self.root_link._load_state(state=state["root_link"])
+@@ -1571,11 +1574,12 @@ class EntityPrim(XFormPrim):
+     def serialize(self, state):
+         # We serialize by first flattening the root link state and then iterating over all joints and
+         # adding them to the a flattened array
+-        state_flat = [th.tensor([state["is_asleep"]], dtype=th.int), self.root_link.serialize(state=state["root_link"])]
++        root_flat = self.root_link.serialize(state=state["root_link"])
++        state_flat = [th.tensor([state["is_asleep"]], dtype=th.int, device=root_flat.device), root_flat]
+         if self.n_joints > 0:
+             state_flat += [
+-                state["joint_pos"],
+-                state["joint_vel"],
++                state["joint_pos"].to(root_flat.device),
++                state["joint_vel"].to(root_flat.device),
+             ]
+ 
+         return th.cat(state_flat)
+diff --git a/OmniGibson/omnigibson/robots/robot.py b/OmniGibson/omnigibson/robots/robot.py
+index fb92943..9c91780 100644
+--- a/OmniGibson/omnigibson/robots/robot.py
++++ b/OmniGibson/omnigibson/robots/robot.py
+@@ -1131,7 +1131,8 @@ class Robot(USDObject, GymObservable):
+             if controller_state is None and group_key in state["controller_groups"]:
+                 controller_state = state["controller_groups"][group_key]
+             if controller_state is not None:
+-                group_parts.append(ControllerView.serialize(group_key, controller_idx, controller_state))
++                part = ControllerView.serialize(group_key, controller_idx, controller_state)
++                group_parts.append(part.to(device=state_flat.device) if isinstance(part, th.Tensor) else part)
+         if group_parts:
+             state_flat = th.cat([state_flat] + group_parts)
+ 
+@@ -3885,6 +3886,7 @@ class Robot(USDObject, GymObservable):
+             # Note that this will also set the target to be the desired linear velocity (i.e. the robot will try to maintain
+             # such velocity), which is different from the default behavior of set_linear_velocity for all other objects.
+             orn = self.root_link.get_position_orientation()[1]
++            velocity = velocity.to(device=orn.device)
+             velocity_in_root_link = T.quat2mat(orn).T @ velocity
+             self.set_joint_velocities(velocity_in_root_link, indices=self.base_idx[:3], drive=False)
+         else:
+@@ -3900,13 +3902,14 @@ class Robot(USDObject, GymObservable):
+     def set_angular_velocity(self, velocity: th.Tensor) -> None:
+         if self.is_holonomic_base:
+             # 1e-3 is emperically tuned to be a good value for the time step
+-            delta_t = 1e-3 / (velocity.norm() + 1e-6)
+-            delta_mat = T.delta_rotation_matrix(velocity, delta_t)
+             base_link_orn = self.get_position_orientation()[1]
+-            rot_mat = T.quat2mat(base_link_orn)
++            velocity = velocity.to(device=base_link_orn.device)
++            delta_t = 1e-3 / (velocity.norm() + 1e-6)
++            delta_mat = T.delta_rotation_matrix(velocity, delta_t).to(device=base_link_orn.device)
++            rot_mat = T.quat2mat(base_link_orn).to(device=base_link_orn.device)
+             desired_mat = delta_mat @ rot_mat
+             root_link_orn = self.root_link.get_position_orientation()[1]
+-            desired_mat_in_root_link = T.quat2mat(root_link_orn).T @ desired_mat
++            desired_mat_in_root_link = T.quat2mat(root_link_orn).to(device=desired_mat.device).T @ desired_mat
+             desired_intrinsic_eulers = T.mat2euler_intrinsic(desired_mat_in_root_link)
+ 
+             cur_joint_pos = self.get_joint_positions()[self.base_idx[3:]]
+diff --git a/OmniGibson/omnigibson/simulator.py b/OmniGibson/omnigibson/simulator.py
+index fd21294..e763526 100644
+--- a/OmniGibson/omnigibson/simulator.py
++++ b/OmniGibson/omnigibson/simulator.py
+@@ -601,7 +601,11 @@ def _launch_simulator(*args, **kwargs):
+             # default collide with each other, and modify settings for speed optimization
+             self._physics_context.set_invert_collision_group_filter(False)
+             self._physics_context.enable_ccd(gm.ENABLE_CCD)
+-            self._physics_context.enable_fabric(True)
++            # The custom GPU-particle scene can trigger an illegal FabricMapper
++            # device access during the first control step.  Keep GPU dynamics
++            # enabled for the water system while allowing this compatibility path
++            # to disable Fabric mapping for the experiment.
++            self._physics_context.enable_fabric(not os.environ.get("OG_DISABLE_FABRIC"))
+ 
+             # Enable GPU dynamics based on whether we need omni particles feature
+             if gm.USE_GPU_DYNAMICS:
+@@ -1169,6 +1173,9 @@ def _launch_simulator(*args, **kwargs):
+             # We don't want to sync PhysX to Fabric during a physics step, as it is quite slow!
+             assert not self.currently_stepping, "Cannot refresh poses during a physics step!"
+ 
++            if os.environ.get("OG_DISABLE_FABRIC"):
++                return
++
+             self._sim_context._physx_fabric_interface.update(self.current_time, self.get_physics_dt())
+ 
+         def update_handles(self):
+@@ -1195,7 +1202,8 @@ def _launch_simulator(*args, **kwargs):
+                             system.update_handles()
+ 
+             # Finally update any unified views
+-            RigidContactAPI.initialize_view()
++            if not os.environ.get("OG_DISABLE_CONTACT_CACHE"):
++                RigidContactAPI.initialize_view()
+             ControllableObjectViewAPI.initialize_view()
+ 
+         @with_profiler(name="_non_physics_step_profiler")
+@@ -1210,7 +1218,11 @@ def _launch_simulator(*args, **kwargs):
+             # If we're playing we, also run additional logic
+             if self.is_playing():
+                 # Update persistent rigid contact caches from the latest step
+-                RigidContactAPI.update_contact_cache()
++                # GPU dynamics can crash while PhysX is still building the contact
++                # force matrix during scene warm-up.  Allow experiments that do not
++                # require contact observations to skip this unstable cache path.
++                if not os.environ.get("OG_DISABLE_CONTACT_CACHE"):
++                    RigidContactAPI.update_contact_cache()
+ 
+                 # Check to see if any objects should be initialized (only done IF we're playing)
+                 n_objects_to_initialize = len(self._objects_to_initialize)
+@@ -1413,7 +1425,8 @@ def _launch_simulator(*args, **kwargs):
+ 
+             # Accumulate contact data from this physics step and then flush to cache.
+             # We normally do this in _non_physics_step, but step_physics bypasses that so we do it here.
+-            RigidContactAPI.update_contact_cache()
++            if not os.environ.get("OG_DISABLE_CONTACT_CACHE"):
++                RigidContactAPI.update_contact_cache()
+ 
+         @with_profiler(name="_pre_physics_step_profiler")
+         def _on_pre_physics_step(self):
+@@ -1452,7 +1465,8 @@ def _launch_simulator(*args, **kwargs):
+                     ControllableObjectViewAPI.post_physics_step()
+ 
+                 # Pull the contact sensor data
+-                RigidContactAPI.add_contacts_from_physics_step()
++                if not os.environ.get("OG_DISABLE_CONTACT_CACHE"):
++                    RigidContactAPI.add_contacts_from_physics_step()
+ 
+                 if self._deferred_joint_breaks:
+                     # Copy the current deferred joint breaks and clear the shared list
+diff --git a/OmniGibson/omnigibson/systems/micro_particle_system.py b/OmniGibson/omnigibson/systems/micro_particle_system.py
+index 736bd48..4698d7d 100644
+--- a/OmniGibson/omnigibson/systems/micro_particle_system.py
++++ b/OmniGibson/omnigibson/systems/micro_particle_system.py
+@@ -730,7 +730,8 @@ class MicroPhysicalParticleSystem(MicroParticleSystem, PhysicalParticleSystem):
+ 
+         # Potentially set system prim's max velocity value
+         if m.MICRO_PARTICLE_SYSTEM_MAX_VELOCITY is not None:
+-            self.system_prim.GetProperty("maxVelocity").Set(m.MICRO_PARTICLE_SYSTEM_MAX_VELOCITY)
++            with og.sim.editing_usd():
++                self.system_prim.GetProperty("maxVelocity").Set(m.MICRO_PARTICLE_SYSTEM_MAX_VELOCITY)
+ 
+         # TODO: remove this hack once omniverse fixes the issue (now we assume prototype IDs are all 0 always)
+         og.sim.add_callback_on_stop(
+diff --git a/OmniGibson/omnigibson/tasks/__init__.py b/OmniGibson/omnigibson/tasks/__init__.py
+index 591bb6b..491d6f1 100644
+--- a/OmniGibson/omnigibson/tasks/__init__.py
++++ b/OmniGibson/omnigibson/tasks/__init__.py
+@@ -3,6 +3,7 @@ from omnigibson.tasks.dummy_task import DummyTask
+ from omnigibson.tasks.grasp_task import GraspTask
+ from omnigibson.tasks.point_navigation_task import PointNavigationTask
+ from omnigibson.tasks.point_reaching_task import PointReachingTask
++from omnigibson.tasks.partial_order_behavior_task import PartialOrderBehaviorTask
+ from omnigibson.tasks.task_base import REGISTERED_TASKS
+ 
+ __all__ = [
+@@ -11,5 +12,6 @@ __all__ = [
+     "GraspTask",
+     "PointNavigationTask",
+     "PointReachingTask",
++    "PartialOrderBehaviorTask",
+     "REGISTERED_TASKS",
+ ]
+diff --git a/OmniGibson/omnigibson/tasks/behavior_task.py b/OmniGibson/omnigibson/tasks/behavior_task.py
+index 80fa6ff..b85393b 100644
+--- a/OmniGibson/omnigibson/tasks/behavior_task.py
++++ b/OmniGibson/omnigibson/tasks/behavior_task.py
+@@ -229,6 +229,10 @@ class BehaviorTask(BaseTask):
+         if self.use_presampled_robot_pose:
+             robot = self.get_agent(env)
+             presampled_poses = env.scene.get_task_metadata(key="robot_poses")
++            # Hand-authored challenge instances may omit scene task metadata;
++            # keep the pose already loaded from the instance in that case.
++            if presampled_poses is None:
++                return
+             # make all lowercase
+             presampled_poses = {k.lower(): v for k, v in presampled_poses.items()}
+             # use generic "robot" key if it exists, otherwise look for model-specific key
+diff --git a/OmniGibson/omnigibson/utils/backend_utils.py b/OmniGibson/omnigibson/utils/backend_utils.py
+index d405044..4058ff2 100644
+--- a/OmniGibson/omnigibson/utils/backend_utils.py
++++ b/OmniGibson/omnigibson/utils/backend_utils.py
+@@ -5,6 +5,14 @@ import omnigibson.utils.transform_utils as TT
+ import omnigibson.utils.transform_utils_np as NT
+ 
+ 
++def _numpy_to_torch(x):
++    """Convert compute-backend arrays to the currently active PhysX device."""
++    # Import lazily to avoid the macros/backend import cycle.
++    from omnigibson.macros import gm
++    device = "cuda" if th.cuda.is_available() and gm.USE_GPU_DYNAMICS else "cpu"
++    return th.as_tensor(x, device=device)
++
++
+ # Global function for adding custom compute functions
+ def add_compute_function(name, np_function, th_function):
+     """
+@@ -143,8 +151,10 @@ class _ComputeNumpyBackend(_ComputeBackend):
+     ones = lambda *args: np.ones(*args, dtype=np.float32)
+     to_numpy = lambda x: x
+     from_numpy = lambda x: x
+-    to_torch = lambda x: th.from_numpy(x) if isinstance(x, np.ndarray) else th.as_tensor(x)
+-    from_torch = lambda x: x.numpy()
++    to_torch = _numpy_to_torch
++    # GPU dynamics may return CUDA tensors even when this compatibility backend
++    # is selected; normalize them before handing data to NumPy.
++    from_torch = lambda x: x.detach().cpu().numpy() if hasattr(x, "detach") else np.asarray(x)
+     allclose = np.allclose
+     arr_type = np.ndarray
+     as_int = lambda arr: arr.astype(int)
+diff --git a/OmniGibson/omnigibson/utils/sampling_utils.py b/OmniGibson/omnigibson/utils/sampling_utils.py
+index e9f6d10..a9eff28 100644
+--- a/OmniGibson/omnigibson/utils/sampling_utils.py
++++ b/OmniGibson/omnigibson/utils/sampling_utils.py
+@@ -149,8 +149,11 @@ def get_parallel_rays(source, destination, offset, new_ray_per_horizontal_distan
+     """
+     ray_direction = destination - source
+ 
+-    # Get an orthogonal vector using a random vector.
+-    random_vector = th.randn(3)
++    # Keep all sampling tensors on the same device and dtype as the input ray.
++    # Object poses may be stored on CUDA during GPU dynamics; creating the
++    # helper vector with the default CPU device makes linalg.cross fail when
++    # placement sampling runs on such a scene.
++    random_vector = th.randn(3, device=ray_direction.device, dtype=ray_direction.dtype)
+     random_vector /= th.norm(random_vector)
+     orthogonal_vector_1 = th.linalg.cross(ray_direction, random_vector)
+     orthogonal_vector_1 /= th.norm(orthogonal_vector_1)
+@@ -163,13 +166,17 @@ def get_parallel_rays(source, destination, offset, new_ray_per_horizontal_distan
+     assert th.all(th.isfinite(orthogonal_vectors))
+ 
+     # Convert the offset into a 2-vector if it already isn't one.
+-    offset = th.tensor([1, 1]) * offset
++    offset = th.as_tensor(offset, device=ray_direction.device, dtype=ray_direction.dtype)
++    if offset.ndim == 0:
++        offset = th.stack([offset, offset])
++    else:
++        offset = th.broadcast_to(offset, (2,))
+ 
+     # Compute the grid of rays
+     steps = (offset / new_ray_per_horizontal_distance).int() * 2 + 1
+-    steps = th.maximum(steps, th.tensor(3))
+-    x_range = th.linspace(-offset[0], offset[0], steps[0])
+-    y_range = th.linspace(-offset[1], offset[1], steps[1])
++    steps = th.maximum(steps, th.tensor(3, device=ray_direction.device, dtype=steps.dtype))
++    x_range = th.linspace(-offset[0], offset[0], int(steps[0].item()), device=ray_direction.device, dtype=ray_direction.dtype)
++    y_range = th.linspace(-offset[1], offset[1], int(steps[1].item()), device=ray_direction.device, dtype=ray_direction.dtype)
+     ray_grid = th.stack(th.meshgrid(x_range, y_range, indexing="ij"), dim=-1)
+     ray_grid_flattened = ray_grid.reshape(-1, 2)
+ 
+@@ -327,7 +334,9 @@ def raytest(
+     """
+     # Make sure start point, end point are torch tensors
+     start_point = th.tensor(start_point) if not isinstance(start_point, th.Tensor) else start_point
+-    end_point = th.tensor(end_point) if not isinstance(end_point, th.Tensor) else end_point
++    end_point = th.tensor(end_point, device=start_point.device, dtype=start_point.dtype) if not isinstance(end_point, th.Tensor) else end_point.to(device=start_point.device, dtype=start_point.dtype)
++    hit_device = start_point.device
++    hit_dtype = start_point.dtype
+     point_diff = end_point - start_point
+     distance = th.norm(point_diff)
+     direction = point_diff / distance
+@@ -340,8 +349,8 @@ def raytest(
+             distance=distance.tolist(),
+         )
+         if result["hit"]:
+-            result["position"] = th.tensor(result["position"])
+-            result["normal"] = th.tensor(result["normal"])
++            result["position"] = th.tensor(result["position"], device=hit_device, dtype=hit_dtype)
++            result["normal"] = th.tensor(result["normal"], device=hit_device, dtype=hit_dtype)
+         return result
+     else:
+         # Compose callback function for finding raycasts
+@@ -355,8 +364,8 @@ def raytest(
+                 hits.append(
+                     {
+                         "hit": True,
+-                        "position": th.tensor(hit.position),
+-                        "normal": th.tensor(hit.normal),
++                        "position": th.tensor(hit.position, device=hit_device, dtype=hit_dtype),
++                        "normal": th.tensor(hit.normal, device=hit_device, dtype=hit_dtype),
+                         "distance": hit.distance,
+                         "collision": hit.collision,
+                         "rigidBody": hit.rigid_body,
+@@ -953,12 +962,17 @@ def sample_cuboid_on_object(
+                     continue
+ 
+                 # Get projection of the base onto the plane, fit a rotation, and compute the new center hit / corners.
+-                hit_positions = th.stack([ray_res.get("position", th.tensor([0.0] * 3)) for ray_res in cast_results])
++                hit_positions = th.stack([
++                    ray_res.get("position", th.zeros(3, device=plane_centroid.device, dtype=plane_centroid.dtype))
++                    for ray_res in cast_results
++                ])
+                 projected_hits = get_projection_onto_plane(hit_positions, plane_centroid, plane_normal)
+                 padding = cuboid_bottom_padding * plane_normal
+                 projected_hits += padding
+                 center_projected_hit = projected_hits[center_idx]
+-                cuboid_centroid = center_projected_hit + plane_normal * this_cuboid_dimensions[2] / 2.0
++                cuboid_centroid = center_projected_hit + plane_normal * this_cuboid_dimensions.to(
++                    device=plane_normal.device, dtype=plane_normal.dtype
++                )[2] / 2.0
+ 
+                 rotation = compute_rotation_from_grid_sample(
+                     grid,
+@@ -973,10 +987,17 @@ def sample_cuboid_on_object(
+                 if rotation is None:
+                     continue
+ 
++                corner_dimensions = this_cuboid_dimensions.to(
++                    device=rotation.device, dtype=rotation.dtype
++                )
+                 corner_vectors = (
+                     0.5
+-                    * this_cuboid_dimensions
+-                    * th.tensor([[1, 1, -1], [-1, 1, -1], [-1, -1, -1], [1, -1, -1]], dtype=th.float32)
++                    * corner_dimensions
++                    * th.tensor(
++                        [[1, 1, -1], [-1, 1, -1], [-1, -1, -1], [1, -1, -1]],
++                        dtype=rotation.dtype,
++                        device=rotation.device,
++                    )
+                 )
+                 corner_positions = cuboid_centroid.unsqueeze(0) + T.quat_apply(rotation, corner_vectors)
+ 
+@@ -984,7 +1005,7 @@ def sample_cuboid_on_object(
+                 if verify_cuboid_empty and not check_cuboid_empty(
+                     plane_normal,
+                     corner_positions,
+-                    this_cuboid_dimensions,
++                    corner_dimensions,
+                     refusal_reasons["cuboid_not_empty"],
+                 ):
+                     continue
+@@ -997,8 +1018,10 @@ def sample_cuboid_on_object(
+                 if not undo_cuboid_bottom_padding:
+                     padding = cuboid_bottom_padding * center_hit_normal
+                     cuboid_centroid += padding
+-                plane_normal = th.zeros(3)
+-                rotation = th.tensor([0, 0, 0, 1], dtype=th.float32)
++                plane_normal = th.zeros(3, device=center_hit_pos.device, dtype=center_hit_pos.dtype)
++                rotation = th.tensor(
++                    [0, 0, 0, 1], dtype=center_hit_pos.dtype, device=center_hit_pos.device
++                )
+ 
+             # We've found a nice attachment point. Continue onto next point to sample.
+             results[i] = (cuboid_centroid, plane_normal, rotation, hit_link, refusal_reasons)
+@@ -1035,6 +1058,15 @@ def compute_rotation_from_grid_sample(
+         None or scipy.Rotation: If successfully hit, returns relative rotation from two_d_grid to
+             generated hit plane. Otherwise, returns None
+     """
++    # Placement sampling may combine object extents kept on CPU with ray hits
++    # returned on the simulator device. Normalize this small local calculation
++    # before the vector alignment / quaternion application below.
++    sample_device = projected_hits.device
++    sample_dtype = projected_hits.dtype
++    two_d_grid = two_d_grid.to(device=sample_device, dtype=sample_dtype)
++    cuboid_centroid = cuboid_centroid.to(device=sample_device, dtype=sample_dtype)
++    this_cuboid_dimensions = this_cuboid_dimensions.to(device=sample_device, dtype=sample_dtype)
++
+     if sum(hits) < 3:
+         if m.DEBUG_SAMPLING:
+             refusal_log.append(f"insufficient hits to compute the rotation of the grid: needs 3, has {th.sum(hits)}")
+@@ -1042,7 +1074,11 @@ def compute_rotation_from_grid_sample(
+ 
+     grid_in_planar_coordinates = two_d_grid.reshape(-1, 2)
+     grid_in_planar_coordinates = grid_in_planar_coordinates[hits]
+-    grid_in_object_coordinates = th.zeros((len(grid_in_planar_coordinates), 3))
++    grid_in_object_coordinates = th.zeros(
++        (len(grid_in_planar_coordinates), 3),
++        device=grid_in_planar_coordinates.device,
++        dtype=grid_in_planar_coordinates.dtype,
++    )
+     grid_in_object_coordinates[:, :2] = grid_in_planar_coordinates
+     grid_in_object_coordinates[:, 2] = -this_cuboid_dimensions[2] / 2.0
+ 
+@@ -1126,7 +1162,8 @@ def check_hit_max_angle_from_z_axis(hit_normal, max_angle_with_z_axis, refusal_l
+         bool: True if the angle between @hit_normal and the global z-axis is less than @max_angle_with_z_axis,
+             otherwise False
+     """
+-    hit_angle_with_z = th.arccos(th.clip(th.dot(hit_normal, th.tensor([0.0, 0.0, 1.0])), -1.0, 1.0))
++    z_axis = th.tensor([0.0, 0.0, 1.0], device=hit_normal.device, dtype=hit_normal.dtype)
++    hit_angle_with_z = th.arccos(th.clip(th.dot(hit_normal, z_axis), -1.0, 1.0))
+     if hit_angle_with_z > max_angle_with_z_axis:
+         if m.DEBUG_SAMPLING:
+             refusal_log.append("normal %r" % hit_normal)
+@@ -1152,7 +1189,7 @@ def compute_ray_destination(axis, is_top, start_pos, aabb_min, aabb_max):
+         3-array: computed (x,y,z) point on the AABB surface
+     """
+     # Get the ray casting direction - we want to do it parallel to the sample axis.
+-    ray_direction = th.tensor([0, 0, 0])
++    ray_direction = th.zeros(3, device=start_pos.device, dtype=start_pos.dtype)
+     ray_direction[axis] = 1
+     ray_direction *= -1 if is_top else 1
+ 
+diff --git a/OmniGibson/omnigibson/utils/transform_utils.py b/OmniGibson/omnigibson/utils/transform_utils.py
+index c939a9f..0e7005e 100644
+--- a/OmniGibson/omnigibson/utils/transform_utils.py
++++ b/OmniGibson/omnigibson/utils/transform_utils.py
+@@ -1406,7 +1406,7 @@ def check_quat_right_angle(quat: torch.Tensor, atol: float = 5e-2) -> torch.Tens
+ @torch_compile
+ def z_angle_from_quat(quat):
+     """Get the angle around the Z axis produced by the quaternion."""
+-    rotated_X_axis = quat_apply(quat, torch.tensor([1, 0, 0], dtype=torch.float32))
++    rotated_X_axis = quat_apply(quat, torch.tensor([1, 0, 0], dtype=torch.float32, device=quat.device))
+     return torch.arctan2(rotated_X_axis[1], rotated_X_axis[0])
+ 
+ 
+diff --git a/OmniGibson/omnigibson/utils/usd_utils.py b/OmniGibson/omnigibson/utils/usd_utils.py
+index 836d443..6ed551a 100644
+--- a/OmniGibson/omnigibson/utils/usd_utils.py
++++ b/OmniGibson/omnigibson/utils/usd_utils.py
+@@ -517,9 +517,9 @@ class RigidContactAPIImpl:
+ 
+             # Now we compute the last physics step that the body was awake. We need to do this because we want to use the
+             # data for all the indices where the object is not asleep.
+-            body_step_indices = th.arange(N, dtype=th.long).unsqueeze(1).expand_as(per_step_awake)
++            body_step_indices = th.arange(N, dtype=th.long, device=per_step_awake.device).unsqueeze(1).expand_as(per_step_awake)
+             last_awake_body_step = (
+-                th.where(per_step_awake, body_step_indices, th.tensor(-1, dtype=th.long)).max(dim=0).values
++                th.where(per_step_awake, body_step_indices, th.tensor(-1, dtype=th.long, device=per_step_awake.device)).max(dim=0).values
+             )  # (num_bodies,)
+ 
+             # For each step, compute the rows that are awake
+@@ -528,16 +528,16 @@ class RigidContactAPIImpl:
+             # For each step, compute the columns that are awake
+             col_to_rigid = self._CONTACT_MATRIX_COLS_TO_RIGID_BODY_ROWS[scene_idx]
+             valid_col_mask = self._CONTACT_MATRIX_COLS_HAS_RIGID_BODY[scene_idx]
+-            per_step_col_awake = th.zeros(N, len(col_to_rigid), dtype=th.bool)  # (N, C)
++            per_step_col_awake = th.zeros(N, len(col_to_rigid), dtype=th.bool, device=per_step_awake.device)  # (N, C)
+             per_step_col_awake[:, valid_col_mask] = per_step_awake[:, col_to_rigid[valid_col_mask]]
+ 
+             # For each step, compute the pairs that are awake. This is an outer-OR of the row and column awake masks.
+             per_step_awake_pairs = per_step_row_awake[:, :, None] | per_step_col_awake[:, None, :]  # (N, R, C)
+ 
+             # What is the last step that the pair was awake?
+-            pair_step_indices = th.arange(N, dtype=th.long).reshape(N, 1, 1).expand_as(per_step_awake_pairs)
++            pair_step_indices = th.arange(N, dtype=th.long, device=per_step_awake.device).reshape(N, 1, 1).expand_as(per_step_awake_pairs)
+             last_awake_pair_step = (
+-                th.where(per_step_awake_pairs, pair_step_indices, th.tensor(-1, dtype=th.long)).max(dim=0).values
++                th.where(per_step_awake_pairs, pair_step_indices, th.tensor(-1, dtype=th.long, device=per_step_awake.device)).max(dim=0).values
+             )  # (R, C)
+             pair_was_awake = last_awake_pair_step >= 0  # (R, C)
+ 
+diff --git a/OmniGibson/scripts/sampling/multiply_b1k_tasks.py b/OmniGibson/scripts/sampling/multiply_b1k_tasks.py
+index 255e9e9..400dc69 100644
+--- a/OmniGibson/scripts/sampling/multiply_b1k_tasks.py
++++ b/OmniGibson/scripts/sampling/multiply_b1k_tasks.py
+@@ -53,7 +53,8 @@ with open(TASK_CUSTOM_LIST_PATH, "r") as f:
+     TASK_CUSTOM_LISTS = json.load(f)
+ 
+ gm.HEADLESS = False
+-gm.USE_GPU_DYNAMICS = False
++# The hot-drink task contains water particles and requires GPU dynamics.
++gm.USE_GPU_DYNAMICS = True
+ gm.ENABLE_OBJECT_STATES = True
+ gm.ENABLE_TRANSITION_RULES = True
+ 
+diff --git a/OmniGibson/scripts/sampling/sample_b1k_tasks.py b/OmniGibson/scripts/sampling/sample_b1k_tasks.py
+index bf9418d..3e3f570 100644
+--- a/OmniGibson/scripts/sampling/sample_b1k_tasks.py
++++ b/OmniGibson/scripts/sampling/sample_b1k_tasks.py
+@@ -65,7 +65,9 @@ parser.add_argument(
+ )
+ 
+ # gm.HEADLESS = False
+-gm.USE_GPU_DYNAMICS = False
++# This task contains water particles; GPU dynamics is required for the water
++# system to initialize and is available on the selected RTX 4090.
++gm.USE_GPU_DYNAMICS = True
+ gm.ENABLE_OBJECT_STATES = True
+ gm.ENABLE_TRANSITION_RULES = False  # Must be False! We permute this later
+ 

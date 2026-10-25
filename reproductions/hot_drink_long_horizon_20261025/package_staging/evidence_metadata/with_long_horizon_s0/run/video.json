@@ -1,0 +1,981 @@
+{
+  "status": "passed",
+  "file": "episode.mp4",
+  "poster": "video_poster.jpg",
+  "fps": 30.0,
+  "width": 1024,
+  "height": 1616,
+  "started_at": "2026-10-22T12:32:21.288593+00:00",
+  "frame_count": 6545,
+  "scope": "every_env_step_plus_observation_boundaries",
+  "spectator_model_visible": false,
+  "synthesized_motion": false,
+  "demo_motion": false,
+  "time_basis": "simulation control steps; model wait time omitted; boundary captures add one frame",
+  "excluded": "physics substeps and private volume-sampler candidate-search ticks",
+  "views": [
+    "front",
+    "back",
+    "left",
+    "right",
+    "spectator"
+  ],
+  "markers": [
+    {
+      "tool": "initialize",
+      "primitive": "initialize",
+      "request_id": "76a8af95-d909-4cb5-8ea1-b415ad3b1f83",
+      "frame_index": 1,
+      "seconds": 0.03333333333333333
+    },
+    {
+      "tool": "list_skills",
+      "primitive": "list_skills",
+      "request_id": "8eb0e95f-0a0a-4426-8c00-46095781e4fd",
+      "frame_index": 1,
+      "seconds": 0.03333333333333333
+    },
+    {
+      "tool": "read_skill",
+      "primitive": "read_skill",
+      "request_id": "60663826-a595-4291-953a-de676ee00e3d",
+      "frame_index": 1,
+      "seconds": 0.03333333333333333
+    },
+    {
+      "tool": "read_skill",
+      "primitive": "read_skill",
+      "request_id": "84bf4020-03b7-4e33-80b6-3f087b9ae864",
+      "frame_index": 1,
+      "seconds": 0.03333333333333333
+    },
+    {
+      "tool": "read_skill",
+      "primitive": "read_skill",
+      "request_id": "6e7d6821-1ccf-49c9-b591-fec82954bacf",
+      "frame_index": 1,
+      "seconds": 0.03333333333333333
+    },
+    {
+      "tool": "update_plan",
+      "primitive": "update_plan",
+      "request_id": "375fb03e-54c3-4d7e-90f3-8ea4382d6c18",
+      "frame_index": 1,
+      "seconds": 0.03333333333333333
+    },
+    {
+      "tool": "read_skill",
+      "primitive": "read_skill",
+      "request_id": "446615a4-d2bb-4670-9927-34caea608127",
+      "frame_index": 1,
+      "seconds": 0.03333333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "020eed44-4546-43be-bc85-e19017c11ea0",
+      "frame_index": 1,
+      "seconds": 0.03333333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "1afc9ce6-ae8f-40fb-b9e1-ee141ec24e30",
+      "frame_index": 64,
+      "seconds": 2.1333333333333333
+    },
+    {
+      "tool": "read_skill",
+      "primitive": "read_skill",
+      "request_id": "9d62d2d3-1915-43cc-b347-b8b07bc929ab",
+      "frame_index": 71,
+      "seconds": 2.3666666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "1a361f1c-c8a2-4b04-9ebb-0e0ba6b2bc64",
+      "frame_index": 71,
+      "seconds": 2.3666666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "ac45f865-e525-4b3d-96b9-aa6058a7ba4b",
+      "frame_index": 156,
+      "seconds": 5.2
+    },
+    {
+      "tool": "look",
+      "primitive": "look",
+      "request_id": "23479bd3-2eb3-408f-a6f0-08ca97a8e056",
+      "frame_index": 338,
+      "seconds": 11.266666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "d5119c83-da1e-45f4-8066-d703cdff90ff",
+      "frame_index": 394,
+      "seconds": 13.133333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "c4a861fd-c299-44dc-b6a8-4e10bc5d68cc",
+      "frame_index": 493,
+      "seconds": 16.433333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "1a45cba3-0cc5-4794-b6ca-8ce458df4e7c",
+      "frame_index": 500,
+      "seconds": 16.666666666666668
+    },
+    {
+      "tool": "act",
+      "primitive": "pour",
+      "request_id": "b347686f-8af8-4b9c-853b-7b1014c6b312",
+      "frame_index": 609,
+      "seconds": 20.3
+    },
+    {
+      "tool": "read_skill",
+      "primitive": "read_skill",
+      "request_id": "de46fe7c-aeb6-47f3-a1bf-3c9bec915962",
+      "frame_index": 610,
+      "seconds": 20.333333333333332
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "d32a0d70-f5d2-4cfa-a60f-371cea34830a",
+      "frame_index": 610,
+      "seconds": 20.333333333333332
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "5764dec4-3dd8-4bbb-816e-83c24006357e",
+      "frame_index": 710,
+      "seconds": 23.666666666666668
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "6b06145d-d059-43ac-842d-d62ecc3183a9",
+      "frame_index": 717,
+      "seconds": 23.9
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "357e160c-6f79-4d4c-9441-f74e142d19bb",
+      "frame_index": 724,
+      "seconds": 24.133333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "4909ea3a-cdb4-4588-9c6a-9181b18b8b73",
+      "frame_index": 731,
+      "seconds": 24.366666666666667
+    },
+    {
+      "tool": "look",
+      "primitive": "look",
+      "request_id": "62874916-f3eb-460d-a428-bf98a924245d",
+      "frame_index": 738,
+      "seconds": 24.6
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "ca5118a5-e60f-407f-a8e9-13f90e56b3ec",
+      "frame_index": 794,
+      "seconds": 26.466666666666665
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "62b4ccb7-4d00-4661-a757-9b0a49e366cb",
+      "frame_index": 853,
+      "seconds": 28.433333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "pour",
+      "request_id": "a0f3b46e-4abb-4591-9c23-6518a68c092a",
+      "frame_index": 860,
+      "seconds": 28.666666666666668
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "2eb493a9-2344-4919-8d1d-c869edb1d60b",
+      "frame_index": 867,
+      "seconds": 28.9
+    },
+    {
+      "tool": "act",
+      "primitive": "boil",
+      "request_id": "849528f4-3b69-443f-bab7-dadd96015a35",
+      "frame_index": 874,
+      "seconds": 29.133333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "boil",
+      "request_id": "a5ab9502-f766-48a6-8177-d1b119322827",
+      "frame_index": 875,
+      "seconds": 29.166666666666668
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "42a3f091-4ff3-4529-82aa-fd7ba2550faf",
+      "frame_index": 876,
+      "seconds": 29.2
+    },
+    {
+      "tool": "act",
+      "primitive": "place_near_heating_element",
+      "request_id": "a158c301-eea6-4a3f-ac90-2523b996750b",
+      "frame_index": 883,
+      "seconds": 29.433333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "boil",
+      "request_id": "28d47657-ab22-4383-a3a2-559f132d5ec8",
+      "frame_index": 890,
+      "seconds": 29.666666666666668
+    },
+    {
+      "tool": "update_plan",
+      "primitive": "update_plan",
+      "request_id": "5ef5409f-03c5-4ade-b77c-c475b6501cae",
+      "frame_index": 897,
+      "seconds": 29.9
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "25246b92-0ef4-4616-9bcf-d3c7bf04e60f",
+      "frame_index": 897,
+      "seconds": 29.9
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "bff82c57-2c55-4f95-ad43-a435e28b13cc",
+      "frame_index": 898,
+      "seconds": 29.933333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "5cbcd80a-61ea-4a93-9391-948ec862f5a4",
+      "frame_index": 899,
+      "seconds": 29.966666666666665
+    },
+    {
+      "tool": "look",
+      "primitive": "look",
+      "request_id": "a5af7a39-04a5-4d14-9768-fc7929918eaa",
+      "frame_index": 906,
+      "seconds": 30.2
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "bdc2fa19-5c82-4f7b-bcac-d7b6f8e8a603",
+      "frame_index": 940,
+      "seconds": 31.333333333333332
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "15b6719d-fef7-4c4e-8871-28e261935c05",
+      "frame_index": 947,
+      "seconds": 31.566666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "babdad58-dd00-4cce-a564-dde74f6b9721",
+      "frame_index": 954,
+      "seconds": 31.8
+    },
+    {
+      "tool": "act",
+      "primitive": "pour",
+      "request_id": "6622e9b2-bd46-483a-bc2d-a0a3d6d20443",
+      "frame_index": 961,
+      "seconds": 32.03333333333333
+    },
+    {
+      "tool": "look",
+      "primitive": "look",
+      "request_id": "6165a098-e82d-43a2-8be2-eca412dbd965",
+      "frame_index": 962,
+      "seconds": 32.06666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "pour",
+      "request_id": "babafee0-b58a-4221-9cf2-2cdc5d56460c",
+      "frame_index": 996,
+      "seconds": 33.2
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "d5109db3-1989-459a-8189-f3c57b798fa5",
+      "frame_index": 997,
+      "seconds": 33.233333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "02213692-40e2-4e75-ad16-ec4f92ef086a",
+      "frame_index": 1004,
+      "seconds": 33.46666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "3d3c6cfd-bfae-4655-a7ea-29c6ec5359f8",
+      "frame_index": 1011,
+      "seconds": 33.7
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "6657a09f-0a23-4148-b358-db65c913206b",
+      "frame_index": 1012,
+      "seconds": 33.733333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "9f10040f-a15d-4a57-82b4-247f33b2e26f",
+      "frame_index": 1019,
+      "seconds": 33.96666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "f44e1914-3a87-488d-8e3c-a38dc11311d9",
+      "frame_index": 1026,
+      "seconds": 34.2
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "77041b32-0c66-47db-814a-91bb03a41552",
+      "frame_index": 1033,
+      "seconds": 34.43333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "pour",
+      "request_id": "27f9c9bf-fba9-41db-906b-795abcd7411c",
+      "frame_index": 1040,
+      "seconds": 34.666666666666664
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "507e4674-5893-44a7-9153-1bfe81d72fe5",
+      "frame_index": 1041,
+      "seconds": 34.7
+    },
+    {
+      "tool": "act",
+      "primitive": "pour",
+      "request_id": "4214006e-1ef9-4129-b946-c35c0f723765",
+      "frame_index": 1165,
+      "seconds": 38.833333333333336
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "f66319cc-0136-4820-b76f-caa97ae7a2ec",
+      "frame_index": 1172,
+      "seconds": 39.06666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "a21ad762-f6b6-4156-a9b8-e71654f30367",
+      "frame_index": 1179,
+      "seconds": 39.3
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "45969c42-e703-4a8b-a989-bcc7ee3924ed",
+      "frame_index": 1186,
+      "seconds": 39.53333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "93475902-2bea-4e42-b03e-453344c25c4e",
+      "frame_index": 1558,
+      "seconds": 51.93333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "7d17eb7c-b044-4319-be02-95cd1abe5cb0",
+      "frame_index": 1565,
+      "seconds": 52.166666666666664
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "037923e6-521e-44a3-82bf-dba606a4eddd",
+      "frame_index": 1566,
+      "seconds": 52.2
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "5f042960-a946-4c06-9439-b63b893f77ed",
+      "frame_index": 1711,
+      "seconds": 57.03333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "ccf92e38-198b-4052-ad39-e6f227112210",
+      "frame_index": 1919,
+      "seconds": 63.96666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "4439ddf6-ac07-4ded-8bc3-4a094c5ffd18",
+      "frame_index": 1926,
+      "seconds": 64.2
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "b6cd70c0-0a63-4876-b48e-1de5a4b4936a",
+      "frame_index": 2114,
+      "seconds": 70.46666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "e10e9d65-3b8d-445a-93dc-5bf4d969f455",
+      "frame_index": 2339,
+      "seconds": 77.96666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "1b9f5f52-5a27-433c-b97e-efe0fd049a9c",
+      "frame_index": 2346,
+      "seconds": 78.2
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "0fed0559-02e2-4362-b16a-aaa96655cc5b",
+      "frame_index": 2555,
+      "seconds": 85.16666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "744406ae-c2fa-4227-9449-305390e388ab",
+      "frame_index": 2745,
+      "seconds": 91.5
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "7fff0c3b-0178-495a-a654-f59249958a10",
+      "frame_index": 2752,
+      "seconds": 91.73333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "8073f9d0-7b04-4024-b66f-d2271135847d",
+      "frame_index": 2840,
+      "seconds": 94.66666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "ef25446c-12db-47d9-92cd-e2281e9b97d5",
+      "frame_index": 2847,
+      "seconds": 94.9
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "008f4eac-bdf6-4bd5-b97c-8e5692ab2560",
+      "frame_index": 2854,
+      "seconds": 95.13333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "971b3070-c699-4c48-83f4-1f7e49b1686f",
+      "frame_index": 2861,
+      "seconds": 95.36666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "fe4adcce-c4ac-4d74-b127-3abc29a6db63",
+      "frame_index": 2868,
+      "seconds": 95.6
+    },
+    {
+      "tool": "read_skill",
+      "primitive": "read_skill",
+      "request_id": "06428ea6-b561-421a-be96-a1ce6a69f672",
+      "frame_index": 2875,
+      "seconds": 95.83333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "82a9f484-0f8b-465c-987b-b79516974fc2",
+      "frame_index": 2875,
+      "seconds": 95.83333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "5315368b-c92f-45d3-a60a-ce1a627792d6",
+      "frame_index": 2882,
+      "seconds": 96.06666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "97de4df5-a5fd-4457-9b71-7d559e14988e",
+      "frame_index": 2889,
+      "seconds": 96.3
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "279ee806-06e4-44ca-878f-783ec1690093",
+      "frame_index": 2896,
+      "seconds": 96.53333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "91ec7378-7cb9-4f9c-9ce0-50820e6b2f40",
+      "frame_index": 2903,
+      "seconds": 96.76666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "9d994783-8194-4453-8ae2-4425a9c78187",
+      "frame_index": 2910,
+      "seconds": 97.0
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "d86d5a29-e095-430a-8b44-0f6f80065d5d",
+      "frame_index": 2911,
+      "seconds": 97.03333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "57a21595-6e6e-4c9f-abb1-f31f6441d342",
+      "frame_index": 2918,
+      "seconds": 97.26666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "cde0d449-3b80-424d-b2f3-1ec2803930b7",
+      "frame_index": 2919,
+      "seconds": 97.3
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "f3513040-4588-422f-9dda-7a4665863c87",
+      "frame_index": 3028,
+      "seconds": 100.93333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "close",
+      "request_id": "23ad2992-6f57-479f-a85c-7384b58cb0a3",
+      "frame_index": 3035,
+      "seconds": 101.16666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "85730532-1765-4395-85fe-6849626512c4",
+      "frame_index": 3042,
+      "seconds": 101.4
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "41612c6b-be1c-4bb2-b75c-843388dedfa5",
+      "frame_index": 3049,
+      "seconds": 101.63333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "bdccb19f-09b2-485f-b3e9-41356b6e2b65",
+      "frame_index": 3364,
+      "seconds": 112.13333333333334
+    },
+    {
+      "tool": "update_plan",
+      "primitive": "update_plan",
+      "request_id": "4b3e6a41-d198-45c9-8653-a5681d535430",
+      "frame_index": 3371,
+      "seconds": 112.36666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "fca5befe-47cf-4e6c-bc9a-4f24eeadea94",
+      "frame_index": 3371,
+      "seconds": 112.36666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "b8d189a0-8418-4352-9409-c826e951dedf",
+      "frame_index": 3532,
+      "seconds": 117.73333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "b8917e60-dbc5-4e1a-9000-8d3f4e804ded",
+      "frame_index": 3763,
+      "seconds": 125.43333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "8c3b264f-facf-4d67-9729-9ae8995cfe61",
+      "frame_index": 3770,
+      "seconds": 125.66666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "26c0a97c-aac5-45dd-a3ea-0e07b6102815",
+      "frame_index": 4151,
+      "seconds": 138.36666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "43aa04c4-c706-41a1-8dd3-524dced1e2f5",
+      "frame_index": 4158,
+      "seconds": 138.6
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "144de060-6d3b-47de-9100-712c032e37fb",
+      "frame_index": 4313,
+      "seconds": 143.76666666666668
+    },
+    {
+      "tool": "look",
+      "primitive": "look",
+      "request_id": "059a5f89-e2ec-4c91-b458-9468be89f71d",
+      "frame_index": 4589,
+      "seconds": 152.96666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "ed985a24-d844-4c10-b043-902242fc74ee",
+      "frame_index": 4623,
+      "seconds": 154.1
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "26437336-95df-4dce-9948-cdd627a775aa",
+      "frame_index": 4630,
+      "seconds": 154.33333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "81577f1b-1594-4f10-a9b5-69c9b1d10108",
+      "frame_index": 4637,
+      "seconds": 154.56666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "046ac886-3fda-4cb0-8b5f-a19557e8c8ff",
+      "frame_index": 4644,
+      "seconds": 154.8
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "3acb0fe8-6ddb-4122-ba25-2747e9ff7845",
+      "frame_index": 4727,
+      "seconds": 157.56666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "84cd9885-6077-41a7-b22a-65ae8dc497b9",
+      "frame_index": 4734,
+      "seconds": 157.8
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "dd04529f-cbbf-4322-b3c0-696108b3b681",
+      "frame_index": 4735,
+      "seconds": 157.83333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "d1895935-6d7d-491f-9e52-8131342b6b76",
+      "frame_index": 4870,
+      "seconds": 162.33333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "d363cb92-6f73-4595-b2be-c97ccfdac347",
+      "frame_index": 4871,
+      "seconds": 162.36666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "add81eb7-6c98-489d-8060-5bede1a69578",
+      "frame_index": 4872,
+      "seconds": 162.4
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "7820cab9-54b0-4051-ac09-7bdc36f99f19",
+      "frame_index": 4943,
+      "seconds": 164.76666666666668
+    },
+    {
+      "tool": "look",
+      "primitive": "look",
+      "request_id": "15eb4ad0-ec7b-4f8a-b799-a7f4c13238c7",
+      "frame_index": 4950,
+      "seconds": 165.0
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "6273abd8-7114-4cb0-8f86-d653d5dac9eb",
+      "frame_index": 4984,
+      "seconds": 166.13333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "open",
+      "request_id": "ee27c242-4f30-4f1e-8c85-576200d7df2d",
+      "frame_index": 5100,
+      "seconds": 170.0
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "838b2006-e95b-4e09-87a8-8d9646de078a",
+      "frame_index": 5107,
+      "seconds": 170.23333333333332
+    },
+    {
+      "tool": "look",
+      "primitive": "look",
+      "request_id": "684b9675-71c5-4314-b495-59b0bc15507b",
+      "frame_index": 5185,
+      "seconds": 172.83333333333334
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "bd668b87-013c-4ab5-b5ee-7d416d0c3a1b",
+      "frame_index": 5226,
+      "seconds": 174.2
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "0c5f5ddd-89bb-419f-8921-94022f320a4c",
+      "frame_index": 5327,
+      "seconds": 177.56666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "c60e0644-b686-45c2-b9e0-44f94877bd6c",
+      "frame_index": 5334,
+      "seconds": 177.8
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "ff8c8fe8-e772-49a5-8ac9-9ac21d0e3fb9",
+      "frame_index": 5724,
+      "seconds": 190.8
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "4499bd8a-53af-48a7-9d57-430c106e8036",
+      "frame_index": 5731,
+      "seconds": 191.03333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "98b375f8-a1c5-4630-9008-2e77ccaf2445",
+      "frame_index": 5912,
+      "seconds": 197.06666666666666
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "0b264837-a693-439e-a25a-7c2eca8316d4",
+      "frame_index": 6139,
+      "seconds": 204.63333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "1d64216a-8f09-4c11-88bc-d754f7837290",
+      "frame_index": 6146,
+      "seconds": 204.86666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "navigate_to",
+      "request_id": "967bad57-3b46-4aa5-a38c-1ebd4866c8c6",
+      "frame_index": 6341,
+      "seconds": 211.36666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "169b519b-1f6d-4201-a2c8-22fddf8502fa",
+      "frame_index": 6522,
+      "seconds": 217.4
+    },
+    {
+      "tool": "act",
+      "primitive": "grasp",
+      "request_id": "817afb9d-5341-4ced-8e47-5ee265157425",
+      "frame_index": 6529,
+      "seconds": 217.63333333333333
+    },
+    {
+      "tool": "act",
+      "primitive": "pour",
+      "request_id": "22de1d1c-1916-4664-97db-167a3e98cbcc",
+      "frame_index": 6536,
+      "seconds": 217.86666666666667
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "6de87fc2-9ca9-4c5b-a515-9ffcb68bb655",
+      "frame_index": 6537,
+      "seconds": 217.9
+    },
+    {
+      "tool": "act",
+      "primitive": "place_on_top",
+      "request_id": "d344937f-e2ec-4fdb-94f3-33cc5546250a",
+      "frame_index": 6538,
+      "seconds": 217.93333333333334
+    },
+    {
+      "tool": "update_plan",
+      "primitive": "update_plan",
+      "request_id": "80478f49-ea6b-46c4-b2bb-46ff7f9a6483",
+      "frame_index": 6545,
+      "seconds": 218.16666666666666
+    },
+    {
+      "tool": "finish",
+      "primitive": "finish",
+      "request_id": "33e1b292-9593-49c3-bf28-13b7fcc88136",
+      "frame_index": 6545,
+      "seconds": 218.16666666666666
+    }
+  ],
+  "encoder_pid": 3290163,
+  "encoder_command": [
+    "/mnt/data/home/sunyujie/miniforge3/envs/behavior/lib/python3.11/site-packages/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2",
+    "-hide_banner",
+    "-loglevel",
+    "warning",
+    "-y",
+    "-f",
+    "rawvideo",
+    "-pixel_format",
+    "rgb24",
+    "-video_size",
+    "1024x1616",
+    "-framerate",
+    "30.0",
+    "-i",
+    "pipe:0",
+    "-an",
+    "-c:v",
+    "libx264",
+    "-threads",
+    "2",
+    "-preset",
+    "fast",
+    "-crf",
+    "20",
+    "-pix_fmt",
+    "yuv420p",
+    "-g",
+    "30",
+    "-movflags",
+    "+frag_keyframe+empty_moov+default_base_moof",
+    "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_opt_baseline_gpt61sol_low_20261022_s0/run/episode.mp4"
+  ],
+  "recorded_env_steps": 6428,
+  "checkpoint_at": "2026-10-22T14:15:16.657666+00:00",
+  "finished_at": "2026-10-22T14:16:56.933559+00:00",
+  "duration_seconds": 218.16666666666666,
+  "final_env_step": 6428,
+  "every_env_step_recorded": true,
+  "encoder_exit_code": 0,
+  "fresh_camera_frames": 2259,
+  "repeated_camera_frames": 4286,
+  "capture_policy": "control-step CFR; explicit previous-frame hold between fresh captures; fresh action observation boundaries",
+  "bytes": 117435344,
+  "sha256": "fb0c242c86f573fda18303bb459ebbbc71b8e826717e22634c1283adffc7909a"
+}

@@ -1,0 +1,28 @@
+{
+  "completed_control_attempts": 3,
+  "groups": {
+    "with_long_horizon": {
+      "completed_attempts": 3,
+      "planned": 3,
+      "independent_successes": 3,
+      "formally_closed_successes": 3,
+      "mean_actions": 112.33333333333333,
+      "mean_failed_actions": 15.666666666666666,
+      "mean_wall_seconds": 7456.076597228646,
+      "mean_motor_tool_wall_seconds": 3578.2024156666666
+    },
+    "without_long_horizon": {
+      "completed_attempts": 3,
+      "planned": 3,
+      "independent_successes": 0,
+      "formally_closed_successes": 0,
+      "mean_actions": 114.33333333333333,
+      "mean_failed_actions": 60.666666666666664,
+      "mean_wall_seconds": 6045.806548822981,
+      "mean_motor_tool_wall_seconds": 1529.416725
+    }
+  },
+  "comparison_file": "comparison_through_cell_3.json",
+  "historical_reference": true,
+  "no_causal_generalization": true
+}

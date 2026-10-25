@@ -1,0 +1,5 @@
+{"type":"step_start","timestamp":1740000000000,"part":{"type":"step-start"}}
+{"type":"text","timestamp":1740000000001,"part":{"type":"text","text":"I will inspect the scene."}}
+{"type":"tool_use","timestamp":1740000000010,"part":{"id":"part-1","type":"tool","callID":"call-1","tool":"manipulation_observe","state":{"status":"completed","input":{},"output":"{\"ok\":true,\"observation\":{\"revision\":0},\"evidence_id\":\"obs-result\"}"}}}
+{"type":"tool_use","timestamp":1740000000020,"part":{"type":"tool","callID":"call-2","tool":"manipulation_finish","state":{"status":"completed","input":{},"output":"{\"ok\":true,\"closed\":true}"}}}
+{"type":"step_finish","timestamp":1740000000030,"part":{"type":"step-finish","tokens":{"input":10,"output":5,"reasoning":2}}}

@@ -1,0 +1,267 @@
+[
+  {
+    "file": "src/manipulation_agent/skill_runtime.py",
+    "line": 20,
+    "code": "if name == 'long-horizon-planning' and os.environ.get('MAS_LONG_HORIZON_PLANNING_SKILL') != '1':"
+  },
+  {
+    "file": "src/manipulation_agent/records.py",
+    "line": 85,
+    "code": "\"interpreter\": sys.executable, \"unit\": os.environ.get(\"MAS_UNIT\"),"
+  },
+  {
+    "file": "src/manipulation_agent/records.py",
+    "line": 86,
+    "code": "\"gpu_uuid\": os.environ.get(\"MAS_GPU_UUID\"),"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 142,
+    "code": "gpu = int(os.environ.get(\"OMNIGIBSON_GPU_ID\", \"0\"))"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 160,
+    "code": "gm.USE_GPU_DYNAMICS = os.environ.get('MAS_CPU_DYNAMICS') != '1'"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 239,
+    "code": "if task == 'prepare_and_serve_hot_drink' and os.environ.get('OG_SWITCH_TO_CPU_AFTER_WATER'):"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 244,
+    "code": "if os.environ.pop('OG_DISABLE_CONTACT_CACHE', None):"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 272,
+    "code": "if task == 'prepare_and_serve_hot_drink' and not os.environ.get('MAS_HIGH_LEVEL_HARNESS') == '1':"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 304,
+    "code": "if os.environ.get('MAS_PREOPEN_TASK_CONTAINERS'):"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 325,
+    "code": "if opened and os.environ.get('MAS_PREOPEN_RENDER_FLUSH'):"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 333,
+    "code": "'render_flush': bool(os.environ.get('MAS_PREOPEN_RENDER_FLUSH')),"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 360,
+    "code": "if not os.environ.get('MAS_SYNC_ARTICULATION_VISUALS'):"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 373,
+    "code": "root = Path(os.environ[\"OMNIGIBSON_DATA_PATH\"])"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 444,
+    "code": "cache = Path(os.environ[\"OMNIGIBSON_APPDATA_PATH\"]) / \"mas-scenes\""
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 454,
+    "code": "if os.environ.get('MAS_HIGH_LEVEL_HARNESS') == '1':"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 794,
+    "code": "gpu = os.environ.get(\"OMNIGIBSON_GPU_ID\", \"0\")"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 799,
+    "code": "root = Path(os.environ[\"OMNIGIBSON_DATA_PATH\"])"
+  },
+  {
+    "file": "src/manipulation_agent/omnigibson_backend.py",
+    "line": 805,
+    "code": "\"dynamics_mode\": \"cpu\" if os.environ.get('MAS_CPU_DYNAMICS') == '1' else \"gpu\","
+  },
+  {
+    "file": "src/manipulation_agent/deadline.py",
+    "line": 120,
+    "code": "clock_path=os.environ.get('MAS_EXECUTION_CLOCK_PATH')"
+  },
+  {
+    "file": "src/manipulation_agent/deadline.py",
+    "line": 122,
+    "code": "value = os.environ.get('MAS_EPISODE_DEADLINE_UNIX')"
+  },
+  {
+    "file": "src/manipulation_agent/review_video.py",
+    "line": 36,
+    "code": "'interpreter':sys.executable,'gpu_uuid':None,'unit':os.environ.get('MAS_UNIT'),"
+  },
+  {
+    "file": "src/manipulation_agent/policies.py",
+    "line": 90,
+    "code": "missing = [k for k in (\"LLM_MODEL\", \"LLM_BASE_URL\", \"LLM_API_KEY\") if not os.environ.get(k)]"
+  },
+  {
+    "file": "src/manipulation_agent/policies.py",
+    "line": 93,
+    "code": "return cls(model=os.environ[\"LLM_MODEL\"], base_url=os.environ[\"LLM_BASE_URL\"], key=os.environ[\"LLM_API_KEY\"])"
+  },
+  {
+    "file": "src/manipulation_agent/mcp_server.py",
+    "line": 94,
+    "code": "if os.environ.get('MAS_QWEN_TARGET_JSON_COMPAT') == '1':"
+  },
+  {
+    "file": "src/manipulation_agent/model_trace.py",
+    "line": 23,
+    "code": "root=Path(sessions_root) if sessions_root else Path(os.environ.get('CODEX_HOME',str(Path.home()/'.codex')))/'sessions'"
+  },
+  {
+    "file": "src/manipulation_agent/video.py",
+    "line": 25,
+    "code": "return os.environ.get(name, '').strip().lower() in {'1', 'true', 'yes', 'on'}"
+  },
+  {
+    "file": "src/manipulation_agent/walltime_video.py",
+    "line": 94,
+    "code": "'host':platform.node(),'pid':os.getpid(),'interpreter':sys.executable,'unit':os.environ.get('MAS_UNIT'),"
+  },
+  {
+    "file": "src/manipulation_agent/inspection_video.py",
+    "line": 123,
+    "code": "'unit': os.environ.get('MAS_UNIT'), 'file': output.name,"
+  },
+  {
+    "file": "src/manipulation_agent/vision_policy.py",
+    "line": 100,
+    "code": "if os.environ.get('MAS_HIGH_LEVEL_HARNESS') == '1':"
+  },
+  {
+    "file": "src/manipulation_agent/executors/cartographer_mapping.py",
+    "line": 58,
+    "code": "self.runtime = Path(runtime or os.environ.get('MAS_CARTOGRAPHER_RUNTIME', default)).resolve()"
+  },
+  {
+    "file": "src/manipulation_agent/executors/cartographer_mapping.py",
+    "line": 63,
+    "code": "env = os.environ.copy()"
+  },
+  {
+    "file": "src/manipulation_agent/executors/online_backend.py",
+    "line": 106,
+    "code": "diagnostic_step = int(os.environ.get('MAS_ONLINE_CAPTURE_DIAGNOSTICS_FROM_STEP', '-1'))"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 26,
+    "code": "return os.environ.get(name, '').strip().lower() in {'1', 'true', 'yes', 'on'}"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 90,
+    "code": "self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 91,
+    "code": "self.demo_motion = os.environ.get('MAS_DEMO_MOTION','0') in {'1','true','yes'}"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 101,
+    "code": "self.video_render_stride = int(os.environ.get(\"MAS_VIDEO_RENDER_STRIDE\", \"2\"))"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 103,
+    "code": "self.video_render_flushes = int(os.environ.get('MAS_VIDEO_RENDER_FLUSHES', '4'))"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 116,
+    "code": "self.image_size=int(os.environ.get('MAS_RGB_IMAGE_SIZE','512'))"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 119,
+    "code": "self.rgb_jpeg_quality=int(os.environ.get('MAS_RGB_JPEG_QUALITY','92'))"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 127,
+    "code": "self.rig_pitch_degrees=float(os.environ.get('MAS_RGB_PITCH_DEGREES','35'))"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 164,
+    "code": "configured_height = os.environ.get('MAS_RGB_RIG_HEIGHT')"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 400,
+    "code": "interval = int(os.environ.get(\"OG_SKIP_PHYSICS_VIDEO_INTERVAL\", \"0\"))"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 404,
+    "code": "if os.environ.get(\"OG_DIRECT_SIM_STEP\"):"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 530,
+    "code": "not os.environ.get(\"OG_ALLOW_PHYSICS_CAPTURE_DRIFT\")):"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 539,
+    "code": "'allowed': bool(os.environ.get('OG_ALLOW_PHYSICS_CAPTURE_DRIFT')),"
+  },
+  {
+    "file": "src/manipulation_agent/executors/omnigibson_rgb.py",
+    "line": 847,
+    "code": "if os.environ.get(\"OG_KINEMATIC_CAMERA_TURNS\"):"
+  },
+  {
+    "file": "src/manipulation_agent/clients/codex.py",
+    "line": 60,
+    "code": "root = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex')))"
+  },
+  {
+    "file": "src/manipulation_agent/clients/codex.py",
+    "line": 76,
+    "code": "if key == 'base_url' and (proxy := os.environ.get('MAS_RESPONSES_PROXY_URL')):"
+  },
+  {
+    "file": "src/manipulation_agent/clients/codex.py",
+    "line": 93,
+    "code": "client_root = Path(os.environ.get(\"CODEX_HOME\", str(Path.home() / \".codex\")))"
+  },
+  {
+    "file": "src/manipulation_agent/clients/codex.py",
+    "line": 97,
+    "code": "local_root = os.environ.get(\"MAS_CLIENT_STATE_ROOT\")"
+  },
+  {
+    "file": "src/manipulation_agent/clients/codex.py",
+    "line": 117,
+    "code": "if pythonpath := os.environ.get('PYTHONPATH'):"
+  },
+  {
+    "file": "src/manipulation_agent/clients/codex.py",
+    "line": 119,
+    "code": "if os.environ.get('MAS_QWEN_TARGET_JSON_COMPAT') == '1':"
+  },
+  {
+    "file": "src/manipulation_agent/clients/base.py",
+    "line": 24,
+    "code": "kwargs[\"env\"] = {**os.environ, **project.env_overlay}"
+  }
+]

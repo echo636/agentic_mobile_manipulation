@@ -1,0 +1,702 @@
+{
+  "reviews": [
+    {
+      "seed": 0,
+      "original_checks": {
+        "model_controller_passed": false,
+        "model_simulator_calls_align": false,
+        "target_action_selected_by_model": true,
+        "target_action_executed": true,
+        "semantic_task_success": false,
+        "semantic_state_log_matches": true,
+        "visual_base_height_stable": true,
+        "official_submission_ineligible": true,
+        "video_passed": true,
+        "agent_reported_achieved": false,
+        "hand_empty_at_finish": true,
+        "motion_mode_matches_run": true,
+        "no_demo_motion_recorded": true,
+        "visual_pixel_action_profile": true,
+        "no_named_action_calls": true,
+        "model_chose_navigate_to": true,
+        "all_paths_from_explicit_navigate_to": true,
+        "navigation_path_recorded": true,
+        "public_decision_every_robot_tool": true
+      },
+      "robot_calls_align_excluding_supervisor_and_client_resource_calls": true,
+      "extra_client_calls": [],
+      "extra_client_results": null,
+      "skill_reads": [
+        {
+          "event": "event-00007",
+          "arguments": {
+            "decision": {
+              "state": "已发现技能文件",
+              "active_subgoal": "读取视觉操作主流程",
+              "reason": "遵从任务所需的技能流程",
+              "expected": "获得当前RGB操作的核心步骤"
+            },
+            "name": "visual-manipulation",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00009",
+          "arguments": {
+            "decision": {
+              "state": "需确认跨场景搜索和取放规则",
+              "active_subgoal": "读取探索与取放技能",
+              "reason": "现场需从冰箱和橱柜取用物件并搬到茶几",
+              "expected": "明确导航、抓取及放置注意事项"
+            },
+            "name": "visual-exploration",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00011",
+          "arguments": {
+            "decision": {
+              "state": "探索指引已读，取放物品前读取取放技能",
+              "active_subgoal": "读取拾取与放置流程",
+              "reason": "后续需要持物跨区域并在茶几上布置",
+              "expected": "明确抓取分类反馈与放置流程"
+            },
+            "name": "pick-and-place",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00189",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "Read manipulation workflow",
+              "expected": "Core procedure for RGB-directed manipulation",
+              "reason": "Following the required visual manipulation skill before further actions.",
+              "state": "Scene indicates kitchen staging and living-room table in view."
+            },
+            "name": "visual-manipulation",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00191",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "Read exploration workflow",
+              "expected": "Guidance for finding remaining items",
+              "reason": "Current wide RGB does not show all requested ingredients or table setup; use exploration rules.",
+              "state": "Kitchen counter and living-room sofa/table visible from current pose."
+            },
+            "name": "visual-exploration",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00193",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "Read pick-and-place workflow",
+              "expected": "Safe procedure to carry items and place them",
+              "reason": "Task requires moving multiple kitchen items to the living-room table.",
+              "state": "Need inspect likely remaining goals after prior thread; no assumptions about previous actions."
+            },
+            "name": "pick-and-place",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00277",
+          "arguments": {
+            "decision": {
+              "state": "Workflow resources identified.",
+              "active_subgoal": "Read visual manipulation and carrying guidance.",
+              "reason": "Need the required action loop and safe pick/place procedure.",
+              "expected": "Operational guidance for RGB-based manipulation."
+            },
+            "name": "visual-manipulation",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00279",
+          "arguments": {
+            "decision": {
+              "state": "Workflow resources identified.",
+              "active_subgoal": "Read visual manipulation and carrying guidance.",
+              "reason": "Need the required action loop and safe pick/place procedure.",
+              "expected": "Operational guidance for RGB-based manipulation."
+            },
+            "name": "pick-and-place",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00293",
+          "arguments": {
+            "decision": {
+              "state": "Boil attempts repeatedly failed without changing the scene; the target may be occluded from this viewpoint.",
+              "active_subgoal": "Read visual exploration and recovery guidance before changing approach.",
+              "reason": "A viewpoint shift may reveal the vessel/stove more clearly, and recovery procedures help avoid repeating the same failed pixel.",
+              "expected": "Guidance for a new visible approach."
+            },
+            "name": "visual-exploration",
+            "resource": "SKILL.md"
+          }
+        }
+      ],
+      "actual_skill_bundle": "5dcce20f01e9c4d37cd45e46a28093152fc1a5321ddd87df060b71cbf7b00996",
+      "failed_tool_latency_seconds": 49.299834,
+      "failed_tool_latency_note": "Direct latency only; excludes downstream recovery. No removable-action total validated.",
+      "semantic_goals": {
+        "water_boiled": false,
+        "kettle_has_hot_water": false,
+        "napkin_served": false,
+        "mat_on_table": false,
+        "plate_served": true,
+        "spoon_served": false,
+        "tray_on_table": false,
+        "cookie_served": false,
+        "honey_served": false,
+        "mug_has_hot_water": false,
+        "mug_served": false
+      }
+    },
+    {
+      "seed": 11,
+      "original_checks": {
+        "model_controller_passed": true,
+        "model_simulator_calls_align": false,
+        "target_action_selected_by_model": true,
+        "target_action_executed": true,
+        "semantic_task_success": false,
+        "semantic_state_log_matches": true,
+        "visual_base_height_stable": true,
+        "official_submission_ineligible": true,
+        "video_passed": true,
+        "agent_reported_achieved": false,
+        "hand_empty_at_finish": true,
+        "motion_mode_matches_run": true,
+        "no_demo_motion_recorded": true,
+        "visual_pixel_action_profile": true,
+        "no_named_action_calls": true,
+        "model_chose_navigate_to": true,
+        "all_paths_from_explicit_navigate_to": true,
+        "navigation_path_recorded": true,
+        "public_decision_every_robot_tool": true
+      },
+      "robot_calls_align_excluding_supervisor_and_client_resource_calls": true,
+      "extra_client_calls": [
+        [
+          "read_mcp_resource",
+          {
+            "server": "x",
+            "uri": "x"
+          }
+        ],
+        [
+          "read_mcp_resource",
+          {
+            "server": "x",
+            "uri": "x"
+          }
+        ],
+        [
+          "list_mcp_resources",
+          {}
+        ]
+      ],
+      "extra_client_results": "seed11: two unknown server x errors and one empty resources list; no task or oracle information returned",
+      "skill_reads": [
+        {
+          "event": "event-00007",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "读取视觉操作技能",
+              "expected": "掌握RGB选择和反馈循环",
+              "reason": "后续每步都依赖可验证的视觉操作流程",
+              "state": "技能清单已读取"
+            },
+            "name": "visual-manipulation",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00009",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "读取抓取放置技能",
+              "expected": "掌握开柜、抓取和茶几布置流程",
+              "reason": "任务包含多个物品搬运到客厅茶几",
+              "state": "视觉技能已读取"
+            },
+            "name": "pick-and-place",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00097",
+          "arguments": {
+            "name": "pick-and-place",
+            "resource": "references/staging-and-doors.md",
+            "decision": {
+              "state": "持有托盘，盘子实际在厨房岛台",
+              "active_subgoal": "修正布置路线",
+              "reason": "需要临时放置托盘以腾手取物",
+              "expected": "读取安全暂存和门操作规范"
+            }
+          }
+        },
+        {
+          "event": "event-00122",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "load_workflow",
+              "expected": "Read core visual manipulation and pick-place instructions.",
+              "reason": "The task requires searching, carrying, boiling, and arranging multiple items.",
+              "state": "reading_skills"
+            },
+            "name": "visual-manipulation",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00124",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "load_workflow",
+              "expected": "Read pick-and-place guidance for carrying and placement.",
+              "reason": "Need safe handling of cabinet items and arranging them on the living-room coffee table.",
+              "state": "reading_skills"
+            },
+            "name": "pick-and-place",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00234",
+          "arguments": {
+            "decision": {
+              "state": "Workflow documents located; reading core visual manipulation guidance.",
+              "active_subgoal": "Understand bounded exploration and action verification.",
+              "reason": "Need to navigate from an uninformative corridor view safely.",
+              "expected": "Core workflow rules for selecting visible navigation targets and verifying effects."
+            },
+            "name": "visual-manipulation",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00236",
+          "arguments": {
+            "decision": {
+              "state": "Core guidance read; need exploration and carrying specifics.",
+              "active_subgoal": "Read visual exploration and pick-and-place procedures.",
+              "reason": "Task requires locating fridge/cabinet items and arranging many objects.",
+              "expected": "Bounded navigation, grasp, and placement rules."
+            },
+            "name": "visual-exploration",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00238",
+          "arguments": {
+            "decision": {
+              "state": "Exploration guidance read; now loading pick-and-place rules.",
+              "active_subgoal": "Plan safe multi-item transport and placement on the tea table.",
+              "reason": "Need avoid guessing item pixels and maintain hand/state tracking.",
+              "expected": "Rules for grasping, carrying, destination selection, and verification."
+            },
+            "name": "pick-and-place",
+            "resource": "SKILL.md"
+          }
+        }
+      ],
+      "actual_skill_bundle": "5dcce20f01e9c4d37cd45e46a28093152fc1a5321ddd87df060b71cbf7b00996",
+      "failed_tool_latency_seconds": 44.2343,
+      "failed_tool_latency_note": "Direct latency only; excludes downstream recovery. No removable-action total validated.",
+      "semantic_goals": {
+        "water_boiled": false,
+        "kettle_has_hot_water": false,
+        "napkin_served": false,
+        "mat_on_table": false,
+        "plate_served": false,
+        "spoon_served": false,
+        "tray_on_table": false,
+        "cookie_served": false,
+        "honey_served": false,
+        "mug_has_hot_water": false,
+        "mug_served": false
+      }
+    },
+    {
+      "seed": 22,
+      "original_checks": {
+        "model_controller_passed": true,
+        "model_simulator_calls_align": true,
+        "target_action_selected_by_model": true,
+        "target_action_executed": true,
+        "semantic_task_success": false,
+        "semantic_state_log_matches": true,
+        "visual_base_height_stable": true,
+        "official_submission_ineligible": true,
+        "video_passed": true,
+        "agent_reported_achieved": false,
+        "hand_empty_at_finish": true,
+        "motion_mode_matches_run": true,
+        "no_demo_motion_recorded": true,
+        "visual_pixel_action_profile": true,
+        "no_named_action_calls": true,
+        "model_chose_navigate_to": true,
+        "all_paths_from_explicit_navigate_to": true,
+        "navigation_path_recorded": true,
+        "public_decision_every_robot_tool": true
+      },
+      "robot_calls_align_excluding_supervisor_and_client_resource_calls": true,
+      "extra_client_calls": [],
+      "extra_client_results": null,
+      "skill_reads": [
+        {
+          "event": "event-00007",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "读取核心视觉操作技能",
+              "expected": "获得完成任务的观察-动作-验证约束",
+              "reason": "技能清单已确认，先读取视觉操作总则。",
+              "state": "正在加载操作规范"
+            }
+          }
+        },
+        {
+          "event": "event-00009",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "读取视觉操作总则",
+              "expected": "获得可直接执行的动作流程",
+              "reason": "上次技能调用缺少必需的name和resource字段；现在按接口补齐。",
+              "state": "当前仍处于厨房，观察到炉灶与橱柜"
+            }
+          }
+        },
+        {
+          "event": "event-00011",
+          "arguments": {
+            "name": "visual-manipulation",
+            "resource": "SKILL.md",
+            "decision": {
+              "active_subgoal": "读取视觉操作总则",
+              "expected": "获取观察和动作流程说明",
+              "reason": "根据技能清单读取 visual-manipulation/SKILL.md。",
+              "state": "厨房设备与客厅茶几已在视野中"
+            }
+          }
+        },
+        {
+          "event": "event-00013",
+          "arguments": {
+            "name": "pick-and-place",
+            "resource": "SKILL.md",
+            "decision": {
+              "active_subgoal": "读取拾取与摆放流程",
+              "expected": "掌握开门、抓取、搬运和茶几摆放规则",
+              "reason": "任务需要从冰箱/橱柜取多件物品并布置茶几。",
+              "state": "已确认厨房右侧有橱柜抽屉和冰箱方向"
+            }
+          }
+        },
+        {
+          "event": "event-00192",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "load_workflow",
+              "expected": "Read visual manipulation and pick-and-place procedures.",
+              "reason": "Need safe observation-action-feedback loop and placement rules for this multi-item task.",
+              "state": "skills_listed"
+            },
+            "name": "visual-manipulation",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00194",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "load_workflow",
+              "expected": "Read pick-and-place instructions for handling and staging objects.",
+              "reason": "The task requires carrying many cabinet items to a living-room table.",
+              "state": "visual_skill_loaded"
+            },
+            "name": "pick-and-place",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00290",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "load visual manipulation workflow",
+              "expected": "Guidance clarifies exploration, planning, and evidence requirements",
+              "reason": "Follow required workflow before continuing this live episode",
+              "state": "reading skill"
+            }
+          }
+        },
+        {
+          "event": "event-00292",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "read workflow instructions",
+              "expected": "Skill contents guide safe continued actions",
+              "reason": "Correcting required resource arguments",
+              "state": "reading skill"
+            },
+            "name": "visual-manipulation",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00294",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "read exploration and carrying guidance",
+              "expected": "Relevant workflows for locating and transporting items are available",
+              "reason": "Need search and placement rules for the resumed scene",
+              "state": "reading skills"
+            },
+            "name": "visual-exploration",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00296",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "read pick-and-place guidance",
+              "expected": "Transport and destination selection rules are available",
+              "reason": "Task requires moving multiple cabinet and refrigerator items",
+              "state": "reading skills"
+            },
+            "name": "pick-and-place",
+            "resource": "SKILL.md"
+          }
+        },
+        {
+          "event": "event-00383",
+          "arguments": {
+            "decision": {
+              "active_subgoal": "read_workflow",
+              "expected": "读取视觉操作和抓放技能",
+              "reason": "建立后续导航、抓取、放置与验证规则",
+              "state": "reading"
+            }
+          }
+        },
+        {
+          "event": "event-00385",
+          "arguments": {
+            "name": "visual-manipulation",
+            "resource": "SKILL.md",
+            "decision": {
+              "active_subgoal": "read_workflow",
+              "expected": "读取视觉操作技能",
+              "reason": "遵循当前模拟器的观察-动作-验证循环",
+              "state": "reading"
+            }
+          }
+        },
+        {
+          "event": "event-00387",
+          "arguments": {
+            "name": "pick-and-place",
+            "resource": "SKILL.md",
+            "decision": {
+              "active_subgoal": "read_workflow",
+              "expected": "读取抓取放置技能",
+              "reason": "搬运厨房物品到客厅茶几",
+              "state": "reading"
+            }
+          }
+        },
+        {
+          "event": "event-00389",
+          "arguments": {
+            "name": "visual-exploration",
+            "resource": "SKILL.md",
+            "decision": {
+              "active_subgoal": "read_workflow",
+              "expected": "读取探索技能",
+              "reason": "从当前异常近景恢复可用视角",
+              "state": "reading"
+            }
+          }
+        }
+      ],
+      "actual_skill_bundle": "5dcce20f01e9c4d37cd45e46a28093152fc1a5321ddd87df060b71cbf7b00996",
+      "failed_tool_latency_seconds": 46.663708,
+      "failed_tool_latency_note": "Direct latency only; excludes downstream recovery. No removable-action total validated.",
+      "semantic_goals": {
+        "water_boiled": false,
+        "kettle_has_hot_water": false,
+        "napkin_served": false,
+        "mat_on_table": false,
+        "plate_served": false,
+        "spoon_served": false,
+        "tray_on_table": false,
+        "cookie_served": false,
+        "honey_served": false,
+        "mug_has_hot_water": false,
+        "mug_served": false
+      }
+    }
+  ],
+  "source_hashes_verified": 252,
+  "published_links": [
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s0/review_5view.html",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s0/episode_browser.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s0/episode.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s0/demo_audit.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s0/video.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s0/replay.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s11/review_5view.html",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s11/episode_browser.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s11/episode.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s11/demo_audit.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s11/video.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s11/replay.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s22/review_5view.html",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s22/episode_browser.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s22/episode.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s22/demo_audit.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s22/video.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/with_long_horizon_s22/replay.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s0/review_5view.html",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s0/episode_browser.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s0/episode.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s0/demo_audit.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s0/video.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s0/replay.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s11/review_5view.html",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s11/episode_browser.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s11/episode.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s11/demo_audit.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s11/video.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s11/replay.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s22/review_5view.html",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s22/episode_browser.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s22/episode.mp4",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s22/demo_audit.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s22/video.json",
+      "status": 200
+    },
+    {
+      "url": "http://10.130.140.115:8769/cohort/without_long_horizon_s22/replay.json",
+      "status": 200
+    }
+  ],
+  "conclusion": "Large descriptive advantage for the long-horizon-skill condition in these historical matched development seeds. Not clean causal proof: historical controls, n3, seed0 closure failure and seed11 client-tool deviation. All attempts retained.",
+  "remaining_evidence_scope": "Full structured traces and skill exposure audited; no counterfactual action deletion or exhaustive recovery/visual-window review in this status report."
+}

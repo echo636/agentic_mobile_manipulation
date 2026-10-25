@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "audited_at": "2026-10-24T17:52:20.123475+00:00",
+  "run_id": "run",
+  "model": "gpt-6.1-sol",
+  "status": "failed",
+  "evidence_alignment": "failed",
+  "task_success": false,
+  "checks": {
+    "real_simulator": true,
+    "real_controller_finished": false,
+    "formal_finish_in_model_trace": false,
+    "only_allowed_tools": false,
+    "controller_calls_match_simulator_exactly": false,
+    "same_source_commit": false,
+    "independent_task_success": false,
+    "official_task_success": false,
+    "model_results_match_simulator": false,
+    "rgb_observation_allowlist": true,
+    "image_bytes_hashes_and_archive_match": true,
+    "pixel_actions_use_latest_images": false,
+    "semantic_actions_use_named_targets": true,
+    "actual_images_delivered": true,
+    "same_clean_source_digest": true,
+    "minimal_profile_on_both_sides": false,
+    "no_workflow_tools_called": true
+  },
+  "unexpected_items": [
+    {
+      "type": "error",
+      "id": "item_0"
+    },
+    {
+      "type": "error",
+      "id": "item_0"
+    },
+    {
+      "type": "error",
+      "id": "item_0"
+    },
+    {
+      "type": "error",
+      "id": "item_0"
+    }
+  ],
+  "model_tool_calls": 137,
+  "usage": {
+    "input_tokens": 7685111,
+    "cached_input_tokens": 5819318,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 26150,
+    "reasoning_output_tokens": 5105
+  },
+  "rgb_evidence": {
+    "image_content_count": 492,
+    "unique_model_image_count": 416,
+    "archive_capture_count": 104,
+    "errors": []
+  },
+  "protocol": "high_level_hot_drink_state_v1",
+  "official_submission_eligible": false,
+  "simulator_record": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_long_horizon_ablation_20261024/without_long_horizon_s0/run/run.json",
+  "controller_record": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_long_horizon_ablation_20261024/without_long_horizon_s0/controller/controller.json"
+}

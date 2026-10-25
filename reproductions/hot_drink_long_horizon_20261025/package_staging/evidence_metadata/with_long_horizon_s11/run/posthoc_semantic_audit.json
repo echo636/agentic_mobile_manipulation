@@ -1,0 +1,27 @@
+{
+  "protocol": "posthoc_action_trace_replay_v1",
+  "evaluation": {
+    "task_success": true,
+    "goal_satisfaction_fraction": 1.0,
+    "semantic_goals": {
+      "water_boiled": true,
+      "kettle_has_hot_water": true,
+      "napkin_served": true,
+      "mat_on_table": true,
+      "plate_served": true,
+      "spoon_served": true,
+      "tray_on_table": true,
+      "cookie_served": true,
+      "honey_served": true,
+      "mug_has_hot_water": true,
+      "mug_served": true
+    },
+    "protocol": "high_level_hot_drink_state_v1",
+    "official_task_success": null,
+    "official_submission_eligible": false,
+    "action_count": 50
+  },
+  "committed_actions": 50,
+  "private_state_log_count": 50,
+  "private_state_log_matches": true
+}

@@ -1,0 +1,5 @@
+{
+  "before_episode_creation": true,
+  "cause": "Inherited task manifest contains Python3.12 generated cache entries absent from the copied task snapshot.",
+  "resolution": "Validate all task text/scene inputs and skip generated __pycache__/*.pyc. Scene catalog, evaluator and execution source hash checks retained. No simulator episode or task input altered."
+}

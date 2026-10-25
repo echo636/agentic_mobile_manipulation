@@ -1,0 +1,7 @@
+{
+  "async_rendering": false,
+  "throttling_enable_async": false,
+  "dlss_exec_mode": 2,
+  "source": "https://docs.isaacsim.omniverse.nvidia.com/5.1.0/overview/known_issues.html",
+  "purpose": "synchronous Replicator capture; not a proven native crash fix"
+}

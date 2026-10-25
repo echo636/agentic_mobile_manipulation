@@ -1,0 +1,9 @@
+--- with_long_horizon
++++ without_long_horizon
+@@ -33,6 +33,4 @@
+ If one item or required arrangement remains uncertain, keep inspecting the available RGB and change viewpoint when useful. Finish blocked only after an explicit tool budget/deadline error or after distinct recovery approaches have failed and no visible feasible action remains. Elapsed conversation length alone is not an episode-limit signal; do not stop midway through a feasible sequence. Do not silently omit a required item.
+ Before a material or cutting action, read visual-manipulation/references/material-actions.md through read_skill.
+ 
+-Read long-horizon-planning/SKILL.md before the first motor action. Derive dependencies from the human instruction and RGB yourself; do not ask the skill to choose actions or pixels. If the task input is BDDL, also read long-horizon-planning/references/bddl-goals.md and translate its formal goals into the same dependency graph.
+-
+ For this hot-drink task, act with primitive=boil selects the visible kettle or stove. A successful boil result confirms the water is boiled; do not use wait to heat water. Choose the action order yourself.

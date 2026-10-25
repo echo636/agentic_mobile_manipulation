@@ -1,0 +1,28 @@
+{
+  "policy": "restore_absent_fixed_floors_from_same_supplied_full_template",
+  "added_floors": [
+    "floors_fpnxmg_0",
+    "floors_glwobe_0",
+    "floors_hkdmte_0",
+    "floors_htolat_0",
+    "floors_khjmrr_0",
+    "floors_lltizc_0",
+    "floors_mawnss_0",
+    "floors_mdozod_0",
+    "floors_pyoemr_0",
+    "floors_qgmjvd_0",
+    "floors_qnvzkr_0",
+    "floors_shuuqu_0",
+    "floors_uftgek_0",
+    "floors_vcsslq_0",
+    "floors_vmamhf_0",
+    "floors_wkdxrr_0",
+    "floors_yfyxxu_0",
+    "floors_yibjol_0",
+    "floors_yrqspn_0"
+  ],
+  "full_template_sha256": "94870bb3ad4596a99b736305c583609fab4016189bb60b633c9c6f050a819519",
+  "task_object_bindings_unchanged": true,
+  "original_assets_unmodified": true,
+  "scope": "research_scene_geometry_repair_not_official_submission"
+}

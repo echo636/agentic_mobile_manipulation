@@ -1,0 +1,173 @@
+{
+  "env": {
+    "action_frequency": 30,
+    "rendering_frequency": 30,
+    "physics_frequency": 120,
+    "device": "cuda:0",
+    "automatic_reset": false
+  },
+  "scene": {
+    "type": "InteractiveTraversableScene",
+    "scene_model": "house_single_floor",
+    "load_room_types": null,
+    "load_room_instances": [
+      "kitchen_0",
+      "living_room_0",
+      "garden_0"
+    ],
+    "include_robots": false,
+    "scene_file": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_long_horizon_ablation_20261024/appdata_gpu0/mas-scenes/580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6.json",
+    "trav_map_resolution": 0.05,
+    "default_erosion_radius": 0.57,
+    "waypoint_resolution": 0.1
+  },
+  "task": {
+    "type": "BehaviorTask",
+    "activity_name": "prepare_and_serve_hot_drink",
+    "activity_definition_id": 0,
+    "activity_instance_id": 0,
+    "online_object_sampling": false,
+    "debug_object_sampling": false,
+    "highlight_task_relevant_objects": false,
+    "termination_config": {
+      "max_steps": 20000
+    },
+    "reward_config": {
+      "r_potential": 1.0
+    },
+    "include_obs": false
+  },
+  "robots": [
+    {
+      "model": "r1pro",
+      "name": "robot_r1",
+      "action_normalize": false,
+      "self_collisions": true,
+      "obs_modalities": [
+        "rgb",
+        "depth_linear"
+      ],
+      "proprio_obs": [
+        "base_qvel",
+        "arm_left_qpos",
+        "arm_left_qvel",
+        "eef_left_pos",
+        "eef_left_quat",
+        "gripper_left_qpos",
+        "gripper_left_qvel",
+        "arm_right_qpos",
+        "arm_right_qvel",
+        "eef_right_pos",
+        "eef_right_quat",
+        "gripper_right_qpos",
+        "gripper_right_qvel",
+        "trunk_qpos",
+        "trunk_qvel"
+      ],
+      "grasping_mode": "sticky",
+      "sensor_config": {
+        "VisionSensor": {
+          "sensor_kwargs": {
+            "image_height": 512,
+            "image_width": 512
+          }
+        }
+      },
+      "controller_config": {
+        "arm_left": {
+          "name": "JointController",
+          "motor_type": "position",
+          "command_input_limits": null,
+          "command_output_limits": null,
+          "use_impedances": false,
+          "use_delta_commands": false
+        },
+        "arm_right": {
+          "name": "JointController",
+          "motor_type": "position",
+          "command_input_limits": null,
+          "command_output_limits": null,
+          "use_impedances": false,
+          "use_delta_commands": false
+        },
+        "gripper_left": {
+          "name": "JointController",
+          "motor_type": "position",
+          "command_input_limits": null,
+          "command_output_limits": null,
+          "use_impedances": false,
+          "use_delta_commands": false
+        },
+        "gripper_right": {
+          "name": "JointController",
+          "motor_type": "position",
+          "command_input_limits": null,
+          "command_output_limits": null,
+          "use_impedances": false,
+          "use_delta_commands": false
+        },
+        "base": {
+          "name": "HolonomicBaseJointController",
+          "motor_type": "position",
+          "command_input_limits": null,
+          "command_output_limits": null,
+          "use_impedances": false
+        },
+        "trunk": {
+          "name": "JointController",
+          "motor_type": "position",
+          "command_input_limits": null,
+          "command_output_limits": null,
+          "use_impedances": false,
+          "use_delta_commands": false
+        },
+        "camera": {
+          "name": "NullJointController"
+        }
+      },
+      "reset_joint_pos": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.025,
+        -1.45,
+        -0.47,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.05,
+        0.05,
+        0.05,
+        0.05
+      ],
+      "disable_grasp_handling": true,
+      "include_sensor_names": [],
+      "position": [
+        6.06195068359375,
+        -0.887542724609375,
+        0.0050048828125
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        -0.7934740781784058,
+        0.6086040735244752
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+PLANNING_PROMPT += ('\nRead long-horizon-planning/SKILL.md before the first motor action. '
+                    'Derive dependencies from the human instruction and RGB yourself; '
+                    'do not ask the skill to choose actions or pixels. '
+                    'If the task input is BDDL, also read long-horizon-planning/references/bddl-goals.md '
+                    'and translate its formal goals into the same dependency graph.\n')

@@ -1,0 +1,58 @@
+{
+  "checked_at_utc": "2026-10-25T06:30:41.574281+00:00",
+  "checks": [
+    {
+      "command": [
+        "python3",
+        "verify_staging.py"
+      ],
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "stdout": "PASS: exactly 756 staged files match their sizes and hashes\npublication_ready: False",
+      "stderr": "",
+      "passed": true
+    },
+    {
+      "command": [
+        "python3",
+        "package_staging/validation/audit_regression_check.py"
+      ],
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "stdout": "PASS: rejected malformed action does not commit; malformed successful action is rejected",
+      "stderr": "",
+      "passed": true
+    },
+    {
+      "command": [
+        "python3",
+        "package_staging/validation/recompute_recorded_table.py"
+      ],
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "stdout": "with_long_horizon success 3 / 3 mean_actions 112.33333333333333\nwithout_long_horizon success 0 / 3 mean_actions 114.33333333333333",
+      "stderr": "",
+      "passed": true
+    },
+    {
+      "command": [
+        "python3",
+        "verify_staging.py",
+        "--require-publish-ready"
+      ],
+      "expected_exit": 2,
+      "actual_exit": 2,
+      "stdout": "PASS: exactly 756 staged files match their sizes and hashes\npublication_ready: False",
+      "stderr": "",
+      "passed": true
+    }
+  ],
+  "both_frozen_runtime_manifests_verified": true,
+  "raw_evidence_files_hashed": 9367,
+  "raw_evidence_bytes": 3477706619,
+  "raw_evidence_content_uploaded": false,
+  "credential_pattern_hits": [],
+  "credential_check_scope": "Pattern and sensitive-filename screening of the complete release directory; does not claim exhaustive secret detection.",
+  "full_cross_host_reproduction_accepted": false,
+  "new_model_experiments_run": false
+}

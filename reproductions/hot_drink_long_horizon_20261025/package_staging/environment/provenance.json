@@ -1,0 +1,25 @@
+{
+  "python_interpreters": [
+    "/mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python",
+    "/mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python",
+    "/mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python",
+    "/mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python",
+    "/mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python",
+    "/mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python"
+  ],
+  "recorded_client_versions": [
+    "codex-cli 0.157.1"
+  ],
+  "upstream_commits": [
+    "b1979916ec1549b10a4e65e630bc6504a9af1b00"
+  ],
+  "versions": {
+    "omnigibson": "3.9.2",
+    "isaacsim": "5.1.0.0",
+    "torch": "2.7.0+cu128",
+    "bddl": "3.7.0",
+    "mcp": "1.28.1",
+    "joylo": "3.9.2"
+  },
+  "status": "Package records preserved, not tested as a fresh conda/pip installation. Driver/OS and original full inherited environment not fully captured. GPU identity alone is not driver pinning."
+}

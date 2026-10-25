@@ -1,0 +1,44 @@
+[
+  {
+    "trial": "with_long_horizon_s0",
+    "source": "/mnt/data/home/sunyujie/robot_manipulation/experiments/groceries_appdata_gpu0/mas-scenes/580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6.json",
+    "expected_sha256": "580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6",
+    "exists_now": true,
+    "copied": true
+  },
+  {
+    "trial": "with_long_horizon_s11",
+    "source": "/mnt/data/home/sunyujie/robot_manipulation/experiments/groceries_appdata_gpu0/mas-scenes/580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6.json",
+    "expected_sha256": "580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6",
+    "exists_now": true,
+    "copied": true
+  },
+  {
+    "trial": "with_long_horizon_s22",
+    "source": "/mnt/data/home/sunyujie/robot_manipulation/experiments/groceries_appdata_gpu0/mas-scenes/580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6.json",
+    "expected_sha256": "580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6",
+    "exists_now": true,
+    "copied": true
+  },
+  {
+    "trial": "without_long_horizon_s0",
+    "source": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_long_horizon_ablation_20261024/appdata_gpu0/mas-scenes/580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6.json",
+    "expected_sha256": "580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6",
+    "exists_now": true,
+    "copied": true
+  },
+  {
+    "trial": "without_long_horizon_s11",
+    "source": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_long_horizon_ablation_20261024/appdata_gpu0/mas-scenes/580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6.json",
+    "expected_sha256": "580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6",
+    "exists_now": true,
+    "copied": true
+  },
+  {
+    "trial": "without_long_horizon_s22",
+    "source": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_long_horizon_ablation_20261024/appdata_gpu0/mas-scenes/580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6.json",
+    "expected_sha256": "580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6",
+    "exists_now": true,
+    "copied": true
+  }
+]

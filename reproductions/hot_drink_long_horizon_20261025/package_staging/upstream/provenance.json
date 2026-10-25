@@ -1,0 +1,148 @@
+{
+  "repository": "https://github.com/StanfordVL/BEHAVIOR-1K.git",
+  "base_commit": "b1979916ec1549b10a4e65e630bc6504a9af1b00",
+  "tracked_changes": 17,
+  "untracked_code_files": 5,
+  "files": [
+    {
+      "path": "OmniGibson/omnigibson/action_primitives/curobo.py",
+      "tracked_change": true,
+      "sha256_current": "21e9263bca5efc0d94b78a6903ed19b4dd89c6100298167394102e9a7ed4423f",
+      "mtime_utc": "2026-09-22T11:11:35.230349+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/controllers/controller_base.py",
+      "tracked_change": true,
+      "sha256_current": "053814c87f22969df6ce8ca684f91b9e6193d05b3f15bf2f598ca63645fc4dc0",
+      "mtime_utc": "2026-10-14T14:17:03.569858+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/controllers/joint_controller.py",
+      "tracked_change": true,
+      "sha256_current": "c16a910f38e1c3712520de88156019b98617da689e571b7c69e2bccdbabf2d9f",
+      "mtime_utc": "2026-10-14T14:21:36.455618+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/envs/env_base.py",
+      "tracked_change": true,
+      "sha256_current": "e29a4ae0f8390649196d3a7ded963ef6cb8b19bca4a2d90962d3c8ad27511374",
+      "mtime_utc": "2026-10-14T16:43:04.848920+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/objects/usd_object.py",
+      "tracked_change": true,
+      "sha256_current": "d7855f985341c49b8e14d7c6af5222b5f2f3e1c3ef063f917c01d42154aee0b4",
+      "mtime_utc": "2026-10-14T13:08:05.907203+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/prims/entity_prim.py",
+      "tracked_change": true,
+      "sha256_current": "b51397636b74ef37e97670623b7d15ae4aeb0602b38d252a986413dac9fe566f",
+      "mtime_utc": "2026-10-14T13:14:30.982017+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/robots/robot.py",
+      "tracked_change": true,
+      "sha256_current": "705a3d2274509eb637ad32948cb1731ff2e7e09ca683d7b78f4bd1bb5959f4d8",
+      "mtime_utc": "2026-10-14T14:09:30.789201+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/simulator.py",
+      "tracked_change": true,
+      "sha256_current": "181a572dfd3312a6996b8759b3c24b6b7ecbb510a5c3005a269cd4eeb5dd6f52",
+      "mtime_utc": "2026-10-14T15:36:27.262317+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/systems/micro_particle_system.py",
+      "tracked_change": true,
+      "sha256_current": "ed55d4e44c0ec5e985914aa43ba0140b7c56455d1ffc6ae50026715b4e415975",
+      "mtime_utc": "2026-10-14T11:11:31.559170+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/tasks/__init__.py",
+      "tracked_change": true,
+      "sha256_current": "9c112468f8b4a4dfaa6c2b81c052b6298196f34ec9ef526b5183004a67bb9095",
+      "mtime_utc": "2026-10-13T14:44:22.060773+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/tasks/behavior_task.py",
+      "tracked_change": true,
+      "sha256_current": "c28817e6cb043dbce83378d36324d38ea6ac8c78dca4a60857ffd95de6dcd4f6",
+      "mtime_utc": "2026-10-14T14:26:23.668684+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/utils/backend_utils.py",
+      "tracked_change": true,
+      "sha256_current": "373d30663f301e0840ea7ae38768335b12296166c39e87299a1f42015f6d0ef7",
+      "mtime_utc": "2026-10-14T15:40:45.475792+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/utils/sampling_utils.py",
+      "tracked_change": true,
+      "sha256_current": "8c32d5a8ccf77f5d7e61adc9064e778aa5a8e24405dbc95293c68a92c64ee5a2",
+      "mtime_utc": "2026-10-14T22:28:08.591706+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/utils/transform_utils.py",
+      "tracked_change": true,
+      "sha256_current": "f49c482ff9491ff992dac78235445a682453789d90a0edaf29d5d8fe68d205db",
+      "mtime_utc": "2026-10-14T14:00:52.526623+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/utils/usd_utils.py",
+      "tracked_change": true,
+      "sha256_current": "41394658003991ce4372b4cf7273d30a42ccd09ba475bdfc904cdb2787dc5024",
+      "mtime_utc": "2026-10-14T13:28:06.494637+00:00"
+    },
+    {
+      "path": "OmniGibson/scripts/sampling/multiply_b1k_tasks.py",
+      "tracked_change": true,
+      "sha256_current": "6cbe2a64c97e182f825cb492ad3bd03a1025ede5208ab30e92cb3a7765bfb943",
+      "mtime_utc": "2026-10-14T12:10:37.188720+00:00"
+    },
+    {
+      "path": "OmniGibson/scripts/sampling/sample_b1k_tasks.py",
+      "tracked_change": true,
+      "sha256_current": "884092546da20a3a430510803bbc82ab690422a5fe977c4c3f5762f349e66f36",
+      "mtime_utc": "2026-10-14T11:01:33.136758+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/examples/wip/prepare_and_serve_hot_drink.py",
+      "tracked_change": false,
+      "sha256_current": "6ad1000ebace219115e316e97d51934ba70c9727559291ab860edfa6b8085dec",
+      "mtime_utc": "2026-10-13T15:28:55.611168+00:00"
+    },
+    {
+      "path": "OmniGibson/omnigibson/tasks/partial_order_behavior_task.py",
+      "tracked_change": false,
+      "sha256_current": "29db1274433ed65de1da3762dcb8e85fc36ca9a07384fe716eff500643431d41",
+      "mtime_utc": "2026-10-13T14:45:58.159055+00:00"
+    },
+    {
+      "path": "bddl3/bddl/activity_definitions/prepare_and_serve_hot_drink/README.md",
+      "tracked_change": false,
+      "sha256_current": "6ebd5dead096b15c41ecefe7b6597b767b467b2e1168d9256f991c7c5f6e2278",
+      "mtime_utc": "2026-10-16T14:11:31.128191+00:00"
+    },
+    {
+      "path": "bddl3/bddl/activity_definitions/prepare_and_serve_hot_drink/problem0.bddl",
+      "tracked_change": false,
+      "sha256_current": "30fd46781286f62f08bff1090bd6ac09dcc69050c63e13acc150c46914162f5d",
+      "mtime_utc": "2026-10-16T14:08:02.159333+00:00"
+    },
+    {
+      "path": "bddl3/bddl/activity_definitions/prepare_and_serve_hot_drink/scene_layout.json",
+      "tracked_change": false,
+      "sha256_current": "9c0466f807b22b7826f00cf6d12640616f3fb5cb3af02b2be6df6f00e4132c97",
+      "mtime_utc": "2026-10-14T06:24:16.673107+00:00"
+    }
+  ],
+  "patch_apply_and_file_hash_check_passed": true,
+  "historical_exactness": "NOT PROVEN: original episodes recorded commit but no dirty-tree patch/hash. Current file mtimes predate the compared runs, which is supporting metadata only. Do not label this patch historically verified.",
+  "dependency_roots": [
+    "OmniGibson",
+    "bddl3",
+    "joylo"
+  ],
+  "why_untracked_matters": "tasks/__init__.py imports untracked tasks/partial_order_behavior_task.py at module import; it must be available even though optional evaluator was not the scoring protocol."
+}

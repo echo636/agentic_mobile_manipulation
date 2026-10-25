@@ -1,0 +1,80 @@
+{
+  "scope": "Hot-drink long-horizon-skill incremental contribution: historical full-skill seeds0/11/22 versus prospective four-common-skill seeds0/11/22. Candidate skill optimization rounds and all-skills-off trial excluded from primary6.",
+  "date": "2026-10-25 Asia/Shanghai",
+  "components": [
+    {
+      "id": "C01",
+      "name": "Benchmark runtime, executors and all local imports",
+      "status": "staged_verified",
+      "path": "package_staging/runtime",
+      "why": "The whole frozen src tree and scripts, not just modified executors, plus meaningful regression tests and package metadata."
+    },
+    {
+      "id": "C02",
+      "name": "Both skill conditions and actual prompts/tool catalogs",
+      "status": "staged_verified",
+      "path": "package_staging/runtime + configs/actual_prompts",
+      "why": "Other four skill files byte-identical; long-horizon main/reference removal and required-read paragraph are the intended intervention. Planning/memory tools and public decisions identical."
+    },
+    {
+      "id": "C03",
+      "name": "Task BDDL, instruction, scene overlay and generated geometry",
+      "status": "staged_verified",
+      "path": "package_staging/task + dataset_overlay + configured_scene",
+      "why": "Preserve partial/full templates, instance states, task catalog, actual repaired scene bytes, placement/evaluator protocol."
+    },
+    {
+      "id": "C04",
+      "name": "BEHAVIOR/OmniGibson source base + local patches + untracked imports",
+      "status": "current_snapshot_staged_historical_unverified",
+      "path": "package_staging/upstream",
+      "why": "17 tracked changes and5 untracked files captured; base+patch reproduction tested. Historical exact patch bytes were not recorded."
+    },
+    {
+      "id": "C05",
+      "name": "Large model/robot/texture/material/system/scene metadata assets",
+      "status": "external_assets_inventory_only",
+      "path": "package_staging/asset_inventory",
+      "why": "Shared symlinks are not portable archives. Version roots and candidate model directories inventoried; six small scene map PNGs saved. Transitive asset closure not certified; do not ship license key."
+    },
+    {
+      "id": "C06",
+      "name": "Installed environment + model controller + renderer",
+      "status": "recorded_versions_staged_fresh_install_unverified",
+      "path": "package_staging/environment",
+      "why": "298 recorded packages, codex CLI0.157.1, model service and versions; package list alone does not pin OS/driver/Kit plugins, wheel URLs or reconstruct editable dependencies."
+    },
+    {
+      "id": "C07",
+      "name": "Complete effective launch environment and portable entry point",
+      "status": "inventory_staged_relocation_and_env_gaps",
+      "path": "package_staging/configs",
+      "why": "Original plans use local absolute paths; os.environ inheritance was not completely logged. Need explicit clean environment wrapper, relocatable paths and fresh-host smoke test before runnable release."
+    },
+    {
+      "id": "C08",
+      "name": "Independent evaluator, analyzer and audit repair",
+      "status": "staged_verified_original_scores_preserved",
+      "path": "package_staging/runtime/*/scripts + results",
+      "why": "Use ablation analyzer for rejected malformed act; preserve old failure and protocol deviation audit flags. Tests for no commit on rejection and fail-closed successful missing primitive included via preflight source."
+    },
+    {
+      "id": "C09",
+      "name": "All six raw successful/failed trial artifacts and media",
+      "status": "lightweight_metadata_staged_raw_archive_inventory_only",
+      "path": "RAW_EVIDENCE_INVENTORY.json",
+      "why": "Both groups3seeds; seed0 supervisor finish and seed11 extra client resource calls preserved. All9,367 raw files hashed. Large raw logs/images/videos not duplicated into code package; need redaction review, external archives with archive SHA256 and public links."
+    },
+    {
+      "id": "C10",
+      "name": "Benchmark change journal + source lineage + known limitations",
+      "status": "staged_current_documentation",
+      "path": "package_staging/documentation_current + SOURCE_LINEAGE.json",
+      "why": "Journals include newer unrelated grocery changes; only source manifest defines what these six runs used. Do not apply latest code to historical runs."
+    }
+  ],
+  "publication_ready": false,
+  "new_simulator_experiments_run": false,
+  "uploaded": false,
+  "raw_evidence_files_sha256_recorded": 9367
+}

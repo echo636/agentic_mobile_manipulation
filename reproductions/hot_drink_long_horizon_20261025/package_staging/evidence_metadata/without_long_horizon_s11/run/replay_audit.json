@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "audited_at": "2026-10-24T19:20:41.445888+00:00",
+  "run_id": "run",
+  "model": "gpt-6.1-sol",
+  "status": "failed",
+  "evidence_alignment": "failed",
+  "task_success": false,
+  "checks": {
+    "real_simulator": true,
+    "real_controller_finished": true,
+    "formal_finish_in_model_trace": true,
+    "only_allowed_tools": false,
+    "controller_calls_match_simulator_exactly": false,
+    "same_source_commit": false,
+    "independent_task_success": false,
+    "official_task_success": false,
+    "model_results_match_simulator": false,
+    "rgb_observation_allowlist": true,
+    "image_bytes_hashes_and_archive_match": true,
+    "pixel_actions_use_latest_images": true,
+    "semantic_actions_use_named_targets": true,
+    "actual_images_delivered": true,
+    "same_clean_source_digest": true,
+    "minimal_profile_on_both_sides": false,
+    "no_workflow_tools_called": false
+  },
+  "unexpected_items": [
+    {
+      "type": "error",
+      "id": "item_0"
+    },
+    {
+      "type": "error",
+      "id": "item_0"
+    },
+    {
+      "server": "x",
+      "tool": "read_mcp_resource"
+    },
+    {
+      "server": "x",
+      "tool": "read_mcp_resource"
+    },
+    {
+      "server": "codex",
+      "tool": "list_mcp_resources"
+    },
+    {
+      "type": "error",
+      "id": "item_0"
+    }
+  ],
+  "model_tool_calls": 155,
+  "usage": {
+    "input_tokens": 9015413,
+    "cached_input_tokens": 8106112,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 21194,
+    "reasoning_output_tokens": 4246
+  },
+  "rgb_evidence": {
+    "image_content_count": 552,
+    "unique_model_image_count": 476,
+    "archive_capture_count": 121,
+    "errors": [
+      {
+        "event_id": "event-00146",
+        "model_item_id": "item_19",
+        "tool": "read_mcp_resource",
+        "error_type": "ToolResponseUnavailable",
+        "code": "missing_tool_response",
+        "response_received": false
+      },
+      {
+        "event_id": "event-00148",
+        "model_item_id": "item_20",
+        "tool": "read_mcp_resource",
+        "error_type": "ToolResponseUnavailable",
+        "code": "missing_tool_response",
+        "response_received": false
+      }
+    ]
+  },
+  "protocol": "high_level_hot_drink_state_v1",
+  "official_submission_eligible": false,
+  "simulator_record": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_long_horizon_ablation_20261024/without_long_horizon_s11/run/run.json",
+  "controller_record": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_long_horizon_ablation_20261024/without_long_horizon_s11/controller/controller.json"
+}

@@ -1,0 +1,26 @@
+{
+  "scene_model": "house_single_floor",
+  "rooms": [
+    "kitchen_0",
+    "living_room_0"
+  ],
+  "objects": {
+    "electric_refrigerator.n.01_1": "kitchen_0",
+    "countertop.n.01_1": "kitchen_0",
+    "cabinet.n.01_1": "kitchen_0",
+    "stove.n.01_1": "kitchen_0",
+    "floor.n.01_1": "kitchen_0",
+    "coffee_table.n.01_1": "living_room_0",
+    "water_bottle.n.01_1": "electric_refrigerator.n.01_1",
+    "kettle.n.01_1": "cabinet.n.01_1",
+    "mug.n.04_1": "cabinet.n.01_1",
+    "napkin.n.01_1": "cabinet.n.01_1",
+    "place_mat.n.01_1": "cabinet.n.01_1",
+    "plate.n.04_1": "cabinet.n.01_1",
+    "teaspoon.n.02_1": "cabinet.n.01_1",
+    "tray.n.01_1": "cabinet.n.01_1",
+    "sugar_cookie.n.01_1": "cabinet.n.01_1",
+    "jar__of__sugar.n.01_1": "cabinet.n.01_1"
+  },
+  "sampling": "online_object_sampling; persist tro_state after successful GPU sampling"
+}

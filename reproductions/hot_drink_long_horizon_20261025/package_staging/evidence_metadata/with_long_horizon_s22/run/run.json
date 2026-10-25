@@ -1,0 +1,1143 @@
+{
+  "schema_version": 1,
+  "run_id": "run",
+  "status": "passed",
+  "started_at": "2026-10-22T16:49:00.408711+00:00",
+  "host": "ZJU3DV-4090",
+  "pid": 2195661,
+  "interpreter": "/mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python",
+  "unit": null,
+  "gpu_uuid": null,
+  "output_path": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_opt_baseline_gpt61sol_low_20261022_s22/run",
+  "source": {
+    "commit": null,
+    "dirty": false,
+    "source_sha256": "6601852cf23929923320e4a5c60c2a6bd56be7b12ea5c814a2884b8a2df452e9"
+  },
+  "config": {
+    "backend": "omnigibson",
+    "policy": "serve",
+    "task": "prepare_and_serve_hot_drink",
+    "instance": 301,
+    "seed": 22,
+    "output": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_opt_baseline_gpt61sol_low_20261022_s22/run",
+    "instruction": "请准备一份热饮和点心：把冰箱里的水烧开，橱柜里有水壶、杯子、餐巾、餐垫、盘子、茶匙、托盘、糖饼干和蜂蜜；将饮品、餐具和点心布置在客厅茶几上。",
+    "instruction_file": null,
+    "inside_placement": "official_volume",
+    "port": 50311,
+    "controller": "codex:gpt-6.1-sol",
+    "agent_profile": "planning",
+    "record_video": true,
+    "max_actions": 120,
+    "max_sim_steps": 20000,
+    "wall_seconds": 14580.0,
+    "unbounded_episode": true,
+    "model_max_turns": 100,
+    "model_max_tokens": 150000,
+    "image_history_captures": 0,
+    "observation_mode": "rgb_only",
+    "validation_level": "rgb_simulator_requires_controller_image_evidence",
+    "episode_deadline_unix": null,
+    "execution_clock_path": null
+  },
+  "task_success": true,
+  "episode_deadline_unix": null,
+  "backend": {
+    "name": "OmniGibson",
+    "executor": "controlled_carry_and_checked_placement_plus_jinkai_gt_navigation",
+    "observation_mode": "rgb_only",
+    "packages": {
+      "omnigibson": "3.9.2",
+      "torch": "2.7.0+cu128",
+      "isaacsim": "5.1.0.0",
+      "bddl": "3.7.0",
+      "mcp": "1.28.1"
+    },
+    "gpu_index": "0",
+    "dynamics_mode": "gpu",
+    "inside_placement": "official_volume",
+    "omnigibson_source_commit": "b1979916ec1549b10a4e65e630bc6504a9af1b00",
+    "gpu_uuid": "GPU-2f2ab185-9827-23e7-6e54-ca06c0f214f3",
+    "assets": {
+      "behavior-1k-assets": "3.9.0",
+      "omnigibson-robot-assets": "3.8.2"
+    },
+    "input_hashes": {
+      "available_tasks": "33645c6598dfeccf755daa7095fa3ee1e638ac73bf2b7cdbbf091bac25619bed",
+      "scene_template": "3dfc27f8b63c0790922b4fbf80a69113124870059e5553818dd961dc755120ba",
+      "configured_scene": "580fe3b313f70c75daf1282a242989d24157bb8b85b3b47e24cece1f4335edf6",
+      "task_instance_state": "0c3c89338f65d78d84b9de3f8840b5bb7f00aa568cdab2a70bc451deb69667d7",
+      "bddl_definition": "4be5469c5eff25f59504c90c4d78d04312057353ae35a0bf007012c2d0a9b915"
+    },
+    "task_instance": {
+      "task": "prepare_and_serve_hot_drink",
+      "instance": 301,
+      "split": "public_test",
+      "scene": "house_single_floor",
+      "seed": 22
+    },
+    "official_submission_eligible": false,
+    "image_size": 512,
+    "demo_motion": false,
+    "task_definition_origin": "pinned_public",
+    "grounding": "direct_pixel_depth_backprojection_private_executor_only",
+    "model_visible_truth": {
+      "successful_grasp_category": true,
+      "instance_id": false,
+      "pose": false,
+      "task_binding": false,
+      "goal_state": false,
+      "evaluator": false
+    },
+    "action_feedback_contract": "selected_object_category_after_successful_grasp_only",
+    "visual_navigation_contract": {
+      "version": "explicit_navigate_to_only_v2",
+      "floor_waypoint_policy": "selected_visual_floor_only",
+      "manipulation_auto_approach": false,
+      "far_selection": "out_of_reach_without_base_motion",
+      "scope": "execute_visual; historical named semantic mode is separate"
+    },
+    "grounding_protocol": {
+      "position": "same_pixel_depth_linear_backprojection",
+      "depth_consistency_check": false,
+      "navigation_object_lookup": true,
+      "manipulation_object_lookup": "first_visual_surface_on_selected_ray",
+      "mesh_hit_replaces_backprojected_point": false,
+      "robot_mesh_blocks_object_selection": true
+    },
+    "grasp_protocol": {
+      "mode": "controlled_pose_carry",
+      "fixed_joint": false,
+      "collision_and_gravity_disabled": false,
+      "rigid_contents_follow": true,
+      "payload_relations": [
+        "Inside",
+        "OnTop"
+      ],
+      "payload_closure": "transitive_rigid_support_with_postplacement_verification"
+    },
+    "record_video": true,
+    "video_capture_policy": {
+      "render_stride": 3,
+      "video_render_flushes": 4,
+      "observation_render_flushes": 4,
+      "observation_pixels_reused_for_video": true,
+      "fresh_observation_boundaries": true,
+      "intermediate_frames": "explicit_previous_frame_hold",
+      "no_motion_interpolation": true
+    },
+    "placement": {
+      "on_top": "strict_selected_surface_cuboid_no_object_wide_fallback",
+      "inside": "official_volume",
+      "verification": "selected_surface_geometric_support_required; contact_predicate_diagnostic_only; official_Inside_and_payload_relations",
+      "base_anchor": "control_and_sampler_physics_steps",
+      "failure_policy": "restore_pre_action_state",
+      "goal_access": false
+    },
+    "goal_evaluation_optimization": "interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged",
+    "base_execution": "feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes",
+    "navigation": {
+      "strategy": "jinkai_visual_point_gt_grid_v1",
+      "source_repository": "dadwadw233/habitat-gs",
+      "source_branch": "jinkai/harness",
+      "source_commit": "0815cf234ee591bacd8017e9b1def4fac13e649b",
+      "geometry": "OmniGibson static eroded traversability grid",
+      "map_input": "precomputed scene floor traversability; selected-pixel depth supplies the target only",
+      "localization": "private simulator pose",
+      "precomputed_walkability": true,
+      "static_map_loader_disabled": false,
+      "online_mapping": false,
+      "habitat_native_navmesh": false,
+      "dynamic_collision_check": false,
+      "erosion": {
+        "implementation": "pinned OmniGibson _erode_trav_map without robot argument",
+        "configured_default_erosion_radius": 0.57,
+        "map_resolution_m": 0.05,
+        "kernel": "12x12 square at configured resolution; parameter is not a disk radius"
+      },
+      "segment_validation": "exact_grid_supercover_for_planner_and_follower",
+      "approach_visibility": "actual_four_camera_frusta_and_collision_rays",
+      "goal_selection": "jinkai visual-point candidate sampling and ranking",
+      "pixel_grounding": "same RGB pixel depth and visual mesh triangle ray; no neighboring-pixel substitution",
+      "model_visible_gt": false
+    },
+    "robot_camera_views": [
+      "front",
+      "back",
+      "left",
+      "right"
+    ],
+    "private_grounding_provider": "CPU visual mesh ray + selected-pixel depth; no segmentation annotator",
+    "surround": "four_fixed_cameras_one_simulation_state_no_robot_rotation",
+    "camera_rig": {
+      "horizontal_fov_degrees": 90,
+      "pitch_down_degrees": 35.0,
+      "mount_radius_m": 0.35,
+      "mount_height_m": 1.5277364730834961,
+      "views": [
+        "front",
+        "back",
+        "left",
+        "right"
+      ],
+      "height_policy": "initial_visual_body_below_lower_20_percent_at_configured_pitch_and_radius_with_5cm_clearance",
+      "stock_wrist_cameras_enabled": false
+    }
+  },
+  "budget": {
+    "max_actions": 120,
+    "max_calls": 240,
+    "max_sim_steps": 20000,
+    "max_steps_per_action": 700,
+    "wall_seconds": null
+  },
+  "skill_bundle_sha256": "5fd7031b5e4b2398c27723137156011b9ee539eb8820ac3c62b16a132894edd2",
+  "observation_contract": "rgb_four_camera_same_state_v1",
+  "execution_limit_policy": {
+    "clock": "episode_execution_excludes_initialization",
+    "managed_action_step_limit": "max_actions_and_max_sim_steps",
+    "unmanaged_action_step_limit": 700,
+    "finish_interrupt": "cooperative_owner_thread_checkpoint",
+    "episode_budget_policy": "action_steps_with_wall_watchdog",
+    "limits_still_configured": {
+      "actions": 120,
+      "tool_calls": 240,
+      "environment_steps": 20000
+    },
+    "legacy_limits_active": true
+  },
+  "scoring": {
+    "status": "passed"
+  },
+  "execution_finished_at_unix": 1792695241.3404486,
+  "deadline_expired_at_finish": false,
+  "evaluation": {
+    "task_success": true,
+    "goal_satisfaction_fraction": 1.0,
+    "semantic_goals": {
+      "water_boiled": true,
+      "kettle_has_hot_water": true,
+      "napkin_served": true,
+      "mat_on_table": true,
+      "plate_served": true,
+      "spoon_served": true,
+      "tray_on_table": true,
+      "cookie_served": true,
+      "honey_served": true,
+      "mug_has_hot_water": true,
+      "mug_served": true
+    },
+    "protocol": "high_level_hot_drink_state_v1",
+    "official_task_success": null,
+    "official_submission_eligible": false,
+    "action_count": 33,
+    "observation_mode": "rgb_only",
+    "demo_motion": false
+  },
+  "agent_outcome": "achieved",
+  "finish_reason": "冰箱水已倒入壶并经boil确认烧开，已倒进茶几杯中；水壶、杯子、餐巾、餐垫、盘子、茶匙、托盘、蜂蜜均成功放在茶几，最新图像显示糖饼干在盘上。冰箱已关闭且手空。",
+  "actions": 105,
+  "tool_calls": 118,
+  "sim_steps": 10377,
+  "wall_seconds": 7315.34130533319,
+  "evaluation_finished_at_unix": 1792695241.3420107,
+  "evaluation_finished_after_deadline": false,
+  "finished_at": "2026-10-22T18:54:01.342208+00:00",
+  "video": {
+    "status": "passed",
+    "file": "episode.mp4",
+    "poster": "video_poster.jpg",
+    "fps": 30.0,
+    "width": 1024,
+    "height": 1616,
+    "started_at": "2026-10-22T16:51:59.842048+00:00",
+    "frame_count": 10483,
+    "scope": "every_env_step_plus_observation_boundaries",
+    "spectator_model_visible": false,
+    "synthesized_motion": false,
+    "demo_motion": false,
+    "time_basis": "simulation control steps; model wait time omitted; boundary captures add one frame",
+    "excluded": "physics substeps and private volume-sampler candidate-search ticks",
+    "views": [
+      "front",
+      "back",
+      "left",
+      "right",
+      "spectator"
+    ],
+    "markers": [
+      {
+        "tool": "initialize",
+        "primitive": "initialize",
+        "request_id": "210421e3-5e91-4609-a6e1-939745c286e3",
+        "frame_index": 1,
+        "seconds": 0.03333333333333333
+      },
+      {
+        "tool": "list_skills",
+        "primitive": "list_skills",
+        "request_id": "d76e0dd8-9cec-4329-8552-9919eb0019d4",
+        "frame_index": 1,
+        "seconds": 0.03333333333333333
+      },
+      {
+        "tool": "read_skill",
+        "primitive": "read_skill",
+        "request_id": "a5bd15f3-5b19-44bf-9be2-53990eaf17ef",
+        "frame_index": 1,
+        "seconds": 0.03333333333333333
+      },
+      {
+        "tool": "read_skill",
+        "primitive": "read_skill",
+        "request_id": "d67824ca-8735-429c-bfb9-35a55d3e8aca",
+        "frame_index": 1,
+        "seconds": 0.03333333333333333
+      },
+      {
+        "tool": "read_skill",
+        "primitive": "read_skill",
+        "request_id": "130d4b6c-52e3-4339-a1d6-a7e3fe677386",
+        "frame_index": 1,
+        "seconds": 0.03333333333333333
+      },
+      {
+        "tool": "update_plan",
+        "primitive": "update_plan",
+        "request_id": "c7a49fe2-ddc0-4361-b197-08078ac3a132",
+        "frame_index": 1,
+        "seconds": 0.03333333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "c48188b3-90bf-4f42-b0e8-2fc33f924506",
+        "frame_index": 1,
+        "seconds": 0.03333333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "baabcc80-eeed-4d25-bf44-88319fb4f73d",
+        "frame_index": 60,
+        "seconds": 2.0
+      },
+      {
+        "tool": "read_skill",
+        "primitive": "read_skill",
+        "request_id": "3c236ef6-e092-4939-abf8-67c3e9e72240",
+        "frame_index": 67,
+        "seconds": 2.2333333333333334
+      },
+      {
+        "tool": "read_skill",
+        "primitive": "read_skill",
+        "request_id": "e9e66c73-200e-49e3-9705-a3a4e6c0f869",
+        "frame_index": 67,
+        "seconds": 2.2333333333333334
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "37992b01-16e0-4248-a314-9dd8d0788df0",
+        "frame_index": 67,
+        "seconds": 2.2333333333333334
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "fd234bfc-8373-4815-ab23-8bc17d2c80df",
+        "frame_index": 144,
+        "seconds": 4.8
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "c595e243-8831-4e05-a8aa-3124f73d433e",
+        "frame_index": 253,
+        "seconds": 8.433333333333334
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "5c13d327-dddd-4f87-a40e-be183e527f4b",
+        "frame_index": 338,
+        "seconds": 11.266666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "f5039f1f-f798-44a2-9973-bf3ab3fe6562",
+        "frame_index": 345,
+        "seconds": 11.5
+      },
+      {
+        "tool": "look",
+        "primitive": "look",
+        "request_id": "8bd3bee6-2e93-47c6-ac36-db1615f1fdff",
+        "frame_index": 427,
+        "seconds": 14.233333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "81f5f632-de5c-4290-a520-322d1b3e1272",
+        "frame_index": 461,
+        "seconds": 15.366666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "41c73c97-d95f-4f5d-91ef-0afeb43c50e7",
+        "frame_index": 468,
+        "seconds": 15.6
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "80bc6d1b-6f11-40f2-9f1c-27a3729674d5",
+        "frame_index": 685,
+        "seconds": 22.833333333333332
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "a382f05c-7533-44c9-b1a1-ba52b020f8b0",
+        "frame_index": 819,
+        "seconds": 27.3
+      },
+      {
+        "tool": "act",
+        "primitive": "pour",
+        "request_id": "72ea578c-86d3-40a3-a3b1-f0f5b5ee5dd5",
+        "frame_index": 911,
+        "seconds": 30.366666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "8d50cd8d-b981-4506-8a5f-8b24c7fc0c3f",
+        "frame_index": 918,
+        "seconds": 30.6
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "31de2b7a-2517-4bd2-a1ef-e67d5bdf2697",
+        "frame_index": 925,
+        "seconds": 30.833333333333332
+      },
+      {
+        "tool": "act",
+        "primitive": "place_near_heating_element",
+        "request_id": "9cca2967-817a-4962-bc61-4e4f8385a27a",
+        "frame_index": 932,
+        "seconds": 31.066666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "boil",
+        "request_id": "b6ea9d43-26e0-4b1b-a32b-0665c7d7de70",
+        "frame_index": 939,
+        "seconds": 31.3
+      },
+      {
+        "tool": "read_skill",
+        "primitive": "read_skill",
+        "request_id": "f93e8b5b-3ab0-45da-ba11-0f8747f2a4a2",
+        "frame_index": 940,
+        "seconds": 31.333333333333332
+      },
+      {
+        "tool": "act",
+        "primitive": "boil",
+        "request_id": "7e03e1cc-9c02-42f9-958b-12b412a81dce",
+        "frame_index": 940,
+        "seconds": 31.333333333333332
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "d01115eb-f6ad-4514-b980-3a8bbc2a0204",
+        "frame_index": 947,
+        "seconds": 31.566666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "6c026299-6f33-4999-8d32-d0e74d26fd90",
+        "frame_index": 948,
+        "seconds": 31.6
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "fd775871-05f5-41e2-a54b-59e66e4a4b9a",
+        "frame_index": 955,
+        "seconds": 31.833333333333332
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "c6858cb2-2e73-411c-94d0-9f900d12da61",
+        "frame_index": 1091,
+        "seconds": 36.36666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "686817f3-3173-477d-92d6-f5afe3cec354",
+        "frame_index": 1171,
+        "seconds": 39.03333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "023bffef-3114-40c0-931e-81947e5d7367",
+        "frame_index": 1435,
+        "seconds": 47.833333333333336
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "8224a482-787a-44d6-96df-28f5450321b2",
+        "frame_index": 1442,
+        "seconds": 48.06666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "close",
+        "request_id": "c7ed6dce-ed40-44fb-889c-567cc8bdebbc",
+        "frame_index": 1768,
+        "seconds": 58.93333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "f3ae71fc-b6c5-489d-a362-84db0a2771cf",
+        "frame_index": 1775,
+        "seconds": 59.166666666666664
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "5daa15ea-e9f1-4c80-af3e-2e6905b95f31",
+        "frame_index": 1841,
+        "seconds": 61.36666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "09678ce8-c544-4c95-a65d-10cf23690dc8",
+        "frame_index": 1848,
+        "seconds": 61.6
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "c2049add-857a-4965-a29a-0fb34b24a091",
+        "frame_index": 1849,
+        "seconds": 61.63333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "76f02155-34f8-4d20-a20b-bf33d0ab5b80",
+        "frame_index": 1944,
+        "seconds": 64.8
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "9e19ab37-080e-4471-a076-f914688f9e8e",
+        "frame_index": 1945,
+        "seconds": 64.83333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "c84a6486-c068-46a0-b874-254972c15128",
+        "frame_index": 1946,
+        "seconds": 64.86666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "7f69e7ee-c471-417b-bf74-a4c9668df70c",
+        "frame_index": 2042,
+        "seconds": 68.06666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "6278b997-3a36-492f-b188-4ba64d6a5038",
+        "frame_index": 2049,
+        "seconds": 68.3
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "17bc17ab-bbf2-4034-b0ac-236e1d603e47",
+        "frame_index": 2198,
+        "seconds": 73.26666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "63de028f-2441-4de1-9039-d62dcd376931",
+        "frame_index": 2474,
+        "seconds": 82.46666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "2e13a27d-bc2b-44a8-bcdb-915f2eb9004d",
+        "frame_index": 2481,
+        "seconds": 82.7
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "436b6275-4b0e-4d4a-abf0-ed4f1fb16645",
+        "frame_index": 2791,
+        "seconds": 93.03333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "798dbaea-058b-4205-ae39-ed4e08e398b7",
+        "frame_index": 2917,
+        "seconds": 97.23333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "6a830cbe-23bc-4372-b762-34b32c091b4a",
+        "frame_index": 2924,
+        "seconds": 97.46666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "28fc7f91-c2d7-4306-a65e-b06eb5a64cb0",
+        "frame_index": 3082,
+        "seconds": 102.73333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "edd83a04-0755-474e-8377-5985be981046",
+        "frame_index": 3378,
+        "seconds": 112.6
+      },
+      {
+        "tool": "update_plan",
+        "primitive": "update_plan",
+        "request_id": "140e024d-4673-47f2-9ffe-0af5a933df61",
+        "frame_index": 3385,
+        "seconds": 112.83333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "8d743eea-eb19-40ac-9e52-21bae8fa3f27",
+        "frame_index": 3385,
+        "seconds": 112.83333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "1c943c1b-a6dc-4878-bba5-5c77ae0e3322",
+        "frame_index": 3695,
+        "seconds": 123.16666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "fbe7ea3b-cef0-4ebd-9357-51da7cfa7823",
+        "frame_index": 3834,
+        "seconds": 127.8
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "abdf0022-926b-4b14-bda7-ebbb4d8d03a3",
+        "frame_index": 3841,
+        "seconds": 128.03333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "2e3726c7-0f44-4511-80dc-18ed980fe9e2",
+        "frame_index": 3996,
+        "seconds": 133.2
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "bdfc6603-5418-4cd4-8443-1e88b719be4f",
+        "frame_index": 4317,
+        "seconds": 143.9
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "e6de6e01-60bc-4724-aaf1-f5847e1b60f6",
+        "frame_index": 4324,
+        "seconds": 144.13333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "409ab094-3116-4d02-8533-6478445b3908",
+        "frame_index": 4691,
+        "seconds": 156.36666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "63db1270-86ea-45bd-a715-859f3ece74fa",
+        "frame_index": 4759,
+        "seconds": 158.63333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "0d0398d1-339c-4654-aa58-809dc56adf85",
+        "frame_index": 4766,
+        "seconds": 158.86666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "5a6f0f6e-c02c-4c96-80d3-864d8439d9d2",
+        "frame_index": 4880,
+        "seconds": 162.66666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "cf41cedb-62ab-4f4b-a70d-403261237b01",
+        "frame_index": 5161,
+        "seconds": 172.03333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "12e3e760-78d8-4485-8588-65f97d11c5f6",
+        "frame_index": 5168,
+        "seconds": 172.26666666666668
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "f61d6874-4b50-4a3b-8e07-50bc1d802232",
+        "frame_index": 5462,
+        "seconds": 182.06666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "a4b671be-315b-4407-903a-8e0f947907cb",
+        "frame_index": 5535,
+        "seconds": 184.5
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "5dec6e4e-7644-480c-8153-037980ae39d6",
+        "frame_index": 5536,
+        "seconds": 184.53333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "67985110-1863-41af-96ef-bea5267a3e92",
+        "frame_index": 5543,
+        "seconds": 184.76666666666668
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "e18b58a2-cb91-42c9-a0b1-73f3dd3da2dc",
+        "frame_index": 5692,
+        "seconds": 189.73333333333332
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "1b22f558-f1e0-48eb-97f7-3abbebfb4b5c",
+        "frame_index": 5960,
+        "seconds": 198.66666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "be2ca800-b113-477d-baa6-d8ac484b02d6",
+        "frame_index": 5967,
+        "seconds": 198.9
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "0c1a89bc-9ee1-4062-b906-cfdf506edcd8",
+        "frame_index": 6276,
+        "seconds": 209.2
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "d68df9c9-6315-446e-8a5e-e9bc48529231",
+        "frame_index": 6351,
+        "seconds": 211.7
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "6c76393d-93f3-4e24-8971-95d0cefcaf81",
+        "frame_index": 6358,
+        "seconds": 211.93333333333334
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "dfac5671-f603-4297-8b66-a57f5b08bae9",
+        "frame_index": 6495,
+        "seconds": 216.5
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "918023ea-1ff0-402a-9a78-46d138636894",
+        "frame_index": 6812,
+        "seconds": 227.06666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "a3dd62b5-c1e9-4419-9566-853e93238a6b",
+        "frame_index": 6819,
+        "seconds": 227.3
+      },
+      {
+        "tool": "act",
+        "primitive": "pour",
+        "request_id": "fbb00e6d-dc20-499a-9402-d8b8d333563b",
+        "frame_index": 6826,
+        "seconds": 227.53333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "87255f15-a4de-4f3e-9670-e38023033492",
+        "frame_index": 6833,
+        "seconds": 227.76666666666668
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "78235a06-2dcd-4c21-9bf7-ebb15e15f5a2",
+        "frame_index": 6840,
+        "seconds": 228.0
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "e54d0947-e638-4765-bc03-0c615ac7ef53",
+        "frame_index": 7251,
+        "seconds": 241.7
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "b60a29d7-aead-4858-acde-cd4102b0111d",
+        "frame_index": 7252,
+        "seconds": 241.73333333333332
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "9cb6ada1-191a-4c98-b6d1-3be23fa5f3b2",
+        "frame_index": 7341,
+        "seconds": 244.7
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "4e4c024e-b5ea-4b52-b046-46f58979ffde",
+        "frame_index": 7342,
+        "seconds": 244.73333333333332
+      },
+      {
+        "tool": "look",
+        "primitive": "look",
+        "request_id": "bf3a32ad-98a7-4843-8095-209901e1aef1",
+        "frame_index": 7343,
+        "seconds": 244.76666666666668
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "9da95cff-f7b1-48e4-a771-0418a1cb9df6",
+        "frame_index": 7377,
+        "seconds": 245.9
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "6988cae6-0e24-44aa-a66c-9972c93a245c",
+        "frame_index": 7452,
+        "seconds": 248.4
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "96ab7c0f-6a65-4794-a841-b81801bc4b53",
+        "frame_index": 7459,
+        "seconds": 248.63333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "2f22523d-8f2c-4b49-85b2-fddae08d70bf",
+        "frame_index": 7579,
+        "seconds": 252.63333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "e979f923-b2ac-4bd6-9c42-6dcaaa687739",
+        "frame_index": 7838,
+        "seconds": 261.26666666666665
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "4c3483c9-73bd-4a1c-86e6-503f746dfbbb",
+        "frame_index": 7845,
+        "seconds": 261.5
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "35776054-432d-4d7c-b674-b0fe1a2ae21e",
+        "frame_index": 8140,
+        "seconds": 271.3333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "close",
+        "request_id": "0ee1acef-ba70-44b2-8a8d-381a83086d8d",
+        "frame_index": 8221,
+        "seconds": 274.03333333333336
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "a86a165e-2548-44af-a76b-340a61a02af6",
+        "frame_index": 8222,
+        "seconds": 274.06666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "close",
+        "request_id": "75285390-fd11-4090-b52f-fe3676636699",
+        "frame_index": 8311,
+        "seconds": 277.03333333333336
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "979ef9cc-d778-40b2-a022-51c7bf23eb04",
+        "frame_index": 8312,
+        "seconds": 277.06666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "ad5c8d00-0358-4baa-963c-0907ef581e62",
+        "frame_index": 8457,
+        "seconds": 281.9
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "30eb2908-c520-480f-90e6-0d8012dace07",
+        "frame_index": 8464,
+        "seconds": 282.1333333333333
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "54f8cbb8-d526-44b5-b7c6-c5b57551bfc9",
+        "frame_index": 8465,
+        "seconds": 282.1666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "5c06eb70-2e3a-4d26-bd2b-372595242e1f",
+        "frame_index": 8550,
+        "seconds": 285.0
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "b7be14ac-ce8b-4964-993b-74ed366dd7d3",
+        "frame_index": 8551,
+        "seconds": 285.03333333333336
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "72c10cf4-d0a8-44f9-9d84-266f7243242d",
+        "frame_index": 8690,
+        "seconds": 289.6666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "c7113879-093d-4940-8da9-63a94d73ad8e",
+        "frame_index": 8817,
+        "seconds": 293.9
+      },
+      {
+        "tool": "read_skill",
+        "primitive": "read_skill",
+        "request_id": "7433802a-1858-48d6-806c-2a33dfba26b1",
+        "frame_index": 9132,
+        "seconds": 304.4
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "39f3e0ab-bf52-480f-8ba8-b8868330d79c",
+        "frame_index": 9132,
+        "seconds": 304.4
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "5ffbab50-9840-4b6f-968a-cf5605c42c34",
+        "frame_index": 9572,
+        "seconds": 319.06666666666666
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "8f5fc8c0-900c-4e16-b0f5-ad06a58b3a27",
+        "frame_index": 9675,
+        "seconds": 322.5
+      },
+      {
+        "tool": "act",
+        "primitive": "open",
+        "request_id": "fa0a79bb-fbdc-4f55-9661-2d502ef2b346",
+        "frame_index": 9765,
+        "seconds": 325.5
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "ad8da995-8a3f-43c7-b319-4af0cd33055f",
+        "frame_index": 9772,
+        "seconds": 325.73333333333335
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "9b2e7e40-a862-44cf-9943-49f8d71be883",
+        "frame_index": 9879,
+        "seconds": 329.3
+      },
+      {
+        "tool": "act",
+        "primitive": "grasp",
+        "request_id": "d9007b4b-ee0e-4645-96ff-6d1a5905e5ec",
+        "frame_index": 10049,
+        "seconds": 334.96666666666664
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "2c7ca078-fe8b-49b3-bf06-b5e827460662",
+        "frame_index": 10056,
+        "seconds": 335.2
+      },
+      {
+        "tool": "act",
+        "primitive": "navigate_to",
+        "request_id": "398dc77b-4a34-4eea-9ecf-32e5f28e6a54",
+        "frame_index": 10211,
+        "seconds": 340.3666666666667
+      },
+      {
+        "tool": "act",
+        "primitive": "place_on_top",
+        "request_id": "e3890b5c-8d92-43a1-b6c0-4b38567145ce",
+        "frame_index": 10476,
+        "seconds": 349.2
+      },
+      {
+        "tool": "update_plan",
+        "primitive": "update_plan",
+        "request_id": "da683f45-3305-4108-ac5c-899cb49db98a",
+        "frame_index": 10483,
+        "seconds": 349.43333333333334
+      },
+      {
+        "tool": "finish",
+        "primitive": "finish",
+        "request_id": "ed171dc7-92f6-42fa-8d0a-01c611195c9d",
+        "frame_index": 10483,
+        "seconds": 349.43333333333334
+      }
+    ],
+    "encoder_pid": 2239815,
+    "encoder_command": [
+      "/mnt/data/home/sunyujie/miniforge3/envs/behavior/lib/python3.11/site-packages/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2",
+      "-hide_banner",
+      "-loglevel",
+      "warning",
+      "-y",
+      "-f",
+      "rawvideo",
+      "-pixel_format",
+      "rgb24",
+      "-video_size",
+      "1024x1616",
+      "-framerate",
+      "30.0",
+      "-i",
+      "pipe:0",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-threads",
+      "2",
+      "-preset",
+      "fast",
+      "-crf",
+      "20",
+      "-pix_fmt",
+      "yuv420p",
+      "-g",
+      "30",
+      "-movflags",
+      "+frag_keyframe+empty_moov+default_base_moof",
+      "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_opt_baseline_gpt61sol_low_20261022_s22/run/episode.mp4"
+    ],
+    "recorded_env_steps": 10377,
+    "checkpoint_at": "2026-10-22T18:52:12.224560+00:00",
+    "finished_at": "2026-10-22T18:54:12.456274+00:00",
+    "duration_seconds": 349.43333333333334,
+    "final_env_step": 10377,
+    "every_env_step_recorded": true,
+    "encoder_exit_code": 0,
+    "fresh_camera_frames": 3565,
+    "repeated_camera_frames": 6918,
+    "capture_policy": "control-step CFR; explicit previous-frame hold between fresh captures; fresh action observation boundaries",
+    "bytes": 191926679,
+    "sha256": "b8b9e42b52fc88808ea18a11f0332c0d95dd0bb3f1ed07ff1b48927073a6d005"
+  }
+}

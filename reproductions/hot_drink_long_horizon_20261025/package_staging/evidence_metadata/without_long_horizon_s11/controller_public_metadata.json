@@ -1,0 +1,37 @@
+{
+  "client_version": "codex-cli 0.157.1",
+  "client_capability": {
+    "client": "codex",
+    "status": "available",
+    "version": "codex-cli 0.157.1",
+    "executable": "/home/sunyujie/.local/bin/codex",
+    "reason": null,
+    "validation_level": "cli_capability_probe"
+  },
+  "model": "gpt-6.1-sol",
+  "model_reasoning_effort": "low",
+  "observation_mode": "rgb_only",
+  "agent_profile": "planning",
+  "formal_finish_observed": true,
+  "duration_seconds": 5062.6726381988265,
+  "status": "passed",
+  "fresh_thread_restarts": [
+    {
+      "attempt": 1,
+      "reason": "model_ended_without_formal_finish",
+      "thread_id": "01a16f1f-8333-7df2-a068-0daf50888873",
+      "returncode": 0,
+      "timed_out": false,
+      "raw_events": "fresh_restarts/1/model_events.jsonl"
+    },
+    {
+      "attempt": 2,
+      "reason": "model_ended_without_formal_finish",
+      "thread_id": "01a16f31-8720-7552-a2d1-195d90ebe222",
+      "returncode": 0,
+      "timed_out": false,
+      "raw_events": "fresh_restarts/2/model_events.jsonl"
+    }
+  ],
+  "provider_history_restarts": []
+}

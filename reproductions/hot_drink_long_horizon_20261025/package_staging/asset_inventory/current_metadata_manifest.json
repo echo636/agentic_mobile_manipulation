@@ -1,0 +1,50 @@
+[
+  {
+    "original": "/mnt/data/home/sunyujie/robot_manipulation/behavior_challenge_sunyujie/BEHAVIOR-1K/datasets/behavior-1k-assets/metadata/avg_category_specs.json",
+    "package": "asset_inventory/current_metadata/behavior-1k-assets/metadata/avg_category_specs.json",
+    "sha256_current": "6f60da2c968d067fb4da017b9d42bcc30cf5b03175dc7020139f7d9bc6844903",
+    "historical_frozen": false
+  },
+  {
+    "original": "/mnt/data/home/sunyujie/robot_manipulation/behavior_challenge_sunyujie/BEHAVIOR-1K/datasets/behavior-1k-assets/metadata/room_categories.txt",
+    "package": "asset_inventory/current_metadata/behavior-1k-assets/metadata/room_categories.txt",
+    "sha256_current": "112298662e7c8a45f85f120cb736909fe64026d4a225b21f1c734a55ed052859",
+    "historical_frozen": false
+  },
+  {
+    "original": "/mnt/data/home/sunyujie/robot_manipulation/behavior_challenge_sunyujie/BEHAVIOR-1K/datasets/behavior-1k-assets/metadata/non_sampleable_categories.txt",
+    "package": "asset_inventory/current_metadata/behavior-1k-assets/metadata/non_sampleable_categories.txt",
+    "sha256_current": "913ee09dc3ad2df1c453a1b7baa9a48f2a19fb4ce8d4e1c7ef4d3e7a87eb3060",
+    "historical_frozen": false
+  },
+  {
+    "original": "/mnt/data/home/sunyujie/robot_manipulation/behavior_challenge_sunyujie/BEHAVIOR-1K/datasets/behavior-1k-assets/metadata/categories.txt",
+    "package": "asset_inventory/current_metadata/behavior-1k-assets/metadata/categories.txt",
+    "sha256_current": "f541590a4250afdd7004fccfbafd6c41bdb8bfeb2f8b099faff8147cac096301",
+    "historical_frozen": false
+  },
+  {
+    "original": "/mnt/data/home/sunyujie/robot_manipulation/behavior_challenge_sunyujie/BEHAVIOR-1K/datasets/2026-challenge-task-instances/metadata/task_custom_lists.json",
+    "package": "asset_inventory/current_metadata/2026-challenge-task-instances/metadata/task_custom_lists.json",
+    "sha256_current": "3b5e83295715dc997e28c914bd4e9995a55ba133092c307b268995b0a77a52dc",
+    "historical_frozen": false
+  },
+  {
+    "original": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_skill_transfer_20261021_frozen/dataset_overlay/2026-challenge-task-instances/metadata/available_tasks.yaml",
+    "package": "asset_inventory/current_metadata/2026-challenge-task-instances/metadata/available_tasks.yaml",
+    "sha256_current": "33645c6598dfeccf755daa7095fa3ee1e638ac73bf2b7cdbbf091bac25619bed",
+    "historical_frozen": true
+  },
+  {
+    "original": "/mnt/data/home/sunyujie/robot_manipulation/behavior_challenge_sunyujie/BEHAVIOR-1K/datasets/2026-challenge-task-instances/metadata/task.jsonl",
+    "package": "asset_inventory/current_metadata/2026-challenge-task-instances/metadata/task.jsonl",
+    "sha256_current": "1876ffc163ca7b764d3271e62009c8d7a1798e5af05c0c70f39582ee0eb9b047",
+    "historical_frozen": false
+  },
+  {
+    "original": "/mnt/data/home/sunyujie/robot_manipulation/behavior_challenge_sunyujie/BEHAVIOR-1K/datasets/2026-challenge-task-instances/metadata/B100_task_misc.csv",
+    "package": "asset_inventory/current_metadata/2026-challenge-task-instances/metadata/B100_task_misc.csv",
+    "sha256_current": "5b7cd50b7b0d757bfb2f6fbac8b21d1e23e30e88ccda4993dd3fdf9ede6b6f77",
+    "historical_frozen": false
+  }
+]

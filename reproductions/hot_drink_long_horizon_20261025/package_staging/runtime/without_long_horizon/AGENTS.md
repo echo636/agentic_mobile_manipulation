@@ -1,0 +1,34 @@
+# Independent manipulation system
+
+This is a new project, not a fork of the source repositories. Keep simulator imports inside the OmniGibson adapter. The core must run on CPU without simulator dependencies.
+
+The maintained origin is https://github.com/echo636/agentic_mobile_manipulation.git, explicitly authorized by the user. Develop this repository; do not push to reference repositories. Keep generated runs, assets, credentials and environments outside Git. Current observation is four fixed RGB cameras (front/back/left/right); no wrist camera or robot rotation is used to collect surround views.
+
+The default model protocol starts with initialize, which returns the prepared episode's current four-camera snapshot without a reset or extra render. Each act/look response supplies the next snapshot; wait is an action when simulation time must advance. The minimal profile exposes initialize/look/act/finish, and skills adds list_skills/read_skill. Keep observe and start/get/cancel observation jobs confined to legacy workflow compatibility. Default prompts and skills must not require those hidden tools or an extra observation before finish. All client prompts come from vision_policy.system_prompt.
+The model selects every action and RGB pixel. A successful grasp may return only the class of the object its pixel actually selected as bounded executor feedback. Never expose instance IDs, poses, task bindings, a goal-state list, or evaluator results in that feedback. Record this simulator-derived category channel in experiment provenance; it is not a pure RGB-only observation claim.
+
+Never label a mock, scripted policy, oracle-state experiment, or symbolic execution run as a visual autonomous policy or an official challenge submission. Record source, assets, task instance, host, interpreter, GPU UUID, PID/unit, configuration and validation level for each run. A tool success or agent finish claim is not task success: use the independent task evaluator.
+
+For new atomic-action model experiments, reviews, and result publication, follow [the experiment requirements](docs/atomic_action_experiment_requirements.md).
+For visible first-ten demonstrations, follow the two independent task/presentation gates and failure-driven probe-to-model iteration in [the demo reliability record](docs/demo_reliability.md). A private motor probe never counts as autonomous task success.
+The evaluator's `goal_options` are alternative object bindings, not a time series: use the best binding or `goal_satisfaction_fraction`, never the last row. A transient `OnTop=false` inside an action is not grounds to abort a run until the final post-action relation has been checked; hand retreat can restore contact.
+
+## Building and repairing benchmark tasks
+
+Optimize the benchmark as a complete package: task definitions, scenes, observation/action tools, executor, evaluation and reproducible evidence. When an experiment fails, consult [the benchmark repair priorities and acceptance evidence](docs/long_horizon_benchmark_suite.md#benchmark-设施与任务的持续优化) before choosing a skill change. Repair confirmed facility defects with a reproducible case and regression evidence; preserve genuine agent failures as measured outcomes. Version benchmark repairs separately from policy changes.
+
+When creating or changing a long-horizon task, follow [the task construction workflow](docs/long_horizon_task_workflow.md) and consult [the task failure cases and benchmark lessons](docs/bugfix_journal.md) before designing the scene and goals. Turn relevant past failures into explicit checks for the new task. Build coherent tasks whose subgoals serve one user objective; document the capabilities and dependencies being measured.
+
+For every investigated task failure, create or update a stable case in the journal. Identify the task package, scene, instance, seed, definition version/hash, protocol and failed subgoal. Record reproduction evidence, confirmed cause versus hypotheses, the changed layer and files, validation commands/results, remaining limitations, and prevention checks reusable when building other tasks. Classify agent, task-definition, scene, harness and simulator failures separately. A partial diagnosis stays unresolved; passing an offline test or private probe does not establish autonomous task success.
+
+Benchmark admission requires evidence that instructions and accepted solutions agree, required objects are discoverable through allowed observations, critical action chains are executable, and the action protocol and independent evaluator pass their checks. Accept every destination allowed by the instruction, including equivalent containers; verify each required item separately. Retain genuine agent planning, counting and manipulation failures as benchmark outcomes. Model success is not an admission requirement, and changes made only to improve one model's score are not task repairs.
+
+Freeze accepted task definitions, scene assets and evaluation configurations. Version changes to instructions, accepted goals, scene, protocol or budgets; preserve original runs and scores. For the task suite, maintain a capability coverage table and development/held-out instance split. Record validation scope and known limitations before calling a task benchmark-ready; a single research instance does not establish suite-level generalization.
+
+When selecting a transfer regression or adding a task, consult [the long-horizon suite coverage and split](docs/long_horizon_benchmark_suite.md). Keep its design coverage separate from validation evidence, and report native-BDDL and high-level evaluation protocols separately.
+
+When optimizing robot workflow skills, follow [the evidence-driven skill iteration record](docs/skill_iteration_20261021.md). Diagnose action sequences before changing guidance, preserve each run's skill snapshot/hash, and record a new policy version separately from task or harness changes. Local document/interface checks do not demonstrate fewer actions; validate benefits and regressions in autonomous runs.
+
+Keep operational steps in journals and structured records; do not create an HTML report for every operation. The existing retest32_v7 replay URL shows only the historical 32 tasks; use a separate summary page for current comparisons. Preserve bookmarked replay links, distinguish cohorts, and publish compact display data rather than full evaluator payloads.
+
+Do not log credentials. Do not modify upstream source snapshots or unrelated environments. Use bounded actions, structured errors, serialized simulator access and immutable episode records. Preserve failure evidence.

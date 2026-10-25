@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "required_count": 16,
+  "missing_instances": [],
+  "level": "actual_initialized_simulator_object_scope",
+  "bindings_offline_only": {
+    "cabinet.n.01_1": "bottom_cabinet_no_top_gjeoer_0",
+    "coffee_table.n.01_1": "coffee_table_rlsebe_0",
+    "countertop.n.01_1": "countertop_kelker_0",
+    "dinner_napkin.n.01_1": "dinner_napkin_273",
+    "electric_refrigerator.n.01_1": "fridge_dszchb_0",
+    "floor.n.01_1": "floors_kxcpgy_0",
+    "honey__jar.n.01_1": "honey_jar_268",
+    "kettle.n.01_1": "kettle_276",
+    "mug.n.04_1": "mug_275",
+    "place_mat.n.01_1": "place_mat_272",
+    "plate.n.04_1": "plate_274",
+    "stove.n.01_1": "burner_mjvqii_0",
+    "sugar_cookie.n.01_1": "sugar_cookie_269",
+    "teaspoon.n.02_1": "teaspoon_271",
+    "tray.n.01_1": "tray_270",
+    "water_bottle.n.01_1": "water_bottle_277"
+  }
+}

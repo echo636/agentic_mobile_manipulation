@@ -1,0 +1,4 @@
+{
+  "startup": "disabled_during_gpu_water_initialization",
+  "runtime": "enabled_after_cpu_switch"
+}

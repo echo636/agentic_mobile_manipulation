@@ -1,0 +1,20 @@
+{
+  "client_version": "codex-cli 0.157.1",
+  "client_capability": {
+    "client": "codex",
+    "status": "available",
+    "version": "codex-cli 0.157.1",
+    "executable": "/home/sunyujie/.local/bin/codex",
+    "reason": null,
+    "validation_level": "cli_capability_probe"
+  },
+  "model": "gpt-6.1-sol",
+  "model_reasoning_effort": "low",
+  "observation_mode": "rgb_only",
+  "agent_profile": "planning",
+  "formal_finish_observed": true,
+  "duration_seconds": 7343.6652675489895,
+  "status": "passed",
+  "fresh_thread_restarts": null,
+  "provider_history_restarts": null
+}

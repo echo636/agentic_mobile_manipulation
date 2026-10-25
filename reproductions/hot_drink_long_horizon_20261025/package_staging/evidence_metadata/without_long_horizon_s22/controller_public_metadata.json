@@ -1,0 +1,45 @@
+{
+  "client_version": "codex-cli 0.157.1",
+  "client_capability": {
+    "client": "codex",
+    "status": "available",
+    "version": "codex-cli 0.157.1",
+    "executable": "/home/sunyujie/.local/bin/codex",
+    "reason": null,
+    "validation_level": "cli_capability_probe"
+  },
+  "model": "gpt-6.1-sol",
+  "model_reasoning_effort": "low",
+  "observation_mode": "rgb_only",
+  "agent_profile": "planning",
+  "formal_finish_observed": true,
+  "duration_seconds": 3373.762892719824,
+  "status": "passed",
+  "fresh_thread_restarts": [
+    {
+      "attempt": 1,
+      "reason": "model_ended_without_formal_finish",
+      "thread_id": "01a16f79-26cf-7cf2-835d-8b5964f7947b",
+      "returncode": 0,
+      "timed_out": false,
+      "raw_events": "fresh_restarts/1/model_events.jsonl"
+    },
+    {
+      "attempt": 2,
+      "reason": "model_ended_without_formal_finish",
+      "thread_id": "01a16f80-ebd5-7820-84a4-6e4b54e204dc",
+      "returncode": 0,
+      "timed_out": false,
+      "raw_events": "fresh_restarts/2/model_events.jsonl"
+    },
+    {
+      "attempt": 3,
+      "reason": "model_ended_without_formal_finish",
+      "thread_id": "01a16f89-8b41-7651-ae81-1b67811cb9f0",
+      "returncode": 0,
+      "timed_out": false,
+      "raw_events": "fresh_restarts/3/model_events.jsonl"
+    }
+  ],
+  "provider_history_restarts": []
+}

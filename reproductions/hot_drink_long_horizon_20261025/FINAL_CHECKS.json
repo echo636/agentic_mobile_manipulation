@@ -1,0 +1,65 @@
+{
+  "checked_at_utc": "2026-10-25T05:56:29.576951+00:00",
+  "checks": [
+    {
+      "command": [
+        "python3",
+        "package_staging/validation/audit_regression_check.py"
+      ],
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "stdout": "PASS: rejected malformed action does not commit; malformed successful action is rejected",
+      "stderr": "",
+      "passed": true
+    },
+    {
+      "command": [
+        "python3",
+        "package_staging/validation/recompute_recorded_table.py"
+      ],
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "stdout": "with_long_horizon success 3 / 3 mean_actions 112.33333333333333\nwithout_long_horizon success 0 / 3 mean_actions 114.33333333333333",
+      "stderr": "",
+      "passed": true
+    },
+    {
+      "command": [
+        "python3",
+        "verify_staging.py"
+      ],
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "stdout": "PASS: exactly 756 staged files match their sizes and hashes\npublication_ready: False",
+      "stderr": "",
+      "passed": true
+    },
+    {
+      "command": [
+        "python3",
+        "verify_staging.py",
+        "--require-publish-ready"
+      ],
+      "expected_exit": 2,
+      "actual_exit": 2,
+      "stdout": "PASS: exactly 756 staged files match their sizes and hashes\npublication_ready: False",
+      "stderr": "",
+      "passed": true
+    }
+  ],
+  "publication_ready": false,
+  "new_simulator_experiments_run": false,
+  "raw_evidence_files_hashed": 9367,
+  "staged_files": 756,
+  "staged_bytes": 12697219,
+  "inventory_files_sha256": {
+    "INVENTORY.json": "2c49583e9dadb5894fb8722b71d683b432a17046d8d5769fe5ea763d39d1af54",
+    "SOURCE_LINEAGE.json": "2cf6721c99764d2307e0716e952ef57af8ff4b174ac0f0b4ecbcb5768737ec75",
+    "SIX_TRIALS.json": "99845b3e38b599dc96d87baefbb952ee409ef6d08fc473c390c62c8db1ad535b",
+    "STAGING_MANIFEST.json": "70a23691215deb4463be7ca579a48e6df15acc396a1a089f5a2cb9943419a99b",
+    "RAW_EVIDENCE_INVENTORY.json": "974b0bbe4516091257257bd17acd18312b583d297966d49401087a0f0236ae9e",
+    "REPRODUCTION_INVENTORY.md": "8d5b76caea78a0d3e1f0c049842e3f0a04eedc51288c11d8aebe79b03c2df181",
+    "verify_staging.py": "b3f0894768e4a084bacceb05535d6142240a4cb5e552c63d95bc31dd46625270",
+    "hash_raw_evidence.py": "7adf00cf7d6a6a5a33fb1bfbb3e4a237edb5b5705e8699a4537185d63d219754"
+  }
+}

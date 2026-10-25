@@ -1,0 +1,46 @@
+{
+  "bundle_sha256": "5fd7031b5e4b2398c27723137156011b9ee539eb8820ac3c62b16a132894edd2",
+  "skills": [
+    {
+      "name": "failure-recovery",
+      "description": "Recover from incorrect visual targets, rejected actions and partial execution without oracle state or endless retries.",
+      "resources": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "long-horizon-planning",
+      "description": "Plan interdependent object or room changes, track individual items and completion evidence, and revise routes or staging after feedback.",
+      "resources": [
+        "SKILL.md",
+        "references/bddl-goals.md"
+      ]
+    },
+    {
+      "name": "pick-and-place",
+      "description": "Grasp, transport and place visible items; handle container contents, staging, doors and destination selection.",
+      "resources": [
+        "SKILL.md",
+        "references/placement.md",
+        "references/staging-and-doors.md",
+        "references/target-selection.md"
+      ]
+    },
+    {
+      "name": "visual-exploration",
+      "description": "Search and revisit places using current RGB, bounded turns, visible navigation points and conversation history.",
+      "resources": [
+        "SKILL.md"
+      ]
+    },
+    {
+      "name": "visual-manipulation",
+      "description": "Complete manipulation through RGB, callable workflow skills, bounded actions and visible verification.",
+      "resources": [
+        "SKILL.md",
+        "references/evidence.md",
+        "references/material-actions.md"
+      ]
+    }
+  ]
+}
