@@ -308,6 +308,14 @@ class LocalRGBManipulation:
             raise SkillError('local_adjustment_blocked','No checked reachable visible stance within target operation reach',
                              stage=stage)
         plan,route=selected
+        from .navigation_refinement import refine_navigation_detour
+        grid,details,plan,route,collision,_,detour=refine_navigation_detour(
+            self,geometry[4],grid,details,actual,[plan],plan,route,collision,{})
+        if detour is not None:
+            operation.record('detour_refinement',**detour)
+            if detour['status']=='refined_route_selected':
+                chosen=detour['attempts'][-1]
+                operation.navigation_sampling={key:chosen[key] for key in ('resolution','window')}
         operation.record('move',route=asdict(route))
         result=self._execute_gt_plan(grid,plan,operation.step_limit-(self.steps-operation.start_steps),prepared_route=route)
         self.navigation_distance+=result['actual_path_distance_m']

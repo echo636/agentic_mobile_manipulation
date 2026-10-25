@@ -971,6 +971,21 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                     target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
                     project_point=mode=='point',allow_lateral=allow_lateral,
                     planning_seconds=getattr(self,'forward_route_planning_seconds',10.))
+            from .navigation_refinement import refine_navigation_detour
+            with component(self,'navigation_detour_refinement'):
+                grid,map_details,plan,prepared_route,endpoint_collision,selection,detour=refine_navigation_detour(
+                    self,floor,grid,map_details,(*initial_xy,travel_yaw),
+                    options,plan,prepared_route,endpoint_collision,selection)
+            if detour is not None:
+                details['detour_refinement']=detour
+                if detour['status']=='refined_route_selected':
+                    # Retain the original coarse artifact alongside the map
+                    # actually used to certify and execute the shorter route.
+                    coarse_file=map_file.with_name(map_file.stem+'_coarse.npz')
+                    map_file.rename(coarse_file)
+                    details['coarse_grid_artifact']=str(coarse_file.relative_to(self.output))
+                    details.update(map_details,map_resolution_m=grid.resolution)
+                    raw_free,_,_=self._navigation_clearance
             details['forward_candidate_selection']=selection
             if any(phase.motion_mode=='holonomic' for phase in prepared_route.phases):
                 details['motion_policy']='checked_holonomic_navigation_fallback'
