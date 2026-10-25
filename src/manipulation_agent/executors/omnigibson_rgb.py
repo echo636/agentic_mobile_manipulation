@@ -407,7 +407,18 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         self._restore_stabilized_containers()
         self._carry_follow()
         self._follow_placement_particles()
-        with component(self,'physics_and_metrics'):super()._step(action)
+        # RGB observation boundaries and the video cadence already own rendering.
+        # OmniGibson's ordinary env.step also renders implicitly, duplicating
+        # that work. Its native no-render branch advances the same physics
+        # substeps, state transitions, task evaluation and simulation clock.
+        # Restore explicitly even on exceptions: OG 3.9.2's context manager
+        # does not put its own restoration in a finally block.
+        implicit_render = self.og.sim._render_on_step
+        try:
+            with self.og.sim.render_on_step(False):
+                with component(self,'physics_and_metrics'):super()._step(action)
+        finally:
+            self.og.sim._render_on_step = implicit_render
         try:
             self._check_placement_objects()
             if self._base_target is not None:
@@ -1445,6 +1456,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,
             'observation_pixels_reused_for_video':True, 'fresh_observation_boundaries':True,
             'intermediate_frames':'explicit_previous_frame_hold','no_motion_interpolation':True}
+        result['control_step_rendering'] = {
+            'implicit_render':False, 'explicit_render':'observation_and_video_boundaries',
+            'physics_substeps':'native_unchanged', 'task_and_state_updates':'native_unchanged',
+            'exception_policy':'restore_previous_implicit_render_setting'}
         result['placement'] = {'on_top':'selected_surface_collision_geometry_and_physics_settling',
             'inside':'official_volume','verification':'selected_surface_support_and_physical_settlement; official_Inside_and_payload_relations',
             'surface_target':'RGB selected point and shelf retained; local candidate search',
