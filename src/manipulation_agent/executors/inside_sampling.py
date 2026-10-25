@@ -133,7 +133,8 @@ def closure_preference_available(backend):
 
 
 def sample_assembly_inside(backend, held, target, contents, *, point=None, residents=(),
-                           max_candidates=108, max_seconds=None, open_fallback=None):
+                           max_candidates=108, max_seconds=None, open_fallback=None,
+                           orientation_phase='all'):
     """Search all selected-container volumes and nearby supported orientations.
 
 Unlike sampling root origins uniformly, bounds refer to the whole assembly
@@ -253,8 +254,14 @@ Rejected candidate poses never become committed actions or task evidence.
             points=getattr(volume,'visual_boundary_points_world',None)
             local_volume=(points-vp)@rotation if points is not None else None
             volume_geometry[volume.prim_path]=(lo,hi,vp,rotation,local_volume)
-        for orientation_source, quat, angle in assembly_orientations(
-                held,root_quat,torch,T,reference_quat=target_quat,allow_reorientation=not payload_locked):
+        orientations = assembly_orientations(
+            held,root_quat,torch,T,reference_quat=target_quat,allow_reorientation=not payload_locked)
+        if orientation_phase not in {'all', 'resting', 'additional'}:
+            raise ValueError('Unknown placement orientation phase')
+        if orientation_phase != 'all':
+            orientations = [row for row in orientations
+                            if (row[0] == 'unladen_face_proposal') == (orientation_phase == 'additional')]
+        for orientation_source, quat, angle in orientations:
             check()
             bottom_offset=None
             if shape is not None and held_shape is not None and not particles:

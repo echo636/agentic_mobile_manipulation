@@ -138,8 +138,24 @@ def checked_initial_inside(env, output):
             native = False
             try:
                 if relation is Inside:
-                    accepted = sample_assembly_inside(adapter, held, target, [], residents=residents,
-                                                      max_candidates=108, max_seconds=45.)
+                    # Known resting poses deserve spatial coverage before
+                    # generating hundreds of sideways/leaning alternatives.
+                    # The latter remain available for long objects that need
+                    # a container wall for support. This staged construction
+                    # avoids spending a tiny flat object's entire budget on
+                    # orientation preparation and its first three faces.
+                    for phase in ('resting', 'additional'):
+                        adapter._placement_record({'status': 'initial_inside_orientation_phase',
+                            'held': held.name, 'target': target.name, 'phase': phase})
+                        try:
+                            accepted = sample_assembly_inside(adapter, held, target, [], residents=residents,
+                                max_candidates=108, max_seconds=45., orientation_phase=phase)
+                        except SkillError as exc:
+                            if exc.code != 'sampling_budget_exhausted':
+                                raise
+                            accepted = False
+                        if accepted:
+                            break
                 else:
                     from .initial_surface import sample_initial_surface
                     accepted = sample_initial_surface(adapter, held, target)
