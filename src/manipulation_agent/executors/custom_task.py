@@ -179,7 +179,8 @@ class CustomTaskBackend(RGBBackend):
                 record['collision_free']=collision.motion_free(pose,pose)
                 if record['collision_free']:
                     record['departure_certificate']=local_exit_certificate(pose,collision,
-                        check_cancelled=budget.check)
+                        check_cancelled=budget.check,
+                        allow_lateral=bool(getattr(self.robot,'is_holonomic_base',False)))
                     record['departure_available']=record['departure_certificate'] is not None
             except SearchBudgetExhausted:
                 record['planning_budget_exhausted']=True

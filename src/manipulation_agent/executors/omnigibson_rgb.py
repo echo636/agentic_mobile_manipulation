@@ -1041,7 +1041,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         endpoint_collision.check_cancelled=self.deadline.check
         actual_exit=local_exit_certificate((*actual[:2].cpu().tolist(),actual_yaw),
-                                          endpoint_collision,check_cancelled=self.deadline.check)
+                                          endpoint_collision,check_cancelled=self.deadline.check,
+                                          allow_lateral=allow_lateral)
         visible=(self._approach_visible(actual[:2].cpu().tolist(),point,
                     getattr(target,'selected_object',None),margin=margin,
                     base_yaw=actual_yaw) if mode=='approach' else None)

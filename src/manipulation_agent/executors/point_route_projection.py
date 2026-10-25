@@ -28,7 +28,8 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
     connector = checked_holonomic_connection if allow_lateral else checked_connection
     if not hasattr(collision,'grid_at_heading') or not hasattr(collision,'_sweep_grid'):
         return None
-    departure=local_exit_certificate(actual,collision,check_cancelled=check_cancelled)
+    departure=local_exit_certificate(actual,collision,check_cancelled=check_cancelled,
+                                     allow_lateral=allow_lateral)
     if hasattr(collision,'local_window'):
         points=[actual[:2],options[0].target,*[xy for p in options for xy in p.points],*[p.goal for p in options]]
         if departure is not None:points.extend(p[:2] for p in departure['poses'])
