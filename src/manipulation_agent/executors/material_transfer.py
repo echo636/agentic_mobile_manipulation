@@ -11,11 +11,12 @@ from .particle_payload import snapshot_particles, _indices
 from .particle_view import physical_particle_view
 
 
-def free_volume_positions(scene, destination, system, limit):
-    """Sample the actual annotated volume, pruning rigid and particle overlap.
+def free_volume_positions(scene, destination, system, limit, *, diagnostics=None):
+    """Find a bounded portion with progressively finer collision-checked grids.
 
-    A bounded portion is explicit: this does not claim to empty the source.
-    Sampling streams horizontal layers to avoid a cubic allocation for fluids.
+    Particle rest spacing constrains accepted positions, not search resolution:
+    a single lattice can skip an entire free layer in a shallow, partly filled
+    vessel. Refine only when the preceding pass found no usable position.
     """
     import torch
     from omnigibson.object_states import ContainedParticles
@@ -25,10 +26,16 @@ def free_volume_positions(scene, destination, system, limit):
     spacing = float(system.particle_particle_rest_distance)
     if not all(math.isfinite(x) and x > 0 for x in (radius, spacing)):
         raise SkillError('execution_error', 'Invalid physical particle dimensions')
-    axes = [torch.arange(float(a) + radius, float(b) - radius, spacing,
-                         dtype=low.dtype, device=low.device) for a, b in zip(low, high)]
-    if any(len(axis) == 0 for axis in axes):
-        return low.new_empty((0, 3))
+    report = diagnostics if diagnostics is not None else {}
+    report.update(bounds_low=low.tolist(), bounds_high=high.tolist(),
+                  radius_m=radius, rest_spacing_m=spacing, limit=limit, passes=[])
+    empty = lambda: low.new_empty((0, 3))
+    if limit <= 0:
+        report['termination'] = 'no_source_material'
+        return empty()
+    if bool(((high - low) <= 2 * radius).any()):
+        report['termination'] = 'sphere_diameter_exceeds_axis'
+        return empty()
     occupied = []
     for other in scene.active_systems.values():
         if other.n_particles and physical_particle_view(other) is not None:
@@ -39,30 +46,53 @@ def free_volume_positions(scene, destination, system, limit):
                 occupied.append((centers[near], reach))
     accepted = []
     deadline = time.monotonic() + 15.0
-    # Center-out horizontal order reduces spilling at a curved rim. Inspect
-    # real collision geometry, not the enclosing object's bounding box.
-    xy = torch.cartesian_prod(axes[0], axes[1]).reshape(-1, 2)
-    xy = xy[((xy - (low[:2] + high[:2]) / 2)**2).sum(dim=1).argsort()]
-    for z in axes[2]:
+    report['termination'] = 'candidate_grids_exhausted'
+    for refinement in (1., .5, .25):
+        axes = [torch.arange(float(a) + radius, float(b) - radius, spacing * refinement,
+                             dtype=low.dtype, device=low.device) for a, b in zip(low, high)]
+        phase = dict(search_spacing_m=spacing * refinement, axis_counts=[len(a) for a in axes],
+                     in_volume=0, particle_clear=0, rigid_checks=0, rigid_clear=0)
+        report['passes'].append(phase)
+        if any(len(axis) == 0 for axis in axes):
+            report['termination'] = 'sphere_diameter_exceeds_axis'
+            return empty()
+        xy = torch.cartesian_prod(axes[0], axes[1]).reshape(-1, 2)
+        xy = xy[((xy - (low[:2] + high[:2]) / 2)**2).sum(dim=1).argsort()]
+        for z in axes[2]:
+            if time.monotonic() >= deadline:
+                report['termination'] = 'sampling_budget_exhausted'
+                break
+            points = torch.cat((xy, z.expand(len(xy), 1)), dim=1)
+            points = points[link.check_points_in_volume(points)]
+            phase['in_volume'] += len(points)
+            for start in range(0, len(points), 256):
+                batch = points[start:start + 256]
+                clear = torch.ones(len(batch), dtype=torch.bool, device=batch.device)
+                for centers, reach in occupied:
+                    for offset in range(0, len(centers), 512):
+                        clear &= (torch.cdist(batch, centers[offset:offset + 512]) >= reach).all(dim=1)
+                batch = batch[clear]
+                phase['particle_clear'] += len(batch)
+                for position in batch:
+                    if time.monotonic() >= deadline:
+                        report['termination'] = 'sampling_budget_exhausted'
+                        return torch.stack(accepted) if accepted else empty()
+                    # Fine search grids must not create overlapping new particles.
+                    if accepted and bool(((torch.stack(accepted) - position).norm(dim=1) < spacing - 1e-7).any()):
+                        continue
+                    phase['rigid_checks'] += 1
+                    if not bool(system.check_in_contact(position.unsqueeze(0))[0]):
+                        phase['rigid_clear'] += 1
+                        accepted.append(position)
+                        if len(accepted) == limit:
+                            report['termination'] = 'portion_limit'
+                            return torch.stack(accepted)
+        if accepted:
+            report['termination'] = 'partial_portion'
+            return torch.stack(accepted)
         if time.monotonic() >= deadline:
             break
-        points = torch.cat((xy, z.expand(len(xy), 1)), dim=1)
-        points = points[link.check_points_in_volume(points)]
-        for start in range(0, len(points), 256):
-            batch = points[start:start + 256]
-            clear = torch.ones(len(batch), dtype=torch.bool, device=batch.device)
-            for centers, reach in occupied:
-                for offset in range(0, len(centers), 512):
-                    clear &= (torch.cdist(batch, centers[offset:offset + 512]) >= reach).all(dim=1)
-            batch = batch[clear]
-            for position in batch:
-                if time.monotonic() >= deadline:
-                    return torch.stack(accepted) if accepted else low.new_empty((0, 3))
-                if not bool(system.check_in_contact(position.unsqueeze(0))[0]):
-                    accepted.append(position)
-                    if len(accepted) == limit:
-                        return torch.stack(accepted)
-    return torch.stack(accepted) if accepted else low.new_empty((0, 3))
+    return empty()
 
 
 def move_particle_centers(system, indices, positions):
@@ -163,7 +193,12 @@ class CheckedMaterialTransfer:
                     used = int(source.states[ModifiedParticles].get_value(system))
                     available = min(int(modifier._get_max_particles_limit_per_step(system)),
                                     int(modifier.physical_particle_modification_limit) - used)
-                positions = free_volume_positions(scene, destination, system, min(512, available)) if available else []
+                sampling = {}
+                positions = free_volume_positions(scene, destination, system, min(512, available),
+                                                  diagnostics=sampling) if available else []
+                self._placement_record({'status': 'material_volume_sampling', 'primitive': primitive,
+                    'source': source.name, 'destination': destination.name, 'material': name,
+                    'accepted': len(positions), **sampling})
                 if not len(positions):
                     continue
                 before = int(system.n_particles)
