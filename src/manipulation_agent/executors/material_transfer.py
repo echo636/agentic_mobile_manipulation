@@ -145,6 +145,10 @@ class CheckedMaterialTransfer:
         systems = {record.system.name: record.system for record in captured}
         systems.update((system.name, system) for system in emitted)
         if not systems:
+            from omnigibson.object_states import ToggledOn
+            if modifier is not None and ToggledOn in source.states and not source.states[ToggledOn].get_value():
+                raise SkillError('pre_condition_error',
+                    'The material dispenser is switched off; enable it with toggle_on before dispensing')
             raise SkillError('pre_condition_error', 'Selected source has no accessible loose material or ready dispenser')
         changes = []
         # No physics until all carry tracking reflects the actual transfer.
