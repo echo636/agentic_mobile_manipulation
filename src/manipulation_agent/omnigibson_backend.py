@@ -218,6 +218,9 @@ class OmniGibsonBackend:
             from .executors.particle_quaternions import install_particle_quaternion_serialization
             write_json(output/'particle_quaternion_serialization.json',
                        install_particle_quaternion_serialization())
+            from .executors.macro_particle_pose import install_macro_particle_pose_repair
+            write_json(output/'macro_particle_pose_compatibility.json',
+                       install_macro_particle_pose_repair())
             from .executors.inside_fabric import install_inside_sampling_fabric_sync
             write_json(output/'inside_sampling_fabric_sync.json',
                        install_inside_sampling_fabric_sync())
