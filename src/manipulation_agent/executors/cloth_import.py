@@ -5,6 +5,15 @@ import json
 from pathlib import Path
 
 
+def mesh_with_optional_normals(native, mesh_prim, include_normals=True, include_texcoord=True):
+    # USD normals are optional. The pinned converter otherwise turns None into
+    # an object-dtype array and fails before native cloth remeshing. Trimesh
+    # computes missing normals from the unchanged points and topology.
+    if include_normals and mesh_prim.GetAttribute('normals').Get() is None:
+        include_normals = False
+    return native(mesh_prim, include_normals=include_normals, include_texcoord=include_texcoord)
+
+
 def prepare_nested_cloth_visual(root, copy_prim):
     """Expose a unique nested visual to EntityPrim's direct-child lookup.
 
@@ -58,6 +67,15 @@ def install_nested_cloth_import(output):
     import omnigibson.lazy as lazy
     from omnigibson.prims import entity_prim as module
     from omnigibson.utils.constants import PrimType
+    from omnigibson.utils import usd_utils
+
+    native_mesh = usd_utils.mesh_prim_mesh_to_trimesh_mesh
+    if not getattr(native_mesh, '_mas_optional_mesh_normals', False):
+        @wraps(native_mesh)
+        def convert_mesh(mesh_prim, include_normals=True, include_texcoord=True):
+            return mesh_with_optional_normals(native_mesh, mesh_prim, include_normals, include_texcoord)
+        convert_mesh._mas_optional_mesh_normals = True
+        usd_utils.mesh_prim_mesh_to_trimesh_mesh = convert_mesh
 
     original = module.EntityPrim._post_load
     if not getattr(original, '_mas_nested_cloth_import', False):
@@ -76,6 +94,7 @@ def install_nested_cloth_import(output):
         post_load._mas_nested_cloth_import = True
         module.EntityPrim._post_load = post_load
     return dict(status='configured', scope='nested_visual_cloth_import',
+                optional_normals='derive missing normals from native mesh geometry',
                 upstream_path=module.__file__,
                 upstream_sha256=hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest(),
                 task_predicates_changed=False)
