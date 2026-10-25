@@ -16,7 +16,7 @@ from manipulation_agent.observations.boundary import public_execution_error
 
 MANIPULATIONS = set(PRIMITIVES) - {'navigate_to', 'release', 'wait'}
 NEEDS_HELD = {'attach', 'hang', 'place_inside', 'place_on_top', 'place_under',
-              'place_next_to', 'wipe', 'sweep', 'vacuum', 'spray', 'spread', 'soak', 'cut'}
+              'place_next_to', 'wipe', 'sweep', 'vacuum', 'spray', 'spread', 'soak', 'cut', 'pour', 'scoop'}
 
 
 @unittest.skipUnless(importlib.util.find_spec('numpy'), 'Requires numpy')
@@ -32,6 +32,7 @@ class ExplicitNavigationTests(unittest.TestCase):
         self.b._demo_arm = None
         self.b.inside_placement = 'official_volume'
         self.b.steps = 0
+        self.b._complete_pending_object_initialization = lambda remaining: None
         self.base = np.array([0., 0., .01])
         self.orientation = np.array([0., 0., 0., 1.])
         self.b.robot = types.SimpleNamespace(
@@ -47,7 +48,7 @@ class ExplicitNavigationTests(unittest.TestCase):
         self.b._navigate = lambda *a, **kw: self.fail('Manipulation attempted implicit navigation')
         self.b._capture_cut_target = lambda obj: None
         for method in ('_ideal_grasp', '_checked_attach', '_checked_surface_action', '_checked_soak',
-                       '_checked_cut', '_ideal_state_action', '_checked_place_on_top',
+                       '_checked_cut', '_checked_transfer', '_ideal_state_action', '_checked_place_on_top',
                        '_checked_place_under', '_checked_place_next_to', '_checked_place_inside'):
             def effect(*args, method=method, **kwargs):
                 self.effects.append(method)

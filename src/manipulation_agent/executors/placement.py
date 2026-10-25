@@ -36,9 +36,9 @@ def scene_object_identities(sim):
 @contextmanager
 def placement_transaction(sim, record):
     """Restore the pre-action state, including the grasp, on a failed placement."""
+    particles = snapshot_particle_state(sim)
     state = sim.dump_state(serialized=False)
     objects = scene_object_identities(sim)
-    particles = snapshot_particle_state(sim)
     try:
         yield
     except Exception as exc:

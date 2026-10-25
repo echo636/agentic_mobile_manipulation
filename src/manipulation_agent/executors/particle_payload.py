@@ -1,4 +1,4 @@
-"""Preserve existing physical macro particles during controlled payload motion.
+"""Preserve existing physical particles during controlled payload motion.
 
 Capture annotated containment, or upward-facing collision support when requested.
 Stable PhysX prim paths identify particles across view rebuilds.
@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import math
 
 from ..contracts import SkillError
+from .particle_view import physical_particle_view
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,8 @@ def _supported_particles(systems, containers, owners):
     bounds = [obj.aabb for obj in containers]
     nodes = []
     for system in systems:
+        if getattr(system, 'particles_view', None) is None:
+            continue  # Fluid support is containment, not rigid contact rays.
         centers, _ = system.get_particles_position_orientation()
         radius = float(system.particle_contact_radius)
         if not math.isfinite(radius) or radius <= 0:
@@ -107,9 +110,9 @@ def _payload(container, link, system, indices, relation='contained', supports=()
     import omnigibson.utils.transform_utils as T
     parent_pos, parent_quat = link.get_position_orientation()
     rotation = T.quat2mat(parent_quat)
-    transforms = system.particles_view.get_transforms()[indices].clone()
+    transforms = physical_particle_view(system).get_transforms()[indices].clone()
     return ParticlePayload(
-        container, link, system, tuple(system.particles_view.prim_paths[i] for i in indices),
+        container, link, system, tuple(physical_particle_view(system).prim_paths[i] for i in indices),
         (transforms[:, :3] - parent_pos) @ rotation,
         T.quat_multiply(T.quat_conjugate(parent_quat), transforms[:, 3:].T).T,
         relation, tuple((parent, offset @ rotation, vector @ rotation) for parent, offset, vector in supports))
@@ -117,7 +120,7 @@ def _payload(container, link, system, indices, relation='contained', supports=()
 
 def snapshot_particles(scene, containers, *, include_supported=False):
     systems = [system for system in getattr(scene, 'active_systems', {}).values()
-               if getattr(system, 'particles_view', None) is not None and system.n_particles]
+               if system.n_particles and physical_particle_view(system) is not None]
     if not systems:
         return []
     from omnigibson.object_states import ContainedParticles
@@ -129,7 +132,7 @@ def snapshot_particles(scene, containers, *, include_supported=False):
             continue
         link = container.states[ContainedParticles].link
         for system in systems:
-            view = system.particles_view
+            view = physical_particle_view(system)
             paths = tuple(view.prim_paths)
             centers, _ = system.get_particles_position_orientation()
             inside = link.check_points_in_volume(centers)
@@ -153,9 +156,9 @@ def snapshot_particles(scene, containers, *, include_supported=False):
 
 def _indices(scene, record):
     system = record.system
-    if getattr(scene, 'active_systems', {}).get(system.name) is not system or system.particles_view is None:
+    if getattr(scene, 'active_systems', {}).get(system.name) is not system or physical_particle_view(system) is None:
         raise SkillError('target_changed', 'Carried particle system changed', changed=True)
-    indices = {path: i for i, path in enumerate(system.particles_view.prim_paths)}
+    indices = {path: i for i, path in enumerate(physical_particle_view(system).prim_paths)}
     if any(path not in indices for path in record.paths):
         raise SkillError('target_changed', 'Carried particles changed; old particles cannot be restored', changed=True)
     return [indices[path] for path in record.paths]
@@ -169,7 +172,7 @@ def relocate_particles(scene, payload):
     # Validate all identities before changing any particle pose.
     selected = [(record, _indices(scene, record)) for record in payload]
     for record, indices in selected:
-        view = record.system.particles_view
+        view = physical_particle_view(record.system)
         position, orientation = record.link.get_position_orientation()
         transforms = view.get_transforms().clone()
         transforms[indices, :3] = record.positions @ T.quat2mat(orientation).T + position
@@ -266,11 +269,11 @@ def particle_count(payload, relation=None):
 
 
 def snapshot_particle_state(sim):
-    """Supplement OG snapshots with raw macro frames (not sphere centers)."""
+    """Supplement OG snapshots with raw physical frames and stable identities."""
     records = []
     for scene in getattr(sim, 'scenes', ()) or ():
         for system in getattr(scene, 'active_systems', {}).values():
-            view = getattr(system, 'particles_view', None)
+            view = physical_particle_view(system) if system.n_particles else None
             if view is not None and system.n_particles:
                 records.append((scene, system, tuple(view.prim_paths),
                                 view.get_transforms().clone(), view.get_velocities().clone()))
@@ -278,8 +281,8 @@ def snapshot_particle_state(sim):
 
 
 def particle_state_unchanged(records):
-    return all(scene.active_systems.get(system.name) is system and system.particles_view is not None
-               and set(system.particles_view.prim_paths) == set(paths)
+    return all(scene.active_systems.get(system.name) is system and physical_particle_view(system) is not None
+               and set(physical_particle_view(system).prim_paths) == set(paths)
                for scene, system, paths, _, _ in records)
 
 
@@ -290,7 +293,7 @@ def restore_particle_state(records):
     if not particle_state_unchanged(records):
         raise SkillError('target_changed', 'Cannot restore changed particle identities', changed=True)
     for _, system, paths, transforms, velocities in records:
-        view = system.particles_view
+        view = physical_particle_view(system)
         old_index = {path: i for i, path in enumerate(paths)}
         order = [old_index[path] for path in view.prim_paths]
         indices = torch.arange(len(order), device=transforms.device)

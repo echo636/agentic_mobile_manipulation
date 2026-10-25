@@ -16,11 +16,12 @@ from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
 from .material_actions import CheckedMaterialActions
+from .material_transfer import CheckedMaterialTransfer
 from .demo_motion import DemoMotion
 from .local_rgb import LocalRGBManipulation
 from .local_manipulation import LocalLimits
 
-class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def _config(self, task, gpu, max_steps):
@@ -1246,7 +1247,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
         if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','wipe','sweep','vacuum',
-                         'spray','spread','soak','cut'} and held is None: raise SkillError('empty_hand','Empty hand')
+                         'spray','spread','soak','cut','pour','scoop'} and held is None: raise SkillError('empty_hand','Empty hand')
         if held is not None and primitive in {'open','close','toggle_on','toggle_off'}:
             # Controlled carry can operate the switch on the object already
             # being carried. This does not grant an extra hand for a different
@@ -1282,6 +1283,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             if primitive in {'wipe','sweep','vacuum','spray','spread'}:
                 self._surface_action_preconditions(primitive,obj)
             if primitive=='soak':self._soak_preconditions(obj)
+            if primitive in {'pour','scoop'}:self._transfer_preconditions(primitive,obj)
             if primitive=='cut' and ('slicer' not in held._abilities or not {'sliceable','diceable'}.intersection(obj._abilities)):
                 raise SkillError('pre_condition_error','Selected tool or target cannot support cutting')
 
@@ -1359,6 +1361,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Contr
             result=self._checked_surface_action(primitive,obj,max_steps)
         elif primitive=='soak':
             result=self._checked_soak(obj,max_steps)
+        elif primitive in {'pour','scoop'}:
+            result=self._checked_transfer(primitive,obj,max_steps)
         elif primitive=='cut':
             # Hold only the robot, not the target: cutting can delete its prim.
             with self._anchored_operation():

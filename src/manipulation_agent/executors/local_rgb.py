@@ -13,7 +13,7 @@ from .visual_target import LockedTarget
 # click point. Surface-specific placements and attachment points remain strict.
 OBJECT_REFERENCE_ACTIONS = frozenset({
     'grasp', 'open', 'close', 'toggle_on', 'toggle_off', 'cut', 'soak',
-    'wipe', 'sweep', 'vacuum', 'spray', 'spread',
+    'wipe', 'sweep', 'vacuum', 'spray', 'spread', 'pour', 'scoop',
     'place_inside', 'place_next_to', 'place_under',
 })
 
@@ -161,7 +161,7 @@ class LocalRGBManipulation:
         # stances with a swept-checked return to the measured approach pose.
         # This ranks proposals only: legitimate one-way approaches remain
         # available when no return connector is certified within this budget.
-        prefer_return=primitive in {'wipe','sweep','vacuum','spray','soak','spread'}
+        prefer_return=primitive in {'wipe','sweep','vacuum','spray','soak','spread','pour','scoop'}
         preparation=PlanningBudget(budget.check,seconds=4.)
         collision.check_cancelled=preparation.check
         try:
