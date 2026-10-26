@@ -25,3 +25,5 @@ Keep operational steps, faults and fixes in journals and structured records; do 
 Do not log credentials. Do not modify upstream source snapshots or unrelated environments. Use bounded actions, structured errors, serialized simulator access and immutable episode records. Preserve failure evidence.
 
 - 2026-10-22 用户明确成功口径：只要独立官方任务评估器判定成功就计任务成功；finish、客户端退出、录像和证据完整性单独记录，不能据此否定任务成功。用户授权 241（本机双4090）、134、112、115、118 全部机器的可用计算资源纳入后续调度，不局限于原先几台。
+
+- 2026-10-27 用户明确执行器的最小干预原则：优先将工具调用转换为一次性状态设置或原生控制目标，后续碰撞、重力、接触和运动交给仿真器处理。修复优先检查状态构造和原生接口的使用；不为任务成功增加逐帧位姿固定、反复状态恢复、关闭碰撞或强制保持内容物等逻辑，不扩展无必要的仿真器补丁和复杂运动控制。

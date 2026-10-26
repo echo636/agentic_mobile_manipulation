@@ -57,7 +57,7 @@ class MaterialActionTests(unittest.TestCase):
         sim = types.SimpleNamespace(dump_state=lambda **kw: {}, load_state=lambda *a, **kw: None)
         self.backend = CheckedMaterialActions()
         self.backend.og = types.SimpleNamespace(sim=sim)
-        self.backend.robot = types.SimpleNamespace(get_joint_positions=lambda: [], q_to_action=lambda q: q)
+        self.backend.primitives = types.SimpleNamespace(_empty_action=lambda: [])
         self.backend._get_held = lambda: self.tool
         self.backend._anchored_operation = lambda target: nullcontext()
         self.backend._placement_record = lambda result: None

@@ -52,18 +52,13 @@ class ControlledCarry:
         if obj.fixed_base:
             raise SkillError('fixed_object', 'The selected object has a fixed base')
         arm = self.primitives.arm
-        joints = self.robot.get_joint_positions().clone()
         indices = self.robot.arm_control_idx[arm]
         ready = self.robot.untucked_default_joint_pos[indices]
         # A tucked hand is beside the torso. Bringing a wide object there
-        # embeds it in the robot even when its finger contact is correct.
-        if not self.torch.allclose(joints[indices], ready, atol=.01, rtol=0):
-            joints[indices] = ready
-            command = self.robot.q_to_action(joints)
-            preparation_steps = min(30, max_steps)
-            for _ in range(preparation_steps):
-                self._step(command)
-            max_steps -= preparation_steps
+        # embeds it in the robot. Set the arm once, then retain its native
+        # controller goal instead of replacing that goal with each sagged pose.
+        self.robot.set_joint_positions(ready, indices=indices)
+        self.primitives._arm_targets['arm_' + arm] = ready.clone()
         original = obj.get_position_orientation()
         dependencies = self._grasp_dependencies(obj)
         contents = [(child, T.relative_pose_transform(*child.get_position_orientation(), *original))
@@ -86,7 +81,7 @@ class ControlledCarry:
         relocate_particles(self.env.scene, particles)
         self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
         for _ in range(min(6, max_steps)):
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
         if self._get_held() is not obj:
             raise SkillError('postcondition_error', 'Native grasp did not hold the selected object', changed=True)
         self.frames_revision = -1
@@ -158,7 +153,7 @@ class ControlledCarry:
         verify_particles(self.env.scene,transported_particles)
         capture('after_setter')
         for step in range(min(30,max_steps)):
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
             if step in (0,4,14,29):capture('settle_'+str(step+1))
         if bool(obj.states[state].get_value())!=wanted:
             report('failed',reason='state_reopened_or_reclosed_after_settling',
@@ -209,7 +204,7 @@ class ControlledCarry:
                 raise SkillError('execution_error','Attachment state setter rejected the selected pair',changed=True)
             self._relocate_contents(child,contents)
             for _ in range(min(30,max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                self._step(self.primitives._empty_action())
             if not state.get_value(parent):
                 raise SkillError('postcondition_error','Attachment did not remain after settling',changed=True)
             self._verify_payload(dependencies)

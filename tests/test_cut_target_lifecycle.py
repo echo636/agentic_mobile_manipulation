@@ -72,6 +72,8 @@ class CutTargetLifecycle(unittest.TestCase):
         self.records = []
         self.backend._placement_record = self.records.append
         self.backend._demo_record = lambda **kwargs: None
+        self.backend.primitives = types.SimpleNamespace(_empty_action=lambda: [])
+        self.backend.og = types.SimpleNamespace(sim=types.SimpleNamespace(_objects_to_initialize=[]))
         self.backend._step = lambda action: setattr(self.backend, 'steps', self.backend.steps+1)
         self.stage = None
         self.replacement = 'valid'

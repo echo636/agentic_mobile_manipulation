@@ -1113,7 +1113,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             self._transfer_base_pose(new_pos,new_quat)
             travelled=route.distance_m if route is not None else plan.geodesic_m
             for _ in range(min(settling,max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                self._step(self.primitives._empty_action())
             motion_steps=self.steps-before
             actual_pos,actual_quat=self.robot.get_position_orientation()
             final_error=math.dist(actual_pos[:2].cpu().tolist(),plan.goal)
@@ -1179,7 +1179,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         before=self.steps
         self._transfer_base_pose(goal,quat)
         for _ in range(min(10,max_steps)):
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
         return {'steps':self.steps-before,'continuous_motion_simulated':False,
                 'motor':'symbolic_route_endpoint','physical_controller':False}
 
@@ -1210,7 +1210,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
         if primitive=='wait':
             count=min(max_steps,int(round(float(kwargs.get('seconds',5.0))/self.og.sim.get_sim_step_dt())))
-            for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            for _ in range(count):self._step(self.primitives._empty_action())
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
         if primitive=='release':
             return self.execute(primitive,None,max_steps)

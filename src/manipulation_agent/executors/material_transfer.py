@@ -247,7 +247,7 @@ class CheckedMaterialTransfer:
             'materials': [{'system': item['system'].name, 'count': item['count'],
                            'generated_by_authored_source': item['generated']} for item in changes]})
         for _ in range(min(6, max_steps)):
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
         materials = []
         for item in changes:
             system = item['system']

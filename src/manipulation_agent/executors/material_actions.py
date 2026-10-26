@@ -133,7 +133,7 @@ class CheckedMaterialActions:
             if not covered.set_value(system, not removing):
                 raise SkillError('execution_error', 'Material state setter rejected the action', changed=True)
         for _ in range(min(6, max_steps)):
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
         if any(bool(covered.get_value(system)) == removing for system in candidates):
             raise SkillError('postcondition_error', 'Material state did not persist after settling', changed=True)
         return {'primitive': primitive, 'implementation': 'checked_official_Covered_state',
@@ -170,7 +170,7 @@ class CheckedMaterialActions:
             if not saturated.set_value(system, True):
                 raise SkillError('execution_error', 'Saturation state setter rejected the action', changed=True)
         for _ in range(min(6, max_steps)):
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
         if any(not saturated.get_value(system) for system in candidates):
             raise SkillError('postcondition_error', 'Carried tool did not remain saturated', changed=True)
         return {'primitive': 'soak', 'implementation': 'checked_official_Saturated_state',
@@ -233,7 +233,7 @@ class CheckedMaterialActions:
             rebuild_cut_topology(self)
         self.frames_revision = -1
         for _ in range(min(6, max_steps)):
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
         if any(obj is target for obj in scene.objects):
             raise SkillError('postcondition_error', 'Original object remained after cutting', changed=True)
         return {'primitive': 'cut', 'implementation': 'official_slicing_or_dicing_transition',

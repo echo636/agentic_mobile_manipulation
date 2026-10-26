@@ -22,7 +22,7 @@ def finish_pending_objects(backend, remaining_steps):
         before = backend.steps
         status = 'failed'
         try:
-            backend._step(backend.robot.q_to_action(backend.robot.get_joint_positions()))
+            backend._step(backend.primitives._empty_action())
             status = 'passed'
         finally:
             backend.frames_revision = -1

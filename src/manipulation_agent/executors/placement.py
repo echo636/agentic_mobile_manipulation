@@ -142,7 +142,7 @@ class CheckedPlacement:
             raise SkillError('sampling_error', 'No supported pose satisfied Under for the selected parent', changed=True)
         self._relocate_contents(held, contents)
         for _ in range(min(50, max_steps)):
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
         if not held.states[Under].get_value(target):
             raise SkillError('postcondition_error', 'Object is no longer under the selected target', changed=True)
         if support_floor is not None and (OnTop not in held.states or
@@ -300,7 +300,7 @@ class CheckedPlacement:
                     raise SkillError('sampling_error', 'No stable supported pose satisfied NextTo near the selected reference', changed=True)
             # The selected pose is committed once. A subsequent physical
             # failure is reported as observed, with no scene rewind or retry.
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            self._step(self.primitives._empty_action())
             valid, details = self._next_to_check(held, target, accepted['support'], payload,
                                                  support_point=support_point)
             self._placement_record({'status': 'next_to_commit', 'target': target.name,
@@ -842,7 +842,7 @@ class CheckedPlacement:
         # Placement is now verified and released. Advance native cooking,
         # slicing and task evaluation without watching or restoring the old
         # assembly: a legitimate transition may consume it in this very step.
-        self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        self._step(self.primitives._empty_action())
         return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=False, resting=None,
@@ -1080,7 +1080,7 @@ class CheckedPlacement:
                     else nullcontext())
             with commit:
                 for _ in range(settling_steps):
-                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                    self._step(self.primitives._empty_action())
         finally:
             self.og.sim.step_physics=original_step
         if not held.states[Inside].get_value(target):

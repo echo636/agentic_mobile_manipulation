@@ -16,7 +16,7 @@ class SceneLifecycleTests(unittest.TestCase):
         b=SimpleNamespace(output=Path(folder),steps=0,frames_revision=0,
             og=SimpleNamespace(sim=sim),env=SimpleNamespace(scene=SimpleNamespace(objects=[product])),
             deadline=SimpleNamespace(check=lambda **kw:None),
-            robot=SimpleNamespace(get_joint_positions=lambda:[],q_to_action=lambda q:q))
+            primitives=SimpleNamespace(_empty_action=lambda:[]))
         def step(action):
             b.steps+=1;product.initialized=True;sim._objects_to_initialize=[]
         b._step=step
