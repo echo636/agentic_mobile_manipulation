@@ -1155,14 +1155,16 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         """One symbolic state transfer of the robot and its currently held load."""
         from omnigibson.utils import transform_utils as T
         from .particle_payload import snapshot_particles, relocate_particles
-        before=self.robot.get_position_orientation()
         held=self._get_held()
         objects=[] if held is None else [held,*[child for child,_,_ in self._grasp_dependencies(held)]]
-        relative=[(obj,T.relative_pose_transform(*obj.get_position_orientation(),*before)) for obj in objects]
+        # Robot.set_position_orientation already transports the native AG
+        # object. Carry only its loose contents across this symbolic change.
+        relative=[] if held is None else [(obj,T.relative_pose_transform(
+            *obj.get_position_orientation(),*held.get_position_orientation())) for obj in objects[1:]]
         particles=snapshot_particles(self.env.scene,objects,include_supported=True) if objects else []
         self.robot.set_position_orientation(position,orientation)
         for obj,pose in relative:
-            obj.set_position_orientation(*T.pose_transform(position,orientation,*pose))
+            obj.set_position_orientation(*T.pose_transform(*held.get_position_orientation(),*pose))
         relocate_particles(self.env.scene,particles)
 
     def _execute_base_path(self, points, end_yaw, max_steps):
