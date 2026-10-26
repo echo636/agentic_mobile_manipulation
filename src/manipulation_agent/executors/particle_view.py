@@ -79,11 +79,17 @@ class MicroParticleView:
 
 
 def physical_particle_view(system):
+    # Native cooking/removal can leave an active macro system with zero
+    # particles and a Python view whose PhysX backend has been destroyed.
+    # Do not dereference that stale view: all old identities are gone. A later
+    # generation can supply a new view once the system has particles again.
+    if not system.n_particles:
+        return None
     view = getattr(system, 'particles_view', None)
     if view is not None:
         return view
     instancers = getattr(system, 'particle_instancers', None)
-    if not instancers or not system.n_particles:
+    if not instancers:
         return None
     # OG's own pose/containment API addresses only the default instancer.
     # Refuse mixed-index interpretation if an unusual system uses several.

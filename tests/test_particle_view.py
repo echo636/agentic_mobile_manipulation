@@ -88,3 +88,15 @@ class ParticleViewTests(unittest.TestCase):
         state.pop('_controlled_particle_ids')
         self.inst._load_state(state)
         self.assertFalse(before.intersection(self.view.prim_paths))
+
+    def test_empty_macro_system_does_not_expose_destroyed_backend(self):
+        class ExpiredView:
+            @property
+            def prim_paths(self):
+                raise AttributeError("'NoneType' object has no attribute 'prim_paths'")
+        system=SimpleNamespace(n_particles=0,particles_view=ExpiredView())
+        self.assertIsNone(physical_particle_view(system))
+        # Regeneration is an actual new view, never the former particle IDs.
+        system.n_particles=1
+        system.particles_view=SimpleNamespace(prim_paths=('/new/material/0',))
+        self.assertEqual(physical_particle_view(system).prim_paths,('/new/material/0',))
