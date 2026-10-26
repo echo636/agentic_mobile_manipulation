@@ -503,7 +503,6 @@ Rejected candidate poses never become committed actions or task evidence.
             if was_open is True and not target.states[Open].get_value():
                 reject('container_closed_during_sampling',candidate)
                 continue
-            backend._relocate_contents(held, contents)
             if not held.states[Inside].get_value(target):
                 low, high = held.aabb
                 actual_center = (low + high) / 2

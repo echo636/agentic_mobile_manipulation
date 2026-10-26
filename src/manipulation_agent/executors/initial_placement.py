@@ -21,15 +21,10 @@ class _InitialPlacementAdapter(CheckedPlacement, ControlledCarry):
         self.robot = env.robots[0]
         self.deadline = EpisodeDeadline.from_env()
         self.steps = self.sampling_physics_steps = 0
-        self._base_target = self._object_anchor = self._local_operation = None
+        self._local_operation = None
         self._placement_particle_payload = (None, [])
-        self._stabilized_containers = {}
         self.sampling_active = False
 
-    def _restore_stabilized_containers(self):
-        # Construction pins only the selected container and its prior residents.
-        # No runtime navigation stabilization exists in this adapter.
-        pass
 
 
 @contextmanager
@@ -84,9 +79,6 @@ def checked_initial_inside(env, output):
             return original(state, target, new_value, **kwargs)
         held = state.obj
         residents = [row for row in adapter._container_payload(target) if row[0] is not held]
-        root = tuple(v.clone() for v in target.get_position_orientation())
-        prior_anchor = adapter._object_anchor
-        adapter._object_anchor = (target, root)
         physics = sim.step_physics
         particles = snapshot_particle_state(sim)
         checkpoint = sim.dump_state(serialized=False)
@@ -94,24 +86,16 @@ def checked_initial_inside(env, output):
         native = True
         steps = 0
 
-        def pin():
-            adapter._restore_object_anchor()
-            adapter._relocate_container_payload(residents)
-
         def step(*args, **kw):
             nonlocal steps
             if native and (steps >= 1200 or time.monotonic() - started > 20.):
                 raise NativeWorkLimit()
             adapter.deadline.check(changed=True)
-            pin()
-            try:
-                result = physics(*args, **kw)
-                steps += 1
-                adapter.sampling_physics_steps += 1
-                sim.sync_physx_to_fabric()
-                return result
-            finally:
-                pin()
+            result = physics(*args, **kw)
+            steps += 1
+            adapter.sampling_physics_steps += 1
+            sim.sync_physx_to_fabric()
+            return result
 
         def restore():
             if not particle_state_unchanged(particles):
@@ -179,7 +163,6 @@ def checked_initial_inside(env, output):
             return bool(accepted)
         finally:
             sim.step_physics = physics
-            adapter._object_anchor = prior_anchor
 
     Inside._set_value = sample
     OnTop._set_value = sample

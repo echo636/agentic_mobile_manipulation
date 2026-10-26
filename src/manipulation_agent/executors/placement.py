@@ -1,4 +1,4 @@
-"""Transactional ideal placement; all geometry stays inside the motor adapter."""
+"""State placement with geometric proposals and native free settling."""
 import json
 import time
 from contextlib import contextmanager, nullcontext
@@ -90,76 +90,68 @@ class CheckedPlacement:
             raise SkillError('empty_hand', 'No object is held')
         if held is target or Under not in held.states:
             raise SkillError('unsupported_relation', 'Carried object cannot be placed under this target')
-        with self._placement_context(target):
-            contents = list(self._carry_contents) if self.ideal_carry else []
-            dependencies = list(getattr(self, '_carry_dependencies', []))
-            pose = held.get_position_orientation()
-            lo, hi = held.aabb
-            bottom_offset = float(pose[0][2] - lo[2])
-            self._carry_detach()
-            sampled = held.states[Under].set_value(target, True, use_trav_map=False)
-            method = 'official_Under_sampler'
-            support_floor = None
-            if not sampled:
-                # The upstream sampler can reject a reachable floor patch
-                # under low furniture. Search only within the selected
-                # parent's bounds, and accept only the official relation.
-                target_lo, target_hi = target.aabb
-                ignored = [link.prim_path for obj in (held, target, self.robot)
-                           for link in obj.links.values()]
-                floors = [obj for obj in self.env.scene.objects
-                          if 'floor' in str(getattr(obj,'category','')).lower()]
-                floor_by_link = {link.prim_path:floor for floor in floors
-                                 for link in floor.links.values()}
-                for fx, fy in ((.5,.5),(.25,.5),(.75,.5),(.5,.25),(.5,.75),
-                               (.25,.25),(.75,.25),(.25,.75),(.75,.75)):
-                    xy = target_lo[:2] + (target_hi[:2]-target_lo[:2]) * self.torch.tensor([fx,fy], device=target_lo.device)
-                    start = self.torch.tensor([float(xy[0]),float(xy[1]),float(target_hi[2])+.3],device=xy.device)
-                    end = start.clone();end[2] = min(float(target_lo[2])-1.5,-.5)
-                    hit = raytest(start,end,ignore_bodies=ignored)
-                    if (not hit['hit'] or float(hit['normal'][2]) < .9
-                            or hit.get('rigidBody') not in floor_by_link):
+        contents = list(self._carry_contents)
+        dependencies = list(getattr(self, '_carry_dependencies', []))
+        pose = held.get_position_orientation()
+        lo, hi = held.aabb
+        bottom_offset = float(pose[0][2] - lo[2])
+        self._carry_detach()
+        sampled = held.states[Under].set_value(target, True, use_trav_map=False)
+        method = 'official_Under_sampler'
+        support_floor = None
+        if not sampled:
+            # The upstream sampler can reject a reachable floor patch
+            # under low furniture. Search only within the selected
+            # parent's bounds, and accept only the official relation.
+            target_lo, target_hi = target.aabb
+            ignored = [link.prim_path for obj in (held, target, self.robot)
+                       for link in obj.links.values()]
+            floors = [obj for obj in self.env.scene.objects
+                      if 'floor' in str(getattr(obj,'category','')).lower()]
+            floor_by_link = {link.prim_path:floor for floor in floors
+                             for link in floor.links.values()}
+            for fx, fy in ((.5,.5),(.25,.5),(.75,.5),(.5,.25),(.5,.75),
+                           (.25,.25),(.75,.25),(.25,.75),(.75,.75)):
+                xy = target_lo[:2] + (target_hi[:2]-target_lo[:2]) * self.torch.tensor([fx,fy], device=target_lo.device)
+                start = self.torch.tensor([float(xy[0]),float(xy[1]),float(target_hi[2])+.3],device=xy.device)
+                end = start.clone();end[2] = min(float(target_lo[2])-1.5,-.5)
+                hit = raytest(start,end,ignore_bodies=ignored)
+                if (not hit['hit'] or float(hit['normal'][2]) < .9
+                        or hit.get('rigidBody') not in floor_by_link):
+                    continue
+                place=pose[0].clone();place[:2]=xy;place[2]=hit['position'][2]+bottom_offset+.003
+                # Reject a second item occupying the first item's space,
+                # even if the center ray happened to reach the floor.
+                candidate_lo=lo+(place-pose[0])
+                candidate_hi=hi+(place-pose[0])
+                blocked=False
+                for other in self.env.scene.objects:
+                    if other in (held,target,self.robot) or other in floors or getattr(other,'fixed_base',True):
                         continue
-                    place=pose[0].clone();place[:2]=xy;place[2]=hit['position'][2]+bottom_offset+.003
-                    # Reject a second item occupying the first item's space,
-                    # even if the center ray happened to reach the floor.
-                    candidate_lo=lo+(place-pose[0])
-                    candidate_hi=hi+(place-pose[0])
-                    blocked=False
-                    for other in self.env.scene.objects:
-                        if other in (held,target,self.robot) or other in floors or getattr(other,'fixed_base',True):
-                            continue
-                        other_lo,other_hi=other.aabb
-                        if bool(((candidate_hi>other_lo+.005)&(candidate_lo<other_hi-.005)).all()):
-                            blocked=True;break
-                    if blocked:continue
-                    held.set_position_orientation(place,pose[1]);held.keep_still()
-                    self._relocate_contents(held,contents)
-                    if held.states[Under].get_value(target):
-                        sampled=True;method='verified_floor_pose_under_selected_parent'
-                        support_floor=floor_by_link[hit['rigidBody']]
-                        break
-            if not sampled:
-                raise SkillError('sampling_error', 'No supported pose satisfied Under for the selected parent', changed=True)
-            self._relocate_contents(held, contents)
-            accepted_pose=held.get_position_orientation()
-            for _ in range(min(50, max_steps)):
-                if method != 'official_Under_sampler':
-                    held.set_position_orientation(*accepted_pose);held.keep_still()
-                    self._relocate_contents(held,contents)
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-            if method != 'official_Under_sampler':
-                held.set_position_orientation(*accepted_pose);held.keep_still()
+                    other_lo,other_hi=other.aabb
+                    if bool(((candidate_hi>other_lo+.005)&(candidate_lo<other_hi-.005)).all()):
+                        blocked=True;break
+                if blocked:continue
+                held.set_position_orientation(place,pose[1]);held.keep_still()
                 self._relocate_contents(held,contents)
-            if not held.states[Under].get_value(target):
-                raise SkillError('postcondition_error', 'Object is no longer under the selected target', changed=True)
-            if support_floor is not None and (OnTop not in held.states or
-                    not held.states[OnTop].get_value(support_floor)):
-                raise SkillError('postcondition_error','Under placement is not supported by the sampled floor',changed=True)
-            self._verify_payload(dependencies)
+                if held.states[Under].get_value(target):
+                    sampled=True;method='verified_floor_pose_under_selected_parent'
+                    support_floor=floor_by_link[hit['rigidBody']]
+                    break
+        if not sampled:
+            raise SkillError('sampling_error', 'No supported pose satisfied Under for the selected parent', changed=True)
+        self._relocate_contents(held, contents)
+        for _ in range(min(50, max_steps)):
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        if not held.states[Under].get_value(target):
+            raise SkillError('postcondition_error', 'Object is no longer under the selected target', changed=True)
+        if support_floor is not None and (OnTop not in held.states or
+                not held.states[OnTop].get_value(support_floor)):
+            raise SkillError('postcondition_error','Under placement is not supported by the sampled floor',changed=True)
+        self._verify_payload(dependencies)
         self.frames_revision = -1
         return {'primitive': 'place_under', 'implementation': method,
-                'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'restore_pre_action_state'}
+                'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'retain_physical_result'}
 
     def _next_to_candidates(self, held, target, point, payload=(), yaw_degrees=None):
         """Find upward physical surfaces near the reference, without class filters."""
@@ -256,38 +248,50 @@ class CheckedPlacement:
         if held is target or NextTo not in held.states:
             raise SkillError('unsupported_relation', 'Carried object cannot be placed next to this target')
         try:
-            with self._placement_context(target):
-                contents = list(self._carry_contents) if self.ideal_carry else []
-                payload = [obj for obj, _ in contents]
-                dependencies = list(getattr(self, '_carry_dependencies', []))
-                candidates = self._next_to_candidates(held, target, point, payload, yaw_degrees)
-                self._carry_detach()
-                trial_state = self.og.sim.dump_state(serialized=False)
-                accepted = None
-                settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
-                for number, candidate in enumerate(candidates):
-                    if number:
-                        self.og.sim.load_state(trial_state, serialized=False)
-                    held.set_position_orientation(*candidate['pose'])
-                    self._relocate_contents(held, contents)
-                    for obj in (held, *payload):
-                        obj.keep_still(); obj.wake()
+            contents = list(self._carry_contents)
+            payload = [obj for obj, _ in contents]
+            dependencies = list(getattr(self, '_carry_dependencies', []))
+            candidates = self._next_to_candidates(held, target, point, payload, yaw_degrees)
+            self._carry_detach()
+            trial_state = self.og.sim.dump_state(serialized=False)
+            accepted = None
+            settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
+            for number, candidate in enumerate(candidates):
+                if number:
+                    self.og.sim.load_state(trial_state, serialized=False)
+                held.set_position_orientation(*candidate['pose'])
+                self._relocate_contents(held, contents)
+                for obj in (held, *payload):
+                    obj.keep_still(); obj.wake()
+                self._placement_physics_step()
+                contacts = self._placement_contacts(held, payload)
+                if contacts:
+                    contact = self._placement_contact_report(held, payload)
+                    self._placement_record({'status': 'initial_contact_admitted' if contact['admissible'] else 'candidate_rejected',
+                        'primitive': 'place_next_to', 'stage': 'raised_pose_collision',
+                        'candidate': candidate['index'], 'target': target.name, 'held': held.name,
+                        'contact_geometry': contact})
+                    if not contact['admissible']:
+                        continue
+                # Gravity and contacts determine the final pose. No pose
+                # reset, velocity reset, or payload projection during settling.
+                for _ in range(settle_steps):
                     self._placement_physics_step()
-                    contacts = self._placement_contacts(held, payload)
-                    if contacts:
-                        contact = self._placement_contact_report(held, payload)
-                        self._placement_record({'status': 'initial_contact_admitted' if contact['admissible'] else 'candidate_rejected',
-                            'primitive': 'place_next_to', 'stage': 'raised_pose_collision',
-                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'contact_geometry': contact})
-                        if not contact['admissible']:
-                            continue
-                    # Gravity and contacts determine the final pose. No pose
-                    # reset, velocity reset, or payload projection during settling.
-                    for _ in range(settle_steps):
-                        self._placement_physics_step()
-                    support_point = self.torch.as_tensor(candidate['support_position'],
-                                                        dtype=point.dtype, device=point.device)
+                support_point = self.torch.as_tensor(candidate['support_position'],
+                                                    dtype=point.dtype, device=point.device)
+                valid, details = self._next_to_check(held, target, candidate['support'], payload,
+                                                     support_point=support_point)
+                if valid:
+                    try:
+                        self._verify_payload(dependencies)
+                    except SkillError as exc:
+                        if exc.code != 'postcondition_error':
+                            raise
+                        valid = False; details['payload_error'] = str(exc)
+                if valid:
+                    # Commit the physical result to the environment/replay,
+                    # then verify again before leaving the candidate loop.
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
                     valid, details = self._next_to_check(held, target, candidate['support'], payload,
                                                          support_point=support_point)
                     if valid:
@@ -297,34 +301,21 @@ class CheckedPlacement:
                             if exc.code != 'postcondition_error':
                                 raise
                             valid = False; details['payload_error'] = str(exc)
-                    if valid:
-                        # Commit the physical result to the environment/replay,
-                        # then verify again before leaving the candidate loop.
-                        self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                        valid, details = self._next_to_check(held, target, candidate['support'], payload,
-                                                             support_point=support_point)
-                        if valid:
-                            try:
-                                self._verify_payload(dependencies)
-                            except SkillError as exc:
-                                if exc.code != 'postcondition_error':
-                                    raise
-                                valid = False; details['payload_error'] = str(exc)
-                    self._placement_record({'status': 'next_to_verified' if valid else 'candidate_rejected',
-                        'primitive': 'place_next_to', 'stage': 'free_settling', 'candidate': candidate['index'],
-                        'target': target.name, 'held': held.name, 'support': candidate['support'].name,
-                        'radius_m': candidate['radius_m'], 'angle_deg': candidate['angle_deg'], **details})
-                    if valid:
-                        accepted = candidate
-                        break
-                if accepted is None:
-                    raise SkillError('sampling_error', 'No stable supported pose satisfied NextTo near the selected reference', changed=True)
+                self._placement_record({'status': 'next_to_verified' if valid else 'candidate_rejected',
+                    'primitive': 'place_next_to', 'stage': 'free_settling', 'candidate': candidate['index'],
+                    'target': target.name, 'held': held.name, 'support': candidate['support'].name,
+                    'radius_m': candidate['radius_m'], 'angle_deg': candidate['angle_deg'], **details})
+                if valid:
+                    accepted = candidate
+                    break
+            if accepted is None:
+                raise SkillError('sampling_error', 'No stable supported pose satisfied NextTo near the selected reference', changed=True)
         finally:
             self.frames_revision = -1
         return {'primitive': 'place_next_to', 'implementation': 'generic_surface_search_and_free_settling',
                 'requested_yaw_degrees': yaw_degrees,
                 'postcondition': 'official_NextTo_and_selected_surface_support_after_free_settling',
-                'failure_policy': 'restore_pre_action_state'}
+                'failure_policy': 'retain_physical_result'}
 
     def _attached_placement_bodies(self, root):
         if not hasattr(root,'scene'):return [root]
@@ -599,7 +590,7 @@ class CheckedPlacement:
             if yaw_degrees is not None:
                 raise SkillError('sampling_error', 'A selected surface is required for oriented placement')
             return self.primitives._sample_pose_with_object_and_predicate(OnTop, held, target)
-        payload = [obj for obj, _ in self._carry_contents] if self.ideal_carry else []
+        payload = [obj for obj, _ in self._carry_contents]
         candidates = self._surface_candidates(held, target, point, yaw_degrees, payload)
         if not candidates:
             raise SkillError('sampling_error', 'No upward surface of the selected object near the selected point')
@@ -614,7 +605,7 @@ class CheckedPlacement:
         finally:
             self.frames_revision = -1
         return {'primitive': 'place_on_top', 'implementation': 'selected_surface_collision_geometry_and_settling',
-                'postcondition': check, 'failure_policy': 'restore_pre_action_state'}
+                'postcondition': check, 'failure_policy': 'retain_physical_result'}
 
     def _placement_contacts(self, held, payload=()):
         from omnigibson.utils.usd_utils import RigidContactAPI
@@ -661,6 +652,7 @@ class CheckedPlacement:
                         state.clear_cache()
             for _ in range(substeps):
                 self._placement_physics_step()
+            self.og.sim.sync_physx_to_fabric()
             if resting is not None:
                 resting.add(*held.get_position_orientation())
             for child in payload:
@@ -687,169 +679,167 @@ class CheckedPlacement:
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
         from .resting_motion import RestingMotionWindow
-        with self._placement_context(watch=(held, target)):
-            contents = list(self._carry_contents) if self.ideal_carry else []
-            payload = [obj for obj, _ in contents]
-            dependencies = list(getattr(self, '_carry_dependencies', []))
-            verification_point=point
-            if point is None:
-                try:
-                    pose = self._surface_pose(held, target, point, yaw_degrees)
-                except ActionPrimitiveError as exc:
-                    raise SkillError('sampling_error', str(exc)) from exc
-                self._carry_detach()
-                held.set_position_orientation(*pose)
+        contents = list(self._carry_contents)
+        payload = [obj for obj, _ in contents]
+        dependencies = list(getattr(self, '_carry_dependencies', []))
+        verification_point=point
+        if point is None:
+            try:
+                pose = self._surface_pose(held, target, point, yaw_degrees)
+            except ActionPrimitiveError as exc:
+                raise SkillError('sampling_error', str(exc)) from exc
+            self._carry_detach()
+            held.set_position_orientation(*pose)
+            self._relocate_contents(held, contents)
+            held.keep_still()
+        else:
+            candidates = self._surface_candidates(held, target, point, yaw_degrees, payload)
+            self._carry_detach()
+            trial_state = self.og.sim.dump_state(serialized=False)
+            accepted = None
+            def candidate_stream():
+                yield from candidates
+                # Restore the detached assembly's original pose before
+                # generating alternatives. Failed trials may have tilted
+                # it; those poses must not redefine a requested yaw.
+                self.og.sim.load_state(trial_state, serialized=False)
+                start_index = 1 + max((c['index'] for c in candidates), default=-1)
+                for index, candidate in enumerate(self._surface_fallback_candidates(
+                        held, target, point, yaw_degrees, payload)):
+                    candidate['index'] = start_index + index
+                    yield candidate
+
+            # Check after the short drop plus a full measured resting
+            # window, instead of spending one second on every candidate.
+            # Supported moving poses still extend in quarter-second
+            # blocks below, up to the same four-second bound. The resting
+            # criterion and final ordinary-step verification are unchanged.
+            settle_steps = max(1, round(.5 / self.og.sim.get_physics_dt()))
+            tried_poses = set()
+            for number, candidate in enumerate(candidate_stream()):
+                pose_key = tuple(round(float(v), 5) for vector in candidate['pose'] for v in vector)
+                if pose_key in tried_poses:
+                    continue
+                tried_poses.add(pose_key)
+                if number:
+                    self.og.sim.load_state(trial_state, serialized=False)
+                held.set_position_orientation(*candidate['pose'])
                 self._relocate_contents(held, contents)
                 held.keep_still()
-            else:
-                candidates = self._surface_candidates(held, target, point, yaw_degrees, payload)
-                self._carry_detach()
-                trial_state = self.og.sim.dump_state(serialized=False)
-                accepted = None
-                def candidate_stream():
-                    yield from candidates
-                    # Restore the detached assembly's original pose before
-                    # generating alternatives. Failed trials may have tilted
-                    # it; those poses must not redefine a requested yaw.
-                    self.og.sim.load_state(trial_state, serialized=False)
-                    start_index = 1 + max((c['index'] for c in candidates), default=-1)
-                    for index, candidate in enumerate(self._surface_fallback_candidates(
-                            held, target, point, yaw_degrees, payload)):
-                        candidate['index'] = start_index + index
-                        yield candidate
-
-                # Check after the short drop plus a full measured resting
-                # window, instead of spending one second on every candidate.
-                # Supported moving poses still extend in quarter-second
-                # blocks below, up to the same four-second bound. The resting
-                # criterion and final ordinary-step verification are unchanged.
-                settle_steps = max(1, round(.5 / self.og.sim.get_physics_dt()))
-                tried_poses = set()
-                for number, candidate in enumerate(candidate_stream()):
-                    pose_key = tuple(round(float(v), 5) for vector in candidate['pose'] for v in vector)
-                    if pose_key in tried_poses:
+                held.wake()
+                self._placement_physics_step()
+                contacts = self._placement_contacts(held, payload)
+                if contacts:
+                    contact = self._placement_contact_report(held, payload)
+                    self._placement_record({'status': 'initial_contact_admitted' if contact['admissible'] else 'candidate_rejected',
+                        'stage': 'raised_pose_collision',
+                        'candidate': candidate['index'], 'target': target.name, 'held': held.name,
+                        'contact_geometry': contact, 'clearance_m': candidate['clearance_m']})
+                    if not contact['admissible']:
                         continue
-                    tried_poses.add(pose_key)
-                    if number:
-                        self.og.sim.load_state(trial_state, serialized=False)
-                    held.set_position_orientation(*candidate['pose'])
-                    self._relocate_contents(held, contents)
-                    held.keep_still()
-                    held.wake()
-                    self._placement_physics_step()
-                    contacts = self._placement_contacts(held, payload)
-                    if contacts:
-                        contact = self._placement_contact_report(held, payload)
-                        self._placement_record({'status': 'initial_contact_admitted' if contact['admissible'] else 'candidate_rejected',
-                            'stage': 'raised_pose_collision',
-                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'contact_geometry': contact, 'clearance_m': candidate['clearance_m']})
-                        if not contact['admissible']:
-                            continue
-                    resting = RestingMotionWindow(self.og.sim.get_physics_dt())
+                resting = RestingMotionWindow(self.og.sim.get_physics_dt())
+                resting.add(*held.get_position_orientation())
+                candidate_payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_physics_dt())
+                                             for child,_,kind in dependencies if kind=='OnTop'}
+                def sample_motion():
                     resting.add(*held.get_position_orientation())
-                    candidate_payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_physics_dt())
-                                                 for child,_,kind in dependencies if kind=='OnTop'}
-                    def sample_motion():
-                        resting.add(*held.get_position_orientation())
-                        for child,_,_ in dependencies:
-                            if id(child) in candidate_payload_resting:
-                                candidate_payload_resting[id(child)].add(*child.get_position_orientation())
-                    for _ in range(settle_steps):
+                    for child,_,_ in dependencies:
+                        if id(child) in candidate_payload_resting:
+                            candidate_payload_resting[id(child)].add(*child.get_position_orientation())
+                for _ in range(settle_steps):
+                    self._placement_physics_step()
+                    sample_motion()
+                contacts = self._placement_contacts(held, payload)
+                touching = any(path in contacts for path in (link.prim_path for link in target.links.values()))
+                candidate_point=candidate.get('verification_point',point)
+                supported, support = self._selected_surface_support(
+                    held, target, candidate_point, touching, payload, require_contact=False, resting=resting.report())
+                elapsed_steps = settle_steps
+                extension_steps = max(1, round(.25 / self.og.sim.get_physics_dt()))
+                max_settle_steps = max(settle_steps, round(4. / self.og.sim.get_physics_dt()))
+                while (not supported and elapsed_steps < max_settle_steps
+                       and support['checks'].get('settled') is False
+                       and all(value for key, value in support['checks'].items() if key != 'settled')):
+                    # Continue only a valid supported pose. Rolling off,
+                    # changing shelves or losing the selected support ends
+                    # this trial immediately; tolerances stay unchanged.
+                    count = min(extension_steps, max_settle_steps-elapsed_steps)
+                    for _ in range(count):
                         self._placement_physics_step()
                         sample_motion()
+                    elapsed_steps += count
                     contacts = self._placement_contacts(held, payload)
-                    touching = any(path in contacts for path in (link.prim_path for link in target.links.values()))
-                    candidate_point=candidate.get('verification_point',point)
+                    touching = any(link.prim_path in contacts for link in target.links.values())
                     supported, support = self._selected_surface_support(
                         held, target, candidate_point, touching, payload, require_contact=False, resting=resting.report())
-                    elapsed_steps = settle_steps
-                    extension_steps = max(1, round(.25 / self.og.sim.get_physics_dt()))
-                    max_settle_steps = max(settle_steps, round(4. / self.og.sim.get_physics_dt()))
-                    while (not supported and elapsed_steps < max_settle_steps
-                           and support['checks'].get('settled') is False
-                           and all(value for key, value in support['checks'].items() if key != 'settled')):
-                        # Continue only a valid supported pose. Rolling off,
-                        # changing shelves or losing the selected support ends
-                        # this trial immediately; tolerances stay unchanged.
-                        count = min(extension_steps, max_settle_steps-elapsed_steps)
-                        for _ in range(count):
-                            self._placement_physics_step()
-                            sample_motion()
-                        elapsed_steps += count
-                        contacts = self._placement_contacts(held, payload)
-                        touching = any(link.prim_path in contacts for link in target.links.values())
-                        supported, support = self._selected_surface_support(
-                            held, target, candidate_point, touching, payload, require_contact=False, resting=resting.report())
-                    if elapsed_steps > settle_steps:
-                        self._placement_record({'status': 'surface_settling_extended',
-                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'physics_seconds': elapsed_steps*self.og.sim.get_physics_dt(),
-                            'supported': supported, 'support': support})
-                    if not supported:
-                        self._placement_record({'status': 'candidate_rejected', 'stage': 'free_settling',
-                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'support': support, 'contact_bodies': contacts})
-                        continue
-                    try:
-                        self._surface_candidate_payload(held,target,dependencies,candidate_payload_resting)
-                    except SkillError as exc:
-                        if exc.code!='postcondition_error':
-                            raise
-                        self._placement_record({'status':'candidate_rejected','stage':'payload_relations',
-                            'candidate':candidate['index'],'target':target.name,'held':held.name,
-                            'reason':str(exc)})
-                        continue
-                    accepted = candidate
-                    verification_point=candidate_point
-                    self._placement_record({'status': 'sampled', 'method': 'selected_surface_collision_geometry',
+                if elapsed_steps > settle_steps:
+                    self._placement_record({'status': 'surface_settling_extended',
                         'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                        'selected_point': point.tolist(), 'requested_yaw_degrees': yaw_degrees,
-                        'proposal_yaw_degrees':candidate.get('proposal_yaw_degrees',yaw_degrees),
-                        'proposal_overlap_score':candidate.get('proposal_overlap_score'),
-                        'offset_xy_m':candidate.get('offset_xy_m'),
-                        'settled_orientation':held.get_position_orientation()[1].tolist(),
-                        'verification_point':verification_point.tolist(),
-                        'surface_kind':candidate.get('surface_kind','selected_surface'),
-                        'selected_cavity':candidate.get('selected_cavity'),
-                        'support_position': candidate['support_position'],
-                        'settled_position': held.get_position_orientation()[0].tolist(),
+                        'physics_seconds': elapsed_steps*self.og.sim.get_physics_dt(),
+                        'supported': supported, 'support': support})
+                if not supported:
+                    self._placement_record({'status': 'candidate_rejected', 'stage': 'free_settling',
+                        'candidate': candidate['index'], 'target': target.name, 'held': held.name,
                         'support': support, 'contact_bodies': contacts})
-                    break
-                if accepted is None:
-                    raise SkillError('sampling_error', 'No collision-free, stable pose on the selected surface', changed=True)
-            # Only the accepted physical result advances environment metrics,
-            # object-state transition rules and the recorded replay.
-            resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
-            resting.add(*held.get_position_orientation())
-            payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
-                               for child, _, kind in dependencies if kind == 'OnTop'}
-            for child, _, _ in dependencies:
-                if id(child) in payload_resting:
-                    payload_resting[id(child)].add(*child.get_position_orientation())
-            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
-                                          payload_resting=payload_resting)
-            adjacency = held.states[VerticalAdjacency].get_value()
-            touching = any(path in self._placement_contacts(held,payload) for path in (link.prim_path for link in target.links.values()))
-            official_on_top = bool(held.states[OnTop].get_value(target))
-            supported, support = self._selected_surface_support(
-                held, target, verification_point, touching, payload, resting=resting.report())
-            self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
-                'position': held.get_position_orientation()[0].tolist(),
-                'touching': touching, 'official_on_top': official_on_top, 'selected_surface_support': support,
-                'verification_point':verification_point.tolist() if verification_point is not None else None,
-                'target_below': target in adjacency.negative_neighbors,
-                'target_above': target in adjacency.positive_neighbors,
-                'grasp_released': self._get_held() is None})
-            if not (supported if point is not None else official_on_top):
-                raise SkillError('postcondition_error', 'Object is not stably supported by the selected surface', changed=True)
-            self._verify_payload(dependencies, support_target=target,
-                                 support_resting={key: window.report() for key, window in payload_resting.items()})
+                    continue
+                try:
+                    self._surface_candidate_payload(held,target,dependencies,candidate_payload_resting)
+                except SkillError as exc:
+                    if exc.code!='postcondition_error':
+                        raise
+                    self._placement_record({'status':'candidate_rejected','stage':'payload_relations',
+                        'candidate':candidate['index'],'target':target.name,'held':held.name,
+                        'reason':str(exc)})
+                    continue
+                accepted = candidate
+                verification_point=candidate_point
+                self._placement_record({'status': 'sampled', 'method': 'selected_surface_collision_geometry',
+                    'candidate': candidate['index'], 'target': target.name, 'held': held.name,
+                    'selected_point': point.tolist(), 'requested_yaw_degrees': yaw_degrees,
+                    'proposal_yaw_degrees':candidate.get('proposal_yaw_degrees',yaw_degrees),
+                    'proposal_overlap_score':candidate.get('proposal_overlap_score'),
+                    'offset_xy_m':candidate.get('offset_xy_m'),
+                    'settled_orientation':held.get_position_orientation()[1].tolist(),
+                    'verification_point':verification_point.tolist(),
+                    'surface_kind':candidate.get('surface_kind','selected_surface'),
+                    'selected_cavity':candidate.get('selected_cavity'),
+                    'support_position': candidate['support_position'],
+                    'settled_position': held.get_position_orientation()[0].tolist(),
+                    'support': support, 'contact_bodies': contacts})
+                break
+            if accepted is None:
+                raise SkillError('sampling_error', 'No collision-free, stable pose on the selected surface', changed=True)
+        # Only the accepted physical result advances environment metrics,
+        # object-state transition rules and the recorded replay.
+        resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
+        resting.add(*held.get_position_orientation())
+        payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
+                           for child, _, kind in dependencies if kind == 'OnTop'}
+        for child, _, _ in dependencies:
+            if id(child) in payload_resting:
+                payload_resting[id(child)].add(*child.get_position_orientation())
+        self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
+                                      payload_resting=payload_resting)
+        adjacency = held.states[VerticalAdjacency].get_value()
+        touching = any(path in self._placement_contacts(held,payload) for path in (link.prim_path for link in target.links.values()))
+        official_on_top = bool(held.states[OnTop].get_value(target))
+        supported, support = self._selected_surface_support(
+            held, target, verification_point, touching, payload, resting=resting.report())
+        self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
+            'position': held.get_position_orientation()[0].tolist(),
+            'touching': touching, 'official_on_top': official_on_top, 'selected_surface_support': support,
+            'verification_point':verification_point.tolist() if verification_point is not None else None,
+            'target_below': target in adjacency.negative_neighbors,
+            'target_above': target in adjacency.positive_neighbors,
+            'grasp_released': self._get_held() is None})
+        if not (supported if point is not None else official_on_top):
+            raise SkillError('postcondition_error', 'Object is not stably supported by the selected surface', changed=True)
+        self._verify_payload(dependencies, support_target=target,
+                             support_resting={key: window.report() for key, window in payload_resting.items()})
         # Placement is now verified and released. Advance native cooking,
         # slicing and task evaluation without watching or restoring the old
         # assembly: a legitimate transition may consume it in this very step.
-        with self._anchored_operation():
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
         return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=False, resting=None,
@@ -950,207 +940,170 @@ class CheckedPlacement:
         moving_ids={id(held),*(id(child) for child,_ in getattr(self,'_carry_contents',[]))}
         residents=[record for record in self._container_payload(target) if id(record[0]) not in moving_ids]
         resident_count=len(residents)
-        stabilized_payload=None
-        with self._placement_context(target):
-            contents=list(self._carry_contents) if self.ideal_carry else []
-            particle_payload=getattr(self,'_placement_particle_payload',(None,[]))[1]
-            # A single carrier still uses native Inside first. Its collision
-            # geometry may fit even when its full AABB exceeds a conservative
-            # annotated volume. Particle ownership and destination containment
-            # are verified after settling; geometric fallback includes them.
-            assembly_search=bool(contents)
-            dependencies=list(getattr(self,'_carry_dependencies',[]))
-            orientation=held.get_position_orientation()[1].clone()
-            self._carry_detach()
-            # Capture the anchored physics wrapper installed by the context.
-            original_step=self.og.sim.step_physics
-            native_sampling=False
-            native_start=start;native_before=before
-            def preserve_payload_poses():
-                if residents:self._relocate_container_payload(residents)
-            def preserve_residents(*args,**kwargs):
-                # The near-bin arm can push an earlier item out while the
-                # official sampler or the settling steps advance physics.
-                # Existing contents are part of the destination's committed
-                # state; keep their link-relative poses until this placement
-                # has been checked. The new item remains free during settling.
-                preserve_payload_poses()
-                try:return original_step(*args,**kwargs)
-                finally:
-                    preserve_payload_poses()
-            def bounded_step(*args,**kwargs):
-                deadline=getattr(self,'deadline',None)
-                if deadline is not None:deadline.check(changed=True)
-                if native_sampling and (self.sampling_physics_steps-native_before>=1200 or time.monotonic()-native_start>30):
-                    raise SkillError('native_sampling_budget_exhausted',
-                                     'Native Inside search exhausted its reserved budget',changed=True)
-                # Managed benchmark episodes have one execution deadline;
-                # the legacy sampler caps apply only to standalone calls.
-                if not getattr(deadline,'managed',False) and (
-                        self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>180):
-                    raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
-                self.sampling_physics_steps+=1
-                if not assembly_search and (contents or getattr(self,'_placement_particle_payload',(None,[]))[1]):
-                    # Randomly flipping a plate is not a valid way to place
-                    # its food (or a bag its particles). Preserve orientation.
-                    held.set_position_orientation(held.get_position_orientation()[0],orientation)
-                self._relocate_contents(held,contents)
-                return preserve_residents(*args,**kwargs)
-            self.og.sim.step_physics=bounded_step
-            from omnigibson.utils.usd_utils import RigidContactAPI
-            original_contact=RigidContactAPI.is_in_contact
-            def assembly_contact(scene_idx,query_set,with_set,ignore_set,current_only):
-                if contents and len(query_set)==1 and next(iter(query_set)) is held and with_set is None:
-                    assembly=[held,*[obj for obj,_ in contents]]
-                    return original_contact(scene_idx,assembly,None,[*(ignore_set or []),*assembly],current_only)
-                return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
-            if contents:RigidContactAPI.is_in_contact=assembly_contact
-            sampling_done=False
-            geometric_fallback=False
-            open_native_state=None
-            try:
-                if assembly_search:
-                    from .inside_sampling import sample_assembly_inside
-                    sampled=sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
-                else:
-                    from .inside_sampling import sample_assembly_inside
-                    particles=snapshot_particle_state(self.og.sim)
-                    checkpoint=self.og.sim.dump_state(serialized=False)
-                    identities=scene_object_identities(self.og.sim)
-                    def native():
-                        nonlocal native_sampling,native_start,native_before,open_native_state
-                        native_start=time.monotonic();native_before=self.sampling_physics_steps
-                        native_sampling=True
-                        try:
-                            sampled=held.states[Inside].set_value(target,True)
-                            if sampled and not self._inside_resting_check(held,target,contents,residents=residents):
-                                return False
-                            if sampled:
-                                from .closure_clearance import check_closure_clearance
-                                closure=check_closure_clearance(self,target,[held,*[obj for obj,_ in contents]])
-                                if not closure['clear']:
-                                    open_native_state=(self.og.sim.dump_state(serialized=False),
-                                                       snapshot_particle_state(self.og.sim))
-                                    self._placement_record({'status':'native_closed_articulation_collision',
-                                        'held':held.name,'target':target.name,'closure':closure})
-                                    return False
-                            return sampled
-                        finally:native_sampling=False
-                    def restore():
-                        if scene_object_identities(self.og.sim)!=identities or not particle_state_unchanged(particles):
-                            raise SkillError('target_changed','Scene identities changed during Inside sampling',changed=True)
-                        self.og.sim.load_state(checkpoint,serialized=False)
-                        restore_particle_state(particles)
-                    def geometric():
-                        try:
-                            fallback = (None if open_native_state is None else
-                                {'state':open_native_state[0], 'particles':open_native_state[1],
-                                 'candidate':{'candidate':0, 'origin':'native_sampler'}})
-                            return sample_assembly_inside(self,held,target,contents,point=point,residents=residents,
-                                                          open_fallback=fallback)
-                        except SkillError as exc:
-                            if exc.code!='sampling_budget_exhausted' or open_native_state is None:
-                                raise
-                            # A valid native Inside pose must not be lost just
-                            # because the optional closure preference ran out
-                            # of work. The caller restores that saved pose.
-                            self.deadline.check(changed=True)
+        contents=list(self._carry_contents)
+        particle_payload=getattr(self,'_placement_particle_payload',(None,[]))[1]
+        # A single carrier still uses native Inside first. Its collision
+        # geometry may fit even when its full AABB exceeds a conservative
+        # annotated volume. Particle ownership and destination containment
+        # are verified after settling; geometric fallback includes them.
+        assembly_search=bool(contents)
+        dependencies=list(getattr(self,'_carry_dependencies',[]))
+        orientation=held.get_position_orientation()[1].clone()
+        self._carry_detach()
+        # Count native sampler work without altering body motion.
+        original_step=self.og.sim.step_physics
+        native_sampling=False
+        native_start=start;native_before=before
+        def bounded_step(*args,**kwargs):
+            deadline=getattr(self,'deadline',None)
+            if deadline is not None:deadline.check(changed=True)
+            if native_sampling and (self.sampling_physics_steps-native_before>=1200 or time.monotonic()-native_start>30):
+                raise SkillError('native_sampling_budget_exhausted',
+                                 'Native Inside search exhausted its reserved budget',changed=True)
+            # Managed benchmark episodes have one execution deadline;
+            # the legacy sampler caps apply only to standalone calls.
+            if not getattr(deadline,'managed',False) and (
+                    self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>180):
+                raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
+            self.sampling_physics_steps+=1
+            result=original_step(*args,**kwargs)
+            self.og.sim.sync_physx_to_fabric()
+            return result
+        self.og.sim.step_physics=bounded_step
+        from omnigibson.utils.usd_utils import RigidContactAPI
+        original_contact=RigidContactAPI.is_in_contact
+        def assembly_contact(scene_idx,query_set,with_set,ignore_set,current_only):
+            if contents and len(query_set)==1 and next(iter(query_set)) is held and with_set is None:
+                assembly=[held,*[obj for obj,_ in contents]]
+                return original_contact(scene_idx,assembly,None,[*(ignore_set or []),*assembly],current_only)
+            return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
+        if contents:RigidContactAPI.is_in_contact=assembly_contact
+        sampling_done=False
+        geometric_fallback=False
+        open_native_state=None
+        try:
+            if assembly_search:
+                from .inside_sampling import sample_assembly_inside
+                sampled=sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
+            else:
+                from .inside_sampling import sample_assembly_inside
+                particles=snapshot_particle_state(self.og.sim)
+                checkpoint=self.og.sim.dump_state(serialized=False)
+                identities=scene_object_identities(self.og.sim)
+                def native():
+                    nonlocal native_sampling,native_start,native_before,open_native_state
+                    native_start=time.monotonic();native_before=self.sampling_physics_steps
+                    native_sampling=True
+                    try:
+                        sampled=held.states[Inside].set_value(target,True)
+                        if sampled and not self._inside_resting_check(held,target,contents,residents=residents):
                             return False
-                    if residents:
-                        # Occupied containers need proposals on/around their
-                        # existing contents. Do not first spend 30 seconds on a
-                        # native search that ignores those support surfaces.
-                        try:sampled=geometric()
-                        except SkillError as exc:
-                            if exc.code!='sampling_budget_exhausted':raise
-                            sampled=False
-                            self._placement_record({'status':'geometric_sampling_exhausted','error':str(exc)})
-                        geometric_fallback=bool(sampled)
-                        if not sampled:
-                            restore()
-                            try:sampled=native()
-                            except SkillError as exc:
-                                if exc.code!='native_sampling_budget_exhausted':raise
-                                sampled=False
-                                self._placement_record({'status':'native_sampling_exhausted','error':str(exc),
-                                                        'preceded_by':'assembly_volume_search'})
-                    else:
-                        sampled,geometric_fallback=inside_sample_with_fallback(
-                            native,geometric,restore,self._placement_record)
-                if not sampled and open_native_state is not None:
+                        if sampled:
+                            from .closure_clearance import check_closure_clearance
+                            closure=check_closure_clearance(self,target,[held,*[obj for obj,_ in contents]])
+                            if not closure['clear']:
+                                open_native_state=(self.og.sim.dump_state(serialized=False),
+                                                   snapshot_particle_state(self.og.sim))
+                                self._placement_record({'status':'native_closed_articulation_collision',
+                                    'held':held.name,'target':target.name,'closure':closure})
+                                return False
+                        return sampled
+                    finally:native_sampling=False
+                def restore():
                     if scene_object_identities(self.og.sim)!=identities or not particle_state_unchanged(particles):
-                        raise SkillError('target_changed','Scene identities changed before native fallback',changed=True)
-                    self.og.sim.load_state(open_native_state[0],serialized=False)
-                    restore_particle_state(open_native_state[1])
-                    sampled=True
-                    geometric_fallback=False
-                    self._placement_record({'status':'native_open_only_fallback',
-                        'held':held.name,'target':target.name,
-                        'note':'Inside is valid; closing may require rearranging contents'})
-                sampling_done=True
-            finally:
-                if contents:RigidContactAPI.is_in_contact=original_contact
-                self.og.sim.step_physics=preserve_residents if sampling_done else original_step
-                self.frames_revision=-1
-            try:
-                if not sampled:
-                    raise SkillError('sampling_error',('Assembly volume search could not find a valid placement'
-                                     if assembly_search else 'Official volume sampler could not find a valid placement'),changed=True)
-                # Containers must support the new object under gravity before
-                # its resting pose becomes an ideal carry/stabilization pose.
-                # Freezing an airborne sampler pose falsely validates Inside
-                # and can leave food in a shelf or tools obstructing a lid.
-                self._relocate_contents(held,contents)
-                settling_steps=min(50,max_steps)
-                local=getattr(self,'_local_operation',None)
-                # Every accepted sampler pose has already passed free-release
-                # resting checks. Optional closure search must not use up the
-                # mandatory environment-step verification of that valid pose.
-                commit=(local.verified_placement_commit(settling_steps) if local is not None
-                        else nullcontext())
-                with commit:
-                    for _ in range(settling_steps):
-                        # Environment.step does not dispatch through the patched
-                        # sim.step_physics method used by the official sampler.
-                        preserve_payload_poses()
-                        try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                        finally:preserve_payload_poses()
-            finally:
-                self.og.sim.step_physics=original_step
-            if not held.states[Inside].get_value(target):
-                raise SkillError('postcondition_error','Object did not remain inside after settling; try another placement',changed=True)
-            self._verify_container_payload(target,residents)
-            self._verify_payload(dependencies)
-            if particle_payload:
-                from .particle_payload import particles_in_volumes
-                if not particles_in_volumes(self.env.scene,particle_payload,fillable):
-                    raise SkillError('postcondition_error','Carried particles extend outside the destination volume',changed=True)
-            if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
-                raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
-            if not getattr(target,'fixed_base',True):
-                stabilized_payload=self._container_payload(target)
-        if not getattr(target,'fixed_base',True):
-            if not hasattr(self,'_stabilized_containers'):self._stabilized_containers={}
-            self._stabilized_containers[target]=tuple(v.clone() for v in target.get_position_orientation())
-            if not hasattr(self,'_stabilized_container_payloads'):self._stabilized_container_payloads={}
-            self._stabilized_container_payloads[target]=stabilized_payload
-        return {'primitive':'place_inside','implementation':('transactional_assembly_volume_with_official_Inside'
-                if assembly_search else 'transactional_inside_geometry_first' if residents and geometric_fallback
-                else 'transactional_Inside_with_geometric_fallback' if geometric_fallback
-                else 'transactional_official_Inside_with_rigid_payload_sampling'),
-                'postcondition':'Inside.get_value_after_settling','failure_policy':'restore_pre_action_state',
-                'target_root_anchored':True,'existing_containment_verified':resident_count,
+                        raise SkillError('target_changed','Scene identities changed during Inside sampling',changed=True)
+                    self.og.sim.load_state(checkpoint,serialized=False)
+                    restore_particle_state(particles)
+                def geometric():
+                    try:
+                        fallback = (None if open_native_state is None else
+                            {'state':open_native_state[0], 'particles':open_native_state[1],
+                             'candidate':{'candidate':0, 'origin':'native_sampler'}})
+                        return sample_assembly_inside(self,held,target,contents,point=point,residents=residents,
+                                                      open_fallback=fallback)
+                    except SkillError as exc:
+                        if exc.code!='sampling_budget_exhausted' or open_native_state is None:
+                            raise
+                        # A valid native Inside pose must not be lost just
+                        # because the optional closure preference ran out
+                        # of work. The caller restores that saved pose.
+                        self.deadline.check(changed=True)
+                        return False
+                if residents:
+                    # Occupied containers need proposals on/around their
+                    # existing contents. Do not first spend 30 seconds on a
+                    # native search that ignores those support surfaces.
+                    try:sampled=geometric()
+                    except SkillError as exc:
+                        if exc.code!='sampling_budget_exhausted':raise
+                        sampled=False
+                        self._placement_record({'status':'geometric_sampling_exhausted','error':str(exc)})
+                    geometric_fallback=bool(sampled)
+                    if not sampled:
+                        restore()
+                        try:sampled=native()
+                        except SkillError as exc:
+                            if exc.code!='native_sampling_budget_exhausted':raise
+                            sampled=False
+                            self._placement_record({'status':'native_sampling_exhausted','error':str(exc),
+                                                    'preceded_by':'assembly_volume_search'})
+                else:
+                    sampled,geometric_fallback=inside_sample_with_fallback(
+                        native,geometric,restore,self._placement_record)
+            if not sampled and open_native_state is not None:
+                if scene_object_identities(self.og.sim)!=identities or not particle_state_unchanged(particles):
+                    raise SkillError('target_changed','Scene identities changed before native fallback',changed=True)
+                self.og.sim.load_state(open_native_state[0],serialized=False)
+                restore_particle_state(open_native_state[1])
+                sampled=True
+                geometric_fallback=False
+                self._placement_record({'status':'native_open_only_fallback',
+                    'held':held.name,'target':target.name,
+                    'note':'Inside is valid; closing may require rearranging contents'})
+            sampling_done=True
+        finally:
+            if contents:RigidContactAPI.is_in_contact=original_contact
+            self.og.sim.step_physics=original_step
+            self.frames_revision=-1
+        try:
+            if not sampled:
+                raise SkillError('sampling_error',('Assembly volume search could not find a valid placement'
+                                 if assembly_search else 'Official volume sampler could not find a valid placement'),changed=True)
+            # Verify the accepted candidate under unmodified native physics.
+            settling_steps=min(50,max_steps)
+            local=getattr(self,'_local_operation',None)
+            # Every accepted sampler pose has already passed free-release
+            # resting checks. Optional closure search must not use up the
+            # mandatory environment-step verification of that valid pose.
+            commit=(local.verified_placement_commit(settling_steps) if local is not None
+                    else nullcontext())
+            with commit:
+                for _ in range(settling_steps):
+                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        finally:
+            self.og.sim.step_physics=original_step
+        if not held.states[Inside].get_value(target):
+            raise SkillError('postcondition_error','Object did not remain inside after settling; try another placement',changed=True)
+        self._verify_container_payload(target,residents)
+        self._verify_payload(dependencies)
+        if particle_payload:
+            from .particle_payload import particles_in_volumes
+            if not particles_in_volumes(self.env.scene,particle_payload,fillable):
+                raise SkillError('postcondition_error','Carried particles extend outside the destination volume',changed=True)
+        if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
+            raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
+        return {'primitive':'place_inside','implementation':('assembly_volume_with_official_Inside'
+                if assembly_search else 'inside_geometry_first' if residents and geometric_fallback
+                else 'Inside_with_geometric_fallback' if geometric_fallback
+                else 'official_Inside_with_rigid_payload_sampling'),
+                'postcondition':'Inside.get_value_after_settling','failure_policy':'retain_physical_result',
+                'target_root_anchored':False,'existing_containment_verified':resident_count,
                 'new_object_settling':'free_physics',
                 'sampling_order':'geometry' if assembly_search else 'geometry_then_native' if residents else 'native_then_geometry',
                 'sampling_physics_steps':self.sampling_physics_steps-before}
 
     def _inside_resting_check(self,held,target,contents,*,residents=()):
-        """Validate release with the same anchoring cadence as an actual action.
-
-        Raw samplers pin the target every physics substep. The real actuator
-        pins once per control interval. A wall pushing an open lid can appear
-        stable in the former and eject its contents in the latter.
-        """
+        """Observe native free settling without restoring any body pose."""
         from omnigibson.object_states import Inside
         from .resting_motion import RestingMotionWindow
         sim=self.og.sim;dt=sim.get_physics_dt();control_dt=sim.get_sim_step_dt()
@@ -1160,20 +1113,13 @@ class CheckedPlacement:
         # controls, contacts and physics still run; these private trials do not
         # advance task metrics, render frames or trigger transition rules.
         physics_step=type(sim).step_physics.__get__(sim,type(sim))
-        def anchors():
-            if self._base_target is not None:self._restore_base_target()
-            self._restore_object_anchor();self._restore_stabilized_containers()
-            self._follow_placement_particles();self._relocate_container_payload(residents)
         for _ in range(max(1,int(.75/control_dt))):
-            anchors();self._relocate_contents(held,contents)
-            try:
-                for _ in range(max(1,round(control_dt/dt))):
-                    self.deadline.check(changed=True)
-                    local=getattr(self,'_local_operation',None)
-                    if local is not None:local.check()
-                    self.sampling_physics_steps+=1;physics_step()
-                sim.sync_physx_to_fabric()
-            finally:anchors()
+            for _ in range(max(1,round(control_dt/dt))):
+                self.deadline.check(changed=True)
+                local=getattr(self,'_local_operation',None)
+                if local is not None:local.check()
+                self.sampling_physics_steps+=1;physics_step()
+            sim.sync_physx_to_fabric()
             resting.add(*held.get_position_orientation())
             if not held.states[Inside].get_value(target):break
             if resting.report()['stable']:
@@ -1185,7 +1131,7 @@ class CheckedPlacement:
                         'held':held.name,'target':target.name,'contact_geometry':contact})
                     return False
         self._placement_record({'status':'inside_unstable_candidate','held':held.name,'target':target.name,
-                                'resting_motion':resting.report(),'anchoring_cadence_seconds':control_dt,
+                                'resting_motion':resting.report(),'observation_interval_seconds':control_dt,
                                 'speed_m_s':float(self.torch.linalg.norm(held.get_linear_velocity()))})
         return False
 

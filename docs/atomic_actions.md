@@ -1,8 +1,23 @@
-# Checked atomic actions
+# Atomic actions with native physics
 
-The RGB agent still selects one point in the latest four-camera snapshot. The executor grounds only that selected target, checks the held tool and reach, applies the simulator's object/material state, and verifies the result after settling. Tool completion is distinct from independent task success. `wait` remains a time-control utility outside the 18 task actions.
+The RGB agent selects one point in the latest four-camera snapshot. The executor
+resolves that target, checks the action's prerequisites, changes the requested
+state and observes the native result. Task success comes from the independent
+official evaluator.
 
-Manipulation keeps the robot base at its current position and orientation. `grasp`, placement, opening/closing, toggling, attachment and material actions never navigate automatically, including in demo-motion mode. The existing ideal-executor reach check measures horizontal distance from the base to the selected surface point, with a 1.4 m limit; this is not a physical arm IK guarantee. A distant target returns `out_of_reach` before physics advances. The agent must explicitly call `act(primitive="navigate_to")`, inspect the returned four-camera RGB, and select the target again. An in-place demo arm attempt can also return `out_of_reach` after moving the arm; it does not retry by moving the base. Base translation belongs to `navigate_to`, and deliberate in-place rotation belongs to `look` (navigation may also turn to follow its route).
+The executor uses OmniGibson's assisted-grasp fixed joint while an object is held.
+A symbolic transfer moves the selected object and its current payload once;
+subsequent gravity, contact, joint motion and released contents belong to PhysX.
+There is no per-step pose projection, fixed released container, resident-content
+pinning, or rollback of a committed physical outcome. Candidate sampling can
+restore hypothetical trials before choosing a pose; this is separate from
+maintaining an action result.
+
+Navigation certifies a geometric route and commits its endpoint once, followed
+by native settling. It does not simulate continuous driving or charge the
+estimated route duration as elapsed simulation time. A manipulation may use the
+existing target-locked local approach. Each tool returns fresh four-camera RGB;
+continuous recording is optional in iteration batches.
 
 | Added action | Required held object | Simulator effect |
 | --- | --- | --- |

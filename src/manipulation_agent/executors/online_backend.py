@@ -218,7 +218,6 @@ class OnlineNavigation:
                     next_orientation = T.euler2quat(self.torch.tensor([0.,0.,next_yaw], device=orientation.device))
                     self._base_target = {'position':next_position, 'orientation':next_orientation, 'indices':indices,
                                          'posture':posture, 'held':held, 'relative':relative}
-                    self._restore_base_target()
                     self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
                     measured, measured_quat = self.robot.get_position_orientation()
                     actual_xy = measured[:2].detach().cpu().tolist()

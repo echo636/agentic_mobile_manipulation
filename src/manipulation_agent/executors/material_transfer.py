@@ -240,18 +240,14 @@ class CheckedMaterialTransfer:
                                     source_remaining=None if generating else available - len(indices)))
         finally:
             held = self._get_held()
-            if self.ideal_carry:
-                self._carry_particles = snapshot_particles(scene,
-                    [held, *[child for child, _ in self._carry_contents]], include_supported=True)
         if not changes:
             raise SkillError('sampling_error', 'No collision-free receiving space for a material portion')
         self._placement_record({'status': 'material_transferred', 'primitive': primitive,
             'source': source.name, 'destination': destination.name,
             'materials': [{'system': item['system'].name, 'count': item['count'],
                            'generated_by_authored_source': item['generated']} for item in changes]})
-        with self._anchored_operation(target):
-            for _ in range(min(6, max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        for _ in range(min(6, max_steps)):
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
         materials = []
         for item in changes:
             system = item['system']

@@ -93,7 +93,6 @@ def prepare_articulation(backend,obj,primitive,operation):
                 # must not be pushed while evaluating hypothetical door poses.
                 obj.set_joint_positions(start+(goal-start)*i/count)
                 backend._relocate_container_payload(payload)
-                backend._carry_follow()
                 current=vertices();boxes.extend(swept_link_bounds(previous,current));previous=current
             moved_links={key:points for key,points in previous.items()
                          if key not in initial_vertices or not np.allclose(points,initial_vertices[key],atol=1e-5,rtol=0.)}

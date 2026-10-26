@@ -1,16 +1,12 @@
-"""Explicit ideal carry without a dynamic robot/object fixed joint.
+"""Native grasp ownership and one-time object state actions.
 
-Object identity comes from the selected RGB pixel only. This is a research
-motor protocol, not physical grasp control. Ordinary environment collisions
-and gravity remain enabled; held poses are projected around each control step.
+No body pose is projected during subsequent physics steps.
 """
-from contextlib import contextmanager, nullcontext
 import json
 import math
 from ..contracts import SkillError
 from ..records import now
 from .particle_payload import snapshot_particles, relocate_particles, verify_particles, particle_count
-from .carry_posture import CompactCarry
 
 
 def support_closure(root, objects, relation):
@@ -43,99 +39,57 @@ def attachment_relation(candidate, member):
     return kind
 
 
-class ControlledCarry(CompactCarry):
-    @contextmanager
-    def _settling_container_contents(self):
-        """Let resident rigid contents settle, then retain their actual new poses.
+class ControlledCarry:
 
-        Navigation stabilization must not pin a tilted tool forever during a
-        wait or lid operation. Keep container roots supported, release only
-        resident pose stabilization, and recapture native containment after
-        physics (or after an enclosing operation has rolled back). Escaped or
-        removed objects are never restored to their previous locations.
-        """
-        pins = getattr(self, '_stabilized_container_payloads', {})
-        containers = tuple(pins)
-        for container in containers:
-            pins.pop(container)
+    def _grasp_state(self, obj, max_steps):
+        """Transfer once, then let OG's assisted-grasp joint own the object."""
+        from omnigibson.utils import transform_utils as T
+        held = self._get_held()
+        if held is obj:
+            return {'primitive': 'grasp', 'postcondition': 'selected_object_already_held'}
+        if held is not None:
+            raise SkillError('hand_occupied', 'An object is already grasped')
+        if obj.fixed_base:
+            raise SkillError('fixed_object', 'The selected object has a fixed base')
+        original = obj.get_position_orientation()
+        dependencies = self._grasp_dependencies(obj)
+        contents = [(child, T.relative_pose_transform(*child.get_position_orientation(), *original))
+                    for child, _, _ in dependencies]
+        particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
+                                       include_supported=True)
+        arm = self.primitives.arm
+        contact = self.robot.get_eef_position(arm)
+        obj.set_position_orientation(position=contact)
+        self._relocate_contents(obj, contents)
+        relocate_particles(self.env.scene, particles)
+        self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
+        for _ in range(min(6, max_steps)):
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        if self._get_held() is not obj:
+            raise SkillError('postcondition_error', 'Native grasp did not hold the selected object', changed=True)
+        self.frames_revision = -1
+        return {'primitive': 'grasp', 'implementation': 'native_assisted_grasp_joint',
+                'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
+                'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
+
+    def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None):
+        """Snapshot transported material once; never pin it during settling."""
+        held=self._get_held()
+        contents=self._carry_contents
+        self._placement_particle_payload=(held,snapshot_particles(
+            self.env.scene,[held,*[child for child,_ in contents]],include_supported=True))
         try:
-            yield
+            if primitive=='place_inside':
+                return self._checked_place_inside(target,max_steps,point=point)
+            if primitive=='place_under':
+                return self._checked_place_under(target,max_steps)
+            method=self._checked_place_on_top if primitive=='place_on_top' else self._checked_place_next_to
+            return method(target,max_steps,point,yaw_degrees)
         finally:
-            if containers:
-                live = {id(obj) for obj in self.env.scene.objects}
-                held = self._get_held()
-                for container in containers:
-                    if id(container) not in live:
-                        getattr(self, '_stabilized_containers', {}).pop(container, None)
-                    elif container is not held:
-                        pins[container] = self._container_payload(container)
+            self._placement_particle_payload=(None,[])
 
-    def _restore_carry_joints(self):
-        # Pose carry represents the selected assembly as a controlled body.
-        # Preserve the captured articulation too; root projection alone can
-        # kick a passive lid open during a turn. Never infer a desired state.
-        for obj,joints in getattr(self,'_carry_joint_positions',{}).items():
-            obj.set_joint_positions(joints);obj.keep_still()
-
-    @contextmanager
-    def _editable_carry_joints(self,obj):
-        positions=getattr(self,'_carry_joint_positions',{})
-        previous=positions.pop(obj,None)
-        try:yield
-        except BaseException:
-            if previous is not None:positions[obj]=previous
-            raise
-        else:
-            if previous is not None:positions[obj]=obj.get_joint_positions().clone()
-
-    @contextmanager
-    def _anchored_operation(self, obj=None):
-        previous=self._base_target;old_object=getattr(self,'_object_anchor',None)
-        pos,quat=self.robot.get_position_orientation();joints=self.robot.get_joint_positions()
-        indices=self.torch.tensor([i for i in range(len(joints)) if i not in self.robot.base_idx.tolist()],device=joints.device)
-        self._base_target={'position':pos.clone(),'orientation':quat.clone(),'indices':indices,
-                           'posture':joints[indices].clone(),'held':None,'relative':None}
-        if obj is not None:self._object_anchor=(obj,tuple(v.clone() for v in obj.get_position_orientation()))
-        original_step=self.og.sim.step_physics
-        def anchored_physics(*args,**kwargs):
-            local=getattr(self,'_local_operation',None)
-            if local is not None:local.check()
-            self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
-            try:
-                result=original_step(*args,**kwargs)
-                # step_physics advances PhysX without refreshing Fabric mesh
-                # transforms. Object poses/velocities are current, but AABBs,
-                # support anchors and fillable geometry can still describe
-                # the preceding pose. Sampling must read one physical state.
-                sync=getattr(self.og.sim,'sync_physx_to_fabric',None)
-                if sync is not None:sync()
-                return result
-            finally:self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
-        self.og.sim.step_physics=anchored_physics
-        try:yield
-        finally:
-            self.og.sim.step_physics=original_step
-            try:self._restore_base_target();self._restore_object_anchor();self._follow_placement_particles()
-            finally:self._base_target=previous;self._object_anchor=old_object
-
-    def _restore_object_anchor(self):
-        if getattr(self,'_object_anchor',None) is not None:
-            obj,pose=self._object_anchor
-            if not any(current is obj for current in self.env.scene.objects):
-                self._object_anchor=None
-                self.frames_revision=-1
-                return
-            # The scene's fixed-base constraint already holds this root.
-            # Rewriting an articulated root and zeroing its velocities around
-            # every physics step can invalidate the native GPU solver state.
-            # Let its door joints settle under their existing constraints.
-            if obj.fixed_base:
-                return
-            obj.set_position_orientation(*pose);obj.keep_still()
-
-    def _ideal_state_action(self, primitive, obj, max_steps):
+    def _state_action(self, primitive, obj, max_steps):
         from omnigibson.object_states import Open,ToggledOn
-        from .placement import placement_transaction
         state=Open if primitive in {'open','close'} else ToggledOn
         wanted=primitive in {'open','toggle_on'}
         if state not in obj.states:raise SkillError('pre_condition_error','Selected object does not support this operation')
@@ -145,8 +99,6 @@ class ControlledCarry(CompactCarry):
         particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in payload]]) if state is Open else []
         from .particle_payload import particle_link_motion, particle_containment_observation
         moved_particles=particle_link_motion(particles)
-        edit=self._editable_carry_joints(obj) if state is Open else nullcontext()
-        settling=self._settling_container_contents() if state is Open else nullcontext()
         prepared=getattr(getattr(self,'_local_operation',None),'articulation_plan',None) if state is Open else None
         open_goal=None
         if primitive=='open' and prepared is None:
@@ -166,61 +118,58 @@ class ControlledCarry(CompactCarry):
             if state is Open:
                 from .articulation_diagnostics import record_articulation
                 record_articulation(self,obj,primitive,samples,status=status,**details)
-        with edit,settling,self._anchored_operation(obj),placement_transaction(self.og.sim,self._placement_record):
-            capture('before_setter')
-            # Upstream symbolic OPEN samples a random opening and returns early
-            # when already ajar. Use a checked usable opening; close fully.
-            if prepared is not None:
-                current=obj.get_joint_positions()
-                start=self.torch.as_tensor(prepared['start_joints'],dtype=current.dtype,device=current.device)
-                if str(obj.prim_path)!=prepared['object_prim'] or prepared['primitive']!=primitive or not self.torch.allclose(current,start,atol=.02,rtol=0.):
-                    raise SkillError('target_changed','Articulation changed after safe-stance preparation')
-                obj.set_joint_positions(self.torch.as_tensor(prepared['goal_joints'],dtype=current.dtype,device=current.device))
-                obj.states[state].clear_cache();obj.state_updated()
-                accepted=bool(obj.states[state].get_value())==wanted
-            elif open_goal is not None:
-                obj.set_joint_positions(open_goal);obj.keep_still()
-                obj.states[state].clear_cache();obj.state_updated()
-                accepted=bool(obj.states[state].get_value())
-            else:
-                accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
-            if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
-            self._relocate_container_payload(payload)
-            transported_particles=moved_particles()
-            # A door setter moves only its articulated support frames. Leave
-            # material in stationary shelves/bottles to ordinary physics rather
-            # than resetting its velocities or demanding zero natural settling.
-            relocate_particles(self.env.scene,transported_particles)
-            verify_particles(self.env.scene,transported_particles)
-            capture('after_setter')
-            for step in range(min(30,max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                if step in (0,4,14,29):capture('settle_'+str(step+1))
-            if bool(obj.states[state].get_value())!=wanted:
-                report('failed',reason='state_reopened_or_reclosed_after_settling',
-                       payload=[child.name for child,_,_ in payload])
-                raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
-            self._verify_container_payload(obj,payload)
-            if particles:
-                self._placement_record({'status':'articulation_particle_settle',
-                    'target':obj.name,'primitive':primitive,
-                    'transported_particles':particle_count(transported_particles),
-                    'particles':particle_containment_observation(self.env.scene,particles,outer=obj)})
-            # Still require containment for material this setter actually
-            # transported. Unmoved background material is not an open/close
-            # postcondition and is never restored to conceal its real settling.
-            verify_particles(self.env.scene,transported_particles)
-            report('passed',payload=[child.name for child,_,_ in payload])
-        return {'primitive':primitive,'implementation':'transactional_official_state_setter_with_link_payload',
+        capture('before_setter')
+        # Upstream symbolic OPEN samples a random opening and returns early
+        # when already ajar. Use a checked usable opening; close fully.
+        if prepared is not None:
+            current=obj.get_joint_positions()
+            start=self.torch.as_tensor(prepared['start_joints'],dtype=current.dtype,device=current.device)
+            if str(obj.prim_path)!=prepared['object_prim'] or prepared['primitive']!=primitive or not self.torch.allclose(current,start,atol=.02,rtol=0.):
+                raise SkillError('target_changed','Articulation changed after safe-stance preparation')
+            obj.set_joint_positions(self.torch.as_tensor(prepared['goal_joints'],dtype=current.dtype,device=current.device))
+            obj.states[state].clear_cache();obj.state_updated()
+            accepted=bool(obj.states[state].get_value())==wanted
+        elif open_goal is not None:
+            obj.set_joint_positions(open_goal);obj.keep_still()
+            obj.states[state].clear_cache();obj.state_updated()
+            accepted=bool(obj.states[state].get_value())
+        else:
+            accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
+        if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
+        self._relocate_container_payload(payload)
+        transported_particles=moved_particles()
+        # A door setter moves only its articulated support frames. Leave
+        # material in stationary shelves/bottles to ordinary physics rather
+        # than resetting its velocities or demanding zero natural settling.
+        relocate_particles(self.env.scene,transported_particles)
+        verify_particles(self.env.scene,transported_particles)
+        capture('after_setter')
+        for step in range(min(30,max_steps)):
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if step in (0,4,14,29):capture('settle_'+str(step+1))
+        if bool(obj.states[state].get_value())!=wanted:
+            report('failed',reason='state_reopened_or_reclosed_after_settling',
+                   payload=[child.name for child,_,_ in payload])
+            raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
+        self._verify_container_payload(obj,payload)
+        if particles:
+            self._placement_record({'status':'articulation_particle_settle',
+                'target':obj.name,'primitive':primitive,
+                'transported_particles':particle_count(transported_particles),
+                'particles':particle_containment_observation(self.env.scene,particles,outer=obj)})
+        # Still require containment for material this setter actually
+        # transported. Unmoved background material is not an open/close
+        # postcondition and is never restored to conceal its real settling.
+        verify_particles(self.env.scene,transported_particles)
+        report('passed',payload=[child.name for child,_,_ in payload])
+        return {'primitive':primitive,'implementation':'official_state_setter_with_link_payload',
                 'fully_open_or_closed':primitive=='close','opening_policy':'largest_checked_usable_endpoint' if primitive=='open' else None,
                 'postcondition':'official_state_and_containment_after_settling',
-                'preserved_contained_objects':len(payload),'failure_policy':'restore_pre_action_state'}
+                'preserved_contained_objects':len(payload),'failure_policy':'retain_physical_result'}
 
     def _checked_attach(self, parent, max_steps):
         """Attach the carried child to the visually selected compatible parent."""
         from omnigibson.object_states import AttachedTo
-        if not self.ideal_carry:
-            raise SkillError('pre_condition_error','Attach requires controlled carry mode')
         child=self._get_held()
         if child is None:
             raise SkillError('empty_hand','No carried object')
@@ -239,25 +188,23 @@ class ControlledCarry(CompactCarry):
             # The new fixed joint must move the connected bodies together.
             # Repeatedly projecting only the parent's pose fights the native
             # constraint solver and can inject energy into the whole assembly.
-            # Keep the robot anchor, rollback and parent identity checks while
-            # allowing the attached objects to respond to contacts and gravity.
-            with self._placement_context(watch=(parent,)):
-                self._carry_detach()
-                accepted=state.set_value(parent,True,bypass_alignment_checking=True,
-                                         check_physics_stability=False,can_joint_break=False)
-                if not accepted:
-                    raise SkillError('execution_error','Attachment state setter rejected the selected pair',changed=True)
-                self._relocate_contents(child,contents)
-                for _ in range(min(30,max_steps)):
-                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                if not state.get_value(parent):
-                    raise SkillError('postcondition_error','Attachment did not remain after settling',changed=True)
-                self._verify_payload(dependencies)
+            # Native joint constraints and contacts determine the outcome.
+            self._carry_detach()
+            accepted=state.set_value(parent,True,bypass_alignment_checking=True,
+                                     check_physics_stability=True)
+            if not accepted:
+                raise SkillError('execution_error','Attachment state setter rejected the selected pair',changed=True)
+            self._relocate_contents(child,contents)
+            for _ in range(min(30,max_steps)):
+                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            if not state.get_value(parent):
+                raise SkillError('postcondition_error','Attachment did not remain after settling',changed=True)
+            self._verify_payload(dependencies)
         finally:
             self.frames_revision=-1
-        return {'primitive':'attach','implementation':'transactional_official_AttachedTo_state_setter',
+        return {'primitive':'attach','implementation':'official_AttachedTo_state_setter',
                 'postcondition':'AttachedTo.get_value_after_settling',
-                'preserved_carried_objects':len(contents),'failure_policy':'restore_pre_action_state'}
+                'preserved_carried_objects':len(contents),'failure_policy':'retain_physical_result'}
 
     def _container_payload(self, container):
         """Snapshot rigid contents relative to their support or fillable link.
@@ -314,35 +261,28 @@ class ControlledCarry(CompactCarry):
                                    escaped_contents=details)
             raise SkillError('postcondition_error','Operation displaced existing contents from the container',changed=True)
 
+    @property
+    def _carry_dependencies(self):
+        held = self._get_held()
+        return [] if held is None else self._grasp_dependencies(held)
+
+    @property
+    def _carry_contents(self):
+        from omnigibson.utils import transform_utils as T
+        held = self._get_held()
+        if held is None:
+            return []
+        pose = held.get_position_orientation()
+        return [(child, T.relative_pose_transform(*child.get_position_orientation(), *pose))
+                for child, _, _ in self._grasp_dependencies(held)]
+
     def _get_held(self):
-        return self._ideal_held if self.ideal_carry else self.primitives._get_obj_in_hand()
+        return self.primitives._get_obj_in_hand()
 
     def _carry_record(self, **data):
         with (self.output/'carry_diagnostics.jsonl').open('a') as f:
             f.write(json.dumps({'at':now(),'env_step':self.steps,'audience':'executor_private',**data})+'\n')
 
-    def _carry_follow(self):
-        if not self.ideal_carry or self._ideal_held is None:return
-        live={id(obj) for obj in self.env.scene.objects}
-        if any(id(obj) not in live for obj in (self._ideal_held,*(c for c,_ in self._carry_contents))):
-            self._carry_detach()
-            self.frames_revision=-1
-            raise SkillError('target_changed','Carried object changed during simulation',changed=True)
-        from omnigibson.utils import transform_utils as T
-        origin=(self.robot.eef_links[self._demo_arm].get_position_orientation()
-                if getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None)
-                else self.robot.get_position_orientation())
-        pose=T.pose_transform(*origin,*self._carry_relative)
-        self._ideal_held.set_position_orientation(*pose);self._ideal_held.keep_still()
-        self._restore_carry_joints()
-        for obj,relative in self._carry_contents:
-            obj.set_position_orientation(*T.pose_transform(*pose,*relative));obj.keep_still()
-        try:
-            relocate_particles(self.env.scene,getattr(self,'_carry_particles',[]))
-        except SkillError:
-            self._carry_detach()
-            self.frames_revision=-1
-            raise
 
     def _relocate_contents(self, held, contents):
         from omnigibson.utils import transform_utils as T
@@ -351,46 +291,10 @@ class ControlledCarry(CompactCarry):
         root,particles=getattr(self,'_placement_particle_payload',(None,[]))
         if root is held:relocate_particles(self.env.scene,particles)
 
-    def _follow_placement_particles(self):
-        # Preserve the selected assembly until the placement transaction ends,
-        # including sampler physics and Environment.step's separate code path.
-        _,particles=getattr(self,'_placement_particle_payload',(None,[]))
-        if particles:relocate_particles(self.env.scene,particles)
 
     def _carry_detach(self):
-        if not self.ideal_carry:
-            for arm in self.robot.arm_names:self.robot.release_grasp_immediately(arm=arm)
-        else:
-            self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[]
-            self._carry_particles=[]
-            self._carry_joint_positions={}
-
-    @contextmanager
-    def _placement_context(self,target=None,*,watch=()):
-        from .placement import placement_transaction
-        held=getattr(self,'_ideal_held',None);relative=getattr(self,'_carry_relative',None);contents=list(getattr(self,'_carry_contents',[]))
-        dependencies=list(getattr(self,'_carry_dependencies',[]))
-        particles=list(getattr(self,'_carry_particles',[]))
-        joints=dict(getattr(self,'_carry_joint_positions',{}))
-        old_particles=getattr(self,'_placement_particle_payload',(None,[]))
-        self._placement_particle_payload=(held,particles)
-        previous=getattr(self,'_placement_watch',())
-        self._placement_watch=tuple(obj for obj in (held,target,*watch,*(c for c,_ in contents)) if obj is not None)
-        try:
-            with self._anchored_operation(target),placement_transaction(self.og.sim,self._placement_record):yield
-        except Exception as exc:
-            if isinstance(exc,SkillError) and exc.code=='target_changed':
-                self._carry_detach()
-                self.frames_revision=-1
-            else:
-                self._ideal_held=held;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
-                self._carry_particles=particles
-                self._carry_joint_positions=joints
-                if held is not None:self._carry_follow()
-            raise
-        finally:
-            self._placement_watch=previous
-            self._placement_particle_payload=old_particles
+        for arm in self.robot.arm_names:
+            self.robot.release_grasp_immediately(arm=arm)
 
     def _check_placement_objects(self):
         watched=getattr(self,'_placement_watch',())
@@ -417,102 +321,6 @@ class ControlledCarry(CompactCarry):
             return None
         return support_closure(obj,candidates,relation)
 
-    def _ideal_grasp(self,obj,max_steps):
-        from omnigibson.utils import transform_utils as T
-        from omnigibson.object_states import Inside,OnTop,Touching
-        torch=self.torch
-        if self._ideal_held is obj:
-            try:
-                verify_particles(self.env.scene,getattr(self,'_carry_particles',[]))
-            except Exception:
-                self._carry_detach();self.frames_revision=-1
-                raise
-            return {'primitive':'grasp','postcondition':'selected_object_already_held'}
-        if self._ideal_held is not None:raise SkillError('hand_occupied','A carry relationship already exists')
-        if obj.fixed_base:raise SkillError('fixed_object','The selected object has a fixed base')
-        # Preserve both contained objects and supported objects (e.g. food on a
-        # plate), including nested payloads. Fixed scene objects never follow.
-        original=obj.get_position_orientation()
-        local=getattr(self,'_local_operation',None)
-        prepared=getattr(local,'carry_plan',None)
-        if prepared is not None:
-            pose=self._local_pose()
-            if (math.dist(pose[:2],prepared['pose'][:2])>.01 or
-                    abs(math.atan2(math.sin(pose[2]-prepared['pose'][2]),math.cos(pose[2]-prepared['pose'][2])))>.02):
-                raise SkillError('local_adjustment_blocked','Base moved after carry preparation')
-        dependencies=self._grasp_dependencies(obj)
-        if not getattr(self,'demo_motion',False):
-            from .carry_geometry import PayloadSweep, plan_instant_carry
-            payload=[obj,*[child for child,_,_ in dependencies]]
-            if prepared is None:
-                pose=self._local_pose()
-                check=local.check if local is not None else self.deadline.check
-                sweep=PayloadSweep(self,obj,payload,pose,check=check)
-                base_z=float(self.robot.get_position_orientation()[0][2])
-                route,status=plan_instant_carry(sweep.origin,(*pose[:2],base_z,pose[2]),
-                                               sweep.bounds,sweep.destination_clear,check=check)
-                if route is None:
-                    self._carry_record(status=status,diagnostic=sweep.last_failure)
-                    raise SkillError('local_adjustment_blocked','No collision-free carry destination found')
-                prepared={'pose':pose,'route':route,'status':status,'transfer_mode':'instant_pose_transfer'}
-            self._validate_carry_destination(obj,prepared,payload,max_steps)
-        contents=[(child,T.relative_pose_transform(*child.get_position_orientation(),*original)) for child,_,_ in dependencies]
-        particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in dependencies]],include_supported=True)
-        demo = getattr(self,'demo_motion',False) and getattr(self,'_demo_arm',None)
-        # The entire selected assembly is leaving its old support. An outer
-        # container can have recorded nested children as well as this root;
-        # retaining those records would pull the children back after release.
-        moving={id(obj),*(id(child) for child,_,_ in dependencies)}
-        stabilized=getattr(self,'_stabilized_containers',{})
-        for container in list(stabilized):
-            if id(container) in moving:stabilized.pop(container)
-        payloads=getattr(self,'_stabilized_container_payloads',{})
-        for container,records in list(payloads.items()):
-            if id(container) in moving:payloads.pop(container)
-            else:payloads[container]=[record for record in records if id(record[0]) not in moving]
-        base_pos,base_quat=self.robot.get_position_orientation()
-        # In demo mode the carried pose follows the visible hand. The object is
-        # lifted over recorded control steps after the carry relation is made.
-        if prepared is not None:
-            relative=T.relative_pose_transform(*original,base_pos,base_quat)
-        elif demo:
-            relative=T.relative_pose_transform(*original,
-                *self.robot.eef_links[self._demo_arm].get_position_orientation())
-        else:
-            relative=T.relative_pose_transform(*original,base_pos,base_quat)
-        self._ideal_held=obj;self._carry_relative=relative;self._carry_contents=contents;self._carry_dependencies=dependencies
-        self._carry_particles=particles
-        self._carry_joint_positions={body:body.get_joint_positions().clone()
-            for body in [obj,*[child for child,_ in contents]] if getattr(body,'n_joints',0)}
-        self._carry_record(status='attached',object=obj.name,contained_objects=[c.name for c,_ in contents],
-                           payload_relations=[{'child':c.name,'parent':p.name,'relation':kind} for c,p,kind in dependencies],
-                           contained_particles=particle_count(particles,'contained'),
-                           supported_particles=particle_count(particles,'supported'),
-                           preserved_articulated_objects=[body.name for body in self._carry_joint_positions],
-                           implementation='pose_projection_no_fixed_joint',
-                           original_position=original[0].tolist())
-        try:
-            self._carry_follow()
-            if prepared is not None:
-                packing=self._execute_prepared_carry(obj,prepared,max_steps)
-            else:
-                with self._anchored_operation():
-                    for _ in range(min(6,max_steps)):
-                        self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                packing={'status':'demo_hand_carry'}
-            pos,quat=obj.get_position_orientation()
-            if not bool(torch.isfinite(pos).all() and torch.isfinite(quat).all()):
-                raise SkillError('physics_instability','Non-finite held pose',changed=True)
-            verify_particles(self.env.scene,particles)
-        except Exception:
-            # Retain actual physics outcomes, but a failed attachment must not
-            # become an unchecked "already held" success on retry.
-            self._carry_detach();self.frames_revision=-1
-            raise
-        return {'primitive':'grasp','implementation':'controlled_pose_carry','postcondition':'selected_object_held_and_finite',
-                'physical_grasp':False,'fixed_joint_created':False,'carry_posture':packing,'contained_rigid_objects':len(contents),
-                'contained_particles':particle_count(particles,'contained'),
-                'supported_particles':particle_count(particles,'supported')}
 
     def _verify_payload(self, dependencies, *, support_target=None, support_resting=None):
         from omnigibson.object_states import Inside,OnTop,Touching,AttachedTo
@@ -546,12 +354,3 @@ class ControlledCarry(CompactCarry):
                     'parent_orientation':parent.get_position_orientation()[1].tolist(),
                     'child_linear_velocity':child.get_linear_velocity().tolist()})
                 raise SkillError('postcondition_error','Carried payload lost its original support, containment or attachment after placement',changed=True)
-
-    def _ideal_release(self,max_steps):
-        if self._ideal_held is None:raise SkillError('empty_hand','No carried object')
-        self._carry_record(status='released',object=self._ideal_held.name)
-        self._carry_detach()
-        if getattr(self,'demo_motion',False):self._demo_arm=None
-        with self._anchored_operation():
-            for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-        return {'primitive':'release','implementation':'controlled_carry_detach_and_settle','physical_grasp':False}

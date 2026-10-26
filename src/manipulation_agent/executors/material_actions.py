@@ -126,19 +126,16 @@ class CheckedMaterialActions:
         return covered, removing, candidates
 
     def _checked_surface_action(self, primitive, target, max_steps):
-        from .placement import placement_transaction
         covered, removing, candidates = self._surface_action_preconditions(primitive, target)
 
-        # The selected object is fixed in place while the official Covered
-        # setter changes only material belonging to that object.
-        with self._anchored_operation(target), placement_transaction(self.og.sim, self._placement_record):
-            for system in candidates:
-                if not covered.set_value(system, not removing):
-                    raise SkillError('execution_error', 'Material state setter rejected the action', changed=True)
-            for _ in range(min(6, max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-            if any(bool(covered.get_value(system)) == removing for system in candidates):
-                raise SkillError('postcondition_error', 'Material state did not persist after settling', changed=True)
+        # Set material state once, then let the native scene evolve.
+        for system in candidates:
+            if not covered.set_value(system, not removing):
+                raise SkillError('execution_error', 'Material state setter rejected the action', changed=True)
+        for _ in range(min(6, max_steps)):
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        if any(bool(covered.get_value(system)) == removing for system in candidates):
+            raise SkillError('postcondition_error', 'Material state did not persist after settling', changed=True)
         return {'primitive': primitive, 'implementation': 'checked_official_Covered_state',
                 'material_systems': [system.name for system in candidates],
                 'postcondition': 'Covered.get_value_after_settling'}
@@ -168,16 +165,14 @@ class CheckedMaterialActions:
         return saturated, candidates
 
     def _checked_soak(self, target, max_steps):
-        from .placement import placement_transaction
         saturated, candidates = self._soak_preconditions(target)
-        with self._anchored_operation(target), placement_transaction(self.og.sim, self._placement_record):
-            for system in candidates:
-                if not saturated.set_value(system, True):
-                    raise SkillError('execution_error', 'Saturation state setter rejected the action', changed=True)
-            for _ in range(min(6, max_steps)):
-                self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-            if any(not saturated.get_value(system) for system in candidates):
-                raise SkillError('postcondition_error', 'Carried tool did not remain saturated', changed=True)
+        for system in candidates:
+            if not saturated.set_value(system, True):
+                raise SkillError('execution_error', 'Saturation state setter rejected the action', changed=True)
+        for _ in range(min(6, max_steps)):
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+        if any(not saturated.get_value(system) for system in candidates):
+            raise SkillError('postcondition_error', 'Carried tool did not remain saturated', changed=True)
         return {'primitive': 'soak', 'implementation': 'checked_official_Saturated_state',
                 'material_systems': [system.name for system in candidates],
                 'postcondition': 'Saturated.get_value_after_settling'}

@@ -45,7 +45,8 @@ class SurfaceContactRefreshTests(unittest.TestCase):
 
         backend = SimpleNamespace(
             og=SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda: 1/30,
-                                                  get_physics_dt=lambda: 1/120)),
+                                                  get_physics_dt=lambda: 1/120,
+                                                  sync_physx_to_fabric=lambda: None)),
             _placement_physics_step=step,
             _step=lambda *_: self.fail('Uncommitted placement must not trigger native slicing'),
         )

@@ -86,37 +86,36 @@ class DemoMotion:
         self._demo_arm = chosen
         self._demo_focus = point.clone()
         self._spectator_anchor = None
-        with self._anchored_operation(anchor):
-            if prepose_steps:
-                ready = self.robot.untucked_default_joint_pos[arm_indices].to(device=start.device)
-                for values in eased_positions(arm_start, ready, prepose_steps):
-                    joints = self.robot.get_joint_positions().clone()
-                    joints[arm_indices] = values
-                    self._base_target['posture'] = joints[self._base_target['indices']].clone()
-                    self._step(self.robot.q_to_action(joints))
-            first_hand = self.robot.eef_links[chosen].get_position_orientation()[0].clone()
-            for fraction in eased_positions(0., 1., steps-prepose_steps):
-                hand = self.robot.eef_links[chosen].get_position_orientation()[0]
-                jacobian = self._demo_jacobian(chosen)
-                desired = first_hand + (point-first_hand)*fraction
-                error = (desired-hand).to(device=jacobian.device,dtype=jacobian.dtype)
-                damping = .06
-                matrix = jacobian @ jacobian.T + damping*damping*self.torch.eye(3,device=jacobian.device)
-                delta = jacobian.T @ self.torch.linalg.solve(matrix,error)
-                delta = delta.clamp(-.12,.12)
+        if prepose_steps:
+            ready = self.robot.untucked_default_joint_pos[arm_indices].to(device=start.device)
+            for values in eased_positions(arm_start, ready, prepose_steps):
                 joints = self.robot.get_joint_positions().clone()
-                joints[indices] += delta.to(device=joints.device,dtype=joints.dtype)
-                # The position-only Jacobian can otherwise satisfy a distant
-                # point by folding the entire torso across a work surface.
-                # Keep the presentation posture near the robot's reset pose.
-                joints[trunk_indices] = self.torch.maximum(
-                    self.torch.minimum(joints[trunk_indices], trunk_home + .55),
-                    trunk_home - .55)
-                joints[indices] = self.torch.maximum(
-                    self.torch.minimum(joints[indices], self.robot.joint_upper_limits[indices]),
-                    self.robot.joint_lower_limits[indices])
+                joints[arm_indices] = values
                 self._base_target['posture'] = joints[self._base_target['indices']].clone()
                 self._step(self.robot.q_to_action(joints))
+        first_hand = self.robot.eef_links[chosen].get_position_orientation()[0].clone()
+        for fraction in eased_positions(0., 1., steps-prepose_steps):
+            hand = self.robot.eef_links[chosen].get_position_orientation()[0]
+            jacobian = self._demo_jacobian(chosen)
+            desired = first_hand + (point-first_hand)*fraction
+            error = (desired-hand).to(device=jacobian.device,dtype=jacobian.dtype)
+            damping = .06
+            matrix = jacobian @ jacobian.T + damping*damping*self.torch.eye(3,device=jacobian.device)
+            delta = jacobian.T @ self.torch.linalg.solve(matrix,error)
+            delta = delta.clamp(-.12,.12)
+            joints = self.robot.get_joint_positions().clone()
+            joints[indices] += delta.to(device=joints.device,dtype=joints.dtype)
+            # The position-only Jacobian can otherwise satisfy a distant
+            # point by folding the entire torso across a work surface.
+            # Keep the presentation posture near the robot's reset pose.
+            joints[trunk_indices] = self.torch.maximum(
+                self.torch.minimum(joints[trunk_indices], trunk_home + .55),
+                trunk_home - .55)
+            joints[indices] = self.torch.maximum(
+                self.torch.minimum(joints[indices], self.robot.joint_upper_limits[indices]),
+                self.robot.joint_lower_limits[indices])
+            self._base_target['posture'] = joints[self._base_target['indices']].clone()
+            self._step(self.robot.q_to_action(joints))
         finish = self.robot.get_joint_positions()[indices]
         final_hand = self.robot.eef_links[chosen].get_position_orientation()[0]
         residual=float(self.torch.linalg.norm(final_hand-point))
@@ -143,12 +142,11 @@ class DemoMotion:
         arm_indices = self.robot.arm_control_idx[arm]
         joints[arm_indices] = self.robot.untucked_default_joint_pos[arm_indices].to(device=joints.device)
         finish = joints[indices].clone()
-        with self._anchored_operation():
-            for values in eased_positions(start, finish, steps):
-                current = self.robot.get_joint_positions().clone()
-                current[indices] = values
-                self._base_target['posture'] = current[self._base_target['indices']].clone()
-                self._step(self.robot.q_to_action(current))
+        for values in eased_positions(start, finish, steps):
+            current = self.robot.get_joint_positions().clone()
+            current[indices] = values
+            self._base_target['posture'] = current[self._base_target['indices']].clone()
+            self._step(self.robot.q_to_action(current))
         self._demo_record(action='transport_pose', status='shown', arm=arm, steps=steps,
                           joint_delta=float(self.torch.linalg.norm(finish-start)))
         return steps
