@@ -39,6 +39,7 @@ def rate_limit_error(events):
         return False
     return (bool(re.search(r'\b(?:429 Too Many Requests|(?:status|HTTP) (?:429|500|502|503|504)\b)', message))
             or 'API_KEY_CONCURRENCY_QUEUE_' in message
+            or 'selected model is at capacity' in message.lower()
             or 'stream disconnected before completion' in message)
 
 

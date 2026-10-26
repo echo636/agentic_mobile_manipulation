@@ -37,6 +37,7 @@ class ProviderRecoveryTests(unittest.TestCase):
     def test_actual_queue_full_and_bad_gateway_are_retryable(self):
         for message in ['unexpected status 503 Service Unavailable: API_KEY_CONCURRENCY_QUEUE_FULL',
                         'unexpected status 502 Bad Gateway', '429 Too Many Requests',
+                        'Selected model is at capacity. Please try a different model.',
                         'stream disconnected before completion: Transport error']:
             with self.subTest(message=message):
                 self.assertTrue(controller.rate_limit_error([{'type':'turn.failed','error':{'message':message}}]))
