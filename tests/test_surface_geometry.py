@@ -101,7 +101,6 @@ class PlacementRejectionTransactions(unittest.TestCase):
     def test_obstructed_candidates_restore_world_and_carry_without_advancing_metrics(self):
         import copy
         import sys
-        from contextlib import nullcontext
         from types import ModuleType, SimpleNamespace
         from unittest.mock import patch
         from manipulation_agent.contracts import SkillError
@@ -122,15 +121,9 @@ class PlacementRejectionTransactions(unittest.TestCase):
         backend.og = SimpleNamespace(sim=SimpleNamespace(
             dump_state=lambda **kw: copy.deepcopy(world), load_state=load,
             get_physics_dt=lambda: .01))
-        backend.ideal_carry = True
-        backend._ideal_held = held
-        relation = object()
-        backend._carry_relative = relation
-        backend._carry_contents = []
-        dependencies = [('preserved payload dependency',)]
-        backend._carry_dependencies = dependencies.copy()
-        backend._anchored_operation = lambda *args: nullcontext()
-        backend._carry_follow = lambda: world.update(position=initial['position'].copy())
+        backend._get_held = lambda: held
+        backend._grasp_dependencies = lambda obj: []
+        backend._carry_detach = lambda: None
         backend._placement_record = records.append
         backend._relocate_contents = lambda *args: None
         backend._surface_candidates = lambda *args: [
@@ -163,10 +156,7 @@ class PlacementRejectionTransactions(unittest.TestCase):
         self.assertEqual(error.exception.code, 'sampling_error')
         self.assertEqual(len(physics), 3)
         self.assertEqual(world, initial)
-        self.assertIs(backend._ideal_held, held)
-        self.assertIs(backend._carry_relative, relation)
-        self.assertEqual(backend._carry_dependencies, dependencies)
-        self.assertEqual(len(loads), 4)  # Two new trials, fallback generation, outer rollback.
+        self.assertEqual(len(loads), 4)  # Two new trials, fallback generation, discard the final failed trial.
         self.assertEqual([r['stage'] for r in records if r['status'] == 'candidate_rejected'],
                          ['raised_pose_collision'] * 3)
         self.assertEqual(records[-1]['status'], 'rolled_back')

@@ -74,7 +74,7 @@ class NextToCandidateRetry(unittest.TestCase):
         self.assertFalse(world['grasp'])
         self.assertEqual(len(restored), 1)
         self.assertTrue(all(writes == 1 for _, writes in steps))
-        self.assertEqual([r['status'] for r in records], ['candidate_rejected', 'next_to_verified'])
+        self.assertEqual([r['status'] for r in records], ['candidate_rejected', 'next_to_verified', 'committed', 'next_to_commit'])
 
     def test_exhaustion_restores_held_item_and_previously_placed_item(self):
         b, held, target, world, steps, restored, checks, records = self.backend(None)
@@ -84,6 +84,22 @@ class NextToCandidateRetry(unittest.TestCase):
         self.assertEqual(checks, [0, 1])
         self.assertEqual(world['prior_item'], 'placed')
         self.assertIs(b._get_held(), held)
+
+    def test_failed_commit_keeps_physics_result_and_does_not_try_another_pose(self):
+        b, held, target, world, steps, restored, checks, records = self.backend(0)
+        sample_check = b._next_to_check
+        def check(*args, **kwargs):
+            valid, details = sample_check(*args, **kwargs)
+            return valid and world['prior_item'] != 'fell_after_release', details
+        b._next_to_check = check
+        b._step = lambda action: world.update(prior_item='fell_after_release')
+        with self.assertRaises(SkillError) as error:
+            b._checked_place_next_to(target, 100, b.torch.zeros(3))
+        self.assertEqual(error.exception.code, 'postcondition_error')
+        self.assertEqual(checks, [0, 0])
+        self.assertEqual(world['prior_item'], 'fell_after_release')
+        self.assertFalse(world['grasp'])
+        self.assertEqual(restored, [])
 
     def test_oriented_pair_placement_still_requires_support_and_nextto(self):
         b, held, target, world, steps, restored, checks, records = self.backend(1)

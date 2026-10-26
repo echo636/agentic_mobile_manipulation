@@ -11,7 +11,7 @@ class ContainerVisibilityTests(unittest.TestCase):
   import numpy
   self.torch=torch
   self.b=b=RGBBackend.__new__(RGBBackend);b.torch=torch;b.rig_height=1.5;b.rig_radius=.35;b.rig_pitch_degrees=35
-  b.robot=SimpleNamespace(links={},get_position_orientation=lambda:(torch.tensor([0.,0.,0.]),None));b._get_held=lambda:None;b._carry_contents=[]
+  b.robot=SimpleNamespace(links={},get_position_orientation=lambda:(torch.tensor([0.,0.,0.]),None));b._get_held=lambda:None
   self.target=SimpleNamespace(links={'base':SimpleNamespace(prim_path='/container/base')})
   self.point=torch.tensor([1.,0.,1.]);self.sampling=ModuleType('omnigibson.utils.sampling_utils')
  def visible(self,body,*,container=False,self_blocked=False,in_frame=True):

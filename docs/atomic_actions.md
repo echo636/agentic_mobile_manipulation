@@ -1,5 +1,12 @@
 # Atomic actions with native physics
 
+Candidate sampling and committed execution have separate lifetimes. Rejected
+hypothetical placement trials restore their snapshot, including the native grasp;
+otherwise failed search would leave an unexecuted collision in the scene. Once a
+pose is selected and environment stepping begins, physical outcomes are retained,
+including failed postconditions. `place_next_to` commits only once and does not
+rewind an executed release to try another candidate.
+
 The RGB agent selects one point in the latest four-camera snapshot. The executor
 resolves that target, checks the action's prerequisites, changes the requested
 state and observes the native result. Task success comes from the independent
