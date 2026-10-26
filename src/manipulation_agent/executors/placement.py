@@ -385,9 +385,13 @@ class CheckedPlacement:
             offsets = [(0., 0.)] + [(x, y) for radius in (.04, .08, .12)
                                    for x, y in ((radius, 0), (-radius, 0), (0, radius), (0, -radius))]
         candidates = []
-        # Stay above contact offsets even after the first physics step, as in
-        # OG's standard kinematic sampler. This is clearance, not support area.
-        clearance = .025 + .5 * 9.81 * self.og.sim.get_physics_dt() ** 2
+        # Release immediately above the measured collision surface. A 2.5 cm
+        # drop (the native rejection sampler's clearance) unnecessarily jolts
+        # loaded vessels and spills contents. Contacts are admitted by their
+        # actual penetration below, so we need only a small geometric gap plus
+        # the first free physics step's gravity displacement. Free settling and
+        # all support/payload postconditions still apply.
+        clearance = .002 + .5 * 9.81 * self.og.sim.get_physics_dt() ** 2
         for index, (x, y) in enumerate(offsets):
             center = point + self.torch.tensor([x, y, 0.], device=point.device)
             end = center - self.torch.tensor([0., 0., .08], device=point.device)
