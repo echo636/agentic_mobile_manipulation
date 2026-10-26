@@ -58,9 +58,11 @@ class ControlledCarry:
         particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
                                        include_supported=True)
         arm = self.primitives.arm
-        contact = self.robot.get_eef_position(arm)
-        # Align the selected surface with the hand, retaining the object's
-        # orientation and surface-to-root offset (especially for loaded trays).
+        direction = T.quat2mat(self.robot.get_eef_orientation(arm))[:, 2]
+        contact = (self.robot.get_eef_position(arm) + direction *
+                   max(self.robot.eef_to_fingertip_lengths[arm].values()))
+        # Sticky contact belongs at the finger tips. Putting a broad surface
+        # at the EEF origin embeds the fingers in it and physics ejects it.
         obj.set_position_orientation(position=original[0] + contact - point)
         self._relocate_contents(obj, contents)
         relocate_particles(self.env.scene, particles)
