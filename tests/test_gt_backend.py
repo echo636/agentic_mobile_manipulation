@@ -78,11 +78,15 @@ class GTBackendTests(unittest.TestCase):
         modules['omnigibson'].utils = modules['omnigibson.utils']
         modules['omnigibson.utils'].transform_utils = modules['omnigibson.utils.transform_utils']
         modules['omnigibson.utils.transform_utils'].quat2mat = lambda _: np.eye(3)
+        def select_route(options,*args,**kwargs):
+            from manipulation_agent.executors.forward_navigation import ForwardRoute
+            plan=min(options,key=lambda p:p.score)
+            return plan,ForwardRoute((plan,),plan.geodesic_m,0,'fixture'),{'fixture':True}
         patches = [patch.dict('sys.modules', modules),
                    patch('manipulation_agent.executors.heading_collision.HeadingCollisionChecker',
                          return_value=SimpleNamespace(motion_free=lambda a,b:True,grid_at_heading=lambda yaw:grid)),
                    patch('manipulation_agent.executors.forward_navigation.select_forward_route',
-                         side_effect=lambda options,*a,**kw:(min(options,key=lambda p:p.score),None,{'fixture':True})),
+                         side_effect=select_route),
                    patch('manipulation_agent.executors.live_gt_map.build_navigation_grid', return_value=(grid,
                        {'chassis_footprint_world_offsets': [], 'collision_layers': [],
                         'dynamic_collision_check': False, 'collision_substrate': 'static_fixture'})),
@@ -148,13 +152,13 @@ class GTBackendTests(unittest.TestCase):
         self.assertFalse(record['online_mapping'])
         b._update_online_map.assert_not_called()
 
-    def test_elevated_approach_checks_visibility_in_both_legacy_modes(self):
+    def test_only_manipulation_approach_checks_visibility(self):
         b=self.backend()
         target=SimpleNamespace(get_position_orientation=lambda:(Tensor([1.,0.,1.]),None))
         seen=[]
         b._approach_visible=lambda xy,point,selected,**kw:(seen.append(xy) or xy[0]>=.5)
         b._navigate(target,700)
-        self.assertTrue(seen)
+        self.assertFalse(seen)
         seen.clear()
         b._navigate(target,700,for_manipulation=True)
         self.assertTrue(seen)
@@ -163,7 +167,7 @@ class GTBackendTests(unittest.TestCase):
         b = self.backend(blocked=True)
         target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 1.]), None))
         with self.assertRaises(SkillError) as error:
-            b._navigate(target, 700)
+            b._navigate(target, 700, for_manipulation=True)
         self.assertEqual(error.exception.code, 'navigation_search_exhausted')
         b._execute_gt_plan.assert_not_called()
         b._update_online_map.assert_not_called()

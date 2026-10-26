@@ -1,4 +1,4 @@
-"""An explicit elevated click cannot accept a reachable goal behind a wall."""
+"""Navigation reaches a physical approach; manipulation checks target visibility."""
 import json
 import math
 from pathlib import Path
@@ -92,16 +92,15 @@ class TargetVisibilityTests(unittest.TestCase):
         route=b._execute_gt_plan.call_args.kwargs['prepared_route']
         self.assertAlmostEqual(route.turn_radians,math.pi/2)
         self.assertGreater(route.phases[-1].geodesic_m,0.)
-        self.assertTrue(any(abs(c.kwargs['base_yaw']-math.pi/2)<1e-8
-                            for c in b._approach_visible.call_args_list))
+        b._approach_visible.assert_not_called()
         arrival=json.loads((b.output/'navigation_arrivals.jsonl').read_text())
-        self.assertTrue(arrival['target_visible'])
+        self.assertIsNone(arrival['target_visible'])
         self.assertIsNotNone(arrival['local_exit_certificate'])
 
     def test_arrival_heading_that_loses_target_keeps_original_view(self):
         b=self.backend;target=self.open_side_target()
         b._approach_visible.side_effect=lambda *a,base_yaw,**kw:abs(base_yaw)<.01
-        b._navigate(target,1000)
+        b._navigate(target,1000,for_manipulation=True)
         self.assertAlmostEqual(b.yaw,0.)
         saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
         self.assertEqual(saved['arrival_heading_refinement'][0]['reason'],'target_not_visible')
@@ -127,7 +126,7 @@ class TargetVisibilityTests(unittest.TestCase):
                                1.291521,math.dist(goal,point[:2]),1,1,0.,0,travel_yaw=original_yaw)
         target=SimpleNamespace(get_position_orientation=lambda:(Tensor(point),None))
         with patch('manipulation_agent.executors.gt_navigation.plan_navigation',return_value=proposed):
-            b._navigate(target,1000)
+            b._navigate(target,1000,for_manipulation=True)
         self.assertGreater(abs(b.yaw-original_yaw),.1)
         route=b._execute_gt_plan.call_args.kwargs['prepared_route']
         self.assertLess(math.degrees(route.turn_radians),82.)
@@ -161,8 +160,8 @@ class TargetVisibilityTests(unittest.TestCase):
         saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
         self.assertTrue(saved['arrival_heading_refinement_budget_exhausted'])
 
-    def test_explicit_approach_rejects_reachable_wrong_side_and_records_arrival(self):
-        b=self.backend;result=b._navigate(self.target(),1000)
+    def test_manipulation_approach_rejects_occluded_side_and_records_arrival(self):
+        b=self.backend;result=b._navigate(self.target(),1000,for_manipulation=True)
         self.assertGreater(b.position.tolist()[0],2.)
         self.assertTrue(b._approach_visible.called)
         arrival=json.loads((b.output/'navigation_arrivals.jsonl').read_text())
@@ -172,10 +171,19 @@ class TargetVisibilityTests(unittest.TestCase):
     def test_target_occluded_after_motion_is_not_reported_success(self):
         b=self.backend
         b._approach_visible.side_effect=lambda xy,*_,**kw:not b.moved and xy[0]>2.
-        with self.assertRaises(SkillError) as failure:b._navigate(self.target(),1000)
+        with self.assertRaises(SkillError) as failure:b._navigate(self.target(),1000,for_manipulation=True)
         self.assertEqual(failure.exception.code,'navigation_unreachable')
         self.assertTrue(failure.exception.changed)
         self.assertFalse(json.loads((b.output/'navigation_arrivals.jsonl').read_text())['target_visible'])
+
+    def test_navigation_is_not_rejected_by_original_point_occlusion(self):
+        b=self.backend;target=self.open_side_target()
+        b._approach_visible.side_effect=AssertionError('Navigation must not impose a view lock')
+        result=b._navigate(target,1000)
+        self.assertTrue(b.moved)
+        self.assertEqual(result['nav_status'],'reached')
+        b._approach_visible.assert_not_called()
+        self.assertFalse(json.loads((b.output/'navigation_plans.jsonl').read_text())['approach_visibility_required'])
 
     def test_reachable_visible_approach_stops_heading_enumeration(self):
         b=self.backend
@@ -235,12 +243,13 @@ class TargetVisibilityTests(unittest.TestCase):
         second=first.copy();second[:,4]=0
         grids=[GridMap(41,41,.1,(0.,0.),f.tobytes()) for f in (first,second,second)]
         b._live_gt_collision_cache={0:{'support':raw}}
-        def build(*_):
+        def build(*_,**kwargs):
             g=grids.pop(0)
             b._navigation_clearance=(raw.tobytes(),1-np.frombuffer(g.free,dtype='uint8'),.35)
             return g,meta
         self.build_grid.side_effect=build
-        with patch('manipulation_agent.executors.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True):
+        with patch('manipulation_agent.executors.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True), \
+             patch('manipulation_agent.executors.navigation_refinement.detour_sampling',return_value=()):
             result=b._navigate(SimpleNamespace(get_position_orientation=lambda:(Tensor([.1,1.,0.]),None)),1000)
         records=[json.loads(s) for s in (b.output/'navigation_recovery.jsonl').read_text().splitlines()]
         completed=[r for r in records if 'refreshed_start_navigable' in r]

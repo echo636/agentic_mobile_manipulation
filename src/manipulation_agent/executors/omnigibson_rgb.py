@@ -710,6 +710,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         ground_click=not for_manipulation and float(point[2])-float(trav.floor_heights[floor]) <= .15
         mode='point' if ground_click else 'approach'
+        require_visibility=mode=='approach' and for_manipulation
         standoff,margin=0.,(.08 if mode=='approach' else 0.)
         if mode=='approach' and getattr(self,'local_manipulation',False):
             from .gt_navigation import visual_approach_settings
@@ -821,8 +822,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                  'selected_world_point':point.cpu().tolist(),
                  'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
-                 'approach_visibility_required':mode=='approach',
-                 'candidate_ranking':('visible_approach_annulus_then_near_start' if standoff else
+                 'approach_visibility_required':require_visibility,
+                 'candidate_ranking':('approach_annulus_then_near_start' if standoff else
                                       'nearest_feasible_connected_cell_then_travel'),'target_search_radius_m':None,
                  'map_sha256':hashlib.sha256(grid.free).hexdigest(),
                  **map_details,'precomputed_walkability':True,'online_mapping':False}
@@ -830,9 +831,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             plan=None
             try:
                 with component(self,'navigation_planning'):
-                    # Ground goals may end below the camera. Elevated targets must
-                    # remain visible from the approach, including explicit navigation:
-                    # a reachable cell across a wall is not a valid approach.
+                    # A navigation click specifies where to approach, not a
+                    # requirement to keep the exact original surface point in
+                    # view. Articulated doors and cabinet cavities can hide that
+                    # point as the robot moves. Manipulation retains its own
+                    # visibility contract; navigation keeps physical route checks.
                     planning_xy=position[:2].cpu().tolist()
                     budget=PlanningBudget(self.deadline.check)
                     from .heading_collision import HeadingCollisionChecker
@@ -849,7 +852,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                             nonlocal exit_rejections
                             pose=(*xy,yaw)
                             if not endpoint_collision.motion_free(pose,pose):return False
-                            if mode=='approach' and not visible(xy,yaw):return False
+                            if require_visibility and not visible(xy,yaw):return False
                             if pose not in entries:
                                 entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
                                                                     check_cancelled=budget.check,allow_lateral=allow_lateral)
@@ -926,7 +929,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                 if plan is None:raise
             # Neither a ground click nor an elevated visual target requires
             # restoring the departure yaw. Consider arrival-aligned headings
-            # for both, rechecking elevated-target visibility at the new pose.
+            # for both; manipulation also checks visibility at the new pose.
             # Keep the validated original options if refinement is exhausted.
             refinement=PlanningBudget(self.deadline.check,seconds=2.)
             endpoint_collision.check_cancelled=refinement.check
@@ -945,7 +948,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                             heading_attempts.append(attempt)
                             if not endpoint_collision.motion_free(pose,pose):
                                 attempt.update(status='rejected',reason='endpoint_collision');continue
-                            if mode=='approach':
+                            if require_visibility:
                                 refinement.visibility()
                                 if not self._approach_visible(candidate.goal,point,getattr(target,'selected_object',None),
                                                               margin=margin,base_yaw=yaw):
@@ -1062,7 +1065,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                                           allow_lateral=allow_lateral)
         visible=(self._approach_visible(actual[:2].cpu().tolist(),point,
                     getattr(target,'selected_object',None),margin=margin,
-                    base_yaw=actual_yaw) if mode=='approach' else None)
+                    base_yaw=actual_yaw) if require_visibility else None)
         projection=math.dist(actual[:2].cpu().tolist(),plan.target)
         nav_status='reached' if projection<=grid.resolution/math.sqrt(2)+.002 else (
             'already_at_closest_approach' if result['actual_path_distance_m']<.002 else 'approached')
@@ -1530,7 +1533,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             'erosion':{'implementation':'height-matched robot collision footprint',
                 'map_resolution_m':0.05},
             'segment_validation':'exact_grid_supercover_for_planner_and_follower',
-            'approach_visibility':'RGB-bound target; tracked local targets may leave frustum but retain checked scene/self occlusion',
+            'approach_visibility':'navigation has no arrival view lock; manipulation checks scene/self occlusion for its RGB-bound target',
             'goal_selection':'jinkai candidate geometry with path-length-aware approach ranking',
             'pixel_grounding':'pixel-center backprojection; no neighboring-pixel substitution',
             'model_visible_gt':False}
