@@ -38,11 +38,11 @@ class ForwardBackendTests(unittest.TestCase):
         b.og=SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda:1/30))
         b._get_held=lambda:None
         self.restores=0
-        def restore():
+        def restore(position,orientation):
             self.restores+=1
-            self.position=b._base_target['position'].clone()
-            self.quat=b._base_target['orientation'].clone()
-        b._restore_base_target=restore
+            self.position=position.clone()
+            self.quat=orientation.clone()
+        b._transfer_base_pose=restore
         b._step=lambda action:setattr(b,'steps',b.steps+1)
         raw=np.ones((81,81),dtype='uint8')
         self.grid=GridMap(81,81,.05,(-2.,-2.),raw.tobytes())
@@ -65,32 +65,25 @@ class ForwardBackendTests(unittest.TestCase):
         return NavigationPlan(((0.,0.),(0.,.5)),(0.,.5),(0.,.5),0.,.5,0.,1,1,0.,0,
                               travel_yaw=0.,motion_mode=mode)
 
-    def test_adapter_turns_to_path_and_restores_endpoint_view(self):
+    def test_adapter_commits_one_certified_endpoint_and_settles(self):
         result=self.b._execute_gt_plan(self.grid,self.plan(),500)
-        self.assertEqual(result['motion_policy'],'checked_forward_reverse_v2')
         self.assertFalse(result['physical_controller'])
+        self.assertFalse(result['continuous_motion_simulated'])
         self.assertLess(result['final_position_error_m'],.002)
         self.assertLess(result['final_yaw_error_rad'],.001)
+        self.assertEqual(self.restores,1)
+        self.assertEqual(self.b.steps,10)
         records=[json.loads(line) for line in (self.b.output/'base_motion.jsonl').read_text().splitlines()]
-        self.assertGreater(records[0]['commanded_yaw'],0.)
-        self.assertEqual(records[0]['commanded_position'][:2],[0.,0.])
-        previous=(0.,0.,0.)
-        for event in records:
-            x,y=event['actual_position'][:2];q=event['actual_orientation']
-            yaw=2*math.atan2(q[2],q[3]);dx,dy=x-previous[0],y-previous[1]
-            if math.hypot(dx,dy)>.002:
-                self.assertGreater(dx*math.cos(previous[2])+dy*math.sin(previous[2]),0.)
-                self.assertLess(abs(-dx*math.sin(previous[2])+dy*math.cos(previous[2])),.002)
-            previous=(x,y,yaw)
-        self.assertIsNone(self.b._base_target)
+        self.assertEqual(len(records),1)
+        self.assertEqual(records[0]['commanded_position'][:2],[0.,.5])
+        self.assertEqual(records[0]['follower'],'symbolic_route_endpoint')
 
-    def test_all_turn_and_translation_phases_share_step_budget(self):
+    def test_insufficient_settling_budget_does_not_commit_pose(self):
         with self.assertRaises(SkillError) as caught:
-            self.b._execute_gt_plan(self.grid,self.plan(),40)
+            self.b._execute_gt_plan(self.grid,self.plan(),5)
         self.assertEqual(caught.exception.code,'action_timeout')
-        self.assertTrue(caught.exception.changed)
-        self.assertLessEqual(self.b.steps,40)
-        self.assertIsNone(self.b._base_target)
+        self.assertFalse(caught.exception.changed)
+        self.assertEqual(self.restores,0)
 
     def test_contact_recovery_is_explicit_fixed_heading_exception(self):
         result=self.b._execute_gt_plan(self.grid,self.plan('clearance_retreat'),500)
@@ -115,7 +108,8 @@ class ForwardBackendTests(unittest.TestCase):
         # Long carried item clears both end orientations but clips the diagonal.
         b._navigation_layers=[(raw,np.array([[-.4,-.03],[.4,-.03],[.4,.03],[-.4,.03]]))]
         raw[45,45]=0
-        with patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(self.grid,{})):
+        with patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(self.grid,{})), \
+             patch('manipulation_agent.executors.navigation_refinement.refine_in_place_turn',return_value=(None,{})):
             with self.assertRaises(SkillError) as caught:b._turn(90,200)
             self.assertEqual(caught.exception.code,'look_rotation_blocked')
             self.assertFalse(caught.exception.changed)
@@ -146,6 +140,7 @@ class ForwardBackendTests(unittest.TestCase):
             return (self.grid,HeadingCollisionChecker(self.grid,b._navigation_layers,0.,b._navigation_support),
                     {'held_object_footprint_included':False},(),0)
         b._local_geometry=geometry
+        b._refine_local_geometry=lambda *args,**kwargs:False
         for reason,expected in [('navigation_search_exhausted','local_adjustment_exhausted'),
                                 ('navigation_unreachable','local_adjustment_exhausted')]:
             op=LocalOperation(b,'open',None,600,{})
@@ -164,7 +159,7 @@ class ForwardBackendTests(unittest.TestCase):
         from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
         b=self.b;b.local_limits=LocalLimits();b.navigation_distance=0.
         b.deadline=SimpleNamespace(check=lambda **kwargs:None)
-        b._carry_contents=[];b.demo_motion=False;b.ideal_carry=False
+        b.demo_motion=False;b.ideal_carry=False
         target=object();point=self.torch.tensor(getattr(self,'approach_test_target',[1.55,0.,.8]));effects=[];captures=[]
         binding=SimpleNamespace(grounding={},describe=lambda:{'scope':'cpu_fixture'})
         b._resolve_local_target=lambda lock:(target,point)
@@ -174,6 +169,7 @@ class ForwardBackendTests(unittest.TestCase):
                                              check_cancelled=op.check)
             return self.grid,checker,{'held_object_footprint_included':False},(),0
         b._local_geometry=geometry
+        b._refine_local_geometry=lambda *args,**kwargs:False
         b._approach_visible=lambda *a,**kw:True
         b._local_reobserve=lambda lock:captures.append(lock)
         b._navigate=lambda *a,**kw:self.fail('Micropositioning called macro navigation')

@@ -1137,7 +1137,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             if local is not None:local.finish_route()
             self._base_target=None
         return {'motor':'gt_route_symbolic_endpoint','nav_status':'reached','motion_steps':motion_steps,
-                'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
+                'steps':self.steps-before,'final_position_error_m':final_error,
+                'actual_path_distance_m':math.dist(previous,actual_pos[:2].cpu().tolist()),
+                'certified_route_distance_m':travelled,
+                'distance_measure':'observed_endpoint_displacement; continuous_path_not_executed',
                 'final_yaw_error_rad':final_yaw_error,'motion_policy':('checked_holonomic_v1' if route and any(p.motion_mode=='holonomic' for p in route.phases)
                                 else 'checked_forward_reverse_v2') if forward else 'clearance_retreat',
                 'forward_route_method':route.method if route else None,
@@ -1180,6 +1183,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         return {'steps':self.steps-before,'continuous_motion_simulated':False,
                 'motor':'symbolic_route_endpoint','physical_controller':False}
 
+    @action_profile
     def execute_visual(self,primitive,target,max_steps,**kwargs):
         before=self.steps
         complete=getattr(self,'_complete_pending_object_initialization',None)
@@ -1408,10 +1412,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             'inside':'official_volume','verification':'selected_surface_support_and_physical_settlement; official_Inside_and_payload_relations',
             'surface_target':'RGB selected point and shelf retained; local candidate search',
             'surface_geometry':'object collision mesh; no diagonal-square yaw envelope',
-            'base_anchor':'control_and_sampler_physics_steps',
-            'failure_policy':'restore_pre_action_state','goal_access':False}
+            'base_anchor':None,'released_body_pinning':False,
+            'failure_policy':'retain_committed_physical_result',
+            'candidate_sampling':'hypothetical_poses_may_restore_before_commit','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
-        result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
+        result['base_execution'] = 'checked_route_then_single_endpoint_transfer_and_native_settling'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
             'motion_policy':'checked_forward_reverse_v2',
             'forward_route':'checked_forward_point_projection_or_polyline_or_shared_bidirectional_continuous_pose_astar',

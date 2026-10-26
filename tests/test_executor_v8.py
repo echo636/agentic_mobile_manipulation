@@ -111,7 +111,7 @@ class MotorContractRegression(unittest.TestCase):
         child=types.SimpleNamespace(states={attached:state})
         parent=types.SimpleNamespace(states={attached:object()})
         backend=ControlledCarry();backend.ideal_carry=True;backend._get_held=lambda:child
-        backend._carry_contents=[];backend._carry_dependencies=[];backend.frames_revision=0
+        backend._grasp_dependencies=lambda obj:[];backend.frames_revision=0
         backend._placement_context=lambda target:nullcontext()
         backend._carry_detach=lambda:calls.append('released')
         backend._relocate_contents=lambda *a:None
@@ -123,8 +123,7 @@ class MotorContractRegression(unittest.TestCase):
             result=backend._checked_attach(parent,2)
         self.assertEqual(result['primitive'],'attach')
         self.assertEqual(calls[0],'released')
-        self.assertEqual(calls[1],{'bypass_alignment_checking':True,'check_physics_stability':False,
-                                   'can_joint_break':False})
+        self.assertEqual(calls[1],{'bypass_alignment_checking':True,'check_physics_stability':True})
         self.assertEqual(backend.frames_revision,-1)
 
     def test_support_payload_closure_includes_nested_items_without_cycles(self):
@@ -191,22 +190,6 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             valid,_=b._selected_surface_support(plate,table,torch.zeros(3),True,[pizza])
             self.assertFalse(valid)
 
-    def test_sampler_physics_cannot_displace_base_and_wrapper_restores_on_error(self):
-        import torch
-        pose=torch.tensor([1.,2.,3.]);quat=torch.tensor([0.,0.,0.,1.]);calls=[]
-        b=ControlledCarry();b.torch=torch;b._base_target=None;b._object_anchor=None
-        b.robot=types.SimpleNamespace(get_position_orientation=lambda:(pose.clone(),quat.clone()),
-            get_joint_positions=lambda:torch.zeros(5),base_idx=torch.tensor([0,1]))
-        def physics():pose.add_(10);calls.append('physics')
-        b.og=types.SimpleNamespace(sim=types.SimpleNamespace(step_physics=physics))
-        b._restore_base_target=lambda:pose.copy_(b._base_target['position'])
-        with self.assertRaisesRegex(ValueError,'injected'):
-            with b._anchored_operation():
-                b.og.sim.step_physics()
-                self.assertTrue(torch.equal(pose,torch.tensor([1.,2.,3.])))
-                raise ValueError('injected')
-        self.assertEqual(calls,['physics']);self.assertIs(b.og.sim.step_physics,physics)
-        self.assertIsNone(b._base_target);self.assertTrue(torch.equal(pose,torch.tensor([1.,2.,3.])))
 
     def test_whole_object_ontop_cannot_override_wrong_selected_shelf(self):
         import torch

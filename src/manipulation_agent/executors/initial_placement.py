@@ -25,6 +25,9 @@ class _InitialPlacementAdapter(CheckedPlacement, ControlledCarry):
         self._placement_particle_payload = (None, [])
         self.sampling_active = False
 
+    def _get_held(self):
+        return None
+
 
 
 @contextmanager

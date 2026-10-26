@@ -297,48 +297,8 @@ class ParticlePayloadTests(unittest.TestCase):
         with self.assertRaises(SkillError) as error: verify_particles(self.scene, payload)
         self.assertEqual(error.exception.code, 'postcondition_error')
 
-    def test_failed_placement_restores_particle_carry_and_release_discards_it(self):
-        self.check_rollback(snapshot_particles(self.scene, [self.bag]))
 
-    def test_surface_failed_placement_restores_payload_and_release_stops_following(self):
-        self.surface_scene()
-        self.check_rollback(snapshot_particles(self.scene, [self.bag], include_supported=True))
 
-    def check_rollback(self, payload):
-        from manipulation_agent.executors.carry import ControlledCarry
-        backend = ControlledCarry()
-        backend.ideal_carry = True
-        backend.env = SimpleNamespace(scene=self.scene)
-        self.scene.objects = [self.bag]
-        backend._ideal_held = self.bag
-        backend._carry_relative = None
-        backend._carry_contents = []
-        backend._carry_dependencies = []
-        backend._carry_particles = payload
-        backend._anchored_operation = lambda *args: nullcontext()
-        backend._placement_record = lambda record: None
-        backend._carry_follow = lambda: relocate_particles(self.scene, backend._carry_particles)
-        def load(state, **kwargs):
-            self.raw.copy_(state[0]); self.pose[:] = state[1]
-            # OG's macro serialized poses are sphere centers, whereas its
-            # two-argument setter consumes raw frames. Model the restore drift.
-            self.raw[:, 0] += .03
-        backend.og = SimpleNamespace(sim=SimpleNamespace(scenes=[self.scene],
-            dump_state=lambda **kwargs: (self.raw.clone(), [p.clone() for p in self.pose]), load_state=load))
-        before = self.raw.clone()
-        with self.assertRaises(ValueError), backend._placement_context():
-            backend._carry_detach()
-            self.pose[0] += 1
-            backend._relocate_contents(self.bag, [])
-            raise ValueError('reject candidate')
-        self.assertIs(backend._ideal_held, self.bag)
-        self.assertEqual(len(backend._carry_particles), 1)
-        self.torch.testing.assert_close(self.raw, before)
-        backend._carry_detach()
-        self.assertFalse(backend._carry_particles)
-        self.pose[0] += 3
-        backend._relocate_contents(self.bag, [])
-        self.torch.testing.assert_close(self.raw, before)
 
 
 if __name__ == '__main__': unittest.main()

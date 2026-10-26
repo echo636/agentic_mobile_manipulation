@@ -268,13 +268,13 @@ class ControlledCarry:
 
     @property
     def _carry_contents(self):
-        from omnigibson.utils import transform_utils as T
         held = self._get_held()
-        if held is None:
-            return []
+        dependencies=[] if held is None else self._grasp_dependencies(held)
+        if not dependencies:return []
+        from omnigibson.utils import transform_utils as T
         pose = held.get_position_orientation()
         return [(child, T.relative_pose_transform(*child.get_position_orientation(), *pose))
-                for child, _, _ in self._grasp_dependencies(held)]
+                for child, _, _ in dependencies]
 
     def _get_held(self):
         return self.primitives._get_obj_in_hand()

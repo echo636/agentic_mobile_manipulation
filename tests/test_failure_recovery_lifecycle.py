@@ -48,38 +48,13 @@ class DeletedPlacementObject(unittest.TestCase):
         b.og = SimpleNamespace(sim=sim)
         b.ideal_carry = True
         b._ideal_held, b._carry_relative = held, 'pose'
-        b._carry_contents, b._carry_dependencies = [], []
         b._anchored_operation = lambda target: nullcontext()
         b._placement_record = Mock()
         b._carry_follow = Mock()
         b.frames_revision = 2
         return b, held, target, scene, sim
 
-    def test_replaced_held_object_is_not_rolled_back_or_reattached(self):
-        b, held, target, scene, sim = self.setup_backend()
-        with self.assertRaises(SkillError) as failure:
-            with b._placement_context(watch=(held, target)):
-                b._carry_detach()
-                scene.objects = [target, object(), object()]
-                b._check_placement_objects()
-        self.assertEqual(failure.exception.code, 'target_changed')
-        self.assertTrue(failure.exception.changed)
-        sim.load_state.assert_not_called()
-        b._carry_follow.assert_not_called()
-        self.assertIsNone(b._ideal_held)
-        self.assertEqual(b.frames_revision, -1)
-        self.assertEqual(b._placement_watch, ())
-        self.assertEqual(b._placement_record.call_args.args[0]['status'], 'rollback_skipped')
 
-    def test_ordinary_sampling_failure_still_restores_carry(self):
-        b, held, target, scene, sim = self.setup_backend()
-        with self.assertRaisesRegex(ValueError, 'sampling'):
-            with b._placement_context(watch=(held, target)):
-                b._carry_detach()
-                raise ValueError('sampling failed')
-        sim.load_state.assert_called_once()
-        b._carry_follow.assert_called_once()
-        self.assertIs(b._ideal_held, held)
 
     def test_runtime_failure_after_topology_change_preserves_new_scene(self):
         b, held, target, scene, sim = self.setup_backend()
@@ -90,17 +65,12 @@ class DeletedPlacementObject(unittest.TestCase):
         self.assertEqual(failure.exception.code, 'target_changed')
         sim.load_state.assert_not_called()
 
-    def test_carry_follow_clears_deleted_root_before_accessing_prim(self):
-        b, held, target, scene, sim = self.setup_backend()
-        scene.objects = [target]
-        with self.assertRaises(SkillError) as failure:
-            ControlledCarry._carry_follow(b)
-        self.assertEqual(failure.exception.code, 'target_changed')
-        self.assertIsNone(b._ideal_held)
 
     def test_transition_error_keeps_the_executed_physics_step_in_video(self):
         b=RGBBackend.__new__(RGBBackend)
         b.deadline=Mock();b._base_target=None;b.steps=0
+        b.og=SimpleNamespace(sim=SimpleNamespace(_render_on_step=True,render_on_step=lambda _:nullcontext()))
+        b._check_renderer_health=Mock()
         b._restore_object_anchor=Mock();b._restore_stabilized_containers=Mock();b._carry_follow=Mock()
         b._check_placement_objects=Mock(side_effect=SkillError('target_changed','object replaced',changed=True))
         recorded=[]

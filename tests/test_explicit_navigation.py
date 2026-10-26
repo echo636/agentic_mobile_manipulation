@@ -43,12 +43,13 @@ class ExplicitNavigationTests(unittest.TestCase):
         self.held = None
         self.effects = []
         self.b._get_held = lambda: self.held
+        self.b._place_state=lambda primitive,*a,**k:self.effects.append(primitive) or {'primitive':primitive}
         self.b._anchored_operation = nullcontext
         self.b._ground = lambda *a, **kw: (self.obj, self.point.copy(), {'object': 'private_target'})
         self.b._navigate = lambda *a, **kw: self.fail('Manipulation attempted implicit navigation')
         self.b._capture_cut_target = lambda obj: None
-        for method in ('_ideal_grasp', '_checked_attach', '_checked_surface_action', '_checked_soak',
-                       '_checked_cut', '_checked_transfer', '_ideal_state_action', '_checked_place_on_top',
+        for method in ('_grasp_state', '_checked_attach', '_checked_surface_action', '_checked_soak',
+                       '_checked_cut', '_checked_transfer', '_state_action', '_checked_place_on_top',
                        '_checked_place_under', '_checked_place_next_to', '_checked_place_inside'):
             def effect(*args, method=method, **kwargs):
                 self.effects.append(method)
@@ -128,45 +129,13 @@ class ExplicitNavigationTests(unittest.TestCase):
         self.np.testing.assert_array_equal(self.base, self.point)
         self.assertEqual(self.effects, [])
 
-    def test_symbolic_fallback_and_release_hold_base_during_execution(self):
-        self.point[0] = 1.
-        self.b.ideal_carry = False
-        anchored = []
-        @contextmanager
-        def anchor():
-            anchored.append(True)
-            try:
-                yield
-            finally:
-                anchored.pop()
-        self.b._anchored_operation = anchor
-        def execute(primitive, target, steps):
-            self.assertEqual(anchored, [True])
-            return {'primitive': primitive}
-        self.b.execute = execute
-        for primitive in ('grasp', 'open', 'close', 'toggle_on', 'toggle_off', 'release'):
-            with self.subTest(primitive=primitive):
-                self.assertEqual(self.run_action(primitive)['primitive'], primitive)
-                self.assertEqual(anchored, [])
-
-    def test_cut_holds_base_without_anchoring_a_target_that_can_be_deleted(self):
-        self.point[0] = 1.
-        anchored = []
-        @contextmanager
-        def anchor(*objects):
-            self.assertEqual(objects, ())
-            anchored.append(True)
-            try:
-                yield
-            finally:
-                anchored.pop()
-        self.b._anchored_operation = anchor
-        def cut(target, steps):
-            self.assertEqual(anchored, [True])
-            return {'primitive': 'cut'}
-        self.b._checked_cut = cut
-        self.assertEqual(self.run_action('cut')['primitive'], 'cut')
-        self.assertEqual(anchored, [])
+    def test_release_and_cut_do_not_enter_a_pose_pinning_scope(self):
+        self.point[0]=1.
+        self.b._anchored_operation=lambda *a:self.fail('Pose pinning scope entered')
+        self.b.execute=lambda primitive,*a,**k:{'primitive':primitive}
+        self.assertEqual(self.run_action('release')['primitive'],'release')
+        self.b._checked_cut=lambda *a,**k:{'primitive':'cut'}
+        self.assertEqual(self.run_action('cut')['primitive'],'cut')
 
     def test_harness_returns_reach_hint_and_four_fresh_views_without_physics(self):
         from manipulation_agent.observations.mock_rgb import MockRGBBackend
