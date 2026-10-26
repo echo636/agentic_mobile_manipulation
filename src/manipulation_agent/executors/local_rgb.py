@@ -312,7 +312,9 @@ class LocalRGBManipulation:
         grid,details,plan,route,collision,_,detour=refine_navigation_detour(
             self,geometry[4],grid,details,actual,[plan],plan,route,collision,{})
         if detour is not None:
-            operation.record('detour_refinement',**detour)
+            # Refinement has its own attempt list; LocalOperation owns the
+            # top-level primitive-attempt counter in every diagnostic record.
+            operation.record('detour_refinement',refinement=detour)
             if detour['status']=='refined_route_selected':
                 chosen=detour['attempts'][-1]
                 operation.navigation_sampling={key:chosen[key] for key in ('resolution','window')}
