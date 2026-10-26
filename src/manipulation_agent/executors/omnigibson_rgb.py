@@ -716,14 +716,25 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             suggested,_=visual_approach_settings(self.rig_height,float(position[2]),float(point[2]),
                 pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
             standoff=max(1.25,suggested)
+        navigation_sampling=None
         grid,map_details=build_navigation_grid(self,floor)
         self._navigation_layer_yaw=travel_yaw
+        if not grid.navigable(grid.cell(position[:2].cpu().tolist())):
+            # Local manipulation can leave a valid pose in a narrow passage
+            # resolved by its finer native map. Do not reinterpret that pose
+            # as penetration when explicit navigation rebuilds the coarse map.
+            from .navigation_refinement import detour_sampling
+            for sampling in detour_sampling(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist()):
+                navigation_sampling=sampling
+                grid,map_details=build_navigation_grid(self,floor,sampling=sampling)
+                if grid.navigable(grid.cell(position[:2].cpu().tolist())):
+                    break
         carry_posture=None
         if not grid.navigable(grid.cell(position[:2].cpu().tolist())):
             carry_posture=self._adapt_carry_for_navigation(floor,grid,map_details,max_steps)
             if carry_posture is not None:
                 max_steps-=carry_posture['steps']
-                grid,map_details=build_navigation_grid(self,floor)
+                grid,map_details=build_navigation_grid(self,floor,sampling=navigation_sampling)
                 position,orientation=self.robot.get_position_orientation()
                 rotation=T.quat2mat(orientation)
                 travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
@@ -746,7 +757,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                 overlap=overlap.reshape(grid.height,grid.width),origin=grid.origin,resolution=grid.resolution,
                 start=position.cpu().numpy(),target=point.cpu().numpy(),travel_yaw=travel_yaw,
                 raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
-                support=self._live_gt_collision_cache[floor]['support'],
+                support=self._navigation_support,
                 layer_footprints_json=json.dumps(map_details['collision_layers']))
             record['grid_artifact']=str(recovery_file.relative_to(self.output))
             try:
@@ -756,7 +767,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                     raise NavigationError('Clearance recovery revisited a blocked pose without map progress','navigation_invalid_start')
                 recovery_states.add(state)
                 if max_steps<=10:raise SkillError('action_timeout','Clearance recovery exhausted its control-step budget')
-                support=self._live_gt_collision_cache[floor]['support']
+                support=self._navigation_support
                 guard=clearance_transition_guard(grid,self._navigation_layers,support,
                     [(layer['z_min'],layer['z_max']) for layer in map_details['collision_layers']])
                 escape_grid,escape,escape_details=plan_start_clearance_exit(
@@ -776,7 +787,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                 position,orientation=self.robot.get_position_orientation()
                 rotation=T.quat2mat(orientation)
                 travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
-                grid,map_details=build_navigation_grid(self,floor)
+                grid,map_details=build_navigation_grid(self,floor,sampling=navigation_sampling)
                 self._navigation_layer_yaw=travel_yaw
                 valid=grid.navigable(grid.cell(position[:2].cpu().tolist()))
                 record.update(status='passed' if valid else 'running',execution=recovery_result,
