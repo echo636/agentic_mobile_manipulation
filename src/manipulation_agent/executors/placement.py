@@ -471,12 +471,16 @@ class CheckedPlacement:
             score = ranker(position.tolist(), orientation) if ranker is not None else 0.
             candidate['proposal_overlap_score'] = score
             distance = sum(v * v for v in candidate['offset_xy_m'])
-            return score, round(distance, 6), abs(candidate['proposal_yaw_degrees'] or 0.)
+            # Envelope overlap is only a coarse hint: a valid ledge placement
+            # can overlap a window's envelope. Explore nearby positions across
+            # orientations before spending physics on distant zero-score ones.
+            return round(distance, 6), score, abs(candidate['proposal_yaw_degrees'] or 0.)
 
         proposals.sort(key=rank)
         self._placement_record({'status': 'surface_proposal_coverage', 'target': target.name, 'held': held.name,
             'proposals': len(proposals), 'zero_overlap': sum(not c['proposal_overlap_score'] for c in proposals),
-            'angles_degrees': angles, 'unchanged_support_and_collision_acceptance': True})
+            'angles_degrees': angles, 'ordering':'distance_then_envelope_overlap_then_yaw',
+            'unchanged_support_and_collision_acceptance': True})
         return proposals
 
     def _collision_triangles(self, obj):
@@ -791,6 +795,10 @@ class CheckedPlacement:
                     self._placement_record({'status': 'sampled', 'method': 'selected_surface_collision_geometry',
                         'candidate': candidate['index'], 'target': target.name, 'held': held.name,
                         'selected_point': point.tolist(), 'requested_yaw_degrees': yaw_degrees,
+                        'proposal_yaw_degrees':candidate.get('proposal_yaw_degrees',yaw_degrees),
+                        'proposal_overlap_score':candidate.get('proposal_overlap_score'),
+                        'offset_xy_m':candidate.get('offset_xy_m'),
+                        'settled_orientation':held.get_position_orientation()[1].tolist(),
                         'verification_point':verification_point.tolist(),
                         'surface_kind':candidate.get('surface_kind','selected_surface'),
                         'selected_cavity':candidate.get('selected_cavity'),
