@@ -16,7 +16,9 @@ from manipulation_agent.executors.articulation_clearance import moving_link_clea
 class EndpointTests(unittest.TestCase):
     def exercise(self, mode):
         initial = torch.tensor([1., 0.] if mode=='selected_already_open' else
-                               [.2, 0.] if mode in ('independent','selected','selected_blocked') else [.2])
+                               [.75, 0.] if mode=='selected_partly_open' else
+                               [0., 0.] if mode=='selected_blocked' else
+                               [.2, 0.] if mode in ('independent','selected') else [.2])
         state = [initial.clone()]
         initial_rng = random.getstate()
         open_type = object()
@@ -80,6 +82,10 @@ class EndpointTests(unittest.TestCase):
                 torch.testing.assert_close(goal,torch.tensor([1.,0.]))
                 self.assertEqual(records[-1]['opening_policy'],'selected_link')
                 self.assertEqual(records[-1]['selected_joint_indices'],[0])
+            elif mode == 'selected_partly_open':
+                goal=checked_open_goal(backend,obj,lambda:None)
+                torch.testing.assert_close(goal,initial)
+                self.assertEqual(records[-1]['trials'][-1]['method'],'unchanged_open_joint_state')
             elif mode == 'alternate':
                 self.assertEqual(checked_open_goal(backend, obj, lambda: None).tolist(), [.875])
             else:
@@ -101,6 +107,9 @@ class EndpointTests(unittest.TestCase):
 
     def test_reopening_selected_fully_open_door_preserves_state_and_succeeds(self):
         self.exercise('selected_already_open')
+
+    def test_reopening_partly_open_door_with_wall_at_larger_angles_preserves_opening(self):
+        self.assertEqual(self.exercise('selected_partly_open'), [1., .875])
 
     def test_blocked_selected_leaf_does_not_fall_back_to_another_leaf(self):
         self.exercise('selected_blocked')

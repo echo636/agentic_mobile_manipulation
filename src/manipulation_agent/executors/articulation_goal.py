@@ -96,12 +96,9 @@ def checked_open_goal(backend, obj, check):
             if not obj.states[Open].get_value():continue
             # Never integrate hypothetical overlapping endpoints. The actual
             # operation still checks collision clearance and physical settling.
-            # Reopening the selected fully open leaf yields the identical
-            # joint state. There is no swept geometry to certify; requiring a
-            # queried collision piece would reject every repeated open call.
-            # Keep missing/disabled geometry rejection for any actual motion.
-            unchanged=(fraction==1. and not candidate_moving
-                       and backend.torch.equal(goal,initial))
+            # A partly open leaf may already be at its largest clear opening.
+            # Keeping that exact state needs no moving collision geometry.
+            unchanged=not candidate_moving and backend.torch.equal(goal,initial)
             clearance=(dict(clear=True,method='unchanged_open_joint_state',
                             queried_collision_pieces=0,overlapping_enclosures=[],
                             missing_collision_geometry=[])
