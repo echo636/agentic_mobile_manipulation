@@ -76,6 +76,8 @@ def infrastructure_failure(row):
     if row.get('archive_failure'):
         return 'archive_failure'
     for field in ('video_validation','observation_validation','evidence_alignment'):
+        if field=='video_validation' and row.get('record_video') is False and row.get(field)=='not_requested':
+            continue
         if row.get(field)!='passed':
             return field
     return None
@@ -1304,7 +1306,13 @@ class Batch:
                                   if (run.get('evaluation') or {}).get('score_type') in ('custom_joint_terminal_and_public_history_v1', 'custom_joint_terminal_and_public_history_v2') else None),
                     run_source=run.get('source'),backend=run.get('backend'),agent_outcome=run.get('agent_outcome'),finish_reason=run.get('finish_reason'))
         errors=[]
+        record_video=self.manifest.get('record_video') is not False
+        self.update(row,record_video=record_video)
         for script,filename in [('validate_async_observation.py','observation_validation.json'),('validate_episode_video.py','video_validation.json')]:
+            if script=='validate_episode_video.py' and not record_video:
+                write_json(dest/filename,{'status':'not_requested','record_video':False,
+                    'reason':'Continuous video disabled in the frozen experiment manifest'})
+                continue
             cmd=[sys.executable,str(self.source/'scripts'/script)]
             if script=='validate_async_observation.py': cmd.extend(['--allow-sync-only','--run-dir'])
             cmd.append(str(dest))
@@ -1317,7 +1325,7 @@ class Batch:
             # Failed validation never gets converted to success merely because the file exists.
             if not (dest/filename).exists(): write_json(dest/filename,{'status':'failed','reason':'Validator could not complete','exit_code':p.returncode})
         controller_ready=(controller/'controller.json').is_file() and (controller/'model_events.jsonl').is_file()
-        if self.c.get('export_spectator_video'):
+        if record_video and self.c.get('export_spectator_video'):
             media_validation_field='spectator_video_validation'
             try:
                 from manipulation_agent.spectator_video import export_spectator_video

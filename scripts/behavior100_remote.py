@@ -344,7 +344,8 @@ def main():
     os.environ['MAS_GPU_UUID']=result['gpu_uuid']
     args=[sys.executable,'-m','manipulation_agent.vision_cli','--backend','omnigibson','--policy','serve',
           '--task',row['task'],'--instance',str(row['instance']),'--seed',str(row['seed']),
-          '--instruction',row['instruction'],'--agent-profile',manifest['agent_profile'],'--record-video',
+          '--instruction',row['instruction'],'--agent-profile',manifest['agent_profile'],
+          '--no-record-video' if manifest.get('record_video') is False else '--record-video',
           '--port',str(a.port),'--controller','codex:'+manifest['model'],
           '--output',str(a.data_root/'runs'/row['run_id'])]
     args += episode_budget_args(manifest)
