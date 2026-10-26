@@ -710,10 +710,12 @@ class CheckedPlacement:
                         candidate['index'] = start_index + index
                         yield candidate
 
-                # Start with one second of free physics. A supported body may
-                # still be settling; measure its motion instead of treating
-                # this first observation as a fixed stability deadline.
-                settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
+                # Check after the short drop plus a full measured resting
+                # window, instead of spending one second on every candidate.
+                # Supported moving poses still extend in quarter-second
+                # blocks below, up to the same four-second bound. The resting
+                # criterion and final ordinary-step verification are unchanged.
+                settle_steps = max(1, round(.5 / self.og.sim.get_physics_dt()))
                 tried_poses = set()
                 for number, candidate in enumerate(candidate_stream()):
                     pose_key = tuple(round(float(v), 5) for vector in candidate['pose'] for v in vector)
