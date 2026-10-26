@@ -1,10 +1,61 @@
-"""Optional local resampling before committing to a long coarse-map detour."""
+"""Local native resampling for coarse-map detours and rejected in-place turns."""
 from dataclasses import replace
 import math
 
 from .gt_navigation import NavigationError, PlanningBudget, plan_navigation
 from .heading_collision import HeadingCollisionChecker
 from .forward_navigation import local_exit_certificate, select_forward_route
+
+
+def refine_in_place_turn(backend, floor, grid, start, end):
+    """Recheck the same full turn against finer live collision geometry.
+
+    A rejected coarse raster is not a collision certificate. The local window
+    covers the complete rotating body and payload, including the raster halo.
+    Neither the requested angle nor the robot's position is changed.
+    """
+    from .live_gt_map import build_navigation_grid
+    attributes = ('_navigation_layers', '_navigation_support', '_navigation_clearance',
+                  '_navigation_layer_yaw')
+    original = {key: getattr(backend, key) for key in attributes}
+    radius = max((math.hypot(*point) for _, points in backend._navigation_layers
+                  for point in points), default=0.) + 4*grid.resolution
+    window = [start[0]-radius, start[1]-radius, start[0]+radius, start[1]+radius]
+    record = {'reason': 'coarse_map_rejected_in_place_turn',
+              'coarse_resolution_m': grid.resolution, 'attempts': [], 'status': 'rejected'}
+    accepted = False
+    try:
+        for resolution in (.025, .0125):
+            if resolution >= grid.resolution-1e-6:
+                continue
+            backend.deadline.check()
+            sampling = {'resolution': resolution, 'window': window}
+            row = dict(sampling, status='checking')
+            record['attempts'].append(row)
+            if math.prod(math.ceil((window[i+2]-window[i])/resolution)+2
+                         for i in (0, 1)) > 250000:
+                row.update(status='rejected', reason='local_window_too_large')
+                continue
+            finer, detail = build_navigation_grid(backend, floor, sampling=sampling)
+            backend._navigation_layer_yaw = start[2]
+            budget = PlanningBudget(backend.deadline.check, seconds=8.)
+            checker = HeadingCollisionChecker(finer, backend._navigation_layers, start[2],
+                backend._navigation_support, check_cancelled=budget.check)
+            try:
+                clear = checker.motion_free(start, end)
+                row.update(status='accepted' if clear else 'rejected',
+                           query_seconds=detail['query_seconds'])
+                if clear:
+                    accepted = True
+                    record['status'] = 'refined_turn_selected'
+                    return finer, record
+            except NavigationError as exc:
+                row.update(status='rejected', reason=exc.code)
+    finally:
+        if not accepted:
+            for key, value in original.items():
+                setattr(backend, key, value)
+    return None, record
 
 
 def detour_sampling(grid, actual, goal):

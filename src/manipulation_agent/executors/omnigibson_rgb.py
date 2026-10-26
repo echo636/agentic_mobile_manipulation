@@ -603,7 +603,13 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                 'audience':'executor_private','requested_degrees':degrees,'start':[*xy,yaw]}
         try:
             if not checker.motion_free((*xy,yaw),(*xy,end)):
-                raise SkillError('look_rotation_blocked','Body or payload blocks the requested rotation')
+                from .navigation_refinement import refine_in_place_turn
+                refined, refinement = refine_in_place_turn(self,floor,grid,(*xy,yaw),(*xy,end))
+                record['refinement'] = refinement
+                if refined is None:
+                    raise SkillError('look_rotation_blocked','Body or payload blocks the requested rotation')
+                grid = refined
+            record['execution_resolution_m'] = grid.resolution
             plan=NavigationPlan((xy,),xy,xy,end,0.,0.,1,1,0.,0,end,'forward')
             route=ForwardRoute((plan,),0.,0,'checked_in_place_look',
                 turn_radians=abs(angle(end-yaw)),estimated_motion_seconds=abs(angle(end-yaw))/(math.pi/3),
