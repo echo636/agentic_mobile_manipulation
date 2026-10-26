@@ -325,6 +325,10 @@ class CheckedPlacement:
         # Rigid attachments form one moving structure; a tabletop's lowest
         # collider is at its feet, while loose contents remain payload checks.
         import numpy as np
+        # Root poses come from PhysX; mesh.scaled_transform reads Fabric.
+        # Render-free stepping can leave Fabric at an older pose. Refresh
+        # this geometry read without rendering, stepping, or moving bodies.
+        self.og.sim.sync_physx_to_fabric()
         return np.concatenate([self._object_collision_vertices(obj)
                                for obj in self._attached_placement_bodies(held)])
 

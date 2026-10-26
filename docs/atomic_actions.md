@@ -7,6 +7,11 @@ pose is selected and environment stepping begins, physical outcomes are retained
 including failed postconditions. `place_next_to` commits only once and does not
 rewind an executed release to try another candidate.
 
+Placement collision geometry reads explicitly synchronize PhysX to Fabric.
+Without rendering, a live body pose and a stale mesh transform can disagree and
+produce an incorrect landing height. This read synchronization neither renders
+nor advances physics or writes body poses.
+
 The RGB agent selects one point in the latest four-camera snapshot. The executor
 resolves that target, checks the action's prerequisites, changes the requested
 state and observes the native result. Task success comes from the independent

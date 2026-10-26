@@ -92,6 +92,7 @@ class PlacementRejectionTransactions(unittest.TestCase):
         from manipulation_agent.contracts import SkillError
         from manipulation_agent.executors.placement import CheckedPlacement
         backend = CheckedPlacement()
+        backend.og = SimpleNamespace(sim=SimpleNamespace(sync_physx_to_fabric=lambda: None))
         held = SimpleNamespace(links={'root': SimpleNamespace(collision_meshes={})})
         held.get_base_aligned_bbox = lambda: self.fail('Must not fall back to an inflated box')
         with self.assertRaises(SkillError) as error:

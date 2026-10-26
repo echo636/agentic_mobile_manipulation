@@ -35,7 +35,8 @@ class AttachedPayloadTests(unittest.TestCase):
  def test_surface_anchor_uses_feet_and_excludes_unattached_objects(self):
   class Adapter(CheckedPlacement):
    def _object_collision_vertices(self,obj):return obj.points
-  adapter=Adapter();bodies=adapter._attached_placement_bodies(self.top)
+  adapter=Adapter();adapter.og=NS(sim=NS(sync_physx_to_fabric=lambda:None))
+  bodies=adapter._attached_placement_bodies(self.top)
   self.assertEqual([o.name for o in bodies],['top','bracket','leg'])
   points=adapter._collision_vertices(self.top)
   self.assertEqual(float(points[:,2].min()),0.)
