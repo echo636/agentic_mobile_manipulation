@@ -155,6 +155,8 @@ class CatalogRGBBackend(RGBBackend):
         try:
             if policy is not None:
                 write_json(self.output / 'articulation_sleep_policy.json', policy.describe())
+            if particle_policy is not None:
+                write_json(self.output / 'macro_particle_size_policy.json', particle_policy.describe())
             super().close()
         finally:
             if policy is not None:
