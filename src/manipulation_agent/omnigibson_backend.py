@@ -218,6 +218,9 @@ class OmniGibsonBackend:
             from .executors.particle_quaternions import install_particle_quaternion_serialization
             write_json(output/'particle_quaternion_serialization.json',
                        install_particle_quaternion_serialization())
+            from .executors.particle_emission import install_particle_emission_clearance
+            write_json(output/'particle_emission_compatibility.json',
+                       install_particle_emission_clearance(output))
             from .executors.macro_particle_pose import install_macro_particle_pose_repair
             write_json(output/'macro_particle_pose_compatibility.json',
                        install_macro_particle_pose_repair())
