@@ -51,19 +51,37 @@ class ControlledCarry:
             raise SkillError('hand_occupied', 'An object is already grasped')
         if obj.fixed_base:
             raise SkillError('fixed_object', 'The selected object has a fixed base')
+        arm = self.primitives.arm
+        joints = self.robot.get_joint_positions().clone()
+        indices = self.robot.arm_control_idx[arm]
+        ready = self.robot.untucked_default_joint_pos[indices]
+        # A tucked hand is beside the torso. Bringing a wide object there
+        # embeds it in the robot even when its finger contact is correct.
+        if not self.torch.allclose(joints[indices], ready, atol=.01, rtol=0):
+            joints[indices] = ready
+            command = self.robot.q_to_action(joints)
+            preparation_steps = min(30, max_steps)
+            for _ in range(preparation_steps):
+                self._step(command)
+            max_steps -= preparation_steps
         original = obj.get_position_orientation()
         dependencies = self._grasp_dependencies(obj)
         contents = [(child, T.relative_pose_transform(*child.get_position_orientation(), *original))
                     for child, _, _ in dependencies]
         particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
                                        include_supported=True)
-        arm = self.primitives.arm
         direction = T.quat2mat(self.robot.get_eef_orientation(arm))[:, 2]
         contact = (self.robot.get_eef_position(arm) + direction *
                    max(self.robot.eef_to_fingertip_lengths[arm].values()))
-        # Sticky contact belongs at the finger tips. Putting a broad surface
-        # at the EEF origin embeds the fingers in it and physics ejects it.
-        obj.set_position_orientation(position=original[0] + contact - point)
+        # Grasp the selected object on its support plane facing the fingers.
+        # An arbitrary visible point can leave the rest of the object behind
+        # the fingertip plane, intersecting the fingers and palm.
+        vertices = self.torch.as_tensor(self._collision_vertices(obj),
+                                       dtype=point.dtype, device=point.device)
+        depths = vertices @ direction
+        surface = vertices[depths <= depths.min() + 1e-5]
+        grasp_point = surface[self.torch.linalg.vector_norm(surface - point, dim=1).argmin()]
+        obj.set_position_orientation(position=original[0] + contact - grasp_point)
         self._relocate_contents(obj, contents)
         relocate_particles(self.env.scene, particles)
         self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
