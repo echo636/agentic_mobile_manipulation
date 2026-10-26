@@ -1134,7 +1134,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                     if lateral and not getattr(self.robot,'is_holonomic_base',False):
                         raise SkillError('unsupported_motion','Lateral route requires a holonomic robot base')
                     follower=GreedyGridFollower(execution_grid,phase,self.og.sim.get_sim_step_dt(),
-                        forward_only=forward and not lateral,motion_check=collision.motion_free if collision else None)
+                        forward_only=forward and not lateral,motion_check=collision.measured_motion_free if collision else None)
                     while True:
                         self.deadline.check()
                         actual_pos,actual_quat=self.robot.get_position_orientation()
@@ -1169,7 +1169,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             final_yaw=math.atan2(float(final_rotation[1,0]),float(final_rotation[0,0]))
             final_pose=(*actual_pos[:2].cpu().tolist(),final_yaw)
             final_yaw_error=abs(follower.angle(final_yaw-plan.final_yaw))
-            safe=(collision.motion_free(final_pose,final_pose) if collision else
+            safe=(collision.measured_motion_free(final_pose,final_pose) if collision else
                   grid.navigable(grid.cell(final_pose[:2])))
             if final_error>follower.position_tolerance or final_yaw_error>follower.final_yaw_tolerance or not safe:
                 raise SkillError('navigation_unreachable','GT follower final pose verification failed',changed=self.steps>before)

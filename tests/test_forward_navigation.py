@@ -673,6 +673,19 @@ class HeadingCollisionTests(unittest.TestCase):
         self.assertTrue(checker.motion_free((0.,0.,0.),(0.,0.,0.)))
         self.assertTrue(checker.motion_free((0.,0.,math.pi/2),(0.,0.,math.pi/2)))
         self.assertFalse(checker.motion_free((0.,0.,0.),(0.,0.,math.pi/2)))
+        self.assertFalse(checker.measured_motion_free((0.,0.,0.),(0.,0.,math.pi/2)))
+
+    def test_measured_sweep_keeps_feedback_inside_planning_angular_reserve(self):
+        import numpy as np
+        checker=self.checker(np.ones((81,81),dtype='uint8'),
+                             [[-.4,-.1],[.4,-.1],[.4,.1],[-.4,.1]])
+        for degrees in (-67.5,0.,179.5,180.,360.):
+            yaw=math.radians(degrees)
+            planned=checker._kernels(checker._key(yaw,yaw))[0]
+            for error in (-1e-7,0.,1e-7):
+                measured=checker._kernels(checker._key(yaw+error,yaw,reserve=0.))[0]
+                self.assertFalse(np.any((measured!=0)&(planned==0)))
+                self.assertTrue(checker.measured_motion_free((0.,0.,yaw+error),(.1,0.,yaw)))
 
     def test_translation_uses_current_heading_footprint(self):
         import numpy as np
@@ -681,6 +694,7 @@ class HeadingCollisionTests(unittest.TestCase):
         checker=self.checker(raw,footprint)
         self.assertTrue(checker.motion_free((-.3,0.,0.),(.3,0.,0.)))
         self.assertFalse(checker.motion_free((-.3,0.,math.pi/2),(.3,0.,math.pi/2)))
+        self.assertFalse(checker.measured_motion_free((-.3,0.,math.pi/2),(.3,0.,math.pi/2)))
 
     def test_world_footprint_is_rotated_relative_to_recorded_heading(self):
         import numpy as np

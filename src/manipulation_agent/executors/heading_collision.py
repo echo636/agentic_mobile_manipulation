@@ -51,13 +51,13 @@ class HeadingCollisionChecker:
         return result
 
     @staticmethod
-    def _key(a, b):
-        # Outward quantization includes feedback yaw residuals, with half a
-        # degree reserve. Key reuse bounds CPU cost during straight travel.
+    def _key(a, b, reserve=.5):
+        # Planning includes feedback reserve. Measured execution covers the
+        # actual requested arc without adding that reserve a second time.
         delta = math.atan2(math.sin(b-a), math.cos(b-a))
         start, end = math.degrees(a), math.degrees(a+delta)
-        low, high = math.floor(min(start, end)-.5), math.ceil(max(start, end)+.5)
-        return low%360, high-low
+        low, high = math.floor(min(start, end)-reserve), math.ceil(max(start, end)+reserve)
+        return low%360, max(1, high-low)
 
     @staticmethod
     def _put(cache, key, value, limit):
@@ -148,12 +148,25 @@ class HeadingCollisionChecker:
         return self._put(self.grids, key, result, 16)
 
     def motion_free(self, start, end):
-        """Conservative swept-volume check, including tiny pose corrections."""
+        """Plan with a half-degree reserve for later pose feedback error."""
+        return self._motion_free(start, end, reserve=.5)
+
+    def measured_motion_free(self, start, end):
+        """Check the whole measured sweep, without another planning reserve.
+
+        Canonical angular bins still enclose the actual arc, with the same
+        spatial dilation and curvature bound. Adding the planning reserve to
+        measured feedback can jump a whole bin at half-degree boundaries:
+        a 1e-7 rad residual then rejects an already certified motion.
+        """
+        return self._motion_free(start, end, reserve=0.)
+
+    def _motion_free(self, start, end, *, reserve):
         import numpy as np
         self.check_cancelled()
         if not all(math.isfinite(v) for v in (*start, *end)):
             return False
-        key = self._key(start[2], end[2])
+        key = self._key(start[2], end[2], reserve=reserve)
         if math.dist(start[:2], end[:2]) > 1e-10:
             if key in self.grids:
                 return self._sweep_grid(key).segment_free(start[:2], end[:2])
