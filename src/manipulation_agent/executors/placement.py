@@ -639,16 +639,19 @@ class CheckedPlacement:
         self.og.sim.step_physics()
 
     def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None, payload_resting=None):
-        """Finish free settling with live contacts and fresh native state reads.
+        """Finish free settling before committing native state transitions.
 
         Sampling can put a small object to sleep before its contact state has
         been read. PhysX then omits current contacts, while OG's kinematic
         cache can retain a false Touching/OnTop value at the unchanged pose.
-        Wake the released assembly during the final five ordinary steps;
-        gravity and contacts still determine every pose and predicate.
+        Wake the released assembly during the final five intervals; gravity
+        and contacts still determine every pose and predicate. Keep the same
+        physics duration, but defer Environment.step until placement commits:
+        slicing can legitimately replace a released object on this surface.
         """
         objects = (held, target, *payload)
         steps = min(50, max_steps)
+        substeps = max(1, round(self.og.sim.get_sim_step_dt() / self.og.sim.get_physics_dt()))
         for index in range(steps):
             if index == max(0, steps - 5):
                 for obj in (held, *payload):
@@ -656,7 +659,8 @@ class CheckedPlacement:
                 for obj in objects:
                     for state in obj.states.values():
                         state.clear_cache()
-            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            for _ in range(substeps):
+                self._placement_physics_step()
             if resting is not None:
                 resting.add(*held.get_position_orientation())
             for child in payload:
@@ -841,6 +845,11 @@ class CheckedPlacement:
                 raise SkillError('postcondition_error', 'Object is not stably supported by the selected surface', changed=True)
             self._verify_payload(dependencies, support_target=target,
                                  support_resting={key: window.report() for key, window in payload_resting.items()})
+        # Placement is now verified and released. Advance native cooking,
+        # slicing and task evaluation without watching or restoring the old
+        # assembly: a legitimate transition may consume it in this very step.
+        with self._anchored_operation():
+            self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
         return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=False, resting=None,

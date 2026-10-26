@@ -28,7 +28,7 @@ class SurfaceContactRefreshTests(unittest.TestCase):
                 self.states = {'contact': State(self)}
 
             def wake(self):
-                self.awake_for = 10
+                self.awake_for = 40
 
             def step(self):
                 self.contact = self.supported and self.awake_for > 0
@@ -37,28 +37,29 @@ class SurfaceContactRefreshTests(unittest.TestCase):
         held, child, target = Body(supported), Body(True), Body(True)
         calls = []
 
-        def step(action):
-            calls.append(action)
+        def step():
+            calls.append('physics')
             held.step()
             child.step()
-            # State may be queried while processing an ordinary scene step.
             held.states['contact'].get_value()
 
         backend = SimpleNamespace(
-            robot=SimpleNamespace(get_joint_positions=lambda: [], q_to_action=lambda q: q),
-            _step=step,
+            og=SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda: 1/30,
+                                                  get_physics_dt=lambda: 1/120)),
+            _placement_physics_step=step,
+            _step=lambda *_: self.fail('Uncommitted placement must not trigger native slicing'),
         )
         CheckedPlacement._settle_surface_contacts(backend, held, target, [child], budget)
         return held.states['contact'].get_value(), child.states['contact'].get_value(), len(calls)
 
     def test_sleeping_released_assembly_gets_fresh_contact_without_extra_steps(self):
-        self.assertEqual(self.run_settling(True, 100), (True, True, 50))
+        self.assertEqual(self.run_settling(True, 100), (True, True, 200))
 
     def test_refresh_preserves_real_support_failure(self):
-        self.assertEqual(self.run_settling(False, 100), (False, True, 50))
+        self.assertEqual(self.run_settling(False, 100), (False, True, 200))
 
     def test_refresh_respects_a_short_step_budget(self):
-        self.assertEqual(self.run_settling(True, 2), (True, True, 2))
+        self.assertEqual(self.run_settling(True, 2), (True, True, 8))
 
 
 if __name__ == '__main__':
