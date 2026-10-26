@@ -47,7 +47,7 @@ class EndpointTests(unittest.TestCase):
             step_physics=lambda: self.fail('Hypothetical endpoint advanced the live physics world'))
         records = []
         backend = SimpleNamespace(og=SimpleNamespace(sim=sim), env=SimpleNamespace(scene=scene),
-            torch=torch, robot=SimpleNamespace(links={}), frames_revision=0,
+            torch=torch, robot=SimpleNamespace(links={'body': SimpleNamespace(prim_path='/robot/body')}), frames_revision=0,
             _container_payload=lambda obj: [], _relocate_container_payload=lambda payload: None,
             _placement_record=records.append)
         if mode.startswith('selected'):
@@ -65,7 +65,10 @@ class EndpointTests(unittest.TestCase):
             if mode.startswith('selected'):
                 self.assertNotIn('/door/leaf1',args[2])
                 return {'clear': mode == 'selected' or (mode=='selected_already_open' and bool(args[2]))}
-            return {'clear': mode == 'alternate' and float(state[0][0]) < .9}
+            # A full opening overlaps the robot. Ignoring that body would
+            # incorrectly admit the colliding endpoint instead of .875.
+            return {'clear': mode == 'alternate' and
+                    ('/robot/body' in args[3] or float(state[0][0]) < .9)}
         module = ModuleType('omnigibson.object_states')
         module.Open = open_type
         with patch.dict(sys.modules, {'omnigibson': ModuleType('omnigibson'), 'omnigibson.object_states': module}), \

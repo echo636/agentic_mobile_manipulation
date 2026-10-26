@@ -18,9 +18,9 @@ def checked_open_goal(backend, obj, check):
     restore=preview_restore(backend,obj,payload)
     rng=random.getstate();numpy_rng=np.random.get_state();torch_rng=backend.torch.random.get_rng_state()
     own={str(link.prim_path) for link in obj.links.values()}
-    # Robot clearance is evaluated at prospective stances after this endpoint
-    # is selected. Contents move with a drawer and may touch their own support.
-    ignored=own|{str(link.prim_path) for item in [backend.robot,*[x[0] for x in payload]]
+    # This endpoint is committed at the current robot stance. The robot must
+    # remain an obstacle; drawer contents may touch their own moving support.
+    ignored=own|{str(link.prim_path) for item in [x[0] for x in payload]
                  for link in item.links.values()}
     ignored.update(str(link.prim_path) for item in backend.env.scene.objects
                    for link in item.links.values() if link.is_meta_link)
