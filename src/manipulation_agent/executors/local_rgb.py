@@ -35,13 +35,13 @@ class LocalRGBManipulation:
         base=self.robot.get_position_orientation()[0]
         return obj,self.torch.tensor(point,dtype=base.dtype,device=base.device)
 
-    def _local_geometry(self,operation,*,occupancy_overrides=None):
+    def _local_geometry(self,operation):
         from .live_gt_map import build_navigation_grid
         from .heading_collision import HeadingCollisionChecker
         position=self.robot.get_position_orientation()[0]
         trav=self.env.scene.trav_map
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
-        grid,details=build_navigation_grid(self,floor,occupancy_overrides=occupancy_overrides)
+        grid,details=build_navigation_grid(self,floor)
         self._navigation_layer_yaw=self._local_pose()[2]
         collision=HeadingCollisionChecker(grid,self._navigation_layers,self._navigation_layer_yaw,
                                           self._navigation_support,check_cancelled=operation.check)
@@ -66,43 +66,7 @@ class LocalRGBManipulation:
         hulls,_=self._navigation_self_hulls()
         return grid,collision,details,hulls,floor
 
-    def _local_grasp_preview(self,obj,operation,geometry):
-        """Check the same instantaneous carry destination used by ideal grasp."""
-        from types import SimpleNamespace
-        from .carry_geometry import PayloadSweep, plan_instant_carry
-        payload=[obj,*[child for child,_,_ in self._grasp_dependencies(obj)]]
-        base_z=float(self.robot.get_position_orientation()[0][2])
-        cache={}
-        def checker_at(pose):
-            check=getattr(operation,'preview_check',operation.check)
-            check()
-            key=tuple(round(float(v),6) for v in pose)
-            if key in cache:return cache[key]
-            sweep=PayloadSweep(self,obj,payload,pose,check=check)
-            route,status=plan_instant_carry(sweep.origin,(*pose[:2],base_z,pose[2]),
-                                           sweep.bounds,sweep.destination_clear,check=check)
-            if route is None:
-                operation.preview_failure={'reason':status,**(sweep.last_failure or {})}
-                return None
-            checker=SimpleNamespace(route=route,carry_status=status)
-            cache[key]=checker
-            return checker
-        return checker_at
-
-    def _admit_loaded_departure(self,pose,preview,operation,check):
-        # A valid pickup must not depend on a short sampled exit being found.
-        # The real post-action geometry is checked by _local_departure, and
-        # later navigation retains its swept collision checks.
-        operation.preview_check=check
-        loaded=preview(pose)
-        if loaded is None:return False
-        if hasattr(loaded,'route'):
-            operation.carry_plan={'pose':tuple(pose),'route':loaded.route,'status':loaded.carry_status,
-                                  'transfer_mode':'instant_pose_transfer'}
-        return True
-
     def _local_ready(self,primitive,obj,point,operation):
-        from .forward_navigation import local_exit_certificate
         pose=self._local_pose()
         if math.dist(pose[:2],point[:2])>operation.limits.reach_m:return False
         if self._get_held() is obj and primitive in {'grasp','toggle_on','toggle_off'}:return True
@@ -112,13 +76,6 @@ class LocalRGBManipulation:
         if not self._approach_visible(pose[:2],point,obj,margin=.04,self_hulls=geometry[3],base_yaw=pose[2],
                                       selected_container=primitive in OBJECT_REFERENCE_ACTIONS,
                                       tracked_target=True):return False
-        if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
-            if not self._admit_articulation(primitive,obj,pose,operation,operation.check):return False
-        if primitive=='grasp' and self.ideal_carry and not self.demo_motion:
-            operation.grasp_preview=self._local_grasp_preview(obj,operation,geometry)
-            if not self._admit_loaded_departure(pose,operation.grasp_preview,operation,operation.check):
-                operation.record('check_carry_destination',status='rejected',reason='carry_destination_blocked')
-                return False
         return True
 
     def _local_reposition(self,primitive,obj,point,operation):
@@ -135,13 +92,6 @@ class LocalRGBManipulation:
                 return self._local_reposition(primitive,obj,point,operation)
             self._local_clearance_recovery(operation,geometry)
             return
-        preview=getattr(operation,'grasp_preview',None)
-        if primitive=='grasp' and self.ideal_carry and not self.demo_motion and preview is None:
-            preview=self._local_grasp_preview(obj,operation,geometry)
-        if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
-            if getattr(operation,'articulation_preview',None) is None:
-                from .local_articulation import prepare_articulation
-                operation.articulation_preview=prepare_articulation(self,obj,primitive,operation)
         # Endpoint checks only need the target neighbourhood plus the full
         # short departure (at most .7m). Routes retain the full-floor checker.
         local=(collision.local_window(point[:2],operation.limits.reach_m+.75)
@@ -171,24 +121,9 @@ class LocalRGBManipulation:
                                                   selected_container=primitive in OBJECT_REFERENCE_ACTIONS,
                                                   tracked_target=True):
                         row.update(status='rejected',reason='target_not_visible',visibility=visibility);continue
-                    # The checked incoming route is reversible for the current
-                    # body/payload. A separate short-exit sampler is neither
-                    # necessary nor a proof that a reachable stance is trapped.
-                    # Changes caused by grasp or articulation retain their own
-                    # future-geometry checks below.
-                    if primitive in {'open','close'} and self.ideal_carry and not self.demo_motion:
-                        if not self._admit_articulation(primitive,obj,pose,operation,preparation.check):
-                            row.update(status='rejected',reason='articulation_clearance');continue
-                    if preview is not None:
-                        if not self._admit_loaded_departure(pose,preview,operation,preparation.check):
-                            row.update(status='rejected',reason='carry_destination_blocked',
-                                       diagnostic=getattr(operation,'preview_failure',None));continue
                     plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],tuple(map(float,point[:2])),pose[2],
                         math.dist(actual[:2],pose[:2]),math.dist(pose[:2],point[:2]),len(attempts),1,0.,0,pose[2],'forward')
-                    # Keep operation-specific proofs attached to their endpoint:
-                    # a shared search may choose any earlier admitted stance.
-                    eligible.append((plan,row,getattr(operation,'carry_plan',None),
-                                     getattr(operation,'articulation_plan',None)))
+                    eligible.append((plan,row))
                     row['status']='route_candidate'
                     if prefer_return:
                         row['checked_return_poses']=checked_connection(
@@ -213,8 +148,7 @@ class LocalRGBManipulation:
                 proposal_diagnostics['checked_return_candidates']=len(returning)
                 try:
                     # Reuse the compiled shared roadmap as a fast proposal;
-                    # continuous search remains the fallback and all endpoints
-                    # retain their operation-specific proofs.
+                    # continuous search remains the fallback for admitted stances.
                     from .point_route_projection import project_forward_point
                     roadmap_budget=PlanningBudget(budget.check,seconds=3.)
                     collision.check_cancelled=roadmap_budget.check
@@ -237,7 +171,7 @@ class LocalRGBManipulation:
                     selected=(plan,route)
                 except NavigationError as exc:
                     exhausted|=exc.code=='navigation_search_exhausted'
-                    for _,row,_,_ in eligible:
+                    for _,row in eligible:
                         row.update(status='rejected',reason=exc.code,detail=str(exc))
             # R1Pro is holonomic: a narrow aisle may require a sideways drive
             # while its long axis stays fixed. Preserve all endpoint proofs and
@@ -261,11 +195,10 @@ class LocalRGBManipulation:
                 finally:
                     collision.check_cancelled=operation.check
             if selected is not None:
-                for plan,row,carry,articulation in eligible:
+                for plan,row in eligible:
                     if plan is selected[0]:
                         row['status']='selected'
                         row.pop('reason',None);row.pop('detail',None)
-                        operation.carry_plan=carry;operation.articulation_plan=articulation
                     elif row['status']=='route_candidate':row['status']='not_selected'
         except SearchBudgetExhausted:
             exhausted=True
@@ -292,10 +225,6 @@ class LocalRGBManipulation:
             reasons={row.get('reason') for row in attempts}
             stage='local_stance_collision'
             for reason,value in [('target_not_visible','local_target_visibility'),
-                                 ('no_departure','local_departure_clearance'),
-                                 ('articulation_clearance','local_articulation_clearance'),
-                                 ('no_loaded_departure','local_loaded_departure'),
-                                 ('carry_destination_blocked','local_carry_destination'),
                                  ('navigation_unreachable','local_route')]:
                 if reason in reasons:stage=value
             raise SkillError('local_adjustment_blocked','No checked reachable visible stance within target operation reach',
@@ -317,9 +246,6 @@ class LocalRGBManipulation:
         # State and geometry must be measured again after physics, even if a
         # route was certified before executing it.
         operation.geometry=None
-        operation.grasp_preview=None
-        operation.articulation_preview=None
-        operation.articulation_plan=None
 
     def _refine_local_geometry(self,operation,point,grid,*,reason):
         """Refine target geometry within the full-window cell budget.
@@ -359,14 +285,10 @@ class LocalRGBManipulation:
         operation.check()
         operation.navigation_sampling={'resolution':resolution,'window':window}
         operation.geometry=None
-        operation.grasp_preview=None
-        operation.articulation_preview=None
-        operation.articulation_plan=None
-        operation.carry_plan=None
         operation.record('map_refinement',reason=reason,coarse_resolution_m=grid.resolution,
                          resolution_m=resolution,requested_resolution_m=desired,
                          cells=cells(resolution),world_window=window,
-                         unchanged_checks=['collision_geometry','target_identity','reach','loaded_departure'])
+                         unchanged_checks=['collision_geometry','target_identity','reach'])
         return True
 
     def _local_clearance_recovery(self,operation,geometry):
@@ -388,23 +310,7 @@ class LocalRGBManipulation:
         operation.record('clearance_recovery',plan=asdict(plan),**report)
         result=self._execute_gt_plan(corridor,plan,operation.step_limit-(self.steps-operation.start_steps))
         self.navigation_distance+=result['actual_path_distance_m']
-        operation.geometry=None;operation.grasp_preview=None
-        operation.articulation_preview=None;operation.articulation_plan=None
-
-    def _admit_articulation(self,primitive,obj,pose,operation,check):
-        from .local_articulation import prepare_articulation
-        preview=getattr(operation,'articulation_preview',None)
-        if preview is None:
-            preview=prepare_articulation(self,obj,primitive,operation)
-            operation.articulation_preview=preview
-        swept,future,plan=preview
-        swept.check_cancelled=future.check_cancelled=check
-        if not swept.motion_free(pose,pose):return False
-        # Keep the body's current and final clearance; finding an exit after
-        # opening/closing is a separate navigation problem, not this effect.
-        if not future.motion_free(pose,pose):return False
-        operation.articulation_plan=plan
-        return True
+        operation.geometry=None
 
     def _local_reobserve(self,binding):
         self._render_rgb_views(require_calibration=True)

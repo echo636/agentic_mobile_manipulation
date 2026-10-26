@@ -1,7 +1,7 @@
 """Choose a usable open endpoint without forcing a door or lid into the room.
 
 Private endpoint probes restore edited objects and do not execute model actions.
-Robot stance and departure remain the responsibility of local_articulation.
+Local manipulation handles robot stance and post-operation departure.
 """
 import random
 

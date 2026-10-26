@@ -99,9 +99,8 @@ class ControlledCarry:
         particles=snapshot_particles(self.env.scene,[obj,*[child for child,_,_ in payload]]) if state is Open else []
         from .particle_payload import particle_link_motion, particle_containment_observation
         moved_particles=particle_link_motion(particles)
-        prepared=getattr(getattr(self,'_local_operation',None),'articulation_plan',None) if state is Open else None
         open_goal=None
-        if primitive=='open' and prepared is None:
+        if primitive=='open':
             from .articulation_goal import checked_open_goal
             open_goal=checked_open_goal(self,obj,self.deadline.check)
         samples=[]
@@ -121,15 +120,7 @@ class ControlledCarry:
         capture('before_setter')
         # Upstream symbolic OPEN samples a random opening and returns early
         # when already ajar. Use a checked usable opening; close fully.
-        if prepared is not None:
-            current=obj.get_joint_positions()
-            start=self.torch.as_tensor(prepared['start_joints'],dtype=current.dtype,device=current.device)
-            if str(obj.prim_path)!=prepared['object_prim'] or prepared['primitive']!=primitive or not self.torch.allclose(current,start,atol=.02,rtol=0.):
-                raise SkillError('target_changed','Articulation changed after safe-stance preparation')
-            obj.set_joint_positions(self.torch.as_tensor(prepared['goal_joints'],dtype=current.dtype,device=current.device))
-            obj.states[state].clear_cache();obj.state_updated()
-            accepted=bool(obj.states[state].get_value())==wanted
-        elif open_goal is not None:
+        if open_goal is not None:
             obj.set_joint_positions(open_goal);obj.keep_still()
             obj.states[state].clear_cache();obj.state_updated()
             accepted=bool(obj.states[state].get_value())

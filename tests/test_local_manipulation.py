@@ -106,18 +106,6 @@ class CoordinationTests(unittest.TestCase):
         b=Motor();b._local_reposition=lambda *args:None
         with self.assertRaises(SkillError) as cm:b.run()
         self.assertEqual(cm.exception.code,'local_adjustment_blocked');self.assertEqual(b.executions,[])
-    def test_checked_carry_adaptation_is_progress_without_base_motion(self):
-        b=Motor();b.point=(1.,0.,.7)
-        b._local_ready=lambda primitive,obj,point,op:getattr(op,'carry_posture_revision',0)>0
-        def adapt(primitive,obj,point,op):
-            op.carry_posture_revision=getattr(op,'carry_posture_revision',0)+1
-            b.steps+=6
-        b._local_reposition=adapt
-        result=b.run()['local_manipulation']
-        self.assertEqual(b.pose,(0.,0.,0.))
-        self.assertEqual(len(b.executions),1)
-        self.assertEqual(result['env_steps'],7)
-        self.assertEqual(result['path_m'],0.)
     def test_stationary_preparation_executes_only_after_readiness_is_confirmed(self):
         b=Motor();prepared=[False]
         b._local_ready=lambda *args:prepared[0]
@@ -131,17 +119,6 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(result['path_m'],0.)
         self.assertEqual(b.refreshes,1)
         self.assertTrue(next(e for e in b.events if e['phase']=='stationary_recheck')['ready'])
-    def test_valid_pickup_does_not_require_future_exit_search(self):
-        from manipulation_agent.executors.local_rgb import LocalRGBManipulation
-        b=Motor();operation=SimpleNamespace()
-        prepared=SimpleNamespace(route=((1.,0.,.7),(.6,0.,.8)),carry_status='instant_pose_transfer')
-        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
-                   side_effect=AssertionError('Future exit must not veto a valid pickup')):
-            self.assertTrue(LocalRGBManipulation._admit_loaded_departure(
-                b,b.pose,lambda pose:prepared,operation,lambda:None))
-        self.assertEqual(operation.carry_plan['route'],prepared.route)
-        self.assertFalse(LocalRGBManipulation._admit_loaded_departure(
-            b,b.pose,lambda pose:None,SimpleNamespace(),lambda:None))
 
     def test_motion_accounting_has_no_start_radius_or_distance_cap(self):
         b=Motor();op=LocalOperation(b,'grasp',b.binding,100,{})
