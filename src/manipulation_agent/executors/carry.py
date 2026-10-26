@@ -41,7 +41,7 @@ def attachment_relation(candidate, member):
 
 class ControlledCarry:
 
-    def _grasp_state(self, obj, max_steps):
+    def _grasp_state(self, obj, max_steps, point):
         """Transfer once, then let OG's assisted-grasp joint own the object."""
         from omnigibson.utils import transform_utils as T
         held = self._get_held()
@@ -59,7 +59,9 @@ class ControlledCarry:
                                        include_supported=True)
         arm = self.primitives.arm
         contact = self.robot.get_eef_position(arm)
-        obj.set_position_orientation(position=contact)
+        # Align the selected surface with the hand, retaining the object's
+        # orientation and surface-to-root offset (especially for loaded trays).
+        obj.set_position_orientation(position=original[0] + contact - point)
         self._relocate_contents(obj, contents)
         relocate_particles(self.env.scene, particles)
         self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')

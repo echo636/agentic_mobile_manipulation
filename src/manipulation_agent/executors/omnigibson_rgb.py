@@ -1326,7 +1326,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                 return completed
         before_effect_steps=self.steps if shown else 0
         if primitive=='grasp':
-            result=self._grasp_state(obj,max_steps)
+            result=self._grasp_state(obj,max_steps,point)
         elif primitive in {'attach','hang'}:
             if primitive=='hang' and not any(word in str(obj.category).lower() for word in ('nail','hook','hanger')):
                 raise SkillError('unsupported_relation','Selected object is not a hanging anchor')
