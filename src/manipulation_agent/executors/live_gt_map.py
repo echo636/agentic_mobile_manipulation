@@ -471,14 +471,17 @@ def clearance_transition_guard(grid, collision_layers, support, heights=None):
         if cell not in cache:
             hits=set();counts={}
             for index,(raw,offsets,labels) in enumerate(layers):
-                for dr,dc in offsets:
-                    r,c=cell[0]+int(dr),cell[1]+int(dc)
-                    if not grid.contains((r,c)):
-                        cache[cell]=None
-                        return None
-                    if not raw[r,c]:
-                        hits.add((index,r,c))
-                        key=int(labels[r,c]);counts[key]=counts.get(key,0)+1
+                # Query the footprint in one array operation; Python work is
+                # needed only for actual contacts, not thousands of free cells.
+                cells=offsets+np.asarray(cell)
+                if ((cells<0).any() or (cells[:,0]>=grid.height).any()
+                        or (cells[:,1]>=grid.width).any()):
+                    cache[cell]=None
+                    return None
+                occupied=cells[raw[cells[:,0],cells[:,1]]==0]
+                for r,c in occupied:
+                    hits.add((index,int(r),int(c)))
+                    key=int(labels[r,c]);counts[key]=counts.get(key,0)+1
             cache[cell]=(hits,counts)
         return cache[cell]
     def allowed(previous,current):
