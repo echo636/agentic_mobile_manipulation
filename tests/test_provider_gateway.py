@@ -109,6 +109,33 @@ class ProviderGatewayTests(unittest.TestCase):
                     self.assertEqual(response.read(), b'authentication failed')
         self.assertEqual(calls, ['/responses'])
 
+    def test_persistent_failure_reaches_client_with_original_error(self):
+        calls = []
+        body = b'{"error":{"code":"OPENAI_PERMANENT_STICKY_ACCOUNT_UNAVAILABLE"}}'
+
+        class Provider(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                calls.append(self.path)
+                self.rfile.read(int(self.headers['Content-Length']))
+                self.send_response(503)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(body)
+
+        with serving(ThreadingHTTPServer(('127.0.0.1', 0), Provider)) as upstream:
+            gateway = make_server(('127.0.0.1', 0), upstream, 1, retry_base=.001)
+            with serving(gateway) as local:
+                with self.assertRaises(HTTPError) as raised:
+                    urlopen(Request(local+'/responses', b'{}'), timeout=5)
+                with raised.exception as response:
+                    self.assertEqual(response.code, 503)
+                    self.assertEqual(response.read(), body)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(gateway.request_queue.status()['active'], 0)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -70,13 +70,15 @@ class RequestQueue:
                 self.condition.notify_all()
 
 
-def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None):
+def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None, max_attempts=3):
     endpoint = urlsplit(upstream)
     if (endpoint.scheme not in {'http', 'https'} or not endpoint.netloc
             or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment):
         raise ValueError('Expected fixed provider base URL without credentials or query')
     if address[0] not in {'127.0.0.1', '::1'}:
         raise ValueError('Provider queue must bind to loopback')
+    if max_attempts < 1:
+        raise ValueError('Provider attempts must be positive')
     queue = RequestQueue(capacity)
     context = ssl.create_default_context(cafile=ca_file)
     opener = build_opener(NoRedirect(), HTTPSHandler(context=context))
@@ -135,9 +137,15 @@ def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None):
                             response = exc
                         except (URLError, TimeoutError, ConnectionError):
                             response = None
+                        if response is None and attempt >= max_attempts:
+                            self.send_error(502, 'Provider transport interrupted')
+                            queue.count('completed')
+                            return
                         if response is not None:
                             try:
-                                if response.status not in {429, 502, 503, 504}:
+                                # Let the native client see persistent failures and
+                                # recover; replaying one request forever hides them.
+                                if response.status not in {429, 502, 503, 504} or attempt >= max_attempts:
                                     self.send_response(response.status)
                                     for key, value in response.headers.items():
                                         if key.lower() not in HOP_HEADERS:
