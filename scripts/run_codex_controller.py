@@ -122,7 +122,7 @@ def main(argv=None, *, allow_client=False):
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
-    p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh'])
+    p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh','max','ultra'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
     p.add_argument('--model-provider-gateway', help='Optional loopback request queue for this provider')
     p.add_argument('--rate-limit-resumes', '--provider-error-resumes', type=int, default=None,

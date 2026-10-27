@@ -53,7 +53,7 @@ class ClientConfig:
             raise ValueError("mcp_args must be an argv string array")
         if not self.model or not self.mcp_command:
             raise ValueError("model and mcp_command must be nonempty")
-        if self.reasoning_effort is not None and self.reasoning_effort not in {'low','medium','high','xhigh'}:
+        if self.reasoning_effort is not None and self.reasoning_effort not in {'low','medium','high','xhigh','max','ultra'}:
             raise ValueError('Unsupported reasoning effort')
         if self.client != 'codex' and (self.reasoning_effort is not None or self.model_provider_profile is not None):
             raise ValueError('Model provider and reasoning effort overrides are supported only for Codex')
