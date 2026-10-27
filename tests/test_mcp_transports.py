@@ -131,6 +131,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(raw.startswith(b'\x89PNG\r\n\x1a\n'))
             self.assertEqual(struct.unpack('!II', raw[16:24]), (96, 64))
             self.assertEqual(image.mimeType, frame['mime_type'])
+            self.assertEqual(image.meta, {'codex/imageDetail': 'original'})
             self.assertEqual(hashlib.sha256(raw).hexdigest(), frame['sha256'])
             hashes.append(frame['sha256'])
         return hashes

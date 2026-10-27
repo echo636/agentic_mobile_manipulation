@@ -95,7 +95,9 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
                         if hashlib.sha256(data).hexdigest() != frame['sha256']:
                             raise RuntimeError('RGB image content hash mismatch')
                         content.append(types.TextContent(type='text', text=f'RGB view={frame["view"]}, image_ref={frame["image_ref"]}'))
-                        content.append(types.ImageContent(type='image', data=base64.b64encode(data).decode(), mimeType=frame['mime_type']))
+                        content.append(types.ImageContent(
+                            type='image', data=base64.b64encode(data).decode(), mimeType=frame['mime_type'],
+                            _meta={'codex/imageDetail': 'original'}))
                 return content
             # Finish must reach bridge.request_finish while an action is pending.
             # The bridge sets only stop intent here; simulator access and scoring
