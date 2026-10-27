@@ -117,9 +117,9 @@ def worker_configs(config):
             evidence=json.loads(Path(merged['driver_validation_evidence']).read_text())
             if evidence.get('status')!='passed' or evidence.get('driver')!=merged['validated_driver_version']:
                 raise ValueError('Driver exception requires passed renderer evidence for that exact version')
-        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES',
+        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES','MAS_RGB_IMAGE_SIZE',
                      'MAS_LOCAL_MANIPULATION','MAS_RENDERER_PIXEL_OWNER'}:
-            raise ValueError('Only reviewed recording, local manipulation and pixel ownership options may be worker environment overrides')
+            raise ValueError('Only reviewed observation, recording, local manipulation and pixel ownership options may be worker environment overrides')
         for flag in ('MAS_LOCAL_MANIPULATION', 'MAS_RENDERER_PIXEL_OWNER'):
             if flag in env and env[flag] not in ('0','1'):
                 raise ValueError(flag+' must be an explicit string 0 or 1')
