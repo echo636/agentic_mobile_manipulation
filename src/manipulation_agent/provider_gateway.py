@@ -143,6 +143,13 @@ def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None, max
                             return
                         if response is not None:
                             try:
+                                if 300 <= response.status < 400:
+                                    # A Location forwarded from loopback makes the
+                                    # client leave this fixed provider queue and
+                                    # can strip Authorization on the new origin.
+                                    self.send_error(502, 'Provider upstream redirected request')
+                                    queue.count('completed')
+                                    return
                                 # Let the native client see persistent failures and
                                 # recover; replaying one request forever hides them.
                                 if response.status not in {429, 502, 503, 504} or attempt >= max_attempts:

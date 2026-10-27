@@ -136,6 +136,26 @@ class ProviderGatewayTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertEqual(gateway.request_queue.status()['active'], 0)
 
+    def test_upstream_redirect_does_not_redirect_the_client(self):
+        class Provider(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers['Content-Length']))
+                self.send_response(308)
+                self.send_header('Location', 'https://example.invalid/responses')
+                self.end_headers()
+
+        with serving(ThreadingHTTPServer(('127.0.0.1', 0), Provider)) as upstream:
+            with serving(make_server(('127.0.0.1', 0), upstream, 1)) as local:
+                with self.assertRaises(HTTPError) as raised:
+                    urlopen(Request(local+'/responses', b'{}'), timeout=5)
+                with raised.exception as response:
+                    self.assertEqual(response.code, 502)
+                    self.assertIsNone(response.headers.get('Location'))
+                    self.assertIn(b'Provider upstream redirected request', response.read())
+
 
 if __name__ == '__main__':
     unittest.main()
