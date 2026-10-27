@@ -87,6 +87,43 @@ class SelectedSurfaceGeometry(unittest.TestCase):
 
 
 class PlacementRejectionTransactions(unittest.TestCase):
+    def test_surface_ray_start_inside_collider_uses_higher_origin(self):
+        import sys
+        import numpy as np
+        import torch
+        from types import ModuleType, SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.placement import CheckedPlacement
+        backend = CheckedPlacement()
+        backend.torch = torch
+        backend.og = SimpleNamespace(sim=SimpleNamespace(get_physics_dt=lambda: 1/120))
+        backend.robot = SimpleNamespace(links={})
+        held = SimpleNamespace(name='box', links={}, get_position_orientation=lambda:
+            (torch.zeros(3), torch.tensor([0., 0., 0., 1.])))
+        target = SimpleNamespace(name='oven', links={'door': SimpleNamespace(prim_path='/oven/door')})
+        vertices = np.array([[x, y, z] for x in [-.12, .12] for y in [-.12, .12] for z in [0., .14]])
+        backend._collision_vertices = lambda obj: vertices
+        backend._placement_record = lambda record: None
+        backend._open_rim_candidates = lambda *args, **kwargs: []
+        origins = []
+        def raytest(start, end, **kwargs):
+            origins.append(float(start[2]))
+            height = min(float(start[2]), .318)
+            return dict(hit=True, position=[0., 0., height], normal=[0., 0., 1.],
+                        distance=float(start[2])-height, rigidBody='/oven/door')
+        utils = ModuleType('omnigibson.utils')
+        utils.transform_utils = ModuleType('transform_utils')
+        sampling = ModuleType('omnigibson.utils.sampling_utils')
+        sampling.raytest = raytest
+        with patch.dict(sys.modules, {'omnigibson.utils': utils,
+                                      'omnigibson.utils.sampling_utils': sampling}):
+            candidates = backend._surface_candidates(held, target, torch.tensor([0., 0., .2683]),
+                                                     offsets=[(0., 0.)])
+        self.assertEqual(len(origins), 2)
+        self.assertEqual(len(candidates), 1)
+        self.assertAlmostEqual(candidates[0]['support_position'][2], .318, places=6)
+        self.assertGreater(float(candidates[0]['pose'][0][2]), .318)
+
     def test_missing_collision_geometry_has_explicit_error_without_box_fallback(self):
         from types import SimpleNamespace
         from manipulation_agent.contracts import SkillError

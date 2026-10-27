@@ -392,10 +392,13 @@ class CheckedPlacement:
             # Start close to the click: a ray from above the whole object can
             # hit the shelf ABOVE the selected lower shelf. Taller starts only
             # recover small visual/collision-surface offsets on this shelf.
+            # PhysX returns distance zero for a ray originating inside a
+            # collider; that hit is the origin, not a support surface.
             for height in (.03, .10, .20):
                 start = center + self.torch.tensor([0., 0., height], device=point.device)
                 hit = raytest(start, end, ignore_bodies=ignored)
                 reason = ('no_support_surface' if not hit['hit'] else
+                          'ray_origin_inside_collision' if float(hit['distance']) == 0. else
                           'different_support_object' if hit.get('rigidBody') not in target_paths else
                           'support_not_upward' if float(hit['normal'][2]) < .9 else
                           'different_shelf_height' if abs(float(hit['position'][2]) - float(point[2])) > .05 else None)
