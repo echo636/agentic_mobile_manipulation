@@ -34,6 +34,7 @@ Use the following fields. Only two goal records are shown for brevity; put **eve
     "check": "Evidence needed to establish this result", "evidence": []
   }],
   "active": {"goal_id": "g1", "steps": ["Immediate next action"], "next_check": "Expected result"},
+  "members": [{"label": "local-a", "description": "Recognizable visual features", "location": "Last observed location", "state": "Current task-relevant state", "remaining": "Unfinished work", "count": 1, "evidence": []}],
   "assumptions": [],
   "uncertainties": [],
   "change": "Reason for this revision"
@@ -44,6 +45,6 @@ IDs are unique; only the root has a null parent. Every other `parent_id` referen
 
 Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the leaf currently being pursued; its ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list.
 
-Keep a compact member ledger in `evidence`, using visual descriptions, last locations, completion states and actual returned evidence IDs. Update entries rather than appending an action transcript. A spilled item reopens its goal; placing it temporarily on a bench leaves its storage requirement pending.
+Use `members` when item coverage matters. Labels are your own, not simulator IDs. An entry may represent one item or a distinguishable group in the same state; avoid overlapping counts. Update current state and remaining work from RGB and feedback, citing actual evidence IDs. Mark lost identity or unknown counts as uncertain instead of inferring them from action totals. Replace stale entries rather than appending a transcript. A spill reopens the affected goal; temporary placement does not complete storage.
 
 Before finish, use `change` to reconcile each criterion and `uncertainties` for remaining gaps. An evidence ID alone, a successful notes write or a `done` label does not verify a result. Preserve original requirements and valid progress when replacing the state.

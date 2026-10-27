@@ -23,7 +23,7 @@ Before pursuing a goal, split it if it still bundles results that can be achieve
 
 Use `parent_id` for decomposition and `depends_on` for prerequisites, including across branches. Keep dependencies acyclic and limited to necessary ordering. Select an unfinished leaf whose own and ancestors' prerequisites are satisfied; a blocked branch need not stop independent work.
 
-For groups, track distinct members by visual description, last location and pending/placed/verified state. One handled member does not complete a group; items found so far do not establish the total. Record uninspected locations and uncertain identities or destination roles.
+For groups, link pending work to identifiable members or spatially distinct groups sharing the same task-relevant state. Track appearance, last location, current state and remaining work; action counts alone cannot identify what remains. If movement, mixing or a view change breaks that correspondence, mark it uncertain and regain it through a clearer view or separating items before an irreversible operation. Items found so far do not establish the total; retain uninspected locations and uncertain identities or destination roles.
 
 After each action, check its actual result and revise the local plan. Once a leaf is supported, check its parent and continue upward only where each parent's own check is supported. Completed children alone do not prove their parent. Discovery or access does not establish delivery or processing; starting a device does not establish finished processing. Supported continuity and action feedback may establish occluded contents. Reopen or reinspect results and affected ancestors when later handling could have disturbed them.
 

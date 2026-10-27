@@ -23,4 +23,4 @@ For two items that must be beside each other, use the first item as the second's
 
 Open/close requires an empty hand. You can toggle the currently held object; toggling another object requires an empty hand. Release/wait takes a null target.
 
-A failed placement attempts to restore the previous state; confirm the actual hand and object state from feedback. `place_inside: unsupported_relation` can mean the pixel hit the held item or a surface without a fillable volume. Reselect the container; do not grasp again while already holding the item.
+A failed placement may leave the object moved or released; use RGB and feedback to establish the current hand and object state. `place_inside: unsupported_relation` can mean the pixel hit the held item or a surface without a fillable volume. If still holding the item, reselect the container without grasping again.
