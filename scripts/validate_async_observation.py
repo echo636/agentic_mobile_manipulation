@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from PIL import Image
 
 
 def read_lines(p): return [json.loads(x) for x in p.read_text().splitlines()]
@@ -65,7 +66,9 @@ def validate(root, probe=None, require_async=True):
             checks['rgb_hashes_match'] &= sha==row['sha256']==meta['rgb_sha256']
             base=by_capture[c['synchronized_capture']['capture_id']]['before_orientation']
             axis=base_relative_forward(meta['orientation'],base);n=math.hypot(*axis[:2]);axes[ref.split('-')[-1]]=[axis[0]/n,axis[1]/n]
-            k=meta['intrinsic'];fov=math.degrees(2*math.atan(256/k[0][0]))
+            with Image.open(root/row['file']) as image:
+                width=image.width
+            k=meta['intrinsic'];fov=math.degrees(2*math.atan((width/2)/k[0][0]))
             checks['ninety_degree_hfov'] &= abs(fov-90)<.1
         checks['four_distinct_direction_images'] &= len(set(hashes))==4
         dot=lambda a,b:sum(x*y for x,y in zip(axes[a],axes[b]))
