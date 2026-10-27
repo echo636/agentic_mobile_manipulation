@@ -225,6 +225,12 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     held=backend._get_held()
     carried=[obj for obj in [held,*[o for o,_ in backend._carry_contents]] if obj is not None]
     carried.extend(obj for obj in prospective_carry if obj not in carried)
+    from .particle_payload import snapshot_particles, particle_bounds
+    particles=snapshot_particles(scene,carried,include_supported=True) if carried else []
+    # Only macro particles have rigid collision bodies in PhysX overlap queries.
+    # Fluid instancer IDs are not rigid-body paths or rigid payload geometry.
+    particles=[record for record in particles if getattr(record.system,'particles_view',None) is not None]
+    particle_paths={str(path) for record in particles for path in record.paths}
     moving_objects=[backend.robot,*([] if robot_only else carried)]
     height=max(float(obj.aabb[1][2])+(.18 if obj in prospective_carry else 0.) for obj in moving_objects)-floor_z
     # Stable, conservative band edges avoid a full raster rebuild for every
@@ -248,6 +254,14 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
                                            float(vertices[:,2].max())-floor_z))
         if obj is not backend.robot and not object_hulls:
             raise ValueError('Carried collision geometry unavailable for navigation')
+    if not robot_only:
+        for record,(lo,hi) in zip(particles,particle_bounds(scene,particles)):
+            vertices=np.array([[x,y,z] for x in (float(lo[0]),float(hi[0]))
+                               for y in (float(lo[1]),float(hi[1])) for z in (float(lo[2]),float(hi[2]))])
+            if record.container in prospective_carry:vertices[:,2]+=.18
+            bodies.append((moving_objects.index(record.container),vertices))
+            payload_bounds.append((float(vertices[:,2].min())-floor_z,float(vertices[:,2].max())-floor_z))
+            height=max(height,float(vertices[:,2].max())-floor_z)
     # Payloads now have independent fine-grained bands below. Keep robot
     # bands stable across grasp/release so their occupancy remains reusable.
     edges=navigation_height_edges(height)
@@ -312,6 +326,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     origin=cached['origin']
     ignored_objects={backend.robot,*carried}
     ignored_links={link.prim_path for obj in ignored_objects if obj is not None for link in obj.links.values()}
+    ignored_links.update(particle_paths)
     # A joint preview changes Fabric transforms before PhysX scene queries are
     # guaranteed to observe them. Replace ONLY those moving links with their
     # conservative height-clipped geometry in the hypothetical raster.
@@ -333,6 +348,20 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         if any(str(link.prim_path) in projected for link in obj.links.values()):
             signature+=('hypothetical_projection',)
         current[obj.name]={'signature':signature,'lo':lo[:2],'hi':hi[:2]}
+    # Macro particles are absent from scene.objects. Track their actual bounds
+    # so moving, dropping, removing or picking them up invalidates old cells.
+    external_particles=0
+    for system in getattr(scene,'active_systems',{}).values():
+        if not system.n_particles or getattr(system,'particles_view',None) is None:continue
+        centers=system.get_particles_position_orientation()[0].cpu().numpy()
+        radius=float(system.particle_contact_radius)
+        for path,center in zip(system.particles_view.prim_paths,centers):
+            path=str(path)
+            if path in particle_paths:continue
+            lo,hi=center-radius,center+radius
+            if hi[2]<floor_z+.03 or lo[2]>floor_z+edges[-1]:continue
+            current[path]={'signature':(*map(float,center),radius),'lo':lo[:2],'hi':hi[:2]}
+            external_particles+=1
     query=lazy.omni.physx.get_physx_scene_query_interface()
     started=time.monotonic();count=0;updated_queries=0
     updated=np.zeros_like(support,dtype=bool);raw_bands=[]
@@ -412,6 +441,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         'dynamic_collision_check':'live_PhysX_height_matched_overlaps_incrementally_updated',
         'collision_substrate':'GT_floor_support_and_current_loaded_collision_geometry',
         'held_object_footprint_included':bool(carried_hulls),
+        'carried_particle_count':len(particle_paths),'external_particle_count':external_particles,
         'carried_collision_hulls':carried_hulls}
 
 
