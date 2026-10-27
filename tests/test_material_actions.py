@@ -178,21 +178,34 @@ class MaterialActionTests(unittest.TestCase):
     def test_dicing_checks_only_current_cooked_output_before_particle_generation(self):
         class DicingRule:
             def transition(rule, candidates):
-                self.generated = True
-                return types.SimpleNamespace(add=[], remove=[self.target])
+                raise AssertionError('Do not guess the particle system from the object category')
         transitions = types.ModuleType('omnigibson.transition_rules')
         transitions.DicingRule = DicingRule
         transitions.SlicingRule = type('SlicingRule', (), {})
+        transitions.TransitionResults = types.SimpleNamespace
+        bddl_utils = types.ModuleType('omnigibson.utils.bddl_utils')
+        bddl_utils.get_system_name_by_synset = lambda synset: {'cooked__diced__clove.n.01': 'cooked__diced__clove'}[synset]
         self.tool._abilities = {'slicer'}
-        self.target._abilities = {'diceable'}
-        self.target.category = 'half_onion'
+        self.target._abilities = {'diceable': {'cooked_diceable_derivative_synset': 'cooked__diced__clove.n.01'}}
+        self.target.category = 'half_garlic_clove'
+        self.target.root_link = object()
         self.target.states[self.Cooked] = types.SimpleNamespace(get_value=lambda: True)
         self.scene.objects = [self.target]
         self.generated = False
+        def generate(target, link, **options):
+            self.assertIs(target, self.target)
+            self.assertIs(link, self.target.root_link)
+            self.generated = True
+        self.system.generate_particles_from_link = generate
+        def system_by_name(name):
+            self.assertEqual(name, 'cooked__diced__clove')
+            return self.system
+        self.scene.get_system = system_by_name
         self.scene.transition_rule_api = types.SimpleNamespace(active_rules=[DicingRule()],
             execute_transition=lambda **kw: self.scene.objects.remove(self.target))
-        system = self.asset_root/'systems/cooked__diced__onion'
-        with self.modules, patch.dict(sys.modules, {'omnigibson.transition_rules': transitions}):
+        system = self.asset_root/'systems/cooked__diced__clove'
+        with self.modules, patch.dict(sys.modules, {'omnigibson.transition_rules': transitions,
+                                                   'omnigibson.utils.bddl_utils': bddl_utils}):
             with self.assertRaises(SkillError) as missing_system:
                 self.backend._checked_cut(self.target, 6)
             self.assertFalse(missing_system.exception.changed)
