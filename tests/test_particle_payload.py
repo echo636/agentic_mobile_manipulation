@@ -27,6 +27,7 @@ class ParticlePayloadTests(unittest.TestCase):
         state.ContainedParticles = self.state_key = type('ContainedParticles', (), {})
         modules = {'omnigibson': ModuleType('omnigibson'), 'omnigibson.utils': ModuleType('omnigibson.utils'),
                    'omnigibson.utils.transform_utils': transform, 'omnigibson.object_states': state}
+        modules['omnigibson'].sim = SimpleNamespace(sync_physx_to_fabric=lambda: None)
         self.override = patch.dict(sys.modules, modules)
         self.override.start(); self.addCleanup(self.override.stop)
         self.transform = transform

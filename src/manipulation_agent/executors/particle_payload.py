@@ -185,6 +185,10 @@ def relocate_particles(scene, payload):
         all_indices = torch.arange(len(transforms), device=transforms.device)
         view.set_transforms(transforms, indices=all_indices)
         view.set_velocities(velocities, indices=all_indices)
+    # Match native rigid-body setters: publish the new poses before the next
+    # simulation update can reapply the previous Fabric transforms.
+    import omnigibson as og
+    og.sim.sync_physx_to_fabric()
 
 
 def particle_link_motion(payload):
@@ -348,3 +352,5 @@ def restore_particle_state(records):
         indices = torch.arange(len(order), device=transforms.device)
         view.set_transforms(transforms[order], indices=indices)
         view.set_velocities(velocities[order], indices=indices)
+    import omnigibson as og
+    og.sim.sync_physx_to_fabric()
