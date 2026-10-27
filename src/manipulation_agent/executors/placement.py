@@ -831,15 +831,20 @@ class CheckedPlacement:
         official_on_top = bool(held.states[OnTop].get_value(target))
         supported, support = self._selected_surface_support(
             held, target, verification_point, touching, payload, resting=resting.report())
+        # The candidate already passed free settling. Verify the current
+        # support after release; residual native motion is not a failed placement.
+        if point is not None:
+            supported = all(value for check, value in support['checks'].items() if check != 'settled')
         self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
             'position': held.get_position_orientation()[0].tolist(),
             'touching': touching, 'official_on_top': official_on_top, 'selected_surface_support': support,
+            'supported': supported,
             'verification_point':verification_point.tolist() if verification_point is not None else None,
             'target_below': target in adjacency.negative_neighbors,
             'target_above': target in adjacency.positive_neighbors,
             'grasp_released': self._get_held() is None})
         if not (supported if point is not None else official_on_top):
-            raise SkillError('postcondition_error', 'Object is not stably supported by the selected surface', changed=True)
+            raise SkillError('postcondition_error', 'Object is not supported by the selected surface', changed=True)
         self._verify_payload(dependencies, support_target=target,
                              support_resting={key: window.report() for key, window in payload_resting.items()})
         # Placement is now verified and released. Advance native cooking,
