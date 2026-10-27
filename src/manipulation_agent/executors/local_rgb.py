@@ -45,6 +45,9 @@ class LocalRGBManipulation:
         self._navigation_layer_yaw=self._local_pose()[2]
         collision=HeadingCollisionChecker(grid,self._navigation_layers,self._navigation_layer_yaw,
                                           self._navigation_support,check_cancelled=operation.check)
+        # Use this checker's angular bins for both recovery and readiness.
+        # The map builder's zero-origin bins can mark a blocked pose as free.
+        grid=collision.grid_at_heading(self._navigation_layer_yaw)
         # Navigation's earlier map may differ after transport or settling.
         # Keep the actual operation map so failed approach searches can be
         # replayed without claiming that a stale navigation map was exact.
