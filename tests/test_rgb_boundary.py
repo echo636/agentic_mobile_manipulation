@@ -64,6 +64,20 @@ class RGBBoundary(unittest.TestCase):
             self.assertTrue(result['effect']['transfer']['held_object_retained'])
             self.assertNotIn('PRIVATE_MATERIAL_SYSTEM',json.dumps(result))
             self.assertNotIn('moved_particles',json.dumps(result))
+    def test_cut_reports_actual_transformation_without_private_identity(self):
+        for transition, count, expected in (
+                ('SlicingRule',2,{'result':'sliced','pieces_created':2}),
+                ('DicingRule',0,{'result':'diced_material'})):
+            self.backend.execute_visual=lambda *a,**kw:{
+                'transition':transition,'created_objects':count,
+                'private_grounding':{'selected_object_prim':'PRIVATE_OBJECT_NAME'},
+                'material_system':'PRIVATE_MATERIAL_SYSTEM','goal_satisfied':True}
+            result=self.act('cut')
+            self.assertTrue(result['ok'])
+            self.assertEqual(result['effect']['cut'],expected)
+            self.assertEqual(result['effect']['verification'],'executor_operation_only')
+            for private in ('PRIVATE_OBJECT_NAME','PRIVATE_MATERIAL_SYSTEM','goal_satisfied','transition'):
+                self.assertNotIn(private,json.dumps(result))
     def test_navigation_partial_approach_is_public_but_geometry_stays_private(self):
         for status in ('reached','approached','already_at_closest_approach'):
             self.backend.execute_visual=lambda *a,**kw:{'nav_status':status,'private_pose':[1,2,3],

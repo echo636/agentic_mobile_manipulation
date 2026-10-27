@@ -243,6 +243,13 @@ class VisionHarness:
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
+        if primitive=='cut':
+            # Report this action's transformation, without object/material IDs
+            # or task-goal state. Particle counts are not physical piece counts.
+            if details.get('transition')=='SlicingRule':
+                effect['cut']={'result':'sliced','pieces_created':int(details['created_objects'])}
+            elif details.get('transition')=='DicingRule':
+                effect['cut']={'result':'diced_material'}
         if primitive in {'pour','scoop'}:
             materials=details.get('materials',[])
             if materials:
