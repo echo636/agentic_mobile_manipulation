@@ -215,7 +215,11 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         sampling=getattr(getattr(backend,'_local_operation',None),'navigation_sampling',{})
     resolution=float(sampling.get('resolution',original_resolution))
     window=sampling.get('window')
-    floor_z=float(trav.floor_heights[floor]);base=backend.robot.get_position_orientation()[0].cpu().numpy()
+    from .visual_target import rotate
+    position,orientation=backend.robot.get_position_orientation()
+    base=position.cpu().numpy();floor_z=float(trav.floor_heights[floor])
+    forward=rotate((1.,0.,0.),orientation)
+    yaw=math.atan2(forward[1],forward[0])
     # The base is wider than the torso. A single base-width column falsely
     # blocks motion beside desks/chair backs. Match occupancy by height band.
     held=backend._get_held()
@@ -380,12 +384,11 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         navigable &= cv2.erode(raw,k,borderType=cv2.BORDER_CONSTANT,borderValue=0)
         overlap+=cv2.filter2D((1-raw).astype('float32'),-1,k.astype('float32'),borderType=cv2.BORDER_CONSTANT)
     grid=GridMap(w,h,resolution,tuple(origin),navigable.tobytes())
-    # Use the same subcell/yaw reserve as forward route certification. Without
-    # this, an old fixed-heading goal can sit on a boundary that the driving
-    # controller must reject, and initial recovery would not see the mismatch.
+    # World-offset footprints must use the measured heading as their reference.
+    # A zero reference shifts the angular raster bins relative to route checks.
     from .heading_collision import HeadingCollisionChecker
     grid=HeadingCollisionChecker(grid,[(raw,footprint) for raw,(_,_,footprint,_) in zip(collision_raw,layers)],
-        0.,support,check_cancelled=backend.deadline.check).grid_at_heading(0.)
+        yaw,support,check_cancelled=backend.deadline.check).grid_at_heading(yaw)
     combined=np.all(free,axis=0).astype('uint8')
     backend._navigation_clearance=(combined.tobytes(),overlap.ravel(),max(float(np.linalg.norm(p,axis=1).max()) for _,_,p,_ in layers)+resolution)
     backend._navigation_layers=[(raw.copy(),footprint.copy()) for raw,(_,_,footprint,_) in zip(collision_raw,layers)]
