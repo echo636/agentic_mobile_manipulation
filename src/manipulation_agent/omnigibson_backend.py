@@ -231,6 +231,8 @@ class OmniGibsonBackend:
             write_json(output/'contact_manifold_capacity.json', install_contact_manifold_capacity())
             from .executors.temperature_indices import install_temperature_index_repair
             install_temperature_index_repair(output)
+            from .executors.heat_source_links import install_heat_source_links
+            write_json(output/'heat_source_links_compatibility.json', install_heat_source_links())
             from .executors.cloth_import import install_nested_cloth_import
             write_json(output/'cloth_import_compatibility.json', install_nested_cloth_import(output))
             from omnigibson.macros import gm
@@ -693,6 +695,7 @@ class OmniGibsonBackend:
         return {"name": "OmniGibson", "executor": "official_symbolic_plus_ideal_navigation",
                 "observation_mode": self.mode, "packages": packages, "gpu_index": gpu,
                 "inside_placement": self.inside_placement,
+                "heat_source_coverage": "all_authored_links_union_with_native_temperature_update",
                 "omnigibson_source_commit": source.stdout.strip(),
                 "gpu_uuid": query.stdout.strip(), "assets": versions, "input_hashes": self.input_hashes,
                 "task_instance": self.task_metadata, "official_submission_eligible": False}
