@@ -40,10 +40,13 @@ class EpisodeVideo:
         self.views = tuple(views or self.VIEWS)
         if self.views not in {self.VIEWS, ('front','back','left','right','spectator')}:
             raise ValueError('Unsupported recording layout')
-        self.size = size; self.fps = float(fps)
+        self.input_size = size
+        # Full-resolution observations are archived separately. Bound the
+        # replay mosaic so larger policy images do not multiply encoder load.
+        self.size = min(size, 1024); self.fps = float(fps)
         self.demo_motion = bool(demo_motion)
         self.rows = (len(self.views)+1)//2
-        self.width = 2 * size; self.height = self.rows * size + 80
+        self.width = 2 * self.size; self.height = self.rows * self.size + 80
         self.count = 0; self.env_steps = []; self.markers = []; self.context = {}
         self.closed = False; self.process = None; self.log = None
         self.timeline = JsonlAppend(output/'video_frames.jsonl')
@@ -58,6 +61,7 @@ class EpisodeVideo:
         self.fresh_frames = 0; self.held_frames = 0
         self.manifest = {'status':'running','file':'episode.mp4','poster':'video_poster.jpg',
                          'fps':self.fps,'width':self.width,'height':self.height,
+                         'source_camera_size':self.input_size,'tile_size':self.size,
                          'started_at':now(),'frame_count':0,'scope':'every_env_step_plus_observation_boundaries',
                          'spectator_model_visible':False, 'synthesized_motion':False,
                          'demo_motion':self.demo_motion,
@@ -148,7 +152,7 @@ class EpisodeVideo:
         if set(pixels) != set(self.views):
             raise ValueError('Continuous recorder requires its configured RGB views')
         tiles = {name: np.asarray(pixels[name], dtype=np.uint8) for name in self.views}
-        if any(a.shape != (self.size, self.size, 3) for a in tiles.values()):
+        if any(a.shape != (self.input_size, self.input_size, 3) for a in tiles.values()):
             raise ValueError('Invalid video camera shape')
         if self._font is None:
             font_path = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
@@ -161,7 +165,10 @@ class EpisodeVideo:
             draw = ImageDraw.Draw(self._camera_canvas)
             for i, name in enumerate(self.views):
                 x,y=(i%2)*self.size,(i//2)*self.size
-                self._camera_canvas.paste(Image.fromarray(tiles[name]), (x,y))
+                tile = Image.fromarray(tiles[name])
+                if self.size != self.input_size:
+                    tile = tile.resize((self.size, self.size), Image.Resampling.BILINEAR)
+                self._camera_canvas.paste(tile, (x,y))
                 draw.rectangle((x,y,x+self.size,y+25), fill='#102637')
                 label = 'SPECTATOR - replay only' if name == 'spectator' else 'ROBOT RGB - '+name
                 draw.text((x+8,y+3),label,fill='white',font=font)
