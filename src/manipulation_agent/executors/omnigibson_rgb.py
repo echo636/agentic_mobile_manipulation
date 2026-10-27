@@ -93,8 +93,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         self._spectator_choice = None
         self._base_target = None
         self.image_size=int(os.environ.get('MAS_RGB_IMAGE_SIZE','512'))
-        if self.image_size not in (512,768,1024):
-            raise ValueError('RGB image size must be 512, 768 or 1024')
+        if self.image_size not in (512,768,1024,2048):
+            raise ValueError('RGB image size must be 512, 768, 1024 or 2048')
         self.rgb_jpeg_quality=int(os.environ.get('MAS_RGB_JPEG_QUALITY','92'))
         if self.rgb_jpeg_quality not in range(70,96):
             raise ValueError('RGB JPEG quality must be between 70 and 95')
