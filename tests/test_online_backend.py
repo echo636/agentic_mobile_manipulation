@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from manipulation_agent.executors.online_backend import OnlineNavigation
+from manipulation_agent.executors.navigation.online_backend import OnlineNavigation
 from manipulation_agent.observations.rig import camera_mount
 
 
@@ -149,7 +149,7 @@ class OnlineBackendTests(unittest.TestCase):
         class ObservedNavigationScene:
             pass
 
-        with patch('manipulation_agent.executors.online_scene.register_online_scene',
+        with patch('manipulation_agent.executors.navigation.online_scene.register_online_scene',
                    return_value=ObservedNavigationScene):
             backend = Backend()
             config = backend._config('fixture-task', 2, 123)
@@ -160,7 +160,7 @@ class OnlineBackendTests(unittest.TestCase):
         self.assertEqual(original['scene']['type'], 'InteractiveTraversableScene')
 
     def test_scene_skips_precomputed_loader_and_refuses_map_access(self):
-        from manipulation_agent.executors.online_scene import register_online_scene
+        from manipulation_agent.executors.navigation.online_scene import register_online_scene
         modules = fake_og_modules()
         module = ModuleType('omnigibson.scenes.interactive_traversable_scene')
         register = {}
@@ -210,7 +210,7 @@ class OnlineBackendTests(unittest.TestCase):
             floor_touching_base_links=[])
         backend.torch = SimpleNamespace(linalg=SimpleNamespace(norm=lambda values, dim:
                                                               np.linalg.norm(values, axis=dim)))
-        mapper_module = ModuleType('manipulation_agent.executors.cartographer_mapping')
+        mapper_module = ModuleType('manipulation_agent.executors.navigation.cartographer_mapping')
         mapper_module.CartographerMapper = Mock(return_value=SimpleNamespace(close=Mock()))
         return backend, mapper_module
 
@@ -219,7 +219,7 @@ class OnlineBackendTests(unittest.TestCase):
             for yaw in (0., math.pi / 4, math.pi / 2):
                 with self.subTest(yaw=yaw):
                     backend, module = self.initialization_fixture(folder, yaw)
-                    with patch.dict('sys.modules', {'manipulation_agent.executors.cartographer_mapping': module}):
+                    with patch.dict('sys.modules', {'manipulation_agent.executors.navigation.cartographer_mapping': module}):
                         backend._initialize_online_navigation()
                     self.assertAlmostEqual(backend._online_robot_radius, .5, places=12)
                     self.assertEqual(backend._online_floor_height, .02)
@@ -230,7 +230,7 @@ class OnlineBackendTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             backend, module = self.initialization_fixture(folder)
             backend.robot.base_footprint_link.collision_boundary_points_world = None
-            with patch.dict('sys.modules', {'manipulation_agent.executors.cartographer_mapping': module}):
+            with patch.dict('sys.modules', {'manipulation_agent.executors.navigation.cartographer_mapping': module}):
                 with self.assertRaisesRegex(ValueError, 'usable navigation footprint'):
                     backend._initialize_online_navigation()
             module.CartographerMapper.assert_not_called()

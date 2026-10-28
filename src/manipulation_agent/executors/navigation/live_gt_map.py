@@ -218,7 +218,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         sampling=getattr(getattr(backend,'_local_operation',None),'navigation_sampling',{})
     resolution=float(sampling.get('resolution',original_resolution))
     window=sampling.get('window')
-    from .visual_target import rotate
+    from ..visual_target import rotate
     position,orientation=backend.robot.get_position_orientation()
     base=position.cpu().numpy();floor_z=float(trav.floor_heights[floor])
     forward=rotate((1.,0.,0.),orientation)
@@ -228,7 +228,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     held=backend._get_held()
     carried=[obj for obj in [held,*[o for o,_ in backend._carry_contents]] if obj is not None]
     carried.extend(obj for obj in prospective_carry if obj not in carried)
-    from .particle_payload import snapshot_particles, particle_bounds
+    from ..particle_payload import snapshot_particles, particle_bounds
     particles=snapshot_particles(scene,carried,include_supported=True) if carried else []
     # Only macro particles have rigid collision bodies in PhysX overlap queries.
     # Fluid instancer IDs are not rigid-body paths or rigid payload geometry.

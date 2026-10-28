@@ -10,7 +10,7 @@ import tempfile
 import time
 import unittest
 
-from manipulation_agent.executors.cartographer_mapping import CartographerMapper
+from manipulation_agent.executors.navigation.cartographer_mapping import CartographerMapper
 
 
 def scan(*, origin=(.025, .025, 0), hits=(), misses=()):

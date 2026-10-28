@@ -3,8 +3,8 @@ import unittest
 
 import numpy as np
 
-from manipulation_agent.executors.depth_scan import DepthFrame, ProjectionConfig, project_four_depth_frames, to_mapper_scans
-from manipulation_agent.executors.self_depth_filter import prepare_self_hulls, mask_self_depth
+from manipulation_agent.executors.navigation.depth_scan import DepthFrame, ProjectionConfig, project_four_depth_frames, to_mapper_scans
+from manipulation_agent.executors.navigation.self_depth_filter import prepare_self_hulls, mask_self_depth
 
 
 def box(center, half=.1):

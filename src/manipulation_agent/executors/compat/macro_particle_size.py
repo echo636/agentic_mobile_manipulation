@@ -28,7 +28,7 @@ class MacroParticleSizePolicy:
             m.MIN_PARTICLE_RADIUS = 0.0
         self._settings = m
         from omnigibson.systems.macro_particle_system import MacroPhysicalParticleSystem
-        from .macro_particle_sampling import thin_macro_sampler
+        from ..macro_particle_sampling import thin_macro_sampler
         self._sampler_class = MacroPhysicalParticleSystem
         self._original_sampler = MacroPhysicalParticleSystem.generate_particles_from_link
         MacroPhysicalParticleSystem.generate_particles_from_link = thin_macro_sampler(

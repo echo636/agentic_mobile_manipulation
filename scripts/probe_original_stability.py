@@ -81,7 +81,7 @@ def load_navigation_fixture(archive, case_indices=(0, 1)):
 
 
 def recorded_navigation(backend, recorder, fixture):
-    from manipulation_agent.executors.gt_navigation import GridMap, NavigationPlan
+    from manipulation_agent.executors.navigation.gt_navigation import GridMap, NavigationPlan
     import omnigibson.utils.transform_utils as T
     cases = []
     for case in fixture['cases']:

@@ -81,8 +81,8 @@ class CatalogRGBBackend(RGBBackend):
         return config
 
     def _load_catalog_environment(self, config):
-        from .articulation_sleep import ArticulationSleepPolicy
-        from .macro_particle_size import MacroParticleSizePolicy
+        from .compat.articulation_sleep import ArticulationSleepPolicy
+        from .compat.macro_particle_size import MacroParticleSizePolicy
         self._articulation_sleep_policy = ArticulationSleepPolicy(gpu_dynamics=self.use_gpu_dynamics)
         try:
             self._macro_particle_size_policy = MacroParticleSizePolicy()

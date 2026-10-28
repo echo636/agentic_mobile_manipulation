@@ -1,8 +1,8 @@
 """A doorway must allow retreat with identical collision and follower checks."""
 import math
 import unittest
-from manipulation_agent.executors.forward_navigation import plan_forward_route,route_from_poses,angle
-from manipulation_agent.executors.gt_navigation import GridMap,NavigationPlan,GreedyGridFollower
+from manipulation_agent.executors.navigation.forward_navigation import plan_forward_route,route_from_poses,angle
+from manipulation_agent.executors.navigation.gt_navigation import GridMap,NavigationPlan,GreedyGridFollower
 
 class Doorway:
     grid=GridMap(101,101,.05,(-2.,-2.),bytes([1])*101**2)
@@ -35,7 +35,7 @@ class ReverseTests(unittest.TestCase):
         c=Doorway();poses=[(0.,0.,math.pi),(.5,0.,math.pi),(0.,0.,math.pi)]
         p=NavigationPlan(tuple(q[:2] for q in poses),(0.,0.),(0.,0.),math.pi,1.,0.,1,1,0.,0)
         from unittest.mock import patch
-        with patch('manipulation_agent.executors.forward_navigation.simplify_forward_poses',return_value=(poses,0)):
+        with patch('manipulation_agent.executors.navigation.forward_navigation.simplify_forward_poses',return_value=(poses,0)):
             route=route_from_poses(p,poses,c)
         self.assertEqual([q.motion_mode for q in route.phases],['reverse','forward'])
 

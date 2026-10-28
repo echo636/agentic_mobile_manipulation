@@ -6,10 +6,10 @@ from unittest.mock import patch
 
 import numpy as np
 
-from manipulation_agent.executors.forward_navigation import route_from_poses, select_forward_route
-from manipulation_agent.executors.gt_navigation import GridMap, NavigationPlan, GreedyGridFollower, NavigationError
-from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
-from manipulation_agent.executors.point_route_projection import project_forward_point
+from manipulation_agent.executors.navigation.forward_navigation import route_from_poses, select_forward_route
+from manipulation_agent.executors.navigation.gt_navigation import GridMap, NavigationPlan, GreedyGridFollower, NavigationError
+from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
+from manipulation_agent.executors.navigation.point_route_projection import project_forward_point
 
 
 class HolonomicTests(unittest.TestCase):
@@ -24,7 +24,7 @@ class HolonomicTests(unittest.TestCase):
         blocked = NavigationPlan((start[:2], goal), goal, goal, 0., 2., 0., 1, 1, 0., 0)
         clear = replace(blocked, points=(start[:2], (-.3, -.8), (.3, -.8), (1., -.3)),
                         goal=(1., -.3), score=.3, geodesic_m=2.5)
-        with patch('manipulation_agent.executors.forward_navigation.plan_forward_route',
+        with patch('manipulation_agent.executors.navigation.forward_navigation.plan_forward_route',
                    side_effect=NavigationError('Forward search exhausted', 'navigation_search_exhausted')):
             chosen, route, details = select_forward_route(
                 [blocked, clear], start, collision, project_point=True, allow_lateral=True)
@@ -59,7 +59,7 @@ class HolonomicTests(unittest.TestCase):
         route = route_from_poses(chosen, poses, collision, allow_lateral=True)
         # The public navigation selector must reach the same capability after
         # its preferred forward/reverse planner exhausts its budget.
-        with patch('manipulation_agent.executors.forward_navigation.plan_forward_route',
+        with patch('manipulation_agent.executors.navigation.forward_navigation.plan_forward_route',
                    side_effect=NavigationError('Archived forward search failure', 'navigation_search_exhausted')):
             chosen, route, selection = select_forward_route([plan], start, collision, allow_lateral=True)
             self.assertEqual(chosen.goal, plan.goal)
@@ -83,7 +83,7 @@ class HolonomicTests(unittest.TestCase):
     def test_same_heading_sideways_corner_is_not_merged_through_obstacle(self):
         poses = [(0., 0., 0.), (1., 0., 0.), (1., 1., 0.)]
         plan = NavigationPlan(tuple(p[:2] for p in poses), (1., 1.), (1., 1.), 0., 2., 0., 1, 1, 0., 0)
-        with patch('manipulation_agent.executors.forward_navigation.simplify_forward_poses',
+        with patch('manipulation_agent.executors.navigation.forward_navigation.simplify_forward_poses',
                    return_value=(poses, 0)):
             route = route_from_poses(plan, poses, None, allow_lateral=True)
         self.assertEqual(len(route.phases), 2)

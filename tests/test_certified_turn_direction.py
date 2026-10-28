@@ -3,8 +3,8 @@ from dataclasses import replace
 import math
 import unittest
 
-from manipulation_agent.executors.forward_navigation import angle, route_from_poses
-from manipulation_agent.executors.gt_navigation import GridMap, GreedyGridFollower, NavigationError, NavigationPlan
+from manipulation_agent.executors.navigation.forward_navigation import angle, route_from_poses
+from manipulation_agent.executors.navigation.gt_navigation import GridMap, GreedyGridFollower, NavigationError, NavigationPlan
 
 
 class CertifiedTurnDirectionTests(unittest.TestCase):

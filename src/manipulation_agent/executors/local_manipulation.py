@@ -272,7 +272,7 @@ class LocalCollision:
         self.grid=self._restrict(collision.grid)
 
     def _restrict(self,grid):
-        from .gt_navigation import GridMap
+        from .navigation.gt_navigation import GridMap
         free=bytearray(grid.width*grid.height)
         row,col=grid.cell(self.origin[:2]);cells=math.ceil(self.radius/grid.resolution)+1
         for r in range(max(0,row-cells),min(grid.height,row+cells+1)):

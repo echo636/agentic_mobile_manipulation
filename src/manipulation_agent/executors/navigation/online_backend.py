@@ -12,9 +12,9 @@ import json
 import math
 import os
 
-from ..contracts import SkillError
-from ..records import now
-from .profiling import component
+from ...contracts import SkillError
+from ...records import now
+from ..profiling import component
 
 
 class OnlineNavigation:
@@ -142,7 +142,7 @@ class OnlineNavigation:
 
     def _online_plan(self, snapshot, position, point, fixed_goal=None):
         from .online_navigation import plan_online_navigation, STRATEGY
-        from ..observations.rig import visible_rig_rays
+        from ...observations.rig import visible_rig_rays
         grid = self._online_grid(snapshot)
         xy = position[:2].detach().cpu().tolist()
         hint = point[:2].detach().cpu().tolist()

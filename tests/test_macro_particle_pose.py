@@ -6,7 +6,7 @@ from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 
-from manipulation_agent.executors.macro_particle_pose import set_particle_center, set_particle_centers
+from manipulation_agent.executors.compat.macro_particle_pose import set_particle_center, set_particle_centers
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch') and importlib.util.find_spec('scipy'), 'Requires geometry environment')

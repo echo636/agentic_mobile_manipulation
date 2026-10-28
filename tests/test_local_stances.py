@@ -9,8 +9,8 @@ import unittest
 from unittest.mock import patch
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.executors.gt_navigation import GridMap, SearchBudgetExhausted
-from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+from manipulation_agent.executors.navigation.gt_navigation import GridMap, SearchBudgetExhausted
+from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
 from manipulation_agent.executors.local_manipulation import LocalLimits, LocalOperation, LocalCollision, stance_candidates
 from manipulation_agent.executors.local_rgb import LocalRGBManipulation
 from manipulation_agent.executors.local_stances import local_stance_proposals
@@ -47,7 +47,7 @@ class ArchivedStanceTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec('scipy'), 'roadmap dependency')
     def test_surface_stance_keeps_checked_return_in_recorded_garden_pocket(self):
         import numpy as np
-        from manipulation_agent.executors.forward_navigation import checked_connection, local_exit_certificate
+        from manipulation_agent.executors.navigation.forward_navigation import checked_connection, local_exit_certificate
         with np.load(FIXTURES/'garden_tool_return_r44.npz',allow_pickle=False) as z:
             free=z['free'];start=tuple(z['start']);support=z['support']
             grid=GridMap(free.shape[1],free.shape[0],float(z['resolution']),tuple(z['origin']),free.tobytes())

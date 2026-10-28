@@ -147,10 +147,10 @@ class CustomTaskBackend(RGBBackend):
         """Reject a tipped or trapped prepared robot before accepting a build."""
         import math
         import numpy as np
-        from .live_gt_map import build_navigation_grid
-        from .heading_collision import HeadingCollisionChecker
-        from .forward_navigation import local_exit_certificate
-        from .gt_navigation import PlanningBudget, SearchBudgetExhausted
+        from .navigation.live_gt_map import build_navigation_grid
+        from .navigation.heading_collision import HeadingCollisionChecker
+        from .navigation.forward_navigation import local_exit_certificate
+        from .navigation.gt_navigation import PlanningBudget, SearchBudgetExhausted
         pos,quat=self.robot.get_position_orientation()
         position=[float(v) for v in pos];orientation=[float(v) for v in quat]
         up_z=1.-2.*(orientation[0]**2+orientation[1]**2)

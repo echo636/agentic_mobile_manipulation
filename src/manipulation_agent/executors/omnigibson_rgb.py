@@ -61,7 +61,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
     def __init__(self,*args,record_video=False,**kwargs):
         self.deadline=EpisodeDeadline.from_env()
         self.deadline.check()
-        from .point_route_projection import prepare_point_projection
+        from .navigation.point_route_projection import prepare_point_projection
         self._point_projection_ready=prepare_point_projection()
         self.deadline.check()
         # A symbolic grasp creates the simulator's native grasp joint once.
@@ -557,10 +557,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
 
     def _turn(self,degrees,max_steps):
         import omnigibson.utils.transform_utils as T
-        from .gt_navigation import NavigationPlan, NavigationError, PlanningBudget
-        from .forward_navigation import ForwardRoute, angle
-        from .heading_collision import HeadingCollisionChecker
-        from .live_gt_map import build_navigation_grid
+        from .navigation.gt_navigation import NavigationPlan, NavigationError, PlanningBudget
+        from .navigation.forward_navigation import ForwardRoute, angle
+        from .navigation.heading_collision import HeadingCollisionChecker
+        from .navigation.live_gt_map import build_navigation_grid
         pos,quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(quat)
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
@@ -576,7 +576,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                 'audience':'executor_private','requested_degrees':degrees,'start':[*xy,yaw]}
         try:
             if not checker.motion_free((*xy,yaw),(*xy,end)):
-                from .navigation_refinement import refine_in_place_turn
+                from .navigation.navigation_refinement import refine_in_place_turn
                 refined, refinement = refine_in_place_turn(self,floor,grid,(*xy,yaw),(*xy,end))
                 record['refinement'] = refinement
                 if refined is None:
@@ -603,7 +603,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         """Current visible robot and carried geometry in yaw-local base coordinates."""
         import numpy as np
         import omnigibson.utils.transform_utils as T
-        from .self_depth_filter import prepare_self_hulls
+        from .navigation.self_depth_filter import prepare_self_hulls
         position,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
         yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
@@ -629,7 +629,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
-        from .self_depth_filter import segment_hits_self_hull
+        from .navigation.self_depth_filter import segment_hits_self_hull
         torch=self.torch
         if max_distance is not None and math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
         ignore=[l.prim_path for l in self.robot.links.values()]
@@ -672,21 +672,21 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         from dataclasses import asdict, replace
         import numpy as np
         import omnigibson.utils.transform_utils as T
-        from .gt_navigation import NavigationError, PlanningBudget, SearchBudgetExhausted, plan_navigation, STRATEGY
+        from .navigation.gt_navigation import NavigationError, PlanningBudget, SearchBudgetExhausted, plan_navigation, STRATEGY
         allow_lateral=bool(getattr(self.robot,'is_holonomic_base',False))
         trav=self.env.scene.trav_map
         position,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
         travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
         point=target.get_position_orientation()[0]
-        from .live_gt_map import build_navigation_grid
+        from .navigation.live_gt_map import build_navigation_grid
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         ground_click=not for_manipulation and float(point[2])-float(trav.floor_heights[floor]) <= .15
         mode='point' if ground_click else 'approach'
         require_visibility=mode=='approach' and for_manipulation
         standoff,margin=0.,(.08 if mode=='approach' else 0.)
         if mode=='approach' and getattr(self,'local_manipulation',False):
-            from .gt_navigation import visual_approach_settings
+            from .navigation.gt_navigation import visual_approach_settings
             suggested,_=visual_approach_settings(self.rig_height,float(position[2]),float(point[2]),
                 pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
             standoff=max(1.25,suggested)
@@ -697,7 +697,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             # Local manipulation can leave a valid pose in a narrow passage
             # resolved by its finer native map. Do not reinterpret that pose
             # as penetration when explicit navigation rebuilds the coarse map.
-            from .navigation_refinement import detour_sampling
+            from .navigation.navigation_refinement import detour_sampling
             for sampling in detour_sampling(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist()):
                 navigation_sampling=sampling
                 grid,map_details=build_navigation_grid(self,floor,sampling=sampling)
@@ -705,8 +705,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                     break
         recovery_results=[];recovery_states=set()
         while not grid.navigable(grid.cell(position[:2].cpu().tolist())):
-            from .gt_navigation import plan_start_clearance_exit
-            from .live_gt_map import clearance_transition_guard
+            from .navigation.gt_navigation import plan_start_clearance_exit
+            from .navigation.live_gt_map import clearance_transition_guard
             raw_free,overlap,radius=self._navigation_clearance
             record={'at':now(),'audience':'executor_private','attempt':len(recovery_results)+1,
                     'start':position.cpu().tolist(),'map_sha256':hashlib.sha256(grid.free).hexdigest()}
@@ -801,8 +801,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                     # visibility contract; navigation keeps physical route checks.
                     planning_xy=position[:2].cpu().tolist()
                     budget=PlanningBudget(self.deadline.check)
-                    from .heading_collision import HeadingCollisionChecker
-                    from .forward_navigation import local_exit_certificate, select_forward_route, arrival_heading_options
+                    from .navigation.heading_collision import HeadingCollisionChecker
+                    from .navigation.forward_navigation import local_exit_certificate, select_forward_route, arrival_heading_options
                     endpoint_collision=HeadingCollisionChecker(grid,self._navigation_layers,
                         self._navigation_layer_yaw,self._navigation_support,check_cancelled=budget.check)
                     entries={};exits={};exit_rejections=0;options=[]
@@ -833,8 +833,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                             travel_yaw=yaw,final_yaw=yaw)
                         options.append(proposed)
                         return proposed
-                    from .live_gt_map import feasible_heading_grids, rotation_staging_plan
-                    from .gt_navigation import NavigationPlan
+                    from .navigation.live_gt_map import feasible_heading_grids, rotation_staging_plan
+                    from .navigation.gt_navigation import NavigationPlan
                     initial_grid=grid;initial_xy=tuple(planning_xy)
                     turn=None;stage=None;plan=None;original_error=None;best_key=None
                     exact_tolerance=grid.resolution/math.sqrt(2)+1e-9
@@ -949,7 +949,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                 raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
                 support=self._navigation_support,
                 layer_footprints_json=json.dumps(map_details['collision_layers']))
-            from .navigation_refinement import refine_navigation_detour
+            from .navigation.navigation_refinement import refine_navigation_detour
             # A coarse guide that goes around the house can exhaust continuous
             # route certification before a post-selection refinement is reached.
             # Try native local geometry first, keeping ordinary route selection
@@ -1059,9 +1059,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         """Certify a route, commit the endpoint once, then let physics settle."""
         import omnigibson.utils.transform_utils as T
         from dataclasses import asdict
-        from .gt_navigation import GreedyGridFollower, NavigationError, PlanningBudget
-        from .forward_navigation import plan_forward_route
-        from .heading_collision import HeadingCollisionChecker
+        from .navigation.gt_navigation import GreedyGridFollower, NavigationError, PlanningBudget
+        from .navigation.forward_navigation import plan_forward_route
+        from .navigation.heading_collision import HeadingCollisionChecker
         local=getattr(self,'_local_operation',None)
         settling=10
         if max_steps<=settling:raise SkillError('action_timeout','Insufficient GT follower step budget')
@@ -1365,7 +1365,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         return result
 
     def provenance(self):
-        from .gt_navigation import SOURCE_COMMIT, STRATEGY
+        from .navigation.gt_navigation import SOURCE_COMMIT, STRATEGY
         result=super().provenance()
         result.update(executor='native_grasp_and_state_actions_plus_gt_navigation',
                       observation_mode=self.mode,image_size=self.image_size,demo_motion=getattr(self,'demo_motion',False),

@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.executors.gt_navigation import (
+from manipulation_agent.executors.navigation.gt_navigation import (
     GridMap, NavigationError, PlanningBudget, SearchBudgetExhausted, plan_navigation,
 )
 
@@ -30,9 +30,9 @@ class NavigationWorkBudgetTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'episode_cancelled')
 
     def test_elapsed_action_budget_is_recoverable(self):
-        with patch('manipulation_agent.executors.gt_navigation.time.monotonic', return_value=100.):
+        with patch('manipulation_agent.executors.navigation.gt_navigation.time.monotonic', return_value=100.):
             budget = PlanningBudget(lambda: None, seconds=20.)
-        with patch('manipulation_agent.executors.gt_navigation.time.monotonic', return_value=120.):
+        with patch('manipulation_agent.executors.navigation.gt_navigation.time.monotonic', return_value=120.):
             with self.assertRaises(SearchBudgetExhausted) as caught: budget.check()
         self.assertEqual(caught.exception.code, 'navigation_search_exhausted')
 

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.carry import ControlledCarry, support_closure
-from manipulation_agent.executors.gt_navigation import GridMap
+from manipulation_agent.executors.navigation.gt_navigation import GridMap
 from manipulation_agent.executors.placement import CheckedPlacement
 from manipulation_agent.observations.rig import visible_rig_rays
 from manipulation_agent.observations.boundary import public_execution_error

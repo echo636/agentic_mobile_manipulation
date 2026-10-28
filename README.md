@@ -4,12 +4,11 @@ An independent research system for **RGB observation -> LLM action and target se
 
 Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/agentic_mobile_manipulation). Reference repositories and existing navigation environments remain separate from this project.
 
-The three custom long-horizon task candidates—lunch, movie night, and workshop—
-have versioned public/scoring contracts, full-reference and negative-case runners,
-and an evidence-based evaluation gate. See [task cards and the readiness protocol](docs/custom_long_horizon.md).
-Two additional candidates extend these scenes with a loaded-toolbox inventory
-roundtrip and meal delivery, plating and empty-carrier return.
-Recipes and CPU tests alone do not certify an instance for evaluation.
+Start with the [code map and entry points](docs/code_organization.md) to locate
+runtime, executor, task, skill and reporting code. See
+[task cards and the readiness protocol](docs/custom_long_horizon.md) for custom
+long-horizon tasks and their versioned public/scoring contracts. Recipes,
+scripted references and CPU tests alone do not establish autonomous task success.
 
 ## Observation: four fixed cameras
 
@@ -31,13 +30,13 @@ Call `initialize` first and inspect the returned images. It exposes the prepared
 
 Use the latest returned revision and image references for the next action. Older captures remain historical evidence and cannot target a new action after they are superseded. Any current camera view can supply an action target without rotating the robot first. `look` explicitly turns the base; it is not surround capture. If the world needs time to change, use `act` with `primitive="wait"`, `target=null` and an appropriate `wait_seconds`, then inspect the returned RGB. The latest action images can support final verification; no extra observation request is required before `finish`.
 
-The default `skills` profile exposes six MCP tools: `initialize`, `look`, `act`, `finish`, `list_skills`, and `read_skill`. `minimal` exposes the first four. The legacy `workflow` profile retains `observe` and asynchronous observation jobs for compatibility; they are absent from the default tool catalog.
+The default `skills` profile exposes seven MCP tools: `initialize`, `look`, `act`, `finish`, `list_skills`, `read_skill`, and `task_notes`. `minimal` exposes the first four. The legacy `workflow` profile retains `observe` and asynchronous observation jobs for compatibility; they are absent from the default tool catalog.
 
-Five readable workflow skills are available: `visual-manipulation`, `goal-decomposition`, `visual-exploration`, `pick-and-place`, and `failure-recovery`. The goal-decomposition skill guides the model to form observable subgoals, order prerequisites, and revise its working plan in conversation. Separate planning stacks and persistent memory are currently deferred. Skills provide guidance; the LLM selects actions through tools.
+Five readable workflow skills are available: `visual-manipulation`, `goal-decomposition`, `visual-exploration`, `pick-and-place`, and `failure-recovery`. The goal-decomposition skill guides the model to write the task end state, recursively refine subgoals, and track prerequisites and item coverage in versioned, episode-local `task_notes`. Tree depth and child counts follow the task; the current action plan is stored separately. Skills provide guidance; the LLM selects actions through tools.
 
 ## Local manipulation control
 
-The default RGB executor uses `target_locked_local_v1`: the brain chooses the task, general navigation approach and current-image target; the motor controller makes bounded local position/heading adjustments and then executes the operation on that same target. `initialize.control` declares the protocol. Set `MAS_LOCAL_MANIPULATION=0` for the previous explicit-navigation behavior. See [coordination, limits and validation](docs/local_manipulation.md).
+The default RGB executor uses `target_locked_approach_v2`: the brain chooses the task and current-image target; the motor controller approaches that same target and executes the operation. `initialize.control` declares the protocol. Set `MAS_LOCAL_MANIPULATION=0` for the previous explicit-navigation behavior. See [coordination, limits and validation](docs/local_manipulation.md).
 
 ## Installation and execution
 
@@ -69,7 +68,9 @@ The default Codex controller is preserved. A common `prepare_project -> run -> p
 interface also provides OpenCode and Kimi adapters; their live RGB integration is
 not yet validated. The native Responses loop has configurable turn/token budgets,
 verified image attachments and optional historical-image retention, with replay
-records for each tool call. Explicit planning and memory remain deferred.
+records for each tool call. Both paths use the same episode-local task notes;
+the optional provider gateway can also prune old image payloads from CLI-client
+requests. Context retention settings are recorded per experiment.
 
 See [harness architecture and transport usage](docs/architecture.md) and
 [client capabilities and validation limits](src/manipulation_agent/clients/README.md).
@@ -83,21 +84,44 @@ with nine tests skipped for unavailable simulator dependencies.
 
 ## Execution and evidence
 
-The model selects a pixel in a current RGB image. The private executor directly backprojects that pixel with its captured depth to obtain the target position, without a depth-to-mesh consistency check. Navigation uses that point without an object lookup. Manipulation additionally identifies the first visual object on the selected ray, solely to obtain its simulator handle; the mesh intersection never replaces the backprojected position. The executor then performs navigation, controlled carrying without a robot/object fixed joint, official state operations, or placement sampling. Base motion uses incremental idealized pose control; grasp and placement can be discontinuous. This is not a physical-control leaderboard submission. Final BDDL predicates and TaskMetric are evaluated independently after termination and are not returned to the active model. See the [RGB protocol](docs/rgb_protocol.md) and [executor v7 history](docs/executor_v7.md).
+The model selects a pixel in a current RGB image. The private executor directly backprojects that pixel with its captured depth to obtain the target position, without a depth-to-mesh consistency check. Navigation uses that point without an object lookup. Manipulation additionally identifies the first visual object on the selected ray, solely to obtain its simulator handle; the mesh intersection never replaces the backprojected position. The executor then performs navigation, native assisted grasp, official state operations, or placement sampling. Grasp transfers the object and its payload once and creates the simulator's native grasp joint; subsequent carrying is handled by native physics. Base motion certifies a route and transfers to its endpoint once, then lets physics settle; grasp and placement can also be discontinuous. This is not a physical-control leaderboard submission. Final BDDL predicates and TaskMetric are evaluated independently after termination and are not returned to the active model. See the [RGB protocol](docs/rgb_protocol.md) and [executor v7 history](docs/executor_v7.md).
 
 For `place_on_top`, the selected surface and shelf determine the landing region. Candidate poses use the carried object's collision geometry and requested relative yaw, without expanding its footprint into a diagonal-sized square. The executor checks physical contacts, lets candidates settle under gravity, and verifies support near the selected surface after release. Rejected candidates restore the scene; failed actions also restore the carry relationship. Collision geometry and diagnostics remain private to the executor. `place_inside` uses official volume sampling with a geometric fallback that covers distinct poses and supports on existing contents. Ideal grasps transfer the assembly directly to a checked carry destination; pickup trajectories are not required. Loaded base motion still checks continuous collision sweeps. Paired scripted placement probes are component evidence, not autonomous task success or a benchmark success-rate estimate.
 
-Default navigation backprojects the model's selected RGB pixel with private calibrated depth. A floor click requests the nearest reachable point, without a camera-distance standoff; an elevated click requests a nearby approach with an unobstructed view of the target. Target visibility is checked again at arrival. The private GT grid combines floor support with current PhysX obstacle geometry and updates when doors or objects move. Normal travel uses checked turns and straight forward or reverse driving. Backing out is allowed without first sweeping the body or payload around a doorway. If the original corners are unsafe, a bounded search over position and heading looks for turning space. Endpoints now require checked local arrival and departure paths; arrival revalidates the departure. Ground routes compare a bounded set of nearby endpoints and final headings by movement plus turning time, with checked shortcuts and no independent pre-turn. This is not a globally shortest continuous planner. Robot and carried collision hulls are checked throughout each turn and translation; the explicit contact-shedding recovery retains its fixed-heading retreat. Motion still uses bounded incremental ideal pose updates and actual feedback, not physical wheel control. Maps, depth and world coordinates stay private. See [GT-grid navigation](docs/gt_navigation.md). The `initialize` → action → four-RGB protocol remains in use. [Online Cartographer navigation](docs/online_navigation.md) is retained as an experiment and is not called by this executor. Frozen evaluations retain their original source and results.
+Default navigation uses private floor support and current scene collision geometry
+in `executors/navigation/`. It selects a reachable point or target approach and
+checks the route against robot/payload geometry. The current RGB actuator commits
+the endpoint pose once, advances native physics for settling, and checks the
+result. It does not simulate continuous driving along the planned route; recorded
+route distance is a planning measure. Maps, depth and world coordinates stay
+private. See [GT-grid planning](docs/gt_navigation.md) for the planner and its
+historical controller stages. [Online Cartographer navigation](docs/online_navigation.md)
+remains an experiment and is not called by the default executor. Frozen evaluations
+retain their original source and results.
 
 ## Batch evaluation
 
-Latest Original harness development is on `feat/harness-fastmcp`; Official is on `explore/official-symbolic`. Both methods use the same task list, while archived attempts retain their actual frozen source versions. Motor exploration is paused. The [current comparison](http://10.76.5.241:8765/compare100_20261002/) is separate from the historical 32-task replay portal.
+The integration target is `feat/harness-fastmcp`; this long-horizon worktree uses
+`feat/long-horizon-tasks`. Archived attempts retain their actual frozen source and
+protocol. The [2026-10-02 comparison](http://10.76.5.241:8765/compare100_20261002/)
+is a historical cohort, separate from current long-horizon experiments and the
+historical 32-task replay portal. Official development is outside this worktree's scope.
 
-The current queue protocol gives each task 30 minutes of actual agent execution, starting immediately before model launch after simulator initialization and MCP setup. Model inference, observations and actions consume this budget; resource waiting and initialization do not. Initialization has a separate watchdog and an initialization failure is recorded separately from a task execution timeout. A task has one terminal outcome: `success`, `failure` or `timeout`. Independent evaluator scores, controller completion and recording quality remain separate fields. A native crash or timeout may prevent a final Q score; the supervisor still records an explicit terminal outcome without inventing a score.
+New long-horizon runs explicitly select `unbounded` episode policy: action counts
+are recorded without an episode action, physics-step or wall-time cutoff. This
+does not change historical runs or the generic CLI's defaults. Initialization and
+post-finish cleanup have separate watchdogs; each frozen batch configuration is
+authoritative. Independent evaluator success, controller completion and recording
+quality remain separate fields. A native crash may prevent a final score; missing
+scores are never invented.
 
-Both methods can use multiple workers in separately assigned resource pools. Within each method, host-memory and GPU leases prevent duplicate resource claims. Workers claim tasks in list order after resource admission; concurrently executing tasks may finish out of order. Cleanup must confirm the owned simulator has exited before its resource lease is released. A faulty worker waits for cleanup while other workers continue. Media validation and replay publication run in a bounded CPU queue after simulator cleanup.
+Batches can use multiple workers. Shared host-memory admission and GPU leases
+coordinate resource claims. Workers claim tasks in list order after admission;
+concurrent tasks may finish out of order. Cleanup must confirm the owned simulator
+has exited before its resource lease is released. Media validation and replay
+publication run in a bounded CPU queue after simulator cleanup.
 
-Launch a frozen checkout with `scripts/start_behavior100_service.py --config <config.json> --unit mas-b100-<name>.service`. The supervisor restarts after an unexpected exit and retains task identities, deadlines and original records. For disjoint method resource pools, configure a separate `shared_lease_dir` per method and respect each host's actual GPU and memory capacity. A supervisor may finish the cohort only when every manifest task has a terminal outcome; unexpected worker exit cannot silently drop a task. Source versions and protocol changes remain attached to individual attempts; earlier completed attempts are not silently reclassified as new-code experiments.
+Launch a frozen checkout with `scripts/start_behavior100_service.py --config <config.json> --unit mas-b100-<name>.service`. The supervisor restarts after an unexpected exit and retains task identities, configured budgets and original records. Batches sharing resources must use the shared lease directory and respect each host's actual GPU and memory capacity. A supervisor may finish the cohort only when every manifest task has a terminal outcome; unexpected worker exit cannot silently drop a task. Source versions and protocol changes remain attached to individual attempts; earlier completed attempts are not silently reclassified as new-code experiments.
 
 Each run retains video, images, available model messages and returned reasoning summaries, tool traces, skill snapshots, versions, host/interpreter/GPU/PID provenance, and failure records. Replays do not invent hidden reasoning or unrecorded arm motion. Raw experiment data, credentials, and assets are excluded from Git.
 
@@ -108,17 +132,17 @@ Each run retains video, images, available model messages and returned reasoning 
 - [2026-09-30 validation](docs/four_camera_validation_20260930.md): 60 CPU checks, a real four-camera MCP probe, and a successful radio instance 301 loop; [report and replay](http://10.76.5.241:8765/surround_observation.html) require the lab network or VPN.
 - [Earlier three-camera experiments](docs/history_before_four_camera.md): historical results do not validate a different camera configuration.
 
-## Current executor validation
+## Historical executor v8 validation (2026-10-01)
 
-The v8 candidate enforces the selected placement surface, carries rigid supported contents such as food on plates, anchors the base during sampling physics, and uses consistent navigation segment checks. Camera calibration annotators initialize eagerly; RGB, private depth, and intrinsics pass a bounded render-only readiness check. No synthetic intrinsics or robot movement bypass initialization failures.
+The historical v8 candidate enforced the selected placement surface, carried rigid supported contents such as food on plates, anchored the base during sampling physics, and used consistent navigation segment checks. These records describe that source version, not all subsequent executor changes.
 
 The recorded v8 validation includes 134 CPU tests and a real four-camera startup retest on `preparing_lunch_box`, instance 301. Component probes and complete model episodes have separate records. Passing code tests or initialization does not establish task success or a perfect executor. The [repair report](http://10.76.5.241:8765/executor_v8_20261001/index.html) preserves failed attempts and recordings. The [comparison with lvzhang and wenbo](http://10.76.5.241:8765/executor_v8_20261001/comparison.html) distinguishes program policies, navigation harnesses, and this project's RGB manipulation loop using pinned source snapshots.
 
 ## Results and replay
 
-The [current system guide](http://10.76.5.241:8765/manipulation_system.html) explains the complete RGB loop and the Original / Official implementations with pinned source references, interactive tool and navigation explanations, a real four-camera grasp example, and a presentation mode. Its maintained source is [web/system_guide.html](web/system_guide.html); publish it with `python scripts/publish_system_guide.py --output-dir <report-root>`.
+The [system guide](http://10.76.5.241:8765/manipulation_system.html) explains the RGB loop and historical Original / Official implementations with pinned source references, interactive tool and navigation explanations, a real four-camera grasp example, and a presentation mode. Check its recorded source version before applying it to a newer run. Its source is [web/system_guide.html](web/system_guide.html); publish it with `python scripts/publish_system_guide.py --output-dir <report-root>`.
 
-The [current comparison](http://10.76.5.241:8765/compare100_20261002/index.html) shows the Original and Official 100-task queues. The [historical 32-task replay portal](http://10.76.5.241:8765/retest32_v7_20261001/replays.html) retains only that completed cohort, synchronized camera views, and the model timeline. The complete task table is collapsed by default. Refreshes preserve playback. Retried tasks remain in the original batch without increasing its task count; previous attempts and bookmarked URLs retain their original execution versions. Bookmarked replays load independently of live progress metadata.
+The [2026-10-02 comparison](http://10.76.5.241:8765/compare100_20261002/index.html) shows the historical Original and Official 100-task queues. The [historical 32-task replay portal](http://10.76.5.241:8765/retest32_v7_20261001/replays.html) retains only that completed cohort, synchronized camera views, and the model timeline. The complete task table is collapsed by default. Refreshes preserve playback. Retried tasks remain in the original batch without increasing its task count; previous attempts and bookmarked URLs retain their original execution versions. Bookmarked replays load independently of live progress metadata.
 
 The portal source is [web/replays.html](web/replays.html). It reads `behavior100/progress.json` from the report directory and embeds existing replays without changing recordings, model outputs, or scores. `scripts/publish_results_page.py --output-dir <report-directory>` publishes the replay portal and analysis page.
 

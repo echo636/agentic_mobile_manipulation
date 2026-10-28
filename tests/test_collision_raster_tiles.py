@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 import unittest
 import numpy as np
-from manipulation_agent.executors.live_gt_map import rasterize_collision_cells
+from manipulation_agent.executors.navigation.live_gt_map import rasterize_collision_cells
 
 
 class CollisionRasterTiles(unittest.TestCase):

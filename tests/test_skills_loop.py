@@ -5,7 +5,7 @@ import unittest
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
 from manipulation_agent.vision_harness import VisionHarness
-from manipulation_agent.executors.base_motion import trajectory
+from manipulation_agent.executors.navigation.base_motion import trajectory
 
 class SkillsLoopTests(unittest.TestCase):
     def test_skills_without_forced_summary_plan_or_memory(self):

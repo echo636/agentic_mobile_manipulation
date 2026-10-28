@@ -185,7 +185,7 @@ class CoordinationTests(unittest.TestCase):
         self.assertTrue(any(math.dist(p[:2],origin[:2])>2. for p in candidates))
         self.assertTrue(all(math.dist(p[:2],point[:2])<=1.4 for p in candidates))
     def test_explicit_collision_window_restricts_only_its_own_users(self):
-        from manipulation_agent.executors.gt_navigation import GridMap
+        from manipulation_agent.executors.navigation.gt_navigation import GridMap
         from manipulation_agent.executors.local_manipulation import LocalCollision
         grid=GridMap(61,61,.1,(-3.,-3.),bytes([1])*61**2)
         collision=SimpleNamespace(grid=grid,motion_free=lambda *args:True,optimistic_grid=lambda:grid)
@@ -288,7 +288,7 @@ class CoordinationTests(unittest.TestCase):
             recoveries.append(op);free[0]=True;b.steps+=1
         b._local_clearance_recovery=recovery
         b._local_departure=LocalRGBManipulation._local_departure.__get__(b)
-        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
+        with patch('manipulation_agent.executors.navigation.forward_navigation.local_exit_certificate',
                    side_effect=[None,{'poses':[]} ]):
             result=b.run()['local_manipulation']
         self.assertEqual(result['departure'],'checked')

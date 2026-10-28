@@ -5,8 +5,8 @@ import unittest
 
 import numpy as np
 
-from manipulation_agent.executors.gt_navigation import NavigationError
-from manipulation_agent.executors.online_navigation import observed_grid, plan_online_navigation
+from manipulation_agent.executors.navigation.gt_navigation import NavigationError
+from manipulation_agent.executors.navigation.online_navigation import observed_grid, plan_online_navigation
 from manipulation_agent.observations.rig import visible_rig_rays
 
 

@@ -14,7 +14,7 @@ class LiveGridTests(unittest.TestCase):
         import cv2
         import numpy as np
         import torch
-        from manipulation_agent.executors.live_gt_map import build_navigation_grid
+        from manipulation_agent.executors.navigation.live_gt_map import build_navigation_grid
         class Body:
             n_joints=0
             def __init__(self,name,lo,hi):
@@ -76,8 +76,8 @@ class LiveGridTests(unittest.TestCase):
 
     def test_retreat_cannot_trade_contact_between_separate_heights(self):
         import numpy as np
-        from manipulation_agent.executors.gt_navigation import GridMap
-        from manipulation_agent.executors.live_gt_map import clearance_transition_guard
+        from manipulation_agent.executors.navigation.gt_navigation import GridMap
+        from manipulation_agent.executors.navigation.live_gt_map import clearance_transition_guard
         lower=np.ones((9,9),dtype='uint8');upper=lower.copy()
         lower[4,4]=0;upper[4,5]=0
         point=np.array([[0.,0.]])
@@ -95,8 +95,8 @@ class LiveGridTests(unittest.TestCase):
     def test_occupied_centre_can_shed_contacts_but_cannot_enter_new_obstacles(self):
         import cv2
         import numpy as np
-        from manipulation_agent.executors.gt_navigation import GridMap,plan_start_clearance_exit,NavigationError
-        from manipulation_agent.executors.live_gt_map import clearance_transition_guard,footprint_kernel
+        from manipulation_agent.executors.navigation.gt_navigation import GridMap,plan_start_clearance_exit,NavigationError
+        from manipulation_agent.executors.navigation.live_gt_map import clearance_transition_guard,footprint_kernel
         raw=np.ones((21,21),dtype='uint8');raw[:,10]=0
         footprint=np.array([[-.2,-.1],[.2,-.1],[.2,.1],[-.2,.1]])
         kernel=footprint_kernel(footprint,.1)
@@ -132,7 +132,7 @@ class LiveGridTests(unittest.TestCase):
         import cv2
         import numpy as np
         import torch
-        from manipulation_agent.executors.live_gt_map import build_navigation_grid
+        from manipulation_agent.executors.navigation.live_gt_map import build_navigation_grid
         class Obj:
             def __init__(self,name,lo,hi,position,n_joints=0):
                 self.name=name;self.aabb=(torch.tensor(lo),torch.tensor(hi));self.position=torch.tensor(position)
@@ -201,8 +201,8 @@ class LiveGridTests(unittest.TestCase):
 
     def test_heading_fallback_checks_rotation_sweep(self):
         import numpy as np
-        from manipulation_agent.executors.gt_navigation import GridMap
-        from manipulation_agent.executors.live_gt_map import feasible_heading_grids
+        from manipulation_agent.executors.navigation.gt_navigation import GridMap
+        from manipulation_agent.executors.navigation.live_gt_map import feasible_heading_grids
         raw=np.ones((41,41),dtype='uint8')
         grid=GridMap(41,41,.05,(-1.,-1.),raw.tobytes())
         footprint=[[-.4,-.06],[.4,-.06],[.4,.06],[-.4,.06]]
@@ -217,8 +217,8 @@ class LiveGridTests(unittest.TestCase):
 
     def test_height_layers_do_not_extend_wide_base_into_overhead_obstacle(self):
         import numpy as np
-        from manipulation_agent.executors.gt_navigation import GridMap
-        from manipulation_agent.executors.live_gt_map import feasible_heading_grids
+        from manipulation_agent.executors.navigation.gt_navigation import GridMap
+        from manipulation_agent.executors.navigation.live_gt_map import feasible_heading_grids
         raw=np.ones((41,41),dtype='uint8');upper=raw.copy();upper[:,25]=0
         grid=GridMap(41,41,.05,(-1.,-1.),raw.tobytes())
         wide=[[-.35,-.35],[.35,-.35],[.35,.35],[-.35,.35]]
@@ -231,7 +231,7 @@ class LiveGridTests(unittest.TestCase):
 
     def test_collision_hull_is_clipped_before_height_projection(self):
         import numpy as np
-        from manipulation_agent.executors.live_gt_map import clipped_body_projection
+        from manipulation_agent.executors.navigation.live_gt_map import clipped_body_projection
         points=np.array([[x,y,z] for z,radius in [(0.,.1),(1.,.4)]
                          for x in (-radius,radius) for y in (-radius,radius)])
         lower=clipped_body_projection(points,0.,.2)

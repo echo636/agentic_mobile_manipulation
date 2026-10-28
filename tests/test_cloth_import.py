@@ -6,7 +6,7 @@ try:
 except ImportError:
     Usd = None
 
-from manipulation_agent.executors.cloth_import import prepare_nested_cloth_visual
+from manipulation_agent.executors.compat.cloth_import import prepare_nested_cloth_visual
 
 
 @unittest.skipIf(Usd is None, 'Requires the pinned USD Python library')

@@ -91,7 +91,7 @@ def select_visible_floor_target(backend, minimum_travel):
     """Private component fixture from actual rendered pixels, not a policy."""
     import numpy as np
     import omnigibson.utils.transform_utils as T
-    from manipulation_agent.executors.gt_navigation import NavigationError
+    from manipulation_agent.executors.navigation.gt_navigation import NavigationError
     position, _ = backend.robot.get_position_orientation()
     base = position.detach().cpu().numpy()
     floor_height = backend._online_floor_height

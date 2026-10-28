@@ -3,7 +3,7 @@ import sys
 from unittest.mock import patch
 import unittest
 
-from manipulation_agent.executors.gt_navigation import (
+from manipulation_agent.executors.navigation.gt_navigation import (
     GridMap, GreedyGridFollower, NavigationError, NavigationPlan, candidate_score, plan_navigation,
     visual_approach_settings,
 )
@@ -110,7 +110,7 @@ class GTNavigationTests(unittest.TestCase):
             plan_navigation(grid(),(.5,.5),(3.,3.),check_cancelled=stop)
 
     def test_clearance_exit_retreats_from_wall_without_crossing_it(self):
-        from manipulation_agent.executors.gt_navigation import plan_start_clearance_exit
+        from manipulation_agent.executors.navigation.gt_navigation import plan_start_clearance_exit
         raw=bytearray([1])*15*11;cost=[0.]*(15*11);free=bytearray([1])*15*11
         for r in range(11):
             raw[r*15+8]=0

@@ -5,7 +5,7 @@ import tempfile
 import sys
 import unittest
 from manipulation_agent.executors.carry import ControlledCarry
-from manipulation_agent.executors.gt_navigation import GridMap,plan_navigation,NavigationError
+from manipulation_agent.executors.navigation.gt_navigation import GridMap,plan_navigation,NavigationError
 from manipulation_agent.mcp_preflight import check_server
 from manipulation_agent.tools.action import act
 from manipulation_agent.contracts import SkillError

@@ -44,8 +44,8 @@ class LocalRGBManipulation:
         return obj,self.torch.tensor(point,dtype=base.dtype,device=base.device)
 
     def _local_geometry(self,operation):
-        from .live_gt_map import build_navigation_grid
-        from .heading_collision import HeadingCollisionChecker
+        from .navigation.live_gt_map import build_navigation_grid
+        from .navigation.heading_collision import HeadingCollisionChecker
         position=self.robot.get_position_orientation()[0]
         trav=self.env.scene.trav_map
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
@@ -88,8 +88,8 @@ class LocalRGBManipulation:
 
     def _local_reposition(self,primitive,obj,point,operation):
         from collections import Counter
-        from .gt_navigation import NavigationPlan, NavigationError, PlanningBudget, SearchBudgetExhausted
-        from .forward_navigation import (plan_forward_route,
+        from .navigation.gt_navigation import NavigationPlan, NavigationError, PlanningBudget, SearchBudgetExhausted
+        from .navigation.forward_navigation import (plan_forward_route,
                                          checked_connection, route_from_poses, angle)
         from .local_stances import local_stance_proposals
         geometry=getattr(operation,'geometry',None) or self._local_geometry(operation)
@@ -157,7 +157,7 @@ class LocalRGBManipulation:
                 try:
                     # Reuse the compiled shared roadmap as a fast proposal;
                     # continuous search remains the fallback for admitted stances.
-                    from .point_route_projection import project_forward_point
+                    from .navigation.point_route_projection import project_forward_point
                     roadmap_budget=PlanningBudget(budget.check,seconds=3.)
                     collision.check_cancelled=roadmap_budget.check
                     try:
@@ -185,7 +185,7 @@ class LocalRGBManipulation:
             # while its long axis stays fixed. Preserve all endpoint proofs and
             # use the same footprint sweeps; differential bases never enter here.
             if selected is None and eligible and getattr(self.robot,'is_holonomic_base',False):
-                from .point_route_projection import project_forward_point
+                from .navigation.point_route_projection import project_forward_point
                 lateral_budget=PlanningBudget(operation.check,seconds=min(40.,12.*.05/grid.resolution))
                 collision.check_cancelled=lateral_budget.check
                 try:
@@ -238,7 +238,7 @@ class LocalRGBManipulation:
             raise SkillError('local_adjustment_blocked','No checked reachable visible stance within target operation reach',
                              stage=stage)
         plan,route=selected
-        from .navigation_refinement import refine_navigation_detour
+        from .navigation.navigation_refinement import refine_navigation_detour
         grid,details,plan,route,collision,_,detour=refine_navigation_detour(
             self,geometry[4],grid,details,actual,[plan],plan,route,collision,{})
         if detour is not None:
@@ -304,8 +304,8 @@ class LocalRGBManipulation:
 
     def _local_clearance_recovery(self,operation,geometry):
         from dataclasses import replace
-        from .gt_navigation import plan_start_clearance_exit,NavigationError,PlanningBudget
-        from .live_gt_map import clearance_transition_guard
+        from .navigation.gt_navigation import plan_start_clearance_exit,NavigationError,PlanningBudget
+        from .navigation.live_gt_map import clearance_transition_guard
         grid,_,details,_,_=geometry;actual=self._local_pose()
         raw,overlap,radius=self._navigation_clearance
         budget=PlanningBudget(operation.check,seconds=6.)
@@ -328,7 +328,7 @@ class LocalRGBManipulation:
         self._resolve_local_target(binding)
 
     def _local_departure(self,operation,obj):
-        from .forward_navigation import local_exit_certificate
+        from .navigation.forward_navigation import local_exit_certificate
         # A committed operation may open a door or change carried geometry.
         # Check actual post-state but do not repeat/undo its successful effect.
         try:
@@ -347,8 +347,8 @@ class LocalRGBManipulation:
                 if operation.repositions>=operation.limits.max_repositions:return 'blocked'
             # A free pose may still lack a short exit certificate. Try a
             # checked forward route to a nearby pose with a certified exit.
-            from .gt_navigation import NavigationPlan,NavigationError,PlanningBudget
-            from .forward_navigation import plan_forward_route
+            from .navigation.gt_navigation import NavigationPlan,NavigationError,PlanningBudget
+            from .navigation.forward_navigation import plan_forward_route
             actual=self._local_pose();grid,collision,_,_,_=geometry
             budget=PlanningBudget(operation.check,seconds=6.)
             collision.check_cancelled=budget.check

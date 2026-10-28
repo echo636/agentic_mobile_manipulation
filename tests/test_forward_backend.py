@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-from manipulation_agent.executors.gt_navigation import GridMap, NavigationPlan
+from manipulation_agent.executors.navigation.gt_navigation import GridMap, NavigationPlan
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch') and importlib.util.find_spec('cv2'),
@@ -36,6 +36,7 @@ class ForwardBackendTests(unittest.TestCase):
             get_joint_positions=lambda:self.joints.clone(),base_idx=torch.tensor([0,1,2]),q_to_action=lambda q:q)
         b.deadline=SimpleNamespace(check=lambda:None)
         b.og=SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda:1/30))
+        b.primitives=SimpleNamespace(_empty_action=lambda:torch.zeros(5))
         b._get_held=lambda:None
         self.restores=0
         def restore(position,orientation):
@@ -108,8 +109,8 @@ class ForwardBackendTests(unittest.TestCase):
         # Long carried item clears both end orientations but clips the diagonal.
         b._navigation_layers=[(raw,np.array([[-.4,-.03],[.4,-.03],[.4,.03],[-.4,.03]]))]
         raw[45,45]=0
-        with patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(self.grid,{})), \
-             patch('manipulation_agent.executors.navigation_refinement.refine_in_place_turn',return_value=(None,{})):
+        with patch('manipulation_agent.executors.navigation.live_gt_map.build_navigation_grid',return_value=(self.grid,{})), \
+             patch('manipulation_agent.executors.navigation.navigation_refinement.refine_in_place_turn',return_value=(None,{})):
             with self.assertRaises(SkillError) as caught:b._turn(90,200)
             self.assertEqual(caught.exception.code,'look_rotation_blocked')
             self.assertFalse(caught.exception.changed)
@@ -121,7 +122,7 @@ class ForwardBackendTests(unittest.TestCase):
         self.assertLess(result['final_yaw_error_rad'],.001)
 
     def test_look_certificate_start_mismatch_does_not_plan_a_detour(self):
-        from manipulation_agent.executors.forward_navigation import ForwardRoute
+        from manipulation_agent.executors.navigation.forward_navigation import ForwardRoute
         route=ForwardRoute((self.plan(),),0.,0,'fixture',start=(.1,0.,0.))
         with self.assertRaises(SkillError) as caught:
             self.b._execute_gt_plan(self.grid,self.plan(),100,prepared_route=route,require_prepared_route=True)
@@ -130,8 +131,8 @@ class ForwardBackendTests(unittest.TestCase):
 
     def test_incomplete_candidate_pool_does_not_claim_geometric_impossibility(self):
         from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
-        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
-        from manipulation_agent.executors.gt_navigation import NavigationError
+        from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.navigation.gt_navigation import NavigationError
         b=self.b;b.local_limits=LocalLimits();b.deadline=SimpleNamespace(check=lambda **kw:None)
         b.ideal_carry=False;b.demo_motion=False
         b._approach_visible=lambda *a,**kw:True
@@ -144,10 +145,10 @@ class ForwardBackendTests(unittest.TestCase):
         for reason,expected in [('navigation_search_exhausted','local_adjustment_exhausted'),
                                 ('navigation_unreachable','local_adjustment_exhausted')]:
             op=LocalOperation(b,'open',None,600,{})
-            with patch('manipulation_agent.executors.forward_navigation.plan_forward_route',
+            with patch('manipulation_agent.executors.navigation.forward_navigation.plan_forward_route',
                        side_effect=NavigationError('fixture incomplete search',reason)), \
-                 patch('manipulation_agent.executors.forward_navigation.checked_connection',return_value=None), \
-                 patch('manipulation_agent.executors.point_route_projection.project_forward_point',return_value=None):
+                 patch('manipulation_agent.executors.navigation.forward_navigation.checked_connection',return_value=None), \
+                 patch('manipulation_agent.executors.navigation.point_route_projection.project_forward_point',return_value=None):
                 with self.assertRaises(SkillError) as caught:
                     b._local_reposition('open',object(),self.torch.tensor([1.55,0.,.8]),op)
             self.assertEqual(caught.exception.code,expected)
@@ -156,7 +157,7 @@ class ForwardBackendTests(unittest.TestCase):
 
     def test_local_operation_drives_then_executes_once_without_macro_navigation(self):
         from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
-        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
         b=self.b;b.local_limits=LocalLimits();b.navigation_distance=0.
         b.deadline=SimpleNamespace(check=lambda **kwargs:None)
         b.demo_motion=False;b.ideal_carry=False

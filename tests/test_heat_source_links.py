@@ -4,7 +4,7 @@ import unittest
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock, patch
 
-from manipulation_agent.executors.heat_source_links import install_heat_source_links
+from manipulation_agent.executors.compat.heat_source_links import install_heat_source_links
 
 
 class HeatSourceLinksTests(unittest.TestCase):

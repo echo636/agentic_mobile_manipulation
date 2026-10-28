@@ -1,7 +1,9 @@
 # Harness architecture
 
-The default system uses RGB observations, callable workflow skills, and tools. It
-has no explicit planning stack or persistent memory. The optional legacy
+The default system uses RGB observations, callable workflow skills, and tools.
+The model maintains hierarchical goals and working state in episode-local,
+versioned task notes. See the [code map](code_organization.md) for implementation
+entry points. The optional legacy
 `workflow` profile remains available for older experiments, but is not enabled by
 the default `skills` profile.
 
@@ -26,7 +28,7 @@ Task instruction + fixed instance + versions + execution budget
                   VisionHarness (owner thread)
            revision / budgets / execution / records
                             |
-              Original or Official backend
+            RGBBackend -> OmniGibsonBackend
                             |
                  result + fresh four-view RGB
 
@@ -56,8 +58,11 @@ response directly. Use the wait action when simulation time must pass. Final
 verification can use the last action's images without an additional capture.
 Workflow documents cover manipulation, exploration, pick and place, recovery, and
 [hierarchical goal decomposition](hierarchical_goal_planning.md). The goal skill
-teaches L1/L2 outcome planning and a separate current L3 action plan, saved as
-versioned model-authored task_notes. The no-goal-skill control has the same note
+teaches a model-written root end state, recursively refined intermediate outcomes
+and directly pursuable leaf goals. Depth and child counts vary with the task;
+the current action plan stays outside the tree. The tree, dependencies, item
+coverage and evidence are saved as versioned model-authored `task_notes`.
+The no-goal-skill control has the same note
 store and tools. Documents guide the model; they do not secretly run actions.
 
 ## FastMCP and concurrency
@@ -119,6 +124,15 @@ clients manage their own model context, so this option does not configure Codex,
 OpenCode or Kimi. `--model-max-turns` and `--model-max-tokens` also apply only to the
 native Responses path.
 
+Separately, `provider_gateway.py --keep-latest-image-items N` can prune old image
+payloads in outbound Responses requests, including those sent by a Codex client
+routed through that gateway. It is opt-in (default zero), retains the newest N
+image-bearing items and replaces older image payloads with fixed notices. An item
+can contain the four surround images; it is not necessarily one image or one
+capture. Raw episode images and replay records remain intact. Rewriting history
+can reduce provider prefix-cache reuse, so token and latency comparisons must
+include cached and uncached usage.
+
 ## Evidence and limits
 
 Raw client stdout remains `model_events.jsonl`. Canonical events and derived replay
@@ -128,8 +142,11 @@ returned public assistant messages and available reasoning summaries; they do no
 reconstruct unavailable internal reasoning. Model claims never override the private
 BDDL/TaskMetric result.
 
-New benchmark batches use 50 agent act/look attempts without an episode wall-time
-deadline. The execution clock starts after simulator initialization and MCP setup.
+New long-horizon batches explicitly use `unbounded` episode policy, recording
+act/look counts without an episode action, physics-step or wall-time cutoff.
+This is a batch setting, not a change to generic CLI defaults; native-loop model
+turn/token limits are configured separately. The execution clock starts after
+simulator initialization and MCP setup.
 Initialization and shutdown have separate watchdogs. Historical time-budget batches
 retain their configured execution deadline. Source and protocol changes are
 recorded per attempt and do not rewrite historical benchmark scores.
@@ -189,4 +206,4 @@ Architecture references were inspected at Jinkai's `jinkai/harness` commit
 FastMCP registration, and the native tool-call/image-history loop. The implementations
 here retain OmniGibson's owner-thread model, RGB-only policy boundary, existing
 executor profiles and independent evaluator. Navigation environments are not imported
-or modified; task_notes now provides explicit persistent model-authored planning state.
+or modified; task_notes provides episode-local model-authored planning state.

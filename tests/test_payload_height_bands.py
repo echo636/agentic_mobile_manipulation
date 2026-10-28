@@ -1,6 +1,6 @@
 import unittest
 
-from manipulation_agent.executors.live_gt_map import navigation_height_edges
+from manipulation_agent.executors.navigation.live_gt_map import navigation_height_edges
 
 
 def cooccupies(edges, first, second):

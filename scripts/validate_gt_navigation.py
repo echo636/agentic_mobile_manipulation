@@ -13,7 +13,7 @@ import sys
 from types import SimpleNamespace
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
-from manipulation_agent.executors.gt_navigation import (
+from manipulation_agent.executors.navigation.gt_navigation import (
     GridMap, GreedyGridFollower, candidate_points, candidate_score, plan_navigation,
 )
 

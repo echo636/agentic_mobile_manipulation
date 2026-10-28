@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from manipulation_agent.executors.depth_scan import DepthFrame, ProjectionConfig, project_four_depth_frames, to_mapper_scans
+from manipulation_agent.executors.navigation.depth_scan import DepthFrame, ProjectionConfig, project_four_depth_frames, to_mapper_scans
 from manipulation_agent.observations.rig import camera_mount
 
 

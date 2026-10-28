@@ -3,8 +3,8 @@ import unittest
 
 import numpy as np
 
-from manipulation_agent.executors.gt_navigation import GridMap
-from manipulation_agent.executors.live_gt_map import floor_support_window, repair_floor_support
+from manipulation_agent.executors.navigation.gt_navigation import GridMap
+from manipulation_agent.executors.navigation.live_gt_map import floor_support_window, repair_floor_support
 
 
 class FloorWindowTests(unittest.TestCase):

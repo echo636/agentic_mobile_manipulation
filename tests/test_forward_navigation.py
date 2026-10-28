@@ -6,13 +6,13 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.executors.forward_navigation import (
+from manipulation_agent.executors.navigation.forward_navigation import (
     plan_forward_route, angle, local_exit_certificate, checked_connection,
     simplify_forward_poses, motion_seconds,
     select_forward_route,
     route_from_poses,
 )
-from manipulation_agent.executors.gt_navigation import GridMap, NavigationPlan, GreedyGridFollower, NavigationError
+from manipulation_agent.executors.navigation.gt_navigation import GridMap, NavigationPlan, GreedyGridFollower, NavigationError
 
 
 def plan(points, final_yaw=0.):
@@ -32,7 +32,7 @@ class PointCollision:
 class ForwardNavigationTests(unittest.TestCase):
     def test_connection_rejects_nearly_tangent_shortcut_before_feedback_drift(self):
         import numpy as np
-        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
         support = np.ones((5, 5), dtype='uint8')
         support[1, 1] = 0
         grid = GridMap(5, 5, 1., (0., 0.), support.tobytes())
@@ -85,8 +85,8 @@ class ForwardNavigationTests(unittest.TestCase):
             clock[0]+=25.
             kwargs['check_cancelled']()
             return result
-        with patch('manipulation_agent.executors.gt_navigation.time.monotonic',side_effect=lambda:clock[0]), \
-                patch('manipulation_agent.executors.forward_navigation.plan_forward_route',side_effect=search):
+        with patch('manipulation_agent.executors.navigation.gt_navigation.time.monotonic',side_effect=lambda:clock[0]), \
+                patch('manipulation_agent.executors.navigation.forward_navigation.plan_forward_route',side_effect=search):
             _,route,details=select_forward_route([plan([(0.,0.),(1.,0.)])],
                 (0.,0.,0.),PointCollision(),planning_seconds=60.)
             self.assertAlmostEqual(route.distance_m,1.)
@@ -106,8 +106,8 @@ class ForwardNavigationTests(unittest.TestCase):
             kwargs['check_cancelled']()
             return result
 
-        with patch('manipulation_agent.executors.gt_navigation.time.monotonic', side_effect=lambda: clock[0]), \
-                patch('manipulation_agent.executors.forward_navigation.plan_forward_route', side_effect=slower_search):
+        with patch('manipulation_agent.executors.navigation.gt_navigation.time.monotonic', side_effect=lambda: clock[0]), \
+                patch('manipulation_agent.executors.navigation.forward_navigation.plan_forward_route', side_effect=slower_search):
             _, route, details = select_forward_route(
                 [plan([(0., 0.), (1., 0.)])], (0., 0., 0.), PointCollision())
         self.assertAlmostEqual(route.distance_m, 1.)
@@ -125,8 +125,8 @@ class ForwardNavigationTests(unittest.TestCase):
             self.fail('Exhausted candidate must not return an unchecked route')
 
         options = [replace(plan([(0., 0.), (1., 0.)]), final_yaw=i*.1) for i in range(6)]
-        with patch('manipulation_agent.executors.gt_navigation.time.monotonic', side_effect=lambda: clock[0]), \
-                patch('manipulation_agent.executors.forward_navigation.plan_forward_route', side_effect=exhausted_search) as search:
+        with patch('manipulation_agent.executors.navigation.gt_navigation.time.monotonic', side_effect=lambda: clock[0]), \
+                patch('manipulation_agent.executors.navigation.forward_navigation.plan_forward_route', side_effect=exhausted_search) as search:
             with self.assertRaises(NavigationError) as caught:
                 select_forward_route(options, (0., 0., 0.), PointCollision())
         self.assertEqual(caught.exception.code, 'navigation_search_exhausted')
@@ -168,7 +168,7 @@ class ForwardNavigationTests(unittest.TestCase):
         self.follow(route,start,collision)
 
     def test_certified_route_survives_optional_shortcut_timeout(self):
-        from manipulation_agent.executors.gt_navigation import SearchBudgetExhausted
+        from manipulation_agent.executors.navigation.gt_navigation import SearchBudgetExhausted
         poses=[(0.,0.,0.),(1.,0.,0.),(1.,0.,math.pi/2),(1.,1.,math.pi/2)]
         collision=PointCollision()
         self.assertTrue(all(collision.motion_free(a,b) for a,b in zip(poses,poses[1:])))
@@ -519,7 +519,7 @@ class HeadingCollisionTests(unittest.TestCase):
     def test_recorded_nearby_approach_avoids_forty_metre_house_detour(self):
         import hashlib
         import numpy as np
-        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
         path=Path(__file__).parent/'fixtures/local_stances/garden_detour_r50.npz'
         meta=json.loads(path.with_suffix('.json').read_text())
         self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),meta['sha256'])
@@ -545,7 +545,7 @@ class HeadingCollisionTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec('scipy'),'Requires optional roadmap dependency')
     def test_loaded_fridge_departure_reaches_original_visible_stance(self):
         import numpy as np
-        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
         z=np.load(Path(__file__).parent/'fixtures/local_stances/kitchen_loaded_departure_r43.npz')
         free=z['free'];grid=GridMap(free.shape[1],free.shape[0],float(z['resolution']),
                                    tuple(z['origin']),free.tobytes())
@@ -589,7 +589,7 @@ class HeadingCollisionTests(unittest.TestCase):
     def test_floor_projection_cannot_choose_closer_pose_across_wall(self):
         import numpy as np
         from dataclasses import replace
-        from manipulation_agent.executors.point_route_projection import prepare_point_projection
+        from manipulation_agent.executors.navigation.point_route_projection import prepare_point_projection
         if not prepare_point_projection():self.skipTest('Requires optional SciPy graph support')
         raw=np.ones((81,81),dtype='uint8');raw[:,40]=0
         footprint=[[-.15,-.1],[.15,-.1],[.15,.1],[-.15,.1]]
@@ -661,7 +661,7 @@ class HeadingCollisionTests(unittest.TestCase):
 
     def checker(self,raw,footprint,reference_yaw=0.):
         import numpy as np
-        from manipulation_agent.executors.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
         grid=GridMap(raw.shape[1],raw.shape[0],.05,(-1.,-1.),np.ones_like(raw).tobytes())
         return HeadingCollisionChecker(grid,[(raw,footprint)],reference_yaw,np.ones_like(raw))
 

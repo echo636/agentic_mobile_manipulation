@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.executors.gt_navigation import NavigationError
-from manipulation_agent.executors.navigation_refinement import refine_navigation_detour
+from manipulation_agent.executors.navigation.gt_navigation import NavigationError
+from manipulation_agent.executors.navigation.navigation_refinement import refine_navigation_detour
 
 
 class DetourFallbackTests(unittest.TestCase):
@@ -29,9 +29,9 @@ class DetourFallbackTests(unittest.TestCase):
                 setattr(backend, name, object())
             return SimpleNamespace(resolution=kwargs['sampling']['resolution']), {}
         fine_checker = SimpleNamespace(motion_free=lambda *args: True, check_cancelled=None)
-        with patch('manipulation_agent.executors.live_gt_map.build_navigation_grid', side_effect=build), \
-                patch('manipulation_agent.executors.navigation_refinement.HeadingCollisionChecker', return_value=fine_checker), \
-                patch('manipulation_agent.executors.navigation_refinement.local_exit_certificate',
+        with patch('manipulation_agent.executors.navigation.live_gt_map.build_navigation_grid', side_effect=build), \
+                patch('manipulation_agent.executors.navigation.navigation_refinement.HeadingCollisionChecker', return_value=fine_checker), \
+                patch('manipulation_agent.executors.navigation.navigation_refinement.local_exit_certificate',
                       side_effect=NavigationError('No fine route')):
             result = refine_navigation_detour(backend, 0, coarse, detail, (0., 0., 0.),
                                                [plan], plan, route, collision, selection)

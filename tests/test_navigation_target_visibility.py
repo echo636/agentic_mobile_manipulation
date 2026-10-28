@@ -12,8 +12,8 @@ import numpy as np
 
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.deadline import EpisodeDeadline
-from manipulation_agent.executors.gt_navigation import GridMap, NavigationError
-from manipulation_agent.executors.forward_navigation import ForwardRoute, select_forward_route
+from manipulation_agent.executors.navigation.gt_navigation import GridMap, NavigationError
+from manipulation_agent.executors.navigation.forward_navigation import ForwardRoute, select_forward_route
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 
 
@@ -55,7 +55,7 @@ class TargetVisibilityTests(unittest.TestCase):
         modules['omnigibson.utils.transform_utils'].quat2mat=lambda _:np.array([
             [math.cos(b.yaw),-math.sin(b.yaw),0.],[math.sin(b.yaw),math.cos(b.yaw),0.],[0.,0.,1.]])
         p=patch.dict(sys.modules,modules);p.start();self.addCleanup(p.stop)
-        p=patch('manipulation_agent.executors.heading_collision.HeadingCollisionChecker',
+        p=patch('manipulation_agent.executors.navigation.heading_collision.HeadingCollisionChecker',
                 return_value=SimpleNamespace(motion_free=lambda a,b:True,
                                              grid_at_heading=lambda yaw:self.build_grid.return_value[0]))
         self.collision=p.start();self.addCleanup(p.stop)
@@ -63,15 +63,15 @@ class TargetVisibilityTests(unittest.TestCase):
             selected=min(options,key=lambda p:p.score)
             route=ForwardRoute((selected,),selected.geodesic_m,0,'visibility_fixture',start=actual)
             return selected,route,{'fixture':True}
-        p=patch('manipulation_agent.executors.forward_navigation.select_forward_route',
+        p=patch('manipulation_agent.executors.navigation.forward_navigation.select_forward_route',
                 side_effect=select_fixture_route)
         self.route_selection=p.start();self.addCleanup(p.stop)
-        p=patch('manipulation_agent.executors.live_gt_map.build_navigation_grid',return_value=(grid,
+        p=patch('manipulation_agent.executors.navigation.live_gt_map.build_navigation_grid',return_value=(grid,
             {'chassis_footprint_world_offsets':[],'collision_layers':[],'dynamic_collision_check':True}))
         self.build_grid=p.start();self.addCleanup(p.stop)
-        p=patch('manipulation_agent.executors.live_gt_map.feasible_heading_grids',return_value=[])
+        p=patch('manipulation_agent.executors.navigation.live_gt_map.feasible_heading_grids',return_value=[])
         self.headings=p.start();self.addCleanup(p.stop)
-        p=patch('manipulation_agent.executors.live_gt_map.rotation_staging_plan',side_effect=NavigationError('No staging'))
+        p=patch('manipulation_agent.executors.navigation.live_gt_map.rotation_staging_plan',side_effect=NavigationError('No staging'))
         p.start();self.addCleanup(p.stop)
 
     def target(self,z=1.):
@@ -106,7 +106,7 @@ class TargetVisibilityTests(unittest.TestCase):
         self.assertEqual(saved['arrival_heading_refinement'][0]['reason'],'target_not_visible')
 
     def test_radio_camera_gap_uses_small_view_turn_instead_of_departure_yaw(self):
-        from manipulation_agent.executors.gt_navigation import NavigationPlan
+        from manipulation_agent.executors.navigation.gt_navigation import NavigationPlan
         from manipulation_agent.observations.rig import visible_rig_rays
         b=self.backend;self.open_side_target()
         # Recorded radio stance: the straight-arrival yaw has safe geometry
@@ -125,7 +125,7 @@ class TargetVisibilityTests(unittest.TestCase):
         proposed=NavigationPlan((tuple(b.position.tolist()[:2]),goal),goal,point[:2],original_yaw,
                                1.291521,math.dist(goal,point[:2]),1,1,0.,0,travel_yaw=original_yaw)
         target=SimpleNamespace(get_position_orientation=lambda:(Tensor(point),None))
-        with patch('manipulation_agent.executors.gt_navigation.plan_navigation',return_value=proposed):
+        with patch('manipulation_agent.executors.navigation.gt_navigation.plan_navigation',return_value=proposed):
             b._navigate(target,1000,for_manipulation=True)
         self.assertGreater(abs(b.yaw-original_yaw),.1)
         route=b._execute_gt_plan.call_args.kwargs['prepared_route']
@@ -142,19 +142,19 @@ class TargetVisibilityTests(unittest.TestCase):
                 def certificate(pose,*_,incoming=False,**kw):
                     if abs(pose[2])>.01 and incoming==reject_incoming:return None
                     return {'poses':[pose]}
-                with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',side_effect=certificate):
+                with patch('manipulation_agent.executors.navigation.forward_navigation.local_exit_certificate',side_effect=certificate):
                     b._navigate(target,1000)
                 self.assertAlmostEqual(b.yaw,0.)
                 selected=self.route_selection.call_args.args[0]
                 self.assertTrue(all(abs(p.final_yaw)<.01 for p in selected))
 
     def test_arrival_heading_timeout_retains_validated_original(self):
-        from manipulation_agent.executors.gt_navigation import SearchBudgetExhausted
+        from manipulation_agent.executors.navigation.gt_navigation import SearchBudgetExhausted
         b=self.backend;target=self.open_side_target()
         def certificate(pose,*_,**kw):
             if abs(pose[2])>.01:raise SearchBudgetExhausted()
             return {'poses':[pose]}
-        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',side_effect=certificate):
+        with patch('manipulation_agent.executors.navigation.forward_navigation.local_exit_certificate',side_effect=certificate):
             b._navigate(target,1000)
         self.assertAlmostEqual(b.yaw,0.)
         saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
@@ -248,8 +248,8 @@ class TargetVisibilityTests(unittest.TestCase):
             b._navigation_clearance=(raw.tobytes(),1-np.frombuffer(g.free,dtype='uint8'),.35)
             return g,meta
         self.build_grid.side_effect=build
-        with patch('manipulation_agent.executors.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True), \
-             patch('manipulation_agent.executors.navigation_refinement.detour_sampling',return_value=()):
+        with patch('manipulation_agent.executors.navigation.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True), \
+             patch('manipulation_agent.executors.navigation.navigation_refinement.detour_sampling',return_value=()):
             result=b._navigate(SimpleNamespace(get_position_orientation=lambda:(Tensor([.1,1.,0.]),None)),1000)
         records=[json.loads(s) for s in (b.output/'navigation_recovery.jsonl').read_text().splitlines()]
         completed=[r for r in records if 'refreshed_start_navigable' in r]
@@ -277,7 +277,7 @@ class TargetVisibilityTests(unittest.TestCase):
         def certificate(pose,*_,**kw):
             if kw.get('incoming'):return {'poses':[pose], 'scope':'fixture'}
             return {'poses':[pose], 'scope':'fixture'} if np.linalg.norm(np.array(pose[:2])-[2.3,1.])>.21 else None
-        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',side_effect=certificate):
+        with patch('manipulation_agent.executors.navigation.forward_navigation.local_exit_certificate',side_effect=certificate):
             result=b._navigate(target,1000)
         self.assertGreater(result['target_projection_distance_m'],.21)
         saved=json.loads((b.output/'navigation_plans.jsonl').read_text())
@@ -286,7 +286,7 @@ class TargetVisibilityTests(unittest.TestCase):
 
     def test_arrival_revalidates_exit_instead_of_claiming_success(self):
         b=self.backend
-        with patch('manipulation_agent.executors.forward_navigation.local_exit_certificate',
+        with patch('manipulation_agent.executors.navigation.forward_navigation.local_exit_certificate',
                    side_effect=lambda pose,*_,**kw:None if b.moved else {'poses':[pose]}):
             with self.assertRaises(SkillError) as caught:b._navigate(self.target(0.),1000)
         self.assertTrue(caught.exception.changed)
@@ -301,7 +301,7 @@ class TargetVisibilityTests(unittest.TestCase):
         b._navigation_clearance=(raw.tobytes(),1-free.ravel(),.35)
         b._live_gt_collision_cache={0:{'support':raw}}
         b._execute_gt_plan.side_effect=lambda *a,**kw:{'steps':3,'motion_steps':3,'actual_path_distance_m':.01}
-        with patch('manipulation_agent.executors.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True):
+        with patch('manipulation_agent.executors.navigation.live_gt_map.clearance_transition_guard',return_value=lambda a,b:True):
             with self.assertRaises(SkillError) as error:b._navigate(self.target(0.),1000)
         self.assertEqual(error.exception.code,'navigation_invalid_start')
         self.assertTrue(error.exception.changed)

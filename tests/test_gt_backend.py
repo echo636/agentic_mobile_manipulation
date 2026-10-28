@@ -68,7 +68,7 @@ class GTBackendTests(unittest.TestCase):
         b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav))
         # Exercise the historical planner without importing/constructing Isaac
         # Sim. Its live substrate is covered by test_live_gt_map separately.
-        from manipulation_agent.executors.gt_navigation import GridMap, NavigationError
+        from manipulation_agent.executors.navigation.gt_navigation import GridMap, NavigationError
         grid = GridMap(60, 60, .1, (-3., -3.), (occupancy > 0).astype('uint8').tobytes())
         b._navigation_clearance = (grid.free, np.zeros_like(occupancy), .35)
         b._navigation_layers = [(occupancy > 0, np.zeros((4,2)))]
@@ -79,19 +79,19 @@ class GTBackendTests(unittest.TestCase):
         modules['omnigibson.utils'].transform_utils = modules['omnigibson.utils.transform_utils']
         modules['omnigibson.utils.transform_utils'].quat2mat = lambda _: np.eye(3)
         def select_route(options,*args,**kwargs):
-            from manipulation_agent.executors.forward_navigation import ForwardRoute
+            from manipulation_agent.executors.navigation.forward_navigation import ForwardRoute
             plan=min(options,key=lambda p:p.score)
             return plan,ForwardRoute((plan,),plan.geodesic_m,0,'fixture'),{'fixture':True}
         patches = [patch.dict('sys.modules', modules),
-                   patch('manipulation_agent.executors.heading_collision.HeadingCollisionChecker',
+                   patch('manipulation_agent.executors.navigation.heading_collision.HeadingCollisionChecker',
                          return_value=SimpleNamespace(motion_free=lambda a,b:True,grid_at_heading=lambda yaw:grid)),
-                   patch('manipulation_agent.executors.forward_navigation.select_forward_route',
+                   patch('manipulation_agent.executors.navigation.forward_navigation.select_forward_route',
                          side_effect=select_route),
-                   patch('manipulation_agent.executors.live_gt_map.build_navigation_grid', return_value=(grid,
+                   patch('manipulation_agent.executors.navigation.live_gt_map.build_navigation_grid', return_value=(grid,
                        {'chassis_footprint_world_offsets': [], 'collision_layers': [],
                         'dynamic_collision_check': False, 'collision_substrate': 'static_fixture'})),
-                   patch('manipulation_agent.executors.live_gt_map.feasible_heading_grids', return_value=[]),
-                   patch('manipulation_agent.executors.live_gt_map.rotation_staging_plan',
+                   patch('manipulation_agent.executors.navigation.live_gt_map.feasible_heading_grids', return_value=[]),
+                   patch('manipulation_agent.executors.navigation.live_gt_map.rotation_staging_plan',
                          side_effect=NavigationError('No fixture staging'))]
         for mocked in patches:
             mocked.start()
@@ -127,7 +127,7 @@ class GTBackendTests(unittest.TestCase):
         b = self.backend()
         original = {'scene': {'type': 'InteractiveTraversableScene', 'scene_model': 'fixture'}}
         with patch.object(OmniGibsonBackend, '_config', return_value=copy.deepcopy(original)), \
-             patch('manipulation_agent.executors.online_scene.register_online_scene',
+             patch('manipulation_agent.executors.navigation.online_scene.register_online_scene',
                    side_effect=AssertionError('online scene selected')):
             self.assertEqual(b._config('fixture', 0, 100), original)
         with patch.object(OmniGibsonBackend, 'close') as close:

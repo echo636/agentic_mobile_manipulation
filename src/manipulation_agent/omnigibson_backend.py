@@ -215,25 +215,25 @@ class OmniGibsonBackend:
             import omnigibson as og
             from .executors.usd_diagnostics import install_usd_caller_metadata
             write_json(output/'usd_caller_diagnostics.json',install_usd_caller_metadata())
-            from .executors.particle_quaternions import install_particle_quaternion_serialization
+            from .executors.compat.particle_quaternions import install_particle_quaternion_serialization
             write_json(output/'particle_quaternion_serialization.json',
                        install_particle_quaternion_serialization())
-            from .executors.particle_emission import install_particle_emission_clearance
+            from .executors.compat.particle_emission import install_particle_emission_clearance
             write_json(output/'particle_emission_compatibility.json',
                        install_particle_emission_clearance(output))
-            from .executors.macro_particle_pose import install_macro_particle_pose_repair
+            from .executors.compat.macro_particle_pose import install_macro_particle_pose_repair
             write_json(output/'macro_particle_pose_compatibility.json',
                        install_macro_particle_pose_repair())
-            from .executors.inside_fabric import install_inside_sampling_fabric_sync
+            from .executors.compat.inside_fabric import install_inside_sampling_fabric_sync
             write_json(output/'inside_sampling_fabric_sync.json',
                        install_inside_sampling_fabric_sync())
-            from .executors.contact_manifold_capacity import install_contact_manifold_capacity
+            from .executors.compat.contact_manifold_capacity import install_contact_manifold_capacity
             write_json(output/'contact_manifold_capacity.json', install_contact_manifold_capacity())
-            from .executors.temperature_indices import install_temperature_index_repair
+            from .executors.compat.temperature_indices import install_temperature_index_repair
             install_temperature_index_repair(output)
-            from .executors.heat_source_links import install_heat_source_links
+            from .executors.compat.heat_source_links import install_heat_source_links
             write_json(output/'heat_source_links_compatibility.json', install_heat_source_links())
-            from .executors.cloth_import import install_nested_cloth_import
+            from .executors.compat.cloth_import import install_nested_cloth_import
             write_json(output/'cloth_import_compatibility.json', install_nested_cloth_import(output))
             from omnigibson.macros import gm
             from omnigibson.eval.evaluator import Evaluator, resolve_instance_ids
