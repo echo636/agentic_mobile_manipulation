@@ -15,7 +15,6 @@ class LocalLimits:
     reach_m: float = 1.4
     preferred_reach_m: float = 1.25
     max_repositions: int = 3
-    max_operation_attempts: int = 2
     max_env_steps: int = 600  # Atomic allowance; certified routes reserve extra steps.
     max_sampling_steps: int = 1200
     wall_seconds: float = 300.0
@@ -155,8 +154,8 @@ class LocalOperation:
                 ready = self.backend._local_ready(self.primitive, obj, point, self)
                 self.record('check', ready=ready)
                 if ready:
-                    if self.attempts >= self.limits.max_operation_attempts:
-                        raise SkillError('local_adjustment_exhausted', 'Operation attempt limit reached')
+                    # Each retry requires a bounded reposition below. A second
+                    # attempt cap can reject the stance we just moved to.
                     self.attempts += 1
                     self.record('execute')
                     try:

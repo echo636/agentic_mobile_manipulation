@@ -103,6 +103,25 @@ class CoordinationTests(unittest.TestCase):
     def test_ready_target_executes_without_unnecessary_motion(self):
         b=Motor();b.point=(1.,0.,.7);r=b.run()
         self.assertEqual(r['local_manipulation']['repositions'],0)
+    def test_grasp_can_use_last_allowed_stance_without_unbounded_retries(self):
+        for blocked_attempts in (2, 99):
+            with self.subTest(blocked_attempts=blocked_attempts):
+                b=Motor()
+                execute=b._execute_bound_manipulation
+                def grasp(*args, **kwargs):
+                    b.operation_error='out_of_reach' if len(b.executions)<blocked_attempts else None
+                    return execute(*args, **kwargs)
+                b._execute_bound_manipulation=grasp
+                if blocked_attempts==2:
+                    result=b.run()['local_manipulation']
+                    self.assertEqual(result['repositions'],3)
+                    self.assertEqual(result['primitive_attempts'],3)
+                else:
+                    with self.assertRaises(SkillError) as caught:b.run()
+                    self.assertEqual(str(caught.exception),'Local reposition limit reached')
+                self.assertEqual(len(b.executions),3)
+                self.assertEqual(b.refreshes,3)
+                self.assertTrue(all(call[0] is b.target for call in b.executions))
     def test_far_selected_target_can_approach_and_execute_in_one_call(self):
         b=Motor();b.point=(6.,0.,.7)
         def approach(primitive,obj,point,op):
