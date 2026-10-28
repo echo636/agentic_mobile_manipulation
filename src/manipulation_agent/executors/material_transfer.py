@@ -152,14 +152,18 @@ def free_surface_positions(scene, destination, system, limit, *, diagnostics):
 
 class CheckedMaterialTransfer:
     def _pour_objects(self, source):
-        """Select loose payload roots; a nested vessel owns its own contents."""
-        from omnigibson.object_states import Inside, OnTop, AttachedTo
-        candidates = [child for child, parent, kind in self._grasp_dependencies(source)
-                      if parent is source and kind in {'Inside', 'OnTop'}]
+        """Pour loose stacked items separately; nested vessels keep contents."""
+        from omnigibson.object_states import ContainedParticles, Inside, OnTop, AttachedTo
+        dependencies = self._grasp_dependencies(source)
+        members = [child for child, _, _ in dependencies]
+        candidates = [child for child, _, kind in dependencies if kind in {'Inside', 'OnTop'}]
         return [child for child in candidates if not any(
-            other is not child and any(state in child.states and child.states[state].get_value(other)
-                                       for state in (Inside, OnTop, AttachedTo))
-            for other in candidates)]
+            other is not child and (
+                AttachedTo in child.states and child.states[AttachedTo].get_value(other)
+                or ContainedParticles in other.states and any(
+                    state in child.states and child.states[state].get_value(other)
+                    for state in (Inside, OnTop)))
+            for other in members)]
 
     def _pour_rigid_objects(self, source, destination, objects, max_steps):
         """Use native containment/support placement, then leave free physics.
@@ -174,7 +178,10 @@ class CheckedMaterialTransfer:
         moved = []
         for obj in objects:
             self.deadline.check(changed=bool(moved))
-            dependencies = self._grasp_dependencies(obj)
+            # Loose peers have their own transfer in this batch. Only carry
+            # this object's nested contents or attached assembly with it.
+            dependencies = [(child, parent, kind) for child, parent, kind in self._grasp_dependencies(obj)
+                            if child not in objects]
             contents = [(child, T.relative_pose_transform(
                 *child.get_position_orientation(), *obj.get_position_orientation()))
                 for child, _, _ in dependencies]

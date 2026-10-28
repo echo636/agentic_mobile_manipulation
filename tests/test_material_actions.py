@@ -115,6 +115,28 @@ class MaterialActionTests(unittest.TestCase):
             backend._pour_objects = lambda obj: []
             self.assertEqual(backend._transfer_preconditions('pour', board), (source, board))
 
+    def test_pour_counts_stacked_loose_items_without_emptying_nested_vessels(self):
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        states = {name: type(name, (), {}) for name in
+                  ('Inside', 'OnTop', 'AttachedTo', 'ContainedParticles')}
+        source = types.SimpleNamespace(name='tray', states={})
+        bottom = types.SimpleNamespace(name='bottom_piece', states={})
+        top = types.SimpleNamespace(name='top_piece', states={states['OnTop']:
+            types.SimpleNamespace(get_value=lambda obj: obj is bottom)})
+        vessel = types.SimpleNamespace(name='nested_vessel', states={states['ContainedParticles']: object()})
+        nested = types.SimpleNamespace(name='nested_contents', states={states['Inside']:
+            types.SimpleNamespace(get_value=lambda obj: obj is vessel)})
+        attached = types.SimpleNamespace(name='attached_part', states={states['AttachedTo']:
+            types.SimpleNamespace(get_value=lambda obj: obj is vessel)})
+        backend = CheckedMaterialTransfer()
+        backend._grasp_dependencies = lambda obj: [(bottom, source, 'OnTop'),
+            (top, bottom, 'OnTop'), (vessel, source, 'OnTop'),
+            (nested, vessel, 'Inside'), (attached, vessel, 'AttachedTo')]
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'], **states, create=True):
+            selected = backend._pour_objects(source)
+        self.assertEqual([obj.name for obj in selected], ['bottom_piece', 'top_piece', 'nested_vessel'])
+
     def test_surface_pour_moves_existing_portion_and_measures_contact_after_settling(self):
         import numpy as np
         from unittest.mock import Mock
