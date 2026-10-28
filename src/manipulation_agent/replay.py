@@ -126,6 +126,10 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             if name == 'remember': notes[args['key']] = {'text': args['text'], 'revision': args['revision']}
             if name == 'task_notes' and args.get('operation') == 'write':
                 task_notes=copy.deepcopy(result['notes'])
+                # New write receipts acknowledge metadata; the accepted text is
+                # already archived in the model's tool call. Preserve old receipts.
+                if 'content' not in task_notes:
+                    task_notes['content'] = args['content']
                 note_versions.append({**task_notes,'tool_step':len(steps)+1,'result_event_id':event['id']})
         seconds = (datetime.fromisoformat(event['at']) - datetime.fromisoformat(call['at'])).total_seconds() if event else None
         steps.append({'index': len(steps) + 1, 'event_id': call['id'], 'result_event_id': event['id'] if event else None,
