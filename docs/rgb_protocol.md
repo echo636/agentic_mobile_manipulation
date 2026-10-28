@@ -75,20 +75,23 @@ extend this support to piles, including mixed materials. Intervening rigid
 objects block selection; neighboring table particles, side contacts, and
 disconnected floating particles do not follow merely because they are nearby.
 Annotated containment takes priority over surface support.
-Particle poses follow their own supporting link through grasp, navigation and
-placement; unrelated particles are untouched. Stable prim paths survive index
-reordering, while deleted particles or replaced systems invalidate the carry
-instead of restoring consumed material. Rejected placements restore the carry
-and raw PhysX particle frames unless target identity changed. This supplemental
-snapshot avoids the center/frame offset in OG 3.9.2's macro state restoration.
-Particles follow the container through placement sampling and settling;
-successful placement and
-release clear the carry constraint and resume particle physics. This remains
-ideal pose actuation, and does not claim physical grasp control or fluid carry.
-Surface support is checked again after grasp and placement, with the original
-contact probe transformed in the supporting link's frame. Carrying a board
-does not pour or scrape its contents into another object: no transfer primitive
-is added, and `spread` retains its absorbed-tool-material semantics.
+Symbolic grasp, navigation and placement relocate the assembly and its captured
+contents once. Subsequent settling belongs to native physics; contents are not
+pinned to the carrier on every step. Stable prim paths identify existing
+particles across index changes. Consumed material is not recreated. Rejected
+hypothetical placement samples can restore their snapshots, including raw PhysX
+particle frames, before committing a pose. A committed physical outcome is not
+rewound. This remains ideal pose actuation, not physical grasp or pour control.
+
+Carrying a board alone does not empty it. The explicit `pour` action transfers
+loose rigid contents with native `Inside` placement and transfers a portion of
+loose material into the selected open receiver. It preserves existing object and
+particle identities and keeps the carrier held. Capacity can leave a remainder;
+feedback reports moved/retained rigid counts and remaining source contents.
+Nested vessels keep their contents. `scoop` transfers loose material into the
+held vessel; `spread` retains its absorbed-tool-material semantics. These are
+executor capabilities; whole-task success and efficiency require separate
+autonomous validation.
 
 The 2026-10-13 private instance-301 popcorn regression reproduced the old
 255-to-0 loss on grasp. The repaired grasp, base turn, rejected-placement
