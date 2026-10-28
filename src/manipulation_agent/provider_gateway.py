@@ -13,6 +13,7 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPSHandler, HTTPRedirectHandler, Request, build_opener
+from .image_pruning import prune_stale_images
 
 
 HOP_HEADERS = {'host', 'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
@@ -70,7 +71,8 @@ class RequestQueue:
                 self.condition.notify_all()
 
 
-def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None, max_attempts=3):
+def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None, max_attempts=3,
+                keep_latest_image_items=0):
     endpoint = urlsplit(upstream)
     if (endpoint.scheme not in {'http', 'https'} or not endpoint.netloc
             or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment):
@@ -79,6 +81,8 @@ def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None, max
         raise ValueError('Provider queue must bind to loopback')
     if max_attempts < 1:
         raise ValueError('Provider attempts must be positive')
+    if keep_latest_image_items < 0:
+        raise ValueError('Image history retention must be nonnegative')
     queue = RequestQueue(capacity)
     context = ssl.create_default_context(cafile=ca_file)
     opener = build_opener(NoRedirect(), HTTPSHandler(context=context))
@@ -121,8 +125,20 @@ def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None, max
             if len(body) != length:
                 self.close_connection = True
                 return
+            image_stats = None
+            if keep_latest_image_items:
+                try:
+                    payload = json.loads(body)
+                except (ValueError, UnicodeDecodeError):
+                    pass  # Preserve upstream handling of malformed requests.
+                else:
+                    image_stats = prune_stale_images(payload, keep_latest_image_items)
+                    if image_stats['dropped_images']:
+                        body = json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode()
             headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP_HEADERS}
             request = Request(upstream.rstrip('/') + self.path, body, headers, method='POST')
+            # Local instrumentation may read these counts; they are not HTTP headers.
+            request.image_pruning = dict(image_stats or {}, input_bytes=length, forwarded_bytes=len(body))
             queue.count('requests')
             sent_headers = False
             attempt = 0
@@ -203,8 +219,11 @@ def main():
     p.add_argument('--port', type=int, required=True)
     p.add_argument('--max-inflight', type=int, required=True)
     p.add_argument('--ca-file')
+    p.add_argument('--keep-latest-image-items', type=int, default=0,
+                   help='Keep this many newest image-bearing input items; 0 preserves all images')
     args = p.parse_args()
-    server = make_server(('127.0.0.1', args.port), args.upstream, args.max_inflight, ca_file=args.ca_file)
+    server = make_server(('127.0.0.1', args.port), args.upstream, args.max_inflight, ca_file=args.ca_file,
+                         keep_latest_image_items=args.keep_latest_image_items)
     print(json.dumps(dict(status='ready', port=args.port, max_inflight=args.max_inflight)), flush=True)
     server.serve_forever()
 

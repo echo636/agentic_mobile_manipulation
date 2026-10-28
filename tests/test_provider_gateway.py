@@ -1,5 +1,6 @@
 """Actual HTTP transport checks, with a local provider and no model API calls."""
 from concurrent.futures import ThreadPoolExecutor
+import copy
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -12,6 +13,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from manipulation_agent.provider_gateway import make_server
+from manipulation_agent.image_pruning import prune_stale_images, count_images, PLACEHOLDER
 
 
 @contextmanager
@@ -31,6 +33,63 @@ class ProviderGatewayTests(unittest.TestCase):
         proxy = patch.dict(os.environ, {'no_proxy': '127.0.0.1,localhost'})
         proxy.start()
         self.addCleanup(proxy.stop)
+
+    def observation(self, revision):
+        return {'type': 'custom_tool_call_output', 'call_id': 'call-'+str(revision),
+                'output': [{'type': 'input_text', 'text': 'exact receipt '+str(revision)},
+                           *[{'type': 'input_image', 'image_url': 'data:image/jpeg;base64,'+str(revision)+view,
+                              'detail': 'original'} for view in ('front', 'back', 'left', 'right')]]}
+
+    def test_fixed_placeholders_preserve_prefix_until_previous_latest_images(self):
+        payload = {'model': 'unchanged', 'input': [
+            {'role': 'user', 'content': 'unchanged task'}, self.observation(1),
+            {'type': 'message', 'content': [{'type': 'output_text', 'text': 'exact plan'}]},
+            self.observation(2)]}
+        before = copy.deepcopy(payload)
+        stats = prune_stale_images(before)
+        self.assertEqual(stats, {'image_items': 2, 'kept_images': 4, 'dropped_images': 4})
+        self.assertEqual(before['input'][-1], payload['input'][-1])
+        self.assertEqual(before['input'][1]['output'][0], payload['input'][1]['output'][0])
+        self.assertEqual(before['input'][1]['output'][1], {'type': 'input_text', 'text': PLACEHOLDER})
+        payload['input'].append(self.observation(3))
+        after = copy.deepcopy(payload)
+        prune_stale_images(after)
+        self.assertEqual(before['input'][:3], after['input'][:3])
+        self.assertNotEqual(before['input'][3], after['input'][3])
+        self.assertEqual(count_images(after), 4)
+        stable = copy.deepcopy(after)
+        prune_stale_images(after)
+        self.assertEqual(after, stable)
+        control = copy.deepcopy(payload)
+        prune_stale_images(control, 0)
+        self.assertEqual(control, payload)
+
+    def test_image_pruning_on_actual_http_preserves_current_views_and_response(self):
+        seen = []
+        response = b'data: {"type":"response.completed","response":{"usage":{"input_tokens":42}}}\n\n'
+
+        class Provider(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                seen.append((self.path, json.loads(self.rfile.read(int(self.headers['Content-Length'])))))
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream')
+                self.end_headers()
+                self.wfile.write(response)
+
+        payload = {'model': 'unchanged', 'input': [self.observation(1), self.observation(2)]}
+        with serving(ThreadingHTTPServer(('127.0.0.1', 0), Provider)) as upstream:
+            with serving(make_server(('127.0.0.1', 0), upstream, 1, keep_latest_image_items=1)) as local:
+                for path in ('/responses', '/responses/compact'):
+                    with urlopen(Request(local+path, json.dumps(payload).encode()), timeout=5) as result:
+                        self.assertEqual(result.read(), response)
+        self.assertEqual([path for path, _ in seen], ['/responses', '/responses/compact'])
+        for _, forwarded in seen:
+            self.assertEqual(count_images(forwarded), 4)
+            self.assertEqual(forwarded['input'][-1], payload['input'][-1])
+            self.assertEqual(forwarded['input'][0]['call_id'], payload['input'][0]['call_id'])
 
     def test_concurrency_waits_and_retries_without_changing_request_or_stream(self):
         lock = threading.Lock()
