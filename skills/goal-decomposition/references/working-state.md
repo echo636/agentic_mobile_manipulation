@@ -45,6 +45,8 @@ IDs are unique; only the root has a null parent. Every other `parent_id` referen
 
 Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the leaf currently being pursued; its ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list.
 
-Use `members` when item coverage matters. Labels are your own, not simulator IDs. An entry may represent one item or a distinguishable group in the same state; avoid overlapping counts. Update current state and remaining work from RGB and feedback, citing actual evidence IDs. Mark lost identity or unknown counts as uncertain instead of inferring them from action totals. Replace stale entries rather than appending a transcript. A spill reopens the affected goal; temporary placement does not complete storage.
+Use `members` when item coverage matters. Labels are your own, not simulator IDs. An entry represents one item or a distinguishable group in the same state; keep groups disjoint and make count units clear after splitting or processing. Update state and remaining work from RGB and feedback. A spill reopens the affected goal; temporary placement does not complete storage.
+
+For repeated transfers, save each subtotal with the last feedback event it includes in `evidence`. On resuming, reconcile subsequent available results with that checkpoint before adding more; a remembered subtotal may omit completed transfers. If the intervening results or item correspondence are unavailable, mark the count uncertain. Keep uninspected supply, work in progress and confirmed delivery distinct. Replace stale entries rather than appending a transcript.
 
 Before finish, use `change` to reconcile each criterion and `uncertainties` for remaining gaps. An evidence ID alone, a successful notes write or a `done` label does not verify a result. Preserve original requirements and valid progress when replacing the state.
