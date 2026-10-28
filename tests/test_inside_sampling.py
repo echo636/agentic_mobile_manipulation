@@ -214,6 +214,35 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertTrue(b.torch.equal(held.position,original[0]))
         self.assertEqual(records[-1]['rejections'],{'initial_collision':1})
 
+    def test_loaded_container_prioritizes_door_clear_pose_with_one_trial(self):
+        import numpy as np
+        from manipulation_agent.executors.closure_clearance import closed_geometry_overlap
+        for collide in (False, 'all'):
+            with self.subTest(collide=collide):
+                b,held,target,contents,state,records,modules=self.fixture(collide=collide)
+                target.states[modules['omnigibson.object_states'].Open]=SimpleNamespace(get_value=lambda:True)
+                volume=target.links['volume']
+                # Open geometry permits both positions; a closed door overlaps
+                # the center but leaves room at the back of the same cavity.
+                geometry=([(np.array([-.5,-.5,0.]),np.array([.1,.5,1.]))],
+                          {'volume':(np.eye(3),np.zeros(3))})
+                b._inside_overlap_ranker=lambda assembly:lambda center,extent:0.
+                def closure(*args):
+                    overlap=closed_geometry_overlap(geometry,volume,held.position+held.offset,held.extent)
+                    return {'clear':not overlap}
+                with patch.dict('sys.modules',modules), \
+                     patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',return_value=geometry), \
+                     patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',side_effect=closure):
+                    result=sample_assembly_inside(b,held,target,contents,max_candidates=1)
+                if collide:
+                    self.assertFalse(result)
+                    self.assertEqual(records[-1]['rejections'],{'initial_collision':1})
+                else:
+                    self.assertTrue(result)
+                    self.assertEqual(closed_geometry_overlap(geometry,volume,held.position+held.offset,held.extent),0.)
+                    self.assertFalse(any(r.get('closure_clearance')=='open_only_fallback' for r in records))
+                self.assertEqual(records[-1]['attempted'],1)
+
     def test_small_budget_reaches_empty_space_despite_many_yaws(self):
         b,held,target,contents,state,records,modules=self.fixture()
         with patch.dict('sys.modules',modules):

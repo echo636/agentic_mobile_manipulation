@@ -331,6 +331,14 @@ Rejected candidate poses never become committed actions or task evidence.
                                     orientation_source, domain) for center in centers])
         held.set_position_orientation(root_pos, root_quat)
         backend._relocate_contents(held, contents)
+        def closed_overlap(candidate):
+            # Support proposals start above their resting surface. The
+            # release clearance itself need not fit under a closed lid.
+            center=list(candidate[1])
+            if candidate[-1].startswith('support_'):
+                center[2]-=.025+.5*9.81*sim.get_physics_dt()**2
+            return round(closed_geometry_overlap(closure_geometry,candidate[0],center,
+                extents[tuple(candidate[3].cpu().tolist())]),6)
         if payload_locked:
             # Spread early work across positions as well as orientations. Repeating
             # many yaws at one occupied center can exhaust the time budget before
@@ -365,14 +373,6 @@ Rejected candidate poses never become committed actions or task evidence.
             def location(candidate):return tuple(round(float(v)/.02) for v in candidate[1][:2])
             def top_height(candidate):
                 return float(candidate[1][2])+.5*extents[tuple(candidate[3].cpu().tolist())][2]
-            def closed_overlap(candidate):
-                # Support proposals start above their resting surface. The
-                # release clearance itself need not fit under a closed lid.
-                center=list(candidate[1])
-                if candidate[-1].startswith('support_'):
-                    center[2]-=.025+.5*9.81*sim.get_physics_dt()**2
-                return round(closed_geometry_overlap(closure_geometry,candidate[0],center,
-                    extents[tuple(candidate[3].cpu().tolist())]),6)
             volume_bounds={v.prim_path:tuple(a.cpu().tolist() for a in v.visual_aabb) for v in volumes}
             settling_drop=.025+.5*9.81*sim.get_physics_dt()**2
             def priority(c):
@@ -416,8 +416,12 @@ Rejected candidate poses never become committed actions or task evidence.
                         check()
                         overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
                         priority=(overlap,)
-                        if not payload_locked and was_open is True and closure_geometry is not None:
-                            priority+=(closed_overlap(c),round(top_height(c)/.01),round(occupancy(c),6))
+                        if was_open is True and closure_geometry is not None:
+                            # Loaded cookware needs door clearance too. Use
+                            # the existing geometry score, without extra trials.
+                            priority+=(closed_overlap(c),)
+                            if not payload_locked:
+                                priority+=(round(top_height(c)/.01),round(occupancy(c),6))
                         ranking['scored']+=1
                         ranking['clear']+=int(not overlap)
                         if pose_score is not None and not payload_locked and overlap:
