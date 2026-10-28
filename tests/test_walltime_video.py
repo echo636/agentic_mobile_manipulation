@@ -1,5 +1,5 @@
 import unittest
-from manipulation_agent.walltime_video import timeline
+from manipulation_agent.reporting.walltime_video import timeline
 
 class WalltimeTests(unittest.TestCase):
     def fixture(self):

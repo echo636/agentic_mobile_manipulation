@@ -256,7 +256,7 @@ def main():
             while not a.wait_ready_file.exists():
                 time.sleep(1)
             ready = json.loads(a.wait_ready_file.read_text())
-            from manipulation_agent.deadline import EpisodeDeadline
+            from manipulation_agent.runtime.deadline import EpisodeDeadline
             backend.deadline = EpisodeDeadline()
             backend.deadline.arm_local(max(1, a.execution_seconds - prefix_seconds))
             recorder.run['execution_clock'] = backend.deadline.clock
@@ -358,7 +358,7 @@ def main():
         if backend is not None:
             backend.close()
         else:
-            from manipulation_agent.startup_cleanup import shutdown_partial_simulator
+            from manipulation_agent.batch.startup_cleanup import shutdown_partial_simulator
             recorder.event('startup_cleanup', shutdown_partial_simulator())
     return 0 if validation['status'] == 'passed' else 2
 

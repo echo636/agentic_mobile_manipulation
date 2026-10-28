@@ -7,10 +7,10 @@ import unittest
 from unittest.mock import patch
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.runtime.deadline import EpisodeDeadline
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 from manipulation_agent.executors.placement import CheckedPlacement
-from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch'), 'Requires CPU geometry environment')

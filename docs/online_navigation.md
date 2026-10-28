@@ -1,17 +1,14 @@
-# Experimental online depth navigation
+# Archived online depth navigation experiment
 
-The default RGB executor now uses [private static GT-grid navigation](gt_navigation.md).
-It does not initialize, update or close a Cartographer mapper and does not need
-`MAS_CARTOGRAPHER_RUNTIME`. The online mapping/planning modules remain available
-for experimental integration and CPU tests; they are not a selectable default
-mode. Existing online probe scripts require a compatible online-wired runtime.
+The implementation, native Cartographer worker, dedicated probes and tests were
+removed from the current checkout on 2026-10-29. This page preserves historical
+results and replay links. Build instructions and source paths below refer to the
+pre-removal versions in Git, not commands to run against the current checkout.
+Frozen experiment sources, measurements and recordings were not changed.
 
-The implementation and acceptance records below describe the earlier online
-executor, which replaced precomputed traversability with a map built during the
-episode. Frozen runs retain that source and those results. Restoring GT navigation
-preserves the latest `initialize` → action → four-RGB observation protocol and the
-centered calibrated camera rig; it does not restore legacy observation-job tools
-to the default catalog.
+The active executor uses [private GT-grid navigation](gt_navigation.md). It has no
+Cartographer dependency. Shared robot/payload visibility geometry lives in
+`executors/navigation/self_occlusion.py`; online depth masking has been removed.
 
 ## Sensor and policy boundary
 
@@ -90,7 +87,7 @@ not a successful BEHAVIOR task.
 ## Runtime and validation
 
 Build and package the CPU worker as described in
-[`native/cartographer/README.md`](../native/cartographer/README.md), and set
+`native/cartographer/README.md` in the pre-removal Git history, and set
 `MAS_CARTOGRAPHER_RUNTIME` to the project-owned runtime prefix. The existing
 navigation environment is used only as a read-only build source. In particular,
 the worker and Cartographer library must use compatible Eigen headers; the

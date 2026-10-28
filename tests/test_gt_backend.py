@@ -11,12 +11,12 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.runtime.deadline import EpisodeDeadline
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 from manipulation_agent.observations.rig import DIRECTIONS
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 
 
 class Tensor:
@@ -107,10 +107,6 @@ class GTBackendTests(unittest.TestCase):
         b._render_rgb_views = Mock(side_effect=lambda **_: {
             v: np.full((8, 8, 3), b.steps*10+i, dtype=np.uint8) for i, v in enumerate(DIRECTIONS)})
         b._video_frame = Mock()
-        # Any accidental online hook must fail instead of silently running.
-        b._initialize_online_navigation = Mock(side_effect=AssertionError('mapper initialized'))
-        b._update_online_map = Mock(side_effect=AssertionError('mapper updated'))
-        b._close_online_navigation = Mock(side_effect=AssertionError('mapper closed'))
         def execute(grid, plan, max_steps, **kwargs):
             self.assertTrue(all(grid.segment_free(a, c) for a, c in zip(plan.points, plan.points[1:])))
             b._position = Tensor([*plan.goal, 0.])
@@ -123,17 +119,14 @@ class GTBackendTests(unittest.TestCase):
         b._turn = turn
         return b
 
-    def test_default_scene_config_and_cleanup_do_not_enter_online_hooks(self):
+    def test_default_scene_config_and_cleanup_use_base_adapter(self):
         b = self.backend()
         original = {'scene': {'type': 'InteractiveTraversableScene', 'scene_model': 'fixture'}}
-        with patch.object(OmniGibsonBackend, '_config', return_value=copy.deepcopy(original)), \
-             patch('manipulation_agent.executors.navigation.online_scene.register_online_scene',
-                   side_effect=AssertionError('online scene selected')):
+        with patch.object(OmniGibsonBackend, '_config', return_value=copy.deepcopy(original)):
             self.assertEqual(b._config('fixture', 0, 100), original)
         with patch.object(OmniGibsonBackend, 'close') as close:
             b.close()
             close.assert_called_once_with()
-        b._close_online_navigation.assert_not_called()
 
     def test_static_grid_plans_through_doorway_and_records_private_provenance(self):
         b = self.backend()
@@ -150,7 +143,6 @@ class GTBackendTests(unittest.TestCase):
         self.assertEqual(record['collision_substrate'], 'static_fixture')
         self.assertTrue(record['precomputed_walkability'])
         self.assertFalse(record['online_mapping'])
-        b._update_online_map.assert_not_called()
 
     def test_only_manipulation_approach_checks_visibility(self):
         b=self.backend()
@@ -163,14 +155,13 @@ class GTBackendTests(unittest.TestCase):
         b._navigate(target,700,for_manipulation=True)
         self.assertTrue(seen)
 
-    def test_disconnected_static_grid_fails_before_any_actuator_or_mapper(self):
+    def test_disconnected_static_grid_fails_before_any_actuator(self):
         b = self.backend(blocked=True)
         target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 1.]), None))
         with self.assertRaises(SkillError) as error:
             b._navigate(target, 700, for_manipulation=True)
         self.assertEqual(error.exception.code, 'navigation_search_exhausted')
         b._execute_gt_plan.assert_not_called()
-        b._update_online_map.assert_not_called()
         self.assertEqual(b.steps, 0)
 
     def test_default_gt_action_keeps_initialize_four_rgb_and_private_boundary(self):
@@ -205,7 +196,6 @@ class GTBackendTests(unittest.TestCase):
                 self.assertNotIn(private, public)
         self.assertEqual(b._render_rgb_views.call_count, 3)
         self.assertEqual(len(h.surround.jobs), 0)
-        b._update_online_map.assert_not_called()
         audits = [json.loads(line) for line in (self.output/'observation_capture_audit.jsonl').read_text().splitlines()]
         self.assertTrue(all(row['no_robot_motion'] for row in audits))
         self.assertEqual(len(list((self.output/'executor_frames').glob('*.npz'))), 12)

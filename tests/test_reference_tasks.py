@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import unittest
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.reference_tasks import ReferenceTask, appliance_approach_point, placement_yaw_delta, next_unstacked_tool
+from manipulation_agent.references.reference_tasks import ReferenceTask, appliance_approach_point, placement_yaw_delta, next_unstacked_tool
 
 
 class UnstackedToolTests(unittest.TestCase):
@@ -62,7 +62,7 @@ class ApplianceApproachTests(unittest.TestCase):
 
 class ReferenceRecoveryTests(unittest.TestCase):
     def test_powered_removal_negative_requires_actual_extraction_after_zero_lift_grasp(self):
-        from manipulation_agent.long_horizon import TemporalGoalEvaluator
+        from manipulation_agent.tasks.long_horizon import TemporalGoalEvaluator
         path = Path(__file__).resolve().parents[1] / 'task_designs/evaluation_v2/movie_night_and_restore_v2.json'
         spec = json.loads(path.read_text())
         for placement_moves_bag in (False, True):

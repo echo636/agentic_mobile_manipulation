@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 import unittest
 
-from manipulation_agent.custom_tasks import load_spec
-from manipulation_agent.long_horizon import TemporalGoalEvaluator
+from manipulation_agent.tasks.custom_tasks import load_spec
+from manipulation_agent.tasks.long_horizon import TemporalGoalEvaluator
 
 
 ROOT = Path(__file__).resolve().parents[1] / 'task_designs/candidates'

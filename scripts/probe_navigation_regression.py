@@ -23,7 +23,7 @@ def main():
         from manipulation_agent.executors.omnigibson_rgb import RGBBackend
         from manipulation_agent.executors.navigation.live_gt_map import build_navigation_grid
         from manipulation_agent.executors.navigation.gt_navigation import plan_navigation,NavigationError
-        from manipulation_agent.vision_harness import VisionHarness
+        from manipulation_agent.runtime.vision_harness import VisionHarness
         from manipulation_agent.contracts import Budget
         from omnigibson.object_states import Open
         backend=RGBBackend(fixture['task'],301,a.output,seed=0,max_steps=40000,inside_placement='official_volume',record_video=True)

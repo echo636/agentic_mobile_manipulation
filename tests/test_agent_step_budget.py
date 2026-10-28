@@ -8,12 +8,12 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent import bridge
+from manipulation_agent.transport import bridge
 from manipulation_agent.contracts import Budget
-from manipulation_agent.deadline import EpisodeDeadline, write_execution_clock, validate_execution_clock, tool_wait_seconds
+from manipulation_agent.runtime.deadline import EpisodeDeadline, write_execution_clock, validate_execution_clock, tool_wait_seconds
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder, read_run
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 from manipulation_agent.clients.base import run_process
 from manipulation_agent.clients.types import PreparedProject
 import test_batch_lifecycle as lifecycle
@@ -39,7 +39,7 @@ class AgentStepTests(unittest.TestCase):
     def test_clock_is_immutable_and_never_expires(self):
         path=self.root/'clock.json'
         clock=write_execution_clock(path,None,max_agent_steps=50)
-        with patch('manipulation_agent.deadline.time.time',return_value=clock['execution_started_at_unix']+86400):
+        with patch('manipulation_agent.runtime.deadline.time.time',return_value=clock['execution_started_at_unix']+86400):
             deadline=EpisodeDeadline(clock_path=path)
             self.assertFalse(deadline.expired);self.assertIsNone(deadline.remaining())
             self.assertEqual(write_execution_clock(path,None,max_agent_steps=50),clock)
@@ -87,7 +87,7 @@ class AgentStepTests(unittest.TestCase):
             self.assertFalse(self.h.agent_step_closure_due())
             return original(*args,**kwargs)
         self.backend.execute_visual=slow
-        with patch('manipulation_agent.deadline.time.time',return_value=time.time()+86400):
+        with patch('manipulation_agent.runtime.deadline.time.time',return_value=time.time()+86400):
             reply=self.act('last')
         self.assertTrue(reply['ok']);self.assertGreater(self.backend.capture,before)
         self.assertEqual(reply['execution_budget']['steps_remaining'],0)

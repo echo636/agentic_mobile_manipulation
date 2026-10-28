@@ -20,11 +20,11 @@ from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.events import write_derived_events
 
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.vision_policy import system_prompt
+from manipulation_agent.agent.vision_policy import system_prompt
 from manipulation_agent.records import now, write_json, source_version
-from manipulation_agent.model_trace import export_summaries
-from manipulation_agent.mcp_preflight import check_server
-from manipulation_agent.deadline import EpisodeDeadline, validate_execution_clock
+from manipulation_agent.reporting.model_trace import export_summaries
+from manipulation_agent.transport.mcp_preflight import check_server
+from manipulation_agent.runtime.deadline import EpisodeDeadline, validate_execution_clock
 
 
 def rate_limit_error(events):

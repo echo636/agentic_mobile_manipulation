@@ -13,8 +13,8 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from manipulation_agent.custom_readiness import validate_release
-from manipulation_agent.custom_tasks import load_spec, sha256
+from manipulation_agent.references.custom_readiness import validate_release
+from manipulation_agent.tasks.custom_tasks import load_spec, sha256
 
 
 def prepare(release_path, asset_manifest_path, output, tag):

@@ -70,7 +70,7 @@ class CoordinationTests(unittest.TestCase):
     def test_harness_one_revision_and_cached_request_after_internal_motion(self):
         from manipulation_agent.observations.mock_rgb import MockRGBBackend
         from manipulation_agent.records import Recorder
-        from manipulation_agent.vision_harness import VisionHarness
+        from manipulation_agent.runtime.vision_harness import VisionHarness
         with tempfile.TemporaryDirectory() as directory:
             recorder=Recorder(Path(directory)/'run',{'validation':'cpu_fixture'})
             b=MockRGBBackend(recorder.output);b.local_manipulation=True

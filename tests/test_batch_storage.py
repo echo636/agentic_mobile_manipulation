@@ -11,7 +11,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock, patch
 
-from manipulation_agent import batch_storage as storage
+from manipulation_agent.batch import batch_storage as storage
 
 spec = importlib.util.spec_from_file_location('io_batch', Path(__file__).resolve().parents[1] / 'scripts/run_behavior100.py')
 batch = importlib.util.module_from_spec(spec)

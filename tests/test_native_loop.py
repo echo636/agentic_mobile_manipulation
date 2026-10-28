@@ -5,11 +5,11 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from manipulation_agent.agent_loop import LoopConfig, VisualToolLoop
-from manipulation_agent.image_history import ImageHistory
+from manipulation_agent.agent.agent_loop import LoopConfig, VisualToolLoop
+from manipulation_agent.agent.image_history import ImageHistory
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 
 
 class NativeLoopTests(unittest.TestCase):
@@ -140,8 +140,8 @@ class NativeLoopTests(unittest.TestCase):
 
     def test_expired_model_network_timeout_closes_episode_as_timeout(self):
         from unittest.mock import patch
-        from manipulation_agent.deadline import EpisodeDeadline
-        from manipulation_agent.vision_policy import RGBResponsesPolicy
+        from manipulation_agent.runtime.deadline import EpisodeDeadline
+        from manipulation_agent.agent.vision_policy import RGBResponsesPolicy
         self.harness.deadline=EpisodeDeadline(100)
         self.backend.deadline=self.harness.deadline
         policy=RGBResponsesPolicy(model='fixture',base_url='http://127.0.0.1',key='fixture')
@@ -149,8 +149,8 @@ class NativeLoopTests(unittest.TestCase):
         def timeout(*args,**kwargs):
             clock[0]=101.0
             raise TimeoutError('fixture network timeout')
-        with patch('manipulation_agent.deadline.time.time',side_effect=lambda:clock[0]), \
-             patch('manipulation_agent.policies.urllib.request.urlopen',side_effect=timeout):
+        with patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:clock[0]), \
+             patch('manipulation_agent.agent.policies.urllib.request.urlopen',side_effect=timeout):
             policy.run(self.harness,'fixture')
         self.assertEqual(self.recorder.run['episode_outcome'],'timeout')
         self.assertEqual(self.recorder.run['finish_reason'],'episode_deadline_exceeded')
@@ -158,9 +158,9 @@ class NativeLoopTests(unittest.TestCase):
 
     def test_independent_network_timeout_remains_a_network_error(self):
         from unittest.mock import patch
-        from manipulation_agent.deadline import EpisodeDeadline
-        from manipulation_agent.policies import ResponsesPolicy
+        from manipulation_agent.runtime.deadline import EpisodeDeadline
+        from manipulation_agent.agent.policies import ResponsesPolicy
         policy=ResponsesPolicy(model='fixture',base_url='http://127.0.0.1',key='fixture')
-        with patch('manipulation_agent.deadline.time.time',return_value=99), \
-             patch('manipulation_agent.policies.urllib.request.urlopen',side_effect=TimeoutError('network')):
+        with patch('manipulation_agent.runtime.deadline.time.time',return_value=99), \
+             patch('manipulation_agent.agent.policies.urllib.request.urlopen',side_effect=TimeoutError('network')):
             with self.assertRaises(TimeoutError):policy._request({},deadline=EpisodeDeadline(200))

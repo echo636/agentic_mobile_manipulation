@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from manipulation_agent.custom_readiness import validate_release
+from manipulation_agent.references.custom_readiness import validate_release
 
 
 def main():

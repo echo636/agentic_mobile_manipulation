@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.custom_readiness import _policy_source_identity
+from manipulation_agent.references.custom_readiness import _policy_source_identity
 from manipulation_agent.records import release_source_digest, source_version
 
 

@@ -13,7 +13,7 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPSHandler, HTTPRedirectHandler, Request, build_opener
-from .image_pruning import prune_stale_images
+from .agent.image_pruning import prune_stale_images
 
 
 HOP_HEADERS = {'host', 'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',

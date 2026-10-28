@@ -1,0 +1,96 @@
+"""Convex-hull visibility checks for the robot and its carried payload.
+
+Navigation supplies visual boundary points in one coordinate frame and tests
+camera-to-target segments against those hulls. No depth masking or map building.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import math
+
+import numpy as np
+
+
+def _immutable(values):
+    values = np.asarray(values, dtype=np.float64)
+    return np.frombuffer(values.tobytes(), dtype=np.float64).reshape(values.shape)
+
+
+@dataclass(frozen=True)
+class SelfHull:
+    link: str
+    minimum: np.ndarray = field(repr=False, compare=False)
+    maximum: np.ndarray = field(repr=False, compare=False)
+    planes: np.ndarray = field(repr=False, compare=False)
+    tolerance_m: float
+
+
+def prepare_self_hulls(link_visual_points, *, tolerance_m=.005):
+    """Compile known robot-link convex hulls once per synchronized capture.
+
+    ``link_visual_points`` maps own-link names to WORLD Nx3 visual boundary
+    points. The caller must collect these after rendering on the simulator
+    owner thread. No hull from another object may be passed. Returns immutable
+    hulls plus a private geometry report. Degenerate links are explicitly
+    skipped; their AABB is never used as a substitute body mask.
+    """
+    from scipy.spatial import ConvexHull, QhullError
+    if isinstance(tolerance_m, bool) or not math.isfinite(tolerance_m) or tolerance_m < 0:
+        raise ValueError('Self-filter tolerance must be finite and nonnegative')
+    hulls, skipped = [], {}
+    for name, values in link_visual_points.items():
+        if values is None:
+            skipped[str(name)] = 'no_visual_points'
+            continue
+        points = np.asarray(values, dtype=np.float64)
+        if points.ndim != 2 or points.shape[1:] != (3,) or len(points) < 4:
+            skipped[str(name)] = 'insufficient_3d_points'
+            continue
+        if not np.isfinite(points).all():
+            skipped[str(name)] = 'nonfinite_visual_points'
+            continue
+        try:
+            hull = ConvexHull(points)
+        except QhullError:
+            skipped[str(name)] = 'degenerate_visual_hull'
+            continue
+        hulls.append(SelfHull(str(name), _immutable(points.min(axis=0) - tolerance_m),
+                              _immutable(points.max(axis=0) + tolerance_m),
+                              _immutable(hull.equations), float(tolerance_m)))
+    return tuple(hulls), {'links_supplied': len(link_visual_points), 'hulls_prepared': len(hulls),
+                         'skipped_links': skipped, 'tolerance_m': float(tolerance_m),
+                         'geometry_source': 'own_robot_visual_convex_hulls_only'}
+
+
+def segment_hits_self_hull(origin, target, hulls, *, endpoint_clearance_m=.01):
+    """Whether an own-link visual hull blocks a candidate camera-to-target ray.
+
+    Inputs share one frame, normally the candidate robot base frame. The small
+    endpoint clearance prevents a hull touching the selected surface from
+    counting as an occluder behind it; every earlier self hit is rejected.
+    """
+    origin = np.asarray(origin, dtype=np.float64)
+    target = np.asarray(target, dtype=np.float64)
+    if origin.shape != (3,) or target.shape != (3,) or not np.isfinite(origin).all() or not np.isfinite(target).all():
+        raise ValueError('Finite 3D camera ray required')
+    delta = target - origin
+    length = float(np.linalg.norm(delta))
+    if length <= endpoint_clearance_m:
+        return False
+    for hull in hulls:
+        lower, upper = 0., 1. - endpoint_clearance_m / length
+        for plane in hull.planes:
+            offset = float(plane[:3] @ origin + plane[3] - hull.tolerance_m)
+            slope = float(plane[:3] @ delta)
+            if abs(slope) < 1e-12:
+                if offset > 0:
+                    break
+            elif slope > 0:
+                upper = min(upper, -offset / slope)
+            else:
+                lower = max(lower, -offset / slope)
+            if lower > upper:
+                break
+        else:
+            return True
+    return False

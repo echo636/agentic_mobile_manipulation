@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.runtime.deadline import EpisodeDeadline
 
 
 spec = importlib.util.spec_from_file_location('preflight_controller',

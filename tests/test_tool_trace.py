@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from manipulation_agent.tool_trace import enrich_tool_trace
+from manipulation_agent.reporting.tool_trace import enrich_tool_trace
 
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4mMAAAAASUVORK5CYII=')
 SHA = hashlib.sha256(PNG).hexdigest()

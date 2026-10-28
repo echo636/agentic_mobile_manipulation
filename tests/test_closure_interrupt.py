@@ -8,12 +8,12 @@ import time
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent import bridge
+from manipulation_agent.transport import bridge
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
+from manipulation_agent.runtime.deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 
 
 class ClosureInterruptTests(unittest.TestCase):
@@ -25,11 +25,11 @@ class ClosureInterruptTests(unittest.TestCase):
             harness=VisionHarness(backend,Recorder(output,{}),profile='minimal')
             job=harness.surround.start()['job']['job_id']
             harness.surround.tick()
-            with patch('manipulation_agent.surround.time.monotonic',return_value=time.monotonic()+31):
+            with patch('manipulation_agent.observations.surround.time.monotonic',return_value=time.monotonic()+31):
                 harness.surround.tick()
             self.assertEqual(harness.surround.get(job)['job']['status'],'passed')
             job=harness.surround.start()['job']['job_id']
-            with patch('manipulation_agent.deadline.time.time',return_value=harness.deadline.unix+1):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=harness.deadline.unix+1):
                 harness.surround.tick()
             self.assertEqual(harness.surround.get(job)['job']['error']['code'],'observation_timeout')
 

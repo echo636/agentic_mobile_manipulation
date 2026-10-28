@@ -94,7 +94,7 @@ def prepare(args: argparse.Namespace) -> dict:
         pages.append({'target': relative, 'input': path.relative_to(root).as_posix(),
                       'input_sha256': digest(path), 'before_html_sha256': digest(root / relative),
                       'staged_html_sha256': digest(staged), 'kind': 'comparison'})
-    source_files = [REPO / 'src/manipulation_agent/replay.py', REPO / 'src/manipulation_agent/tool_trace.py',
+    source_files = [REPO / 'src/manipulation_agent/replay.py', REPO / 'src/manipulation_agent/reporting/tool_trace.py',
                     REPO / 'scripts/publish_replay_ui.py',
                     REPO / 'scripts/batch_comparison.py', REPO / 'scripts/comparison_dashboard.html',
                     *sorted((REPO / 'src/manipulation_agent/replay_assets').glob('*'))]

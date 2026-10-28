@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from manipulation_agent.model_trace import export_summaries
-from manipulation_agent.review_video import frame_indices
+from manipulation_agent.reporting.model_trace import export_summaries
+from manipulation_agent.reporting.review_video import frame_indices
 
 class ModelTraceTests(unittest.TestCase):
     def test_exact_thread_only_readable_summary_exported(self):

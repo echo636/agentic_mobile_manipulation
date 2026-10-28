@@ -8,8 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from ..contracts import SkillError
-from ..deadline import EpisodeDeadline
-from ..omnigibson_backend import OmniGibsonBackend
+from ..runtime.deadline import EpisodeDeadline
+from .omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, centered_head_height, look_at_orientation
 from ..records import JsonlAppend, now
 from .placement import CheckedPlacement
@@ -177,7 +177,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                     self.og.sim.render()
         with self._startup_stage('spectator_camera_setup_and_warmup'):
             if self.record_video:
-                from ..video import EpisodeVideo
+                from ..reporting.video import EpisodeVideo
                 from omnigibson.sensors import VisionSensor
                 # Use an independent offscreen render product at its final size. Do
                 # not resize/destroy the shared GUI viewer product: it invalidates
@@ -603,7 +603,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         """Current visible robot and carried geometry in yaw-local base coordinates."""
         import numpy as np
         import omnigibson.utils.transform_utils as T
-        from .navigation.self_depth_filter import prepare_self_hulls
+        from .navigation.self_occlusion import prepare_self_hulls
         position,orientation=self.robot.get_position_orientation()
         rotation=T.quat2mat(orientation)
         yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
@@ -629,7 +629,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
-        from .navigation.self_depth_filter import segment_hits_self_hull
+        from .navigation.self_occlusion import segment_hits_self_hull
         torch=self.torch
         if max_distance is not None and math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
         ignore=[l.prim_path for l in self.robot.links.values()]

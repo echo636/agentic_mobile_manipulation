@@ -17,9 +17,9 @@ import traceback
 
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / 'src'))
-from manipulation_agent.custom_tasks import load_spec, sha256
+from manipulation_agent.tasks.custom_tasks import load_spec, sha256
 from manipulation_agent.records import write_json, release_source_digest
-from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
+from manipulation_agent.references.reference_evidence import close_reference, complete_reference_exit
 
 
 def trace_dynamics(backend, output, limit=16):
@@ -130,9 +130,9 @@ def main():
     backend = reference = None
     try:
         from manipulation_agent.executors.custom_task import CustomTaskBackend
-        from manipulation_agent.reference_tasks import ReferenceTask
-        from manipulation_agent.full_workflow_reference import FullWorkflowReference
-        from manipulation_agent.long_horizon import expression
+        from manipulation_agent.references.reference_tasks import ReferenceTask
+        from manipulation_agent.references.full_workflow_reference import FullWorkflowReference
+        from manipulation_agent.tasks.long_horizon import expression
         if plan.get('trace_initial_articulations',False):
             trace_initial_articulations(CustomTaskBackend,args.output)
         backend = CustomTaskBackend.__new__(CustomTaskBackend)

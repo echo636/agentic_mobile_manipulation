@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 def outcome(row):
     """Keep timeout/failure terminal even when native shutdown lost its score."""
-    from manipulation_agent.batch_lifecycle import classify_episode_outcome
+    from manipulation_agent.batch.batch_lifecycle import classify_episode_outcome
     return classify_episode_outcome(row)
 
 ARMS = ('original', 'motor', 'official')

@@ -39,7 +39,7 @@ def main():
                     index[runid]={'status':'blocked','reason':'Renderer resource headroom','base':'manipulation_runs/'+runid+'/'};publish('running');continue
                 if not output.exists():
                     with (records/(runid+'.log')).open('w') as log:
-                        subprocess.run([sys.executable,'-m','manipulation_agent.walltime_video','--run-dir',str(run),'--controller-dir',str(controller)],
+                        subprocess.run([sys.executable,'-m','manipulation_agent.reporting.walltime_video','--run-dir',str(run),'--controller-dir',str(controller)],
                                        stdout=log,stderr=subprocess.STDOUT,env={**os.environ,'PYTHONPATH':str(source/'src')},timeout=10800)
                 result=json.loads(output.read_text()) if output.exists() else {'status':'failed','error':'Renderer did not create a record'}
                 destination=a.reports/'manipulation_runs'/runid;destination.mkdir(exist_ok=True)

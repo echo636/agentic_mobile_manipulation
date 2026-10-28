@@ -6,8 +6,8 @@ import unittest
 from manipulation_agent.contracts import Budget
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
-from manipulation_agent.vision_policy import system_prompt
+from manipulation_agent.runtime.vision_harness import VisionHarness
+from manipulation_agent.agent.vision_policy import system_prompt
 from manipulation_agent.replay import build_replay
 
 
@@ -115,7 +115,7 @@ class TaskNotesTests(unittest.TestCase):
             self.assertEqual(updated['notes']['action_feedback_since_write'],{'entries':[],'omitted':0})
 
     def test_feedback_window_reports_missing_earlier_actions(self):
-        from manipulation_agent.task_notes import TaskNotes
+        from manipulation_agent.agent.task_notes import TaskNotes
         notes=TaskNotes(Path('/unused'))
         for i in range(70):
             notes.record_action('act',{'primitive':'cut','target':None},

@@ -8,7 +8,7 @@ from contextlib import contextmanager
 import time
 
 from ..contracts import SkillError
-from ..deadline import EpisodeDeadline
+from ..runtime.deadline import EpisodeDeadline
 from .carry import ControlledCarry
 from .placement import CheckedPlacement
 

@@ -26,7 +26,7 @@ b=None
 try:
     import numpy as np
     from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-    from manipulation_agent.video import EpisodeVideo
+    from manipulation_agent.reporting.video import EpisodeVideo
     def load(name,path):
         spec=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
     old_rgb_path=a.reference_runtime/'src/manipulation_agent/executors/omnigibson_rgb.py'

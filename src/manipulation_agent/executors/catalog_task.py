@@ -12,10 +12,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from .omnigibson_rgb import RGBBackend
-from ..catalog_tasks import load_catalog_spec
-from ..deadline import DEADLINE_STEP_SENTINEL
-from ..goal_grounding import efficient_grounding, evaluate_once_per_literal
-from ..omnigibson_backend import normalize_embedded_robot
+from ..tasks.catalog_tasks import load_catalog_spec
+from ..runtime.deadline import DEADLINE_STEP_SENTINEL
+from ..tasks.goal_grounding import efficient_grounding, evaluate_once_per_literal
+from .omnigibson_backend import normalize_embedded_robot
 from ..records import write_json
 
 

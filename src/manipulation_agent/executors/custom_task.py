@@ -10,8 +10,8 @@ import os
 from pathlib import Path
 
 from .omnigibson_rgb import RGBBackend
-from ..long_horizon import TemporalGoalEvaluator
-from ..custom_tasks import validate_spec
+from ..tasks.long_horizon import TemporalGoalEvaluator
+from ..tasks.custom_tasks import validate_spec
 from ..records import write_json
 
 
@@ -113,7 +113,7 @@ class CustomTaskBackend(RGBBackend):
         # Camera initialization may advance physics. Begin scoring from the
         # actual policy-ready scene, and reject a fixture that already drifted
         # out of its declared initial conditions before the agent can act.
-        from ..long_horizon import expression
+        from ..tasks.long_horizon import expression
         with self._startup_stage('policy_ready_predicates_before_refresh'):
             before_refresh=self._predicate_values()
         # Restoring a scene and attaching cameras can invalidate PhysX contact
@@ -426,7 +426,7 @@ class CustomTaskBackend(RGBBackend):
         self._refresh_custom_contacts('construction')
         self._validate_initial_articulations(roles)
         initial_values = self._predicate_values()
-        from ..long_horizon import expression
+        from ..tasks.long_horizon import expression
         failed=[label for label,condition in spec.get('initial_assertions',{}).items()
                 if not expression(condition,initial_values)]
         write_json(self.output/'custom_construction_contact_refresh.json',{
@@ -539,7 +539,7 @@ class CustomTaskBackend(RGBBackend):
             if row['state'] == 'Exists':
                 result[key] = obj is not None; continue
             if row['state'] == 'Replaced':
-                from ..diverse_task_contract import replacement_complete
+                from ..tasks.diverse_task_contract import replacement_complete
                 rule = next(r for r in self.custom_spec['replacements'] if r['parent'] == row['object'])
                 result[key] = replacement_complete(rule,self.custom_spec['roles'],live,self._initial_entity_names)
                 continue
@@ -553,7 +553,7 @@ class CustomTaskBackend(RGBBackend):
                 result[key]=float(self.torch.linalg.vector_norm(current-initial)) <= row.get('distance',.03)
                 continue
             if row['state']=='Upright':
-                from ..diverse_task_contract import upright_orientation
+                from ..tasks.diverse_task_contract import upright_orientation
                 result[key]=upright_orientation(obj.get_position_orientation()[1],row.get('max_tilt_degrees',15.))
                 continue
             if row['state'] in ('PairedOnTop','CountOnTop'):

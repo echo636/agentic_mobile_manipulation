@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 
 from .base import ClientAdapter
 from .types import PreparedProject
-from ..deadline import tool_wait_seconds
+from ..runtime.deadline import tool_wait_seconds
 
 
 class CodexAdapter(ClientAdapter):

@@ -11,7 +11,7 @@ from types import ModuleType
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.startup_progress import (
+from manipulation_agent.batch.startup_progress import (
     STARTUP_POLICY, startup_event, startup_stage, startup_progress_update,
     instrument_startup_calls,
 )
@@ -67,7 +67,7 @@ class StartupProgressTests(unittest.TestCase):
             return stream
 
         with tempfile.TemporaryDirectory() as tmp, patch.object(Path, 'open', fail_once), \
-                patch('manipulation_agent.startup_progress.time.sleep'):
+                patch('manipulation_agent.batch.startup_progress.time.sleep'):
             with instrument_startup_calls(tmp, []):
                 event = startup_event(tmp, 'restore', 'passed')
                 records = [json.loads(line) for line in
@@ -87,8 +87,8 @@ class StartupProgressTests(unittest.TestCase):
             return original(path, *args, **kwargs)
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(Path, 'open', open_once), \
-                    patch('manipulation_agent.startup_progress.time.sleep'), \
-                    patch('manipulation_agent.startup_progress.time.time', return_value=123.):
+                    patch('manipulation_agent.batch.startup_progress.time.sleep'), \
+                    patch('manipulation_agent.batch.startup_progress.time.time', return_value=123.):
                 event = startup_event(tmp, 'object_construct', 'passed')
             records = [json.loads(s) for s in (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines() if s]
             self.assertEqual(records, [event])
@@ -99,7 +99,7 @@ class StartupProgressTests(unittest.TestCase):
         stderr = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.object(Path, 'open', side_effect=OSError(errno.EIO, 'NAS unavailable')), \
-                patch('manipulation_agent.startup_progress.time.sleep'), \
+                patch('manipulation_agent.batch.startup_progress.time.sleep'), \
                 patch('sys.stderr', stderr):
             with self.assertRaisesRegex(ValueError, 'native failure'):
                 with startup_stage(tmp, 'native_task'):
@@ -177,7 +177,7 @@ class StartupProgressTests(unittest.TestCase):
         row = self.row()
         row.update(startup_timeout_seconds=1000., startup_deadline_unix=1100.)
         with tempfile.TemporaryDirectory() as tmp, \
-                patch('manipulation_agent.startup_progress.time.time', side_effect=lambda: clock[0]):
+                patch('manipulation_agent.batch.startup_progress.time.time', side_effect=lambda: clock[0]):
             with instrument_startup_calls(tmp, [
                 (Loader, 'run', lambda obj, phase, times: 'native_' + phase),
                 (Loader, 'restore', lambda obj, name: 'object_' + name + '_restore'),
@@ -225,7 +225,7 @@ class StartupProgressTests(unittest.TestCase):
                              {'native_recurse', 'native_recurse/native_leaf', 'native_leaf'})
 
     def test_task_snapshot_and_restore_after_scene_load_are_real_finite_progress(self):
-        from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+        from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 
         class NativeBase:
             def __getattr__(self, name):
@@ -269,10 +269,10 @@ class StartupProgressTests(unittest.TestCase):
                 for at, call in [(1000., Scene().initialize),
                                  (2000., Environment()._load_task),
                                  (3000., obj.dump_state)]:
-                    with patch('manipulation_agent.startup_progress.time.time', return_value=at):
+                    with patch('manipulation_agent.batch.startup_progress.time.time', return_value=at):
                         self.assertIs(call(), token)
             with backend._native_startup_progress('instance_reset'):
-                with patch('manipulation_agent.startup_progress.time.time', return_value=4000.):
+                with patch('manipulation_agent.batch.startup_progress.time.time', return_value=4000.):
                     self.assertIs(obj._load_state(), token)
             events = [json.loads(s) for s in (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines()]
             row.update(startup_progress_update(row, events, 4001.))

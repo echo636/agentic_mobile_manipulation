@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.audit import audit_episode, audit_rgb_transport
+from manipulation_agent.reporting.audit import audit_episode, audit_rgb_transport
 from manipulation_agent.replay import build_replay, render_replay
 
 

@@ -153,9 +153,9 @@ def recorded_navigation(backend, recorder, fixture):
 
 
 def interrupt_action(backend, recorder, args):
-    from manipulation_agent import bridge
+    from manipulation_agent.transport import bridge
     from manipulation_agent.contracts import Budget
-    from manipulation_agent.vision_harness import VisionHarness
+    from manipulation_agent.runtime.vision_harness import VisionHarness
     harness = VisionHarness(backend, recorder, Budget(wall_seconds=args.execution_seconds), profile='skills')
     results = {}
     start_steps = backend.steps
@@ -284,7 +284,7 @@ def main():
     write_json(args.output / 'validation.json', validation)
     try:
         from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-        from manipulation_agent.deadline import write_execution_clock
+        from manipulation_agent.runtime.deadline import write_execution_clock
         backend = RGBBackend(args.task, args.instance, args.output, seed=args.seed, max_steps=20000,
                              inside_placement='official_volume', record_video=True)
         recorder.run['backend'] = backend.provenance()
@@ -331,7 +331,7 @@ def main():
         if backend is not None:
             backend.close()
         else:
-            from manipulation_agent.startup_cleanup import shutdown_partial_simulator
+            from manipulation_agent.batch.startup_cleanup import shutdown_partial_simulator
             recorder.event('startup_cleanup', shutdown_partial_simulator())
     print(json.dumps(validation), flush=True)
     return 0 if validation['status'] == 'passed' else 2

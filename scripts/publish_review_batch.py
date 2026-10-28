@@ -38,7 +38,7 @@ for row in json.loads((a.batch/'progress.json').read_text())['tasks']:
         manifest=run/'review_video.json'
         if not manifest.exists():
             with (records/(runid+'.log')).open('w') as log:
-                command=[sys.executable,'-m','manipulation_agent.review_video','--run-dir',str(run)]
+                command=[sys.executable,'-m','manipulation_agent.reporting.review_video','--run-dir',str(run)]
                 if controller:command+=['--controller-dir',str(controller)]
                 subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,timeout=1800)
         result=json.loads(manifest.read_text()) if manifest.exists() else {'status':'failed','error':'No render manifest'}

@@ -14,9 +14,9 @@ import traceback
 
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / 'src'))
-from manipulation_agent.custom_tasks import load_spec, sha256
+from manipulation_agent.tasks.custom_tasks import load_spec, sha256
 from manipulation_agent.records import write_json, release_source_digest
-from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
+from manipulation_agent.references.reference_evidence import close_reference, complete_reference_exit
 
 SHOTS = [
     ('library', '公共书柜、6 个笔袋及工具与收纳台', [-6.0, -3.2, 2.2], [-4.5, -1.25, .5]),
@@ -122,7 +122,7 @@ def main():
     backend = reference = None
     try:
         from manipulation_agent.executors.custom_task import CustomTaskBackend
-        from manipulation_agent.reference_tasks import ReferenceTask
+        from manipulation_agent.references.reference_tasks import ReferenceTask
         backend = CustomTaskBackend(a.spec, a.output, record_video=False,
                                     inside_placement='official_volume', max_steps=1000000)
         record['backend'] = backend.provenance()

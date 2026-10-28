@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from manipulation_agent import video
+from manipulation_agent.reporting import video
 
 
 @unittest.skipUnless(Path('/usr/bin/ffmpeg').exists() and shutil.which('ffprobe'),

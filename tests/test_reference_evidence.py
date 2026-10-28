@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from manipulation_agent.reference_evidence import complete_reference_exit
+from manipulation_agent.references.reference_evidence import complete_reference_exit
 
 
 class ReferenceExitTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class ReferenceExitTests(unittest.TestCase):
     def native_close(self, status='passed', exit_code=0):
         code = '''import os, sys
 from pathlib import Path
-from manipulation_agent.reference_evidence import close_reference
+from manipulation_agent.references.reference_evidence import close_reference
 class Backend:
     def close(self): os._exit(int(sys.argv[3]))
 close_reference(Backend(), {'status':sys.argv[2], 'evaluation':{'task_success':sys.argv[2]=='passed'},

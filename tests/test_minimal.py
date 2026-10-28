@@ -6,7 +6,7 @@ import unittest
 
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 from manipulation_agent.contracts import SkillError
 
 

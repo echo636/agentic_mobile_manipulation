@@ -109,7 +109,7 @@ def main():
             model_code = subprocess.run(command, cwd=source, env=environment,
                 stdout=model_log, stderr=subprocess.STDOUT, timeout=args.timeout + 180).returncode
             if health(url) and not health(url).get('closed'):
-                from manipulation_agent.bridge import rpc
+                from manipulation_agent.transport.bridge import rpc
                 rpc(url, 'finish', {'outcome': 'aborted', 'reason': 'Model ended without formal finish'},
                     'demo-supervisor-finish', timeout=120)
             simulator.wait(timeout=180)

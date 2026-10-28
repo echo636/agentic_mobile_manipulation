@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.deadline import EpisodeDeadline
-from manipulation_agent.startup_cleanup import shutdown_partial_simulator
+from manipulation_agent.runtime.deadline import EpisodeDeadline
+from manipulation_agent.batch.startup_cleanup import shutdown_partial_simulator
 from manipulation_agent import vision_cli
 
 

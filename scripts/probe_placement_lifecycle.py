@@ -30,7 +30,7 @@ def main():
     try:
         from manipulation_agent.contracts import Budget
         from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-        from manipulation_agent.vision_harness import VisionHarness
+        from manipulation_agent.runtime.vision_harness import VisionHarness
         backend=RGBBackend(fixture['task'],fixture['instance'],a.output,seed=fixture['seed'],
                            max_steps=20000,inside_placement='official_volume',record_video=True)
         backend.deadline.arm_local(1800)
@@ -90,7 +90,7 @@ def main():
         finally:
             if backend is not None:backend.close()
             else:
-                from manipulation_agent.startup_cleanup import shutdown_partial_simulator
+                from manipulation_agent.batch.startup_cleanup import shutdown_partial_simulator
                 shutdown_partial_simulator()
     print(json.dumps(validation),flush=True)
     return 0 if validation['status']=='passed' else 2

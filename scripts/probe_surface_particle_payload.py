@@ -31,7 +31,7 @@ def main():
         from manipulation_agent.executors.particle_payload import (
             snapshot_particles, verify_particles, particle_count, snapshot_particle_state, restore_particle_state,
             _support_at)
-        from manipulation_agent.vision_harness import VisionHarness
+        from manipulation_agent.runtime.vision_harness import VisionHarness
         from manipulation_agent.contracts import Budget
         from omnigibson.object_states import OnTop
         from omnigibson.utils.sampling_utils import raytest
@@ -214,7 +214,7 @@ def main():
         finally:
             if backend is not None: backend.close()
             else:
-                from manipulation_agent.startup_cleanup import shutdown_partial_simulator
+                from manipulation_agent.batch.startup_cleanup import shutdown_partial_simulator
                 shutdown_partial_simulator()
     return 0 if validation['status'] == 'passed' else 2
 

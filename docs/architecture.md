@@ -105,17 +105,17 @@ capability probes, project preparation, process execution and event parsing.
 MCP preflight, formal finish check and execution clock. Configuration support is
 separate from installation, authenticated execution and verified RGB delivery.
 OpenCode and Kimi have configuration/parser tests but are not yet live-validated.
-Every client receives its profile instructions from vision_policy.system_prompt.
+Every client receives its profile instructions from agent.vision_policy.system_prompt.
 Default instructions start with initialize and consume act/look result images;
 the adapters do not add a separate observation or polling loop.
 
-The separate `agent_loop.py` implements the native Responses loop. It requests
+The separate `agent/agent_loop.py` implements the native Responses loop. It requests
 one tool call at a time, executes through the same harness, attaches fresh image
 bytes after success or failure, and checks turn, token and task budgets. Plain
 assistant text saying “done” does not close the episode. The model must call
 `finish`; otherwise an exhausted budget closes it as aborted.
 
-`image_history.py` records capture identity and verifies every attached image.
+`agent/image_history.py` records capture identity and verifies every attached image.
 `--image-history-captures 0` keeps all images, preserving the default behavior.
 A positive value limits historical image attachments in outgoing native requests;
 textual tool history, original images and experiment records remain intact. Omitted

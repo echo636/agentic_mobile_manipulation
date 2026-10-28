@@ -7,11 +7,11 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline, write_execution_clock
-from manipulation_agent import bridge
+from manipulation_agent.runtime.deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline, write_execution_clock
+from manipulation_agent.transport import bridge
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 from manipulation_agent.clients.types import ClientCapability
 from manipulation_agent.clients.base import run_process
 
@@ -25,7 +25,7 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.backend=MockRGBBackend(self.output)
         self.backend.deadline=EpisodeDeadline(200)
         self.clock=100.0
-        self.clock_patch=patch('manipulation_agent.deadline.time.time',side_effect=lambda:self.clock)
+        self.clock_patch=patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:self.clock)
         self.clock_patch.start();self.addCleanup(self.clock_patch.stop)
         self.h=VisionHarness(self.backend,self.recorder,profile='minimal')
 
@@ -202,22 +202,22 @@ class ExecutionClockFileTests(unittest.TestCase):
     def test_clock_is_atomic_idempotent_and_loaded_only_once(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'execution_clock.json';reader=EpisodeDeadline(clock_path=path)
-            with patch('manipulation_agent.deadline.time.time',return_value=100):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=100):
                 self.assertTrue(reader.managed)
                 self.assertIsNone(reader.unix)
                 self.assertFalse(reader.expired)
-            with patch('manipulation_agent.deadline.time.time',return_value=4000):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=4000):
                 self.assertFalse(reader.expired)  # Arbitrarily long startup has no task deadline.
                 first=write_execution_clock(path,1800)
                 raw=path.read_bytes();mtime=path.stat().st_mtime_ns
                 self.assertEqual(reader.unix,5800)
-            with patch('manipulation_agent.deadline.time.time',return_value=4100):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=4100):
                 second=write_execution_clock(path,3600)
                 self.assertEqual(first,second)
                 self.assertEqual(path.read_bytes(),raw)
                 self.assertEqual(path.stat().st_mtime_ns,mtime)
             path.unlink()  # Proves a loaded reader does not poll or reset its clock.
-            with patch('manipulation_agent.deadline.time.time',return_value=5800):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=5800):
                 self.assertTrue(reader.expired)
 
 
@@ -260,7 +260,7 @@ class ControllerDeadlineTests(unittest.TestCase):
                 return decode(text,*args,**kwargs)
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
-            with patch('sys.argv',argv), patch('manipulation_agent.deadline.time.time',side_effect=lambda:clock[0]), \
+            with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:clock[0]), \
                  patch.object(controller,'check_server',side_effect=preflight), \
                  patch('manipulation_agent.clients.codex.CodexAdapter.run',side_effect=run), \
                  patch.object(controller.subprocess,'Popen',Process), \
@@ -292,7 +292,7 @@ class ControllerDeadlineTests(unittest.TestCase):
                 def wait(self,timeout):return self.returncode
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
-            with patch('sys.argv',argv), patch('manipulation_agent.deadline.time.time',side_effect=lambda:clock[0]), \
+            with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:clock[0]), \
                  patch.object(controller,'check_server',return_value={'status':'passed'}), \
                  patch.object(controller.subprocess,'Popen',Process), \
                  patch.object(controller.subprocess,'check_output',return_value='fixture'), \
@@ -339,7 +339,7 @@ class ControllerDeadlineTests(unittest.TestCase):
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800',
                   '--execution-clock-command-json','["fixture-clock"]']
-            with patch('sys.argv',argv), patch('manipulation_agent.deadline.time.time',side_effect=lambda:now[0]), \
+            with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:now[0]), \
                  patch.object(controller,'check_server',side_effect=preflight), \
                  patch('manipulation_agent.clients.codex.CodexAdapter.run',side_effect=run), \
                  patch.object(controller.subprocess,'run',side_effect=arm), \

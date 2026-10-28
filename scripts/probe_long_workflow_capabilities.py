@@ -13,7 +13,7 @@ import traceback
 SOURCE = Path(os.environ.get('MAS_PROBE_SOURCE', Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(SOURCE / 'src'))
 from manipulation_agent.records import write_json, release_source_digest
-from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
+from manipulation_agent.references.reference_evidence import close_reference, complete_reference_exit
 
 
 def main():
@@ -47,7 +47,7 @@ def main():
     backend = reference = None
     try:
         from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-        from manipulation_agent.reference_tasks import ReferenceTask
+        from manipulation_agent.references.reference_tasks import ReferenceTask
 
         class ProbeBackend(RGBBackend):
             def _prepare_task_instance(self):

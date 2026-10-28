@@ -1,7 +1,7 @@
 import unittest
 import copy
 
-from manipulation_agent.inspection_video import CAMERA_BOXES, decision_text, paginate, source_markers
+from manipulation_agent.reporting.inspection_video import CAMERA_BOXES, decision_text, paginate, source_markers
 
 
 class InspectionEvidenceTests(unittest.TestCase):

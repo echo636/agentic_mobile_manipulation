@@ -11,12 +11,12 @@ import unittest
 from unittest.mock import Mock, patch
 import urllib.request
 
-from manipulation_agent import bridge
-from manipulation_agent.closure import closure_watchdog
+from manipulation_agent.transport import bridge
+from manipulation_agent.runtime.closure import closure_watchdog
 from manipulation_agent.contracts import Budget
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 import test_batch_lifecycle as lifecycle
 
 

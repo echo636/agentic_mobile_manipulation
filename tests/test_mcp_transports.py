@@ -48,7 +48,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         self.errors = open(Path(self.temp.name) / 'processes.log', 'w+')
         self.addCleanup(self.errors.close)
         # Real main-thread serve loop. Only its post-close cache window is short.
-        code = ('from manipulation_agent import bridge; bridge.CLOSED_REPLAY_SECONDS=0.1; '
+        code = ('from manipulation_agent.transport import bridge; bridge.CLOSED_REPLAY_SECONDS=0.1; '
                 'from manipulation_agent.vision_cli import main; raise SystemExit(main())')
         self.backend = subprocess.Popen([sys.executable, '-c', code, '--backend', 'mock',
             '--port', str(self.port), '--output', str(self.output), '--agent-profile', 'skills'],
@@ -196,7 +196,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         await asyncio.wait_for(self.exercise('streamable-http'), 90)
 
     def test_existing_readonly_preflight_accepts_fastmcp(self):
-        from manipulation_agent.mcp_preflight import check_server
+        from manipulation_agent.transport.mcp_preflight import check_server
         result = check_server(sys.executable, ['-m', 'manipulation_agent.mcp_server', '--bridge', self.url],
                               tool_specs('skills'), Path(self.temp.name), timeout=90)
         self.assertEqual(result['status'], 'passed')
@@ -217,9 +217,9 @@ class ToolContextBinding(unittest.TestCase):
         from unittest.mock import patch
         from manipulation_agent.observations.mock_rgb import MockRGBBackend
         from manipulation_agent.records import Recorder
-        from manipulation_agent.tool_context import ToolContext
+        from manipulation_agent.runtime.tool_context import ToolContext
         from manipulation_agent.tools import REGISTRY
-        from manipulation_agent.vision_harness import VisionHarness
+        from manipulation_agent.runtime.vision_harness import VisionHarness
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / 'episode'
             harness = VisionHarness(MockRGBBackend(output), Recorder(output, {}), profile='minimal')

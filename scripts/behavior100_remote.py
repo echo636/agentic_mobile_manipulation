@@ -117,7 +117,7 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
     # only rechecks quantities that can change while it waits for a GPU lease.
     encoding_check = None
     if not light:
-        from manipulation_agent.video import ffmpeg_executable
+        from manipulation_agent.reporting.video import ffmpeg_executable
         try:
             encoder = ffmpeg_executable()
             encoding_check = command([encoder, '-hide_banner', '-loglevel', 'error',
@@ -167,7 +167,7 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
     checks['host_memory_including_peer_reservations']=host_available>(40+reserved_host_memory_gib)*1024**3
     adaptive = None
     if memory_policy is not None:
-        from manipulation_agent.memory_admission import host_memory_admission
+        from manipulation_agent.batch.memory_admission import host_memory_admission
         adaptive = host_memory_admission(memory_policy,
             account_current=int(cg['memory.current']), account_stats=stats,
             account_limit=None if cg['memory.max']=='max' else int(cg['memory.max']))
@@ -224,8 +224,8 @@ def assets(manifest, data_root):
     rows = []
     for task in manifest['tasks']:
         if task.get('catalog_task_spec'):
-            from manipulation_agent.catalog_tasks import load_catalog_spec
-            from manipulation_agent.asset_preflight import inspect_model_assets
+            from manipulation_agent.tasks.catalog_tasks import load_catalog_spec
+            from manipulation_agent.batch.asset_preflight import inspect_model_assets
             path = Path(task['catalog_task_spec'])
             if hashlib.sha256(path.read_bytes()).hexdigest() != task['catalog_task_spec_sha256']:
                 raise ValueError('Frozen catalog specification changed')
@@ -267,7 +267,7 @@ def assets(manifest, data_root):
         row['base_files_match_manifest'] = (custom is None or custom.get('schema_version') != 2 or
             all(value['sha256'] == task.get('asset_sha256', {}).get(key)
                 for key, value in row['files'].items()))
-        from manipulation_agent.asset_preflight import inspect_scene_assets
+        from manipulation_agent.batch.asset_preflight import inspect_scene_assets
         try:
             row['runtime_assets'] = inspect_scene_assets(paths['scene_template'], paths['instance_state'],
                 data_root/'data/omnigibson/behavior-1k-assets', scene, task_name=name)

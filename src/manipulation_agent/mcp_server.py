@@ -30,8 +30,8 @@ def _startup(stage):
 
 
 _startup('proxy_import')
-from .bridge import rpc
-from .deadline import tool_wait_seconds
+from .transport.bridge import rpc
+from .runtime.deadline import tool_wait_seconds
 
 
 def fetch(url):

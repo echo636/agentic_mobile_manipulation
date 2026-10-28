@@ -4,7 +4,7 @@ The simulator's particle and transition states remain the source of truth.  No
 task objects, goal predicates, or alternative visual targets are consulted.
 """
 from ..contracts import SkillError
-from ..asset_preflight import inspect_model_assets, inspect_particle_system_assets, object_part_models
+from ..batch.asset_preflight import inspect_model_assets, inspect_particle_system_assets, object_part_models
 
 
 def eligible_systems(systems, modifier, *, covered=None, ideal_projection=False):

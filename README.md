@@ -47,7 +47,7 @@ python -m pip install -e '.[mcp,navigation]'
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-The recorded simulator environment uses OmniGibson 3.9.2, Isaac Sim 5.1.0, torch 2.7.0+cu128, and BDDL 3.7.0. BEHAVIOR assets must be installed under their official license and are not included in this repository. Default navigation uses private GT floor support and current scene collision geometry and does not require Cartographer or `MAS_CARTOGRAPHER_RUNTIME`. The retained [online mapping experiment](docs/online_navigation.md) has a separate native runtime dependency.
+The recorded simulator environment uses OmniGibson 3.9.2, Isaac Sim 5.1.0, torch 2.7.0+cu128, and BDDL 3.7.0. BEHAVIOR assets must be installed under their official license and are not included in this repository. Default navigation uses private GT floor support and current scene collision geometry and does not require Cartographer or `MAS_CARTOGRAPHER_RUNTIME`. The former online-mapping implementation has been removed; its [historical evidence](docs/online_navigation.md) remains archived.
 
 ```bash
 PYTHONPATH=src python -m manipulation_agent.vision_cli \
@@ -95,9 +95,8 @@ the endpoint pose once, advances native physics for settling, and checks the
 result. It does not simulate continuous driving along the planned route; recorded
 route distance is a planning measure. Maps, depth and world coordinates stay
 private. See [GT-grid planning](docs/gt_navigation.md) for the planner and its
-historical controller stages. [Online Cartographer navigation](docs/online_navigation.md)
-remains an experiment and is not called by the default executor. Frozen evaluations
-retain their original source and results.
+historical controller stages. Online Cartographer code and its dedicated probes
+have been removed. Frozen evaluations retain their original source and results.
 
 ## Batch evaluation
 

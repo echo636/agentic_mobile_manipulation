@@ -1,11 +1,9 @@
-import math
 from pathlib import Path
 import tempfile
 import unittest
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
-from manipulation_agent.executors.navigation.base_motion import trajectory
+from manipulation_agent.runtime.vision_harness import VisionHarness
 
 class SkillsLoopTests(unittest.TestCase):
     def test_skills_without_forced_summary_plan_or_memory(self):
@@ -25,17 +23,3 @@ class SkillsLoopTests(unittest.TestCase):
             from manipulation_agent.replay import build_replay
             steps=build_replay(root)['steps']
             self.assertIsNone(next(s for s in steps if s['tool']=='act')['decision'])
-
-    def test_kinematic_path_preserves_corners_and_speed_bounds(self):
-        path=trajectory([(0,0),(1,0),(1,1)],math.radians(170),math.radians(-170),1/30)
-        previous=(0,0,math.radians(170))
-        for x,y,yaw in path:
-            self.assertLessEqual(math.dist(previous[:2],(x,y)),.5/30+1e-8)
-            self.assertLessEqual(abs(yaw-previous[2]),math.pi/3/30+1e-8)
-            self.assertTrue(abs(y)<1e-8 or abs(x-1)<1e-8)
-            previous=(x,y,yaw)
-        self.assertEqual(path[-1][:2],(1,1))
-        self.assertAlmostEqual(path[-1][2],math.radians(190))
-        turn=trajectory([(1,1)],0,math.pi/2,1/30)
-        self.assertGreaterEqual(len(turn),45)
-        self.assertTrue(all(p[:2]==(1,1) for p in turn))

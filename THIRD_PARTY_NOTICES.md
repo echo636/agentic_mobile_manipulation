@@ -1,6 +1,6 @@
 # Jinkai visual-point GT navigation strategy
 
-The candidate sampling and scoring in `executors/gt_navigation.py` are adapted
+The candidate sampling and scoring in `executors/navigation/gt_navigation.py` are adapted
 from https://github.com/dadwadw233/habitat-gs, branch `jinkai/harness`, commit
 `0815cf234ee591bacd8017e9b1def4fac13e649b`, specifically
 `tools/habitat_agent/oracle_local_nav/visual_point.py`.

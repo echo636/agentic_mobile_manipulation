@@ -5,9 +5,9 @@ from pathlib import Path
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
-from manipulation_agent.custom_tasks import validate_spec
-from manipulation_agent.full_workflow_reference import FullWorkflowReference, validate_workflow_plan
-from manipulation_agent.long_horizon import TemporalGoalEvaluator
+from manipulation_agent.tasks.custom_tasks import validate_spec
+from manipulation_agent.references.full_workflow_reference import FullWorkflowReference, validate_workflow_plan
+from manipulation_agent.tasks.long_horizon import TemporalGoalEvaluator
 
 ROOT=Path(__file__).resolve().parents[1]
 

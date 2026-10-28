@@ -6,10 +6,10 @@ import sys
 import unittest
 from manipulation_agent.executors.carry import ControlledCarry
 from manipulation_agent.executors.navigation.gt_navigation import GridMap,plan_navigation,NavigationError
-from manipulation_agent.mcp_preflight import check_server
+from manipulation_agent.transport.mcp_preflight import check_server
 from manipulation_agent.tools.action import act
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.omnigibson_backend import restore_static_floor_geometry
+from manipulation_agent.executors.omnigibson_backend import restore_static_floor_geometry
 
 class V7Contracts(unittest.TestCase):
     def test_restore_only_missing_fixed_floors_without_goal_or_instance_changes(self):

@@ -6,14 +6,14 @@ from pathlib import Path
 import signal
 import traceback
 from .contracts import Budget
-from .deadline import EpisodeDeadline
+from .runtime.deadline import EpisodeDeadline
 from .records import Recorder
-from .vision_harness import VisionHarness
-from . import bridge
+from .runtime.vision_harness import VisionHarness
+from .transport import bridge
 from .executors.omnigibson_rgb import RGBBackend
 from .observations.mock_rgb import MockRGBBackend
-from .vision_policy import RGBResponsesPolicy
-from .startup_progress import startup_stage
+from .agent.vision_policy import RGBResponsesPolicy
+from .batch.startup_progress import startup_stage
 
 
 def main():
@@ -56,7 +56,7 @@ def main():
     if a.record_video is None: a.record_video = a.backend == 'omnigibson'
     if a.catalog_task is not None:
         if a.custom_task is not None:p.error('Choose either a custom task or an official catalog instance')
-        from .catalog_tasks import load_catalog_spec
+        from .tasks.catalog_tasks import load_catalog_spec
         catalog = load_catalog_spec(a.catalog_task)
         if a.instruction is not None and a.instruction != catalog['public_instruction']:
             p.error('Catalog instruction must equal the frozen public final-goal description')
@@ -74,7 +74,7 @@ def main():
         if not a.instruction:p.error('Provide --instruction for this task')
     policy=RGBResponsesPolicy.from_env() if a.policy=='responses' else None
     if policy is not None:
-        from .agent_loop import LoopConfig
+        from .agent.agent_loop import LoopConfig
         LoopConfig(max_turns=a.model_max_turns, max_tokens=a.model_max_tokens,
                    image_history_captures=a.image_history_captures)
         policy.max_turns, policy.max_tokens = a.model_max_turns, a.model_max_tokens
@@ -135,7 +135,7 @@ def main():
             elif a.backend == 'omnigibson':
                 # A failing constructor never assigns backend, even if Isaac
                 # already launched. Close that existing app before unwinding.
-                from .startup_cleanup import shutdown_partial_simulator
+                from .batch.startup_cleanup import shutdown_partial_simulator
                 cleanup = shutdown_partial_simulator()
                 try:
                     recorder.event('startup_cleanup', cleanup)

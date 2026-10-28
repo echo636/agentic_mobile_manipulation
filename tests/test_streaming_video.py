@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import unittest
 
-from manipulation_agent.streaming_video import prepare_browser_video, packet_signature, file_hash
+from manipulation_agent.reporting.streaming_video import prepare_browser_video, packet_signature, file_hash
 
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'ffmpeg/ffprobe required')

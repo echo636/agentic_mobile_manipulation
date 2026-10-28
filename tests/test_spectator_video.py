@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 
-from manipulation_agent.spectator_video import export_spectator_video, export_spectator_walltime
-from manipulation_agent.streaming_video import file_hash
+from manipulation_agent.reporting.spectator_video import export_spectator_video, export_spectator_walltime
+from manipulation_agent.reporting.streaming_video import file_hash
 
 
 @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'ffmpeg/ffprobe required')

@@ -6,10 +6,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from manipulation_agent.contracts import Budget
-from manipulation_agent.deadline import EpisodeDeadline, write_execution_clock, validate_execution_clock
+from manipulation_agent.runtime.deadline import EpisodeDeadline, write_execution_clock, validate_execution_clock
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder, read_run
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 
 
 class UnboundedEpisodeTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class UnboundedEpisodeTests(unittest.TestCase):
             for n in range(53):
                 args={'primitive':'toggle_on','revision':harness.revision,
                       'target':{'image_ref':harness.snapshot['images'][0]['image_ref'],'point':[.5,.5]}}
-                with patch('manipulation_agent.deadline.time.time',return_value=time.time()+86400):
+                with patch('manipulation_agent.runtime.deadline.time.time',return_value=time.time()+86400):
                     reply=harness.call('act',args,str(n))
                 self.assertTrue(reply['ok']);self.assertIsNone(reply['execution_budget']['max_steps'])
             self.assertEqual(harness.agent_steps,53)

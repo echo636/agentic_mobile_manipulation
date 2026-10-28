@@ -28,7 +28,7 @@ def main():
         from manipulation_agent.executors.omnigibson_rgb import RGBBackend
         from manipulation_agent.executors.visual_mesh_grounding import query_visual_surface
         from manipulation_agent.executors.particle_payload import verify_particles, particle_count, snapshot_particle_state, restore_particle_state
-        from manipulation_agent.vision_harness import VisionHarness
+        from manipulation_agent.runtime.vision_harness import VisionHarness
         from manipulation_agent.contracts import Budget, SkillError
         from omnigibson.object_states import ContainedParticles, Inside
         import omnigibson.utils.transform_utils as T
@@ -122,7 +122,7 @@ def main():
         finally:
             if backend is not None: backend.close()
             else:
-                from manipulation_agent.startup_cleanup import shutdown_partial_simulator
+                from manipulation_agent.batch.startup_cleanup import shutdown_partial_simulator
                 shutdown_partial_simulator()
     return 0 if validation['status'] == 'passed' else 2
 

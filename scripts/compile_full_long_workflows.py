@@ -5,7 +5,7 @@ import argparse,copy,hashlib,json,sys
 R=Path(__file__).resolve().parents[1]
 if not (R/'task_designs').exists():R=Path('/mnt/nas/home--xujingyi/agentic_mobile_manip/repos/manipulation-agentic-system-long-horizon')
 sys.path.insert(0,str(R/'src'))
-from manipulation_agent.custom_tasks import validate_spec
+from manipulation_agent.tasks.custom_tasks import validate_spec
 
 NOT=lambda x:{'not':x}
 ALL=lambda *x:{'all':list(x)}

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 from manipulation_agent.observations.rig import look_at_orientation
-from manipulation_agent.omnigibson_backend import normalize_embedded_robot, select_compatible_scene
+from manipulation_agent.executors.omnigibson_backend import normalize_embedded_robot, select_compatible_scene
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 
 spec=importlib.util.spec_from_file_location('observation_validator',Path(__file__).resolve().parents[1]/'scripts/validate_async_observation.py')

@@ -140,7 +140,7 @@ class ExplicitNavigationTests(unittest.TestCase):
     def test_harness_returns_reach_hint_and_four_fresh_views_without_physics(self):
         from manipulation_agent.observations.mock_rgb import MockRGBBackend
         from manipulation_agent.records import Recorder
-        from manipulation_agent.vision_harness import VisionHarness
+        from manipulation_agent.runtime.vision_harness import VisionHarness
         with tempfile.TemporaryDirectory() as folder:
             recorder = Recorder(Path(folder) / 'episode', {'validation': 'cpu_contract_only'})
             self.b.output = recorder.output

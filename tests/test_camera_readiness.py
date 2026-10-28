@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 
 
 class Tensor:

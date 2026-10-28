@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 import unittest
 
-from manipulation_agent.custom_tasks import validate_spec
-from manipulation_agent.long_horizon import TemporalGoalEvaluator
+from manipulation_agent.tasks.custom_tasks import validate_spec
+from manipulation_agent.tasks.long_horizon import TemporalGoalEvaluator
 
 RECIPE = Path(__file__).resolve().parents[1] / 'task_designs/constructed_branching/bedroom_shared_library_branching_v2.json'
 

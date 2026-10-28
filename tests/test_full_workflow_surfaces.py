@@ -5,7 +5,7 @@ from types import ModuleType,SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.full_workflow_reference import FullWorkflowReference
+from manipulation_agent.references.full_workflow_reference import FullWorkflowReference
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires pinned CPU tensor dependency')

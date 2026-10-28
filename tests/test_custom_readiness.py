@@ -4,9 +4,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from manipulation_agent.custom_readiness import evidence, validate_release, _physical
-from manipulation_agent.custom_tasks import sha256
-from manipulation_agent.long_horizon import TemporalGoalEvaluator
+from manipulation_agent.references.custom_readiness import evidence, validate_release, _physical
+from manipulation_agent.tasks.custom_tasks import sha256
+from manipulation_agent.tasks.long_horizon import TemporalGoalEvaluator
 
 
 class ReadinessTests(unittest.TestCase):

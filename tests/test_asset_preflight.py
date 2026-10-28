@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from manipulation_agent.asset_preflight import inspect_scene_assets, inspect_particle_system_assets
+from manipulation_agent.batch.asset_preflight import inspect_scene_assets, inspect_particle_system_assets
 
 
 class AssetPreflightTests(unittest.TestCase):

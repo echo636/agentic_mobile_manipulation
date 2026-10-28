@@ -13,7 +13,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from manipulation_agent.provider_gateway import make_server
-from manipulation_agent.image_pruning import prune_stale_images, count_images, PLACEHOLDER
+from manipulation_agent.agent.image_pruning import prune_stale_images, count_images, PLACEHOLDER
 
 
 @contextmanager

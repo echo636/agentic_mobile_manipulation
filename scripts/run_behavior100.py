@@ -29,12 +29,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import now, write_json, read_run, source_version
 from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.batch_lifecycle import ExecutionCapacity, FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
-from manipulation_agent.startup_progress import STARTUP_POLICY, startup_progress_update
-from manipulation_agent.startup_logs import startup_reader_code
-from manipulation_agent.closure import closure_watchdog
+from manipulation_agent.batch.batch_lifecycle import ExecutionCapacity, FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
+from manipulation_agent.batch.startup_progress import STARTUP_POLICY, startup_progress_update
+from manipulation_agent.batch.startup_logs import startup_reader_code
+from manipulation_agent.runtime.closure import closure_watchdog
 from manipulation_agent.clients.events import parse_events
-from manipulation_agent.batch_storage import BatchStorage
+from manipulation_agent.batch.batch_storage import BatchStorage
 
 FINAL = {'passed','failed','blocked'}
 TRANSIENT_STORAGE_ERRORS = {errno.EIO, errno.ESTALE, errno.ETIMEDOUT,
@@ -786,7 +786,7 @@ class Batch:
         if policy in {'agent_steps','unbounded'}:seconds=None
         options=(',max_agent_steps='+repr((row or {}).get('max_agent_steps',manifest.get('max_agent_steps')))
                  if policy=='agent_steps' else ',unbounded=True' if policy=='unbounded' else '')
-        code=('import json; from manipulation_agent.deadline import write_execution_clock; '
+        code=('import json; from manipulation_agent.runtime.deadline import write_execution_clock; '
               'print(json.dumps(write_execution_clock('+repr(str(path))+','+repr(seconds)+options+')))')
         remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-c',code])
         return self.c['ssh']+[remote]
@@ -1235,7 +1235,7 @@ class Batch:
         if not metadata.get('formal_finish_observed') and not (health or {}).get('closed') and not known:
             self.update(row,supervisor_intervention=True,stage='finishing')
             timeout=self._config.get('finish_stage_timeout_seconds',600)
-            code=("from manipulation_agent.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{row["port"]}')+
+            code=("from manipulation_agent.transport.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{row["port"]}')+
                 ",'finish',{'outcome':'aborted','reason':'Controller ended or episode deadline reached'},'batch-supervisor-finish',timeout="+str(timeout)+",origin='supervisor'))")
             result=self.ssh(['env','PYTHONPATH='+str(Path(row.get('runtime_source', self.remote_source))/'src'),self.c['sim_python'],'-c',code],timeout=timeout+5)
             (self.root/'logs'/f'{row["run_id"]}_forced_finish.log').write_text(result.stdout+result.stderr)
@@ -1328,12 +1328,12 @@ class Batch:
         if record_video and self.c.get('export_spectator_video'):
             media_validation_field='spectator_video_validation'
             try:
-                from manipulation_agent.spectator_video import export_spectator_video
+                from manipulation_agent.reporting.spectator_video import export_spectator_video
                 spectator = export_spectator_video(dest)
                 self.update(row,spectator_video_validation=spectator['status'])
                 if controller_ready:
                     media_validation_field='spectator_walltime_validation'
-                    from manipulation_agent.spectator_video import export_spectator_walltime
+                    from manipulation_agent.reporting.spectator_video import export_spectator_walltime
                     walltime_spectator = export_spectator_walltime(dest,controller)
                     self.update(row,spectator_walltime_validation=walltime_spectator['status'])
             except Exception as exc:

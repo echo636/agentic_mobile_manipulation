@@ -12,7 +12,7 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, preferred_gpu_worker, gpu_lease_available
+from manipulation_agent.batch.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, preferred_gpu_worker, gpu_lease_available
 
 spec=importlib.util.spec_from_file_location('lifecycle_batch',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
@@ -231,7 +231,7 @@ class LifecycleTests(unittest.TestCase):
     def test_real_process_gpu_and_host_leases_survive_independent_callers(self):
         with tempfile.TemporaryDirectory() as tmp:
             worker={'id':'other-arm','gpu':0,'ssh':['ssh','host'],'expected_gpu_uuid':'physical0'}
-            code='''import json,sys\nfrom manipulation_agent.batch_lifecycle import WorkerLease\nw=json.loads(sys.argv[2]); l=WorkerLease(sys.argv[1],w,host_budget_gib=28)\nassert l.acquire(); l.record(unit="owned.service",run_id="original",released=False)\nprint("locked",flush=True); sys.stdin.readline(); l.release(cleared=True)\n'''
+            code='''import json,sys\nfrom manipulation_agent.batch.batch_lifecycle import WorkerLease\nw=json.loads(sys.argv[2]); l=WorkerLease(sys.argv[1],w,host_budget_gib=28)\nassert l.acquire(); l.record(unit="owned.service",run_id="original",released=False)\nprint("locked",flush=True); sys.stdin.readline(); l.release(cleared=True)\n'''
             process=subprocess.Popen([sys.executable,'-c',code,tmp,json.dumps(worker)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
             try:
                 self.assertEqual(process.stdout.readline().strip(),'locked')
@@ -297,7 +297,7 @@ class LifecycleTests(unittest.TestCase):
     def test_orphan_remote_owner_does_not_starve_host_or_disappear_from_memory(self):
         with tempfile.TemporaryDirectory() as tmp:
             worker={'id':'old','gpu':0,'ssh':['ssh','host'],'expected_gpu_uuid':'physical0'}
-            code='''import json,sys\nfrom manipulation_agent.batch_lifecycle import WorkerLease\nl=WorkerLease(sys.argv[1],json.loads(sys.argv[2]),host_budget_gib=56)\nassert l.acquire(); l.record(unit="still-running.service",run_id="original",released=False)\n'''
+            code='''import json,sys\nfrom manipulation_agent.batch.batch_lifecycle import WorkerLease\nl=WorkerLease(sys.argv[1],json.loads(sys.argv[2]),host_budget_gib=56)\nassert l.acquire(); l.record(unit="still-running.service",run_id="original",released=False)\n'''
             subprocess.run([sys.executable,'-c',code,tmp,json.dumps(worker)],check=True)
             old=WorkerLease(tmp,worker,host_budget_gib=56,owner_active=lambda owner:True)
             before={p:p.read_bytes() for p in Path(tmp).glob('*.json')}

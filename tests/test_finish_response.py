@@ -6,10 +6,10 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent import bridge
+from manipulation_agent.transport import bridge
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 
 
 class FinishResponseTests(unittest.TestCase):

@@ -4,7 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import numpy as np
-from manipulation_agent.video import EpisodeVideo
+from manipulation_agent.reporting.video import EpisodeVideo
 
 output=Path(sys.argv[1]);output.mkdir(parents=True,exist_ok=False)
 video=EpisodeVideo(output,fps=30,size=64)

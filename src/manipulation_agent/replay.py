@@ -9,12 +9,12 @@ import subprocess
 from pathlib import Path
 
 from .replay_shell import render_replay_shell
-from .audit import audit_episode
+from .reporting.audit import audit_episode
 from .records import now, write_json, read_run
-from .transcript import build_transcript
-from .tool_trace import enrich_tool_trace
+from .reporting.transcript import build_transcript
+from .reporting.tool_trace import enrich_tool_trace
 from .clients.events import event_path
-from .goal_replay import goal_state, planning_metrics
+from .reporting.goal_replay import goal_state, planning_metrics
 
 
 def lines(path: Path) -> list[dict]:
@@ -181,7 +181,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
 def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     data = build_replay(run_dir, controller_dir)
     if data['video'] and data['video'].get('status') == 'passed':
-        from .streaming_video import prepare_browser_video
+        from .reporting.streaming_video import prepare_browser_video
         try:
             browser = prepare_browser_video(run_dir, data['video']['file'])
             data['video']['playback_file'] = browser['file']

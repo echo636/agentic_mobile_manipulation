@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from manipulation_agent.catalog_tasks import load_catalog_spec
+from manipulation_agent.tasks.catalog_tasks import load_catalog_spec
 
 
 class CatalogEvidenceTests(unittest.TestCase):

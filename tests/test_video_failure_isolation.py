@@ -13,11 +13,11 @@ from unittest.mock import patch
 
 import numpy as np
 
-from manipulation_agent import video
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.reporting import video
+from manipulation_agent.runtime.deadline import EpisodeDeadline
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 from manipulation_agent.executors.profiling import action_profile
 from manipulation_agent.contracts import SkillError
 

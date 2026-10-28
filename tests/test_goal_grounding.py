@@ -3,7 +3,7 @@ import random
 from types import SimpleNamespace
 import unittest
 
-from manipulation_agent.goal_grounding import efficient_grounding, evaluate_once_per_literal, ground_options
+from manipulation_agent.tasks.goal_grounding import efficient_grounding, evaluate_once_per_literal, ground_options
 
 
 @unittest.skipUnless(importlib.util.find_spec('bddl'), 'Requires pinned BDDL for differential checks')

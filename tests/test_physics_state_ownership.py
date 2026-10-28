@@ -5,7 +5,7 @@ from unittest import TestCase
 from unittest.mock import Mock, patch
 
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 
 
 class PhysicsStateOwnershipTests(TestCase):

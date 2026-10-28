@@ -6,8 +6,8 @@ import threading
 import unittest
 from unittest.mock import Mock
 
-from manipulation_agent.memory_admission import GIB, admission_decision
-from manipulation_agent.batch_lifecycle import WorkerLease
+from manipulation_agent.batch.memory_admission import GIB, admission_decision
+from manipulation_agent.batch.batch_lifecycle import WorkerLease
 
 spec = importlib.util.spec_from_file_location('memory_batch', Path(__file__).resolve().parents[1] / 'scripts/run_behavior100.py')
 batch = importlib.util.module_from_spec(spec)

@@ -3,7 +3,7 @@ import hashlib,json,os,tempfile,unittest
 from pathlib import Path
 from types import ModuleType,SimpleNamespace
 from unittest.mock import patch
-from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 
 class FullWorkflowConfigurationTests(unittest.TestCase):
  def config(self,full,gpu_physics=False,seed=False):

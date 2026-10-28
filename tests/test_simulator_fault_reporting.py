@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.omnigibson_backend import configure_native_fault_reporting
+from manipulation_agent.executors.omnigibson_backend import configure_native_fault_reporting
 
 
 class SimulatorFaultReportingTests(unittest.TestCase):

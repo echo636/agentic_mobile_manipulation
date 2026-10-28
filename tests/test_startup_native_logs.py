@@ -5,8 +5,8 @@ import sys
 import tempfile
 import unittest
 
-from manipulation_agent.startup_logs import read_startup_logs, startup_reader_code
-from manipulation_agent.startup_progress import STARTUP_POLICY, startup_progress_update
+from manipulation_agent.batch.startup_logs import read_startup_logs, startup_reader_code
+from manipulation_agent.batch.startup_progress import STARTUP_POLICY, startup_progress_update
 
 
 class NativeLoadingProgressTests(unittest.TestCase):

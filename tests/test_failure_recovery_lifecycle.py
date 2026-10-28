@@ -11,7 +11,7 @@ from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.carry import ControlledCarry
 from manipulation_agent.executors.placement import placement_transaction
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
-from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 
 spec = importlib.util.spec_from_file_location('recovery_batch', Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch = importlib.util.module_from_spec(spec)

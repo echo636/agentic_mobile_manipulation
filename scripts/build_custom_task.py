@@ -12,9 +12,9 @@ import traceback
 
 SOURCE=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(SOURCE/'src'))
-from manipulation_agent.custom_tasks import load_spec, sha256
+from manipulation_agent.tasks.custom_tasks import load_spec, sha256
 from manipulation_agent.records import write_json, release_source_digest
-from manipulation_agent.reference_evidence import close_reference, complete_reference_exit
+from manipulation_agent.references.reference_evidence import close_reference, complete_reference_exit
 
 
 def main():
@@ -52,7 +52,7 @@ def main():
             record.update(status='passed',validation_level='native_object_geometry_seed_only_not_initial_state_or_task_success',
                           geometry_seed={'path':'initial_scene.json','sha256':sha256(a.output/'initial_scene.json')})
             return 0
-        from manipulation_agent.diverse_task_contract import robot_spawn_supports
+        from manipulation_agent.tasks.diverse_task_contract import robot_spawn_supports
         position=backend.robot.get_position_orientation()[0].tolist()
         floors={obj.name:[v.tolist() for v in obj.aabb] for obj in backend.env.scene.objects
                 if obj.category in ('floors','lawn','driveway')}

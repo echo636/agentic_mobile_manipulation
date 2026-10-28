@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.runtime.deadline import EpisodeDeadline
 from manipulation_agent.executors.placement import CheckedPlacement
 
 
@@ -65,7 +65,7 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
                       side_effect=lambda *args, **kwargs: sim.sample(target, True)), \
                 patch('manipulation_agent.executors.placement.time.monotonic',
                       side_effect=lambda: clock['elapsed']), \
-                patch('manipulation_agent.deadline.time.time', side_effect=lambda: clock['unix']):
+                patch('manipulation_agent.runtime.deadline.time.time', side_effect=lambda: clock['unix']):
             return backend._checked_place_inside(target, max_steps)
 
     def test_managed_sampler_exceeds_all_legacy_limits_with_time_remaining(self):

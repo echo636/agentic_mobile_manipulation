@@ -15,8 +15,8 @@ from manipulation_agent.clients.base import run_process
 from manipulation_agent.clients.events import parse_events, write_derived_events, event_path
 from manipulation_agent.clients.types import PreparedProject, ClientCapability
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.transcript import build_transcript
-from manipulation_agent.vision_policy import system_prompt
+from manipulation_agent.reporting.transcript import build_transcript
+from manipulation_agent.agent.vision_policy import system_prompt
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'clients'
 

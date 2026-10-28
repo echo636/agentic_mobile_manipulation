@@ -7,9 +7,9 @@ import unittest
 from contextlib import nullcontext
 from unittest.mock import Mock, patch
 
-from manipulation_agent.custom_tasks import load_spec, validate_spec
-from manipulation_agent.diverse_task_contract import replacement_complete, robot_spawn_supports, upright_orientation
-from manipulation_agent.long_horizon import TemporalGoalEvaluator
+from manipulation_agent.tasks.custom_tasks import load_spec, validate_spec
+from manipulation_agent.tasks.diverse_task_contract import replacement_complete, robot_spawn_supports, upright_orientation
+from manipulation_agent.tasks.long_horizon import TemporalGoalEvaluator
 
 ROOT=Path(__file__).resolve().parents[1]
 def recipe(prefix):

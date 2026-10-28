@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.deadline import EpisodeDeadline
+from manipulation_agent.runtime.deadline import EpisodeDeadline
 from manipulation_agent.executors.navigation.gt_navigation import GridMap, NavigationError
 from manipulation_agent.executors.navigation.forward_navigation import ForwardRoute, select_forward_route
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend

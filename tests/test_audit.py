@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from manipulation_agent.audit import audit_episode
+from manipulation_agent.reporting.audit import audit_episode
 
 
 class ModelEvidenceAudit(unittest.TestCase):

@@ -2,7 +2,7 @@ import copy
 import unittest
 from types import SimpleNamespace
 
-from manipulation_agent.long_horizon import TemporalGoalEvaluator
+from manipulation_agent.tasks.long_horizon import TemporalGoalEvaluator
 
 
 SPEC = {

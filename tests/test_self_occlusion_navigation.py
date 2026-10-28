@@ -2,7 +2,7 @@
 import itertools
 import unittest
 
-from manipulation_agent.executors.navigation.self_depth_filter import (
+from manipulation_agent.executors.navigation.self_occlusion import (
     prepare_self_hulls, segment_hits_self_hull,
 )
 

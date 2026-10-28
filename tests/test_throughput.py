@@ -146,7 +146,7 @@ class RenderTests(unittest.TestCase):
 
     def test_real_encoder_preserves_hold_hashes_and_new_frames(self):
         import numpy as np
-        from manipulation_agent.video import EpisodeVideo
+        from manipulation_agent.reporting.video import EpisodeVideo
         with tempfile.TemporaryDirectory() as d:
             out=Path(d);views=('front','back','left','right','spectator')
             v=EpisodeVideo(out,30,size=32,views=views)
