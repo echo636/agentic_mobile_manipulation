@@ -77,6 +77,51 @@ class TaskNotesTests(unittest.TestCase):
             self.assertEqual(h.agent_steps,0);self.assertEqual(h.backend.steps,0)
             self.assertEqual(json.loads((h.recorder.output/'task_notes.json').read_text())['version'],2)
 
+    def test_resume_retains_public_feedback_after_stale_authored_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            h=self.harness(Path(tmp)/'episode')
+            self.write(h,'Food is on the board; next cut it.',0,'plan')
+            transitions=iter(['SlicingRule','DicingRule','DicingRule'])
+            h.backend.execute_visual=lambda *a,**kw:dict(transition=next(transitions),created_objects=2,
+                private_grounding={'selected_object_prim':'PRIVATE_OBJECT'},task_success='PRIVATE_SCORE')
+            replies=[]
+            for i in range(3):
+                args={'primitive':'cut','revision':h.revision,
+                      'target':{'image_ref':h.snapshot['images'][0]['image_ref'],'point':[.5,.5]}}
+                replies.append(h.call('act',args,'cut-'+str(i)))
+            self.assertEqual(h.call('act',args,'cut-2'),replies[-1])
+            failed=h.call('act',args,'stale-click')
+            self.assertFalse(failed['ok'])
+            before_steps=h.backend.steps
+            notes=h.call('initialize',{},'resumed')['notes']
+            history=notes['action_feedback_since_write']
+            self.assertEqual(history['omitted'],0)
+            entries=history['entries']
+            self.assertEqual([x['evidence_id'] for x in entries],
+                             [x['evidence_id'] for x in replies]+[failed['evidence_id']])
+            self.assertEqual([x['effect']['cut']['result'] for x in entries[:3]],
+                             ['sliced','diced_material','diced_material'])
+            self.assertEqual(entries[-1]['error']['code'],'stale_observation')
+            self.assertEqual(notes['content'],'Food is on the board; next cut it.')
+            self.assertNotIn('PRIVATE_',json.dumps(notes))
+            self.assertTrue(all('observation' not in entry for entry in entries))
+            self.assertEqual(h.backend.steps,before_steps)
+            read=h.call('task_notes',{'operation':'read','content':None,'expected_version':None},'read')
+            self.assertEqual(read['notes'],notes)
+            updated=self.write(h,'Food diced; transfer next.',1,'updated')
+            self.assertEqual(updated['notes']['action_feedback_since_write'],{'entries':[],'omitted':0})
+
+    def test_feedback_window_reports_missing_earlier_actions(self):
+        from manipulation_agent.task_notes import TaskNotes
+        notes=TaskNotes(Path('/unused'))
+        for i in range(70):
+            notes.record_action('act',{'primitive':'cut','target':None},
+                                {'ok':True,'evidence_id':str(i),'effect':{'primitive':'cut'}},i)
+        window=notes.read()['action_feedback_since_write']
+        self.assertEqual(window['omitted']+len(window['entries']),70)
+        self.assertGreater(window['omitted'],0)
+        self.assertEqual(window['entries'][-1]['evidence_id'],'69')
+
     def test_both_arms_require_an_authored_plan_before_first_action(self):
         for mode in ('hierarchical','none'):
             with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:

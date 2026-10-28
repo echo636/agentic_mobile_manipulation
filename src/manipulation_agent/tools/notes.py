@@ -2,7 +2,7 @@ from .base import register
 from ..contracts import object_schema, SkillError
 
 
-@register('task_notes', 'Read or replace your episode-local working notes. Content is your own text, not environment truth. Writes use the current version to avoid losing prior work. No physics or action step is consumed.', object_schema({
+@register('task_notes', 'Read or replace your episode-local working notes. Content is your own text, not environment truth. Reads also return recent public action receipts since the last write, with an omitted count if the window overflowed. Writes use the current version and start a new receipt checkpoint. No physics or action step is consumed.', object_schema({
     'operation': {'type': 'string', 'enum': ['read', 'write']},
     'content': {'type': ['string', 'null'], 'maxLength': 12000},
     'expected_version': {'type': ['integer', 'null'], 'minimum': 0},

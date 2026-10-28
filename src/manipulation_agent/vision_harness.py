@@ -204,6 +204,8 @@ class VisionHarness:
             }
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result,'origin':origin})
         result['evidence_id']=event_id
+        if name in {'act','look'} and 'task_notes' in self.catalog and origin=='controller':
+            self.task_notes.record_action(name,arguments,result,self.agent_steps)
         self.evidence[event_id]={'name':'act' if name in {'act','look'} else name,'ok':result['ok'],'revision':self.revision}
         self.cache[request_id]=(fingerprint,copy.deepcopy(result))
         if name=='finish' and result.get('closed'):
