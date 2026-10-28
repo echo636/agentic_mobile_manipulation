@@ -33,7 +33,7 @@ Use the following fields. Only two goal records are shown for brevity; put **eve
     "depends_on": [], "status": "active",
     "check": "Evidence needed to establish this result", "evidence": []
   }],
-  "active": {"goal_id": "g1", "steps": ["Immediate next action"], "next_check": "Expected result"},
+  "active": {"goal_id": "g1", "serves": ["g1"], "steps": ["Immediate next action"], "next_check": "Expected result"},
   "members": [{"label": "local-a", "description": "Recognizable visual features", "location": "Last observed location", "state": "Current task-relevant state", "remaining": "Unfinished work", "count": 1, "evidence": []}],
   "assumptions": [],
   "uncertainties": [],
@@ -43,7 +43,7 @@ Use the following fields. Only two goal records are shown for brevity; put **eve
 
 IDs are unique; only the root has a null parent. Every other `parent_id` references an existing goal; parent links form one tree. Dependencies reference goal IDs and may cross branches. Keep both relations acyclic. Parentage alone does not require sibling execution order; children do not wait for their parent to be done.
 
-Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the leaf currently being pursued; its ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list.
+Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the focal leaf; `active.serves` lists all ready leaves advanced by the current batch or shared trip. Their ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list. In `steps`, name the batch's source, carrier, destination and next useful work at that destination; use `members` for its inventory. Keep this short, not a complete future action transcript.
 
 Use `members` when item coverage matters. Labels are your own, not simulator IDs. An entry represents one item or a distinguishable group in the same state; keep groups disjoint and make count units clear after splitting or processing. Update state and remaining work from RGB and feedback. A spill reopens the affected goal; temporary placement does not complete storage.
 

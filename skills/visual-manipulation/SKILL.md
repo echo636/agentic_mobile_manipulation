@@ -6,7 +6,7 @@ description: Choose manipulation skills and verify progress from RGB and action 
 
 Initialize, inspect the four returned views, then choose the next action. Read `initialize.control` for the active protocol. In `target_locked_approach_v2`, directly request the operation when its target is clearly selectable; the executor handles approach and stance. Use macro navigation for exploration, another task area, or an approach change justified by feedback. Check the other current views before moving to recover a cropped target.
 
-Read these when relevant:
+Read each relevant resource once; reread only if its instructions are no longer available in context:
 
 - `visual-exploration`: finding objects and traveling between areas.
 - `pick-and-place`: carrying, placing and attaching objects.

@@ -1,6 +1,6 @@
-"""Checked ideal portions between the held vessel and an RGB-selected object.
+"""Transfer contents between the held vessel and an RGB-selected object.
 
-Transfer existing physical particles, or dispense from an asset-authored source.
+Pour loose rigid objects and particles, or dispense from an authored source.
 No task bindings, recipes, goal predicates, or material substitutions are used.
 """
 import math
@@ -115,6 +115,63 @@ def move_particle_centers(system, indices, positions, orientations=None):
 
 
 class CheckedMaterialTransfer:
+    def _pour_objects(self, source):
+        """Select loose payload roots; a nested vessel owns its own contents."""
+        from omnigibson.object_states import Inside, OnTop, AttachedTo
+        candidates = [child for child, parent, kind in self._grasp_dependencies(source)
+                      if parent is source and kind in {'Inside', 'OnTop'}]
+        return [child for child in candidates if not any(
+            other is not child and any(state in child.states and child.states[state].get_value(other)
+                                       for state in (Inside, OnTop, AttachedTo))
+            for other in candidates)]
+
+    def _pour_rigid_objects(self, source, destination, objects, max_steps):
+        """Use native Inside placement, then leave the result to free physics.
+
+        Stop when the receiver cannot accept the next object. Earlier transfers
+        remain real progress; never roll back the scene or reconstruct food.
+        """
+        from omnigibson.object_states import Inside
+        from omnigibson.utils import transform_utils as T
+        from .particle_payload import relocate_particles
+        moved = []
+        for obj in objects:
+            self.deadline.check(changed=bool(moved))
+            dependencies = self._grasp_dependencies(obj)
+            contents = [(child, T.relative_pose_transform(
+                *child.get_position_orientation(), *obj.get_position_orientation()))
+                for child, _, _ in dependencies]
+            particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
+                                           include_supported=True)
+            if Inside not in obj.states or not obj.states[Inside].set_value(destination, True):
+                break
+            self._relocate_contents(obj, contents)
+            relocate_particles(self.env.scene, particles)
+            moved.append(obj)
+        if not moved:
+            raise SkillError('sampling_error', 'The receiving vessel could not accept a loose object', changed=True)
+        for _ in range(min(6, max_steps)):
+            self._step(self.primitives._empty_action())
+        retained = sum(bool(obj.states[Inside].get_value(destination)) for obj in moved)
+        remaining = len(self._pour_objects(source))
+        self._placement_record({'status': 'rigid_contents_poured', 'source': source.name,
+            'destination': destination.name, 'objects': [obj.name for obj in moved],
+            'retained_objects': retained, 'source_remaining_objects': remaining})
+        if not retained:
+            raise SkillError('postcondition_error', 'Poured objects did not remain in the receiving vessel', changed=True)
+        return {'moved_objects': len(moved), 'retained_objects': retained,
+                'source_remaining_objects': remaining}
+
+    def _checked_transfer(self, primitive, target, max_steps):
+        source, destination = self._transfer_preconditions(primitive, target)
+        objects = self._pour_objects(source) if primitive == 'pour' else []
+        rigid = self._pour_rigid_objects(source, destination, objects, max_steps) if objects else None
+        result = self._transfer_material_portion(primitive, source, destination, max_steps,
+                                                 empty_ok=rigid is not None)
+        if rigid is not None:
+            result.update(rigid_transfer=rigid, implementation='native_rigid_and_particle_transfer')
+        return result
+
     def _transfer_preconditions(self, primitive, target):
         from omnigibson.object_states import ContainedParticles, Inside, Open
         held = self._get_held()
@@ -166,10 +223,9 @@ class CheckedMaterialTransfer:
             if tilt:
                 source.set_position_orientation(*pose)
 
-    def _checked_transfer(self, primitive, target, max_steps):
+    def _transfer_material_portion(self, primitive, source, destination, max_steps, *, empty_ok=False):
         from omnigibson.object_states import ContainedParticles
         from omnigibson.object_states.saturated import ModifiedParticles
-        source, destination = self._transfer_preconditions(primitive, target)
         scene = self.env.scene
         # Nested bowls/bags own their contents; pouring an outer tray must not
         # extract material through those intervening objects.
@@ -182,6 +238,9 @@ class CheckedMaterialTransfer:
         systems = {record.system.name: record.system for record in captured}
         systems.update((system.name, system) for system in emitted)
         if not systems:
+            if empty_ok:
+                return {'primitive': primitive, 'materials': [], 'source_has_more_material': False,
+                        'held_vessel_retained': True, 'postcondition': 'actual_transfer_then_physical_settling'}
             from omnigibson.object_states import ToggledOn
             if modifier is not None and ToggledOn in source.states and not source.states[ToggledOn].get_value():
                 raise SkillError('material_dispenser_off',
@@ -241,6 +300,9 @@ class CheckedMaterialTransfer:
         finally:
             held = self._get_held()
         if not changes:
+            if empty_ok:
+                return {'primitive': primitive, 'materials': [], 'source_has_more_material': True,
+                        'held_vessel_retained': True, 'postcondition': 'rigid_transfer_only; material_not_transferred'}
             raise SkillError('sampling_error', 'No collision-free receiving space for a material portion')
         self._placement_record({'status': 'material_transferred', 'primitive': primitive,
             'source': source.name, 'destination': destination.name,

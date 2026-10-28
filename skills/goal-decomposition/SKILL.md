@@ -1,6 +1,6 @@
 ---
 name: goal-decomposition
-description: Recursively decompose task outcomes and track dependencies, item coverage and evidence in task notes.
+description: Decompose task outcomes, schedule efficient batches across ready goals, and track item coverage and evidence.
 ---
 # Plan from the end state down to executable goals
 
@@ -11,7 +11,7 @@ Plan top down and verify bottom up. Use these roles to organize the hierarchy:
 | Root: task end state | State what must be true when the whole task is complete, in your own words. Check coverage against the instruction. |
 | Intermediate goal layers | Describe the contributing results needed to achieve each parent. Group related subresults under a meaningful parent and preserve their dependencies and constraints. Repeat this decomposition at finer levels where needed. |
 | Leaf goals | State directly pursuable results, each with a feasible local plan and an observable completion check. A leaf may require several tool calls. |
-| Current action plan | Put only the current leaf's immediate actions and next check in `active.steps` and `active.next_check`, outside the goal tree. Select concrete targets from current RGB. |
+| Current action plan | Choose a short sequence serving one or several ready leaves; put it in `active.steps` with the next check, outside the goal tree. Select concrete targets from current RGB. |
 
 These are roles, not a fixed number of levels. Intermediate layers can repeat, and leaves can occur at different depths. Choose depth and child counts from the task; do not add levels just to fill a template. Keep intermediate parents when refining their children.
 
@@ -22,6 +22,10 @@ Give requirements stable IDs, preserving quantities, destinations, relations, fi
 Before pursuing a goal, split it if it still bundles results that can be achieved and checked separately; apply the same test to the child you pursue. Stop when it meets the leaf criteria above. Children must jointly cover their parent's result and constraints. Refine the current branch as observations arrive; other branches can stay coarse until needed. A former leaf can acquire children when new work becomes apparent.
 
 Use `parent_id` for decomposition and `depends_on` for prerequisites, including across branches. Keep dependencies acyclic and limited to necessary ordering. Select an unfinished leaf whose own and ancestors' prerequisites are satisfied; a blocked branch need not stop independent work.
+
+The tree describes results, not a fixed execution order. Before leaving an area or starting repeated transfers, compare the next ready work by travel, loading/unloading, tool changes and risk of disturbing completed results. Prefer a shared trip or work session when it reduces total work: gather compatible items onto a stable carrier, carry the loaded assembly once, then distribute them or pour loose contents into a common receiver. Include the cost of obtaining and returning the carrier; a nearby single delivery may be cheaper directly. Keep incompatible processing states separate and respect capacity and access.
+
+Record the chosen batch, its destination and unfinished members in the local plan. Complete useful work at the current station before departing, leave a hand free for required access, and combine dependent storage closure with the last transfer. A batch may advance several branches; update each only for the results actually achieved. Change the plan when a tool cannot support it or a batch spills, rather than repeating the same costly pattern.
 
 For groups, link pending work to identifiable members or spatially distinct groups sharing the same task-relevant state. Track appearance, last location, current state and remaining work; action counts alone cannot identify what remains. If movement, mixing or a view change breaks that correspondence, mark it uncertain and regain it through a clearer view or separating items before an irreversible operation. Items found so far do not establish the total; retain uninspected locations and uncertain identities or destination roles.
 

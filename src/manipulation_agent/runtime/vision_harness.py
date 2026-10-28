@@ -254,13 +254,16 @@ class VisionHarness:
                 effect['cut']={'result':'diced_material'}
         if primitive in {'pour','scoop'}:
             materials=details.get('materials',[])
-            if materials:
+            rigid=details.get('rigid_transfer')
+            if materials or rigid:
                 remaining=details.get('source_has_more_material')
                 effect['transfer']={
                     'portion_transferred':True,
                     'source_has_more_material':remaining if isinstance(remaining,bool) else None,
                     'held_object_retained':True,
-                    'message':'A material portion was transferred. One operation need not empty the source; inspect the returned RGB.'}
+                    'message':'Contents were transferred. Check remaining contents and the receiving vessel in the returned RGB.'}
+                if rigid:
+                    effect['transfer'].update(rigid)
         local=details.get('local_manipulation')
         if local:
             effect['local_adjustment']={'repositions':int(local['repositions']),
