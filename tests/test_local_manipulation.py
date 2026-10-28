@@ -47,6 +47,26 @@ class Motor:
 
 
 class CoordinationTests(unittest.TestCase):
+    def test_trace_io_failure_preserves_action_outcome_without_reexecution(self):
+        from manipulation_agent.executors.local_rgb import LocalRGBManipulation
+        import errno
+        for error in (None, 'sampling_error'):
+            with self.subTest(operation_error=error):
+                b=Motor();b.output=Path('/unavailable-diagnostic-output')
+                b.operation_error=error
+                b._local_record=LocalRGBManipulation._local_record.__get__(b)
+                with patch.object(Path,'open',side_effect=OSError(errno.EIO,'Input/output error')) as opened:
+                    with self.assertLogs('manipulation_agent.executors.local_rgb',level='WARNING') as logs:
+                        if error is None:
+                            result=b.run()
+                            self.assertEqual(result['local_manipulation']['departure'],'checked')
+                        else:
+                            with self.assertRaises(SkillError) as caught:b.run()
+                            self.assertEqual(caught.exception.code,error)
+                self.assertEqual(len(b.executions),1)
+                self.assertEqual(opened.call_count,1)
+                self.assertEqual(len(logs.records),1)
+
     def test_harness_one_revision_and_cached_request_after_internal_motion(self):
         from manipulation_agent.observations.mock_rgb import MockRGBBackend
         from manipulation_agent.records import Recorder

@@ -1,6 +1,7 @@
 """OmniGibson adapter for local manipulation; GT stays executor-private."""
 from dataclasses import asdict
 import json
+import logging
 import math
 from ..contracts import SkillError
 from ..records import now
@@ -26,9 +27,16 @@ class LocalRGBManipulation:
         return float(pos[0]),float(pos[1]),math.atan2(forward[1],forward[0])
 
     def _local_record(self, **data):
-        with (self.output/'local_manipulation.jsonl').open('a') as stream:
-            stream.write(json.dumps({'at':now(),'parent_request_id':getattr(self,'_active_request_id',None),
-                                    'env_step':self.steps,'audience':'executor_private',**data})+'\n')
+        if getattr(self, '_local_trace_unavailable', False):return
+        try:
+            with (self.output/'local_manipulation.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at':now(),'parent_request_id':getattr(self,'_active_request_id',None),
+                                        'env_step':self.steps,'audience':'executor_private',**data})+'\n')
+        except OSError as exc:
+            # Optional tracing must not abort an action after physical motion.
+            # Preserve the failure in the process log; core run records stay strict.
+            self._local_trace_unavailable = True
+            logging.getLogger(__name__).warning('Local manipulation trace disabled at %s: %s', self.output, exc)
 
     def _resolve_local_target(self,binding):
         obj,point=binding.resolve(self.env.scene.objects,self.local_limits.max_target_drift_m)
