@@ -51,7 +51,10 @@ def navigation_height_edges(height, payload_bounds=()):
     adds at most two slabs and keeps the empty-handed map unchanged.
     """
     top = max(1.26, math.ceil((height + .02) * 100) / 100)
-    edges = [.03, .35, .8, 1.25, top]
+    # An extended arm above a worktop must not inherit the worktop's lower
+    # obstacle projection. Keep fine, stable bands through the arm workspace.
+    edges = [.03, .35, .8, top,
+             *[round(.8 + .05 * i, 8) for i in range(1, math.ceil((top - .8) / .05))]]
     if payload_bounds:
         low = min(bounds[0] for bounds in payload_bounds)
         high = max(bounds[1] for bounds in payload_bounds)

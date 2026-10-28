@@ -41,6 +41,15 @@ def attachment_relation(candidate, member):
 
 class ControlledCarry:
 
+    def _prepare_grasp_arm(self):
+        arm = self.primitives.arm
+        indices = self.robot.arm_control_idx[arm]
+        ready = self.robot.untucked_default_joint_pos[indices]
+        self.robot.set_joint_positions(ready, indices=indices)
+        self.primitives._arm_targets['arm_' + arm] = ready.clone()
+        self.og.sim.sync_physx_to_fabric()
+        self.frames_revision = -1
+
     def _grasp_state(self, obj, max_steps, point):
         """Transfer once, then let OG's assisted-grasp joint own the object."""
         from omnigibson.utils import transform_utils as T
@@ -52,13 +61,10 @@ class ControlledCarry:
         if obj.fixed_base:
             raise SkillError('fixed_object', 'The selected object has a fixed base')
         arm = self.primitives.arm
-        indices = self.robot.arm_control_idx[arm]
-        ready = self.robot.untucked_default_joint_pos[indices]
-        # A tucked hand is beside the torso. Bringing a wide object there
-        # embeds it in the robot. Set the arm once, then retain its native
-        # controller goal instead of replacing that goal with each sagged pose.
-        self.robot.set_joint_positions(ready, indices=indices)
-        self.primitives._arm_targets['arm_' + arm] = ready.clone()
+        # Local approach planning already uses this arm posture. Changing it
+        # only after arriving invalidates the geometry used for that approach.
+        if getattr(self, '_local_operation', None) is None:
+            self._prepare_grasp_arm()
         original = obj.get_position_orientation()
         dependencies = self._grasp_dependencies(obj)
         contents = [(child, T.relative_pose_transform(*child.get_position_orientation(), *original))
@@ -73,10 +79,28 @@ class ControlledCarry:
         # the fingertip plane, intersecting the fingers and palm.
         vertices = self.torch.as_tensor(self._collision_vertices(obj),
                                        dtype=point.dtype, device=point.device)
-        depths = vertices @ direction
-        surface = vertices[depths <= depths.min() + 1e-5]
-        grasp_point = surface[self.torch.linalg.vector_norm(surface - point, dim=1).argmin()]
-        obj.set_position_orientation(position=original[0] + contact - grasp_point)
+        from .placement_overlap import assembly_overlap_ranker
+        overlap = assembly_overlap_ranker(self, obj, [obj, *[child for child, _ in contents]])
+        # Preserve the original yaw when it fits. A long tool can otherwise
+        # reach through a wall when transferred to the fingertips. Compare
+        # upright yaw alternatives without moving any body during the search.
+        for yaw in (0., math.pi / 2, -math.pi / 2, math.pi):
+            turn = T.euler2quat(original[1].new_tensor([0., 0., yaw]))
+            rotation = T.quat2mat(turn)
+            rotated = (vertices - original[0]) @ rotation.T + original[0]
+            selected = rotation @ (point - original[0]) + original[0]
+            depths = rotated @ direction
+            surface = rotated[depths <= depths.min() + 1e-5]
+            grasp_point = surface[self.torch.linalg.vector_norm(surface - selected, dim=1).argmin()]
+            position = original[0] + contact - grasp_point
+            orientation = T.quat_multiply(turn, original[1])
+            if overlap is None or overlap(position, orientation) == 0:
+                break
+        else:
+            # The object is unchanged; the existing local approach loop may
+            # choose another stance before trying the grasp again.
+            raise SkillError('out_of_reach', 'No unobstructed grasp pose at this stance')
+        obj.set_position_orientation(position=position, orientation=orientation)
         self._relocate_contents(obj, contents)
         relocate_particles(self.env.scene, particles)
         self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
