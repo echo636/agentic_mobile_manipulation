@@ -21,7 +21,7 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
         clock = {'elapsed': 0., 'unix': 1000., 'physics': 0, 'records': []}
         def physics():
             clock['physics'] += 1
-        sim = SimpleNamespace(step_physics=physics, scenes=[],
+        sim = SimpleNamespace(step_physics=physics, scenes=[], sync_physx_to_fabric=lambda: None,
                               dump_state=lambda **kwargs: {}, load_state=lambda *args, **kwargs: None)
         def sample(target, wanted):
             clock['elapsed'] = elapsed
@@ -48,6 +48,7 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
         backend._placement_context = lambda container: nullcontext()
         backend._relocate_contents = lambda obj, contents: None
         backend._step = lambda action: None
+        backend.primitives = SimpleNamespace(_empty_action=lambda: None)
         backend._verify_container_payload = lambda container, contents: None
         backend._verify_payload = lambda dependencies: None
         backend._placement_record = clock['records'].append
@@ -77,7 +78,7 @@ class VolumeSamplerBudgetTests(unittest.TestCase):
         self.assertEqual(backend.sampling_physics_steps, 6001)
         self.assertIs(sim.step_physics, physics)
         self.assertEqual(clock['records'][0]['status'], 'native_sampling_exhausted')
-        self.assertEqual(result['implementation'], 'transactional_Inside_with_geometric_fallback')
+        self.assertEqual(result['implementation'], 'Inside_with_geometric_fallback')
 
     def test_managed_sampler_stops_at_actual_episode_deadline_and_restores_physics(self):
         fixture = self.fixture(EpisodeDeadline(2800.), 6001, elapsed=181., expire_at=10)

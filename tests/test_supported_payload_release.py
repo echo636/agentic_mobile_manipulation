@@ -1,5 +1,6 @@
 """Safe release of a supported child must not relax containment or stability."""
 import types
+import numpy as np
 import unittest
 from unittest.mock import patch
 
@@ -18,6 +19,9 @@ class SupportedPayloadRelease(unittest.TestCase):
         self.target = types.SimpleNamespace(name='selected_support')
         self.parent = types.SimpleNamespace(name='held_parent')
         self.child = types.SimpleNamespace(name='supported_child', states={})
+        for body in (self.parent, self.child):
+            body.get_position_orientation = lambda: (np.zeros(3), np.array([0., 0., 0., 1.]))
+            body.get_linear_velocity = lambda: np.zeros(3)
         self.backend = ControlledCarry()
         self.backend.env = types.SimpleNamespace(scene=types.SimpleNamespace())
         self.records = []
@@ -39,7 +43,7 @@ class SupportedPayloadRelease(unittest.TestCase):
 
     def test_contained_child_must_remain_inside_its_original_container(self):
         with self.assertRaises(SkillError):self.verify('Inside')
-        self.assertEqual(self.records,[])
+        self.assertEqual(self.records[-1]['status'],'payload_relation_failed')
 
     def test_falling_or_unsupported_child_still_rejects_placement(self):
         for stable,supported,touching in ((False,True,True),(True,False,True),(True,True,False)):

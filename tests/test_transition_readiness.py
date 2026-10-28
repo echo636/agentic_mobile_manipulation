@@ -16,6 +16,7 @@ class TransitionReadinessTests(unittest.TestCase):
             halves=[NS(name='half_'+str(i),initialized=False) for i in range(2)]
             sim=NS(_objects_to_initialize=[])
             backend=NS(og=NS(sim=sim),steps=17,output=Path(directory),
+                       primitives=NS(_empty_action=lambda:'hold'),
                        deadline=NS(check=lambda **kw:None),
                        robot=NS(get_joint_positions=lambda:[],q_to_action=lambda q:'hold'))
             backend._complete_pending_object_initialization=lambda remaining=8:RGBBackend._complete_pending_object_initialization(backend,remaining)
@@ -52,6 +53,7 @@ class TransitionReadinessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             sim=NS(_objects_to_initialize=[])
             backend=NS(og=NS(sim=sim),steps=0,output=Path(directory),
+                       primitives=NS(_empty_action=lambda:None),
                        deadline=NS(check=lambda **kw:None),
                        robot=NS(get_joint_positions=lambda:[],q_to_action=lambda q:None))
             backend._step=lambda action:self.fail('Ready scene advanced physics')

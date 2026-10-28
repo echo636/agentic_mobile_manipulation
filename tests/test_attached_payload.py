@@ -20,13 +20,15 @@ class AttachedPayloadTests(unittest.TestCase):
   self.states=types.ModuleType('omnigibson.object_states')
   for n,v in [('AttachedTo',Attached),('Inside',Inside),('OnTop',OnTop),('Touching',Touching)]:setattr(self.states,n,v)
   self.mock=patch.dict(sys.modules,{'omnigibson':types.ModuleType('omnigibson'),'omnigibson.object_states':self.states});self.mock.start();self.addCleanup(self.mock.stop)
-  def obj(name,z):return NS(name=name,fixed_base=False,states={},aabb=(torch.tensor([0.,0.,z]),torch.tensor([1.,1.,z+.05])),points=np.array([[0.,0.,z],[1.,1.,z+.05]]))
+  def obj(name,z):return NS(name=name,fixed_base=False,states={},aabb=(torch.tensor([0.,0.,z]),torch.tensor([1.,1.,z+.05])),points=np.array([[0.,0.,z],[1.,1.,z+.05]]),
+                           get_position_orientation=lambda:(torch.tensor([0.,0.,z]),torch.tensor([0.,0.,0.,1.])),
+                           get_linear_velocity=lambda:torch.zeros(3))
   self.top=obj('top',.7);self.bracket=obj('bracket',.65);self.leg=obj('leg',0.);self.unrelated=obj('other',.2)
   self.bracket.states[Attached]=NS(get_value=lambda p:p is self.top)
   self.leg.states[Attached]=NS(get_value=lambda p:p is self.bracket)
   scene=NS(objects=[self.top,self.bracket,self.leg,self.unrelated])
   for o in scene.objects:o.scene=scene
-  self.backend=NS(env=NS(scene=scene),robot=NS())
+  self.backend=NS(env=NS(scene=scene),robot=NS(),_placement_record=lambda row:None)
 
  def test_grasp_collects_attachment_grandchildren(self):
   edges=ControlledCarry._grasp_dependencies(self.backend,self.top)

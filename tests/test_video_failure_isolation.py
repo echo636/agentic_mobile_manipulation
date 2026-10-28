@@ -34,7 +34,7 @@ class VideoFailureIsolationTests(unittest.TestCase):
             pixels={v:np.zeros((32,32,3),dtype=np.uint8) for v in views}
             original_open=Path.open
             def faulty_open(path,*args,**kwargs):
-                if path.name in {'video_frames.jsonl','video.json.tmp'}:
+                if path.name == 'video_frames.jsonl' or (path.name.startswith('video.json.') and path.suffix == '.tmp'):
                     raise OSError(errno.EIO,'simulated NAS I/O error',str(path))
                 return original_open(path,*args,**kwargs)
             with patch.object(Path,'open',faulty_open):
@@ -73,7 +73,7 @@ class VideoFailureIsolationTests(unittest.TestCase):
         for stop in (False, True):
             with self.subTest(stop=stop), tempfile.TemporaryDirectory() as tmp:
                 output=Path(tmp)/'episode';recorder=Recorder(output,{})
-                backend=MockRGBBackend(output);backend.deadline=EpisodeDeadline(time.time()+10)
+                backend=MockRGBBackend(output);backend.deadline=EpisodeDeadline()
                 harness=VisionHarness(backend,recorder,profile='minimal')
                 views=('front','back','left','right','spectator')
                 recording=video.EpisodeVideo(output,30,size=32,views=views)

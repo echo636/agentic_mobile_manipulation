@@ -45,7 +45,7 @@ class LiftClearanceTests(unittest.TestCase):
         obj = SimpleNamespace(name='bag', links={'base': own},
                               aabb=(torch.tensor([0., 0., .9]), torch.tensor([.2, .2, 1.])))
         oven = SimpleNamespace(links={'fill': helper})
-        system = SimpleNamespace(name='material', particles_view=SimpleNamespace(prim_paths=['/grain']),
+        system = SimpleNamespace(name='material', n_particles=1, particles_view=SimpleNamespace(prim_paths=['/grain']),
             particle_contact_radius=.01,
             get_particles_position_orientation=lambda: (torch.tensor([[.1, .1, 1.08]]), None))
         particle = SimpleNamespace(system=system, paths=('/grain',))

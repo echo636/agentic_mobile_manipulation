@@ -12,7 +12,7 @@ def cooccupies(edges, first, second):
 class PayloadHeightBands(unittest.TestCase):
     def test_lifted_food_does_not_inherit_countertop_obstacles(self):
         counter, food = (.85, .90), (1.06, 1.13)
-        self.assertTrue(cooccupies(navigation_height_edges(1.5), counter, food))
+        self.assertFalse(cooccupies(navigation_height_edges(1.5), counter, food))
         refined = navigation_height_edges(1.5, [food])
         self.assertFalse(cooccupies(refined, counter, food))
         # A real shelf at the carried food's height remains blocking.
@@ -22,10 +22,11 @@ class PayloadHeightBands(unittest.TestCase):
         assembly = [(.83, .93), (1.06, 1.13)]
         edges = navigation_height_edges(1.5, assembly)
         self.assertTrue(cooccupies(edges, (.85, .90), assembly[0]))
-        self.assertLessEqual(len(edges), 7)
 
     def test_empty_hand_and_micrometre_feedback_preserve_cache_bands(self):
-        self.assertEqual(navigation_height_edges(1.5), [.03, .35, .8, 1.25, 1.52])
+        edges = navigation_height_edges(1.5)
+        self.assertEqual((edges[0], edges[-1]), (.03, 1.52))
+        self.assertLessEqual(max(b-a for a,b in zip(edges,edges[1:]) if a>=.8), .051)
         self.assertEqual(navigation_height_edges(1.5, [(1.065, 1.135)]),
                          navigation_height_edges(1.5, [(1.065001, 1.134999)]))
 

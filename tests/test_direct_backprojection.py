@@ -84,7 +84,7 @@ class DirectBackprojection(unittest.TestCase):
         b._navigate = Mock(return_value={'nav_status': 'reached'})
         with patch('manipulation_agent.executors.visual_mesh_grounding.query_visual_surface',
                    side_effect=AssertionError('navigation queried mesh')) as query:
-            result = b.execute_visual('navigate_to', self.target, 123)
+            result = b._execute_visual('navigate_to', self.target, 123)
         self.assertEqual(result['nav_status'], 'reached')
         anchor, budget = b._navigate.call_args.args
         self.assertEqual(budget, 123)
@@ -97,12 +97,13 @@ class DirectBackprojection(unittest.TestCase):
         b = self.backend
         b.ideal_carry = True
         b._get_held = lambda: SimpleNamespace(name='held')
-        b._checked_place_on_top = Mock(return_value={'placed': True})
+        b._place_state = Mock(return_value={'placed': True})
         with patch('manipulation_agent.executors.visual_mesh_grounding.query_visual_surface',
                    return_value=(self.object, self.visual)) as query:
-            result = b.execute_visual('place_on_top', self.target, 100, placement_yaw_degrees=15)
+            result = b._execute_visual('place_on_top', self.target, 100, placement_yaw_degrees=15)
         self.assertTrue(result['placed'])
-        owner, budget, point, yaw = b._checked_place_on_top.call_args.args
+        primitive, owner, budget, point, yaw = b._place_state.call_args.args
+        self.assertEqual(primitive, 'place_on_top')
         self.assertIs(owner, self.object)
         self.assertEqual((budget, yaw), (100, 15))
         self.torch.testing.assert_close(point, self.expected)

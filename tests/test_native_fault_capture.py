@@ -34,7 +34,8 @@ class NativeFaultCaptureTests(unittest.TestCase):
                 env=dict(os.environ,MAS_NATIVE_FAULT_DIR=str(folder/'fault')),capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             self.assertEqual(json.loads(result_path.read_text()),
-                             {'peers':peers,'candidate_gib':28,'startup_gib':28,'host_budget_gib':56})
+                             {'peers':peers,'candidate_gib':28,'startup_gib':28,'host_budget_gib':56,
+                              'profile':'observed_peak','account_margin_gib':2})
             self.assertFalse((folder/'fault').exists())
 
     @unittest.skipUnless(shutil.which('gdb'), 'GDB is unavailable')

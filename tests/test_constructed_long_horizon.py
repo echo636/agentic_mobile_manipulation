@@ -38,7 +38,8 @@ class ConstructionContracts(unittest.TestCase):
                 if fail:raise RuntimeError('restore failed')
             backend=CustomTaskBackend.__new__(CustomTaskBackend)
             backend.custom_spec={'schema_version':3}
-            backend.env=SimpleNamespace(scene=SimpleNamespace(restore=restore,
+            backend.build_instance=None
+            backend.env=SimpleNamespace(scene=SimpleNamespace(restore=restore,load_state=Mock(),
                 transition_rule_api=SimpleNamespace(refresh_all_rules=refresh)))
             with patch.dict('sys.modules',{'omnigibson.macros':SimpleNamespace(gm=gm)}):
                 if fail:

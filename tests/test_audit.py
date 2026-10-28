@@ -41,7 +41,7 @@ class ModelEvidenceAudit(unittest.TestCase):
             self.assertEqual(result['status'], 'passed')
             self.assertNotIn('official_task_success', result['checks'])
         self.run['evaluation']['score_type'] = 'unknown_custom_score'
-        self.assertEqual(self.audit()['status'], 'failed')
+        self.assertEqual(self.audit()['evidence_status'], 'failed')
         self.run['evaluation']['score_type'] = 'custom_joint_terminal_and_public_history_v2'
         del self.run['evaluation']['input_hashes']['custom_initial_scene']
         self.assertEqual(self.audit()['evidence_status'],'failed')

@@ -66,7 +66,7 @@ class MotorContractRegression(unittest.TestCase):
         states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):
             with self.assertRaises(SkillError) as failure:
-                RGBBackend._execute_visual_action(backend,'attach',object(),700)
+                RGBBackend._execute_visual(backend,'attach',object(),700)
         self.assertEqual(failure.exception.code,'out_of_reach')
 
     @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
@@ -84,7 +84,7 @@ class MotorContractRegression(unittest.TestCase):
         backend._execute_bound_manipulation=RGBBackend._execute_bound_manipulation.__get__(backend)
         states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):
-            result=RGBBackend._execute_visual_action(backend,'hang',object(),30)
+            result=RGBBackend._execute_visual(backend,'hang',object(),30)
         self.assertEqual(result['primitive'],'hang')
         self.assertEqual(result['selected'],'wall_nail')
 
@@ -117,6 +117,7 @@ class MotorContractRegression(unittest.TestCase):
         backend._relocate_contents=lambda *a:None
         backend._verify_payload=lambda *a:None
         backend._step=lambda *a:None
+        backend.primitives=types.SimpleNamespace(_empty_action=lambda:None)
         backend.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
         states=types.ModuleType('omnigibson.object_states');states.AttachedTo=attached
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):

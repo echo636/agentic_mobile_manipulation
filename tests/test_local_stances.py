@@ -37,6 +37,7 @@ class GeometryMotor(LocalRGBManipulation):
         return self.collision.grid, self.collision, {'held_object_footprint_included': self.held}, [], 0
     def _local_record(self, **kw): self.records.append(kw)
     def _approach_visible(self, *args, **kw): return True
+    def _refine_local_geometry(self, *args, **kw): return False
     def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route):
         self.route = prepared_route
         return {'actual_path_distance_m': prepared_route.distance_m}
@@ -160,7 +161,8 @@ class ArchivedStanceTests(unittest.TestCase):
         motor = GeometryMotor(start,collision,False)
         motor._approach_visible = lambda *a,**kw: False
         op = LocalOperation(motor,row['primitive'],None,600,{})
-        with self.assertRaises(SkillError) as caught:
+        with patch('manipulation_agent.executors.local_stances.local_stance_proposals',
+                   return_value=iter([(start,'fixture')])), self.assertRaises(SkillError) as caught:
             motor._local_reposition(row['primitive'],object(),target,op)
         self.assertEqual(caught.exception.stage,'local_target_visibility')
         self.assertIsNone(motor.route)

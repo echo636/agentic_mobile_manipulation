@@ -63,6 +63,7 @@ class NextToCandidateRetry(unittest.TestCase):
         b._verify_payload = lambda *args: None
         b.robot = SimpleNamespace(get_joint_positions=lambda: (), q_to_action=lambda q: None)
         b._step = lambda action: None
+        b.primitives = SimpleNamespace(_empty_action=lambda: None)
         return b, held, target, world, attempts, restored, checks, records
 
     def test_failed_support_tries_next_candidate_without_repeated_pose_projection(self):

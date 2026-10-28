@@ -285,6 +285,7 @@ class ControllerDeadlineTests(unittest.TestCase):
             class Process:
                 pid=123456;returncode=-15
                 def __init__(self,*args,**kwargs):self.stdout=kwargs['stdout']
+                def poll(self):return None
                 def communicate(self,text,timeout):
                     self.stdout.write('{"type":"unfinished')
                     clock[0]=151
@@ -293,6 +294,7 @@ class ControllerDeadlineTests(unittest.TestCase):
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
             with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:clock[0]), \
+                 patch('manipulation_agent.clients.base.time.monotonic',side_effect=lambda:clock[0]), \
                  patch.object(controller,'check_server',return_value={'status':'passed'}), \
                  patch.object(controller.subprocess,'Popen',Process), \
                  patch.object(controller.subprocess,'check_output',return_value='fixture'), \
