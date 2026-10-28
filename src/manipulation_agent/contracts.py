@@ -107,8 +107,10 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
         for i, v in enumerate(value):
             validate(v, schema["items"], f"{path}[{i}]")
     elif kind == "string":
-        if len(value) > schema.get('maxLength',8000) or len(value) < schema.get('minLength',0):
-            raise SkillError("invalid_arguments", f"{path} has invalid length")
+        minimum, maximum = schema.get('minLength', 0), schema.get('maxLength', 8000)
+        if not minimum <= len(value) <= maximum:
+            raise SkillError("invalid_arguments",
+                             f"{path} has {len(value)} characters; allowed length is {minimum}–{maximum}.")
     elif kind in {"integer", "number"}:
         if value < schema.get("minimum", value) or value > schema.get("maximum", value):
             raise SkillError("invalid_arguments", f"{path} is outside the allowed range")
