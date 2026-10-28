@@ -66,6 +66,35 @@ class MaterialActionTests(unittest.TestCase):
     def test_all_requested_actions_are_in_public_catalog(self):
         self.assertTrue({'wipe', 'cut', 'soak', 'sweep', 'spray', 'spread', 'hang', 'vacuum'} <= set(PRIMITIVES))
 
+    def test_mixed_pour_counts_objects_after_material_settling(self):
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        inside = type('Inside', (), {})
+        retained = [True, True]
+        objects = [types.SimpleNamespace(name=str(i), states={inside: types.SimpleNamespace(
+            get_value=lambda destination, i=i: retained[i])}) for i in range(2)]
+        source = types.SimpleNamespace(name='source')
+        destination = types.SimpleNamespace(name='receiver')
+        remaining = []
+        backend = CheckedMaterialTransfer()
+        backend._transfer_preconditions = lambda *args: (source, destination)
+        backend._pour_objects = lambda source: remaining or objects
+        backend._pour_rigid_objects = lambda *args: objects
+        backend._placement_record = lambda record: None
+
+        def transfer_material(*args, **kwargs):
+            self.assertTrue(kwargs['empty_ok'])
+            # Later free physics dislodges one rigid object back to the source.
+            retained[1] = False
+            remaining.append(objects[1])
+            return {'materials': [{'moved_particles': 3, 'retained_particles': 3}]}
+
+        backend._transfer_material_portion = transfer_material
+        with self.modules, patch.object(sys.modules['omnigibson.object_states'], 'Inside', inside, create=True):
+            result = backend._checked_transfer('pour', destination, 6)
+        self.assertEqual(result['rigid_transfer'], {
+            'moved_objects': 2, 'retained_objects': 1, 'source_remaining_objects': 1})
+
     def test_sweep_removes_only_compatible_selected_material(self):
         with self.modules:
             result = self.backend._checked_surface_action('sweep', self.target, 6)

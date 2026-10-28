@@ -152,23 +152,26 @@ class CheckedMaterialTransfer:
             raise SkillError('sampling_error', 'The receiving vessel could not accept a loose object', changed=True)
         for _ in range(min(6, max_steps)):
             self._step(self.primitives._empty_action())
-        retained = sum(bool(obj.states[Inside].get_value(destination)) for obj in moved)
-        remaining = len(self._pour_objects(source))
-        self._placement_record({'status': 'rigid_contents_poured', 'source': source.name,
-            'destination': destination.name, 'objects': [obj.name for obj in moved],
-            'retained_objects': retained, 'source_remaining_objects': remaining})
-        if not retained:
-            raise SkillError('postcondition_error', 'Poured objects did not remain in the receiving vessel', changed=True)
-        return {'moved_objects': len(moved), 'retained_objects': retained,
-                'source_remaining_objects': remaining}
+        return moved
 
     def _checked_transfer(self, primitive, target, max_steps):
+        from omnigibson.object_states import Inside
+
         source, destination = self._transfer_preconditions(primitive, target)
         objects = self._pour_objects(source) if primitive == 'pour' else []
-        rigid = self._pour_rigid_objects(source, destination, objects, max_steps) if objects else None
+        moved = self._pour_rigid_objects(source, destination, objects, max_steps) if objects else []
         result = self._transfer_material_portion(primitive, source, destination, max_steps,
-                                                 empty_ok=rigid is not None)
-        if rigid is not None:
+                                                 empty_ok=bool(moved))
+        if moved:
+            # Material transfer can advance physics again. Count rigid contents
+            # after that settling, so the receipt describes the returned scene.
+            retained = sum(bool(obj.states[Inside].get_value(destination)) for obj in moved)
+            rigid = {'moved_objects': len(moved), 'retained_objects': retained,
+                     'source_remaining_objects': len(self._pour_objects(source))}
+            self._placement_record({'status': 'rigid_contents_poured', 'source': source.name,
+                'destination': destination.name, 'objects': [obj.name for obj in moved], **rigid})
+            if not retained:
+                raise SkillError('postcondition_error', 'Poured objects did not remain in the receiving vessel', changed=True)
             result.update(rigid_transfer=rigid, implementation='native_rigid_and_particle_transfer')
         return result
 
