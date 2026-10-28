@@ -313,12 +313,31 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
         if allow_lateral:
             # Explicit navigate_to uses the same physical capability as local
             # approach. A forward-only search failure is not an impossibility
-            # proof for a holonomic base. Keep the already certified endpoints
-            # and target slack; never replace an elevated target's visibility.
+            # proof for a holonomic base. Keep certified endpoints and retain
+            # target slack/visibility for object approaches.
             from .point_route_projection import project_forward_point
             lateral_budget=PlanningBudget(check_cancelled,seconds=10.)
             collision.check_cancelled=lateral_budget.check
             try:
+                # Reuse admitted grid guides before rebuilding a pose graph.
+                # A floor click permits reachable projection; a closer 2-D
+                # endpoint without a certified route must not exclude these.
+                guides=options if project_point else acceptable
+                for candidate in sorted(guides,key=lambda p:(p.score,estimate(p))):
+                    poses=[tuple(actual)]
+                    for xy in (*candidate.points[1:],candidate.goal):
+                        segment=checked_holonomic_connection(poses[-1],xy,candidate.final_yaw,
+                                                            collision,lateral_budget.check)
+                        if segment is None:break
+                        poses.extend(segment[1:])
+                    else:
+                        route=route_from_poses(candidate,poses,collision,allow_lateral=True,
+                            method='checked_holonomic_guide',check_cancelled=lateral_budget.check)
+                        return candidate,route,{
+                            'search':'checked_holonomic_guide','forward_failure':exc.code,
+                            'target_slack_m':None if project_point else target_slack,
+                            'closest_candidate_m':closest,'target_distance_m':candidate.score,
+                            'exact_endpoint_preserved':True,'globally_optimal':False}
                 found=project_forward_point(acceptable,actual,collision,lateral_budget.check,
                                             exact_endpoints=True,allow_lateral=True)
                 if found is not None:

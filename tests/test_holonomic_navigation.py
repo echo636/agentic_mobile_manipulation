@@ -1,6 +1,7 @@
 """A holonomic base can retain its heading through a narrow elbow."""
 import math
 import unittest
+from dataclasses import replace
 from unittest.mock import patch
 
 import numpy as np
@@ -12,6 +13,34 @@ from manipulation_agent.executors.point_route_projection import project_forward_
 
 
 class HolonomicTests(unittest.TestCase):
+    def test_floor_projection_reuses_clear_guide_without_relaxing_object_approach(self):
+        rr, cc = np.mgrid[:61, :61]
+        x, y = cc*.05-1.5, rr*.05-1.5
+        free = (~((abs(x) <= .1) & (abs(y) <= .5))).astype('uint8')
+        grid = GridMap(61, 61, .05, (-1.5, -1.5), free.tobytes())
+        footprint = [(-.03, -.03), (.03, -.03), (.03, .03), (-.03, .03)]
+        collision = HeadingCollisionChecker(grid, [(free, footprint)], 0., free)
+        start, goal = (-1., 0., 0.), (1., 0.)
+        blocked = NavigationPlan((start[:2], goal), goal, goal, 0., 2., 0., 1, 1, 0., 0)
+        clear = replace(blocked, points=(start[:2], (-.3, -.8), (.3, -.8), (1., -.3)),
+                        goal=(1., -.3), score=.3, geodesic_m=2.5)
+        with patch('manipulation_agent.executors.forward_navigation.plan_forward_route',
+                   side_effect=NavigationError('Forward search exhausted', 'navigation_search_exhausted')):
+            chosen, route, details = select_forward_route(
+                [blocked, clear], start, collision, project_point=True, allow_lateral=True)
+            self.assertEqual(chosen.goal, clear.goal)
+            self.assertEqual(details['search'], 'checked_holonomic_guide')
+            actual = start
+            for phase in route.phases:
+                following = (*phase.goal, phase.final_yaw)
+                self.assertTrue(collision.motion_free(actual, following))
+                actual = following
+            # An object approach retains its admitted endpoint tolerance;
+            # the same farther guide cannot replace its required stance.
+            chosen, _, _ = select_forward_route(
+                [blocked, clear], start, collision, project_point=False, allow_lateral=True)
+            self.assertEqual(chosen.goal, blocked.goal)
+
     def test_sideways_roadmap_and_follower_keep_full_body_clear(self):
         rr, cc = np.mgrid[:81, :81]
         x, y = cc*.025-1.5, rr*.025-.4
