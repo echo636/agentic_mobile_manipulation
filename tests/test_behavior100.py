@@ -166,6 +166,27 @@ class BatchEvidenceTests(unittest.TestCase):
         self.assertTrue(capacity.acquire('new'))
         capacity.release('new')
 
+    def test_slow_resource_query_does_not_block_another_host_starting(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workers=[{'id':name,'gpu':0,'ssh':['ssh',name]} for name in ('slow','ready')]
+            runner=self.make_queue_runner(folder,workers=workers,count=1)
+            runner._config['max_active_workers']=1
+            runner.acquire_startup_gate=Mock(return_value=True)
+            runner.release_startup_gate=Mock()
+            querying=threading.Event();started=threading.Event();timed_out=[];hosts=[]
+            def admit():
+                if runner.c['id']=='slow':
+                    querying.set()
+                    if not started.wait(3):timed_out.append('slow query occupied execution capacity')
+                    return False
+                return querying.wait(3)
+            def run(row,gpu):
+                hosts.append(runner.c['id']);row['status']='passed';started.set()
+            runner.resource_admission=admit;runner.run_one=run
+            runner.run()
+            self.assertEqual(timed_out,[])
+            self.assertEqual(hosts,['ready'])
+
     def test_explicit_drain_stops_new_admission(self):
         for before_start in (False,True):
             with self.subTest(before_start=before_start),tempfile.TemporaryDirectory() as folder:

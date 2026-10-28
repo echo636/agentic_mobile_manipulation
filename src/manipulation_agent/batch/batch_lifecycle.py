@@ -24,6 +24,10 @@ class ExecutionCapacity:
         self.active = set()
         self.lock = threading.Lock()
 
+    def has_capacity(self):
+        with self.lock:
+            return len(self.reserved) + len(self.active) < self.limit
+
     def acquire(self, key, *, adopting=False):
         with self.lock:
             if key in self.active:

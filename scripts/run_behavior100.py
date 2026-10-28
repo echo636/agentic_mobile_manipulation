@@ -1592,7 +1592,8 @@ class Batch:
                 if not adopting and getattr(self,'storage',None) and self.storage.status()['local_checkpoint_error']:
                     self.worker_state('waiting_for_local_storage');time.sleep(poll);continue
                 capacity_key=adopting['run_id'] if adopting else config['id']
-                if not capacity.acquire(capacity_key,adopting=adopting is not None):
+                capacity_acquired=capacity.acquire(capacity_key,adopting=True) if adopting else False
+                if not adopting and not capacity.has_capacity():
                     self.worker_state('waiting_for_capacity');time.sleep(poll);continue
                 lease=None;row=None;paths=None;cleared=True
                 try:
@@ -1605,6 +1606,12 @@ class Batch:
                     else:
                         if not self.resource_admission():continue
                         if self.drain_requested():continue
+                        # Read-only host queries do not consume episode slots.
+                        # Reserve atomically before claiming a task or starting
+                        # its simulator; another healthy host may qualify first.
+                        if not capacity.acquire(capacity_key):
+                            self.worker_state('waiting_for_capacity');continue
+                        capacity_acquired=True
                         with self.lock:
                             if time.monotonic()<host_cooldowns.get(config['ssh'][-1],0):continue
                             try:row=self.queue.get_nowait()
@@ -1639,7 +1646,8 @@ class Batch:
                         self.journal('LEASE METADATA CLEANUP '+config['id']+': '+str(exc))
                     finally:
                         self._worker_local.lease=None;self.release_startup_gate()
-                        capacity.release(capacity_key,preserve=adopting is not None and adopting in inflight)
+                        if capacity_acquired:
+                            capacity.release(capacity_key,preserve=adopting is not None and adopting in inflight)
                     if row is None:time.sleep(poll)
                 # GPU and host capacity are free before any bulk copy or decode.
                 if row is not None:
