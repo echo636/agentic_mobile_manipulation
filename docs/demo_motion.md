@@ -140,12 +140,9 @@ simulator probe passed with the preservation fix: both cans remained officially
 and green with the fix. The revised model trial must still pass the independent
 whole-task evaluator; diagnostic success alone is not sufficient.
 
-`scripts/watch_demo_site.py` publishes each new summary or audit to the
-internal first-ten review index while the batch scheduler is alive. The
-publisher reuses unchanged media exports so periodic updates do not copy the
-same video and frame directory repeatedly. The public index includes both
-reviewed attempts and pre-model infrastructure failures, with attempt numbers
-and separate evidence links.
+The historical first-ten review site and its published recordings remain available.
+Its cohort-specific publisher and watcher were removed from the maintained source
+on 2026-10-29; current runs use the general replay and evaluation tools.
 
 Long model turns can hit provider HTTP 429 even with one task at a time. New
 demo trials may use `--rate-limit-resumes 3` in the controller. After a 120 s

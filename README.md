@@ -100,7 +100,7 @@ have been removed. Frozen evaluations retain their original source and results.
 
 ## Batch evaluation
 
-The integration target is `feat/harness-fastmcp`; this long-horizon worktree uses
+The integration target is `main`; this long-horizon worktree uses
 `feat/long-horizon-tasks`. Archived attempts retain their actual frozen source and
 protocol. The [2026-10-02 comparison](http://10.76.5.241:8765/compare100_20261002/)
 is a historical cohort, separate from current long-horizon experiments and the
@@ -139,7 +139,14 @@ The recorded v8 validation includes 134 CPU tests and a real four-camera startup
 
 ## Results and replay
 
-The [system guide](http://10.76.5.241:8765/manipulation_system.html) explains the RGB loop and historical Original / Official implementations with pinned source references, interactive tool and navigation explanations, a real four-camera grasp example, and a presentation mode. Check its recorded source version before applying it to a newer run. Its source is [web/system_guide.html](web/system_guide.html); publish it with `python scripts/publish_system_guide.py --output-dir <report-root>`.
+The repository retains reusable evaluation and replay interfaces:
+`web/replays.html` and `web/replay_portal.js` for result navigation,
+`web/evaluation/` for batch/comparison templates, and the packaged
+`replay_assets/` / `report_assets/` for episode playback and shared presentation.
+Cohort-specific dashboards, task-story pages and system/demo explainers have been
+removed from source. Previously published pages and experimental evidence remain
+at their original report locations. `goal_ablation_summary.py` exports comparison
+JSON without publishing a dedicated cohort page.
 
 The [2026-10-02 comparison](http://10.76.5.241:8765/compare100_20261002/index.html) shows the historical Original and Official 100-task queues. The [historical 32-task replay portal](http://10.76.5.241:8765/retest32_v7_20261001/replays.html) retains only that completed cohort, synchronized camera views, and the model timeline. The complete task table is collapsed by default. Refreshes preserve playback. Retried tasks remain in the original batch without increasing its task count; previous attempts and bookmarked URLs retain their original execution versions. Bookmarked replays load independently of live progress metadata.
 

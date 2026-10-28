@@ -6,7 +6,7 @@ The maintained origin is https://github.com/echo636/agentic_mobile_manipulation.
 
 This worktree is dedicated to custom long-horizon task development, explicitly authorized by the user on 2026-10-19. Work in `/mnt/nas/home--xujingyi/agentic_mobile_manip/repos/manipulation-agentic-system-long-horizon` on `feat/long-horizon-tasks`, created from `feat/harness-fastmcp@924fa8c`. The original `repos/manipulation-agentic-system` worktree remains in use by other agents; make this task's source changes here.
 
-Use `feat/harness-fastmcp` as the PR merge target. Do not create a separate integration branch solely to merge a PR. Resolve conflicts on this feature branch and complete relevant validation before merging.
+Use `main` as the PR merge target (explicit user instruction, 2026-10-29, superseding the earlier `feat/harness-fastmcp` target). Do not create a separate integration branch solely to merge a PR. Resolve conflicts on this feature branch and complete relevant validation before merging.
 
 Reuse environments and assets under the shared workspace root; keep new run outputs and operations records in separate long-horizon batches under `/mnt/nas/home--xujingyi/agentic_mobile_manip/operations/`. Historical custom task instances and evidence are in `operations/long_horizon_execution_20261015/`; preserve their frozen inputs and scores. The current task definitions are in `task_designs/runtime/`, with validation requirements in `docs/custom_long_horizon.md`.
 

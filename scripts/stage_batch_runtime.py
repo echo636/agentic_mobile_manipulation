@@ -70,7 +70,7 @@ def build_bundle(config, worker):
     files['manifest.json'] = (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode()
     for label, path in sources.items():
         # This is a small, known frozen release, not an asset/cache traversal.
-        for folder in ('src', 'scripts', 'skills', 'task_designs'):
+        for folder in ('src', 'scripts', 'skills', 'task_designs', 'web'):
             for child in sorted((path / folder).rglob('*')):
                 if child.is_file() and '__pycache__' not in child.parts and child.suffix != '.pyc':
                     assert not child.is_symlink(), 'Release must not reference external files'

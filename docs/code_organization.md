@@ -28,7 +28,7 @@ The root keeps ten Python files: six command entry points (`vision_cli.py`,
 `mcp_server.py`, `provider_gateway.py`, `cli.py`, `replay.py`, `report_server.py`),
 shared `contracts.py` and `records.py`, the small `replay_shell.py` presentation
 loader, and package `__init__.py`. `tasks.json` stays beside the CLI entry points.
-Existing command names, packaged resources and script paths remain stable.
+Episode command names and packaged replay resources remain stable.
 There are no import-alias wrappers or a second copy of the implementations.
 
 ## Runtime path
@@ -106,7 +106,7 @@ not install patches; the adapter explicitly installs the ones it uses.
 - Batch: `scripts/prepare_behavior100.py`, `scripts/start_behavior100_service.py`, `scripts/run_behavior100.py`, `scripts/behavior100_remote.py`.
 - Source freezing: `scripts/stage_batch_runtime.py`.
 - Task construction/readiness: `scripts/build_custom_task.py`, `scripts/prepare_custom_evaluation.py`, `scripts/validate_custom_readiness.py`, `scripts/validate_custom_task_physics.py`.
-- Presentation: `scripts/build_review.py`, `scripts/render_batch_replays.py`, `scripts/publish_*`, `web/`.
+- Presentation: `scripts/build_review.py`, `scripts/render_batch_replays.py`, `scripts/publish_replay_ui.py`, `scripts/publish_results_page.py`, `web/replays.html`, `web/replay_portal.js`, `web/evaluation/`.
 - Diagnostics: remaining `scripts/probe_*`, `scripts/validate_*`, `scripts/audit_*`; read their scope before use.
 
 Private module imports now use the packages above. In-tree consumers are updated;
@@ -118,3 +118,20 @@ The large `executors/omnigibson_rgb.py`, `executors/placement.py` and
 `scripts/run_behavior100.py` still combine several coordination responsibilities.
 Their internal decomposition is separate work from this package reorganization.
 See [architecture](architecture.md) for tool and lifecycle details.
+
+## Retained web code
+
+Only reusable evaluation and replay interfaces remain: result navigation in
+`web/`, batch/comparison templates in `web/evaluation/`, and packaged episode
+playback/theme resources in `replay_assets/` and `report_assets/`. Publishers take
+report/output paths; `publish_replay_ui.py prepare --comparison DIRECTORY` stages
+an existing comparison under a relative reports directory. The skill-ablation
+summary still exports its evaluation JSON, without a dedicated HTML page.
+
+Fixed-cohort project/placement/skill dashboards, task-story/collection pages,
+system explainers and demo-site publishers were removed. Their already published
+pages, recordings and frozen sources are untouched. New single-experiment
+presentation material belongs outside the source repository.
+
+The user selected `main` as the merge target on 2026-10-29, superseding the earlier
+`feat/harness-fastmcp` target.

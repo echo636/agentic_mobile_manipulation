@@ -82,12 +82,12 @@ def prepare(args: argparse.Namespace) -> dict:
                            'sha256': sha, 'before_sha256': digest(target.parent / name)}
                           for name, sha in trace_stats['asset_files'].items()]})
     if args.comparison:
-        path = root / 'compare100_20261002/comparison.json'
+        path = within(root, args.comparison) / 'comparison.json'
         data = json.loads(path.read_text())
         spec = importlib.util.spec_from_file_location('ui_batch_comparison', REPO / 'scripts/batch_comparison.py')
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        relative = 'compare100_20261002/index.html'
+        relative = (Path(args.comparison) / 'index.html').as_posix()
         staged = within(record / 'staged', relative)
         staged.parent.mkdir(parents=True, exist_ok=True)
         staged.write_text(module.render_comparison_page(tuple(data['arms'])))
@@ -96,7 +96,7 @@ def prepare(args: argparse.Namespace) -> dict:
                       'staged_html_sha256': digest(staged), 'kind': 'comparison'})
     source_files = [REPO / 'src/manipulation_agent/replay.py', REPO / 'src/manipulation_agent/reporting/tool_trace.py',
                     REPO / 'scripts/publish_replay_ui.py',
-                    REPO / 'scripts/batch_comparison.py', REPO / 'scripts/comparison_dashboard.html',
+                    REPO / 'scripts/batch_comparison.py', REPO / 'web/evaluation/comparison_dashboard.html',
                     *sorted((REPO / 'src/manipulation_agent/replay_assets').glob('*'))]
     manifest = {'status': 'planned', 'prepared_at': stamp(), 'source_commit': commit,
                 'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=REPO, text=True).strip()),
@@ -187,7 +187,7 @@ def main() -> None:
     selection = stage.add_mutually_exclusive_group(required=True)
     selection.add_argument('--selection-json', type=Path, help='Explicit {replays:[relative replay.json paths]} selection')
     selection.add_argument('--scope', action='append', help='Explicit relative run-parent directory; includes all its attempts')
-    stage.add_argument('--comparison', action='store_true', help='Also stage the existing comparison index')
+    stage.add_argument('--comparison', metavar='DIRECTORY', help='Relative report directory containing comparison.json')
     stage.add_argument('--expected-source', help='Require exact repository HEAD')
     publish = commands.add_parser('apply')
     publish.add_argument('--record-dir', type=Path, required=True)

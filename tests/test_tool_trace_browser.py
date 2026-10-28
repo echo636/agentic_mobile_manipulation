@@ -122,10 +122,12 @@ class ToolTraceBrowserTests(unittest.TestCase):
         self.assertEqual(self.page.locator(".tt-target img").get_attribute("src"),
                          "https://trace.test/reports/run/frames/before.png")
         self.assertEqual(self.page.locator(".tt-point-marker").evaluate("e=>[e.style.left,e.style.top]"), ["25%", "75%"])
-        self.assertIn("不是机器人最终位置", self.page.locator(".tt-target").inner_text())
+        self.assertEqual(self.page.locator(".tt-target figcaption").inner_text(),
+                         "前视 · front · (u=0.25, v=0.75)")
         self.page.locator(".tt-target a").click()
         opened = self.page.evaluate("opened")
         self.assertEqual(opened[0]["target"]["point"], [.25, .75])
+        self.assertEqual(opened[0]["target"]["primitive"], "navigate_to")
         self.assertEqual(self.page.evaluate("replays"), [])
         self.page.locator(".tt-entry").last.locator(".tt-replay").click()
         self.assertEqual(self.page.evaluate("replays"), [2])
@@ -162,7 +164,7 @@ class ToolTraceBrowserTests(unittest.TestCase):
         self.page.locator(".tt-replay").first.click()
         self.assertEqual(self.page.evaluate("replays"), [1])
 
-    def test_manipulation_targets_use_input_attachment_and_describe_selection(self):
+    def test_manipulation_targets_use_input_attachment_and_keep_selection(self):
         for primitive in ("toggle_on", "toggle_off", "open", "close", "grasp", "place_inside", "place_on_top"):
             with self.subTest(primitive=primitive):
                 self.render([
@@ -176,12 +178,10 @@ class ToolTraceBrowserTests(unittest.TestCase):
                                  "https://trace.test/reports/run/frames/input.png")
                 self.assertEqual(self.page.locator(".tt-point-marker").count(), 1)
                 self.assertIn("左视 · input-left · (u=0.2, v=0.8)", target.inner_text())
-                meaning = "容器或承载面，不是手中物体" if primitive.startswith("place") else "操作对象，不代表按钮或夹爪的精确接触点"
-                self.assertIn(meaning, target.inner_text())
                 target.locator("a").click()
                 opened = self.page.evaluate("opened[0]")
                 self.assertEqual(opened["target"]["point"], [.2, .8])
-                self.assertIn(meaning, opened["target"]["description"])
+                self.assertEqual(opened["target"]["primitive"], primitive)
                 self.assertEqual(self.errors, [])
 
     def test_skill_resources_have_distinct_titles_and_one_card_per_call(self):

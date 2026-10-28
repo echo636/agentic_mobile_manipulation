@@ -133,7 +133,7 @@ def render_standalone_dashboard(progress):
         if counts[key] or key in ('success','failure','timeout'):
             tabs+=f'<button class="filter" data-filter="{key}" aria-pressed="false">{labels[key]}<span>{counts[key]}</span></button>'
     segments=''.join(f'<i class="segment {key}" style="width:{counts[key]/max(total,1)*100:.4f}%" title="{labels[key]} {counts[key]}"></i>' for key in labels if counts[key])
-    scope=protocol.get('display_scope_note') or ('本页仅展示本轮 100 项任务结果。' if total==100 else '本页展示故障任务的独立补测结果，原始成绩保留。')
+    scope=protocol.get('display_scope_note') or '本页展示本批任务的独立评分与执行记录。'
     if protocol.get('episode_budget_policy')=='agent_steps':
         scope+=' 模型：'+str(protocol.get('model'))+' / '+str(protocol.get('model_reasoning_effort'))+'；每项最多 '+str(protocol['max_agent_steps'])+' 个 agent step；任务执行无时间上限。'
     values={'TITLE':title,'TOTAL':str(total),'ENDED':str(ended),'SUCCESS':str(counts['success']),
@@ -143,7 +143,7 @@ def render_standalone_dashboard(progress):
         'UPDATE_LABEL':'完成时间' if completed else '最近更新',
         'UPDATED':local_time(progress.get('updated_at'),'%m月%d日 %H:%M'),
         'BATCH_DATE':local_time(protocol.get('revision_started_at') or progress.get('updated_at'),'%Y.%m.%d'),
-        'METHOD':esc({'original':'Original','official':'Official','motor':'Motor'}.get(protocol.get('comparison_arm'),'Original')),
+        'METHOD':esc({'original':'Original','official':'Official','motor':'Motor'}.get(protocol.get('comparison_arm'),protocol.get('comparison_arm') or 'Evaluation')),
         'PROGRESS_NOTE':f'进行中 {counts["running"]} · 待开始 {counts["queued"]}' if not completed else '所有任务已结束',
         'ROWS':''.join(rows),'TABS':tabs,'SEGMENTS':segments,
         'LIVE_JSON':json.dumps(not completed),'UPDATED_JSON':json.dumps(progress.get('updated_at','')),
@@ -155,7 +155,7 @@ def render_standalone_dashboard(progress):
     if any(row.get('custom_task_spec') for row in tasks):
         values.update(SCORE_HELP='终态与历史条件满足比例；公开过程约束另行判定，全部通过才成功',
                       SCORE_LABEL='目标与阶段完成度',SCORE_SUFFIX='')
-    template=Path(__file__).with_name('batch_dashboard.html').read_text()
+    template=(Path(__file__).resolve().parents[1]/'web/evaluation/batch_dashboard.html').read_text()
     for key,value in values.items():template=template.replace('__'+key+'__',value)
     return template
 
@@ -167,7 +167,7 @@ def render_comparison_page(arms=ARMS):
     """Render the maintained template; no JavaScript fragment rewriting."""
     arms=tuple(arms)
     if not arms or set(arms)-set(ARMS):raise ValueError('Unknown comparison arms')
-    template=Path(__file__).with_name('comparison_dashboard.html').read_text()
+    template=(Path(__file__).resolve().parents[1]/'web/evaluation/comparison_dashboard.html').read_text()
     return template.replace('__ARMS_JSON__',json.dumps(arms)).replace(
         '__NAMES_JSON__',json.dumps([LABELS[arm] for arm in arms],ensure_ascii=False))
 

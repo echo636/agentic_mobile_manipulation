@@ -1,4 +1,4 @@
-"""Matched goal-skill comparison; a score is independent of planning and cleanup claims."""
+"""Export matched goal-skill comparison data; no cohort-specific web page."""
 import argparse
 import json
 from pathlib import Path
@@ -49,7 +49,6 @@ def summarize(progress):
 def main():
     p=argparse.ArgumentParser();p.add_argument('--batch-root',type=Path,required=True);p.add_argument('--reports',type=Path,required=True);p.add_argument('--watch',action='store_true');a=p.parse_args()
     a.reports.mkdir(parents=True,exist_ok=True)
-    (a.reports/'index.html').write_text(Path(__file__).with_name('goal_ablation_dashboard.html').read_text())
     while True:
         progress={}
         for arm in ARMS:

@@ -174,7 +174,7 @@ native-symbolic implementation. The online component is not merged into either
 method's benchmark statistics.
 
 
-The existing system guide embeds `web/assets/online_navigation_r2.svg`, a plot
+The archived system guide embedded `web/assets/online_navigation_r2.svg` (removed from current source), a plot
 of the actual initial/final occupancy files and recorded robot positions. It
 uses the same world extent in both panels and distinguishes the selected RGB
 floor hint from the fixed approach goal. It is executor-private diagnostic
