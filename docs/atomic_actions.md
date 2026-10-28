@@ -45,8 +45,10 @@ continuous recording is optional in iteration batches.
 The material transfer actions also include `pour` and `scoop`. `pour` takes a
 held vessel, board or ready dispenser and a selected receiver. It
 attempts loose rigid contents with native `Inside` placement into vessels or
-`OnTop` placement onto work surfaces, and transfers a
-material portion, retaining the source in hand. `scoop` transfers material from
+`OnTop` placement onto work surfaces. Material uses volume sampling or native
+top-down surface sampling; existing particle identities are moved once and
+settle freely. Surface receipts count contacts after settling. The source stays
+in hand. `scoop` transfers material from
 the selected source into the held vessel. Both preserve existing contents;
 dispensers supply only their authored material. Receiving capacity can leave
 contents behind. Rigid transfer feedback distinguishes moved, retained and

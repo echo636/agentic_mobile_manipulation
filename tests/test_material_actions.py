@@ -98,7 +98,7 @@ class MaterialActionTests(unittest.TestCase):
         self.assertEqual(result['rigid_transfer'], {
             'moved_objects': 2, 'retained_objects': 1, 'source_remaining_objects': 1})
 
-    def test_pour_surface_accepts_rigid_contents_but_not_material_only_or_scoop(self):
+    def test_pour_accepts_surfaces_while_scoop_requires_a_vessel(self):
         from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
 
         states = {name: type(name, (), {}) for name in ('Inside', 'Open', 'ContainedParticles')}
@@ -113,8 +113,52 @@ class MaterialActionTests(unittest.TestCase):
             with self.assertRaises(SkillError):
                 backend._transfer_preconditions('scoop', board)
             backend._pour_objects = lambda obj: []
-            with self.assertRaises(SkillError):
-                backend._transfer_preconditions('pour', board)
+            self.assertEqual(backend._transfer_preconditions('pour', board), (source, board))
+
+    def test_surface_pour_moves_existing_portion_and_measures_contact_after_settling(self):
+        import numpy as np
+        from unittest.mock import Mock
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        volume, contact, modified = (type(name, (), {}) for name in
+                                     ('ContainedParticles', 'ContactParticles', 'ModifiedParticles'))
+        saturated = types.ModuleType('omnigibson.object_states.saturated')
+        saturated.ModifiedParticles = modified
+        positions = np.zeros((3, 3))
+        system = types.SimpleNamespace(name='loose_food', n_particles=3,
+            generate_particles=Mock(), get_particles_position_orientation=lambda: (positions, None))
+        view = types.SimpleNamespace(prim_paths=['a', 'b', 'c'])
+        source = types.SimpleNamespace(name='source', states={})
+        contacts = set()
+        destination = types.SimpleNamespace(name='surface', states={contact:
+            types.SimpleNamespace(get_value=lambda system: contacts)})
+        payload = types.SimpleNamespace(container=source, system=system, paths=('a', 'b', 'c'))
+        backend = CheckedMaterialTransfer()
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(active_systems={system.name: system}))
+        backend._grasp_dependencies = lambda obj: []
+        backend._get_held = lambda: source
+        backend.primitives = types.SimpleNamespace(_empty_action=lambda: [])
+        backend._step = lambda action: contacts.add(1)
+        backend._placement_record = lambda record: None
+
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
+                ContainedParticles=volume, ContactParticles=contact, create=True), \
+                patch.dict(sys.modules, {'omnigibson.object_states.saturated': saturated}), \
+                patch('manipulation_agent.executors.material_transfer.snapshot_particles', return_value=[payload]), \
+                patch('manipulation_agent.executors.material_transfer._indices', return_value=[0, 1, 2]), \
+                patch('manipulation_agent.executors.material_transfer.physical_particle_view', return_value=view), \
+                patch('manipulation_agent.executors.material_transfer.free_surface_positions',
+                      return_value=np.ones((2, 3))), \
+                patch('manipulation_agent.executors.material_transfer.move_particle_centers') as move:
+            result = backend._transfer_material_portion('pour', source, destination, 6)
+        self.assertEqual(move.call_args.args[1], [0, 1])
+        system.generate_particles.assert_not_called()
+        self.assertEqual(view.prim_paths, ['a', 'b', 'c'])
+        receipt = result['materials'][0]
+        self.assertEqual((receipt['moved_particles'], receipt['retained_particles'],
+                          receipt['source_remaining_particles']), (2, 1, 1))
+        self.assertEqual(receipt['retained_relation'], 'surface_contact')
+        self.assertTrue(result['source_has_more_material'])
 
     def test_sweep_removes_only_compatible_selected_material(self):
         with self.modules:

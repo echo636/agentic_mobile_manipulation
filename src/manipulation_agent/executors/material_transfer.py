@@ -114,6 +114,42 @@ def move_particle_centers(system, indices, positions, orientations=None):
     view.set_velocities(velocities, indices=all_indices)
 
 
+def free_surface_positions(scene, destination, system, limit, *, diagnostics):
+    """Use native top-down surface sampling without generating new material."""
+    import torch
+    from omnigibson.utils.sampling_utils import sample_cuboid_on_object_full_grid_topdown
+
+    radius = float(system.particle_radius)
+    low, high = destination.aabb
+    # Keep large supports from producing an unbounded ray grid for one portion.
+    spacing = max(float(system.particle_particle_rest_distance),
+                  math.sqrt(float((high[:2] - low[:2]).prod()) / max(1, limit * 4)))
+    samples = sample_cuboid_on_object_full_grid_topdown(
+        destination, ray_spacing=spacing, cuboid_dimensions=torch.zeros(3),
+        aabb_offset=torch.tensor([-radius, -radius, radius]),
+        cuboid_bottom_padding=radius + .001, undo_cuboid_bottom_padding=False)
+    positions = [sample[0] for sample in samples if sample[0] is not None]
+    diagnostics.update(method='native_topdown_surface', candidates=len(positions),
+                       sampling_distance_m=spacing)
+    if not positions:
+        return low.new_empty((0, 3))
+    positions = torch.stack(positions)
+    # Native rays establish support. Reject occupied space before moving the
+    # existing portion, including PBD particles absent from rigid scene queries.
+    clear = ~system.check_in_contact(positions)
+    for other in scene.active_systems.values():
+        if not other.n_particles or physical_particle_view(other) is None:
+            continue
+        centers = other.get_particles_position_orientation()[0]
+        reach = radius + float(other.particle_radius)
+        near = ((centers >= positions.amin(0) - reach) &
+                (centers <= positions.amax(0) + reach)).all(dim=1)
+        for chunk in centers[near].split(512):
+            clear &= (torch.cdist(positions, chunk) >= reach).all(dim=1)
+    positions = positions[clear]
+    return positions[torch.randperm(len(positions))[:limit]]
+
+
 class CheckedMaterialTransfer:
     def _pour_objects(self, source):
         """Select loose payload roots; a nested vessel owns its own contents."""
@@ -185,10 +221,9 @@ class CheckedMaterialTransfer:
         source, destination = (held, target) if primitive == 'pour' else (target, held)
         if source is destination:
             raise SkillError('same_transfer_vessel', 'Material source and destination are the same vessel')
-        if (ContainedParticles not in destination.states
-                and not (primitive == 'pour' and self._pour_objects(source))):
+        if primitive == 'scoop' and ContainedParticles not in destination.states:
             raise SkillError('invalid_transfer_destination',
-                'Loose material needs a receiving vessel; only loose rigid objects can be poured onto a surface')
+                'Scoop needs a held receiving vessel')
         for obj in (source, destination):
             if Open in obj.states and not obj.states[Open].get_value():
                 raise SkillError('container_closed', 'Open the material source and receiving vessel before transfer')
@@ -231,7 +266,7 @@ class CheckedMaterialTransfer:
                 source.set_position_orientation(*pose)
 
     def _transfer_material_portion(self, primitive, source, destination, max_steps, *, empty_ok=False):
-        from omnigibson.object_states import ContainedParticles
+        from omnigibson.object_states import ContainedParticles, ContactParticles
         from omnigibson.object_states.saturated import ModifiedParticles
         scene = self.env.scene
         # Nested bowls/bags own their contents; pouring an outer tray must not
@@ -242,13 +277,7 @@ class CheckedMaterialTransfer:
         modifier, emitted = (None, [])
         if not captured:
             modifier, emitted = self._ready_dispenser(source, tilt=primitive == 'pour')
-        if ContainedParticles not in destination.states:
-            # A rigid batch can be emptied onto a board/table. Keep particles in
-            # their source until a vessel with a receiving volume is selected.
-            return {'primitive': primitive, 'materials': [],
-                    'source_has_more_material': bool(captured or emitted),
-                    'held_vessel_retained': True,
-                    'postcondition': 'rigid_surface_transfer; loose_material_not_transferred'}
+        surface = ContainedParticles not in destination.states
         systems = {record.system.name: record.system for record in captured}
         systems.update((system.name, system) for system in emitted)
         if not systems:
@@ -274,13 +303,14 @@ class CheckedMaterialTransfer:
                     available = min(int(modifier._get_max_particles_limit_per_step(system)),
                                     int(modifier.physical_particle_modification_limit) - used)
                 sampling = {}
-                positions = free_volume_positions(scene, destination, system, min(512, available),
-                                                  diagnostics=sampling) if available else []
+                sampler = free_surface_positions if surface else free_volume_positions
+                positions = sampler(scene, destination, system, min(512, available),
+                                    diagnostics=sampling) if available else []
                 self._placement_record({'status': 'material_volume_sampling', 'primitive': primitive,
                     'source': source.name, 'destination': destination.name, 'material': name,
                     'accepted': len(positions), **sampling})
                 orientations = None
-                if (not len(positions) and not generating and available
+                if (not surface and not len(positions) and not generating and available
                         and getattr(system, 'particles_view', None) is not None):
                     from .material_geometry import macro_receiving_poses
                     geometry = {}
@@ -305,7 +335,7 @@ class CheckedMaterialTransfer:
                     if int(system.n_particles) != before:
                         raise SkillError('execution_error', 'Transfer unexpectedly changed the material count', changed=True)
                 centers = system.get_particles_position_orientation()[0][indices]
-                if not bool(destination.states[ContainedParticles].link.check_points_in_volume(centers).all()):
+                if not surface and not bool(destination.states[ContainedParticles].link.check_points_in_volume(centers).all()):
                     raise SkillError('execution_error', 'Physical transfer did not reach the receiving volume', changed=True)
                 view = physical_particle_view(system)
                 changes.append(dict(system=system, paths=tuple(view.prim_paths[i] for i in indices),
@@ -335,12 +365,17 @@ class CheckedMaterialTransfer:
             transformed = len(retained) != item['count']
             inside = 0
             if retained:
-                centers = system.get_particles_position_orientation()[0][retained]
-                inside = int(destination.states[ContainedParticles].link.check_points_in_volume(centers).sum())
+                if surface:
+                    contacts = {int(i) for i in destination.states[ContactParticles].get_value(system)}
+                    inside = len(contacts.intersection(retained))
+                else:
+                    centers = system.get_particles_position_orientation()[0][retained]
+                    inside = int(destination.states[ContainedParticles].link.check_points_in_volume(centers).sum())
             if not transformed and inside == 0:
-                raise SkillError('postcondition_error', 'Transferred portion did not remain in the receiving vessel', changed=True)
+                raise SkillError('postcondition_error', 'Transferred portion did not remain at the receiver', changed=True)
             materials.append({'material': system.name, 'moved_particles': item['count'],
                 'retained_particles': inside, 'source_remaining_particles': item['source_remaining'],
+                'retained_relation': 'surface_contact' if surface else 'inside_volume',
                 'identities_changed_during_settling': transformed,
                 'generated_by_authored_source': item['generated']})
         moved = {item['system'].name: item['count'] for item in changes if not item['generated']}

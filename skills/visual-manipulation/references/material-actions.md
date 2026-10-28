@@ -10,7 +10,7 @@ Identify the held tool and its readiness before selecting the target. A successf
 | `spray` | Switched-on atomizer/sprayer containing compatible material; select the object to treat |
 | `soak` | Absorbent tool; select a visible fluid source or filled container |
 | `spread` | Tool already containing absorbed material; select the surface to coat |
-| `pour` | Held vessel, board or ready dispenser; select an open receiver, or a work surface for loose rigid objects |
+| `pour` | Held vessel, board or ready dispenser; select an open vessel or a receiving surface |
 | `scoop` | Held open vessel; select a source vessel or surface supporting loose material |
 | `cut` | Compatible slicer; select the sliceable object or piece |
 
@@ -24,4 +24,4 @@ For cutting, prefer a cutting board or clear, stable work surface. Keep unproces
 
 Choose each cut from the item's current and required final form. One successful cut performs one transition; read the returned form and update the item ledger. Finished pieces need no further cutting, which may irreversibly turn them into loose material. Identify each next target in current RGB. If its identity or form is uncertain, change the view or separate it before cutting. Plan the transfer of resulting pieces or material and preserve processing, delivery and cleanup dependencies.
 
-`pour` transfers loose objects and material from the held vessel or board into the selected open receiver. For loose rigid objects, it also supports pouring onto a board or stable work surface; loose material stays in the source until a receiving vessel is selected. It attempts the loose objects together and may leave a remainder when space is insufficient. `scoop` transfers a material portion into the held vessel. Both retain the held object. Existing contents keep their identities; a ready dispenser supplies only its authored material. Read transferred and retained object counts, remaining objects and `source_has_more_material`: one call need not empty the source. Nested vessels keep their contents; attached parts are not poured. Open closed containers first.
+`pour` transfers loose objects and material from the held vessel or board into the selected open receiver. Objects and loose material can also be poured onto a stable receiving surface; inspect the result after physical settling. It attempts the loose objects together and may leave a remainder when space is insufficient. `scoop` transfers a material portion into the held vessel. Both retain the held object. Existing contents keep their identities; a ready dispenser supplies only its authored material. Read transferred and retained object counts, remaining objects and `source_has_more_material`: one call need not empty the source. Nested vessels keep their contents; attached parts are not poured. Open closed containers first.
