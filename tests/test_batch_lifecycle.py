@@ -1,4 +1,5 @@
 import importlib.util
+import errno
 import json
 import os
 from pathlib import Path
@@ -11,13 +12,201 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, preferred_gpu_worker, gpu_lease_available
+from manipulation_agent.batch.batch_lifecycle import FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, preferred_gpu_worker, gpu_lease_available
 
 spec=importlib.util.spec_from_file_location('lifecycle_batch',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_staged_worker_admission_is_collected_before_resource_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b = self.runner(tmp, 1)
+            for name in ('preflight', 'worker/preflight'):
+                (Path(tmp) / name).mkdir(parents=True)
+            row = b.rows[0]
+            row.update(run_id='staged_r1', runtime_manifest=str(Path(tmp) / 'worker/manifest.json'))
+            evidence = {'status': 'blocked', 'checks': {'gpu_capacity': False}}
+            (Path(tmp) / 'worker/preflight/staged_r1_in_unit.json').write_text(json.dumps(evidence))
+            b.ssh = lambda args, **kwargs: subprocess.run(args, capture_output=True, text=True, **kwargs)
+            b.collect_runtime_preflight(row)
+            self.assertEqual(json.loads((Path(tmp) / 'preflight/staged_r1_in_unit.json').read_text()), evidence)
+
+    def test_controller_read_eio_during_live_poll_preserves_clock_and_recovers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,1);b.worker_state=Mock();output=Path(tmp)/'controller';output.mkdir()
+            row=b.rows[0];row['startup_deadline_unix']=time.time()-1
+            clock={'status':'running','pid':123,'execution_started_at_unix':time.time()-10,
+                   'episode_deadline_unix':None,'execution_clock':{'budget_policy':'unbounded'}}
+            (output/'controller.json').write_text(json.dumps(clock))
+            b.controller_metadata(row,output)
+            b.refresh_startup_progress=Mock();b.step_episode_closed=Mock(return_value=False)
+            b.stop_controller=Mock();b.cleanup_controller_after_finish=Mock()
+            process=Mock();process.poll.side_effect=[None,None,0];process.last_heartbeat=time.monotonic()
+            recovered={**clock,'status':'passed','formal_finish_observed':True}
+            with patch.object(Path,'read_text',side_effect=[OSError(errno.EIO,'NAS unavailable'),
+                    json.dumps(recovered),json.dumps(recovered)]),patch.object(batch.time,'sleep'):
+                result=b.wait_controller(row,process,output)
+            self.assertTrue(result['formal_finish_observed'])
+            self.assertEqual(row['execution_started_at_unix'],clock['execution_started_at_unix'])
+            self.assertIsNone(row['episode_deadline_unix'])
+            self.assertNotIn('startup_timed_out',row)
+            b.stop_controller.assert_not_called();b.cleanup_controller_after_finish.assert_not_called()
+            self.assertEqual(b.step_episode_closed.call_count,2)
+            self.assertEqual(b.journal.call_count,2)
+
+    def test_controller_spool_uses_direct_local_path_and_preserves_shared_lookup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,1);(b.root/'controllers').mkdir()
+            b._config['controller_spool_dir']=str(Path(tmp)/'local')
+            output=b.controller_directory('run1');output.mkdir()
+            (output/'controller.json').write_text('{"pid":123}')
+            shared=b.root/'controllers/run1'
+            self.assertEqual(output,Path(tmp)/'local/run1')
+            self.assertTrue(shared.is_symlink())
+            self.assertEqual(json.loads((shared/'controller.json').read_text()),{'pid':123})
+            self.assertEqual(b.controller_directory('run1'),output)
+            (Path(tmp)/'local/run2').mkdir()
+            with self.assertRaisesRegex(RuntimeError,'immutable'):
+                b.controller_directory('run2')
+
+    def test_lost_launch_reply_recovers_same_owned_unit_without_resending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b.ssh=Mock(side_effect=subprocess.TimeoutExpired('launch',40))
+            b.unit_state=Mock(side_effect=[{'query_status':'unavailable'},
+                {'ActiveState':'active','MainPID':'123','Description':'BEHAVIOR100 owned same-run'}])
+            row={'run_id':'same-run','simulator_unit':'same.service','startup_deadline_unix':time.time()+60}
+            with patch.object(batch.time,'sleep'):
+                result=b.confirm_simulator_launch(row,['systemd-run','same.service'])
+            self.assertEqual(result['MainPID'],'123')
+            self.assertTrue(row['launch_acknowledgment']['recovered_missing_reply'])
+            b.ssh.assert_called_once()
+
+    def test_launch_confirmation_does_not_accept_foreign_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b.ssh=Mock(side_effect=subprocess.TimeoutExpired('launch',40))
+            b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123','Description':'foreign'})
+            row={'run_id':'same-run','simulator_unit':'same.service','startup_deadline_unix':time.time()+60}
+            with self.assertRaisesRegex(RuntimeError,'ownership mismatch'):
+                b.confirm_simulator_launch(row,['systemd-run','same.service'])
+
+    def test_adoption_waits_for_known_unit_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b.unit_state=Mock(side_effect=[{'query_status':'unavailable'},
+                {'ActiveState':'active','MainPID':'123'}])
+            row={'run_id':'original','simulator_unit':'same.service'}
+            with patch.object(batch.time,'sleep'):
+                self.assertEqual(b.adopted_unit_state(row)['MainPID'],'123')
+
+    def test_restart_during_prelaunch_requeues_without_stopping_or_scoring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp);b.unit_state=Mock();b.cleanup_owned_unit=Mock();b.record_controller_end=Mock()
+            row={'run_id':'original','status':'running','stage':'asset_preflight',
+                'controller_output':str(Path(tmp)/'never-started'),'simulator_output':str(Path(tmp)/'episode')}
+            self.assertIsNone(b.adopt_one(row))
+            self.assertEqual(row['status'],'planned')
+            self.assertIs(b.queue.get_nowait(),row)
+            b.unit_state.assert_not_called();b.cleanup_owned_unit.assert_not_called();b.record_controller_end.assert_not_called()
+            self.assertNotIn('task_success',row)
+
+    def test_controller_not_started_can_record_closure_without_a_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp);b.manifest={}
+            row={'run_id':'original'};controller=Path(tmp)/'not-created'
+            b.record_controller_end(row,controller,{})
+            record=json.loads((controller/'controller_closure.json').read_text())
+            self.assertEqual(record['process_status'],'not_started')
+            self.assertFalse(record['formal_finish_observed'])
+
+    def test_health_transport_failure_does_not_close_live_episode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for error in (subprocess.TimeoutExpired('ssh-health',40),OSError('unavailable')):
+                b=self.runner(tmp)
+                b.ssh=Mock(side_effect=error)
+                b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123'})
+                row={'run_id':'live','port':1234,'simulator_unit':'owned.service'}
+                self.assertFalse(b.step_episode_closed(row))
+                self.assertNotIn('episode_closure',row)
+                self.assertEqual(b.journal.call_args.args[0]['event'],'health_query_unavailable')
+
+    def test_health_outage_preserves_closure_and_recognizes_confirmed_exit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b.ssh=Mock(side_effect=subprocess.TimeoutExpired('ssh-health',40))
+            b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123'})
+            known={'phase':'result_ready','task_success':True}
+            row={'run_id':'closing','port':1234,'simulator_unit':'owned.service','episode_closure':known.copy()}
+            self.assertTrue(b.step_episode_closed(row))
+            self.assertEqual(row['episode_closure'],known)
+            b.unit_state.return_value={'ActiveState':'inactive','MainPID':'0'}
+            other={'run_id':'exited','port':1234,'simulator_unit':'owned.service'}
+            self.assertTrue(b.step_episode_closed(other))
+            self.assertEqual(other['episode_closure']['phase'],'simulator_exited')
+
+    def test_invalid_health_reply_is_unavailable_and_later_recovers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            for reply in ('{truncated','[]','null'):
+                b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,reply,''))
+                self.assertIsNone(b.health(1234))
+            b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,'{"ready":true,"closed":false}',''))
+            self.assertEqual(b.health(1234),{'ready':True,'closed':False})
+
+    def test_resource_requeue_preserves_evidence_and_new_attempt_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,count=1)
+            for name in ('records','preflight','logs','controllers'):(b.root/name).mkdir()
+            row=b.rows[0];row.update(run_id='fixture_task_r1',attempt=1,task='fixture',
+                status='running',stage='execution_finished',failure_stage='simulator_starting',
+                simulator_unit='owned.service',simulator_cleanup={'status':'passed'},
+                episode_budget_policy='unbounded',source_commit='frozen')
+            evidence={'status':'blocked','checks':{'gpu_capacity':False,'validated_driver_floor':True}}
+            (b.root/'preflight/fixture_task_r1_in_unit.json').write_text(json.dumps(evidence))
+            b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,'resource startup log',''))
+            self.assertTrue(b.requeue_resource_rejection(row))
+            self.assertEqual(row['run_id'],'fixture_task_r2')
+            self.assertEqual(row['status'],'planned')
+            self.assertEqual(row['episode_budget_policy'],'unbounded')
+            self.assertEqual(row['source_commit'],'frozen')
+            self.assertNotIn('simulator_unit',row)
+            self.assertIs(b.queue.get_nowait(),row)
+            prior=json.loads((b.root/'records/fixture_task_r1.json').read_text())
+            self.assertEqual(prior['failure_kind'],'infrastructure_resource_admission')
+            self.assertIsNone(prior['task_success'])
+            self.assertTrue(batch.prepolicy_failure(prior,b.root/'controllers/fixture_task_r1'))
+            selection=json.loads((b.root/'infrastructure_retries.json').read_text())
+            self.assertEqual(selection['0']['previous_run_ids'],['fixture_task_r1'])
+
+    def test_resource_retry_rejects_static_failure_and_policy_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);row={'failure_stage':'simulator_starting','actions':None}
+            gpu={'status':'blocked','checks':{'gpu_capacity':False}}
+            self.assertEqual(batch.startup_resource_rejection(row,root,gpu),['gpu_capacity'])
+            self.assertIsNone(batch.startup_resource_rejection(row,root,
+                {'status':'blocked','checks':{'gpu_capacity':False,'validated_driver_floor':False}}))
+            self.assertIsNone(batch.startup_resource_rejection({**row,'actions':1},root,gpu))
+            self.assertIsNone(batch.startup_resource_rejection({**row,'controller_wrapper_pid':55},root,gpu))
+            (root/'model_events.jsonl').write_text('{"item":{"type":"agent_message"}}\n')
+            self.assertIsNone(batch.startup_resource_rejection(row,root,gpu))
+
+    def test_asset_retry_requires_prelaunch_timeout_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp,1)
+            base={'run_id':'fixture_r1','failure_stage':'asset_preflight',
+                  'asset_preflight_unavailable':{'status':'unavailable',
+                      'error_type':'TimeoutExpired','launch_requested':False}}
+            for changes in ({'failure_stage':'simulator_starting'},
+                            {'simulator_pid':123},{'simulator_started_at_unix':0},
+                            {'controller_wrapper_pid':123},{'actions':1},
+                            {'asset_preflight_unavailable':{'status':'failed'}},
+                            {'asset_preflight_unavailable':{**base['asset_preflight_unavailable'],
+                                                           'launch_requested':True}}):
+                with self.subTest(changes=changes):
+                    self.assertFalse(b.requeue_resource_rejection({**base,**changes}))
+
     def test_admission_prefers_real_057_headroom_without_claiming_busy_or_foreign_gpus(self):
         workers=[{'id':f's115-gpu{i}','gpu':i,'ssh':['ssh','s115'],'minimum_free_gpu_mib':18432}
                  for i in range(4)]
@@ -42,7 +231,7 @@ class LifecycleTests(unittest.TestCase):
     def test_real_process_gpu_and_host_leases_survive_independent_callers(self):
         with tempfile.TemporaryDirectory() as tmp:
             worker={'id':'other-arm','gpu':0,'ssh':['ssh','host'],'expected_gpu_uuid':'physical0'}
-            code='''import json,sys\nfrom manipulation_agent.batch_lifecycle import WorkerLease\nw=json.loads(sys.argv[2]); l=WorkerLease(sys.argv[1],w,host_budget_gib=28)\nassert l.acquire(); l.record(unit="owned.service",run_id="original",released=False)\nprint("locked",flush=True); sys.stdin.readline(); l.release(cleared=True)\n'''
+            code='''import json,sys\nfrom manipulation_agent.batch.batch_lifecycle import WorkerLease\nw=json.loads(sys.argv[2]); l=WorkerLease(sys.argv[1],w,host_budget_gib=28)\nassert l.acquire(); l.record(unit="owned.service",run_id="original",released=False)\nprint("locked",flush=True); sys.stdin.readline(); l.release(cleared=True)\n'''
             process=subprocess.Popen([sys.executable,'-c',code,tmp,json.dumps(worker)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
             try:
                 self.assertEqual(process.stdout.readline().strip(),'locked')
@@ -83,11 +272,17 @@ class LifecycleTests(unittest.TestCase):
             b.ssh=Mock(return_value=subprocess.CompletedProcess([],0,json.dumps(check),''))
             try:
                 self.assertTrue(batch.Batch.resource_admission(b))
+                self.assertEqual(b.ssh.call_args.kwargs['timeout'],210)
                 self.assertEqual(held.gpu.owner['run_id'],'other-arm')
                 held.release(cleared=True)
                 # Once genuinely free, the higher-headroom peer can be selected.
                 self.assertFalse(batch.Batch.resource_admission(b))
                 self.assertEqual(b.worker_states[current['id']]['preferred_worker'],'peer')
+                b._config['resource_preflight_timeout_seconds']=150
+                b.ssh.side_effect=subprocess.TimeoutExpired('read-only-resource-probe',150)
+                self.assertFalse(batch.Batch.resource_admission(b))
+                self.assertEqual(b.worker_states[current['id']]['query_timeout_seconds'],150)
+                self.assertFalse(b.journal.call_args.args[0]['task_claimed'])
             finally:
                 held.release();own.release()
 
@@ -98,6 +293,82 @@ class LifecycleTests(unittest.TestCase):
             with patch.object(lease.gpu,'record',side_effect=OSError('disk')):
                 with self.assertRaises(OSError):lease.release(cleared=True)
             fresh=WorkerLease(tmp,w,host_budget_gib=28);self.assertTrue(fresh.acquire());fresh.release()
+
+    def test_orphan_remote_owner_does_not_starve_host_or_disappear_from_memory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker={'id':'old','gpu':0,'ssh':['ssh','host'],'expected_gpu_uuid':'physical0'}
+            code='''import json,sys\nfrom manipulation_agent.batch.batch_lifecycle import WorkerLease\nl=WorkerLease(sys.argv[1],json.loads(sys.argv[2]),host_budget_gib=56)\nassert l.acquire(); l.record(unit="still-running.service",run_id="original",released=False)\n'''
+            subprocess.run([sys.executable,'-c',code,tmp,json.dumps(worker)],check=True)
+            old=WorkerLease(tmp,worker,host_budget_gib=56,owner_active=lambda owner:True)
+            before={p:p.read_bytes() for p in Path(tmp).glob('*.json')}
+            self.assertFalse(old.acquire())  # Remote GPU is still owned.
+            current=WorkerLease(tmp,{**worker,'id':'new','gpu':1,'expected_gpu_uuid':'physical1'},
+                                host_budget_gib=56,owner_active=lambda owner:True)
+            self.assertTrue(current.acquire())
+            try:
+                self.assertTrue(current.host.path.name.endswith('-1.lock'))
+                self.assertEqual([p['unit'] for p in current.active_peers()],['still-running.service'])
+                self.assertEqual(current.other_reserved_gib(),28)
+                self.assertEqual({p:p.read_bytes() for p in before},before)
+                current.owner_active=lambda owner:False
+                self.assertEqual(current.active_peers(),[])
+                self.assertEqual(current.other_reserved_gib(),0)
+            finally:
+                current.release()
+
+    def test_orphan_owner_query_failure_releases_gpu_and_host_locks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker={'id':'old','gpu':0,'ssh':['ssh','host'],'expected_gpu_uuid':'physical0'}
+            old=WorkerLease(tmp,worker,host_budget_gib=56)
+            self.assertTrue(old.acquire());old.record(unit='live.service',run_id='old',released=False)
+            old.release()
+            current=WorkerLease(tmp,{**worker,'gpu':1,'expected_gpu_uuid':'physical1'},host_budget_gib=56,
+                                owner_active=Mock(side_effect=TimeoutError('unit query')))
+            with self.assertRaises(TimeoutError):current.acquire()
+            for path in Path(tmp).glob('*.lock'):
+                probe=FileLease(path,{})
+                self.assertTrue(probe.acquire());probe.release()
+            current.owner_active=lambda owner:True
+            self.assertTrue(current.acquire())
+            try:
+                current.owner_active=Mock(side_effect=TimeoutError('peer query'))
+                with self.assertRaises(TimeoutError):current.active_peers()
+                probe=FileLease(Path(tmp)/f'host-{current.host_key}-0.lock',{})
+                self.assertTrue(probe.acquire());probe.release()
+            finally:
+                current.release()
+
+    def test_orphan_adoption_requires_same_run_and_unit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worker={'id':'a','gpu':0,'ssh':['ssh','host']}
+            old=WorkerLease(tmp,worker,host_budget_gib=28)
+            self.assertTrue(old.acquire());old.record(unit='live.service',run_id='original',released=False)
+            old.release()
+            current=WorkerLease(tmp,worker,host_budget_gib=28,owner_active=lambda owner:None)
+            self.assertFalse(current.acquire())  # Unknown unit state is not free.
+            self.assertFalse(current.acquire(adopting={'run_id':'original','simulator_unit':'other.service'}))
+            self.assertTrue(current.acquire(adopting={'run_id':'original','simulator_unit':'live.service'}))
+            current.release()
+
+    def test_batch_skips_live_orphan_and_keeps_its_memory_policy(self):
+        import base64
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b._config.update(adaptive_memory_admission=True,adaptive_host_slot_count=4,
+                             host_worker_memory_budget_gib={'host':56})
+            old=WorkerLease(b._config['shared_lease_dir'],b.workers[0],host_budget_gib=56)
+            self.assertTrue(old.acquire());old.record(unit='live.service',run_id='old',released=False)
+            old.release()
+            b._worker_local.config={**b.workers[0],'id':'new','gpu':1,'expected_gpu_uuid':'physical1'}
+            b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123'})
+            lease=b.acquire_worker_lease();self.assertIsNotNone(lease)
+            b._worker_local.lease=lease
+            try:
+                policy=json.loads(base64.b64decode(b.memory_policy_args()[1]))
+                self.assertEqual([p['unit'] for p in policy['peers']],['live.service'])
+                self.assertTrue(lease.host.path.name.endswith('-1.lock'))
+            finally:
+                lease.release(cleared=True)
 
     def test_resource_wait_does_not_claim_or_start_deadline(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -172,7 +443,7 @@ class LifecycleTests(unittest.TestCase):
             b.stop_controller(child,output)
             self.assertIsNotNone(child.poll());self.assertLess(time.time()-deadline,2)
 
-    def test_score_survives_media_error_and_late_score_cannot_change_timeout(self):
+    def test_official_success_survives_media_error_and_timeout_diagnostics(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp);b._config.update(id='a',ssh=['ssh','host'])
             row=b.rows[0];row.update(execution_finished_at='now',controller_timeout=True)
@@ -182,7 +453,8 @@ class LifecycleTests(unittest.TestCase):
             b.finalize_episode(row,Path(tmp),Path(tmp),b._config)
             self.assertEqual(row['episode_outcome'],'success');self.assertEqual(row['archive_status'],'failed')
             late={**row,'deadline_expired_at_finish':True}
-            self.assertEqual(classify_episode_outcome(late),'timeout');self.assertEqual(late['q_score'],1)
+            self.assertEqual(classify_episode_outcome(late),'success');self.assertEqual(late['q_score'],1)
+            self.assertTrue(late['deadline_expired_at_finish'])
 
     def test_restart_archive_pending_never_relaunches_model(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -265,10 +537,12 @@ class LifecycleTests(unittest.TestCase):
     def test_ambiguous_remote_launch_still_attempts_owned_cleanup(self):
         with tempfile.TemporaryDirectory() as tmp:
             b=self.runner(tmp,1)
+            b.storage=Mock(spool=Path(tmp))
             for d in ('logs','preflight','launchers'):(Path(tmp)/d).mkdir()
             b.source=Path('/source');b.source_info={'commit':'fixture'}
             b._config.update(id='a',gpu=0,ssh=['ssh','host'],base_port=31000,batch_tag='test',
-                             data_root='/fixture',sim_python='/fixture/python',sim_env='/fixture/env')
+                             data_root='/fixture',sim_python='/fixture/python',sim_env='/fixture/env',
+                             startup_timeout_seconds=0)
             b.manifest={};b.unit_state=Mock(return_value={'ActiveState':'inactive','MainPID':'0'})
             def ssh(args,**kwargs):
                 if 'assets' in args:return subprocess.CompletedProcess(args,0,'{"status":"passed"}','')

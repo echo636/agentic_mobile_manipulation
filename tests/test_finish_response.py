@@ -6,10 +6,10 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent import bridge
+from manipulation_agent.transport import bridge
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 
 
 class FinishResponseTests(unittest.TestCase):
@@ -44,7 +44,7 @@ class FinishResponseTests(unittest.TestCase):
                     self.assertTrue(ready.wait(5))
                     self.assertFalse(failures,failures)
                     url=state['url']
-                    observation=bridge.rpc(url,'observe',{},'observe',timeout=2)['observation']
+                    observation=bridge.rpc(url,'initialize',{},'initialize',timeout=2)['observation']
                     bridge.rpc(url,'act',{'primitive':'toggle_on','target':{
                         'image_ref':observation['images'][0]['image_ref'],'point':[.5,.5]},
                         'revision':observation['revision']},'act',timeout=2)

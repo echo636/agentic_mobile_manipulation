@@ -1,4 +1,9 @@
-# Four fixed cameras and asynchronous acquisition
+# Legacy workflow: asynchronous four-camera acquisition
+
+This document records the retained workflow-profile compatibility interface.
+The current default starts with initialize and receives the next four-camera
+snapshot in each act/look response. It does not expose observation-job tools or
+require an extra capture before finish. See [the current RGB protocol](rgb_protocol.md).
 
 User requirement: front/back/left/right at the same simulation state; no body rotation, no wrist views. Native robot sensors are excluded and replaced by four explicit render products attached kinematically to the base frame. The calibrated local camera basis uses X forward and Z up; yaw offsets are 0°, 180°, +90°, -90°. See observations/rig.py.
 

@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.omnigibson_backend import select_compatible_scene
-from manipulation_agent.task_bindings import audit_wildcard_bindings, validate_runtime_bindings
+from manipulation_agent.executors.omnigibson_backend import select_compatible_scene
+from manipulation_agent.tasks.task_bindings import audit_wildcard_bindings, validate_runtime_bindings
 
 
 class WildcardBindingTests(unittest.TestCase):
@@ -45,7 +45,7 @@ class WildcardBindingTests(unittest.TestCase):
             scene = Path(folder) / 'scene.json'; instance = Path(folder) / 'instance.json'
             scene.write_text(json.dumps(data)); instance.write_text(json.dumps(dict.fromkeys(required, {})))
             original = scene.read_bytes(); deferred = []
-            with patch('manipulation_agent.task_bindings._knowledge_base', return_value=kb):
+            with patch('manipulation_agent.tasks.task_bindings._knowledge_base', return_value=kb):
                 selected, actual, rejected = select_compatible_scene(
                     scene, instance, task_name='fixture', deferred_bindings=deferred)
             self.assertEqual(selected, scene)

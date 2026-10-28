@@ -8,24 +8,77 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from ..contracts import SkillError
-from ..deadline import EpisodeDeadline
-from ..omnigibson_backend import OmniGibsonBackend
-from ..observations.rig import DIRECTIONS, camera_mount, look_at_orientation
-from ..records import now
+from ..runtime.deadline import EpisodeDeadline
+from .omnigibson_backend import OmniGibsonBackend
+from ..observations.rig import DIRECTIONS, camera_mount, centered_head_height, look_at_orientation
+from ..records import JsonlAppend, now
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
+from .material_actions import CheckedMaterialActions
+from .material_transfer import CheckedMaterialTransfer
+from .demo_motion import DemoMotion
+from .local_rgb import LocalRGBManipulation
+from .local_manipulation import LocalLimits
 
-class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
+
+    def _config(self, task, gpu, max_steps):
+        config = super()._config(task, gpu, max_steps)
+        if getattr(self, 'use_gpu_dynamics', False):
+            # Environment loads external sensors while physics is stopped.
+            # Avoid adding render products to an already active GPU particle
+            # scene. The same rig is positioned and warmed after task restore.
+            sensors = list(config['env'].get('external_sensors') or [])
+            names = {row.get('name') for row in sensors}
+            # camera_params is an auxiliary annotator, explicitly excluded
+            # from VisionSensor.all_modalities. Attach it during rig warmup.
+            requested = [('mas_rgb_'+direction, ['rgb', 'depth_linear'])
+                         for direction in DIRECTIONS]
+            if self.record_video:
+                requested.append(('mas_spectator', ['rgb']))
+            for name, modalities in requested:
+                if name in names:
+                    raise ValueError('Reserved RGB sensor name is already configured: '+name)
+                kwargs = dict(image_width=self.image_size, image_height=self.image_size, viewport_name=None)
+                if name != 'mas_spectator':
+                    kwargs.update(focal_length=10.0, horizontal_aperture=20.0)
+                row = dict(sensor_type='VisionSensor', name=name, relative_prim_path='/'+name,
+                    modalities=modalities, sensor_kwargs=kwargs, include_in_obs=False)
+                sensors.append(row)
+            config['env']['external_sensors'] = sensors
+        return config
+
+    def _preloaded_rgb_sensor(self, name):
+        if not getattr(self, 'use_gpu_dynamics', False):
+            return None
+        sensor = (self.env.external_sensors or {}).get(name)
+        if sensor is None or not sensor.initialized:
+            raise RuntimeError('GPU RGB sensor was not initialized before physics: '+name)
+        return sensor
 
     def __init__(self,*args,record_video=False,**kwargs):
         self.deadline=EpisodeDeadline.from_env()
         self.deadline.check()
-        self.ideal_carry = os.environ.get('MAS_GRASP_MODE','controlled')=='controlled'
-        self._ideal_held=None;self._carry_relative=None;self._carry_contents=[];self._carry_dependencies=[];self._object_anchor=None
+        from .navigation.point_route_projection import prepare_point_projection
+        self._point_projection_ready=prepare_point_projection()
+        self.deadline.check()
+        # A symbolic grasp creates the simulator's native grasp joint once.
+        # Subsequent contacts and released objects belong to the physics solver.
+        self.ideal_carry = False
+        self.demo_motion = os.environ.get('MAS_DEMO_MOTION','0') in {'1','true','yes'}
+        if self.demo_motion and not self.ideal_carry:
+            raise ValueError('Demo motion requires controlled carry')
+        self.local_manipulation = os.environ.get("MAS_LOCAL_MANIPULATION", "1") not in {"0", "false", "no"}
+        self.local_limits = LocalLimits()
+        self._local_operation = None
+        self._demo_arm = None
+        self._demo_focus = None
         self.fixed_surround_rgb = True
         self.private_viewer_grounding = False
+        self.renderer_pixel_owner = os.environ.get('MAS_RENDERER_PIXEL_OWNER','0') == '1'
+        self._renderer_owner_annotators = {}
         self.record_video = record_video
         self.video = None
         self.video_render_stride = int(os.environ.get("MAS_VIDEO_RENDER_STRIDE", "2"))
@@ -39,7 +92,18 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self._spectator_anchor = None
         self._spectator_choice = None
         self._base_target = None
-        self.image_size=512
+        self.image_size=int(os.environ.get('MAS_RGB_IMAGE_SIZE','512'))
+        if self.image_size not in (512,768,1024,2048):
+            raise ValueError('RGB image size must be 512, 768, 1024 or 2048')
+        self.rgb_jpeg_quality=int(os.environ.get('MAS_RGB_JPEG_QUALITY','92'))
+        if self.rgb_jpeg_quality not in range(70,96):
+            raise ValueError('RGB JPEG quality must be between 70 and 95')
+        # Preserve the current four simultaneous virtual head cameras.
+        # Their private depth is used only to ground the selected RGB pixel.
+        # Put the model-facing cameras ahead of the robot head. The steeper
+        # pitch keeps nearby floor targets in frame at navigation distance.
+        self.rig_radius=0.35
+        self.rig_pitch_degrees=35.0
         self.capture_index=0
         self.image_files={}
         self.current_frames={}
@@ -47,6 +111,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
+                                 if self.demo_motion else None)
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
         # throttling extension toggles asynchronous rendering. Our capture
         # contract requires synchronous render-only flushes on the owner thread.
@@ -64,35 +130,76 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             raise RuntimeError('Stock head/wrist camera exclusion was not applied')
         from omnigibson.sensors import VisionSensor
         base_pos = self.robot.get_position_orientation()[0]
-        self.rig_height = float(self.robot.aabb[1][2] - base_pos[2]) + 0.05
-        for direction in DIRECTIONS:
-            sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
-                modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
-                focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
-            sensor.load(None)
-            sensor.initialize()
-            # Otherwise intrinsic_matrix lazily attaches a new annotator AFTER
-            # RGB readback and warms only four frames, sometimes returning a
-            # degenerate projection. Attach all before the shared barrier.
-            sensor.initialize_sensors(names='camera_params')
-            self.rig[direction] = sensor
-        self._position_rig()
-        for _ in range(20): self.og.sim.render()
-        if self.record_video:
-            from ..video import EpisodeVideo
-            from omnigibson.sensors import VisionSensor
-            # Use an independent offscreen render product at its final size. Do
-            # not resize/destroy the shared GUI viewer product: it invalidates
-            # robot RGB annotators in the pinned headless runtime.
-            self.spectator = VisionSensor(relative_prim_path='/mas_spectator',name='mas_spectator',
-                                          modalities=['rgb'],image_width=self.image_size,
-                                          image_height=self.image_size,viewport_name=None)
-            self.spectator.load(None)
-            self.spectator.initialize()
-            self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size,
-                                      views=(*DIRECTIONS,'spectator'))
-            self._position_spectator()
-            for _ in range(20): self.og.sim.render()
+        visual_points = []
+        for link in self.robot.links.values():
+            points = link.visual_boundary_points_world
+            if points is not None:
+                visual_points.extend(points.detach().cpu().tolist())
+        self.rig_height = centered_head_height(
+            visual_points, base_pos.detach().cpu().tolist(),
+            pitch_degrees=self.rig_pitch_degrees, radius=self.rig_radius)
+        with self._startup_stage('surround_camera_setup_and_warmup'):
+            for direction in DIRECTIONS:
+                sensor = self._preloaded_rgb_sensor('mas_rgb_'+direction)
+                if sensor is None:
+                    sensor = VisionSensor(relative_prim_path='/mas_rgb_'+direction, name='mas_rgb_'+direction,
+                        modalities=['rgb','depth_linear'],image_width=self.image_size,image_height=self.image_size,
+                        focal_length=10.0,horizontal_aperture=20.0,viewport_name=None)
+                    with self._startup_stage(f'surround_camera_{direction}_load'):
+                        sensor.load(None)
+                    with self._startup_stage(f'surround_camera_{direction}_initialize'):
+                        sensor.initialize()
+                else:
+                    with self._startup_stage(f'surround_camera_{direction}_reuse_preloaded'):
+                        pass
+                # Otherwise intrinsic_matrix lazily attaches a new annotator AFTER
+                # RGB readback and warms only four frames, sometimes returning a
+                # degenerate projection. Attach all before the shared barrier.
+                with self._startup_stage(f'surround_camera_{direction}_camera_params'):
+                    sensor.initialize_sensors(names='camera_params')
+                if self.renderer_pixel_owner:
+                    # OG's seg_instance also enables semantic segmentation. In
+                    # Isaac Sim 5.1 its OgnInstanceSegmentation node can crash
+                    # while indexing the semantic mapping during render. Pixel
+                    # ownership needs only the renderer's mesh path, not that
+                    # semantic grouping or OG's particle/category remapping.
+                    import omnigibson.lazy as lazy
+                    with self._startup_stage(f'surround_camera_{direction}_private_owner'):
+                        with self.og.sim.editing_usd():
+                            annotator = lazy.omni.replicator.core.AnnotatorRegistry.get_annotator(
+                                'instance_id_segmentation_fast')
+                            annotator.attach([sensor.render_product])
+                        self._renderer_owner_annotators[direction] = annotator
+                self.rig[direction] = sensor
+            self._position_rig()
+            for frame in range(20):
+                with self._startup_stage(f'surround_camera_warmup_frame_{frame + 1:02d}'):
+                    self.og.sim.render()
+        with self._startup_stage('spectator_camera_setup_and_warmup'):
+            if self.record_video:
+                from ..reporting.video import EpisodeVideo
+                from omnigibson.sensors import VisionSensor
+                # Use an independent offscreen render product at its final size. Do
+                # not resize/destroy the shared GUI viewer product: it invalidates
+                # robot RGB annotators in the pinned headless runtime.
+                self.spectator = self._preloaded_rgb_sensor('mas_spectator')
+                if self.spectator is None:
+                    self.spectator = VisionSensor(relative_prim_path='/mas_spectator',name='mas_spectator',
+                                                  modalities=['rgb'],image_width=self.image_size,
+                                                  image_height=self.image_size,viewport_name=None)
+                    with self._startup_stage('spectator_camera_load'):
+                        self.spectator.load(None)
+                    with self._startup_stage('spectator_camera_initialize'):
+                        self.spectator.initialize()
+                else:
+                    with self._startup_stage('spectator_camera_reuse_preloaded'):
+                        pass
+                self.video = EpisodeVideo(self.output, fps=1.0/self.og.sim.get_sim_step_dt(),size=self.image_size,
+                                          views=(*DIRECTIONS,'spectator'),demo_motion=self.demo_motion)
+                self._position_spectator()
+                for frame in range(20):
+                    with self._startup_stage(f'spectator_camera_warmup_frame_{frame + 1:02d}'):
+                        self.og.sim.render()
 
     def _position_rig(self):
         """Kinematic sensor mount only: never writes robot pose or advances physics."""
@@ -100,7 +207,8 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         base_pos, base_quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(base_quat)
         for direction, sensor in self.rig.items():
-            offset, basis = camera_mount(direction, self.rig_height)
+            offset, basis = camera_mount(direction, self.rig_height, radius=self.rig_radius,
+                                         pitch_degrees=self.rig_pitch_degrees)
             offset = self.torch.tensor(offset, device=base_pos.device)
             basis = self.torch.tensor(basis, device=base_pos.device)
             sensor.set_position_orientation(base_pos + rotation @ offset, T.mat2quat(rotation @ basis))
@@ -119,6 +227,9 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             if float(torch.linalg.norm(pos-old_pos)) < .002: return
         lo,hi = self.robot.aabb
         target = (lo.cpu()+hi.cpu())/2
+        if self._demo_focus is not None:
+            # Film the selected interaction, while keeping part of the robot in shot.
+            target = (target+self._demo_focus.cpu())/2
         ignore = [link.prim_path for link in self.robot.links.values()]
         best = None
         for i,angle in enumerate((135,-135,90,-90,180,0,45,-45)):
@@ -137,9 +248,10 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         self._spectator_anchor = (pos.clone(),yaw)
         # The caller positions every camera before a shared render barrier.
         # Rendering here would draw the old surround-camera poses unnecessarily.
-        with (self.output/'spectator_poses.jsonl').open('a') as stream:
-            stream.write(json.dumps({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
-                                     'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})+'\n')
+        if getattr(self, '_spectator_log', None) is None:
+            self._spectator_log = JsonlAppend(self.output/'spectator_poses.jsonl')
+        self._spectator_log.append({'env_step':self.steps,'position':camera.tolist(),'orientation':orientation.tolist(),
+                                   'look_at':target.tolist(),'clearance_m':clearance,'audience':'offline_only'})
 
     def _prepare_spectator(self):
         try:
@@ -163,13 +275,60 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                 self._recorded_capture_step=self.steps
             with component(self,'video_encode_submit'):
                 self.video.append(self._recorded_pixels,self.steps,kind,
-                                  capture_env_step=self._recorded_capture_step,repeated=not fresh)
+                                  capture_env_step=self._recorded_capture_step,repeated=not fresh,
+                                  check_active=lambda:self.deadline.check(changed=True))
+
+    def _wait_for_rgb_annotations(self):
+        """Finish Replicator capture at the current pose without advancing time.
+
+        Shape-valid annotator buffers can still contain a previous camera pose.
+        Isaac Sim 5.1's documented completion barrier waits for its render
+        dispatcher; additional arbitrary render ticks are not that guarantee.
+        This is called only by the simulator owner, for calibrated observations.
+        """
+        self._check_renderer_health()
+        import numpy as np
+        import omnigibson.lazy as lazy
+        timeline = lazy.omni.timeline.get_timeline_interface()
+        def state():
+            position, orientation = self.robot.get_position_orientation()
+            return {'env_step': self.steps, 'sim_time': float(self.og.sim.current_time),
+                    'sim_step_index': int(self.og.sim.current_time_step_index),
+                    'timeline_time': float(timeline.get_current_time()),
+                    'position': position.detach().cpu().numpy().tolist(),
+                    'orientation': orientation.detach().cpu().numpy().tolist(),
+                    'joints': self.robot.get_joint_positions().detach().cpu().numpy().tolist()}
+        before = state()
+        # delta_time=0 is the official no-time-advance mode. Do not use
+        # wait_until_complete(), which stops Replicator generation.
+        with component(self, 'render_annotation_barrier'):
+            # Replicator updates SDGPipeline USD attributes while dispatching
+            # the capture. OG requires these writes in its edit scope, whose
+            # exit also synchronizes the changes to Fabric.
+            with self.og.sim.editing_usd():
+                lazy.omni.replicator.core.orchestrator.step(
+                    delta_time=0.0, pause_timeline=False, wait_for_render=True, rt_subframes=1)
+        self._check_renderer_health()
+        after = state()
+        changed = [key for key in ('env_step', 'sim_step_index') if before[key] != after[key]]
+        changed += [key for key in ('sim_time', 'timeline_time')
+                    if not math.isclose(before[key], after[key], rel_tol=0., abs_tol=1e-10)]
+        changed += [key for key in ('position', 'orientation', 'joints')
+                    if not np.allclose(before[key], after[key], rtol=0., atol=1e-6)]
+        with (self.output / 'annotation_barriers.jsonl').open('a') as stream:
+            stream.write(json.dumps({'at': now(), 'audience': 'executor_private',
+                'status': 'failed' if changed else 'passed', 'api': 'replicator.orchestrator.step',
+                'delta_time': 0., 'pause_timeline': False, 'wait_for_render': True, 'rt_subframes': 1,
+                'before': before, 'after': after, 'changed_fields': changed}) + '\n')
+        if changed:
+            raise RuntimeError('Replicator capture changed simulation state: ' + ', '.join(changed))
 
     def _render_rgb_views(self, include_spectator=False, flushes=4, require_calibration=False):
         """Render-product resizing can invalidate all cameras for several frames.
 
         Wait with render-only ticks; never advance physics to warm up recording.
         """
+        self._check_renderer_health()
         import numpy as np
         self._position_rig()
         sensors = dict(self.rig)
@@ -177,9 +336,13 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         # Flush render-product latency after camera poses change, with physics frozen.
         for _ in range(flushes - 1):
             with component(self,'render'):self.og.sim.render()
+            self._check_renderer_health()
         shapes = {}; readiness_failures=[]
         for attempt in range(30):
             with component(self,'render'):self.og.sim.render()
+            self._check_renderer_health()
+            if require_calibration:
+                self._wait_for_rgb_annotations()
             pixels = {}; packets = {}; intrinsics={}; pending={}
             for view,sensor in sensors.items():
                 with component(self,'sensor_readback'):data,info = sensor.get_obs()
@@ -203,6 +366,19 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
                         if depth is None or tuple(depth.shape[:2])!=(self.image_size,self.image_size):
                             pending[view]='depth_render_product_not_ready'
                             continue
+                        if getattr(self,'renderer_pixel_owner',False):
+                            with component(self,'sensor_readback'):
+                                owner=self._renderer_owner_annotators[view].get_data()
+                            ids=owner.get('data') if isinstance(owner,dict) else None
+                            labels=owner.get('info',{}).get('idToLabels') if isinstance(owner,dict) else None
+                            if (ids is None or tuple(ids.shape)!=(self.image_size,self.image_size)
+                                or not isinstance(labels,dict)):
+                                pending[view]='private_instance_render_product_not_ready'
+                                continue
+                            # Copy while the same render barrier is still in
+                            # force. The model receives only the RGB packet.
+                            data['_renderer_instance_ids']=self.torch.as_tensor(ids).clone()
+                            info['_renderer_instance_labels']={str(k):v for k,v in labels.items()}
                         intrinsics[view]=intrinsic
                     pixels[view] = rgb[...,:3].astype(np.uint8)
                     packets[view] = (data,info)
@@ -222,27 +398,31 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         raise RuntimeError('Camera render products did not become ready: '+json.dumps({'rgb_shapes':shapes,'calibration':pending}))
 
     def _step(self, action):
+        self._check_renderer_health()
         self.deadline.check(changed=True)
-        if self._base_target is not None:self._restore_base_target()
-        self._restore_object_anchor()
-        self._carry_follow()
-        with component(self,'physics_and_metrics'):super()._step(action)
+        local=getattr(self,'_local_operation',None)
+        if local is not None:local.check()
         if self._base_target is not None:
-            self._restore_base_target()
-        self._restore_object_anchor();self._carry_follow()
-        self._video_frame('env_step')
-
-    def _restore_base_target(self):
-        """Ideal base actuator holds posture while moving; no passive joint drift."""
-        import omnigibson.utils.transform_utils as T
-        target=self._base_target
-        self.robot.set_joint_positions(target['posture'],indices=target['indices'])
-        self.robot.set_position_orientation(target['position'],target['orientation'])
-        self.robot.keep_still()
-        if target['held'] is not None:
-            target['held'].set_position_orientation(*T.pose_transform(
-                target['position'],target['orientation'],*target['relative']))
-            target['held'].keep_still()
+            target, self._base_target = self._base_target, None
+            self._transfer_base_pose(target['position'],target['orientation'])
+        # RGB observation boundaries and the video cadence already own rendering.
+        # OmniGibson's ordinary env.step also renders implicitly, duplicating
+        # that work. Its native no-render branch advances the same physics
+        # substeps, state transitions, task evaluation and simulation clock.
+        # Restore explicitly even on exceptions: OG 3.9.2's context manager
+        # does not put its own restoration in a finally block.
+        implicit_render = self.og.sim._render_on_step
+        try:
+            with self.og.sim.render_on_step(False):
+                with component(self,'physics_and_metrics'):super()._step(action)
+        finally:
+            self.og.sim._render_on_step = implicit_render
+        try:
+            self._check_placement_objects()
+        finally:
+            # Physics already advanced, including when a transition replaced a
+            # watched object. Keep that executed step in the continuous replay.
+            self._video_frame('env_step')
 
     def mark_video_tool(self, name, arguments, request_id):
         if self.video: self.video.mark(name,arguments,request_id)
@@ -277,17 +457,23 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             ref=f'rgb-{self.capture_index:05d}-{view}'
             pixels=rendered[view]
             path=folder/f'{ref}.jpg'
-            Image.fromarray(pixels).save(path,quality=92)
+            Image.fromarray(pixels).save(path,quality=self.rgb_jpeg_quality)
             digest=hashlib.sha256(path.read_bytes()).hexdigest()
             position,orientation=sensor.get_position_orientation()
             frame={'sensor':sensor,'position':position.clone(),'orientation':orientation.clone(),
                    'intrinsic':self._sensor_intrinsics[view],'width':pixels.shape[1],'height':pixels.shape[0]}
             data,info=self._sensor_packets[view]
             frame['depth_linear']=data['depth_linear'].detach().cpu().clone()
-            np.savez_compressed(private_folder/f'{ref}.npz',depth_linear=frame['depth_linear'].numpy())
+            arrays={'depth_linear':frame['depth_linear'].numpy()}
+            if getattr(self,'renderer_pixel_owner',False):
+                frame['instance_ids']=data['_renderer_instance_ids'].detach().cpu().clone()
+                frame['instance_labels']=dict(info['_renderer_instance_labels'])
+                arrays['instance_ids']=frame['instance_ids'].numpy()
+            np.savez_compressed(private_folder/f'{ref}.npz',**arrays)
             (private_folder/f'{ref}.json').write_text(json.dumps({'audience':'executor_private_only',
                 'image_ref':ref,'rgb_sha256':digest,
-                'position':position.tolist(),'orientation':orientation.tolist(),'intrinsic':frame['intrinsic'].tolist()}))
+                'position':position.tolist(),'orientation':orientation.tolist(),'intrinsic':frame['intrinsic'].tolist(),
+                **({'instance_labels':frame['instance_labels']} if 'instance_labels' in frame else {})}))
             self.current_frames[ref]=frame
             self.image_files[ref]=path
             images.append({'image_ref':ref,'view':view,'width':pixels.shape[1],'height':pixels.shape[0],
@@ -313,223 +499,744 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         if ref not in self.image_files: raise KeyError(ref)
         return self.image_files[ref].read_bytes(),'image/jpeg'
 
-    def _ground(self,target):
-        """Route exactly the chosen rendered pixel to the ideal actuator target.
+    def _ground(self,target, *, require_object=True, reject_particles=False):
+        """Use the chosen pixel's depth backprojection directly as the target.
 
-        Private visual triangle intersection and depth use exactly the selected RGB
-        pixel. Collision disagreement is recorded without substituting another
-        object. No class search, alternate pixels or task-scope lookup occurs;
-        geometry never crosses the model observation boundary.
+        Navigation needs only this point. Manipulation resolves the visible
+        surface nearest this same point, solely for its simulator handle.
+        No mesh/collision depth comparison, point replacement, alternate pixel,
+        semantic target search or task-scope lookup occurs.
         """
-        from omnigibson.utils.sampling_utils import raytest
         import omnigibson.utils.transform_utils as T
         frame=self.current_frames.get(target['image_ref'])
         if frame is None: raise SkillError('stale_image_ref','Expired RGB capture')
         x,y=target['point'];K=frame['intrinsic'].cpu()
         px=round(x*(frame['width']-1));py=round(y*(frame['height']-1))
         # USD cameras look along -Z; image down corresponds to camera -Y.
-        local=self.torch.tensor([(px-float(K[0,2]))/float(K[0,0]),
-                                 -(py-float(K[1,2]))/float(K[1,1]),-1.0])
+        # Replicator samples pixel centers; array indices denote pixel corners.
+        local=self.torch.tensor([(px+.5-float(K[0,2]))/float(K[0,0]),
+                                 -(py+.5-float(K[1,2]))/float(K[1,1]),-1.0])
         start=frame['position'].cpu()
         depth=float(frame['depth_linear'][py,px])
         if not math.isfinite(depth) or not 0<depth<30:
             raise SkillError('no_surface_at_point','No supported visible surface at selected pixel')
         direction=T.quat2mat(frame['orientation'].cpu()) @ local
         point=start+direction*depth
-        unit=direction/self.torch.linalg.norm(direction)
-        hit=raytest(start,start+unit*30.0,ignore_bodies=[link.prim_path for link in self.robot.links.values()])
-        gap=float(self.torch.linalg.norm(hit['position'].cpu()-point)) if hit['hit'] else None
-        tolerance=max(.03,.02*float(self.torch.linalg.norm(point-start)))
-        from .visual_mesh_grounding import query_visual_surface
-        try:
-            with component(self,'visual_grounding'):
-                obj,visual=query_visual_surface(self,start,unit,point)
-        except SkillError as exc:
-            diagnostic={'at':now(),'status':'failed','code':exc.code,'detail':str(exc),
-                'selected_pixel':target['point'],'raster_pixel':[px,py],'image_ref':target['image_ref'],
-                'depth_linear':depth,'hit_position':point.tolist(),
-                'visual_query':getattr(exc,'diagnostics',{}),'audience':'executor_private'}
-            with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
-            raise
-        diagnostic={'at':now(),'routing':'same_pixel_depth_visual_triangle_ray',**visual,
-            'rigid_body':hit.get('rigidBody',''),'selected_object_prim':obj.prim_path,'depth_linear':depth,
-            'hit_position':point.tolist(),'collision_position':hit['position'].tolist() if hit['hit'] else None,
-            'depth_agreement_error_m':gap,'depth_agreement_tolerance_m':tolerance,
-            'collision_agrees':gap is not None and gap<=tolerance,'selected_pixel':target['point'],
-            'raster_pixel':[px,py],'image_ref':target['image_ref'],'audience':'executor_private'}
+        diagnostic={'at':now(),'routing':'direct_pixel_depth_backprojection',
+            'depth_linear':depth,'hit_position':point.tolist(),'depth_consistency_check':False,
+            'object_resolution_required':require_object,'selected_pixel':target['point'],
+            'raster_pixel':[px,py],'pixel_center':[px+.5,py+.5],
+            'image_ref':target['image_ref'],'audience':'executor_private'}
+        obj=None
+        if require_object:
+            from .visual_mesh_grounding import query_visual_surface
+            ownership={}
+            if 'instance_ids' in frame and 'instance_labels' in frame:
+                label=frame['instance_labels'].get(str(int(frame['instance_ids'][py,px])))
+                if isinstance(label,str):
+                    # Raw renderer IDs identify visual meshes below the object
+                    # root. Match an ancestor at a path boundary, so e.g. obj_1
+                    # cannot claim pixels rendered by obj_10.
+                    matches=[o for o in [*self.env.scene.objects,self.robot]
+                             if label in (o.name,str(o.prim_path))
+                             or label.startswith(str(o.prim_path)+'/')]
+                    selected=max(matches,key=lambda o:len(str(o.prim_path)),default=None)
+                    if selected is not None:ownership['renderer_object']=selected
+            try:
+                with component(self,'visual_grounding'):
+                    obj,visual=query_visual_surface(self,point,reject_particles=reject_particles,
+                                                    camera_position=start,**ownership)
+            except SkillError as exc:
+                diagnostic.update(status='failed',code=exc.code,detail=str(exc),
+                                  visual_query=getattr(exc,'diagnostics',{}))
+                with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
+                raise
+            diagnostic.update(visual,selected_object_prim=obj.prim_path)
         with (self.output/'grounding_diagnostics.jsonl').open('a') as stream:stream.write(json.dumps(diagnostic)+'\n')
-        if obj is None or obj is self.robot:
-            raise SkillError('invalid_visual_target','Selected RGB pixel has no supported non-robot visual object')
         return obj,point,diagnostic
 
     def _turn(self,degrees,max_steps):
         import omnigibson.utils.transform_utils as T
+        from .navigation.gt_navigation import NavigationPlan, NavigationError, PlanningBudget
+        from .navigation.forward_navigation import ForwardRoute, angle
+        from .navigation.heading_collision import HeadingCollisionChecker
+        from .navigation.live_gt_map import build_navigation_grid
         pos,quat = self.robot.get_position_orientation()
         rotation = T.quat2mat(quat)
         yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
-        return self._execute_base_path([pos[:2].cpu().tolist()],yaw+math.radians(degrees),max_steps)
+        xy=tuple(pos[:2].cpu().tolist());end=yaw+math.radians(degrees)
+        floor=min(range(len(self.env.scene.trav_map.floor_heights)),
+                  key=lambda i:abs(float(pos[2])-self.env.scene.trav_map.floor_heights[i]))
+        grid,_=build_navigation_grid(self,floor)
+        self._navigation_layer_yaw=yaw
+        budget=PlanningBudget(self.deadline.check,seconds=8.)
+        checker=HeadingCollisionChecker(grid,self._navigation_layers,yaw,
+                                        self._navigation_support,check_cancelled=budget.check)
+        record={'at':now(),'parent_request_id':getattr(self,'_active_request_id',None),
+                'audience':'executor_private','requested_degrees':degrees,'start':[*xy,yaw]}
+        try:
+            if not checker.motion_free((*xy,yaw),(*xy,end)):
+                from .navigation.navigation_refinement import refine_in_place_turn
+                refined, refinement = refine_in_place_turn(self,floor,grid,(*xy,yaw),(*xy,end))
+                record['refinement'] = refinement
+                if refined is None:
+                    raise SkillError('look_rotation_blocked','Body or payload blocks the requested rotation')
+                grid = refined
+            record['execution_resolution_m'] = grid.resolution
+            plan=NavigationPlan((xy,),xy,xy,end,0.,0.,1,1,0.,0,end,'forward')
+            route=ForwardRoute((plan,),0.,0,'checked_in_place_look',
+                turn_radians=abs(angle(end-yaw)),estimated_motion_seconds=abs(angle(end-yaw))/(math.pi/3),
+                start=(*xy,yaw))
+            result=self._execute_gt_plan(grid,plan,max_steps,prepared_route=route,require_prepared_route=True)
+            record.update(status='passed',execution=result)
+            return result
+        except NavigationError as exc:
+            record.update(status='failed',error_code=exc.code,error_type=type(exc).__name__)
+            raise SkillError(exc.code,str(exc)) from exc
+        except Exception as exc:
+            record.update(status='failed',error_code=getattr(exc,'code',None),error_type=type(exc).__name__)
+            raise
+        finally:
+            with (self.output/'look_motion.jsonl').open('a') as stream:stream.write(json.dumps(record)+'\n')
 
-    def _approach_visible(self, xy, point, selected_object):
-        """Check the selected point in actual candidate camera frusta and rays."""
+    def _navigation_self_hulls(self):
+        """Current visible robot and carried geometry in yaw-local base coordinates."""
+        import numpy as np
+        import omnigibson.utils.transform_utils as T
+        from .navigation.self_occlusion import prepare_self_hulls
+        position,orientation=self.robot.get_position_orientation()
+        rotation=T.quat2mat(orientation)
+        yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        c,s=math.cos(yaw),math.sin(yaw)
+        inverse=np.array([[c,s,0.],[-s,c,0.],[0.,0.,1.]])
+        base=position.detach().cpu().numpy()
+        objects=[self.robot]
+        held=self._get_held()
+        if held is not None:objects.append(held)
+        objects.extend(obj for obj,_ in self._carry_contents)
+        vertices={}
+        for obj in objects:
+            for link in obj.links.values():
+                points=link.visual_boundary_points_world
+                if points is not None:
+                    vertices[link.prim_path]=(points.detach().cpu().numpy()-base)@inverse.T
+        hulls,report=prepare_self_hulls(vertices)
+        return hulls,report
+
+    def _approach_visible(self, xy, point, selected_object, *, margin=.04, max_distance=None,
+                          self_hulls=(), base_yaw=None, diagnostics=None, selected_container=False,
+                          tracked_target=False):
+        """Check candidate RGB frusta, own-body silhouette and scene rays."""
         from omnigibson.utils.sampling_utils import raytest
         from ..observations.rig import visible_rig_rays
+        from .navigation.self_occlusion import segment_hits_self_hull
         torch=self.torch
-        if math.dist(xy,point[:2].cpu().tolist())>1.4:return False
+        if max_distance is not None and math.dist(xy,point[:2].cpu().tolist())>max_distance:return False
         ignore=[l.prim_path for l in self.robot.links.values()]
         held=self._get_held()
+        selected_paths=({link.prim_path for link in selected_object.links.values()}
+                        if selected_container and selected_object is not None else set())
         if held is not None:ignore.extend(l.prim_path for l in held.links.values())
         ignore.extend(l.prim_path for obj,_ in self._carry_contents for l in obj.links.values())
-        yaw=math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
-        rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,point.cpu().tolist())
+        yaw=base_yaw if base_yaw is not None else math.atan2(float(point[1])-xy[1],float(point[0])-xy[0])
+        rays=visible_rig_rays(xy,yaw,float(self.robot.get_position_orientation()[0][2]),self.rig_height,
+                              point.cpu().tolist(),margin=margin,radius=self.rig_radius,
+                              pitch_degrees=self.rig_pitch_degrees,require_in_frame=not tracked_target)
+        if diagnostics is not None:
+            diagnostics.update(in_frame_cameras=None if tracked_target else len(rays),
+                               tracked_target=tracked_target,sight_rays=len(rays),self_occluded=0,scene_occluders=[])
+        c,s=math.cos(yaw),math.sin(yaw)
+        base_z=float(self.robot.get_position_orientation()[0][2])
+        def local(world):
+            dx,dy,dz=world[0]-xy[0],world[1]-xy[1],world[2]-base_z
+            return (c*dx+s*dy,-s*dx+c*dy,dz)
         for _,origin,_ in rays:
+            if segment_hits_self_hull(local(origin),local(point.cpu().tolist()),self_hulls):
+                if diagnostics is not None:diagnostics['self_occluded']+=1
+                continue
             hit=raytest(torch.tensor(origin),point.cpu(),ignore_bodies=ignore)
             if not hit['hit'] or float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))<.10:return True
+            # Object-relative placements select a reference object, not an
+            # exact shelf/surface point. Its own surface is sufficient;
+            # other scene occluders and own-body silhouettes still reject it.
+            if hit.get('rigidBody') in selected_paths:
+                if diagnostics is not None:diagnostics['visible_selected_container']=True
+                return True
+            if diagnostics is not None:
+                diagnostics['scene_occluders'].append({'body':hit.get('rigidBody'),
+                    'distance_to_target_m':float(torch.linalg.norm(hit['position'].cpu()-point.cpu()))})
         return False
 
-    def _navigate(self, target, max_steps):
+    def _navigate(self, target, max_steps, *, for_manipulation=False):
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
-        from dataclasses import asdict
-        from .gt_navigation import GridMap, NavigationError, plan_navigation, STRATEGY
-        trav=self.env.scene.trav_map
-        position,_=self.robot.get_position_orientation()
-        point=target.get_position_orientation()[0]
-        floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
-        occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
-        height,width=occupancy.shape
-        grid=GridMap(width,height,float(trav.map_resolution),
-                     (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
-                     (occupancy!=0).astype('uint8').tobytes())
-        try:
-            with component(self,'navigation_planning'):
-                plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
-                                     candidate_filter=lambda xy:self._approach_visible(xy,point,getattr(target,'selected_object',None)))
-        except NavigationError as exc:
-            raise SkillError(exc.code,str(exc)) from exc
-        details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
-                 'plan':asdict(plan),'map_resolution_m':grid.resolution,
-                 'map_sha256':hashlib.sha256(grid.free).hexdigest(),
-                 'dynamic_collision_check':False,'collision_substrate':'static_eroded_grid'}
-        with (self.output/'navigation_plans.jsonl').open('a') as stream:
-            stream.write(json.dumps(details)+'\n')
-        result=self._execute_gt_plan(grid,plan,max_steps)
-        self.navigation_distance+=result['actual_path_distance_m']
-        return {**result,'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
-                'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
-                'start_grid_offset_m':plan.start_grid_offset_m,'dynamic_collision_check':False}
-
-    def _execute_gt_plan(self, grid, plan, max_steps):
-        """Follow the GT path using actual pose feedback and bounded commands."""
+        from dataclasses import asdict, replace
+        import numpy as np
         import omnigibson.utils.transform_utils as T
-        from .gt_navigation import GreedyGridFollower, NavigationError
+        from .navigation.gt_navigation import NavigationError, PlanningBudget, SearchBudgetExhausted, plan_navigation, STRATEGY
+        allow_lateral=bool(getattr(self.robot,'is_holonomic_base',False))
+        trav=self.env.scene.trav_map
+        position,orientation=self.robot.get_position_orientation()
+        rotation=T.quat2mat(orientation)
+        travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        point=target.get_position_orientation()[0]
+        from .navigation.live_gt_map import build_navigation_grid
+        floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
+        ground_click=not for_manipulation and float(point[2])-float(trav.floor_heights[floor]) <= .15
+        mode='point' if ground_click else 'approach'
+        require_visibility=mode=='approach' and for_manipulation
+        standoff,margin=0.,(.08 if mode=='approach' else 0.)
+        if mode=='approach' and getattr(self,'local_manipulation',False):
+            from .navigation.gt_navigation import visual_approach_settings
+            suggested,_=visual_approach_settings(self.rig_height,float(position[2]),float(point[2]),
+                pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
+            standoff=max(1.25,suggested)
+        navigation_sampling=None
+        grid,map_details=build_navigation_grid(self,floor)
+        self._navigation_layer_yaw=travel_yaw
+        if not grid.navigable(grid.cell(position[:2].cpu().tolist())):
+            # Local manipulation can leave a valid pose in a narrow passage
+            # resolved by its finer native map. Do not reinterpret that pose
+            # as penetration when explicit navigation rebuilds the coarse map.
+            from .navigation.navigation_refinement import detour_sampling
+            for sampling in detour_sampling(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist()):
+                navigation_sampling=sampling
+                grid,map_details=build_navigation_grid(self,floor,sampling=sampling)
+                if grid.navigable(grid.cell(position[:2].cpu().tolist())):
+                    break
+        recovery_results=[];recovery_states=set()
+        while not grid.navigable(grid.cell(position[:2].cpu().tolist())):
+            from .navigation.gt_navigation import plan_start_clearance_exit
+            from .navigation.live_gt_map import clearance_transition_guard
+            raw_free,overlap,radius=self._navigation_clearance
+            record={'at':now(),'audience':'executor_private','attempt':len(recovery_results)+1,
+                    'start':position.cpu().tolist(),'map_sha256':hashlib.sha256(grid.free).hexdigest()}
+            # Keep the actual failed-start geometry too; previously a rejected
+            # escape left no map artifact with which to diagnose its contacts.
+            self._navigation_recovery_index=getattr(self,'_navigation_recovery_index',0)+1
+            recovery_dir=self.output/'navigation_recovery_grids';recovery_dir.mkdir(exist_ok=True)
+            recovery_file=recovery_dir/f'{self._navigation_recovery_index:04d}.npz'
+            np.savez_compressed(recovery_file,
+                free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+                raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
+                overlap=overlap.reshape(grid.height,grid.width),origin=grid.origin,resolution=grid.resolution,
+                start=position.cpu().numpy(),target=point.cpu().numpy(),travel_yaw=travel_yaw,
+                raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+                support=self._navigation_support,
+                layer_footprints_json=json.dumps(map_details['collision_layers']))
+            record['grid_artifact']=str(recovery_file.relative_to(self.output))
+            try:
+                self.deadline.check()
+                state=(grid.cell(position[:2].cpu().tolist()),record['map_sha256'])
+                if state in recovery_states:
+                    raise NavigationError('Clearance recovery revisited a blocked pose without map progress','navigation_invalid_start')
+                recovery_states.add(state)
+                if max_steps<=10:raise SkillError('action_timeout','Clearance recovery exhausted its control-step budget')
+                support=self._navigation_support
+                guard=clearance_transition_guard(grid,self._navigation_layers,support,
+                    [(layer['z_min'],layer['z_max']) for layer in map_details['collision_layers']])
+                escape_grid,escape,escape_details=plan_start_clearance_exit(
+                    grid,raw_free,overlap,position[:2].cpu().tolist(),radius=radius,
+                    transition_allowed=guard,check_cancelled=self.deadline.check)
+                # Existing overlap may forbid turning. This explicitly logged
+                # contact-shedding retreat has its own transition checks.
+                escape=replace(escape,travel_yaw=travel_yaw,final_yaw=travel_yaw,
+                               motion_mode='clearance_retreat')
+                record.update(status='planned',plan=asdict(escape),**escape_details)
+                with (self.output/'navigation_recovery.jsonl').open('a') as stream:
+                    stream.write(json.dumps(record)+'\n')
+                recovery_result=self._execute_gt_plan(escape_grid,escape,max_steps)
+                recovery_results.append(recovery_result)
+                max_steps-=recovery_result['steps']
+                self.navigation_distance+=recovery_result['actual_path_distance_m']
+                position,orientation=self.robot.get_position_orientation()
+                rotation=T.quat2mat(orientation)
+                travel_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+                grid,map_details=build_navigation_grid(self,floor,sampling=navigation_sampling)
+                self._navigation_layer_yaw=travel_yaw
+                valid=grid.navigable(grid.cell(position[:2].cpu().tolist()))
+                record.update(status='passed' if valid else 'running',execution=recovery_result,
+                              actual_position=position.cpu().tolist(),refreshed_start_navigable=valid,
+                              refreshed_map_sha256=hashlib.sha256(grid.free).hexdigest())
+            except NavigationError as exc:
+                record.update(status='failed',error_code=exc.code,error=str(exc))
+                raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
+            except SkillError as exc:
+                record.update(status='failed',error_code=exc.code,error=str(exc))
+                raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results)) from exc
+            finally:
+                with (self.output/'navigation_recovery.jsonl').open('a') as stream:
+                    stream.write(json.dumps(record)+'\n')
+        self._navigation_plan_index=getattr(self,'_navigation_plan_index',0)+1
+        map_dir=self.output/'navigation_grids';map_dir.mkdir(exist_ok=True)
+        map_file=map_dir/f'{self._navigation_plan_index:04d}.npz'
+        raw_free,overlap,_=self._navigation_clearance
+        np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+            raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
+            overlap=overlap.reshape(grid.height,grid.width),origin=grid.origin,resolution=grid.resolution,
+            footprint=map_details['chassis_footprint_world_offsets'],start=position.cpu().numpy(),
+            target=point.cpu().numpy(),travel_yaw=travel_yaw,
+            raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+            support=self._navigation_support,
+            layer_footprints_json=json.dumps(map_details['collision_layers']))
+        details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
+                 'goal_mode':mode,'for_manipulation':for_manipulation,'local_clearance_exit':recovery_results,
+                 'motion_policy':'checked_forward_reverse_v2',
+                 'grid_artifact':str(map_file.relative_to(self.output)),
+                 'selected_world_point':point.cpu().tolist(),
+                 'start':position.cpu().tolist(), 'map_resolution_m':grid.resolution,
+                 'visual_standoff_m':standoff,'visual_margin':margin,
+                 'approach_visibility_required':require_visibility,
+                 'candidate_ranking':('approach_annulus_then_near_start' if standoff else
+                                      'nearest_feasible_connected_cell_then_travel'),'target_search_radius_m':None,
+                 'map_sha256':hashlib.sha256(grid.free).hexdigest(),
+                 **map_details,'precomputed_walkability':True,'online_mapping':False}
+        try:
+            plan=None
+            try:
+                with component(self,'navigation_planning'):
+                    # A navigation click specifies where to approach, not a
+                    # requirement to keep the exact original surface point in
+                    # view. Articulated doors and cabinet cavities can hide that
+                    # point as the robot moves. Manipulation retains its own
+                    # visibility contract; navigation keeps physical route checks.
+                    planning_xy=position[:2].cpu().tolist()
+                    budget=PlanningBudget(self.deadline.check)
+                    from .navigation.heading_collision import HeadingCollisionChecker
+                    from .navigation.forward_navigation import local_exit_certificate, select_forward_route, arrival_heading_options
+                    endpoint_collision=HeadingCollisionChecker(grid,self._navigation_layers,
+                        self._navigation_layer_yaw,self._navigation_support,check_cancelled=budget.check)
+                    entries={};exits={};exit_rejections=0;options=[]
+                    def visible(xy,yaw):
+                        budget.visibility()
+                        return self._approach_visible(xy,point,getattr(target,'selected_object',None),
+                                                      margin=margin,base_yaw=yaw)
+                    def make_plan(candidate_grid,yaw):
+                        def acceptable(xy):
+                            nonlocal exit_rejections
+                            pose=(*xy,yaw)
+                            if not endpoint_collision.motion_free(pose,pose):return False
+                            if require_visibility and not visible(xy,yaw):return False
+                            if pose not in entries:
+                                entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
+                                                                    check_cancelled=budget.check,allow_lateral=allow_lateral)
+                            if entries[pose] is None:return False
+                            if pose not in exits:
+                                exits[pose]=local_exit_certificate(pose,endpoint_collision,
+                                                                  check_cancelled=budget.check,allow_lateral=allow_lateral)
+                                if exits[pose] is None:exit_rejections+=1
+                            return exits[pose] is not None
+                        proposed=replace(plan_navigation(candidate_grid,planning_xy,point[:2].cpu().tolist(),
+                            standoff=standoff,goal_mode=mode,max_snap=None,check_cancelled=budget.check,
+                            max_candidate_checks=64 if mode=='approach' else None,
+                            preferred_distance=standoff,
+                            candidate_filter=acceptable),
+                            travel_yaw=yaw,final_yaw=yaw)
+                        options.append(proposed)
+                        return proposed
+                    from .navigation.live_gt_map import feasible_heading_grids, rotation_staging_plan
+                    from .navigation.gt_navigation import NavigationPlan
+                    initial_grid=grid;initial_xy=tuple(planning_xy)
+                    turn=None;stage=None;plan=None;original_error=None;best_key=None
+                    exact_tolerance=grid.resolution/math.sqrt(2)+1e-9
+                    def adequate(candidate):
+                        if candidate is None:return False
+                        distance=math.dist(candidate.goal,candidate.target)
+                        return distance <= (max(1.4,standoff+grid.resolution+.002) if mode=='approach' else exact_tolerance)
+                    try:
+                        plan=make_plan(grid,travel_yaw)
+                        best_key=(round(plan.score,9),plan.geodesic_m)
+                    except SearchBudgetExhausted:raise
+                    except NavigationError as exc:original_error=exc
+                    # A visible manipulation approach need not occupy the object's XY.
+                    # Keep heading fallback for distant/blocked results, bounded jointly.
+                    if not adequate(plan):
+                        raw_free,_,_=self._navigation_clearance
+                        for staged in (False,True):
+                            candidate_stage=None
+                            if staged:
+                                try:
+                                    stage_plan=rotation_staging_plan(initial_grid,self._navigation_layers,initial_xy,travel_yaw,
+                                                                     check_cancelled=budget.check)
+                                except SearchBudgetExhausted:raise
+                                except NavigationError:break
+                                planning_xy=stage_plan.goal
+                                candidate_stage=(initial_grid,stage_plan)
+                            for other_grid,other_yaw,turn_grid,footprint in feasible_heading_grids(
+                                    initial_grid,raw_free,map_details['chassis_footprint_world_offsets'],planning_xy,
+                                    travel_yaw,check_cancelled=budget.check,collision_layers=self._navigation_layers):
+                                try:other_plan=make_plan(other_grid,other_yaw)
+                                except SearchBudgetExhausted:raise
+                                except NavigationError:continue
+                                turn_distance=.5*abs(other_yaw-travel_yaw)/(math.pi/3)
+                                key=(round(other_plan.score,9),other_plan.geodesic_m+turn_distance+
+                                     (candidate_stage[1].geodesic_m if candidate_stage else 0.))
+                                if best_key is not None and key>=best_key:continue
+                                best_key=key
+                                xy=tuple(planning_xy)
+                                turn_plan=NavigationPlan((xy,),xy,xy,other_yaw,0.,0.,1,1,0.,0,other_yaw)
+                                turn=(turn_grid,turn_plan);stage=candidate_stage
+                                details['heading_change']={'from':travel_yaw,'to':other_yaw,
+                                    'check':'full_swept_collision_hulls','footprint':footprint,
+                                    'staging_plan':asdict(stage[1]) if stage else None}
+                                grid,plan=other_grid,other_plan
+                                if adequate(plan):break
+                            if adequate(plan):break
+                    details['planning_visibility_checks']=budget.visibility_checks
+                    details['exit_candidates_checked']=len(exits)
+                    details['exit_candidates_rejected']=exit_rejections
+                    details['entry_candidates_rejected']=sum(value is None for value in entries.values())
+                    if plan is None:raise original_error
+            except SearchBudgetExhausted:
+                details['planning_budget_exhausted']=True
+                details['planning_visibility_checks']=budget.visibility_checks
+                if plan is None:raise
+            # Neither a ground click nor an elevated visual target requires
+            # restoring the departure yaw. Consider arrival-aligned headings
+            # for both; manipulation also checks visibility at the new pose.
+            # Keep the validated original options if refinement is exhausted.
+            refinement=PlanningBudget(self.deadline.check,seconds=2.)
+            endpoint_collision.check_cancelled=refinement.check
+            heading_attempts=[]
+            with component(self,'navigation_heading_refinement'):
+                try:
+                    for candidate in tuple(options):
+                        refinement.check()
+                        slack=.1 if mode=='point' or standoff else 0.
+                        if candidate.score>plan.score+slack+1e-9:continue
+                        for yaw,kind in arrival_heading_options(candidate,(*initial_xy,travel_yaw),approach=mode=='approach'):
+                            refinement.check()
+                            pose=(*candidate.goal,yaw)
+                            attempt={'goal':candidate.goal,'original_yaw':candidate.final_yaw,
+                                     'arrival_yaw':yaw,'kind':kind,'status':'checking'}
+                            heading_attempts.append(attempt)
+                            if not endpoint_collision.motion_free(pose,pose):
+                                attempt.update(status='rejected',reason='endpoint_collision');continue
+                            if require_visibility:
+                                refinement.visibility()
+                                if not self._approach_visible(candidate.goal,point,getattr(target,'selected_object',None),
+                                                              margin=margin,base_yaw=yaw):
+                                    attempt.update(status='rejected',reason='target_not_visible');continue
+                            if pose not in entries:
+                                entries[pose]=local_exit_certificate(pose,endpoint_collision,incoming=True,
+                                                                    check_cancelled=refinement.check,allow_lateral=allow_lateral)
+                            if entries[pose] is None:
+                                attempt.update(status='rejected',reason='no_local_entry');continue
+                            if pose not in exits:
+                                exits[pose]=local_exit_certificate(pose,endpoint_collision,
+                                    check_cancelled=refinement.check,allow_lateral=allow_lateral)
+                            if exits[pose] is None:
+                                attempt.update(status='rejected',reason='no_local_exit');continue
+                            options.append(replace(candidate,final_yaw=yaw,travel_yaw=yaw))
+                            attempt['status']='accepted'
+                except SearchBudgetExhausted:
+                    if heading_attempts and heading_attempts[-1]['status']=='checking':
+                        heading_attempts[-1].update(status='incomplete',reason='refinement_budget_exhausted')
+                    details['arrival_heading_refinement_budget_exhausted']=True
+            details['arrival_heading_refinement']=heading_attempts
+            # Keep exact candidates for future failure replay, including the
+            # guide polylines that a geometry-only snapshot cannot reconstruct.
+            details['forward_candidate_options']=[asdict(candidate) for candidate in options]
+            endpoint_collision.check_cancelled=self.deadline.check
+            # Preserve the actual collision substrate even when no complete
+            # route is found. A failure must be reproducible without another
+            # simulator startup or reconstructing geometry from a screenshot.
+            details['endpoint_options']=[asdict(candidate) for candidate in options]
+            np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+                raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
+                origin=grid.origin,resolution=grid.resolution,
+                footprint=map_details['chassis_footprint_world_offsets'],start=position.cpu().numpy(),
+                target=point.cpu().numpy(),travel_yaw=plan.travel_yaw,initial_layer_yaw=travel_yaw,
+                raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+                support=self._navigation_support,
+                layer_footprints_json=json.dumps(map_details['collision_layers']))
+            from .navigation.navigation_refinement import refine_navigation_detour
+            # A coarse guide that goes around the house can exhaust continuous
+            # route certification before a post-selection refinement is reached.
+            # Try native local geometry first, keeping ordinary route selection
+            # as the fallback if no improved certified route is found.
+            with component(self,'navigation_detour_refinement'):
+                grid,map_details,plan,prepared_route,endpoint_collision,selection,detour=refine_navigation_detour(
+                    self,floor,grid,map_details,(*initial_xy,travel_yaw),
+                    options,plan,None,endpoint_collision,{})
+            if prepared_route is None:
+                if detour is not None:details['guide_refinement']=detour
+                with component(self,'navigation_route_selection'):
+                    plan,prepared_route,selection=select_forward_route(options,(*initial_xy,travel_yaw),endpoint_collision,
+                        target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
+                        project_point=mode=='point',allow_lateral=allow_lateral,
+                        planning_seconds=getattr(self,'forward_route_planning_seconds',10.))
+                if detour is None:
+                    with component(self,'navigation_detour_refinement'):
+                        grid,map_details,plan,prepared_route,endpoint_collision,selection,detour=refine_navigation_detour(
+                            self,floor,grid,map_details,(*initial_xy,travel_yaw),
+                            options,plan,prepared_route,endpoint_collision,selection)
+            if detour is not None:
+                details['detour_refinement']=detour
+                if detour['status']=='refined_route_selected':
+                    # Retain the original coarse artifact alongside the map
+                    # actually used to certify and execute the shorter route.
+                    coarse_file=map_file.with_name(map_file.stem+'_coarse.npz')
+                    map_file.rename(coarse_file)
+                    details['coarse_grid_artifact']=str(coarse_file.relative_to(self.output))
+                    details.update(map_details,map_resolution_m=grid.resolution)
+                    raw_free,_,_=self._navigation_clearance
+            details['forward_candidate_selection']=selection
+            if any(phase.motion_mode=='holonomic' for phase in prepared_route.phases):
+                details['motion_policy']='checked_holonomic_navigation_fallback'
+            grid=endpoint_collision.grid_at_heading(plan.final_yaw)
+            details.update(status='planned',plan=asdict(plan),map_sha256=hashlib.sha256(grid.free).hexdigest())
+            details['local_exit_certificate']=selection.get('local_exit_certificate',exits.get((*plan.goal,plan.final_yaw)))
+            details['local_entry_certificate']=selection.get('local_entry_certificate',entries.get((*plan.goal,plan.final_yaw)))
+            details['heading_selection_only']=True
+            details['pre_turn_executed']=False
+            if plan is not None:
+                np.savez_compressed(map_file,free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
+                    raw_free=np.frombuffer(raw_free,dtype='uint8').reshape(grid.height,grid.width),
+                    origin=grid.origin,resolution=grid.resolution,
+                    footprint=map_details['chassis_footprint_world_offsets'],start=position.cpu().numpy(),
+                    target=point.cpu().numpy(),travel_yaw=plan.travel_yaw,initial_layer_yaw=travel_yaw,
+                    raw_layers=np.stack([layer[0] for layer in self._navigation_layers]),
+                    support=self._navigation_support,
+                    layer_footprints_json=json.dumps(map_details['collision_layers']))
+        except NavigationError as exc:
+            details.update(status='failed',error_code=exc.code,error=str(exc))
+            if hasattr(exc, 'route_attempts'):
+                details['forward_candidate_selection']={'attempts':exc.route_attempts,'status':'failed'}
+            if hasattr(exc,'attempts'):details['forward_candidate_attempts']=exc.attempts
+            raise SkillError(exc.code,str(exc),changed=bool(recovery_results)) from exc
+        finally:
+            with (self.output/'navigation_plans.jsonl').open('a') as stream:
+                stream.write(json.dumps(details)+'\n')
+        try:
+            # Fixed-heading staging/turn grids above propose endpoint headings
+            # only. The forward planner owns the complete measured-start route;
+            # executing an old pre-turn first creates redundant motion and can
+            # move the world before discovering that the actual route is blocked.
+            result=self._execute_gt_plan(grid,plan,max_steps,prepared_route=prepared_route)
+        except SkillError as exc:
+            raise SkillError(exc.code,str(exc),changed=exc.changed or bool(recovery_results)) from exc
+        self.navigation_distance+=result['actual_path_distance_m']
+        for key in ('steps','motion_steps','actual_path_distance_m'):
+            result[key]+=sum(phase.get(key,0) for phase in recovery_results)
+        actual,orientation=self.robot.get_position_orientation()
+        rotation=T.quat2mat(orientation)
+        actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+        endpoint_collision.check_cancelled=self.deadline.check
+        actual_exit=local_exit_certificate((*actual[:2].cpu().tolist(),actual_yaw),
+                                          endpoint_collision,check_cancelled=self.deadline.check,
+                                          allow_lateral=allow_lateral)
+        visible=(self._approach_visible(actual[:2].cpu().tolist(),point,
+                    getattr(target,'selected_object',None),margin=margin,
+                    base_yaw=actual_yaw) if require_visibility else None)
+        projection=math.dist(actual[:2].cpu().tolist(),plan.target)
+        nav_status='reached' if projection<=grid.resolution/math.sqrt(2)+.002 else (
+            'already_at_closest_approach' if result['actual_path_distance_m']<.002 else 'approached')
+        with (self.output/'navigation_arrivals.jsonl').open('a') as stream:
+            stream.write(json.dumps({'at':now(),'audience':'executor_private',
+                'grid_artifact':details['grid_artifact'],'goal_mode':mode,
+                'selected_world_point':point.cpu().tolist(),'planned_goal':list(plan.goal),
+                'actual_position':actual.cpu().tolist(),'actual_yaw':actual_yaw,'target_visible':visible,
+                'local_exit_certificate':actual_exit,
+                'status':'failed' if visible is False or actual_exit is None else nav_status})+'\n')
+        if actual_exit is None:
+            raise SkillError('navigation_unreachable',
+                'Reached pose no longer has its checked local departure',changed=True)
+        if visible is False:
+            raise SkillError('navigation_unreachable',
+                'The selected target is occluded from the reached approach; inspect updated RGB',changed=True)
+        reach=getattr(getattr(self,'local_limits',None),'reach_m',1.4)
+        handoff=('travel_only' if mode=='point' else
+                 'selected_surface_nearby' if projection<=reach else
+                 'target_approach_available' if getattr(self,'local_manipulation',False) else 'needs_closer_approach')
+        return {**result,'nav_status':nav_status,'manipulation_handoff':handoff,
+                'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
+                'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
+                'start_grid_offset_m':plan.start_grid_offset_m,
+                'goal_mode':mode,'target_projection_distance_m':math.dist(plan.goal,plan.target),
+                'dynamic_collision_check':map_details['dynamic_collision_check']}
+
+    def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route=None, require_prepared_route=False):
+        """Certify a route, commit the endpoint once, then let physics settle."""
+        import omnigibson.utils.transform_utils as T
+        from dataclasses import asdict
+        from .navigation.gt_navigation import GreedyGridFollower, NavigationError, PlanningBudget
+        from .navigation.forward_navigation import plan_forward_route
+        from .navigation.heading_collision import HeadingCollisionChecker
+        local=getattr(self,'_local_operation',None)
         settling=10
         if max_steps<=settling:raise SkillError('action_timeout','Insufficient GT follower step budget')
         pos,quat=self.robot.get_position_orientation()
-        follower=GreedyGridFollower(grid,plan,self.og.sim.get_sim_step_dt())
-        held=self._get_held()
-        relative=T.relative_pose_transform(*held.get_position_orientation(),pos,quat) if held else None
-        joints=self.robot.get_joint_positions()
-        indices=self.torch.tensor([i for i in range(len(joints)) if i not in self.robot.base_idx.tolist()],device=joints.device)
-        posture=joints[indices].clone();before=self.steps;travelled=0.;previous=pos[:2].cpu().tolist()
+        before=self.steps;travelled=0.;previous=pos[:2].cpu().tolist()
+        forward=plan.motion_mode!='clearance_retreat'
+        collision=None;route=None
         try:
-            with (self.output/'base_motion.jsonl').open('a') as stream:
-                while True:
-                    actual_pos,actual_quat=self.robot.get_position_orientation()
-                    rotation=T.quat2mat(actual_quat)
-                    actual_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
-                    command=follower.next_pose((*actual_pos[:2].cpu().tolist(),actual_yaw))
-                    if command is None:break
-                    if self.steps-before>=max_steps-settling:
-                        raise SkillError('action_timeout','GT follower exhausted its control-step budget',changed=self.steps>before)
-                    x,y,yaw=command
-                    new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
-                    orientation=T.euler2quat(self.torch.tensor([0.,0.,yaw],device=quat.device))
-                    self._base_target={'position':new_pos,'orientation':orientation,'indices':indices,
-                                       'posture':posture,'held':held,'relative':relative}
-                    self._restore_base_target()
-                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                    measured,measured_quat=self.robot.get_position_orientation()
-                    actual_xy=measured[:2].cpu().tolist();travelled+=math.dist(previous,actual_xy);previous=actual_xy
-                    stream.write(json.dumps({'at':now(),'env_step':self.steps,'commanded_position':new_pos.tolist(),
-                        'actual_position':measured.tolist(),'actual_orientation':measured_quat.tolist(),
-                        'commanded_yaw':yaw,'follower':'greedy_grid_pose_feedback','audience':'executor_private'})+'\n')
+            phases=(plan,)
+            if forward:
+                rotation=T.quat2mat(quat)
+                start_yaw=math.atan2(float(rotation[1,0]),float(rotation[0,0]))
+                budget=PlanningBudget(self.deadline.check,seconds=10.)
+                collision=HeadingCollisionChecker(grid,self._navigation_layers,self._navigation_layer_yaw,
+                    self._navigation_support,check_cancelled=budget.check)
+                record={'at':now(),'audience':'executor_private','motion_policy':'checked_forward_reverse_v2',
+                        'navigation_plan_index':getattr(self,'_navigation_plan_index',None),
+                        'start':[*previous,start_yaw],'goal':list(plan.goal),'final_yaw':plan.final_yaw,
+                        'planning_seconds_limit':10.,'heading_state_limit':20000}
+                try:
+                    if (prepared_route is not None and prepared_route.start is not None
+                            and math.dist(prepared_route.start[:2],previous)<1e-6
+                            and abs(GreedyGridFollower.angle(prepared_route.start[2]-start_yaw))<1e-6):
+                        route=prepared_route
+                    else:
+                        if require_prepared_route:
+                            raise SkillError('look_rotation_blocked','Measured start changed before checked rotation')
+                        route=plan_forward_route(plan,(*previous,start_yaw),collision,check_cancelled=budget.check)
+                    phases=route.phases
+                    record.update(status='planned',route=asdict(route),
+                        motion_policy='checked_holonomic_v1' if any(p.motion_mode=='holonomic' for p in route.phases) else 'checked_forward_reverse_v2')
+                except Exception as exc:
+                    record.update(status='failed',error_code=getattr(exc,'code',None),
+                                  error_type=type(exc).__name__,error=str(exc))
+                    raise
+                finally:
+                    with (self.output/'navigation_forward_plans.jsonl').open('a') as stream:
+                        stream.write(json.dumps(record)+'\n')
+                # Planning has ended; motion checks still honor episode
+                # cancellation but must not reuse the expired search timer.
+                collision.check_cancelled=self.deadline.check
+            if local is not None and route is not None:
+                max_steps=local.reserve_route(route,self.og.sim.get_sim_step_dt(),settling_steps=settling)
+            # Geometry certifies the route; the symbolic actuator commits its
+            # endpoint once. There is no simulated low-level driving trajectory.
+            if local is not None:local.admit_pose((*plan.goal,plan.final_yaw))
+            new_pos=pos.clone();new_pos[:2]=pos.new_tensor(plan.goal)
+            new_quat=T.euler2quat(quat.new_tensor([0.,0.,plan.final_yaw]))
+            self._transfer_base_pose(new_pos,new_quat)
+            travelled=route.distance_m if route is not None else plan.geodesic_m
+            for _ in range(min(settling,max_steps)):
+                self._step(self.primitives._empty_action())
             motion_steps=self.steps-before
-            if self._base_target is not None:
-                for _ in range(settling):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             actual_pos,actual_quat=self.robot.get_position_orientation()
             final_error=math.dist(actual_pos[:2].cpu().tolist(),plan.goal)
-            if final_error>follower.position_tolerance or not grid.navigable(grid.cell(actual_pos[:2].cpu().tolist())):
-                raise SkillError('navigation_unreachable','GT follower final pose verification failed',changed=self.steps>before)
+            final_rotation=T.quat2mat(actual_quat)
+            final_yaw=math.atan2(float(final_rotation[1,0]),float(final_rotation[0,0]))
+            final_pose=(*actual_pos[:2].cpu().tolist(),final_yaw)
+            final_yaw_error=abs(GreedyGridFollower.angle(final_yaw-plan.final_yaw))
+            safe=(collision.measured_motion_free(final_pose,final_pose) if collision else
+                  grid.navigable(grid.cell(final_pose[:2])))
+            with (self.output/'base_motion.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at':now(),'env_step':self.steps,
+                    'commanded_position':new_pos.tolist(),'actual_position':actual_pos.tolist(),
+                    'actual_orientation':actual_quat.tolist(),'commanded_yaw':plan.final_yaw,
+                    'follower':'symbolic_route_endpoint','continuous_motion_simulated':False,
+                    'certified_route_distance_m':travelled,'audience':'executor_private'})+'\n')
+            if final_error>.05 or final_yaw_error>math.radians(5) or not safe:
+                raise SkillError('navigation_unreachable','Native settling moved the base away from the selected endpoint',changed=True)
         except NavigationError as exc:
             raise SkillError(exc.code,str(exc),changed=self.steps>before) from exc
         finally:
+            if local is not None:local.finish_route()
             self._base_target=None
-        return {'motor':'gt_grid_feedback_kinematic','nav_status':'reached','motion_steps':motion_steps,
-                'steps':self.steps-before,'final_position_error_m':final_error,'actual_path_distance_m':travelled,
-                'max_speed_m_s':.5,'max_yaw_speed_deg_s':60,'physical_controller':False}
+        return {'motor':'gt_route_symbolic_endpoint','nav_status':'reached','motion_steps':motion_steps,
+                'steps':self.steps-before,'final_position_error_m':final_error,
+                'actual_path_distance_m':math.dist(previous,actual_pos[:2].cpu().tolist()),
+                'certified_route_distance_m':travelled,
+                'distance_measure':'observed_endpoint_displacement; continuous_path_not_executed',
+                'final_yaw_error_rad':final_yaw_error,'motion_policy':('checked_holonomic_v1' if route and any(p.motion_mode=='holonomic' for p in route.phases)
+                                else 'checked_forward_reverse_v2') if forward else 'clearance_retreat',
+                'forward_route_method':route.method if route else None,
+                'forward_planned_distance_m':route.distance_m if route else None,
+                'forward_planned_turn_degrees':math.degrees(route.turn_radians) if route else None,
+                'forward_estimated_motion_seconds':route.estimated_motion_seconds if route else None,
+                'forward_route_shortcuts':route.shortcuts if route else None,
+                'motion_phases':len(phases),
+                'heading_tolerance_rad':math.radians(5),
+                'final_yaw_tolerance_rad':math.radians(5),
+                'progress_measure':'directed_path_distance_or_target_yaw_convergence',
+                'continuous_motion_simulated':False,'physical_controller':False}
+
+    def _transfer_base_pose(self, position, orientation):
+        """One symbolic state transfer of the robot and its currently held load."""
+        from omnigibson.utils import transform_utils as T
+        from .particle_payload import snapshot_particles, relocate_particles
+        held=self._get_held()
+        objects=[] if held is None else [held,*[child for child,_,_ in self._grasp_dependencies(held)]]
+        # Robot.set_position_orientation already transports the native AG
+        # object. Carry only its loose contents across this symbolic change.
+        relative=[] if held is None else [(obj,T.relative_pose_transform(
+            *obj.get_position_orientation(),*held.get_position_orientation())) for obj in objects[1:]]
+        particles=snapshot_particles(self.env.scene,objects,include_supported=True) if objects else []
+        self.robot.set_position_orientation(position,orientation)
+        for obj,pose in relative:
+            obj.set_position_orientation(*T.pose_transform(*held.get_position_orientation(),*pose))
+        relocate_particles(self.env.scene,particles)
 
     def _execute_base_path(self, points, end_yaw, max_steps):
-        """Execute each bounded ideal pose in simulation and capture its real RGB.
-
-        Privileged traversability and held-object attachment belong to the motor
-        executor only. This is kinematic actuation, not physical path control.
-        """
+        """Commit an already checked endpoint, then observe free settling."""
         import omnigibson.utils.transform_utils as T
-        from .base_motion import trajectory
-        pos,quat=self.robot.get_position_orientation()
-        rotation = T.quat2mat(quat)
-        yaw = math.atan2(float(rotation[1,0]),float(rotation[0,0]))
-        poses = trajectory(points,yaw,end_yaw,self.og.sim.get_sim_step_dt())
-        settling = 10
-        if len(poses)+settling > max_steps:
-            raise SkillError('action_timeout','Selected route exceeds bounded motor time; choose a nearer visible point')
-        held=self._get_held()
-        relative=T.relative_pose_transform(*held.get_position_orientation(),pos,quat) if held else None
-        before = self.steps
-        joints=self.robot.get_joint_positions()
-        indices=self.torch.tensor([i for i in range(len(joints)) if i not in self.robot.base_idx.tolist()],device=joints.device)
-        posture=joints[indices].clone()
-        try:
-            with (self.output/'base_motion.jsonl').open('a') as stream:
-                for x,y,angle in poses:
-                    new_pos=pos.clone();new_pos[0]=x;new_pos[1]=y
-                    new_quat=T.euler2quat(self.torch.tensor([0.,0.,angle],device=quat.device))
-                    self._base_target={'position':new_pos,'orientation':new_quat,'indices':indices,
-                                       'posture':posture,'held':held,'relative':relative}
-                    self._restore_base_target()
-                    self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                    actual_pos,actual_quat=self.robot.get_position_orientation()
-                    stream.write(json.dumps({'env_step':self.steps,'commanded_position':new_pos.tolist(),
-                        'actual_position':actual_pos.tolist(),'actual_orientation':actual_quat.tolist(),
-                        'commanded_yaw':angle,'posture_max_error':float(self.torch.max(self.torch.abs(self.robot.get_joint_positions()[indices]-posture))),
-                        'audience':'executor_private'})+'\n')
-            for _ in range(settling):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-        finally:
-            self._base_target=None
-        return {'motor':'ideal_kinematic_path','motion_steps':len(poses),'settling_steps':settling,
-                'steps':self.steps-before,'max_speed_m_s':.5,'max_yaw_speed_deg_s':60,
-                'physical_controller':False,'posture_hold':'ideal_joint_position_projection_each_control_step'}
+        position,orientation=self.robot.get_position_orientation()
+        goal=position.clone();goal[:2]=position.new_tensor(points[-1])
+        quat=T.euler2quat(orientation.new_tensor([0.,0.,end_yaw]))
+        before=self.steps
+        self._transfer_base_pose(goal,quat)
+        for _ in range(min(10,max_steps)):
+            self._step(self.primitives._empty_action())
+        return {'steps':self.steps-before,'continuous_motion_simulated':False,
+                'motor':'symbolic_route_endpoint','physical_controller':False}
 
     @action_profile
     def execute_visual(self,primitive,target,max_steps,**kwargs):
+        before=self.steps
+        complete=getattr(self,'_complete_pending_object_initialization',None)
+        try:
+            result=RGBBackend._execute_visual(self,primitive,target,max_steps,**kwargs)
+        except SkillError:
+            if complete is not None:complete(max_steps-(self.steps-before))
+            raise
+        # Native transitions register replacement objects at the end of
+        # env.step; their states initialize on the next step. An aborted
+        # placement used to expose those objects to the next grasp. Finish
+        # the lifecycle after action contexts unwind, including tool errors.
+        # Do not attempt physics recovery after an unexpected native failure.
+        if complete is not None:complete(max_steps-(self.steps-before))
+        return result
+
+    def _complete_pending_object_initialization(self, remaining_steps=8):
+        from .scene_lifecycle import finish_pending_objects
+        finish_pending_objects(self, remaining_steps)
+
+    def _execute_visual(self,primitive,target,max_steps,**kwargs):
+        if primitive in {'look','navigate_to','release','wait'} and getattr(self,'_demo_focus',None) is not None:
+            self._demo_focus=None;self._spectator_anchor=None
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
-        if primitive=='release' and self.ideal_carry:return self._ideal_release(max_steps)
         if primitive=='wait':
             count=min(max_steps,int(round(float(kwargs.get('seconds',5.0))/self.og.sim.get_sim_step_dt())))
-            with self._anchored_operation():
-                for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+            for _ in range(count):self._step(self.primitives._empty_action())
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
-        if primitive=='release':return self.execute(primitive,None,max_steps)
-        obj,point,grounding=self._ground(target)
+        if primitive=='release':
+            return self.execute(primitive,None,max_steps)
+        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to',reject_particles=primitive=='grasp')
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
+        self._manipulation_preconditions(primitive,obj)
+        if getattr(self,'local_manipulation',False):
+            return self._execute_local_manipulation(primitive,obj,point,grounding,max_steps,kwargs)
+        return self._execute_bound_manipulation(primitive,obj,point,grounding,max_steps,**kwargs)
+
+    def _manipulation_preconditions(self,primitive,obj):
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
         held=self._get_held()
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
-        if primitive in {'place_inside','place_on_top'} and held is None: raise SkillError('empty_hand','Empty hand')
-        if primitive in {'open','close','toggle_on','toggle_off'} and held is not None: raise SkillError('hand_occupied','Hand occupied')
+        if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','wipe','sweep','vacuum',
+                         'spray','spread','soak','cut','pour','scoop'} and held is None: raise SkillError('empty_hand','Empty hand')
+        if held is not None and primitive in {'open','close','toggle_on','toggle_off'}:
+            # Controlled carry can operate the switch on the object already
+            # being carried. This does not grant an extra hand for a different
+            # object, or change articulated-container handling while carrying.
+            held_self_toggle=held is obj and primitive in {'toggle_on','toggle_off'}
+            if not held_self_toggle:raise SkillError('hand_occupied','Hand occupied')
         from omnigibson.object_states import Open,Inside
         if primitive=='place_inside' and Open in obj.states and not obj.states[Open].get_value():
             raise SkillError('container_closed','Placement into closed container rejected')
@@ -537,70 +1244,209 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
             for parent in self.env.scene.objects:
                 if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
                     raise SkillError('container_closed','Grasp through closed container rejected')
+        if getattr(self,'local_manipulation',False):
+            from omnigibson.object_states import ToggledOn,AttachedTo,OnTop,Under,NextTo
+            state={'open':Open,'close':Open,'toggle_on':ToggledOn,'toggle_off':ToggledOn}.get(primitive)
+            if state is not None and state not in obj.states:
+                raise SkillError('pre_condition_error','Selected object does not support this operation')
+            if primitive in {'place_inside','place_on_top','place_under','place_next_to'}:
+                relation={'place_inside':Inside,'place_on_top':OnTop,'place_under':Under,'place_next_to':NextTo}[primitive]
+                if held is obj or relation not in held.states:
+                    raise SkillError('unsupported_relation','Selected carry/destination does not support this relation')
+                if primitive=='place_inside' and not any(link.is_meta_link and link.meta_link_type in {'fillable','openfillable'} for link in obj.links.values()):
+                    raise SkillError('unsupported_relation','Selected destination has no fillable volume')
+            if primitive in {'attach','hang'}:
+                if held is obj or AttachedTo not in held.states or AttachedTo not in obj.states:
+                    raise SkillError('unsupported_relation','Selected objects do not support attachment')
+                if primitive=='hang' and not any(word in str(obj.category).lower() for word in ('nail','hook','hanger')):
+                    raise SkillError('unsupported_relation','Selected object is not a hanging anchor')
+                if held.states[AttachedTo].parent is not obj:
+                    links=held.states[AttachedTo]._find_attachment_links(obj,bypass_alignment_checking=True)
+                    if any(link is None for link in links):raise SkillError('unsupported_relation','No compatible attachment link')
+            if primitive in {'wipe','sweep','vacuum','spray','spread'}:
+                self._surface_action_preconditions(primitive,obj)
+            if primitive=='soak':self._soak_preconditions(obj)
+            if primitive in {'pour','scoop'}:self._transfer_preconditions(primitive,obj)
+            if primitive=='cut' and ('slicer' not in held._abilities or not {'sliceable','diceable'}.intersection(obj._abilities)):
+                raise SkillError('pre_condition_error','Selected tool or target cannot support cutting')
+
+    def _execute_bound_manipulation(self,primitive,obj,point,grounding,max_steps,**kwargs):
+        """Execute the same selected object/surface, without recursive act/grounding."""
+        self._manipulation_preconditions(primitive,obj)
+        held=self._get_held()
+        # This leaf executor never moves the base. The outer local controller
+        # owns positioning; this final gate still protects the physical effect.
         base=self.robot.get_position_orientation()[0]
-        # A long cabinet/floor AABB can contain the base while the selected
-        # visible surface is far away. Reach belongs to that selected point.
         if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
-            # Approach only the selected target, within this action's existing
-            # step budget; no new object discovery or goal access.
-            before_approach=self.steps
-            anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
-            self._navigate(anchor,max(1,max_steps-60))
-            max_steps-=self.steps-before_approach
-            base=self.robot.get_position_orientation()[0]
-            if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4 or max_steps<30:
-                raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
-        if primitive=='grasp' and self.ideal_carry:
-            result=self._ideal_grasp(obj,max_steps)
-        elif primitive in {'open','close','toggle_on','toggle_off'} and self.ideal_carry:
-            result=self._ideal_state_action(primitive,obj,max_steps)
-        elif primitive=='place_on_top':
-            result=self._checked_place_on_top(obj,max_steps,point,kwargs.get('placement_yaw_degrees'))
-        elif primitive=='place_inside' and self.inside_placement=='official_volume':
-            result=self._checked_place_inside(obj,max_steps)
+            raise SkillError('out_of_reach',
+                             'Selected surface is beyond manipulation reach; call navigate_to, '
+                             'then reselect the target in the returned RGB before retrying')
+        if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
+            self._demo_arm=None
+        # A carried slicer may trigger the official rule during an arm
+        # demonstration step. Save identity/output metadata while the selected
+        # object is alive, and resolve replacement before touching it again.
+        cut_target = self._capture_cut_target(obj) if primitive == 'cut' else None
+        def completed_cut(stage, demo_steps=0):
+            if cut_target is None:
+                return None
+            result = self._cut_replacement_result(cut_target, stage)
+            if result is None:
+                return None
+            if demo_steps:
+                result = {**result, 'demo_motion': {'real_env_steps': demo_steps, 'ideal_contact': True}}
+            return {**result, 'private_grounding': grounding}
+        # A cut target must be free to be destroyed by its legitimate transition;
+        # holding its root pose after env.step would dereference a deleted prim.
+        shown = (self._demo_reach(point,max_steps,anchor=None if obj is held or primitive == 'cut' else obj,
+                                  arm=self._demo_arm if held is not None else None,
+                                  action=primitive)
+                 if getattr(self,'demo_motion',False) else 0)
+        max_steps -= shown
+        completed = completed_cut('demo_reach', shown)
+        if completed is not None:
+            return completed
+        contact_limit=(.45 if primitive=='spray' else .30 if primitive=='vacuum' else .18)
+        if shown and self._demo_last_reach_error>contact_limit:
+            raise SkillError('out_of_reach',
+                             'Robot hand could not reach the selected surface from this base pose; '
+                             'call navigate_to, then reselect the target in fresh RGB',
+                             changed=True)
+        if shown and primitive in {'wipe','sweep','vacuum','spray','spread','soak','cut'}:
+            stroke=point.clone()
+            if primitive in {'soak','cut'}:
+                stroke[2]-=.06
+            else:
+                stroke[0]+=.08
+            stroke_steps=self._demo_reach(stroke,max_steps,anchor=None if primitive == 'cut' else obj,
+                                          arm=self._demo_arm,action=primitive+'_stroke')
+            shown+=stroke_steps;max_steps-=stroke_steps
+            completed = completed_cut('demo_stroke', shown)
+            if completed is not None:
+                return completed
+        before_effect_steps=self.steps if shown else 0
+        if primitive=='grasp':
+            result=self._grasp_state(obj,max_steps,point)
+        elif primitive in {'attach','hang'}:
+            if primitive=='hang' and not any(word in str(obj.category).lower() for word in ('nail','hook','hanger')):
+                raise SkillError('unsupported_relation','Selected object is not a hanging anchor')
+            result=self._checked_attach(obj,max_steps)
+            if primitive=='hang':
+                result={**result,'primitive':'hang'}
+        elif primitive in {'wipe','sweep','vacuum','spray','spread'}:
+            result=self._checked_surface_action(primitive,obj,max_steps)
+        elif primitive=='soak':
+            result=self._checked_soak(obj,max_steps)
+        elif primitive in {'pour','scoop'}:
+            result=self._checked_transfer(primitive,obj,max_steps)
+        elif primitive=='cut':
+            result=self._checked_cut(obj,max_steps)
+        elif primitive in {'open','close','toggle_on','toggle_off'}:
+            result=self._state_action(primitive,obj,max_steps)
+        elif primitive in {'place_on_top','place_inside','place_under','place_next_to'}:
+            result=self._place_state(primitive,obj,max_steps,point,kwargs.get('placement_yaw_degrees'))
         else:
+            # Native symbolic actions own their state change and settling.
             result=self.execute(primitive,obj.name,max_steps)
+        if shown and primitive in {'place_inside','place_on_top','place_under','place_next_to','attach','hang','open','close',
+                                   'toggle_on','toggle_off'}:
+            # A stretched arm must not sweep the destination over when the
+            # model's next navigation action moves the base away.
+            shown+=self._demo_transport_pose(max_steps-(self.steps-before_effect_steps))
+        if shown:
+            result={**result,'demo_motion':{'real_env_steps':shown,'ideal_contact':True}}
         return {**result,'private_grounding':grounding}
 
     def evaluate(self):
         result=super().evaluate()
-        result['protocol']='rgb_agent_ideal_executor_v8_surface_payload_anchor'
+        result['protocol']='rgb_agent_ideal_executor_v9_shared_episode_clock'
         result['observation_mode']=self.mode
+        result['demo_motion']=getattr(self,'demo_motion',False)
         return result
 
     def provenance(self):
-        from .gt_navigation import SOURCE_COMMIT, STRATEGY
+        from .navigation.gt_navigation import SOURCE_COMMIT, STRATEGY
         result=super().provenance()
-        result.update(executor='controlled_carry_and_checked_placement_plus_jinkai_gt_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_jinkai_gt_grid_navigation',
-                      observation_mode=self.mode,image_size=self.image_size,
-                      grounding='same_pixel_depth_visual_triangle_ray_private_executor_only',
+        result.update(executor='native_grasp_and_state_actions_plus_gt_navigation',
+                      observation_mode=self.mode,image_size=self.image_size,demo_motion=getattr(self,'demo_motion',False),
+                      grounding='direct_pixel_depth_backprojection_private_executor_only',
                       model_visible_truth=False)
-        result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
+        result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
+            'depth_consistency_check':False, 'navigation_object_lookup':False,
+            'pixel_sample':'renderer_pixel_center_index_plus_half',
+            'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
+            'coincident_surface_resolution':('same_frame_renderer_instance_within_float32_roundoff'
+                if getattr(self,'renderer_pixel_owner',False) else 'camera_frontmost_within_float32_roundoff'),
+            'private_instance_labels':getattr(self,'renderer_pixel_owner',False),
+            'private_owner_annotator':('instance_id_segmentation_fast'
+                if getattr(self,'renderer_pixel_owner',False) else None),
+            'mesh_hit_replaces_backprojected_point':False, 'robot_surface_selection_rejected':True}
+        result['grasp_protocol'] = {'mode':'native_assisted_grasp_joint', 'fixed_joint':True,
+            'collision_and_gravity_disabled':False, 'payload_transfer':'once_at_state_change',
+            'pose_projection_during_physics':False, 'released_objects':'native_physics'}
+        result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
+            'protocol':'target_locked_approach_v2' if getattr(self,'local_manipulation',False) else 'explicit_navigation_v1',
+            'control_budget':'atomic_allowance_plus_certified_routes_with_caller_cap',
+            'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
+            'stance_candidates':'target_reach_rings_then_collision_free_target_disk_v2',
+            'stance_domain':'selected_target_reach_disk',
+            'holonomic_local_approach':bool(getattr(self.robot,'is_holonomic_base',False)),
+            'map_refinement_min_resolution_m':.0125,
+            'start_radius_limit_m':None,'path_distance_limit_m':None,
+            'stance_failure_feedback':'allowlisted_local_search_stage',
+            'target_lock':'private_selected_link_relative_surface',
+            'scope':'GT-assisted target approach with work budgets; no learned model or real-arm IK',
+            'reach_check':'base_to_selected_point_xy', 'reach_limit_m':1.4,
+            'out_of_reach':'local_stance_controller' if getattr(self,'local_manipulation',False) else 'return_to_agent_for_explicit_navigate_to_and_fresh_pixel',
+            'demo_reach_navigation_retry':False}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
             'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,
             'observation_pixels_reused_for_video':True, 'fresh_observation_boundaries':True,
             'intermediate_frames':'explicit_previous_frame_hold','no_motion_interpolation':True}
-        result['placement'] = {'on_top':'strict_selected_surface_cuboid_no_object_wide_fallback',
-            'inside':'official_volume','verification':'selected_surface_contact_and_support_required; official_Inside_and_payload_relations',
-            'base_anchor':'control_and_sampler_physics_steps',
-            'failure_policy':'restore_pre_action_state','goal_access':False}
+        result['control_step_rendering'] = {
+            'implicit_render':False, 'explicit_render':'observation_and_video_boundaries',
+            'physics_substeps':'native_unchanged', 'task_and_state_updates':'native_unchanged',
+            'exception_policy':'restore_previous_implicit_render_setting'}
+        result['placement'] = {'on_top':'selected_surface_collision_geometry_and_physics_settling',
+            'inside':'official_volume','verification':'selected_surface_support_and_physical_settlement; official_Inside_and_payload_relations',
+            'surface_target':'RGB selected point and shelf retained; local candidate search',
+            'surface_geometry':'object collision mesh; no diagonal-square yaw envelope',
+            'base_anchor':None,'released_body_pinning':False,
+            'failure_policy':'retain_committed_physical_result',
+            'candidate_sampling':'hypothetical_poses_may_restore_before_commit','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
-        result['base_execution'] = 'feedback_greedy_grid_0.5m_s_60deg_s; selected-object approach; ideal grasp/place pose changes'
+        result['base_execution'] = 'checked_route_then_single_endpoint_transfer_and_native_settling'
         result['navigation'] = {'strategy':STRATEGY,'source_repository':'dadwadw233/habitat-gs',
+            'motion_policy':'checked_forward_reverse_v2',
+            'forward_route':'checked_forward_point_projection_or_polyline_or_shared_bidirectional_continuous_pose_astar',
+            'forward_candidate_budget':{'shared_seconds':10.,'point_projection_seconds':3.,'expanded_poses':20000},
+            'forward_planning_budget':{'seconds_per_leg':10.,'expanded_states':20000},
+            'holonomic_navigation_fallback':{'enabled':bool(getattr(self.robot,'is_holonomic_base',False)),
+                'seconds':10.,'preserves_admitted_endpoint':True},
+            'fixed_heading_exception':'contact_shedding_clearance_retreat_and_capability_checked_holonomic_motion',
+            'carried_collision_footprint':True,'physical_controller':False,
             'source_branch':'jinkai/harness','source_commit':SOURCE_COMMIT,
-            'geometry':'OmniGibson static eroded traversability grid',
-            'habitat_native_navmesh':False,'dynamic_collision_check':False,
+            'geometry':'GT floor support and live height-matched collision hulls',
+            'map_input':'GT floor support plus current PhysX overlaps; selected-pixel depth supplies the target',
+            'localization':'private simulator pose',
+            'precomputed_walkability':True,'static_map_loader_disabled':False,'online_mapping':False,
+            'habitat_native_navmesh':False,'dynamic_collision_check':True,
+            'erosion':{'implementation':'height-matched robot collision footprint',
+                'map_resolution_m':0.05},
             'segment_validation':'exact_grid_supercover_for_planner_and_follower',
-            'approach_visibility':'actual_four_camera_frusta_and_collision_rays',
-            'goal_selection':'jinkai visual-point candidate sampling and ranking',
-            'pixel_grounding':'same RGB pixel depth and visual mesh triangle ray; no neighboring-pixel substitution',
+            'approach_visibility':'navigation has no arrival view lock; manipulation checks scene/self occlusion for its RGB-bound target',
+            'goal_selection':'jinkai candidate geometry with path-length-aware approach ranking',
+            'pixel_grounding':'pixel-center backprojection; no neighboring-pixel substitution',
             'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
-        result['private_grounding_provider']='CPU visual mesh ray + selected-pixel depth; no segmentation annotator'
+        result['private_grounding_provider']=('selected-pixel depth point to nearest visible mesh surface; same-capture private instance labels resolve numerical ties'
+            if getattr(self,'renderer_pixel_owner',False) else
+            'selected-pixel depth point to nearest visible mesh surface; no segmentation annotator')
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
-        result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':20,
-            'mount_radius_m':0.35,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
+        result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':self.rig_pitch_degrees,
+            'mount_radius_m':self.rig_radius,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),
+            'height_policy':'initial_visual_body_below_lower_20_percent_at_configured_pitch_and_radius_with_5cm_clearance',
             'stock_wrist_cameras_enabled':False}
         return result
 
@@ -608,4 +1454,11 @@ class RGBBackend(ControlledCarry, CheckedPlacement, OmniGibsonBackend):
         try:
             self.finalize_video()
         finally:
-            super().close()
+            try:
+                self._close_placement_record()
+            finally:
+                try:
+                    if getattr(self, '_spectator_log', None) is not None:
+                        self._spectator_log.close()
+                finally:
+                    super().close()

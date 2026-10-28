@@ -1,0 +1,2143 @@
+{
+  "schema_version": 1,
+  "kind": "diverse_long_horizon_design_catalog",
+  "status": "design_only",
+  "benchmark_ready": false,
+  "date": "2026-10-20",
+  "scope": "Ten additional design proposals, not runtime recipes; executor repairs remain deferred.",
+  "previous_catalog": "task_designs/proposals_100plus/catalog.json",
+  "counting_protocol": {
+    "target_minimum": 100,
+    "unit": "successful necessary act call",
+    "individual_handling": true,
+    "measured_minimum_proven": false,
+    "enforcement_status": "planned",
+    "excluded": [
+      "navigate_to",
+      "look",
+      "wait",
+      "initialize",
+      "finish",
+      "notes",
+      "skill reads",
+      "failures",
+      "no-ops",
+      "redundant transfers"
+    ],
+    "public_context_zh": "逐件操作，不叠放、套叠或用容器/托盘批量运输；固定家具保持原位。所有处理区和顺序要求均提前公开。",
+    "semantics_zh": "账本为显式计入的动作子集；没有计入的必要工具交接、设备操作和导航仍必须执行。每个材料动作只按独立初始未满足目标计一次；不是物理最短解证明，不以调用满 100 作为成功条件。"
+  },
+  "dependency_semantics_zh": "global 表示所有相关对象的全量门槛；per_item 仅约束同件物品或其绑定工作位；per_batch 仅约束同一公开批次/房间/墙面。宏观 DAG 不强制所有对象先全部完成上阶段。资源占用和跨批交错在 layout 中另外约束；尚未编译成运行时调度器。",
+  "evidence": {
+    "source_level": "BDDL source declarations and challenge manifest metadata only",
+    "challenge_manifest_path": "data/manifests/challenge_tasks_2026.json",
+    "challenge_manifest_sha256": "e28fe84f6ed395e7dc11a00bbb8db3c24224ba77352c44719d31a63d1e4ecd30",
+    "historical_action_document": "docs/atomic_actions.md",
+    "historical_action_document_sha256": "16b340d41306750e7ea8c3adbac1acfb37cdf4ad13f6780e05be7c9c26aa017d",
+    "historical_success_actions": [
+      "wipe",
+      "sweep",
+      "vacuum",
+      "spray",
+      "cut",
+      "hang"
+    ],
+    "historical_success_scope": "Documentation reports previous single-task scripted and RGB/MCP successes; not independently rerun here and not evidence for these compositions.",
+    "sources": [
+      {
+        "task": "chopping_wood",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/chopping_wood/problem0.bddl",
+        "bddl_sha256": "2ec0e9adb666075101c888d43b1c0ef48434ab0051d80de20eb49bf75fb04837",
+        "declared_types": [
+          "agent.n.01",
+          "ax.n.01",
+          "chopping_block.n.01",
+          "driveway.n.01",
+          "half__log.n.01",
+          "log.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_double_floor_lower",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "clean_a_computer_monitor",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_a_computer_monitor/problem0.bddl",
+        "bddl_sha256": "e7365558a164e2e5fffb9809bf6603e30495773d86ccc53eb4335c95decbdfd9",
+        "declared_types": [
+          "agent.n.01",
+          "dust.n.01",
+          "floor.n.01",
+          "monitor.n.04",
+          "rag.n.01",
+          "sink.n.01",
+          "table.n.02",
+          "water.n.06"
+        ],
+        "challenge_manifest_listed": false,
+        "manifest_scene": null,
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "clean_a_keyboard",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_a_keyboard/problem0.bddl",
+        "bddl_sha256": "ad7b0abd3167816e4d617a80533a231aaa55a48ed8e25b67bd1d3013066b70ec",
+        "declared_types": [
+          "agent.n.01",
+          "desk.n.01",
+          "dust.n.01",
+          "floor.n.01",
+          "keyboard.n.01",
+          "pipe_cleaner.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "office_cubicles_right",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "clean_up_your_desk",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_up_your_desk/problem0.bddl",
+        "bddl_sha256": "c81e592bf14dd7b2fbbc2a443a5f4989e5d0d038f20c27cc91a4339b3d14318e",
+        "declared_types": [
+          "agent.n.01",
+          "bed.n.01",
+          "bookcase.n.01",
+          "chair.n.01",
+          "desk.n.01",
+          "floor.n.01",
+          "folder.n.02",
+          "laptop.n.01",
+          "paperback_book.n.01",
+          "pen.n.01",
+          "pencil.n.01",
+          "pencil_box.n.01",
+          "stapler.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_single_floor",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "cleaning_bathrooms",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/cleaning_bathrooms/problem0.bddl",
+        "bddl_sha256": "ecab53496ad681fb4a2e24b84f009aaf540698669d7fc42be4e085a758e7d5ea",
+        "declared_types": [
+          "agent.n.01",
+          "bar_soap.n.01",
+          "bathtub.n.01",
+          "bucket.n.01",
+          "floor.n.01",
+          "rag.n.01",
+          "scrub_brush.n.01",
+          "sink.n.01",
+          "stain.n.01",
+          "toilet.n.02"
+        ],
+        "challenge_manifest_listed": false,
+        "manifest_scene": null,
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "cook_hot_dogs",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/cook_hot_dogs/problem0.bddl",
+        "bddl_sha256": "ecfdbe8e432fea1a7fd263e9d249ac219b7a9addaecfee8a6ac01f3c87b1af50",
+        "declared_types": [
+          "agent.n.01",
+          "electric_refrigerator.n.01",
+          "floor.n.01",
+          "hotdog.n.02",
+          "microwave.n.02"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_single_floor",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "doing_laundry",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/doing_laundry/problem0.bddl",
+        "bddl_sha256": "6f73c328c5d8b48020c56a58948c2044d9764ce78232be427833cd5d369d2ce5",
+        "declared_types": [
+          "agent.n.01",
+          "blouse.n.01",
+          "clothes_dryer.n.01",
+          "detergent.n.02",
+          "detergent__bottle.n.01",
+          "floor.n.01",
+          "hamper.n.02",
+          "hanger.n.02",
+          "stain.n.01",
+          "undergarment.n.01",
+          "washer.n.03",
+          "water.n.06"
+        ],
+        "challenge_manifest_listed": false,
+        "manifest_scene": null,
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "hanging_clothes",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/hanging_clothes/problem0.bddl",
+        "bddl_sha256": "194c5dcff2863f76d114af557a7768d4dcbb0ead3b9229896d653a82ef1cebd1",
+        "declared_types": [
+          "agent.n.01",
+          "bed.n.01",
+          "dress.n.01",
+          "floor.n.01",
+          "hanger.n.02",
+          "skirt.n.01",
+          "sweater.n.01",
+          "wardrobe.n.01"
+        ],
+        "challenge_manifest_listed": false,
+        "manifest_scene": null,
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "hanging_pictures",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/hanging_pictures/problem0.bddl",
+        "bddl_sha256": "3fa458a5bd55d6a560014689ae209c5a9c77b88cf830c5bbd46f301a9e46fb80",
+        "declared_types": [
+          "agent.n.01",
+          "countertop.n.01",
+          "floor.n.01",
+          "poster.n.01",
+          "wall_nail.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_double_floor_lower",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "polishing_shoes",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/polishing_shoes/problem0.bddl",
+        "bddl_sha256": "1866560549c57feee96608e55943ed3c656184e4dd82548cbf80dab57d8c2c40",
+        "declared_types": [
+          "agent.n.01",
+          "dust.n.01",
+          "floor.n.01",
+          "footstool.n.01",
+          "scrub_brush.n.01",
+          "shoe.n.01",
+          "stand.n.04"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "hotel_suite_large",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "putting_away_toys",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/putting_away_toys/problem0.bddl",
+        "bddl_sha256": "be5b2d620e15ed4ca414f9488c8e49476e141d289f5ee87983cdef1e710d8dd8",
+        "declared_types": [
+          "agent.n.01",
+          "floor.n.01",
+          "table.n.02",
+          "toy_box.n.01",
+          "toy_figure.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_single_floor",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "putting_shoes_on_rack",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/putting_shoes_on_rack/problem0.bddl",
+        "bddl_sha256": "323a7477b480735aa1dcf41be5e43287394f2d28328f635f7003b8286f885281",
+        "declared_types": [
+          "agent.n.01",
+          "floor.n.01",
+          "gym_shoe.n.01",
+          "hallstand.n.01",
+          "sandal.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_double_floor_lower",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "setting_the_table",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/setting_the_table/problem0.bddl",
+        "bddl_sha256": "777b6f105039dbb646c7a889ab28f16b55ca527235cb8da461a636c333267a37",
+        "declared_types": [
+          "agent.n.01",
+          "breakfast_table.n.01",
+          "cabinet.n.01",
+          "cupcake.n.01",
+          "electric_refrigerator.n.01",
+          "floor.n.01",
+          "plate.n.04",
+          "sink.n.01",
+          "table_knife.n.01",
+          "tablefork.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_single_floor",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "sorting_household_items",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/sorting_household_items/problem0.bddl",
+        "bddl_sha256": "d8eb464ba273d8ccf3efa065bcc1adf759998b567b1d8fe880f5b8529600a3a9",
+        "declared_types": [
+          "agent.n.01",
+          "basket.n.01",
+          "bottle__of__detergent.n.01",
+          "box__of__sanitary_napkin.n.01",
+          "cup.n.01",
+          "floor.n.01",
+          "shelf.n.01",
+          "sink.n.01",
+          "soap_dispenser.n.01",
+          "toothbrush.n.01",
+          "tube__of__toothpaste.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_single_floor",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "spraying_for_bugs",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/spraying_for_bugs/problem0.bddl",
+        "bddl_sha256": "600921b50306093798c7c69bf052fde7ecca9d86b5477fd853fa11c519107a5f",
+        "declared_types": [
+          "agent.n.01",
+          "floor.n.01",
+          "insectifuge.n.01",
+          "insectifuge__atomizer.n.01",
+          "pot_plant.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_double_floor_lower",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "spraying_fruit_trees",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/spraying_fruit_trees/problem0.bddl",
+        "bddl_sha256": "f1b8448c47953c8ca646e0842b27d5058e94de03fa98e741d43350d0824dcd0a",
+        "declared_types": [
+          "agent.n.01",
+          "floor.n.01",
+          "pesticide.n.01",
+          "pesticide__atomizer.n.01",
+          "tree.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_double_floor_lower",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "staining_wood_furniture",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/staining_wood_furniture/problem0.bddl",
+        "bddl_sha256": "43eaff77afcecf5d42efe30dad9ac2ca24b2fbdc811a7c54de0a4c6492d7d084",
+        "declared_types": [
+          "agent.n.01",
+          "coffee_table.n.01",
+          "floor.n.01",
+          "ink.n.01",
+          "ink__bottle.n.01",
+          "paintbrush.n.01"
+        ],
+        "challenge_manifest_listed": false,
+        "manifest_scene": null,
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "sweeping_garage",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/sweeping_garage/problem0.bddl",
+        "bddl_sha256": "a4e9af08f357d4f469ab154a5a37803d569f296bcf7b3daccf45186adcce5ce2",
+        "declared_types": [
+          "agent.n.01",
+          "broom.n.01",
+          "bucket.n.01",
+          "dust.n.01",
+          "floor.n.01",
+          "sand.n.04"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_double_floor_lower",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "tidying_bathroom",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/tidying_bathroom/problem0.bddl",
+        "bddl_sha256": "e206c6fbed1117e4a434505af629782cebfdbdd420698c2f6a1eabcf3b7517a9",
+        "declared_types": [
+          "agent.n.01",
+          "ashcan.n.01",
+          "bar_soap.n.01",
+          "cork.n.04",
+          "floor.n.01",
+          "shelf.n.01",
+          "sink.n.01",
+          "soap_dish.n.01",
+          "tissue_dispenser.n.01",
+          "toilet.n.02",
+          "toilet_tissue.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "hotel_suite_large",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "tidying_bedroom",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/tidying_bedroom/problem0.bddl",
+        "bddl_sha256": "ab922d907c1f7ad980ea11e61abfcc41a0d8e663075b12a65db3715602a3db5d",
+        "declared_types": [
+          "agent.n.01",
+          "bed.n.01",
+          "book.n.02",
+          "floor.n.01",
+          "sandal.n.01",
+          "table.n.02"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_single_floor",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "turning_out_all_lights_before_sleep",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/turning_out_all_lights_before_sleep/problem0.bddl",
+        "bddl_sha256": "b922c30c2f0bf4705fabcdc44827a81e433912677d913afef54308d755923d02",
+        "declared_types": [
+          "agent.n.01",
+          "coffee_table.n.01",
+          "countertop.n.01",
+          "floor.n.01",
+          "switch.n.01",
+          "table_lamp.n.01"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_single_floor",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      },
+      {
+        "task": "vacuuming_floors",
+        "bddl_path": "repos/BEHAVIOR-1K/bddl3/bddl/activity_definitions/vacuuming_floors/problem0.bddl",
+        "bddl_sha256": "39a2a6d367b74df21749d06eaaf1919b29dc4387a98341cce812de35ab23bf43",
+        "declared_types": [
+          "agent.n.01",
+          "dust.n.01",
+          "floor.n.01",
+          "vacuum.n.04"
+        ],
+        "challenge_manifest_listed": true,
+        "manifest_scene": "house_double_floor_upper",
+        "pinned_test_instance_verified": false,
+        "new_scene_or_asset_model_verified": false
+      }
+    ]
+  },
+  "shared_acceptance": [
+    "Freeze source/dependencies/asset model IDs/scale/material rules/scene/spec/public instruction and hashes.",
+    "Verify RGB-visible grouping, physical initial predicates, capacity, reach, source and destination supports.",
+    "Verify public individual-handling, no aggregate transport, no phase skip, and target/object boundaries.",
+    "Implement independent terminal/history/invariant scoring; no success based on model notes or call count.",
+    "Run two complete legal reference orders and at least three physically realized negatives per task.",
+    "Measure >=100 useful calls on a successful reference after removing failures/no-ops/padding; audit possible shortcuts.",
+    "Pass real RGB/MCP/finish and continuous-video acceptance; record model success separately."
+  ],
+  "tasks": [
+    {
+      "id": "kitchen_batch_cook_and_serve_112_v1",
+      "name_zh": "厨房分批熟制、配餐与设备复原",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "house_single_floor",
+      "task_family": "thermal_processing_and_batch_scheduling",
+      "priority": "composition_gate",
+      "public_instruction_zh": "把 16 份初始未熟的热狗分批加热至熟且未焦，为每份配置一只盘子，另摆好 8 只杯子。每批食物都要在微波炉停止后取出，所有餐点就位后关闭设备和炉门。逐件操作，装有食物的盘子留在餐台。",
+      "object_groups": [
+        {
+          "id": "food",
+          "count": 16,
+          "description_zh": "初始未熟的热狗",
+          "source_task": "cook_hot_dogs"
+        },
+        {
+          "id": "plates",
+          "count": 16,
+          "description_zh": "初始空盘",
+          "source_task": "setting_the_table"
+        },
+        {
+          "id": "cups",
+          "count": 8,
+          "description_zh": "饮水杯",
+          "source_task": "sorting_household_items"
+        }
+      ],
+      "phases": [
+        {
+          "id": "set_places",
+          "after": [],
+          "dependency_scope": "per_item",
+          "description_zh": "摆空盘和杯子",
+          "independent_witness_zh": "盘杯确实支撑于指定餐台，盘子之间不叠放"
+        },
+        {
+          "id": "load",
+          "after": [],
+          "dependency_scope": "per_batch",
+          "description_zh": "按实测容量装入一批热狗",
+          "independent_witness_zh": "本批对象 Inside(微波炉)，未超过冻结容量"
+        },
+        {
+          "id": "cook",
+          "after": [
+            "load"
+          ],
+          "dependency_scope": "per_batch",
+          "description_zh": "关门、开启并等待本批熟制",
+          "independent_witness_zh": "本批每份 Cooked 且非 Burnt；真实温度状态推进"
+        },
+        {
+          "id": "serve",
+          "after": [
+            "cook",
+            "set_places"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "停机后逐份出炉装盘",
+          "independent_witness_zh": "该份食物熟且未焦，OnTop(对应可见盘子)，取出前已停机"
+        },
+        {
+          "id": "shutdown",
+          "after": [
+            "serve"
+          ],
+          "dependency_scope": "global",
+          "description_zh": "全部配餐完成，关闭设备",
+          "independent_witness_zh": "16 份都完成；微波炉非 ToggledOn 且非 Open"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "plates_out",
+          "phase": "set_places",
+          "group": "plates",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "每份需要独立餐盘",
+          "source_zone": "plate_store",
+          "destination_zone": "serving_table"
+        },
+        {
+          "id": "cups_out",
+          "phase": "set_places",
+          "group": "cups",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "公开配餐要求的八杯",
+          "source_zone": "cup_store",
+          "destination_zone": "drink_table"
+        },
+        {
+          "id": "food_in",
+          "phase": "load",
+          "group": "food",
+          "actions_per_entity": [
+            "grasp",
+            "place_inside"
+          ],
+          "necessity_zh": "未熟食物须进入热源",
+          "source_zone": "raw_counter",
+          "destination_zone": "microwave"
+        },
+        {
+          "id": "food_out",
+          "phase": "serve",
+          "group": "food",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "熟食必须离开热源并装盘",
+          "source_zone": "microwave",
+          "destination_zone": "individual_plates"
+        }
+      ],
+      "declared_useful_calls": 112,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "cook_hot_dogs",
+        "setting_the_table",
+        "sorting_household_items"
+      ],
+      "layout_and_shared_resources_zh": "一个共享微波炉，拟每批最多 4 份，容量必须实测；若容量不足缩小批量，不能扩大几何或把未熟食物算熟。16 盘分布在多个固定餐台。装盘先后按每份依赖，不能等待所有批次在炉内同时熟制。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "16 份食物分别在盘上且 Cooked、非 Burnt；盘杯数量正确",
+          "设备关闭、门关闭、手空"
+        ],
+        "historical_zh": [
+          "每份经历真实入炉→熟制→停机取出；不能只凭最后位置",
+          "最后停机只能在所有批次完成后验收"
+        ],
+        "invariants_zh": [
+          "不得搬运载食物的盘子、叠盘或把炉内多份一次带走",
+          "所有温度变化来自原生模拟，不设置 Cooked 为真"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "先摆齐所有餐具，再逐批熟制上菜"
+        },
+        {
+          "status": "planned",
+          "description_zh": "先摆好第一批餐盘，利用加热期间摆其他餐具，按批滚动上菜"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "有一份生食也摆到了盘子上"
+        },
+        {
+          "status": "planned",
+          "description_zh": "某一批未停机就取食，最后补关机"
+        },
+        {
+          "status": "planned",
+          "description_zh": "漏一盘或把两份挤在同一盘而有空盘"
+        }
+      ],
+      "capability_gates_zh": [
+        "当前微波炉 Inside 放置和取出存在执行风险；先做单批完整物理验收",
+        "资产的 Cooked/Burnt、加热速度及跨批保温要冻结；不能用固定 wait 次数替代状态",
+        "热源运行期间独立搬餐具是否可行需要实际测量"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "每批开关门、开关机、等候、导航和最终关门均不计入 112；实际预算仍计入 act/look"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "garage_cut_sort_store_113_v1",
+      "name_zh": "车库与庭院劈木、产物归置及扫地",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "house_double_floor_lower",
+      "task_family": "identity_changing_cutting_and_floor_cleanup",
+      "priority": "build_next",
+      "public_instruction_zh": "先清扫作业区已有的砂尘，再把 16 根整木逐根放到劈木墩上劈开。将生成的 32 块半木逐件归到固定柴架，每根处理完释放劈木墩；最后归还斧头和扫帚。",
+      "object_groups": [
+        {
+          "id": "logs",
+          "count": 16,
+          "description_zh": "整根木料",
+          "source_task": "chopping_wood"
+        },
+        {
+          "id": "halves",
+          "count": 32,
+          "description_zh": "切割后才出现的半木",
+          "source_task": "chopping_wood",
+          "generated_from": "logs",
+          "outputs_per_parent": 2
+        },
+        {
+          "id": "floor",
+          "count": 1,
+          "description_zh": "初始同时覆盖砂和尘的独立地面对象",
+          "source_task": "sweeping_garage"
+        }
+      ],
+      "phases": [
+        {
+          "id": "sweep",
+          "after": [],
+          "dependency_scope": "global",
+          "description_zh": "清扫已有砂尘",
+          "independent_witness_zh": "同一地面非 Covered(sand) 且非 Covered(dust)"
+        },
+        {
+          "id": "load",
+          "after": [
+            "sweep"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "单根放入空闲劈木墩",
+          "independent_witness_zh": "当前木料 OnTop(劈木墩)，其他整木不在工作位"
+        },
+        {
+          "id": "cut",
+          "after": [
+            "load"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "用斧头触发原生切割",
+          "independent_witness_zh": "父木被原生规则转换，登记两个新生半木"
+        },
+        {
+          "id": "store",
+          "after": [
+            "cut"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "本根的两半归架再做下一根",
+          "independent_witness_zh": "同一父木的两半均真实存在且 OnTop(柴架)"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "clean_floor",
+          "phase": "sweep",
+          "group": "floor",
+          "actions_per_entity": [
+            "sweep"
+          ],
+          "necessity_zh": "只对一个独立脏地面计一次；砂和尘不拆算两次"
+        },
+        {
+          "id": "load_log",
+          "phase": "load",
+          "group": "logs",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "逐根装上工作位",
+          "source_zone": "log_source",
+          "destination_zone": "chopping_block"
+        },
+        {
+          "id": "split_log",
+          "phase": "cut",
+          "group": "logs",
+          "actions_per_entity": [
+            "cut"
+          ],
+          "necessity_zh": "每根只有一次有效身份转换"
+        },
+        {
+          "id": "store_halves",
+          "phase": "store",
+          "group": "halves",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "原木被替换后必须追踪全部半木",
+          "source_zone": "chopping_block",
+          "destination_zone": "wood_rack"
+        }
+      ],
+      "declared_useful_calls": 113,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "chopping_wood",
+        "sweeping_garage"
+      ],
+      "layout_and_shared_resources_zh": "单个共享劈木墩与斧头；只容纳当前一根及它的两个产物。车库地面与庭院路线须在同一联合场景内可达。已有砂尘是初态，不宣称 cut 自动产生锯屑。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "32 个半木均真实存在、在柴架上；无遗漏整木",
+          "地面砂尘清除，斧头扫帚归位、手空"
+        ],
+        "historical_zh": [
+          "先完成清扫，再逐根装载→切割→产物收纳",
+          "产物通过切割事件的父子映射登记，不能复用同两半充数"
+        ],
+        "invariants_zh": [
+          "允许发生预期的父对象销毁，但禁止其他所需对象消失",
+          "不按旧父对象 ID 继续抓；不把两个半木叠起来运"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "按来源近到远逐根加工，每根两半就近归架"
+        },
+        {
+          "status": "planned",
+          "description_zh": "按来源远到近加工，两半归架顺序相反"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "仅切开 15 根并重复登记一对半木"
+        },
+        {
+          "status": "planned",
+          "description_zh": "切了所有木料但漏收一块半木"
+        },
+        {
+          "status": "planned",
+          "description_zh": "先劈木后扫地，最后状态正确但违反公开顺序"
+        }
+      ],
+      "capability_gates_zh": [
+        "必须新增预期身份变换/产物谱系评分；现有通用“所需对象消失即失败”不能直接复用",
+        "历史 chopping_wood 和 sweeping_garage 单项成功不证明此联合场景成功",
+        "核对 16→32 规则、产物沉降、抓取可见性、斧头与木料单手交替"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "取放斧头/扫帚、导航、因工具占手导致的交接不计入 113"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "garden_treatment_and_distribution_100_v1",
+      "name_zh": "庭院盆栽处理与分区布置",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "house_double_floor_lower",
+      "task_family": "material_application_and_selective_treatment",
+      "priority": "build_next",
+      "public_instruction_zh": "把待处理区的 20 盆植物逐件送到处理台，用指定喷雾处理后送到两处展示区。旁边 4 盆带公开“对照／勿喷”标识的盆栽保持不动且不沾本次材料。最后关闭并归还喷壶。",
+      "object_groups": [
+        {
+          "id": "plants",
+          "count": 20,
+          "description_zh": "本次需要喷涂的盆栽",
+          "source_task": "spraying_for_bugs"
+        },
+        {
+          "id": "controls",
+          "count": 4,
+          "description_zh": "公开标明勿喷的独立对照盆栽",
+          "source_task": "spraying_for_bugs",
+          "ledger_exempt": true
+        }
+      ],
+      "phases": [
+        {
+          "id": "stage",
+          "after": [],
+          "dependency_scope": "per_item",
+          "description_zh": "盆栽进入专用处理位",
+          "independent_witness_zh": "选中的目标盆栽 OnTop(处理台)"
+        },
+        {
+          "id": "spray",
+          "after": [
+            "stage"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "喷施指定 insectifuge",
+          "independent_witness_zh": "目标由非 Covered 变为 Covered(insectifuge)"
+        },
+        {
+          "id": "distribute",
+          "after": [
+            "spray"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "按公开外观分组放到展示区",
+          "independent_witness_zh": "已处理盆栽位于对应展示台"
+        },
+        {
+          "id": "close",
+          "after": [
+            "distribute"
+          ],
+          "dependency_scope": "global",
+          "description_zh": "完成全部对象并归还喷壶",
+          "independent_witness_zh": "20 盆就位、对照未污染、喷壶关闭归位"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "to_treatment",
+          "phase": "stage",
+          "group": "plants",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "公开指定处理台，腾出手拿喷壶",
+          "source_zone": "incoming_plants",
+          "destination_zone": "treatment_bench"
+        },
+        {
+          "id": "apply",
+          "phase": "spray",
+          "group": "plants",
+          "actions_per_entity": [
+            "spray"
+          ],
+          "necessity_zh": "20 个独立初始未覆盖目标各一次有效喷涂"
+        },
+        {
+          "id": "to_display",
+          "phase": "distribute",
+          "group": "plants",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "处理完才进入展示区",
+          "source_zone": "treatment_bench",
+          "destination_zone": "display_by_visible_category"
+        }
+      ],
+      "declared_useful_calls": 100,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "spraying_for_bugs",
+        "spraying_fruit_trees"
+      ],
+      "layout_and_shared_resources_zh": "一个共享喷壶，处理台拟最多同时放 4 盆；可单盆流水或分批处理，不要求 20 盆同时挤上台。对照盆栽与待处理盆栽用可见盆型/区域标识区分，图像可辨性需要验收。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "20 盆 Covered(insectifuge) 且处于正确展示区",
+          "4 盆对照非 Covered(insectifuge)、位置保持；喷壶关闭归位"
+        ],
+        "historical_zh": [
+          "每盆在处理位被处理后再入展示区"
+        ],
+        "invariants_zh": [
+          "不把 Covered 解释为虫害死亡或植物恢复健康",
+          "对照材料污染一旦发生即记录，不能洗掉后掩盖"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "按展示区逐盆处理和归置"
+        },
+        {
+          "status": "planned",
+          "description_zh": "每次四盆上台、同批喷涂、逐盆分发"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "正确摆放但漏喷一盆"
+        },
+        {
+          "status": "planned",
+          "description_zh": "喷了对照盆栽，随后移回原位"
+        },
+        {
+          "status": "planned",
+          "description_zh": "绕过处理位直接在展示区喷涂"
+        }
+      ],
+      "capability_gates_zh": [
+        "核实喷雾材料匹配、开关/容量前提及 20 盆连续应用",
+        "盆栽作为单件搬运的结构、重量和是否含额外活动子件须验收",
+        "对照初态不得已经覆盖本次指定材料；标识只说明任务分组，不隐含植物健康状态"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "喷壶取放、开关与导航不计入 100"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "gallery_replace_and_archive_108_v1",
+      "name_zh": "展墙撤旧、排版预览与新展安装",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "house_double_floor_lower",
+      "task_family": "attachment_and_assignment",
+      "priority": "composition_gate",
+      "public_instruction_zh": "把三面展墙的 18 张旧海报逐张撤下归档，将 18 张新海报放到固定预览台，每面墙的六张新版预览齐备后按公开分组安装到该墙的六个挂点。全部旧海报归档，新海报正确挂好。",
+      "object_groups": [
+        {
+          "id": "old",
+          "count": 18,
+          "description_zh": "初始已挂好的旧海报",
+          "source_task": "hanging_pictures"
+        },
+        {
+          "id": "new",
+          "count": 18,
+          "description_zh": "初始在新展库存台的海报",
+          "source_task": "hanging_pictures"
+        }
+      ],
+      "phases": [
+        {
+          "id": "archive",
+          "after": [],
+          "dependency_scope": "per_item",
+          "description_zh": "撤旧并归档",
+          "independent_witness_zh": "旧海报非 AttachedTo(原挂点)，OnTop(档案台)"
+        },
+        {
+          "id": "preview",
+          "after": [],
+          "dependency_scope": "per_item",
+          "description_zh": "新版在对应墙的预览区摊开",
+          "independent_witness_zh": "该墙六张新版同时 OnTop(预览台)"
+        },
+        {
+          "id": "install",
+          "after": [
+            "archive",
+            "preview"
+          ],
+          "dependency_scope": "per_batch",
+          "description_zh": "本面墙撤旧、预览齐备后安装新版",
+          "independent_witness_zh": "六个独立挂点一对一 AttachedTo，新版不落地"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "archive_old",
+          "phase": "archive",
+          "group": "old",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "原挂点腾空，旧版须保留",
+          "source_zone": "old_mounts",
+          "destination_zone": "archive_table"
+        },
+        {
+          "id": "preview_new",
+          "phase": "preview",
+          "group": "new",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "公开策展要求每墙完整预览一次",
+          "source_zone": "new_stock",
+          "destination_zone": "preview_by_wall"
+        },
+        {
+          "id": "hang_new",
+          "phase": "install",
+          "group": "new",
+          "actions_per_entity": [
+            "grasp",
+            "hang"
+          ],
+          "necessity_zh": "18 个独立挂点的有效附件",
+          "source_zone": "preview_by_wall",
+          "destination_zone": "new_mounts"
+        }
+      ],
+      "declared_useful_calls": 108,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "hanging_pictures"
+      ],
+      "layout_and_shared_resources_zh": "三面低位可达的展墙，每墙六个兼容挂点；可逐墙完成，不要求同时拆空三墙。旧版/新版和墙面组别必须凭纹理或公开区域区分，同组海报允许互换，不使用隐藏序号。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "18 张旧版全部归档、18 张新版 AttachedTo 对应组的不同挂点",
+          "每挂点最多一张，手空"
+        ],
+        "historical_zh": [
+          "每墙新版六张曾同时完成预览；该墙旧版全撤后才安装"
+        ],
+        "invariants_zh": [
+          "真实 AttachedTo，靠墙摆放或 Touching 不算安装",
+          "不得把挂点或整面墙搬走；旧海报不可丢失"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "先全部归档和预览，再按墙装新版"
+        },
+        {
+          "status": "planned",
+          "description_zh": "一面墙撤旧→六张预览→安装，三墙依次完成"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "新版仅靠墙放但未附着"
+        },
+        {
+          "status": "planned",
+          "description_zh": "最终挂对了但绕过六张同时预览"
+        },
+        {
+          "status": "planned",
+          "description_zh": "同一挂点挂两张而另一个为空"
+        }
+      ],
+      "capability_gates_zh": [
+        "现有 hang 有历史成功；grasp 撤除已有 AttachedTo 未确认，必须先做拆装探针",
+        "挂点/海报兼容性、18 个位置的视野与可达性需要冻结",
+        "计数是以撤旧可用为条件；不会为它立即修执行器；若撤旧不可用则重新设计并重新计数"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "导航不计入 108；若拆卸需要新增动作，必须显式扩展能力并重新标定，不虚构现有 detach API"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "hotel_shoe_care_and_pairing_100_v1",
+      "name_zh": "酒店鞋履除尘、配对与归位",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "hotel_suite_large",
+      "task_family": "item_cleaning_and_pair_matching",
+      "priority": "build_next",
+      "public_instruction_zh": "将 10 双共 20 只积尘鞋逐件放到护理台，清除尘土，再按公开可见的配对标识放回对应鞋位。每双两只应相邻，护理刷最后归位。",
+      "object_groups": [
+        {
+          "id": "shoes",
+          "count": 20,
+          "description_zh": "10 双可见配对的积尘鞋",
+          "source_task": "polishing_shoes"
+        }
+      ],
+      "phases": [
+        {
+          "id": "stage",
+          "after": [],
+          "dependency_scope": "per_item",
+          "description_zh": "单鞋进入护理台",
+          "independent_witness_zh": "鞋 OnTop(护理台)"
+        },
+        {
+          "id": "clean",
+          "after": [
+            "stage"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "兼容刷子除尘",
+          "independent_witness_zh": "该鞋从 Covered(dust) 变为非 Covered(dust)"
+        },
+        {
+          "id": "pair",
+          "after": [
+            "clean"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "干净单鞋回指定鞋位",
+          "independent_witness_zh": "鞋在对应固定鞋位，全部完成时同双 NextTo"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "to_service",
+          "phase": "stage",
+          "group": "shoes",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "护理台提供公开处理工位",
+          "source_zone": "dirty_shoe_area",
+          "destination_zone": "care_bench"
+        },
+        {
+          "id": "brush",
+          "phase": "clean",
+          "group": "shoes",
+          "actions_per_entity": [
+            "wipe"
+          ],
+          "necessity_zh": "每只鞋初始有尘，不能只清一只代表整双"
+        },
+        {
+          "id": "return_pair",
+          "phase": "pair",
+          "group": "shoes",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "清洁后归到配对鞋位",
+          "source_zone": "care_bench",
+          "destination_zone": "pair_stands"
+        }
+      ],
+      "declared_useful_calls": 100,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "polishing_shoes",
+        "putting_shoes_on_rack"
+      ],
+      "layout_and_shared_resources_zh": "共享一把刷子、一个最多容纳一双的护理位、十处低位鞋架。对同款相同外观鞋只做等价匹配；如要求区分主人，必须增加可辨标识并验证 RGB。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "20 只均无尘、在正确鞋位；每双 NextTo，无跨双充数",
+          "刷子归位、手空"
+        ],
+        "historical_zh": [
+          "每只鞋在护理台完成清洁后归位"
+        ],
+        "invariants_zh": [
+          "本任务的护理是去尘，不宣称涂鞋油、修鞋或消毒",
+          "左右/主人标识只能来自公开可辨特征"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "逐双处理两只并成对归位"
+        },
+        {
+          "status": "planned",
+          "description_zh": "按鞋的可见类别处理，待同双两只干净后配对"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "每双只清一只"
+        },
+        {
+          "status": "planned",
+          "description_zh": "全部无尘但可见配对错误"
+        },
+        {
+          "status": "planned",
+          "description_zh": "鞋在相邻错误支撑物上，视觉接近但未到对应鞋位"
+        }
+      ],
+      "capability_gates_zh": [
+        "polishing_shoes 的 BDDL 定义已核对；此 20 鞋版本没有物理验证",
+        "鞋尘材料与刷子的兼容性、成对摆放后的 NextTo 和目标支撑接触需要验收"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "刷子取放、导航不计入 100"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "office_maintenance_and_shutdown_108_v1",
+      "name_zh": "办公区设备除尘、归档与闭场",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "office_cubicles_right",
+      "task_family": "multi_station_maintenance_and_shutdown",
+      "priority": "composition_gate",
+      "public_instruction_zh": "完成 12 个工作位的闭场：每个工作位把键盘送到护理位除尘后放回，清洁显示器表面，把一本散放书归入固定书架。每个工位维护、归档都完成后，再关闭初始亮着的台灯作为闭场，最后所有工具归位。",
+      "object_groups": [
+        {
+          "id": "keyboards",
+          "count": 12,
+          "description_zh": "各工作位一把积尘键盘",
+          "source_task": "clean_a_keyboard"
+        },
+        {
+          "id": "monitors",
+          "count": 12,
+          "description_zh": "各工作位一台积尘显示器",
+          "source_task": "clean_a_computer_monitor"
+        },
+        {
+          "id": "books",
+          "count": 12,
+          "description_zh": "各工作位一本待归档书",
+          "source_task": "clean_up_your_desk"
+        },
+        {
+          "id": "lamps",
+          "count": 12,
+          "description_zh": "各工作位一盏初始开启的台灯",
+          "source_task": "turning_out_all_lights_before_sleep"
+        }
+      ],
+      "phases": [
+        {
+          "id": "off",
+          "after": [
+            "restore",
+            "file"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "完成该工位全部维护后闭场关灯",
+          "independent_witness_zh": "台灯从 ToggledOn 变为非 ToggledOn"
+        },
+        {
+          "id": "stage",
+          "after": [],
+          "dependency_scope": "per_item",
+          "description_zh": "把该工位键盘放上护理位",
+          "independent_witness_zh": "键盘 OnTop(护理位)"
+        },
+        {
+          "id": "clean",
+          "after": [
+            "stage"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "清洁对应键盘和显示器",
+          "independent_witness_zh": "两者均非 Covered(dust)"
+        },
+        {
+          "id": "restore",
+          "after": [
+            "clean"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "键盘回工位",
+          "independent_witness_zh": "键盘 OnTop(对应桌面)"
+        },
+        {
+          "id": "file",
+          "after": [],
+          "dependency_scope": "per_item",
+          "description_zh": "书本归架",
+          "independent_witness_zh": "每工作位的一本书 OnTop(书架)"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "lamp_off",
+          "phase": "off",
+          "group": "lamps",
+          "actions_per_entity": [
+            "toggle_off"
+          ],
+          "necessity_zh": "每盏初始开着，闭场必须关闭"
+        },
+        {
+          "id": "keyboard_out",
+          "phase": "stage",
+          "group": "keyboards",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "公开护理工作位",
+          "source_zone": "workstation",
+          "destination_zone": "care_bench"
+        },
+        {
+          "id": "keyboard_wipe",
+          "phase": "clean",
+          "group": "keyboards",
+          "actions_per_entity": [
+            "wipe"
+          ],
+          "necessity_zh": "各键盘独立去尘"
+        },
+        {
+          "id": "screen_wipe",
+          "phase": "clean",
+          "group": "monitors",
+          "actions_per_entity": [
+            "wipe"
+          ],
+          "necessity_zh": "各显示器是独立脏对象"
+        },
+        {
+          "id": "keyboard_back",
+          "phase": "restore",
+          "group": "keyboards",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "设备回原工作位",
+          "source_zone": "care_bench",
+          "destination_zone": "workstation"
+        },
+        {
+          "id": "book_file",
+          "phase": "file",
+          "group": "books",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "散放书按公开类别归档",
+          "source_zone": "workstation",
+          "destination_zone": "book_shelf"
+        }
+      ],
+      "declared_useful_calls": 108,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "clean_a_keyboard",
+        "clean_a_computer_monitor",
+        "clean_up_your_desk",
+        "turning_out_all_lights_before_sleep"
+      ],
+      "layout_and_shared_resources_zh": "12 个工作位能否装入 office_cubicles_right 必须先核对；若不足应换联合布局，不把同一桌的多个视角算多个工作位。一个共享护理台，最多并行两把键盘；工位身份由桌位和可见标识公开。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "12 键盘回正确工位且无尘，12 屏幕无尘、12 本书归架",
+          "12 盏台灯关闭，工具归位、手空"
+        ],
+        "historical_zh": [
+          "键盘在护理位被清洁后返回；每个工作位维护和归档均完成后才能闭场关灯"
+        ],
+        "invariants_zh": [
+          "关灯不等于关闭电脑；本任务不虚构系统关机或文件保存",
+          "关灯后仍须有场景环境光供四相机观察"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "逐工作位维护→归档→关灯"
+        },
+        {
+          "status": "planned",
+          "description_zh": "先按区域归档，以两工作位一批共享护理台维护，完成一组再关其台灯"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "所有键盘干净但调换到错误工作位"
+        },
+        {
+          "status": "planned",
+          "description_zh": "漏一块显示器的尘"
+        },
+        {
+          "status": "planned",
+          "description_zh": "在键盘仍在护理台时提前关灯闭场，随后才补归位"
+        }
+      ],
+      "capability_gates_zh": [
+        "键盘 wipe 有历史成功；显示器和刷/抹布的材料兼容性须验证",
+        "同款键盘若不能视觉区分，应按工位分批保持可追踪；不能给模型隐藏物体身份任务",
+        "显示器如需湿抹布而当前 soak 不可用，此任务转研究门槛，不直接跳过前提"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "工具切换、导航不计入 108"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "bathroom_clear_clean_restock_100_v1",
+      "name_zh": "卫浴四区清洁与用品补位",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "house_single_floor",
+      "task_family": "wet_area_material_cleanup_and_restock",
+      "priority": "composition_gate",
+      "public_instruction_zh": "将洗手台、浴缸周边、置物区和地面四区的 24 件散放用品逐件暂存，全部清空后清洁洗手盆、浴缸、马桶和地面四个有污渍的对象，四者都干净后按公开摆放图归置用品。最后归还清洁工具。",
+      "object_groups": [
+        {
+          "id": "supplies",
+          "count": 24,
+          "description_zh": "肥皂、皂盒、纸盒和纸卷等可搬用品",
+          "source_task": "tidying_bathroom"
+        },
+        {
+          "id": "fixtures",
+          "count": 4,
+          "description_zh": "洗手盆、浴缸、马桶、地面四个独立污渍目标",
+          "source_task": "cleaning_bathrooms"
+        }
+      ],
+      "phases": [
+        {
+          "id": "clear",
+          "after": [],
+          "dependency_scope": "global",
+          "description_zh": "24 件全部进入暂存区",
+          "independent_witness_zh": "全部用品已离开四个作业区域"
+        },
+        {
+          "id": "clean",
+          "after": [
+            "clear"
+          ],
+          "dependency_scope": "global",
+          "description_zh": "用兼容清洁工具去污",
+          "independent_witness_zh": "四个独立目标均非 Covered(stain)"
+        },
+        {
+          "id": "restock",
+          "after": [
+            "clean"
+          ],
+          "dependency_scope": "global",
+          "description_zh": "公开摆放图补位",
+          "independent_witness_zh": "24 件用品在对应固定支撑物"
+        },
+        {
+          "id": "close",
+          "after": [
+            "restock"
+          ],
+          "dependency_scope": "global",
+          "description_zh": "收好工具",
+          "independent_witness_zh": "刷子、抹布在公开归位点，手空"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "supplies_out",
+          "phase": "clear",
+          "group": "supplies",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "腾空四个清洁区域",
+          "source_zone": "bathroom_zones",
+          "destination_zone": "staging"
+        },
+        {
+          "id": "fixture_wipe",
+          "phase": "clean",
+          "group": "fixtures",
+          "actions_per_entity": [
+            "wipe"
+          ],
+          "necessity_zh": "四个独立脏对象各一次，不把同一地面分成虚构擦拭格"
+        },
+        {
+          "id": "supplies_back",
+          "phase": "restock",
+          "group": "supplies",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "干净后按摆放图归位",
+          "source_zone": "staging",
+          "destination_zone": "bathroom_destinations"
+        }
+      ],
+      "declared_useful_calls": 100,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "cleaning_bathrooms",
+        "tidying_bathroom"
+      ],
+      "layout_and_shared_resources_zh": "一个浴室的四种真实对象，而非宣称四间现成浴室。用品需在周边足够大的低位台面分布，不能把 24 件强塞到马桶上。不同污染区域可用两套刷/抹布；工具分区是公开流程要求，不声称模拟了病菌传播。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "四个目标均无指定 stain，24 件用品归位",
+          "工具归位、手空"
+        ],
+        "historical_zh": [
+          "全部腾空→四目标都干净→补位的两次全量门槛"
+        ],
+        "invariants_zh": [
+          "污渍去除不是灭菌；不设置“消毒完成”虚构谓词",
+          "若工具需要含水/含清洁剂，必须满足原生前提"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "按区域撤物，依次洗手盆→浴缸→马桶→地面，再逐区补位"
+        },
+        {
+          "status": "planned",
+          "description_zh": "按用品类别撤物，先处理地面与浴缸，再处理余下目标后按类别补位"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "未全部腾空就开始清洁"
+        },
+        {
+          "status": "planned",
+          "description_zh": "剩一个带 stain 的目标就开始补位"
+        },
+        {
+          "status": "planned",
+          "description_zh": "最后用品摆对但漏一处污渍"
+        }
+      ],
+      "capability_gates_zh": [
+        "cleaning_bathrooms 仅作源码参考，未列入本地 challenge manifest；tidying_bathroom 已列入，但联合清洁实例未验证",
+        "stain 的去除条件、抹布吸水/工具兼容性及马桶/浴缸可达性未验证",
+        "必须冻结明确的 24 个物品支撑位置和 staging 容量"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "工具取放、必要润湿/清洗和导航不计入 100；相关能力前提尚未通过"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "bedroom_vacuum_reset_close_102_v1",
+      "name_zh": "双卧室腾空吸尘、归位与夜间闭场",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "house_double_floor_upper",
+      "task_family": "multi_room_floor_cleaning_and_persistent_constraints",
+      "priority": "build_next",
+      "public_instruction_zh": "清理两间卧室：每间把 12 件散放书和玩具移到固定暂存台，地面腾空后吸尘，再按公开位置归位。两间完成后关闭 4 盏初始亮着的灯，吸尘器关闭并归还。",
+      "object_groups": [
+        {
+          "id": "clutter",
+          "count": 24,
+          "description_zh": "每间 12 件书和玩具",
+          "source_task": "putting_away_toys"
+        },
+        {
+          "id": "floors",
+          "count": 2,
+          "description_zh": "两个不同的独立地面对象",
+          "source_task": "vacuuming_floors"
+        },
+        {
+          "id": "lights",
+          "count": 4,
+          "description_zh": "初始亮着的可控灯",
+          "source_task": "turning_out_all_lights_before_sleep"
+        }
+      ],
+      "phases": [
+        {
+          "id": "clear",
+          "after": [],
+          "dependency_scope": "per_batch",
+          "description_zh": "该房 12 件全部撤到暂存台",
+          "independent_witness_zh": "本房地面无待处理杂物"
+        },
+        {
+          "id": "vacuum",
+          "after": [
+            "clear"
+          ],
+          "dependency_scope": "per_batch",
+          "description_zh": "吸本房地面灰尘",
+          "independent_witness_zh": "该 floor 非 Covered(dust)"
+        },
+        {
+          "id": "restore",
+          "after": [
+            "vacuum"
+          ],
+          "dependency_scope": "per_batch",
+          "description_zh": "该房用品归指定固定家具",
+          "independent_witness_zh": "该房 12 件全部归位且地面仍无尘"
+        },
+        {
+          "id": "lights_off",
+          "after": [
+            "restore"
+          ],
+          "dependency_scope": "global",
+          "description_zh": "两个房间完成再关闭四灯",
+          "independent_witness_zh": "所有灯非 ToggledOn，吸尘器关闭归位"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "clear_items",
+          "phase": "clear",
+          "group": "clutter",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "腾空每房地面",
+          "source_zone": "bedroom_sources",
+          "destination_zone": "room_staging"
+        },
+        {
+          "id": "vacuum_floors",
+          "phase": "vacuum",
+          "group": "floors",
+          "actions_per_entity": [
+            "vacuum"
+          ],
+          "necessity_zh": "每个独立地面只计一次"
+        },
+        {
+          "id": "restore_items",
+          "phase": "restore",
+          "group": "clutter",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "清洁后按固定家具位置恢复",
+          "source_zone": "room_staging",
+          "destination_zone": "room_destinations"
+        },
+        {
+          "id": "off",
+          "phase": "lights_off",
+          "group": "lights",
+          "actions_per_entity": [
+            "toggle_off"
+          ],
+          "necessity_zh": "真实初始开启的四盏灯"
+        }
+      ],
+      "declared_useful_calls": 102,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "vacuuming_floors",
+        "tidying_bedroom",
+        "putting_away_toys",
+        "turning_out_all_lights_before_sleep"
+      ],
+      "layout_and_shared_resources_zh": "必须核查候选场景有两个可独立评分的卧室 floor；若是一个合并 mesh，只能计一次 vacuum 并重算长度。两房各有足够暂存面积，共用一台吸尘器，不假定从相机视角切换就完成跨房导航。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "两地面无尘、24 件用品正确归位",
+          "四灯关闭，吸尘器关闭归位、手空"
+        ],
+        "historical_zh": [
+          "每房分别腾空→吸尘→归位；第二房未完成前不进行闭场关灯"
+        ],
+        "invariants_zh": [
+          "已完成房间的归位和清洁持续保持",
+          "不能反复吸同一 floor 计两房工作"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "完整完成卧室 A，再完成卧室 B"
+        },
+        {
+          "status": "planned",
+          "description_zh": "先撤空两间，再依次吸尘并分房归位"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "只吸一个 floor 却报告两房完成"
+        },
+        {
+          "status": "planned",
+          "description_zh": "一房尚未清空就吸尘"
+        },
+        {
+          "status": "planned",
+          "description_zh": "最终灯关闭但有一本书仍在暂存区"
+        }
+      ],
+      "capability_gates_zh": [
+        "floor 对象边界、材料隔离和四灯实际资产需要核对",
+        "历史单地面 vacuum 成功不等于双房清洁和持久约束通过"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "吸尘器取放/开关、导航不计入 102"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "laundry_wash_dry_dispatch_112_v1",
+      "name_zh": "洗衣区分批洗涤、干燥与分类归架",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "house_single_floor",
+      "task_family": "machine_cycles_and_wet_dry_state_changes",
+      "priority": "research_gate",
+      "public_instruction_zh": "把 14 件带污渍衣物送到分拣台，按公开类别分批洗涤、烘干，干净且不含水后逐件归架。完成后两台设备停止并关门。本版本不要求折衣或搭挂衣架。",
+      "object_groups": [
+        {
+          "id": "garments",
+          "count": 14,
+          "description_zh": "7 件 blouse、7 件 undergarment；具体可用模型待绑定",
+          "source_task": "doing_laundry"
+        }
+      ],
+      "phases": [
+        {
+          "id": "sort",
+          "after": [],
+          "dependency_scope": "per_item",
+          "description_zh": "衣物到分拣台",
+          "independent_witness_zh": "各件在对应类别的固定分拣位置"
+        },
+        {
+          "id": "load_wash",
+          "after": [
+            "sort"
+          ],
+          "dependency_scope": "per_batch",
+          "description_zh": "分批装洗衣机",
+          "independent_witness_zh": "本批 Inside(washer)，容量与材料前提满足"
+        },
+        {
+          "id": "wash",
+          "after": [
+            "load_wash"
+          ],
+          "dependency_scope": "per_batch",
+          "description_zh": "完整原生洗涤循环",
+          "independent_witness_zh": "本批非 Covered(stain)，不能只靠 toggle_on 成功"
+        },
+        {
+          "id": "load_dry",
+          "after": [
+            "wash"
+          ],
+          "dependency_scope": "per_batch",
+          "description_zh": "洗衣机停止后逐件转移至烘干机",
+          "independent_witness_zh": "本批 Inside(dryer)"
+        },
+        {
+          "id": "dry",
+          "after": [
+            "load_dry"
+          ],
+          "dependency_scope": "per_batch",
+          "description_zh": "原生干燥循环",
+          "independent_witness_zh": "本批非 Saturated(water)，且不再带 stain"
+        },
+        {
+          "id": "dispatch",
+          "after": [
+            "dry"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "停止后取出归架",
+          "independent_witness_zh": "干净且干燥的本件 OnTop(类别货架)"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "sort_garments",
+          "phase": "sort",
+          "group": "garments",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "公开要求先分类以确定洗涤批次",
+          "source_zone": "incoming_laundry",
+          "destination_zone": "sort_table"
+        },
+        {
+          "id": "washer_load",
+          "phase": "load_wash",
+          "group": "garments",
+          "actions_per_entity": [
+            "grasp",
+            "place_inside"
+          ],
+          "necessity_zh": "污衣进入机器处理",
+          "source_zone": "sort_table",
+          "destination_zone": "washer"
+        },
+        {
+          "id": "dryer_load",
+          "phase": "load_dry",
+          "group": "garments",
+          "actions_per_entity": [
+            "grasp",
+            "place_inside"
+          ],
+          "necessity_zh": "洗后衣物进入干燥工序",
+          "source_zone": "washer",
+          "destination_zone": "dryer"
+        },
+        {
+          "id": "dispatch_garments",
+          "phase": "dispatch",
+          "group": "garments",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "干燥后归架",
+          "source_zone": "dryer",
+          "destination_zone": "category_shelves"
+        }
+      ],
+      "declared_useful_calls": 112,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "doing_laundry",
+        "hanging_clothes"
+      ],
+      "layout_and_shared_resources_zh": "一台洗衣机、一台烘干机，建议两批各 7 件但实际容量待测；允许洗/烘错峰。洗涤剂、水、衣物材料、机器规则都未绑定，不能仅复制 BDDL 就认为可执行。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "14 件无 stain、非 Saturated(water)、在对应类别架上",
+          "两机器停止、门关闭、工具归位、手空"
+        ],
+        "historical_zh": [
+          "每件按分类→洗涤→干燥→归架；机器停止后才能取出"
+        ],
+        "invariants_zh": [
+          "Folded/Draped 不在本任务目标内，绝不能用 AttachedTo 替代它们",
+          "不由任务脚本直接赋值去污/干燥结果"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "第一类完整洗→烘→归架，再处理第二类"
+        },
+        {
+          "status": "planned",
+          "description_zh": "第一批烘干期间洗第二批，在单手和机器容量约束下交错"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "衣物摆对但仍 Saturated(water)"
+        },
+        {
+          "status": "planned",
+          "description_zh": "开关过机器却残留 stain"
+        },
+        {
+          "status": "planned",
+          "description_zh": "机器运行中取出，最后补停机"
+        }
+      ],
+      "capability_gates_zh": [
+        "doing_laundry 不在本地 challenge manifest；仅验证了 BDDL 源码存在",
+        "未证明现有执行器支持这些 cloth 的抓取/机器装卸，或原生洗涤烘干转换；应先做单衣物全链探针",
+        "仅在上述能力通过后才能生成 benchmark 实例；当前是研究候选"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "洗涤剂/水处理、门和开关、等候、工具取放不计入 112；没有假设新洗衣原子动作"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    },
+    {
+      "id": "wood_finish_and_redecorate_100_v1",
+      "name_zh": "木家具着色与陈设恢复",
+      "status": "design_only",
+      "benchmark_ready": false,
+      "scene_candidate": "house_double_floor_lower",
+      "task_family": "tool_saturation_and_material_transfer",
+      "priority": "research_gate",
+      "public_instruction_zh": "把四张固定木桌上的 24 件陈设暂存，全部腾空后让刷子从指定容器取得材料，再把四张桌面涂覆为指定材料，最后恢复陈设并归还工具。此版本采用仿真的 ink 覆盖状态。",
+      "object_groups": [
+        {
+          "id": "decor",
+          "count": 24,
+          "description_zh": "每桌六件书/杯等陈设",
+          "source_task": "sorting_household_items"
+        },
+        {
+          "id": "tables",
+          "count": 4,
+          "description_zh": "四张独立固定木桌",
+          "source_task": "staining_wood_furniture"
+        }
+      ],
+      "phases": [
+        {
+          "id": "clear",
+          "after": [],
+          "dependency_scope": "global",
+          "description_zh": "四桌陈设全部暂存",
+          "independent_witness_zh": "24 件均离开木桌"
+        },
+        {
+          "id": "charge",
+          "after": [
+            "clear"
+          ],
+          "dependency_scope": "global",
+          "description_zh": "从材料容器浸润刷子",
+          "independent_witness_zh": "刷子 Saturated(ink)，通过原生材料条件取得"
+        },
+        {
+          "id": "coat",
+          "after": [
+            "charge"
+          ],
+          "dependency_scope": "per_item",
+          "description_zh": "刷子向每张桌转移材料",
+          "independent_witness_zh": "各桌由非 Covered 变为 Covered(ink)"
+        },
+        {
+          "id": "restore",
+          "after": [
+            "coat"
+          ],
+          "dependency_scope": "global",
+          "description_zh": "四桌都覆盖后恢复陈设",
+          "independent_witness_zh": "陈设归位且四桌 Covered(ink) 持续满足"
+        }
+      ],
+      "useful_action_ledger": [
+        {
+          "id": "clear_decor",
+          "phase": "clear",
+          "group": "decor",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "腾空待处理表面",
+          "source_zone": "wood_tables",
+          "destination_zone": "staging"
+        },
+        {
+          "id": "coat_tables",
+          "phase": "coat",
+          "group": "tables",
+          "actions_per_entity": [
+            "spread"
+          ],
+          "necessity_zh": "四个独立表面各一次有效材料转移"
+        },
+        {
+          "id": "restore_decor",
+          "phase": "restore",
+          "group": "decor",
+          "actions_per_entity": [
+            "grasp",
+            "place_on_top"
+          ],
+          "necessity_zh": "处理完恢复陈设",
+          "source_zone": "staging",
+          "destination_zone": "wood_tables"
+        }
+      ],
+      "declared_useful_calls": 100,
+      "measured_useful_calls": null,
+      "source_tasks": [
+        "staining_wood_furniture",
+        "sorting_household_items"
+      ],
+      "layout_and_shared_resources_zh": "共享刷子和盛有 ink 的容器。是否需要再次 soak 由真实 Saturated/容量决定，不能为凑长度每擦一下就浸一下。四桌固定，不通过直接移动带材料的整台家具完成任务。",
+      "evaluator_contract": {
+        "terminal_zh": [
+          "四个桌面 Covered(ink)、24 件陈设归位",
+          "刷子和容器在指定储存处、手空"
+        ],
+        "historical_zh": [
+          "全部腾空→取得材料→覆盖四桌→恢复；每次 spread 满足工具材料前提"
+        ],
+        "invariants_zh": [
+          "Covered(ink) 不是油漆固化、均匀刷纹或耐久防护；不添加无实现的干燥目标",
+          "材料必须经 soak/spread，不允许任务脚本直接设置表面状态"
+        ],
+        "implementation_status": "planned"
+      },
+      "reference_orders": [
+        {
+          "status": "planned",
+          "description_zh": "按桌撤空所有陈设，依次着色，再逐桌复原"
+        },
+        {
+          "status": "planned",
+          "description_zh": "按陈设类别撤空，反向处理四桌，再按类别复原"
+        }
+      ],
+      "negative_cases": [
+        {
+          "status": "planned",
+          "description_zh": "没有 Saturated 材料的刷子被当作已着色"
+        },
+        {
+          "status": "planned",
+          "description_zh": "最后摆对了但有一桌未 Covered(ink)"
+        },
+        {
+          "status": "planned",
+          "description_zh": "尚未全部腾空就着色，结束时补正位置"
+        }
+      ],
+      "capability_gates_zh": [
+        "soak/spread 尚无当前公开 100 任务成功证据；本任务必须先通过最小材料闭环探针",
+        "staining_wood_furniture 仅有 BDDL 参考，本地 challenge manifest 未列出该任务",
+        "笔刷作为吸附/转移工具的材料能力与容器 Filled 来源尚未冻结"
+      ],
+      "necessary_but_uncounted_actions_zh": [
+        "soak 至少一次但不计入 100；重浸次数由物理结果决定；工具取放和导航另计"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "scene_freeze": "planned",
+        "physics": "planned",
+        "rgb_mcp": "planned",
+        "model_success": "planned"
+      },
+      "proposed_act_look_budget": 600
+    }
+  ]
+}

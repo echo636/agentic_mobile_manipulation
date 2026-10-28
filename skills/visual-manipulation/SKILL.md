@@ -1,19 +1,19 @@
 ---
 name: visual-manipulation
-description: Complete manipulation through RGB, callable workflow skills, bounded actions and visible verification.
+description: Choose manipulation skills and verify progress from RGB and action feedback.
 ---
-# Visual manipulation workflow
+# Manipulation workflow
 
-1. Start a read-only asynchronous four-camera observation with start_observation({}); use get_observation(job_id) until passed and inspect front/back/left/right RGB. The cameras acquire one simulation state without rotating the robot. Perceive requested objects yourself; no oracle inventory or state is available.
-2. Read visual-exploration for search, pick-and-place before carrying, failure-recovery after failed actions. These documents guide your next action; they do not execute actions automatically.
-3. Choose one next action from visible evidence. The replay records your actual public messages and tool calls verbatim; there is no extra decision form or required language. Do not claim unseen success.
-4. Select a point in the latest image_ref (any direction) with the latest revision; do not use a job marked stale. Approach, then select again from fresh RGB before grasp/open/place/toggle. The executor cannot select objects for you.
-5. Execute one bounded action and inspect its returned RGB. Use normal conversation history to track moved items and visual landmarks. Explicit plan and memory tools are unavailable in the default skills profile; no plan-writing stage is required.
-6. Compare fresh visual evidence with the expected effect. A tool completing is only an operation report. Change the viewpoint or approach when uncertain, and read recovery guidance if needed.
-7. Verify the entire instruction from RGB and feedback. Finish achieved/blocked/aborted with a short evidence-based reason, and receive closed=true. The evaluator remains private.
+Initialize, inspect the four returned views, then choose the next action. Read `initialize.control` for the active protocol. In `target_locked_approach_v2`, directly request the operation when its target is clearly selectable; the executor handles approach and stance. Use macro navigation for exploration, another task area, or an approach change justified by feedback. Check the other current views before moving to recover a cropped target.
 
-Read references/evidence.md for observation and completion rules.
+Read these when relevant:
 
-## Complete-task verification
+- `visual-exploration`: finding objects and traveling between areas.
+- `pick-and-place`: carrying, placing and attaching objects.
+- [references/material-actions.md](references/material-actions.md): cleaning, treating, soaking or cutting, before using those actions.
+- `failure-recovery`: diagnosing a rejected or partially executed action.
+- [references/evidence.md](references/evidence.md): deciding whether uncertain results support completion.
 
-Before claiming achieved, request a fresh four-camera observation and account for every requested item/count, spatial relation, door state and appliance state using RGB plus the actions actually executed. Reinspect occluded items from a new viewpoint. Successful act responses are not an independent task score. Washing or heating needs an appropriate process interval; wait_seconds on wait requests 0.1–20 simulation seconds, default 5. Do not infer a completed process from one successful toggle or visual appearance alone. If required evidence remains missing, continue or report the unresolved part rather than claim full completion.
+After each action, inspect returned RGB and feedback. Confirm the intended object and effect; preserve useful progress in task notes. For heating, washing or drying, allow simulation time using `wait` with a null target. A successful toggle alone does not establish a finished process.
+
+Before `finish`, reconcile the instruction's quantities, destinations, relations and final device states with the latest relevant evidence. Continue unresolved work when possible. Report achieved only when all required results are supported; otherwise state what remains. Receive `closed=true` before final text.

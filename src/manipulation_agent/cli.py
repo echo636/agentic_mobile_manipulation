@@ -7,9 +7,11 @@ import traceback
 from pathlib import Path
 
 from .contracts import Budget
-from .harness import Harness
+from .runtime.harness import Harness
 from .records import Recorder
-from . import bridge, fake_backend, omnigibson_backend, policies
+from .transport import bridge
+from .executors import fake_backend, omnigibson_backend
+from .agent import policies
 
 
 def main() -> int:
@@ -40,7 +42,7 @@ def main() -> int:
     policy = None
     # Check credentials BEFORE spending time and GPU memory on simulator startup.
     if args.policy == "responses":
-        from .policies import ResponsesPolicy
+        from .agent.policies import ResponsesPolicy
         policy = ResponsesPolicy.from_env()
     config = vars(args).copy()
     config["output"] = str(args.output.resolve())
@@ -50,18 +52,18 @@ def main() -> int:
     backend = None
     try:
         if args.backend == "mock":
-            from .fake_backend import FakeBackend
+            from .executors.fake_backend import FakeBackend
             backend = FakeBackend()
         else:
-            from .omnigibson_backend import OmniGibsonBackend
+            from .executors.omnigibson_backend import OmniGibsonBackend
             backend = OmniGibsonBackend(args.task, args.instance, args.output, seed=args.seed,
                                        max_steps=args.max_sim_steps, inside_placement=args.inside_placement)
         harness = Harness(backend, recorder, Budget(max_actions=args.max_actions, max_sim_steps=args.max_sim_steps))
         if args.policy == "scripted":
-            from .policies import scripted_episode
+            from .agent.policies import scripted_episode
             scripted_episode(harness, args.task)
         elif args.policy == "serve":
-            from .bridge import serve
+            from .transport.bridge import serve
             serve(harness, args.port)
         else:
             policy.run(harness, args.instruction)

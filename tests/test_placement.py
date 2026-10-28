@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
 from manipulation_agent.executors.placement import placement_transaction
+from manipulation_agent.contracts import SkillError
 
 class PlacementTransactions(unittest.TestCase):
  def test_failed_sampling_restores_world_and_grasp(self):
@@ -16,3 +17,10 @@ class PlacementTransactions(unittest.TestCase):
   saved=[];records=[];sim=SimpleNamespace(dump_state=lambda **kw:{},load_state=lambda *a,**kw:saved.append(a))
   with placement_transaction(sim,records.append):pass
   self.assertFalse(saved);self.assertEqual(records,[{'status':'committed'}])
+ def test_changed_particle_identity_cannot_restore_consumed_material(self):
+  loaded=[];records=[]
+  sim=SimpleNamespace(dump_state=lambda **kw:{'old_particles':10},load_state=lambda *a,**kw:loaded.append(a))
+  with self.assertRaises(SkillError),placement_transaction(sim,records.append):
+   raise SkillError('target_changed','Particles were consumed',changed=True)
+  self.assertEqual(loaded,[])
+  self.assertEqual(records[0]['reason'],'target_identity_changed')

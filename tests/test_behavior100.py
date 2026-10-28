@@ -11,12 +11,64 @@ import subprocess
 import sys
 import uuid
 from subprocess import CompletedProcess
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 spec=importlib.util.spec_from_file_location('batch_runner',Path(__file__).resolve().parents[1]/'scripts/run_behavior100.py')
 batch=importlib.util.module_from_spec(spec);spec.loader.exec_module(batch)
 
 class BatchEvidenceTests(unittest.TestCase):
+    def test_local_manipulation_protocol_is_explicit_and_validated(self):
+        config={'workers':[{'id':'local','gpu':0,'ssh':['ssh','fixture'],'base_port':36000}]}
+        for value in ('0','1'):
+            config['simulator_env']={'MAS_LOCAL_MANIPULATION':value}
+            self.assertEqual(batch.worker_configs(config)[0]['simulator_env']['MAS_LOCAL_MANIPULATION'],value)
+        for env in ({'MAS_LOCAL_MANIPULATION':'true'},{'MAS_LOCAL_MANIPULATION':1},{'UNREVIEWED_OPTION':'1'}):
+            config['simulator_env']=env
+            with self.assertRaises(ValueError):batch.worker_configs(config)
+
+    def test_fresh_batch_publish_only_creates_journal_and_preserves_existing_history(self):
+        for history in (None, '# Existing experiment\n\n- Original failure evidence.\n'):
+            with self.subTest(existing_journal=history is not None), tempfile.TemporaryDirectory() as folder:
+                root=Path(folder);reports=root/'report'
+                manifest={'comparison_arm':'original','standalone_batch':True,'tasks':[
+                    {'index':0,'task':'fixture_task','name':'Fixture task','run_id':'fixture',
+                     'status':'planned','stage':'queued'}]}
+                (root/'manifest.json').write_text(json.dumps(manifest))
+                config={'batch':str(root),'reports':str(reports),'expected_task_count':1,
+                        'workers':[{'id':'fixture-worker','gpu':0,'ssh':['ssh','fixture-host'],
+                                    'base_port':36000,'sim_python':sys.executable}]}
+                path=root/'config.json';path.write_text(json.dumps(config))
+                if history is not None:(root/'journal.md').write_text(history)
+                # Exercise the real CLI initialization and publication. Only
+                # checkout identity and the CLI --version probe are fixtures.
+                with patch.object(sys,'argv',['run_behavior100.py','--config',str(path),'--publish-only']), \
+                        patch.object(batch,'source_version',return_value={'commit':'fixture','dirty':False}), \
+                        patch.object(batch.shutil,'which',return_value='/fixture/codex'), \
+                        patch.object(batch.subprocess,'run',return_value=CompletedProcess([],0)) as command:
+                    batch.main()
+                command.assert_called_once_with(['/fixture/codex','--version'],check=True,
+                                                capture_output=True,text=True,timeout=20)
+                self.assertEqual((reports/'behavior100/journal.md').read_text(),history or '')
+                self.assertEqual((root/'journal.md').read_text(),history or '')
+                progress=json.loads((reports/'behavior100/progress.json').read_text())
+                self.assertEqual(progress['summary']['completed'],0)
+                self.assertEqual(progress['summary']['counts'],{'planned':1})
+                self.assertIn('Fixture task',(reports/'behavior100.html').read_text())
+
+    def test_remote_assets_selects_benchmark_index_in_single_task_manifest(self):
+        spec=importlib.util.spec_from_file_location('remote_subset_check',
+            Path(__file__).resolve().parents[1]/'scripts/behavior100_remote.py')
+        remote=importlib.util.module_from_spec(spec);spec.loader.exec_module(remote)
+        row={'index':93,'task':'clean_a_keyboard','instance':301,'seed':0}
+        with tempfile.TemporaryDirectory() as folder:
+            manifest=Path(folder)/'manifest.json'
+            manifest.write_text(json.dumps({'tasks':[row]}))
+            argv=['behavior100_remote.py','assets','--manifest',str(manifest),
+                  '--index','93','--data-root',folder]
+            with patch.object(sys,'argv',argv), patch.object(remote,'assets',return_value={'status':'passed'}) as assets, patch('builtins.print'):
+                remote.main()
+            assets.assert_called_once_with({'tasks':[row]},Path(folder))
+
     def make_queue_runner(self, folder, workers=None, count=3):
         runner=batch.Batch.__new__(batch.Batch)
         runner.root=Path(folder);runner._worker_local=threading.local()
@@ -54,6 +106,65 @@ class BatchEvidenceTests(unittest.TestCase):
                 for row in runner.rows:
                     self.assertEqual(row['status'],'failed')
                     for key,value in failure.items():self.assertEqual(row[key],value)
+
+    def test_lower_capacity_adopts_every_existing_execution_before_new_starts(self):
+        with tempfile.TemporaryDirectory() as folder:
+            # Put the fresh lane first to exercise reservation before adoption.
+            workers=[{'id':name,'gpu':i,'ssh':['ssh','fixture']}
+                     for i,name in enumerate(('fresh','a','b','c'))]
+            runner=self.make_queue_runner(folder,workers=workers,count=1)
+            runner._config.update(max_active_workers=1,
+                adopt_inflight={name:name for name in ('a','b','c')})
+            runner.rows.extend({'run_id':name,'status':'running'} for name in ('a','b','c'))
+            entered=threading.Barrier(4)
+            release={name:threading.Event() for name in ('a','b','c')}
+            completed={name:threading.Event() for name in ('a','b','c')}
+            errors=[]
+            runner.acquire_startup_gate=Mock(return_value=True)
+            runner.release_startup_gate=Mock()
+            runner.requeue_resource_rejection=Mock(return_value=False)
+            def adopt(row):
+                entered.wait(timeout=3)
+                if not release[row['run_id']].wait(3):
+                    raise RuntimeError('Test did not release adopted execution')
+                row.update(status='passed',simulator_cleanup={'status':'passed'})
+            runner.adopt_one=Mock(side_effect=adopt)
+            def state(stage,**kwargs):
+                if stage=='available' and runner.c['id'] in completed:
+                    completed[runner.c['id']].set()
+            runner.worker_state=Mock(side_effect=state)
+            runner.run_one=Mock(side_effect=lambda row,gpu:row.update(status='passed'))
+            def run():
+                try:runner.run()
+                except Exception as exc:errors.append(exc)
+            thread=threading.Thread(target=run)
+            thread.start()
+            try:
+                entered.wait(timeout=3)
+                runner.run_one.assert_not_called()
+                for name in ('a','b'):
+                    release[name].set()
+                    self.assertTrue(completed[name].wait(3))
+                # One inherited execution still fills the reduced capacity.
+                runner.run_one.assert_not_called()
+            finally:
+                for event in release.values():event.set()
+                thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(errors,[])
+            self.assertEqual(runner.adopt_one.call_count,3)
+            runner.run_one.assert_called_once()
+
+    def test_failed_adoption_keeps_capacity_reserved_for_retry(self):
+        capacity=batch.ExecutionCapacity(1,['existing'])
+        self.assertFalse(capacity.acquire('new'))
+        self.assertTrue(capacity.acquire('existing',adopting=True))
+        capacity.release('existing',preserve=True)
+        self.assertFalse(capacity.acquire('new'))
+        self.assertTrue(capacity.acquire('existing',adopting=True))
+        capacity.release('existing')
+        self.assertTrue(capacity.acquire('new'))
+        capacity.release('new')
 
     def test_explicit_drain_stops_new_admission(self):
         for before_start in (False,True):
@@ -144,6 +255,7 @@ class BatchEvidenceTests(unittest.TestCase):
             for directory in ('logs','preflight'):(root/directory).mkdir()
             runner=batch.Batch.__new__(batch.Batch)
             runner.root=root;runner.source=Path(__file__).resolve().parents[1];runner.source_info={'commit':'fixture'}
+            runner.storage=Mock(spool=root/'local-spool')
             runner._worker_local=threading.local()
             runner._config={'id':'fixture','base_port':31000,'batch_tag':'test','data_root':'/fixture',
                             'sim_python':'/fixture/python','ssh':['ssh','fixture']}
@@ -160,9 +272,50 @@ class BatchEvidenceTests(unittest.TestCase):
             self.assertIn('assets',runner.ssh.call_args.args[0])
             self.assertEqual(json.loads((root/'preflight/fixture_r1_assets.json').read_text()),asset)
 
+    def test_asset_timeout_requeues_last_task_to_another_host_without_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            common={'base_port':31000,'batch_tag':'test','data_root':'/fixture',
+                    'sim_python':'/fixture/python'}
+            workers=[{**common,'id':name,'gpu':i,'ssh':['ssh',name]}
+                     for i,name in enumerate(('slow','healthy'))]
+            runner=self.make_queue_runner(folder,workers,count=1)
+            for name in ('logs','preflight','controllers','records'):(runner.root/name).mkdir()
+            runner.source=Path(__file__).resolve().parents[1]
+            runner._config['asset_preflight_retry_cooldown_seconds']=.2
+            row=runner.rows[0]
+            row.update(index=0,task='fixture',run_id='fixture_r1',attempt=1,
+                       instruction='Restore the room.',instruction_sha256='original',
+                       episode_budget_policy='unbounded')
+            started=threading.Event();peer_checked=threading.Event();attempts=[]
+            def admission():
+                if runner.c['id']=='healthy':
+                    self.assertTrue(started.wait(2));peer_checked.set()
+                return True
+            runner.resource_admission=admission
+            runner.ssh=Mock(side_effect=subprocess.TimeoutExpired(['read-only-assets'],180))
+            def run_one(record,gpu):
+                attempts.append((record['run_id'],runner.c['id']))
+                if len(attempts)==1:
+                    started.set();self.assertTrue(peer_checked.wait(2))
+                    return batch.Batch.run_one(runner,record,gpu)
+                record.update(status='passed',task_success=True)
+            runner.run_one=run_one
+            runner.run()
+            self.assertEqual(attempts,[('fixture_r1','slow'),('fixture_r2','healthy')])
+            runner.ssh.assert_called_once()
+            self.assertIn('assets',runner.ssh.call_args.args[0])
+            self.assertEqual(row['instruction_sha256'],'original')
+            self.assertEqual(row['episode_budget_policy'],'unbounded')
+            prior=json.loads((runner.root/'records/fixture_r1.json').read_text())
+            self.assertEqual(prior['failure_kind'],'infrastructure_asset_preflight_unavailable')
+            self.assertIsNone(prior['task_success'])
+            self.assertFalse(prior['asset_preflight_unavailable']['launch_requested'])
+            self.assertEqual(prior['failure_stage'],'asset_preflight')
+
     def test_simulator_launch_sends_retained_script_instead_of_shared_path(self):
         with tempfile.TemporaryDirectory() as folder:
             runner=self.make_queue_runner(folder)
+            runner.storage=Mock(spool=Path(folder)/'local-spool')
             for directory in ('logs','preflight','launchers'):(runner.root/directory).mkdir()
             runner.source=Path('/source snapshot')
             runner.manifest={'simulator_runtime_max_seconds':1800}
@@ -247,6 +400,41 @@ class BatchEvidenceTests(unittest.TestCase):
             for kind in ('agent_message','reasoning','mcp_tool_call'):
                 stream.write_text(json.dumps({'type':'item.started','item':{'type':kind}})+'\n')
                 self.assertFalse(batch.prepolicy_failure(record,path))
+
+    def test_missing_action_count_before_simulator_start_can_retry_without_record_changes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)
+            for stage in ('asset_preflight','simulator_starting'):
+                record={'status':'failed','stage':'complete','failure_stage':stage,
+                        'simulator_pid':1678698,'failure':'quota subprocess timed out',
+                        'execution_clock_path':'/remote/not-yet-created/execution_clock.json'}
+                original=dict(record)
+                self.assertTrue(batch.prepolicy_failure(record,path))
+                self.assertEqual(record,original)
+                self.assertNotIn('actions',record)
+                archived={**record,'actions':None}
+                self.assertTrue(batch.prepolicy_failure(archived,path))
+                self.assertIsNone(archived['actions'])
+
+    def test_missing_action_count_never_allows_retry_after_controller_or_policy_start(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder);record={'status':'failed','failure_stage':'simulator_starting'}
+            for changed in ({'failure_stage':None},{'failure_stage':'controller_starting'},
+                            {'controller_pid':123},{'controller_wrapper_pid':123},
+                            {'controller_status':'failed'},{'execution_started_at_unix':0},
+                            {'episode_deadline_unix':123},{'bridge_ready_at':'timestamp'}):
+                for counter in ({},{'actions':None}):
+                    with self.subTest(changed=changed,counter=counter):
+                        self.assertFalse(batch.prepolicy_failure({**record,**counter,**changed},path))
+            stream=path/'model_events.jsonl'
+            for kind in ('agent_message','reasoning','mcp_tool_call','error'):
+                for counter in ({},{'actions':None}):
+                    with self.subTest(kind=kind,counter=counter):
+                        stream.write_text(json.dumps({'type':'item.started','item':{'type':kind}})+'\n')
+                        self.assertFalse(batch.prepolicy_failure({**record,**counter},path))
+            stream.unlink()
+            (path/'controller.json').write_text('{}')
+            self.assertFalse(batch.prepolicy_failure(record,path))
 
     def test_infrastructure_retry_retains_first_attempt_failure(self):
         row={'status':'passed','task_success':True,'previous_attempts':[{'status':'failed','task_success':False}]}

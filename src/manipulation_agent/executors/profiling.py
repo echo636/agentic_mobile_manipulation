@@ -26,5 +26,15 @@ def action_profile(method):
             row={'at':now(),'primitive':primitive,'status':status,'wall_seconds':time.perf_counter()-start,
                  'components':{k:{field:v[field]-before.get(k,{}).get(field,0) for field in v} for k,v in after.items()},
                  'scope':'Nested inclusive component timings, not additive; private executor evidence'}
-            with (self.output/'performance.jsonl').open('a') as f:f.write(json.dumps(row)+'\n')
+            if not getattr(self, '_performance_write_failed', False):
+                try:
+                    with (self.output/'performance.jsonl').open('a') as f:f.write(json.dumps(row)+'\n')
+                except OSError as exc:
+                    # Optional timing must not mask a primary executor error or
+                    # abort a successful action before independent evaluation.
+                    self._performance_write_failed = True
+                    failures = getattr(self, 'diagnostic_write_failures', [])
+                    failures.append({'artifact':'performance.jsonl', 'type':type(exc).__name__,
+                                     'error':str(exc), 'at':row['at'], 'primitive':primitive})
+                    self.diagnostic_write_failures = failures
     return wrapped

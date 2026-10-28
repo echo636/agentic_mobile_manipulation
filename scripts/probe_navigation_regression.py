@@ -1,0 +1,123 @@
+"""Private archived navigation geometry regression; not an autonomous benchmark."""
+import argparse
+import json
+import math
+from pathlib import Path
+import sys
+import traceback
+from types import SimpleNamespace
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from manipulation_agent.records import Recorder,write_json
+
+
+def main():
+    p=argparse.ArgumentParser();p.add_argument('--fixture',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
+    a=p.parse_args();fixture=json.loads(a.fixture.read_text())
+    recorder=Recorder(a.output,dict(fixture,policy='private_archived_geometry_navigation_probe',model_used=False,
+                                  not_a_benchmark_attempt=True,observation_mode='rgb_only'))
+    validation={'status':'running','checks':{},'cases':[], 'validation_level':'real_simulator_private_navigation_component'}
+    backend=harness=None
+    def save():write_json(a.output/'validation.json',validation)
+    save()
+    try:
+        from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+        from manipulation_agent.executors.navigation.live_gt_map import build_navigation_grid
+        from manipulation_agent.executors.navigation.gt_navigation import plan_navigation,NavigationError
+        from manipulation_agent.runtime.vision_harness import VisionHarness
+        from manipulation_agent.contracts import Budget
+        from omnigibson.object_states import Open
+        backend=RGBBackend(fixture['task'],301,a.output,seed=0,max_steps=40000,inside_placement='official_volume',record_video=True)
+        backend.deadline.arm_local(1800)
+        harness=VisionHarness(backend,recorder,Budget(wall_seconds=1800),profile='skills')
+        doors={obj.name:obj for obj in backend.env.scene.objects if obj.name in fixture['doors']}
+        if set(doors)!=set(fixture['doors']):raise ValueError('Expected diagnostic doors absent')
+        validation['doors']={name:{'category':obj.category,'initial_open':obj.states[Open].get_value()} for name,obj in doors.items()}
+        floor=min(range(len(backend.env.scene.trav_map.floor_heights)),key=lambda i:abs(float(backend.robot.get_position_orientation()[0][2])-backend.env.scene.trav_map.floor_heights[i]))
+        grid,meta=build_navigation_grid(backend,floor)
+        import numpy as np
+        np.savez_compressed(a.output/'initial_navigation_map.npz',free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),origin=grid.origin,resolution=grid.resolution)
+        validation['initial_map']=meta;save();print(json.dumps({'stage':'initialized','map':meta}),flush=True)
+        for case in fixture['cases']:
+            case_record={'input':case};validation['cases'].append(case_record)
+            for door in doors.values():door.states[Open].set_value(False,fully=True)
+            for _ in range(10):backend._step(backend.robot.q_to_action(backend.robot.get_joint_positions()))
+            pos,quat=backend.robot.get_position_orientation();pos[:2]=backend.torch.tensor(case['start'],device=pos.device)
+            if case.get('start_orientation') is not None:
+                quat=backend.torch.tensor(case['start_orientation'],device=quat.device)
+            backend.robot.set_position_orientation(pos,quat)
+            closed_grid,closed_meta=build_navigation_grid(backend,floor)
+            np.savez_compressed(a.output/(case['name']+'_closed_map.npz'),free=np.frombuffer(closed_grid.free,dtype='uint8').reshape(closed_grid.height,closed_grid.width),origin=closed_grid.origin,resolution=closed_grid.resolution)
+            try:
+                closed_start=closed_grid.snap(case['start'],.6)
+                if closed_start is None:raise NavigationError('No free closed-door diagnostic start')
+                plan=plan_navigation(closed_grid,closed_grid.world(closed_start),case['world_target'][:2],goal_mode=case['goal_mode'])
+                case_record['closed_door_plan']={'status':'planned','goal':plan.goal,'geodesic_m':plan.geodesic_m,'points':plan.points}
+
+            except NavigationError as exc:case_record['closed_door_plan']={'status':'blocked','error':str(exc)}
+            for door in doors.values():
+                if not door.states[Open].set_value(True,fully=True):raise ValueError('Diagnostic door failed to open')
+            for _ in range(10):backend._step(backend.robot.q_to_action(backend.robot.get_joint_positions()))
+            backend.robot.set_position_orientation(pos,quat)
+            harness.refresh()
+            point=backend.torch.tensor(case['world_target'],dtype=backend.torch.float32)
+            target=SimpleNamespace(get_position_orientation=lambda:(point,None),selected_object=None)
+            recorder.event('diagnostic_navigation_begin',case)
+            motion_before=len((a.output/'base_motion.jsonl').read_text().splitlines()) if (a.output/'base_motion.jsonl').exists() else 0
+            try:
+                result=backend._navigate(target,20000,for_manipulation=case.get('for_manipulation',False))
+            except Exception as exc:
+                expected=case.get('expect_error')
+                if not expected or getattr(exc,'code',None)!=expected:raise
+                obs=harness.refresh()
+                case_record.update(status='passed',expected_rejection=expected,
+                                   message=str(exc),views=[i['view'] for i in obs['images']])
+                validation['checks'][case['name']+'_expected_rejection']=True
+                validation['checks'][case['name']+'_four_views']=len(obs['images'])==4
+                recorder.event('diagnostic_expected_navigation_rejection',case_record)
+                save();print(json.dumps(case_record),flush=True)
+                continue
+            if case.get('expect_error'):raise AssertionError('Expected blocked target was reported reached')
+            obs=harness.refresh()
+            actual=backend.robot.get_position_orientation()[0].cpu().tolist()
+            case_record.update(status='passed',result=result,actual_position=actual,views=[i['view'] for i in obs['images']],
+                               clicked_xy_error_m=math.dist(actual[:2],case['world_target'][:2]))
+            motion=[json.loads(line) for line in (a.output/'base_motion.jsonl').read_text().splitlines()[motion_before:]]
+            dz=max((abs(m['actual_position'][2]-m['commanded_position'][2]) for m in motion),default=0.)
+            case_record['max_vertical_feedback_error_m']=dz
+            validation['checks'][case['name']+'_no_collision_lift']=dz<=.03
+            validation['checks'][case['name']+'_navigation_outcome']=result['nav_status'] in case.get(
+                'expected_nav_status',['reached'] if case['goal_mode']=='point' else ['reached','approached'])
+            if 'projection_range_m' in case:
+                low,high=case['projection_range_m']
+                validation['checks'][case['name']+'_projection_range']=low<=case_record['clicked_xy_error_m']<=high
+            elif case['goal_mode']=='point':validation['checks'][case['name']+'_near_click']=case_record['clicked_xy_error_m']<=.15
+            else:validation['checks'][case['name']+'_within_reach']=case_record['clicked_xy_error_m']<=1.4
+            if case.get('require_recovery'):
+                recovery=a.output/'navigation_recovery.jsonl'
+                records=[json.loads(line) for line in recovery.read_text().splitlines()] if recovery.exists() else []
+                validation['checks'][case['name']+'_revalidated_recovery']=any(
+                    r.get('refreshed_start_navigable') is True for r in records)
+            if doors and case.get('check_closed_door_block',True):
+                validation['checks'][case['name']+'_closed_door_blocks']=case_record['closed_door_plan']['status']=='blocked'
+            recorder.event('diagnostic_navigation_result',case_record);save();print(json.dumps(case_record),flush=True)
+    except Exception as exc:
+        validation['error']={'type':type(exc).__name__,'message':str(exc)}
+        (a.output/'traceback.txt').write_text(traceback.format_exc());print(traceback.format_exc(),flush=True)
+    finally:
+        try:
+            if harness is not None:
+                try:
+                    result=harness.call('finish',{'outcome':'aborted','reason':'Private navigation component probe, not an autonomous challenge result.'},'diagnostic-finish')
+                    harness.finalize_recording()
+                    validation['checks']['finish_closed']=result.get('closed') is True
+                    validation['checks']['scoring_completed']=recorder.run.get('scoring',{}).get('status')=='passed'
+                    validation['checks']['video_finalized']=recorder.run.get('video',{}).get('status')=='passed'
+                except Exception as exc:validation['finish_error']=str(exc)
+            validation['status']='passed' if not validation.get('error') and not validation.get('finish_error') and validation['checks'] and all(validation['checks'].values()) else 'failed'
+            save()
+        finally:
+            if backend is not None:backend.close()
+    print(json.dumps(validation),flush=True)
+    return 0 if validation['status']=='passed' else 2
+
+if __name__=='__main__':raise SystemExit(main())

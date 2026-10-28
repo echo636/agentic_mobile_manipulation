@@ -5,40 +5,190 @@ The default RGB executor now uses the visual-point GT planning strategy from
 `0815cf234ee591bacd8017e9b1def4fac13e649b`. Attribution and the source license
 are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
-The model still supplies exactly `act(primitive="navigate_to", target={image_ref,
-point}, revision)`. It does not receive maps, depth, real object names, world
-coordinates, path lengths, or task evaluator state. Manipulation primitives
-remain symbolic/volume operations and are not changed by this navigation port.
+The current harness uses a private GT grid and does not run Cartographer. The
+model supplies `act(primitive="navigate_to", target={image_ref, point}, revision)`.
+It receives four RGB images and tool feedback, never maps, depth, object IDs,
+world coordinates or evaluator state. `initialize` supplies the first snapshot;
+each `act` / `look` supplies the next one.
 
-## Transferred strategy and simulator adaptation
+## Current navigation pipeline
 
-| Reference behavior | OmniGibson implementation |
-|---|---|
-| Visual-point candidate positions: direct floor projection, camera-side 0.7 m standoff, 12 directions at 0.3/0.6/0.9/1.2 m radii | Same candidate geometry, Habitat XZ converted to OmniGibson XY |
-| `PathFinder.snap_point`, bounded at 0.75 m | Nearest free sample on the private eroded traversability grid, same projection bound |
-| Verify candidate reachability and geodesic path length | One multi-goal Dijkstra search; diagonal corner cutting is forbidden |
-| Score standoff error, snap distance and near-zero progress; use geodesic distance as tie-break | Same point-mode scoring coefficients and thresholds |
-| Native greedy follower with actual step feedback and explicit reached/blocked status | Bounded turn/advance follower reading the actual robot pose after every control step; stalls, divergence, invalid cells and budget exhaustion fail explicitly |
-| Per-step movement recording | Existing RGB recorder plus timestamped private base-motion and navigation-plan logs |
+1. Backproject the exact selected pixel using the capture's calibrated depth.
+   There is no navigation object lookup or depth-to-mesh agreement gate.
+2. Both floor and elevated clicks search the entire start-connected component,
+   proposing the closest feasible points to the selected XY. Ground navigation
+   compares complete routes within 10 cm of the closest proposed point, using
+   translation time plus rotation time; elevated approaches retain the closest
+   target-distance tier. There is no 0.75 m projection radius, ring sampling, or
+   1.4 m navigation cutoff. Elevated approaches must see the target through a
+   camera frustum with an 8% image-edge margin and unobstructed scene ray; a floor point may be below the
+   camera at arrival. This visibility difference does not change the search
+   radius or connectivity rules. Manipulation retains its separate reach check.
+3. Load the GT floor support raster, query current PhysX collision geometry,
+   and update dirty regions when object poses or joints change. AABBs bound the
+   query region; the actual collision query determines occupied cells. Closed
+   doors block travel, and opening a door changes the next navigation grid.
+4. Combine occupancy eroded by the measured oriented robot footprint in each height band. Plan a
+   collision-free grid route without cutting corners. If the current heading
+   cannot reach the nearest target region, compare alternative headings and the whole in-place turn's swept
+   footprint. Endpoint selection uses the same footprint reserve as forward
+   execution, including the required final viewing orientation. Each candidate
+   also requires checked local forward arrival and departure paths (at least
+   30 cm net displacement, optionally staged by 10 or 20 cm). A legal static
+   pose is insufficient: outward-facing poses that can only be entered by
+   reversing, and inward-facing poses that cannot leave, are both rejected.
+   These are local certificates under the current robot/load geometry, not a
+   guarantee that every later target remains reachable after manipulation.
+   For a floor click requiring projection, a bounded forward-motion roadmap
+   first computes reachability across endpoint positions and headings together.
+   It chooses the nearest checked endpoint in that roadmap, with the same
+   arrival/departure certificates. This avoids fixing a holonomically reachable
+   endpoint and discarding a slightly farther endpoint with an executable route.
+   The eight sampled headings accelerate this proposal only: continuous measured
+   start connectors and every reconstructed edge are swept-checked, and the
+   continuous planner remains available if the proposal fails. Its spatial
+   window contains the original guide paths plus turning room; it is not a
+   proof of global optimality or infeasibility. Graph dependencies load during
+   simulator startup rather than consuming the first route's planning budget.
+5. If the starting footprint overlaps an obstacle, seek a short continuous
+   retreat with non-increasing overlap for each connected 3D obstacle across
+   height bands, no new obstacle regions, and continuous contact patches. Once
+   the raw base centre becomes free it cannot enter an occupied cell again. With this geometry proof, even an occupied base centre
+   can retreat; floor support remains mandatory. Rebuild the live map after
+   each retreat and repeat if necessary, respecting the action/deadline budget
+   and rejecting repeated blocked states. Without a verified exit, retain
+   `navigation_invalid_start`. No start teleport or wall crossing is permitted.
+   This contact-shedding retreat is the explicit, logged exception to forward
+   driving: turning while already overlapping an obstacle may be unsafe.
+6. Execute bounded pose increments (at most 0.5 m/s and 60 degrees/s), read back
+   the actual pose after each simulator step, and verify arrival. Normal motion
+   first turns in place to face the path segment, then advances; it stops to
+   turn at corners and only turns at arrival if the selected endpoint heading
+   differs from the last travel segment.
+   Certify every segment and turn with orientation-aware height-layer collision
+   geometry. If the existing polyline cannot be driven, use bounded Hybrid A*
+   with bidirectional continuous XY and heading search. States preserve their actual floating
+   coordinates and orientations; 7.5-degree and one-cell buckets only suppress
+   duplicate search states. Forward edges travel along the stored heading, and
+   turn proposals include exact goal/path bearings and relative angular samples
+   down to 3.75 degrees. Relative 45-degree proposals accelerate open-space search;
+   they are not a restriction on the stored orientation. Shallow checked forward
+   links shift laterally over a longer forward leg before restoring the previous
+   heading. There is no unchecked snap to a grid pose or heading.
+   The reverse search checks every edge in its original forward direction;
+   joining the two trees never authorizes reverse driving.
+   Each turn and complete forward translation passes the same swept collision
+   checks as execution. Immutable parent nodes retain the exact checked path
+   even if another pose later replaces a search bucket. The queue uses a 1.25
+   heuristic weight to seek feasible routes within the existing work budget.
+   A sampled-heading XY guide orders the search where it has coverage; missing
+   cells fall back to Euclidean distance and never exclude continuous poses.
+   Its distance field shares a compiled sparse shortest-path calculation;
+   the dependency-free fallback bounds each incremental distance update.
+   The separate optimistic grid uses orientation-independent discs inscribed
+   in body footprints, retaining passages between coarse headings. Offset
+   payload layers without a base-centred inscribed disc are omitted only from
+   that relaxation; all actual edge checks include the full payload.
+   Uncached continuous-heading translations erode only the crossed raster
+   region with the full obstacle halo, using the same kernels and supercover
+   checks as full-floor erosion. Bounded caches reuse in-place turn results on
+   the same static map and dyadic unions of canonical one-degree swept kernels;
+   these unions preserve the original collision margins and swept cells.
+   Checked entry/exit legs retain the measured and final continuous headings
+   where a narrow aisle requires driving straight before turning.
+   Heading/staging proposals do not execute an independent pre-turn. One route
+   is planned from the measured initial pose. Ground clicks and elevated
+   approaches also consider a final heading aligned with arrival, if entry
+   and exit clearance still hold. Elevated targets must remain visible at
+   that new heading with the same camera margin and occlusion checks. The
+   elevated refinement also tests headings 15 and 30 degrees to either side
+   of arrival, plus a target-facing heading, to cover gaps between the four
+   cameras' margin-cropped frusta without a full return turn. These proposals
+   share the same two-second refinement budget and clearance checks. The
+   original validated heading stays available; neither mode requires restoring
+   the departure yaw. Equivalent wrapped headings are deduplicated, and
+   alternative endpoints share one bidirectional search and reverse root set.
+   Bounded collision-checked shortcuts remove detours only when combined
+   translation/rotation time decreases. The certified route survives even if
+   the optional shortcut budget expires. Execution reuses it
+   when the measured start has not changed, and still checks every command.
+   A relaxed XY geodesic guides that search around walls. All motion phases
+   share the caller's remaining simulation-step budget. Pruned paths
+   reserve a 5 mm corridor against tiny feedback deviations at grid corners.
+   Recheck elevated-target visibility at the actual final pose before reporting
+   success; reaching a goal behind an occluder is a navigation failure. The local
+   departure certificate is checked again at the measured arrival pose.
 
-Habitat's native C++ navmesh and `GreedyGeodesicFollower` cannot operate on an
-OmniGibson scene directly; they are not imported or claimed to be running here.
-This is a strategy port with an explicit grid/kinematic adapter. Navigation
-checks static grid occupancy. It does **not** provide full dynamic body/held-object
-collision checking. Native navmesh geometry may be more permissive or accurate.
+`reached` means the selected XY was reached to grid/feedback precision.
+`approached` means the executor reached a feasible projected endpoint, which may
+still be too far for manipulation. `already_at_closest_approach` explicitly
+reports that another identical request cannot make progress. Only these action
+outcomes cross the RGB boundary; coordinates and distances remain private.
 
-The existing exact-pixel depth/raycast target grounding is retained. The
-reference's neighboring-pixel search and GT scene-graph object selection are
-not enabled. No task object is silently substituted for the model's selected
-target. Public tool schemas and RGB-only response filtering are unchanged.
+The original bounded candidate helper retains the reference algorithm for
+historical diagnostics and exact staging (`max_snap=0`). Runtime navigation
+uses `max_snap=None`. OmniGibson supplies floor support, current collisions and
+an ideal pose follower; Habitat's native navmesh/follower is not running here.
+
+Each runtime planning action has a shared cooperative 20-second / 256-visibility-query
+budget across headings, with at most 64 candidate cells tested per elevated-target
+heading. These limit work, not the geographical search domain or episode duration.
+An already visible approach within the executor's 1.4 m manipulation check stops
+heading refinement; it need not project onto the object's XY within one grid cell.
+Additional arrival-heading certification is bounded by 2 seconds. Complete-route
+selection shares 10 seconds across all work. The optional floor-point projection
+uses at most 3 of those seconds; continuous planning shares up to six distinct
+endpoint poses and 20,000 expansions without restarting per endpoint. Endpoint
+slack applies to that fallback candidate family, not as a reachability assertion
+for floor-point projection. A validated route survives expiration during
+optional shortcutting. Motion cost uses 0.5 m/s translation and
+60 degrees/s rotation; it is **not a globally shortest continuous route**.
+When the work budget expires, an existing validated plan can execute; otherwise
+`navigation_search_exhausted` returns fresh RGB for policy recovery. This is not
+proof that no path exists. Native calls are cooperatively checked between calls.
+
+The MCP proxy lets `finish` reach the bridge while another tool is pending. The
+bridge requests cancellation, then runs scoring on the simulator owner thread.
+Ordinary tools and RGB downloads remain serialized. The episode still uses 50
+agent act/look attempts without a wall-time deadline.
+
+## Limits and evidence
+
+This remains ideal kinematic base actuation, not a physical wheel controller or a
+complete continuous/articulated-body motion planner. Forward route certification
+and heading search have a separate cooperative 10-second / 20,000-state limit
+per execution leg. A blocked or exhausted search fails explicitly; it never
+falls back to sliding sideways. Continuous poses remove the eight-heading constraint, but finite angular/step
+sampling, duplicate buckets and work budgets can still miss feasible paths. Up to 2 mm of endpoint feedback correction is
+permitted to prevent pose-setter drift. Scene obstacles and robot collision hulls are matched in four height bands,
+avoiding a base-width column through the head. Convex hulls within each band
+remain conservative. The held object and supported carried contents contribute
+their collision hulls to the moving footprint, with arm posture held during
+travel. This does not model deformable loads, wheel dynamics or moving arm
+trajectories. Stricter turn clearance may reject a goal reachable by the old
+fixed-heading translation. A disconnected point can yield only an explicitly reported partial
+approach in the start-connected region; it never permits crossing a closed door. Floor raster and
+cell resolution also limit how closely a selected point can be reached.
+
+`navigation_plans.jsonl`, `navigation_grids/*.npz`, `navigation_recovery.jsonl`,
+`navigation_forward_plans.jsonl`, `navigation_arrivals.jsonl` and `base_motion.jsonl` retain private geometry and
+actual motion evidence. Arrivals record the selected target, planned goal,
+actual endpoint, final target visibility and the local departure certificate.
+Plans include entry/exit rejection counts and complete-candidate comparisons;
+saved navigation maps also include the exact support raster.
+`scripts/probe_navigation_regression.py` reproduces archived failed geometries
+in the real simulator and checks closed-door negatives, arrival, four-camera
+capture, scoring and video closure. These are scripted component diagnostics,
+not autonomous challenge success. The new 100-task run records yyf API routing
+and its own immutable outcomes separately from all historical attempts.
 
 ## Grid-boundary regression
 
 The original executor selected grid sample positions, then used a truncating
 world-to-grid conversion. Sub-millimetre settling changes mapped 25 archived
 navigation calls into neighboring obstacle cells. The new grid consistently
-uses nearest-sample coordinates. Occupied or disconnected starts are rejected;
-there is no unlimited start snap or cross-wall recovery teleport.
+uses nearest-sample coordinates. Disconnected starts are rejected except for the bounded continuous clearance
+exit above; there is no unlimited start snap or cross-wall recovery teleport.
 
 Grid paths are pruned only where the whole segment is traversable, rather than
 discarding waypoints at a fixed stride. The follower reads actual position and
@@ -49,17 +199,24 @@ yaw after each simulation step and verifies the final position.
 - CPU tests exercise recorded pose rounding, obstacle corners, disconnected
   regions, bounded snapping/search, doorway routes, command rate limits, stalls
   and divergence. The existing RGB information boundary tests also apply.
-- `scripts/validate_gt_navigation.py` compares candidate coordinates and scoring
-  directly against pure functions extracted from the pinned reference. It can
+- `scripts/validate_gt_navigation.py` compares candidate coordinates against
+  pure functions extracted from the pinned reference and records the intentional
+  scoring differences. It can
   replay archived failed navigation queries using original maps and private
   camera calibration/depth. This is offline execution validation, not task success.
 - `scripts/probe_gt_navigation.py` is an explicitly scripted real-simulator
   regression using archived geometry. It does not run an LLM or count toward
   the benchmark. Its result is separate from the 100-task batch.
+- `scripts/probe_navigation_wall.py` restores the archived task003 base pose,
+  carries the same bowl and reuses the same sink pixel. It checks that the
+  outside-wall goal is rejected and the new arrival has target visibility, four
+  RGB views, scoring and a complete video. This is a component regression, not
+  a full replay of preceding actions or an autonomous task-success measurement.
 
-The original 100-task runtime remains frozen and paused at the user's request.
-No automatic batch resume is part of this change. A future evaluation must use
-a new recorded executor version and retain original failed/interrupted attempts.
+The checks below describe historical validation of the GT strategy. They do not
+establish real-simulator or task success for the restored current default. New
+evaluations must record their own source, assets, task instance and outcome;
+previous attempts and their results remain unchanged.
 
 ## Validation on 2026-09-30 and scoped retest
 
@@ -95,3 +252,7 @@ controller state was substituted and no original instance was rewritten. The 32-
 retest retains this task and its failure in the denominator. Historical trash/toolbox
 camera audits both passed when rechecked on copies in the robot frame; original
 validation files were preserved.
+
+### 2026-10-22 reversible drive repair
+
+The current executor permits straight reverse driving with the same swept body/payload collision checks as forward travel. Route phases record forward/reverse separately; the follower rejects lateral motion and motion against the certified direction. Cheap backing-out connectors precede the pose search, and the roadmap and continuous search both include reverse edges. Archived forward-only evaluations retain their original source. A reproduced Loading The Car doorway failure has a checked 0.8 m reverse exit; its full task regression is separate evidence.

@@ -29,6 +29,40 @@ Preflight checks driver, GPU capacity, cgroup headroom, disk, quota and encoder
 before each attempt. No unrelated process is stopped. Results include worker,
 actual simulator host/PID/unit/interpreter/UUID and per-run source provenance.
 
+## Reuse simulator caches across batches
+
+Keep `simulator_appdata_path` stable for a compatible runtime on one physical
+GPU. A new batch name does not require a new renderer cache. In particular,
+OmniGibson writes reusable textures under `global/cache/texturecache` and Kit
+shader / derived data under `local/cache`. Creating an empty appdata directory
+for each batch and deleting the whole directory afterwards can repeat expensive
+first-camera initialization on every experiment.
+
+Choose a host-local cache location with enough disk and quota headroom. Record
+its physical GPU UUID, NVIDIA driver, OmniGibson and Isaac Sim versions, pinned
+dependency source, asset versions, and rendering configuration. Reuse only a
+compatible cache while holding the existing GPU and host leases; never point
+concurrent workers at the same writable appdata directory. Driver/runtime
+changes require a separate cache identity and fresh validation. Keep episode
+outputs and model sessions separate, and restore each task through the official
+instance-loading/reset path even when rendering caches are reused.
+
+Treat useful renderer caches differently from disposable `TMPDIR` contents,
+run-specific logs, and closed model-client storage. After all associated units
+have exited, remove only confirmed unused temporary files. Do not delete active,
+queued, or registered reusable caches as part of blanket batch cleanup. Record
+retained paths and their intended reuse; periodically evict only idle obsolete
+runtime versions when storage requires it.
+
+Before claiming a speedup, compare `startup_stages.jsonl` for a cold and reused
+cache on the same host/GPU, source, task instance, and camera configuration.
+Report process-launch overhead separately from instrumented backend stages,
+and validate the initial four-camera observation. Parent stages contain child
+stages: do not add `surround_camera_setup_and_warmup` to its individual camera
+load/warmup timings. A startup-only probe is not a whole-task success. Reusing
+disk caches still creates a fresh simulator process; persistent simulator
+workers require additional task-state isolation validation.
+
 Create `drain_requested.json` in the batch directory to stop claiming new tasks
 after active attempts finish. It does not abort their model or simulator. Delete
 that control file before a deliberate later resume.

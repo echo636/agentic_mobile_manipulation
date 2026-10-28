@@ -9,7 +9,7 @@ from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.observations.rig import camera_mount, DIRECTIONS
 from manipulation_agent.observations.boundary import public_observation
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
 
 
 class AsyncObservationTests(unittest.TestCase):
@@ -17,7 +17,7 @@ class AsyncObservationTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)/'episode'
         self.backend = MockRGBBackend(self.root)
-        self.h = VisionHarness(self.backend, Recorder(self.root, {'backend':'mock','observation_mode':'rgb_only'}))
+        self.h = VisionHarness(self.backend, Recorder(self.root, {'backend':'mock','observation_mode':'rgb_only'}), profile='workflow')
         self.calls = 0
 
     def call(self, name, **args):

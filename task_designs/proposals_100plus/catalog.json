@@ -1,0 +1,1267 @@
+{
+  "schema_version": 1,
+  "kind": "long_horizon_design_catalog",
+  "status": "design_only",
+  "benchmark_ready": false,
+  "created_on": "2026-10-20",
+  "scope": "New task design; executor repairs deferred by user. No frozen instances or model runs.",
+  "counting_protocol": {
+    "unit": "successful necessary act call",
+    "target_minimum": 100,
+    "ledger_actions_per_individual_transfer": [
+      "grasp",
+      "place_on_top"
+    ],
+    "excluded_from_lower_bound": [
+      "initialize",
+      "finish",
+      "look",
+      "task_notes",
+      "list_skills",
+      "read_skill",
+      "wait",
+      "failed attempts",
+      "redundant transfers",
+      "navigation"
+    ],
+    "conditional_assumptions": [
+      "One selected inventory item is handled per transfer.",
+      "Public instructions require individual handling: no stacks, nested loads or portable group carriers.",
+      "All source, staging and destination supports are fixed distinct physical surfaces except explicitly aliased before/after-cleaning zones.",
+      "Every counted phase must be witnessed by independent physical predicates after its public prerequisites.",
+      "No action/tool batches multiple primitive executions into one counted model call."
+    ],
+    "common_public_context_zh": "本次是逐件清点和摆放：每次只搬运一件待处理物品，不堆叠、不套叠、不装入其他物品一起搬；固定家具和分拣台保持原位。",
+    "enforcement_status": "planned; must audit aggregate carrying, collisions and phase-skipping before any runtime lower-bound claim",
+    "measured_minimum_proven": false
+  },
+  "asset_families": [
+    {
+      "family": "books",
+      "source_task": "clean_up_your_desk",
+      "source_objects": [
+        "paperback_book_225",
+        "paperback_book_226"
+      ]
+    },
+    {
+      "family": "toys",
+      "source_task": "putting_away_toys",
+      "source_objects": [
+        "toy_figure_242",
+        "toy_figure_243"
+      ]
+    },
+    {
+      "family": "cups",
+      "source_task": "sorting_household_items",
+      "source_objects": [
+        "coffee_cup_220"
+      ]
+    },
+    {
+      "family": "plates_and_forks",
+      "source_task": "setting_the_table",
+      "source_objects": [
+        "plate_243",
+        "plate_244",
+        "tablefork_247",
+        "tablefork_248"
+      ]
+    },
+    {
+      "family": "tools",
+      "source_task": "outfit_a_basic_toolbox",
+      "source_objects": [
+        "drill_193",
+        "plier_192",
+        "flashlight_190",
+        "allen_wrench_189",
+        "screwdriver_188"
+      ]
+    },
+    {
+      "family": "brush",
+      "source_task": "clean_a_keyboard",
+      "source_objects": [
+        "pipe_cleaner_120"
+      ]
+    }
+  ],
+  "asset_provenance_level": "Object names are referenced by existing task recipes; new multiplicities, scales, supports and layouts are unvalidated.",
+  "required_acceptance": [
+    "frozen source/assets/spec/single-scene hashes",
+    "visible public mappings and initial-state audit",
+    "individual-handling and shortcut audit",
+    "two distinct full legal reference orders",
+    "three physically realized negative cases",
+    "successful-reference useful action count >=100 after excluding failures/no-ops/padding",
+    "genuine RGB/MCP/finish/video model-interface acceptance; model task success separately reported"
+  ],
+  "tasks": [
+    {
+      "id": "three_activity_turnover_100_v1",
+      "title_zh": "三活动区两轮换场与闭场复原",
+      "priority": 1,
+      "status": "design_only",
+      "benchmark_ready": false,
+      "public_instruction_zh": "完成社区活动室的两轮布置演练，最后闭场归位。先收好三张活动桌上的6件玩具；第一轮A桌放5件维修工具，B桌放5本书，C桌放5件茶歇餐具。第一轮全部齐备后，第二轮改成A阅读、B茶歇、C维修。第二轮全部齐备后，所有用品回各自储存区，活动桌和临时台保持空置。",
+      "public_context_zh": [
+        "维修组使用现有5类工具；茶歇组为3只杯子和2只盘子。",
+        "A/B/C是三个不同的固定支撑物，场景中须能通过公开标识或外观识别。",
+        "换场可借用空的固定临时台，临时转移不计入102次基础账本。",
+        "这是布置、换场和撤场任务，不要求仿真未提供的实际维修、阅读或喝水动作。"
+      ],
+      "object_groups": [
+        {
+          "id": "repair_tools",
+          "count": 5,
+          "initial_zone": "tool_storage"
+        },
+        {
+          "id": "reading_books",
+          "count": 5,
+          "initial_zone": "book_storage"
+        },
+        {
+          "id": "refreshment_dishes",
+          "count": 5,
+          "initial_zone": "dish_storage"
+        },
+        {
+          "id": "clutter_toys",
+          "count": 6,
+          "initial_zone": "activity_tables"
+        }
+      ],
+      "phases": [
+        {
+          "id": "clear",
+          "title_zh": "六件杂物归置",
+          "after": [],
+          "moves": [
+            {
+              "items": [
+                "clutter_toys_01",
+                "clutter_toys_02",
+                "clutter_toys_03",
+                "clutter_toys_04",
+                "clutter_toys_05",
+                "clutter_toys_06"
+              ],
+              "source": "activity_tables",
+              "destination": "toy_shelf"
+            }
+          ],
+          "checkpoint_zh": "三张活动桌都没有待收纳玩具。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "round1",
+          "title_zh": "第一轮配置",
+          "after": [
+            "clear"
+          ],
+          "moves": [
+            {
+              "items": [
+                "repair_tools_01",
+                "repair_tools_02",
+                "repair_tools_03",
+                "repair_tools_04",
+                "repair_tools_05"
+              ],
+              "source": "tool_storage",
+              "destination": "table_a"
+            },
+            {
+              "items": [
+                "reading_books_01",
+                "reading_books_02",
+                "reading_books_03",
+                "reading_books_04",
+                "reading_books_05"
+              ],
+              "source": "book_storage",
+              "destination": "table_b"
+            },
+            {
+              "items": [
+                "refreshment_dishes_01",
+                "refreshment_dishes_02",
+                "refreshment_dishes_03",
+                "refreshment_dishes_04",
+                "refreshment_dishes_05"
+              ],
+              "source": "dish_storage",
+              "destination": "table_c"
+            }
+          ],
+          "checkpoint_zh": "15件用品同时齐备：A维修、B阅读、C茶歇。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "round2",
+          "title_zh": "第二轮换场",
+          "after": [
+            "round1"
+          ],
+          "moves": [
+            {
+              "items": [
+                "repair_tools_01",
+                "repair_tools_02",
+                "repair_tools_03",
+                "repair_tools_04",
+                "repair_tools_05"
+              ],
+              "source": "table_a",
+              "destination": "table_c"
+            },
+            {
+              "items": [
+                "reading_books_01",
+                "reading_books_02",
+                "reading_books_03",
+                "reading_books_04",
+                "reading_books_05"
+              ],
+              "source": "table_b",
+              "destination": "table_a"
+            },
+            {
+              "items": [
+                "refreshment_dishes_01",
+                "refreshment_dishes_02",
+                "refreshment_dishes_03",
+                "refreshment_dishes_04",
+                "refreshment_dishes_05"
+              ],
+              "source": "table_c",
+              "destination": "table_b"
+            }
+          ],
+          "checkpoint_zh": "15件用品同时完成换场：A阅读、B茶歇、C维修。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "restore",
+          "title_zh": "闭场复原",
+          "after": [
+            "round2"
+          ],
+          "moves": [
+            {
+              "items": [
+                "repair_tools_01",
+                "repair_tools_02",
+                "repair_tools_03",
+                "repair_tools_04",
+                "repair_tools_05"
+              ],
+              "source": "table_c",
+              "destination": "tool_storage"
+            },
+            {
+              "items": [
+                "reading_books_01",
+                "reading_books_02",
+                "reading_books_03",
+                "reading_books_04",
+                "reading_books_05"
+              ],
+              "source": "table_a",
+              "destination": "book_storage"
+            },
+            {
+              "items": [
+                "refreshment_dishes_01",
+                "refreshment_dishes_02",
+                "refreshment_dishes_03",
+                "refreshment_dishes_04",
+                "refreshment_dishes_05"
+              ],
+              "source": "table_b",
+              "destination": "dish_storage"
+            }
+          ],
+          "checkpoint_zh": "三张活动桌及临时台清空，用品回各自储存区，玩具保持归位。",
+          "uncounted_operations": []
+        }
+      ],
+      "declared_length": {
+        "required_item_transfers": 51,
+        "conditional_grasp_place_calls": 102,
+        "target_successful_useful_act_calls_min": 100,
+        "measured_successful_act_calls": null,
+        "interpretation": "Conditional ledger under the public individual-handling protocol; not a simulator minimum-action proof."
+      },
+      "reference_orders": [
+        "按维修→阅读→茶歇处理各阶段",
+        "按目的桌顺序处理，换场时使用临时台解除占用"
+      ],
+      "negative_cases": [
+        "直接把用品归库，跳过第一轮齐备",
+        "完成第一轮后归库，跳过第二轮齐备",
+        "第二轮只在不同时刻分别出现各组，未曾同时齐备"
+      ],
+      "recommended_act_look_budget": 400,
+      "required_primitives": [
+        "navigate_to",
+        "grasp",
+        "place_on_top"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "single_scene_construction": "planned",
+        "visibility": "planned",
+        "individual_handling_guard": "planned",
+        "history_scoring": "planned",
+        "physical_reference_orders": "planned",
+        "physical_negatives": "planned",
+        "model_interface": "planned"
+      }
+    },
+    {
+      "id": "household_sort_and_dispatch_100_v1",
+      "title_zh": "搬家后全屋分类盘点与归置",
+      "priority": 2,
+      "status": "design_only",
+      "benchmark_ready": false,
+      "public_instruction_zh": "整理到货区的30件物品：书、玩具、杯子、盘子、工具各6件。先将全部物品搬到对应类别的固定分拣台，全部摊开齐备后，再送到各类物品的最终储存区。结束时到货区和分拣台不留这些物品。",
+      "public_context_zh": [
+        "这项任务侧重对象覆盖、跨区域导航和遗漏检测；阶段依赖深度只有2，不能把长度当作推理深度。",
+        "分拣区与最终储存区必须是不同支撑物；跨区距离和容量需要实例化后测量。"
+      ],
+      "object_groups": [
+        {
+          "id": "books",
+          "count": 6,
+          "initial_zone": "arrival_books"
+        },
+        {
+          "id": "toys",
+          "count": 6,
+          "initial_zone": "arrival_toys"
+        },
+        {
+          "id": "cups",
+          "count": 6,
+          "initial_zone": "arrival_cups"
+        },
+        {
+          "id": "plates",
+          "count": 6,
+          "initial_zone": "arrival_plates"
+        },
+        {
+          "id": "tools",
+          "count": 6,
+          "initial_zone": "arrival_tools"
+        }
+      ],
+      "phases": [
+        {
+          "id": "inventory",
+          "title_zh": "全量分类盘点",
+          "after": [],
+          "moves": [
+            {
+              "items": [
+                "books_01",
+                "books_02",
+                "books_03",
+                "books_04",
+                "books_05",
+                "books_06"
+              ],
+              "source": "arrival_books",
+              "destination": "sort_books"
+            },
+            {
+              "items": [
+                "toys_01",
+                "toys_02",
+                "toys_03",
+                "toys_04",
+                "toys_05",
+                "toys_06"
+              ],
+              "source": "arrival_toys",
+              "destination": "sort_toys"
+            },
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06"
+              ],
+              "source": "arrival_cups",
+              "destination": "sort_cups"
+            },
+            {
+              "items": [
+                "plates_01",
+                "plates_02",
+                "plates_03",
+                "plates_04",
+                "plates_05",
+                "plates_06"
+              ],
+              "source": "arrival_plates",
+              "destination": "sort_plates"
+            },
+            {
+              "items": [
+                "tools_01",
+                "tools_02",
+                "tools_03",
+                "tools_04",
+                "tools_05",
+                "tools_06"
+              ],
+              "source": "arrival_tools",
+              "destination": "sort_tools"
+            }
+          ],
+          "checkpoint_zh": "30件物品全部同时出现在对应类别的分拣台上，未堆叠。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "dispatch",
+          "title_zh": "分类归置",
+          "after": [
+            "inventory"
+          ],
+          "moves": [
+            {
+              "items": [
+                "books_01",
+                "books_02",
+                "books_03",
+                "books_04",
+                "books_05",
+                "books_06"
+              ],
+              "source": "sort_books",
+              "destination": "home_books"
+            },
+            {
+              "items": [
+                "toys_01",
+                "toys_02",
+                "toys_03",
+                "toys_04",
+                "toys_05",
+                "toys_06"
+              ],
+              "source": "sort_toys",
+              "destination": "home_toys"
+            },
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06"
+              ],
+              "source": "sort_cups",
+              "destination": "home_cups"
+            },
+            {
+              "items": [
+                "plates_01",
+                "plates_02",
+                "plates_03",
+                "plates_04",
+                "plates_05",
+                "plates_06"
+              ],
+              "source": "sort_plates",
+              "destination": "home_plates"
+            },
+            {
+              "items": [
+                "tools_01",
+                "tools_02",
+                "tools_03",
+                "tools_04",
+                "tools_05",
+                "tools_06"
+              ],
+              "source": "sort_tools",
+              "destination": "home_tools"
+            }
+          ],
+          "checkpoint_zh": "30件物品各归其位；到货区与分拣台没有这些物品。",
+          "uncounted_operations": []
+        }
+      ],
+      "declared_length": {
+        "required_item_transfers": 60,
+        "conditional_grasp_place_calls": 120,
+        "target_successful_useful_act_calls_min": 100,
+        "measured_successful_act_calls": null,
+        "interpretation": "Conditional ledger under the public individual-handling protocol; not a simulator minimum-action proof."
+      },
+      "reference_orders": [
+        "按到货区域收集，再按类别归置",
+        "先跨区收集同类物品，再按目的房间归置"
+      ],
+      "negative_cases": [
+        "从到货区直接送到最终区域，跳过全量盘点",
+        "遗漏一件物品但提交完成",
+        "某一类别误送至外观相近的相邻支撑物"
+      ],
+      "recommended_act_look_budget": 400,
+      "required_primitives": [
+        "navigate_to",
+        "grasp",
+        "place_on_top"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "single_scene_construction": "planned",
+        "visibility": "planned",
+        "individual_handling_guard": "planned",
+        "history_scoring": "planned",
+        "physical_reference_orders": "planned",
+        "physical_negatives": "planned",
+        "model_interface": "planned"
+      }
+    },
+    {
+      "id": "four_station_clear_clean_reset_100_v1",
+      "title_zh": "四区储物台腾空、除尘与重排",
+      "priority": 3,
+      "status": "design_only",
+      "benchmark_ready": false,
+      "public_instruction_zh": "清扫并重新整理四个储物台。先把书、玩具、杯子、工具各6件全部移到暂存区，四台同时腾空后再除尘，全部清洁后按公开的类别分区重新摆放。边台的6只盘子也要送回盘子储存台；结束时暂存区、边台清空，清洁刷归位。",
+      "public_context_zh": [
+        "dirty_station_*与clean_station_*是同一组固定物理台面在清洁前后的逻辑状态，不是把新台面偷偷换进场景。",
+        "本任务额外使用wipe与原生Covered(dust)；刷子的操作和清扫次数不用于凑108次基础搬运调用。",
+        "清洁应保持到结束；每个台面至少有一种物品的重排目标。"
+      ],
+      "object_groups": [
+        {
+          "id": "books",
+          "count": 6,
+          "initial_zone": "dirty_station_books"
+        },
+        {
+          "id": "toys",
+          "count": 6,
+          "initial_zone": "dirty_station_toys"
+        },
+        {
+          "id": "cups",
+          "count": 6,
+          "initial_zone": "dirty_station_cups"
+        },
+        {
+          "id": "tools",
+          "count": 6,
+          "initial_zone": "dirty_station_tools"
+        },
+        {
+          "id": "loose_plates",
+          "count": 6,
+          "initial_zone": "side_counter"
+        }
+      ],
+      "phases": [
+        {
+          "id": "clear",
+          "title_zh": "腾空四个储物台",
+          "after": [],
+          "moves": [
+            {
+              "items": [
+                "books_01",
+                "books_02",
+                "books_03",
+                "books_04",
+                "books_05",
+                "books_06"
+              ],
+              "source": "dirty_station_books",
+              "destination": "buffer_books"
+            },
+            {
+              "items": [
+                "toys_01",
+                "toys_02",
+                "toys_03",
+                "toys_04",
+                "toys_05",
+                "toys_06"
+              ],
+              "source": "dirty_station_toys",
+              "destination": "buffer_toys"
+            },
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06"
+              ],
+              "source": "dirty_station_cups",
+              "destination": "buffer_cups"
+            },
+            {
+              "items": [
+                "tools_01",
+                "tools_02",
+                "tools_03",
+                "tools_04",
+                "tools_05",
+                "tools_06"
+              ],
+              "source": "dirty_station_tools",
+              "destination": "buffer_tools"
+            }
+          ],
+          "checkpoint_zh": "24件物品全部在固定暂存区，四个储物台同时腾空。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "clean",
+          "title_zh": "清扫四个腾空储物台",
+          "after": [
+            "clear"
+          ],
+          "moves": [],
+          "checkpoint_zh": "四个指定台面同时不再Covered(dust)。",
+          "uncounted_operations": [
+            "grasp cleaning brush",
+            "wipe each of four initially dusty surfaces until clean",
+            "return brush"
+          ]
+        },
+        {
+          "id": "reorganize",
+          "title_zh": "重新分类布置",
+          "after": [
+            "clean"
+          ],
+          "moves": [
+            {
+              "items": [
+                "books_01",
+                "books_02",
+                "books_03",
+                "books_04",
+                "books_05",
+                "books_06"
+              ],
+              "source": "buffer_books",
+              "destination": "clean_station_books"
+            },
+            {
+              "items": [
+                "toys_01",
+                "toys_02",
+                "toys_03",
+                "toys_04",
+                "toys_05",
+                "toys_06"
+              ],
+              "source": "buffer_toys",
+              "destination": "clean_station_toys"
+            },
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06"
+              ],
+              "source": "buffer_cups",
+              "destination": "clean_station_cups"
+            },
+            {
+              "items": [
+                "tools_01",
+                "tools_02",
+                "tools_03",
+                "tools_04",
+                "tools_05",
+                "tools_06"
+              ],
+              "source": "buffer_tools",
+              "destination": "clean_station_tools"
+            }
+          ],
+          "checkpoint_zh": "24件物品按公开类别映射分区摆开，暂存区清空。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "side_cleanup",
+          "title_zh": "六只盘子收纳",
+          "after": [],
+          "moves": [
+            {
+              "items": [
+                "loose_plates_01",
+                "loose_plates_02",
+                "loose_plates_03",
+                "loose_plates_04",
+                "loose_plates_05",
+                "loose_plates_06"
+              ],
+              "source": "side_counter",
+              "destination": "plate_storage"
+            }
+          ],
+          "checkpoint_zh": "6只盘子离开边台并放到盘子储存台。",
+          "uncounted_operations": []
+        }
+      ],
+      "declared_length": {
+        "required_item_transfers": 54,
+        "conditional_grasp_place_calls": 108,
+        "target_successful_useful_act_calls_min": 100,
+        "measured_successful_act_calls": null,
+        "interpretation": "Conditional ledger under the public individual-handling protocol; not a simulator minimum-action proof."
+      },
+      "reference_orders": [
+        "先清扫重排，再收纳盘子",
+        "先收纳盘子，再腾空清扫重排"
+      ],
+      "negative_cases": [
+        "未腾空就擦台面，随后才移动剩余物品",
+        "有一台仍带尘就开始重排",
+        "只完成重排但遗漏6只盘子或清洁刷"
+      ],
+      "recommended_act_look_budget": 400,
+      "required_primitives": [
+        "navigate_to",
+        "grasp",
+        "place_on_top",
+        "wipe"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "single_scene_construction": "planned",
+        "visibility": "planned",
+        "individual_handling_guard": "planned",
+        "history_scoring": "planned",
+        "physical_reference_orders": "planned",
+        "physical_negatives": "planned",
+        "model_interface": "planned"
+      },
+      "zone_aliases": {
+        "clean_station_books": "dirty_station_books",
+        "clean_station_toys": "dirty_station_toys",
+        "clean_station_cups": "dirty_station_cups",
+        "clean_station_tools": "dirty_station_tools"
+      }
+    },
+    {
+      "id": "three_orders_handoff_returns_100_v1",
+      "title_zh": "三单拣选、交接与指定退库",
+      "priority": 4,
+      "status": "design_only",
+      "benchmark_ready": false,
+      "public_instruction_zh": "完成三份订单的出入库演练，每单包含书、玩具、杯子、工具各2件。先将三单全部拣齐，再分别送到三个固定交接区。三单同时交接齐备后，把其中全部书和玩具共12件退回各自库存；杯子与工具留在对应交接区。",
+      "public_context_zh": [
+        "每类6件按订单分成三个各2件的集合；分配必须对模型公开，不能仅靠私有对象ID。",
+        "任何同类物品可以分配给同一需求的订单，评分应按类别数量或等价匹配，避免隐藏身份限制。",
+        "退库条件从开始就在公开工单中；本版本不是在线收到突发订单变更，不宣称测试动态指令处理。",
+        "订单分区和计数谓词仍需实现或编译验证，现有运行器没有自动执行本蓝图的能力。"
+      ],
+      "object_groups": [
+        {
+          "id": "books",
+          "count": 6,
+          "initial_zone": "stock_books"
+        },
+        {
+          "id": "toys",
+          "count": 6,
+          "initial_zone": "stock_toys"
+        },
+        {
+          "id": "cups",
+          "count": 6,
+          "initial_zone": "stock_cups"
+        },
+        {
+          "id": "tools",
+          "count": 6,
+          "initial_zone": "stock_tools"
+        }
+      ],
+      "phases": [
+        {
+          "id": "pick",
+          "title_zh": "三份订单齐套",
+          "after": [],
+          "moves": [
+            {
+              "items": [
+                "books_01",
+                "books_02",
+                "books_03",
+                "books_04",
+                "books_05",
+                "books_06"
+              ],
+              "source": "stock_books",
+              "destination": "order_staging_books"
+            },
+            {
+              "items": [
+                "toys_01",
+                "toys_02",
+                "toys_03",
+                "toys_04",
+                "toys_05",
+                "toys_06"
+              ],
+              "source": "stock_toys",
+              "destination": "order_staging_toys"
+            },
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06"
+              ],
+              "source": "stock_cups",
+              "destination": "order_staging_cups"
+            },
+            {
+              "items": [
+                "tools_01",
+                "tools_02",
+                "tools_03",
+                "tools_04",
+                "tools_05",
+                "tools_06"
+              ],
+              "source": "stock_tools",
+              "destination": "order_staging_tools"
+            }
+          ],
+          "checkpoint_zh": "三份订单各有8件（四类各2件），24件同时在固定拣选区齐套。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "handoff",
+          "title_zh": "送到三个交接区",
+          "after": [
+            "pick"
+          ],
+          "moves": [
+            {
+              "items": [
+                "books_01",
+                "books_02",
+                "books_03",
+                "books_04",
+                "books_05",
+                "books_06"
+              ],
+              "source": "order_staging_books",
+              "destination": "handoff_books"
+            },
+            {
+              "items": [
+                "toys_01",
+                "toys_02",
+                "toys_03",
+                "toys_04",
+                "toys_05",
+                "toys_06"
+              ],
+              "source": "order_staging_toys",
+              "destination": "handoff_toys"
+            },
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06"
+              ],
+              "source": "order_staging_cups",
+              "destination": "handoff_cups"
+            },
+            {
+              "items": [
+                "tools_01",
+                "tools_02",
+                "tools_03",
+                "tools_04",
+                "tools_05",
+                "tools_06"
+              ],
+              "source": "order_staging_tools",
+              "destination": "handoff_tools"
+            }
+          ],
+          "checkpoint_zh": "三份订单各8件同时完成交接，拣选区清空。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "returns",
+          "title_zh": "指定12件退库",
+          "after": [
+            "handoff"
+          ],
+          "moves": [
+            {
+              "items": [
+                "books_01",
+                "books_02",
+                "books_03",
+                "books_04",
+                "books_05",
+                "books_06"
+              ],
+              "source": "handoff_books",
+              "destination": "stock_books"
+            },
+            {
+              "items": [
+                "toys_01",
+                "toys_02",
+                "toys_03",
+                "toys_04",
+                "toys_05",
+                "toys_06"
+              ],
+              "source": "handoff_toys",
+              "destination": "stock_toys"
+            }
+          ],
+          "checkpoint_zh": "12件书与玩具退回各自库存，12件杯子与工具留在对应交接区。",
+          "uncounted_operations": []
+        }
+      ],
+      "declared_length": {
+        "required_item_transfers": 60,
+        "conditional_grasp_place_calls": 120,
+        "target_successful_useful_act_calls_min": 100,
+        "measured_successful_act_calls": null,
+        "interpretation": "Conditional ledger under the public individual-handling protocol; not a simulator minimum-action proof."
+      },
+      "reference_orders": [
+        "按类别拣选，再按订单交接",
+        "按订单拣选和分区排列，退库按原库存区域处理"
+      ],
+      "negative_cases": [
+        "最终12件货在交接区但未曾交接全部24件",
+        "退错类别，最终总件数恰好正确",
+        "一张订单不足8件，被另一张订单多出的物品掩盖"
+      ],
+      "recommended_act_look_budget": 400,
+      "required_primitives": [
+        "navigate_to",
+        "grasp",
+        "place_on_top"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "single_scene_construction": "planned",
+        "visibility": "planned",
+        "individual_handling_guard": "planned",
+        "history_scoring": "planned",
+        "physical_reference_orders": "planned",
+        "physical_negatives": "planned",
+        "model_interface": "planned"
+      }
+    },
+    {
+      "id": "two_round_dining_turnover_190_v1",
+      "title_zh": "两轮餐台布置、交接与撤场",
+      "priority": 5,
+      "status": "design_only",
+      "benchmark_ready": false,
+      "public_instruction_zh": "完成两轮餐饮场地布置和撤场演练。先把8只杯子、8只盘子和8把餐叉全部摆到主餐台；齐备后全部撤到固定交接台，主餐台腾空。然后分别配置饮水区8杯、餐点区8盘、餐具区8叉。第二轮全部齐备后，将24件餐具送回各自储存区，并清空所有活动台面。",
+      "public_context_zh": [
+        "这是摆台和撤场演练，不要求仿真中的客人用餐、食物消耗、洗涤或消毒。",
+        "24件物品经历4次必需转移，基础账本为192次抓取/放置；实际导航与额外周转需要另计。",
+        "主餐台和交接台需要足够可见且可达的平面面积；必须先验证布局容量。",
+        "杯盘不堆叠、不套叠，叉子不能插入杯子以批量运输；这是公开的逐件盘点协议。"
+      ],
+      "object_groups": [
+        {
+          "id": "cups",
+          "count": 8,
+          "initial_zone": "storage_cups"
+        },
+        {
+          "id": "plates",
+          "count": 8,
+          "initial_zone": "storage_plates"
+        },
+        {
+          "id": "forks",
+          "count": 8,
+          "initial_zone": "storage_forks"
+        }
+      ],
+      "phases": [
+        {
+          "id": "round1",
+          "title_zh": "第一轮餐台齐备",
+          "after": [],
+          "moves": [
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06",
+                "cups_07",
+                "cups_08"
+              ],
+              "source": "storage_cups",
+              "destination": "main_dining_table"
+            },
+            {
+              "items": [
+                "plates_01",
+                "plates_02",
+                "plates_03",
+                "plates_04",
+                "plates_05",
+                "plates_06",
+                "plates_07",
+                "plates_08"
+              ],
+              "source": "storage_plates",
+              "destination": "main_dining_table"
+            },
+            {
+              "items": [
+                "forks_01",
+                "forks_02",
+                "forks_03",
+                "forks_04",
+                "forks_05",
+                "forks_06",
+                "forks_07",
+                "forks_08"
+              ],
+              "source": "storage_forks",
+              "destination": "main_dining_table"
+            }
+          ],
+          "checkpoint_zh": "8杯8盘8叉同时在主餐台上，逐件摆开。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "clear_round1",
+          "title_zh": "全量撤到固定交接台",
+          "after": [
+            "round1"
+          ],
+          "moves": [
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06",
+                "cups_07",
+                "cups_08"
+              ],
+              "source": "main_dining_table",
+              "destination": "handoff_cups"
+            },
+            {
+              "items": [
+                "plates_01",
+                "plates_02",
+                "plates_03",
+                "plates_04",
+                "plates_05",
+                "plates_06",
+                "plates_07",
+                "plates_08"
+              ],
+              "source": "main_dining_table",
+              "destination": "handoff_plates"
+            },
+            {
+              "items": [
+                "forks_01",
+                "forks_02",
+                "forks_03",
+                "forks_04",
+                "forks_05",
+                "forks_06",
+                "forks_07",
+                "forks_08"
+              ],
+              "source": "main_dining_table",
+              "destination": "handoff_forks"
+            }
+          ],
+          "checkpoint_zh": "24件餐具全部在固定交接台，主餐台同时腾空。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "round2",
+          "title_zh": "第二轮分类服务区齐备",
+          "after": [
+            "clear_round1"
+          ],
+          "moves": [
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06",
+                "cups_07",
+                "cups_08"
+              ],
+              "source": "handoff_cups",
+              "destination": "service_cups"
+            },
+            {
+              "items": [
+                "plates_01",
+                "plates_02",
+                "plates_03",
+                "plates_04",
+                "plates_05",
+                "plates_06",
+                "plates_07",
+                "plates_08"
+              ],
+              "source": "handoff_plates",
+              "destination": "service_plates"
+            },
+            {
+              "items": [
+                "forks_01",
+                "forks_02",
+                "forks_03",
+                "forks_04",
+                "forks_05",
+                "forks_06",
+                "forks_07",
+                "forks_08"
+              ],
+              "source": "handoff_forks",
+              "destination": "service_forks"
+            }
+          ],
+          "checkpoint_zh": "饮水区8杯、餐点区8盘、餐具区8叉同时齐备。",
+          "uncounted_operations": []
+        },
+        {
+          "id": "restore",
+          "title_zh": "全部撤场归库",
+          "after": [
+            "round2"
+          ],
+          "moves": [
+            {
+              "items": [
+                "cups_01",
+                "cups_02",
+                "cups_03",
+                "cups_04",
+                "cups_05",
+                "cups_06",
+                "cups_07",
+                "cups_08"
+              ],
+              "source": "service_cups",
+              "destination": "storage_cups"
+            },
+            {
+              "items": [
+                "plates_01",
+                "plates_02",
+                "plates_03",
+                "plates_04",
+                "plates_05",
+                "plates_06",
+                "plates_07",
+                "plates_08"
+              ],
+              "source": "service_plates",
+              "destination": "storage_plates"
+            },
+            {
+              "items": [
+                "forks_01",
+                "forks_02",
+                "forks_03",
+                "forks_04",
+                "forks_05",
+                "forks_06",
+                "forks_07",
+                "forks_08"
+              ],
+              "source": "service_forks",
+              "destination": "storage_forks"
+            }
+          ],
+          "checkpoint_zh": "24件餐具归库，主餐台、交接台和三类服务区清空。",
+          "uncounted_operations": []
+        }
+      ],
+      "declared_length": {
+        "required_item_transfers": 96,
+        "conditional_grasp_place_calls": 192,
+        "target_successful_useful_act_calls_min": 100,
+        "measured_successful_act_calls": null,
+        "interpretation": "Conditional ledger under the public individual-handling protocol; not a simulator minimum-action proof."
+      },
+      "reference_orders": [
+        "每阶段按杯→盘→叉处理",
+        "每阶段按来源/目的区域处理，改变组内顺序"
+      ],
+      "negative_cases": [
+        "直接保持初始归库状态就结束",
+        "跳过交接台腾空里程碑，直接从第一轮改第二轮",
+        "依次摆出各类但未曾在任一轮同时齐备"
+      ],
+      "recommended_act_look_budget": 600,
+      "required_primitives": [
+        "navigate_to",
+        "grasp",
+        "place_on_top"
+      ],
+      "validation": {
+        "asset_binding": "planned",
+        "single_scene_construction": "planned",
+        "visibility": "planned",
+        "individual_handling_guard": "planned",
+        "history_scoring": "planned",
+        "physical_reference_orders": "planned",
+        "physical_negatives": "planned",
+        "model_interface": "planned"
+      }
+    }
+  ]
+}

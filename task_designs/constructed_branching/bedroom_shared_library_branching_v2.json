@@ -1,0 +1,3754 @@
+{
+  "schema_version": 3,
+  "id": "bedroom_shared_library_branching_v2",
+  "instance_id": "bedroom_shared_library_branching_v2_seed0_r4",
+  "status": "candidate_physics_unvalidated",
+  "official_submission_eligible": false,
+  "benchmark_ready": false,
+  "base": {
+    "task": "vacuuming_floors",
+    "instance": 301,
+    "seed": 0
+  },
+  "roles": {
+    "floor": "floors_nlswvt_0",
+    "floor_b": "floors_zrhxwn_0",
+    "background_vacuum": "vacuum_89",
+    "tool_home": "lh_tool_home",
+    "tool": "lh_tool",
+    "a_stage": "lh_a_stage",
+    "a_destination": "lh_a_destination",
+    "a_item00": "lh_a_item00",
+    "a_item01": "lh_a_item01",
+    "a_item02": "lh_a_item02",
+    "a_item03": "lh_a_item03",
+    "a_item04": "lh_a_item04",
+    "a_item05": "lh_a_item05",
+    "a_item06": "lh_a_item06",
+    "a_item07": "lh_a_item07",
+    "a_item08": "lh_a_item08",
+    "a_item09": "lh_a_item09",
+    "a_item10": "lh_a_item10",
+    "a_item11": "lh_a_item11",
+    "a_lamp0": "lh_a_lamp0",
+    "a_lamp0_stand": "lh_a_lamp0_stand",
+    "a_lamp1": "lh_a_lamp1",
+    "a_lamp1_stand": "lh_a_lamp1_stand",
+    "b_stage": "lh_b_stage",
+    "b_destination": "lh_b_destination",
+    "b_item00": "lh_b_item00",
+    "b_item01": "lh_b_item01",
+    "b_item02": "lh_b_item02",
+    "b_item03": "lh_b_item03",
+    "b_item04": "lh_b_item04",
+    "b_item05": "lh_b_item05",
+    "b_item06": "lh_b_item06",
+    "b_item07": "lh_b_item07",
+    "b_item08": "lh_b_item08",
+    "b_item09": "lh_b_item09",
+    "b_item10": "lh_b_item10",
+    "b_item11": "lh_b_item11",
+    "b_lamp0": "lh_b_lamp0",
+    "b_lamp0_stand": "lh_b_lamp0_stand",
+    "b_lamp1": "lh_b_lamp1",
+    "b_lamp1_stand": "lh_b_lamp1_stand",
+    "shared_shelf": "lh_shared_shelf",
+    "clutter_home": "lh_clutter_home",
+    "wipe_tool": "lh_wipe_tool",
+    "wipe_home": "lh_wipe_home",
+    "common_floor": "floors_rfqizg_0",
+    "a_door": "door_pxhbim_1",
+    "b_door": "door_pxhbim_2",
+    "clutter0": "lh_clutter0",
+    "clutter1": "lh_clutter1",
+    "clutter2": "lh_clutter2",
+    "clutter3": "lh_clutter3",
+    "clutter4": "lh_clutter4",
+    "clutter5": "lh_clutter5"
+  },
+  "asset_imports": [
+    {
+      "name": "lh_tool",
+      "source_task": "vacuuming_floors",
+      "source_object": "vacuum_89",
+      "source_sha256": "3aa56342cc02f704725cdd268ce94e15fa7015dfa8c88fadf01b3f5890772b36",
+      "position": [
+        -3.0,
+        0.65,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item00",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.9399999999999995,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item01",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.62,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item02",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.3,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item03",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -3.98,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item04",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.9399999999999995,
+        1.17,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item05",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.62,
+        1.17,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item06",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.3,
+        1.17,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item07",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -3.98,
+        1.17,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item08",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.9399999999999995,
+        1.49,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item09",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.62,
+        1.49,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item10",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        -4.3,
+        1.49,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_item11",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -3.98,
+        1.49,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_lamp0",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        -3.0,
+        1.45,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_a_lamp1",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        -3.4,
+        3.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item00",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        3.9899999999999998,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item01",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.31,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item02",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.63,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item03",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.949999999999999,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item04",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        3.9899999999999998,
+        1.17,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item05",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.31,
+        1.17,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item06",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.63,
+        1.17,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item07",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.949999999999999,
+        1.17,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item08",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        3.9899999999999998,
+        1.49,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item09",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.31,
+        1.49,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item10",
+      "source_task": "putting_away_toys",
+      "source_object": "toy_figure_242",
+      "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+      "position": [
+        4.63,
+        1.49,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_item11",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        4.949999999999999,
+        1.49,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_lamp0",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        3.0,
+        2.4,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_b_lamp1",
+      "source_task": "turning_out_all_lights_before_sleep",
+      "source_object": "table_lamp_428",
+      "source_sha256": "76f44417c032937ff044b66a180d1966cf106e20838bb0be3b26105b81ce8f7a",
+      "position": [
+        5.9,
+        2.4,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shared_shelf",
+      "source_task": "vacuuming_floors",
+      "source_object": "bookcase_kmuacd_0",
+      "source_sha256": "3aa56342cc02f704725cdd268ce94e15fa7015dfa8c88fadf01b3f5890772b36",
+      "scale": [
+        2.0,
+        1.6,
+        0.7
+      ],
+      "fixed_base": true,
+      "in_rooms": [
+        "living_room_0"
+      ],
+      "position": [
+        -4.6,
+        -1.05,
+        0.44
+      ]
+    },
+    {
+      "name": "lh_wipe_tool",
+      "source_task": "polishing_shoes",
+      "source_object": "scrub_brush_42",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        -5.7,
+        -2.4,
+        0.7
+      ],
+      "in_rooms": [
+        "living_room_0"
+      ]
+    },
+    {
+      "name": "lh_clutter0",
+      "source_task": "clean_up_your_desk",
+      "source_object": "pencil_case_224",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.6,
+        -1.05,
+        1.5
+      ],
+      "in_rooms": [
+        "living_room_0"
+      ]
+    },
+    {
+      "name": "lh_clutter1",
+      "source_task": "clean_up_your_desk",
+      "source_object": "pencil_case_224",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.6,
+        -1.05,
+        1.7
+      ],
+      "in_rooms": [
+        "living_room_0"
+      ]
+    },
+    {
+      "name": "lh_clutter2",
+      "source_task": "clean_up_your_desk",
+      "source_object": "pencil_case_224",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.6,
+        -1.05,
+        1.9
+      ],
+      "in_rooms": [
+        "living_room_0"
+      ]
+    },
+    {
+      "name": "lh_clutter3",
+      "source_task": "clean_up_your_desk",
+      "source_object": "pencil_case_224",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.6,
+        -1.05,
+        2.1
+      ],
+      "in_rooms": [
+        "living_room_0"
+      ]
+    },
+    {
+      "name": "lh_clutter4",
+      "source_task": "clean_up_your_desk",
+      "source_object": "pencil_case_224",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.6,
+        -1.05,
+        2.3
+      ],
+      "in_rooms": [
+        "living_room_0"
+      ]
+    },
+    {
+      "name": "lh_clutter5",
+      "source_task": "clean_up_your_desk",
+      "source_object": "pencil_case_224",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        -4.6,
+        -1.05,
+        2.5
+      ],
+      "in_rooms": [
+        "living_room_0"
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "lh_tool_home",
+      "position": [
+        -3.0,
+        0.65,
+        0.225
+      ],
+      "size": [
+        0.8,
+        0.7,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_a_stage",
+      "position": [
+        -5.609999999999999,
+        1.05,
+        0.225
+      ],
+      "size": [
+        1.0,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.95,
+        0.65,
+        0.08,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_a_destination",
+      "position": [
+        -3.5,
+        2.7,
+        0.225
+      ],
+      "size": [
+        0.8,
+        1.6,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_a_lamp0_stand",
+      "position": [
+        -3.0,
+        1.45,
+        0.225
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_a_lamp1_stand",
+      "position": [
+        -3.4,
+        3.85,
+        0.225
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_b_stage",
+      "position": [
+        3.32,
+        0.5,
+        0.225
+      ],
+      "size": [
+        1.0,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.95,
+        0.65,
+        0.08,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_b_destination",
+      "position": [
+        5.619999999999999,
+        0.9,
+        0.225
+      ],
+      "size": [
+        1.0,
+        1.2,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_b_lamp0_stand",
+      "position": [
+        3.0,
+        2.4,
+        0.225
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_b_lamp1_stand",
+      "position": [
+        5.9,
+        2.4,
+        0.225
+      ],
+      "size": [
+        0.5,
+        0.5,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_clutter_home",
+      "position": [
+        -2.9,
+        -2.3,
+        0.225
+      ],
+      "size": [
+        1.2,
+        0.8,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.32,
+        0.85,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_wipe_home",
+      "position": [
+        -5.7,
+        -2.4,
+        0.225
+      ],
+      "size": [
+        0.6,
+        0.6,
+        0.45
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "background_vacuum",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -3.55,
+        1.3
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "tool",
+      "target": "tool_home",
+      "place_on_support": true,
+      "xy": [
+        -3.0,
+        0.65
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        2.8421636670827866e-06,
+        -1.1087049642810598e-05,
+        0.8758368492126465,
+        0.4826078414916992
+      ]
+    },
+    {
+      "object": "tool",
+      "state": "ToggledOn",
+      "value": false,
+      "settle_steps": 1
+    },
+    {
+      "object": "a_item00",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.9399999999999995,
+        0.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "a_item01",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.62,
+        0.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "a_item02",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.3,
+        0.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "a_item03",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -3.98,
+        0.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "a_item04",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.9399999999999995,
+        1.17
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "a_item05",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.62,
+        1.17
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "a_item06",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.3,
+        1.17
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "a_item07",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -3.98,
+        1.17
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "a_item08",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.9399999999999995,
+        1.49
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "a_item09",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.62,
+        1.49
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "a_item10",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -4.3,
+        1.49
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "a_item11",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -3.98,
+        1.49
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "floor",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "a_lamp0",
+      "target": "a_lamp0_stand",
+      "place_on_support": true,
+      "xy": [
+        -3.0,
+        1.45
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        4.5655760914087296e-05,
+        0.0001033931621350348,
+        0.9997740387916565,
+        0.021264418959617615
+      ]
+    },
+    {
+      "object": "a_lamp0",
+      "state": "ToggledOn",
+      "value": true,
+      "settle_steps": 1
+    },
+    {
+      "object": "a_lamp1",
+      "target": "a_lamp1_stand",
+      "place_on_support": true,
+      "xy": [
+        -3.4,
+        3.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        4.5655760914087296e-05,
+        0.0001033931621350348,
+        0.9997740387916565,
+        0.021264418959617615
+      ]
+    },
+    {
+      "object": "a_lamp1",
+      "state": "ToggledOn",
+      "value": true,
+      "settle_steps": 1
+    },
+    {
+      "object": "b_item00",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        3.9899999999999998,
+        0.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "b_item01",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.31,
+        0.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "b_item02",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.63,
+        0.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "b_item03",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.949999999999999,
+        0.85
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "b_item04",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        3.9899999999999998,
+        1.17
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "b_item05",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.31,
+        1.17
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "b_item06",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.63,
+        1.17
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "b_item07",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.949999999999999,
+        1.17
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "b_item08",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        3.9899999999999998,
+        1.49
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "b_item09",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.31,
+        1.49
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "b_item10",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.63,
+        1.49
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -2.6156194508075714e-06,
+        -3.613655280787498e-05,
+        -0.07248082756996155,
+        0.9973698258399963
+      ]
+    },
+    {
+      "object": "b_item11",
+      "target": "floor_b",
+      "place_on_support": true,
+      "xy": [
+        4.949999999999999,
+        1.49
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -1.1002612154698e-08,
+        3.6458735053201963e-07,
+        0.9989964962005615,
+        -0.04478878900408745
+      ]
+    },
+    {
+      "object": "floor_b",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "b_lamp0",
+      "target": "b_lamp0_stand",
+      "place_on_support": true,
+      "xy": [
+        3.0,
+        2.4
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        4.5655760914087296e-05,
+        0.0001033931621350348,
+        0.9997740387916565,
+        0.021264418959617615
+      ]
+    },
+    {
+      "object": "b_lamp0",
+      "state": "ToggledOn",
+      "value": true,
+      "settle_steps": 1
+    },
+    {
+      "object": "b_lamp1",
+      "target": "b_lamp1_stand",
+      "place_on_support": true,
+      "xy": [
+        5.9,
+        2.4
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        4.5655760914087296e-05,
+        0.0001033931621350348,
+        0.9997740387916565,
+        0.021264418959617615
+      ]
+    },
+    {
+      "object": "b_lamp1",
+      "state": "ToggledOn",
+      "value": true,
+      "settle_steps": 1
+    },
+    {
+      "object": "a_door",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      },
+      "max_sampling_attempts": 3
+    },
+    {
+      "object": "b_door",
+      "state": "Open",
+      "value": true,
+      "kwargs": {
+        "fully": true
+      },
+      "max_sampling_attempts": 3
+    },
+    {
+      "object": "wipe_tool",
+      "target": "wipe_home",
+      "xy": [
+        -5.7,
+        -2.4
+      ],
+      "place_on_support": true
+    },
+    {
+      "object": "clutter0",
+      "target": "shared_shelf",
+      "xy": [
+        -5.35,
+        -1.05
+      ],
+      "place_on_support": true
+    },
+    {
+      "object": "clutter1",
+      "target": "shared_shelf",
+      "xy": [
+        -5.05,
+        -1.05
+      ],
+      "place_on_support": true
+    },
+    {
+      "object": "clutter2",
+      "target": "shared_shelf",
+      "xy": [
+        -4.75,
+        -1.05
+      ],
+      "place_on_support": true
+    },
+    {
+      "object": "clutter3",
+      "target": "shared_shelf",
+      "xy": [
+        -4.449999999999999,
+        -1.05
+      ],
+      "place_on_support": true
+    },
+    {
+      "object": "clutter4",
+      "target": "shared_shelf",
+      "xy": [
+        -4.1499999999999995,
+        -1.05
+      ],
+      "place_on_support": true
+    },
+    {
+      "object": "clutter5",
+      "target": "shared_shelf",
+      "xy": [
+        -3.8499999999999996,
+        -1.05
+      ],
+      "place_on_support": true
+    },
+    {
+      "object": "shared_shelf",
+      "state": "Covered",
+      "system": "dust",
+      "value": true,
+      "max_sampling_attempts": 3
+    },
+    {
+      "object": "a_stage",
+      "state": "Covered",
+      "system": "dust",
+      "value": true,
+      "max_sampling_attempts": 3
+    },
+    {
+      "object": "b_stage",
+      "state": "Covered",
+      "system": "dust",
+      "value": true,
+      "max_sampling_attempts": 3
+    }
+  ],
+  "initial_assertions": {
+    "background_vacuum_starts_on_floor": "background_vacuum_on_floor",
+    "tool_starts_on_tool_home": "tool_on_tool_home",
+    "tool_ToggledOn": {
+      "not": "tool_ToggledOn"
+    },
+    "a_item00_starts_on_floor": "a_item00_on_floor",
+    "a_item01_starts_on_floor": "a_item01_on_floor",
+    "a_item02_starts_on_floor": "a_item02_on_floor",
+    "a_item03_starts_on_floor": "a_item03_on_floor",
+    "a_item04_starts_on_floor": "a_item04_on_floor",
+    "a_item05_starts_on_floor": "a_item05_on_floor",
+    "a_item06_starts_on_floor": "a_item06_on_floor",
+    "a_item07_starts_on_floor": "a_item07_on_floor",
+    "a_item08_starts_on_floor": "a_item08_on_floor",
+    "a_item09_starts_on_floor": "a_item09_on_floor",
+    "a_item10_starts_on_floor": "a_item10_on_floor",
+    "a_item11_starts_on_floor": "a_item11_on_floor",
+    "floor_Covered_dust": "floor_Covered_dust",
+    "a_lamp0_starts_on_a_lamp0_stand": "a_lamp0_on_a_lamp0_stand",
+    "a_lamp0_ToggledOn": "a_lamp0_ToggledOn",
+    "a_lamp1_starts_on_a_lamp1_stand": "a_lamp1_on_a_lamp1_stand",
+    "a_lamp1_ToggledOn": "a_lamp1_ToggledOn",
+    "b_item00_starts_on_floor_b": "b_item00_on_floor_b",
+    "b_item01_starts_on_floor_b": "b_item01_on_floor_b",
+    "b_item02_starts_on_floor_b": "b_item02_on_floor_b",
+    "b_item03_starts_on_floor_b": "b_item03_on_floor_b",
+    "b_item04_starts_on_floor_b": "b_item04_on_floor_b",
+    "b_item05_starts_on_floor_b": "b_item05_on_floor_b",
+    "b_item06_starts_on_floor_b": "b_item06_on_floor_b",
+    "b_item07_starts_on_floor_b": "b_item07_on_floor_b",
+    "b_item08_starts_on_floor_b": "b_item08_on_floor_b",
+    "b_item09_starts_on_floor_b": "b_item09_on_floor_b",
+    "b_item10_starts_on_floor_b": "b_item10_on_floor_b",
+    "b_item11_starts_on_floor_b": "b_item11_on_floor_b",
+    "floor_b_Covered_dust": "floor_b_Covered_dust",
+    "b_lamp0_starts_on_b_lamp0_stand": "b_lamp0_on_b_lamp0_stand",
+    "b_lamp0_ToggledOn": "b_lamp0_ToggledOn",
+    "b_lamp1_starts_on_b_lamp1_stand": "b_lamp1_on_b_lamp1_stand",
+    "b_lamp1_ToggledOn": "b_lamp1_ToggledOn",
+    "a_door_starts_open": "a_door_open",
+    "b_door_starts_open": "b_door_open",
+    "wipe_tool_initial_support": "wipe_tool_on_wipe_home",
+    "clutter0_initial_support": "clutter0_on_shared_shelf",
+    "clutter1_initial_support": "clutter1_on_shared_shelf",
+    "clutter2_initial_support": "clutter2_on_shared_shelf",
+    "clutter3_initial_support": "clutter3_on_shared_shelf",
+    "clutter4_initial_support": "clutter4_on_shared_shelf",
+    "clutter5_initial_support": "clutter5_on_shared_shelf",
+    "shared_shelf_starts_dusty": "shared_shelf_Covered_dust",
+    "a_stage_starts_dusty": "a_stage_Covered_dust",
+    "b_stage_starts_dusty": "b_stage_Covered_dust"
+  },
+  "public_instruction": "整理两间卧室及共用书柜：分房暂存、吸尘，清空并擦净公共书柜后归书，玩具回各房绿台，清洁暂存台，最后关灯并归还工具。",
+  "public_context": [
+    "A 卧室的 6 本书和 6 件玩具必须同时放到本房黄色暂存台，保持全部暂存直到地面吸尘完成。吸尘后玩具归本房绿台，书归公共区原生矮书柜顶面；有归位物品时本房地面须保持清洁。全部归位且暂存台清空后才可清除该台初始灰尘，结束时台面清洁且没有任务物品。",
+    "B 卧室的 6 本书和 6 件玩具必须同时放到本房黄色暂存台，保持全部暂存直到地面吸尘完成。吸尘后玩具归本房绿台，书归公共区原生矮书柜顶面；有归位物品时本房地面须保持清洁。全部归位且暂存台清空后才可清除该台初始灰尘，结束时台面清洁且没有任务物品。",
+    "公共区矮书柜顶面起初有 6 个笔袋和灰尘；笔袋全部转移到蓝色收纳台且书柜无笔袋后，才能用护理刷清洁书柜。书柜清洁后才可归书；任何书在书柜上时，书柜都必须保持清洁。结束时 6 个笔袋在蓝台、12 本书在书柜，书柜保持清洁。",
+    "两间地面、所有物品、共用书柜及两张暂存台均完成后，才可关闭 4 盏任务台灯。结束时 4 灯全关、吸尘器关闭并在原灰台、护理刷在公共区灰台、机械手为空；各项结束状态须同时满足。允许中途归还再取用工具。",
+    "物品逐件搬运，不能连同承载其上其他任务物品一起搬运；任务家具固定在场景中。"
+  ],
+  "requirements": [
+    {
+      "id": "a_work",
+      "text": "A 卧室的 6 本书和 6 件玩具必须同时放到本房黄色暂存台，保持全部暂存直到地面吸尘完成。吸尘后玩具归本房绿台，书归公共区原生矮书柜顶面；有归位物品时本房地面须保持清洁。全部归位且暂存台清空后才可清除该台初始灰尘，结束时台面清洁且没有任务物品。",
+      "terminal": [
+        "a_stage_clean",
+        "a_item00_returned",
+        "a_item01_returned",
+        "a_item02_returned",
+        "a_item03_returned",
+        "a_item04_returned",
+        "a_item05_returned",
+        "a_item06_returned",
+        "a_item07_returned",
+        "a_item08_returned",
+        "a_item09_returned",
+        "a_item10_returned",
+        "a_item11_returned",
+        "a_floor_clean",
+        "a_stage_empty"
+      ],
+      "milestones": [
+        "a_staged",
+        "a_floor_clean",
+        "a_restored",
+        "a_stage_clean"
+      ],
+      "constraints": [
+        "a_stage_before_vacuum",
+        "a_keep_staged_until_vacuum",
+        "a_vacuum_before_restore",
+        "a_floor_currently_clean_for_restored_items",
+        "a_restore_before_stage_wipe"
+      ]
+    },
+    {
+      "id": "b_work",
+      "text": "B 卧室的 6 本书和 6 件玩具必须同时放到本房黄色暂存台，保持全部暂存直到地面吸尘完成。吸尘后玩具归本房绿台，书归公共区原生矮书柜顶面；有归位物品时本房地面须保持清洁。全部归位且暂存台清空后才可清除该台初始灰尘，结束时台面清洁且没有任务物品。",
+      "terminal": [
+        "b_stage_clean",
+        "b_item00_returned",
+        "b_item01_returned",
+        "b_item02_returned",
+        "b_item03_returned",
+        "b_item04_returned",
+        "b_item05_returned",
+        "b_item06_returned",
+        "b_item07_returned",
+        "b_item08_returned",
+        "b_item09_returned",
+        "b_item10_returned",
+        "b_item11_returned",
+        "b_floor_clean",
+        "b_stage_empty"
+      ],
+      "milestones": [
+        "b_staged",
+        "b_floor_clean",
+        "b_restored",
+        "b_stage_clean"
+      ],
+      "constraints": [
+        "b_stage_before_vacuum",
+        "b_keep_staged_until_vacuum",
+        "b_vacuum_before_restore",
+        "b_floor_currently_clean_for_restored_items",
+        "b_restore_before_stage_wipe"
+      ]
+    },
+    {
+      "id": "library",
+      "text": "公共区矮书柜顶面起初有 6 个笔袋和灰尘；笔袋全部转移到蓝色收纳台且书柜无笔袋后，才能用护理刷清洁书柜。书柜清洁后才可归书；任何书在书柜上时，书柜都必须保持清洁。结束时 6 个笔袋在蓝台、12 本书在书柜，书柜保持清洁。",
+      "terminal": [
+        "clutter0_stored",
+        "clutter1_stored",
+        "clutter2_stored",
+        "clutter3_stored",
+        "clutter4_stored",
+        "clutter5_stored",
+        "shared_shelf_clean"
+      ],
+      "milestones": [
+        "shelf_cleared",
+        "shelf_clean"
+      ],
+      "constraints": [
+        "clear_shelf_before_wipe",
+        "keep_shelf_clear_until_wiped",
+        "shelf_clean_before_books",
+        "shelf_currently_clean_under_books"
+      ]
+    },
+    {
+      "id": "close",
+      "text": "两间地面、所有物品、共用书柜及两张暂存台均完成后，才可关闭 4 盏任务台灯。结束时 4 灯全关、吸尘器关闭并在原灰台、护理刷在公共区灰台、机械手为空；各项结束状态须同时满足。允许中途归还再取用工具。",
+      "terminal": [
+        "a_lamp0_off",
+        "a_lamp1_off",
+        "b_lamp0_off",
+        "b_lamp1_off",
+        "tool_off",
+        "tool_home",
+        "wipe_tool_home",
+        "hand_empty"
+      ],
+      "milestones": [
+        "rooms_ready",
+        "a_lights_off",
+        "b_lights_off",
+        "tools_home",
+        "complete"
+      ],
+      "constraints": [
+        "a_lamp0_last",
+        "a_lamp1_last",
+        "b_lamp0_last",
+        "b_lamp1_last"
+      ]
+    },
+    {
+      "id": "handling",
+      "text": "物品逐件搬运，不能连同承载其上其他任务物品一起搬运；任务家具固定在场景中。",
+      "terminal": [],
+      "milestones": [],
+      "constraints": [
+        "individual_handling"
+      ]
+    }
+  ],
+  "evaluation": {
+    "predicates": {
+      "background_vacuum_on_floor": {
+        "object": "background_vacuum",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "tool_on_tool_home": {
+        "object": "tool",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "tool_ToggledOn": {
+        "object": "tool",
+        "state": "ToggledOn"
+      },
+      "a_item00_on_floor": {
+        "object": "a_item00",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item00_on_a_stage": {
+        "object": "a_item00",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item00_on_a_destination": {
+        "object": "a_item00",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item01_on_floor": {
+        "object": "a_item01",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item01_on_a_stage": {
+        "object": "a_item01",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item01_on_a_destination": {
+        "object": "a_item01",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item02_on_floor": {
+        "object": "a_item02",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item02_on_a_stage": {
+        "object": "a_item02",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item02_on_a_destination": {
+        "object": "a_item02",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item03_on_floor": {
+        "object": "a_item03",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item03_on_a_stage": {
+        "object": "a_item03",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item03_on_a_destination": {
+        "object": "a_item03",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item04_on_floor": {
+        "object": "a_item04",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item04_on_a_stage": {
+        "object": "a_item04",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item04_on_a_destination": {
+        "object": "a_item04",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item05_on_floor": {
+        "object": "a_item05",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item05_on_a_stage": {
+        "object": "a_item05",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item05_on_a_destination": {
+        "object": "a_item05",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item06_on_floor": {
+        "object": "a_item06",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item06_on_a_stage": {
+        "object": "a_item06",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item06_on_a_destination": {
+        "object": "a_item06",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item07_on_floor": {
+        "object": "a_item07",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item07_on_a_stage": {
+        "object": "a_item07",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item07_on_a_destination": {
+        "object": "a_item07",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item08_on_floor": {
+        "object": "a_item08",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item08_on_a_stage": {
+        "object": "a_item08",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item08_on_a_destination": {
+        "object": "a_item08",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item09_on_floor": {
+        "object": "a_item09",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item09_on_a_stage": {
+        "object": "a_item09",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item09_on_a_destination": {
+        "object": "a_item09",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item10_on_floor": {
+        "object": "a_item10",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item10_on_a_stage": {
+        "object": "a_item10",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item10_on_a_destination": {
+        "object": "a_item10",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "a_item11_on_floor": {
+        "object": "a_item11",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "a_item11_on_a_stage": {
+        "object": "a_item11",
+        "state": "OnTop",
+        "target": "a_stage"
+      },
+      "a_item11_on_a_destination": {
+        "object": "a_item11",
+        "state": "OnTop",
+        "target": "a_destination"
+      },
+      "floor_Covered_dust": {
+        "object": "floor",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "a_lamp0_on_a_lamp0_stand": {
+        "object": "a_lamp0",
+        "state": "OnTop",
+        "target": "a_lamp0_stand"
+      },
+      "a_lamp0_ToggledOn": {
+        "object": "a_lamp0",
+        "state": "ToggledOn"
+      },
+      "a_lamp1_on_a_lamp1_stand": {
+        "object": "a_lamp1",
+        "state": "OnTop",
+        "target": "a_lamp1_stand"
+      },
+      "a_lamp1_ToggledOn": {
+        "object": "a_lamp1",
+        "state": "ToggledOn"
+      },
+      "b_item00_on_floor_b": {
+        "object": "b_item00",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item00_on_b_stage": {
+        "object": "b_item00",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item00_on_b_destination": {
+        "object": "b_item00",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item01_on_floor_b": {
+        "object": "b_item01",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item01_on_b_stage": {
+        "object": "b_item01",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item01_on_b_destination": {
+        "object": "b_item01",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item02_on_floor_b": {
+        "object": "b_item02",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item02_on_b_stage": {
+        "object": "b_item02",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item02_on_b_destination": {
+        "object": "b_item02",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item03_on_floor_b": {
+        "object": "b_item03",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item03_on_b_stage": {
+        "object": "b_item03",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item03_on_b_destination": {
+        "object": "b_item03",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item04_on_floor_b": {
+        "object": "b_item04",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item04_on_b_stage": {
+        "object": "b_item04",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item04_on_b_destination": {
+        "object": "b_item04",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item05_on_floor_b": {
+        "object": "b_item05",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item05_on_b_stage": {
+        "object": "b_item05",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item05_on_b_destination": {
+        "object": "b_item05",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item06_on_floor_b": {
+        "object": "b_item06",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item06_on_b_stage": {
+        "object": "b_item06",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item06_on_b_destination": {
+        "object": "b_item06",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item07_on_floor_b": {
+        "object": "b_item07",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item07_on_b_stage": {
+        "object": "b_item07",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item07_on_b_destination": {
+        "object": "b_item07",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item08_on_floor_b": {
+        "object": "b_item08",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item08_on_b_stage": {
+        "object": "b_item08",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item08_on_b_destination": {
+        "object": "b_item08",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item09_on_floor_b": {
+        "object": "b_item09",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item09_on_b_stage": {
+        "object": "b_item09",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item09_on_b_destination": {
+        "object": "b_item09",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item10_on_floor_b": {
+        "object": "b_item10",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item10_on_b_stage": {
+        "object": "b_item10",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item10_on_b_destination": {
+        "object": "b_item10",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "b_item11_on_floor_b": {
+        "object": "b_item11",
+        "state": "OnTop",
+        "target": "floor_b"
+      },
+      "b_item11_on_b_stage": {
+        "object": "b_item11",
+        "state": "OnTop",
+        "target": "b_stage"
+      },
+      "b_item11_on_b_destination": {
+        "object": "b_item11",
+        "state": "OnTop",
+        "target": "b_destination"
+      },
+      "floor_b_Covered_dust": {
+        "object": "floor_b",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "b_lamp0_on_b_lamp0_stand": {
+        "object": "b_lamp0",
+        "state": "OnTop",
+        "target": "b_lamp0_stand"
+      },
+      "b_lamp0_ToggledOn": {
+        "object": "b_lamp0",
+        "state": "ToggledOn"
+      },
+      "b_lamp1_on_b_lamp1_stand": {
+        "object": "b_lamp1",
+        "state": "OnTop",
+        "target": "b_lamp1_stand"
+      },
+      "b_lamp1_ToggledOn": {
+        "object": "b_lamp1",
+        "state": "ToggledOn"
+      },
+      "hand_empty": {
+        "object": "tool",
+        "state": "HandEmpty"
+      },
+      "a_door_open": {
+        "object": "a_door",
+        "state": "Open"
+      },
+      "b_door_open": {
+        "object": "b_door",
+        "state": "Open"
+      },
+      "wipe_tool_on_wipe_home": {
+        "object": "wipe_tool",
+        "state": "OnTop",
+        "target": "wipe_home"
+      },
+      "clutter0_on_shared_shelf": {
+        "object": "clutter0",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "clutter0_on_clutter_home": {
+        "object": "clutter0",
+        "state": "OnTop",
+        "target": "clutter_home"
+      },
+      "clutter1_on_shared_shelf": {
+        "object": "clutter1",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "clutter1_on_clutter_home": {
+        "object": "clutter1",
+        "state": "OnTop",
+        "target": "clutter_home"
+      },
+      "clutter2_on_shared_shelf": {
+        "object": "clutter2",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "clutter2_on_clutter_home": {
+        "object": "clutter2",
+        "state": "OnTop",
+        "target": "clutter_home"
+      },
+      "clutter3_on_shared_shelf": {
+        "object": "clutter3",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "clutter3_on_clutter_home": {
+        "object": "clutter3",
+        "state": "OnTop",
+        "target": "clutter_home"
+      },
+      "clutter4_on_shared_shelf": {
+        "object": "clutter4",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "clutter4_on_clutter_home": {
+        "object": "clutter4",
+        "state": "OnTop",
+        "target": "clutter_home"
+      },
+      "clutter5_on_shared_shelf": {
+        "object": "clutter5",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "clutter5_on_clutter_home": {
+        "object": "clutter5",
+        "state": "OnTop",
+        "target": "clutter_home"
+      },
+      "shared_shelf_Covered_dust": {
+        "object": "shared_shelf",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "a_stage_Covered_dust": {
+        "object": "a_stage",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "b_stage_Covered_dust": {
+        "object": "b_stage",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "a_item01_on_shared_shelf": {
+        "object": "a_item01",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "a_item03_on_shared_shelf": {
+        "object": "a_item03",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "a_item05_on_shared_shelf": {
+        "object": "a_item05",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "a_item07_on_shared_shelf": {
+        "object": "a_item07",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "a_item09_on_shared_shelf": {
+        "object": "a_item09",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "a_item11_on_shared_shelf": {
+        "object": "a_item11",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "b_item01_on_shared_shelf": {
+        "object": "b_item01",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "b_item03_on_shared_shelf": {
+        "object": "b_item03",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "b_item05_on_shared_shelf": {
+        "object": "b_item05",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "b_item07_on_shared_shelf": {
+        "object": "b_item07",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "b_item09_on_shared_shelf": {
+        "object": "b_item09",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      },
+      "b_item11_on_shared_shelf": {
+        "object": "b_item11",
+        "state": "OnTop",
+        "target": "shared_shelf"
+      }
+    },
+    "terminal": {
+      "clutter0_stored": "clutter0_on_clutter_home",
+      "clutter1_stored": "clutter1_on_clutter_home",
+      "clutter2_stored": "clutter2_on_clutter_home",
+      "clutter3_stored": "clutter3_on_clutter_home",
+      "clutter4_stored": "clutter4_on_clutter_home",
+      "clutter5_stored": "clutter5_on_clutter_home",
+      "shared_shelf_clean": {
+        "not": "shared_shelf_Covered_dust"
+      },
+      "a_stage_clean": {
+        "not": "a_stage_Covered_dust"
+      },
+      "b_stage_clean": {
+        "not": "b_stage_Covered_dust"
+      },
+      "a_item00_returned": "a_item00_on_a_destination",
+      "a_item01_returned": "a_item01_on_shared_shelf",
+      "a_item02_returned": "a_item02_on_a_destination",
+      "a_item03_returned": "a_item03_on_shared_shelf",
+      "a_item04_returned": "a_item04_on_a_destination",
+      "a_item05_returned": "a_item05_on_shared_shelf",
+      "a_item06_returned": "a_item06_on_a_destination",
+      "a_item07_returned": "a_item07_on_shared_shelf",
+      "a_item08_returned": "a_item08_on_a_destination",
+      "a_item09_returned": "a_item09_on_shared_shelf",
+      "a_item10_returned": "a_item10_on_a_destination",
+      "a_item11_returned": "a_item11_on_shared_shelf",
+      "a_floor_clean": {
+        "not": "floor_Covered_dust"
+      },
+      "a_stage_empty": {
+        "not": {
+          "any": [
+            "a_item00_on_a_stage",
+            "a_item01_on_a_stage",
+            "a_item02_on_a_stage",
+            "a_item03_on_a_stage",
+            "a_item04_on_a_stage",
+            "a_item05_on_a_stage",
+            "a_item06_on_a_stage",
+            "a_item07_on_a_stage",
+            "a_item08_on_a_stage",
+            "a_item09_on_a_stage",
+            "a_item10_on_a_stage",
+            "a_item11_on_a_stage"
+          ]
+        }
+      },
+      "b_item00_returned": "b_item00_on_b_destination",
+      "b_item01_returned": "b_item01_on_shared_shelf",
+      "b_item02_returned": "b_item02_on_b_destination",
+      "b_item03_returned": "b_item03_on_shared_shelf",
+      "b_item04_returned": "b_item04_on_b_destination",
+      "b_item05_returned": "b_item05_on_shared_shelf",
+      "b_item06_returned": "b_item06_on_b_destination",
+      "b_item07_returned": "b_item07_on_shared_shelf",
+      "b_item08_returned": "b_item08_on_b_destination",
+      "b_item09_returned": "b_item09_on_shared_shelf",
+      "b_item10_returned": "b_item10_on_b_destination",
+      "b_item11_returned": "b_item11_on_shared_shelf",
+      "b_floor_clean": {
+        "not": "floor_b_Covered_dust"
+      },
+      "b_stage_empty": {
+        "not": {
+          "any": [
+            "b_item00_on_b_stage",
+            "b_item01_on_b_stage",
+            "b_item02_on_b_stage",
+            "b_item03_on_b_stage",
+            "b_item04_on_b_stage",
+            "b_item05_on_b_stage",
+            "b_item06_on_b_stage",
+            "b_item07_on_b_stage",
+            "b_item08_on_b_stage",
+            "b_item09_on_b_stage",
+            "b_item10_on_b_stage",
+            "b_item11_on_b_stage"
+          ]
+        }
+      },
+      "a_lamp0_off": {
+        "not": "a_lamp0_ToggledOn"
+      },
+      "a_lamp1_off": {
+        "not": "a_lamp1_ToggledOn"
+      },
+      "b_lamp0_off": {
+        "not": "b_lamp0_ToggledOn"
+      },
+      "b_lamp1_off": {
+        "not": "b_lamp1_ToggledOn"
+      },
+      "tool_off": {
+        "not": "tool_ToggledOn"
+      },
+      "tool_home": "tool_on_tool_home",
+      "wipe_tool_home": "wipe_tool_on_wipe_home",
+      "hand_empty": "hand_empty"
+    },
+    "milestones": {
+      "shelf_cleared": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                "clutter0_on_clutter_home",
+                {
+                  "not": "clutter0_on_shared_shelf"
+                }
+              ]
+            },
+            {
+              "all": [
+                "clutter1_on_clutter_home",
+                {
+                  "not": "clutter1_on_shared_shelf"
+                }
+              ]
+            },
+            {
+              "all": [
+                "clutter2_on_clutter_home",
+                {
+                  "not": "clutter2_on_shared_shelf"
+                }
+              ]
+            },
+            {
+              "all": [
+                "clutter3_on_clutter_home",
+                {
+                  "not": "clutter3_on_shared_shelf"
+                }
+              ]
+            },
+            {
+              "all": [
+                "clutter4_on_clutter_home",
+                {
+                  "not": "clutter4_on_shared_shelf"
+                }
+              ]
+            },
+            {
+              "all": [
+                "clutter5_on_clutter_home",
+                {
+                  "not": "clutter5_on_shared_shelf"
+                }
+              ]
+            }
+          ]
+        },
+        "after": []
+      },
+      "shelf_clean": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                {
+                  "all": [
+                    "clutter0_on_clutter_home",
+                    {
+                      "not": "clutter0_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter1_on_clutter_home",
+                    {
+                      "not": "clutter1_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter2_on_clutter_home",
+                    {
+                      "not": "clutter2_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter3_on_clutter_home",
+                    {
+                      "not": "clutter3_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter4_on_clutter_home",
+                    {
+                      "not": "clutter4_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter5_on_clutter_home",
+                    {
+                      "not": "clutter5_on_shared_shelf"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "not": "shared_shelf_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shelf_cleared"
+        ]
+      },
+      "a_staged": {
+        "when": {
+          "all": [
+            "a_item00_on_a_stage",
+            "a_item01_on_a_stage",
+            "a_item02_on_a_stage",
+            "a_item03_on_a_stage",
+            "a_item04_on_a_stage",
+            "a_item05_on_a_stage",
+            "a_item06_on_a_stage",
+            "a_item07_on_a_stage",
+            "a_item08_on_a_stage",
+            "a_item09_on_a_stage",
+            "a_item10_on_a_stage",
+            "a_item11_on_a_stage"
+          ]
+        },
+        "after": []
+      },
+      "a_floor_clean": {
+        "when": {
+          "all": [
+            {
+              "not": "floor_Covered_dust"
+            },
+            {
+              "all": [
+                "a_item00_on_a_stage",
+                "a_item01_on_a_stage",
+                "a_item02_on_a_stage",
+                "a_item03_on_a_stage",
+                "a_item04_on_a_stage",
+                "a_item05_on_a_stage",
+                "a_item06_on_a_stage",
+                "a_item07_on_a_stage",
+                "a_item08_on_a_stage",
+                "a_item09_on_a_stage",
+                "a_item10_on_a_stage",
+                "a_item11_on_a_stage"
+              ]
+            }
+          ]
+        },
+        "after": [
+          "a_staged"
+        ]
+      },
+      "a_restored": {
+        "when": {
+          "all": [
+            {
+              "not": "floor_Covered_dust"
+            },
+            "a_item00_on_a_destination",
+            "a_item01_on_shared_shelf",
+            "a_item02_on_a_destination",
+            "a_item03_on_shared_shelf",
+            "a_item04_on_a_destination",
+            "a_item05_on_shared_shelf",
+            "a_item06_on_a_destination",
+            "a_item07_on_shared_shelf",
+            "a_item08_on_a_destination",
+            "a_item09_on_shared_shelf",
+            "a_item10_on_a_destination",
+            "a_item11_on_shared_shelf",
+            {
+              "not": {
+                "any": [
+                  "a_item00_on_a_stage",
+                  "a_item01_on_a_stage",
+                  "a_item02_on_a_stage",
+                  "a_item03_on_a_stage",
+                  "a_item04_on_a_stage",
+                  "a_item05_on_a_stage",
+                  "a_item06_on_a_stage",
+                  "a_item07_on_a_stage",
+                  "a_item08_on_a_stage",
+                  "a_item09_on_a_stage",
+                  "a_item10_on_a_stage",
+                  "a_item11_on_a_stage"
+                ]
+              }
+            }
+          ]
+        },
+        "after": [
+          "a_floor_clean",
+          "shelf_clean"
+        ]
+      },
+      "a_stage_clean": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                {
+                  "not": "floor_Covered_dust"
+                },
+                "a_item00_on_a_destination",
+                "a_item01_on_shared_shelf",
+                "a_item02_on_a_destination",
+                "a_item03_on_shared_shelf",
+                "a_item04_on_a_destination",
+                "a_item05_on_shared_shelf",
+                "a_item06_on_a_destination",
+                "a_item07_on_shared_shelf",
+                "a_item08_on_a_destination",
+                "a_item09_on_shared_shelf",
+                "a_item10_on_a_destination",
+                "a_item11_on_shared_shelf",
+                {
+                  "not": {
+                    "any": [
+                      "a_item00_on_a_stage",
+                      "a_item01_on_a_stage",
+                      "a_item02_on_a_stage",
+                      "a_item03_on_a_stage",
+                      "a_item04_on_a_stage",
+                      "a_item05_on_a_stage",
+                      "a_item06_on_a_stage",
+                      "a_item07_on_a_stage",
+                      "a_item08_on_a_stage",
+                      "a_item09_on_a_stage",
+                      "a_item10_on_a_stage",
+                      "a_item11_on_a_stage"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "not": "a_stage_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "a_restored"
+        ]
+      },
+      "b_staged": {
+        "when": {
+          "all": [
+            "b_item00_on_b_stage",
+            "b_item01_on_b_stage",
+            "b_item02_on_b_stage",
+            "b_item03_on_b_stage",
+            "b_item04_on_b_stage",
+            "b_item05_on_b_stage",
+            "b_item06_on_b_stage",
+            "b_item07_on_b_stage",
+            "b_item08_on_b_stage",
+            "b_item09_on_b_stage",
+            "b_item10_on_b_stage",
+            "b_item11_on_b_stage"
+          ]
+        },
+        "after": []
+      },
+      "b_floor_clean": {
+        "when": {
+          "all": [
+            {
+              "not": "floor_b_Covered_dust"
+            },
+            {
+              "all": [
+                "b_item00_on_b_stage",
+                "b_item01_on_b_stage",
+                "b_item02_on_b_stage",
+                "b_item03_on_b_stage",
+                "b_item04_on_b_stage",
+                "b_item05_on_b_stage",
+                "b_item06_on_b_stage",
+                "b_item07_on_b_stage",
+                "b_item08_on_b_stage",
+                "b_item09_on_b_stage",
+                "b_item10_on_b_stage",
+                "b_item11_on_b_stage"
+              ]
+            }
+          ]
+        },
+        "after": [
+          "b_staged"
+        ]
+      },
+      "b_restored": {
+        "when": {
+          "all": [
+            {
+              "not": "floor_b_Covered_dust"
+            },
+            "b_item00_on_b_destination",
+            "b_item01_on_shared_shelf",
+            "b_item02_on_b_destination",
+            "b_item03_on_shared_shelf",
+            "b_item04_on_b_destination",
+            "b_item05_on_shared_shelf",
+            "b_item06_on_b_destination",
+            "b_item07_on_shared_shelf",
+            "b_item08_on_b_destination",
+            "b_item09_on_shared_shelf",
+            "b_item10_on_b_destination",
+            "b_item11_on_shared_shelf",
+            {
+              "not": {
+                "any": [
+                  "b_item00_on_b_stage",
+                  "b_item01_on_b_stage",
+                  "b_item02_on_b_stage",
+                  "b_item03_on_b_stage",
+                  "b_item04_on_b_stage",
+                  "b_item05_on_b_stage",
+                  "b_item06_on_b_stage",
+                  "b_item07_on_b_stage",
+                  "b_item08_on_b_stage",
+                  "b_item09_on_b_stage",
+                  "b_item10_on_b_stage",
+                  "b_item11_on_b_stage"
+                ]
+              }
+            }
+          ]
+        },
+        "after": [
+          "b_floor_clean",
+          "shelf_clean"
+        ]
+      },
+      "b_stage_clean": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                {
+                  "not": "floor_b_Covered_dust"
+                },
+                "b_item00_on_b_destination",
+                "b_item01_on_shared_shelf",
+                "b_item02_on_b_destination",
+                "b_item03_on_shared_shelf",
+                "b_item04_on_b_destination",
+                "b_item05_on_shared_shelf",
+                "b_item06_on_b_destination",
+                "b_item07_on_shared_shelf",
+                "b_item08_on_b_destination",
+                "b_item09_on_shared_shelf",
+                "b_item10_on_b_destination",
+                "b_item11_on_shared_shelf",
+                {
+                  "not": {
+                    "any": [
+                      "b_item00_on_b_stage",
+                      "b_item01_on_b_stage",
+                      "b_item02_on_b_stage",
+                      "b_item03_on_b_stage",
+                      "b_item04_on_b_stage",
+                      "b_item05_on_b_stage",
+                      "b_item06_on_b_stage",
+                      "b_item07_on_b_stage",
+                      "b_item08_on_b_stage",
+                      "b_item09_on_b_stage",
+                      "b_item10_on_b_stage",
+                      "b_item11_on_b_stage"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "not": "b_stage_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "b_restored"
+        ]
+      },
+      "rooms_ready": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                {
+                  "all": [
+                    {
+                      "not": "floor_Covered_dust"
+                    },
+                    "a_item00_on_a_destination",
+                    "a_item01_on_shared_shelf",
+                    "a_item02_on_a_destination",
+                    "a_item03_on_shared_shelf",
+                    "a_item04_on_a_destination",
+                    "a_item05_on_shared_shelf",
+                    "a_item06_on_a_destination",
+                    "a_item07_on_shared_shelf",
+                    "a_item08_on_a_destination",
+                    "a_item09_on_shared_shelf",
+                    "a_item10_on_a_destination",
+                    "a_item11_on_shared_shelf",
+                    {
+                      "not": {
+                        "any": [
+                          "a_item00_on_a_stage",
+                          "a_item01_on_a_stage",
+                          "a_item02_on_a_stage",
+                          "a_item03_on_a_stage",
+                          "a_item04_on_a_stage",
+                          "a_item05_on_a_stage",
+                          "a_item06_on_a_stage",
+                          "a_item07_on_a_stage",
+                          "a_item08_on_a_stage",
+                          "a_item09_on_a_stage",
+                          "a_item10_on_a_stage",
+                          "a_item11_on_a_stage"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "not": "a_stage_Covered_dust"
+                }
+              ]
+            },
+            {
+              "all": [
+                {
+                  "all": [
+                    {
+                      "not": "floor_b_Covered_dust"
+                    },
+                    "b_item00_on_b_destination",
+                    "b_item01_on_shared_shelf",
+                    "b_item02_on_b_destination",
+                    "b_item03_on_shared_shelf",
+                    "b_item04_on_b_destination",
+                    "b_item05_on_shared_shelf",
+                    "b_item06_on_b_destination",
+                    "b_item07_on_shared_shelf",
+                    "b_item08_on_b_destination",
+                    "b_item09_on_shared_shelf",
+                    "b_item10_on_b_destination",
+                    "b_item11_on_shared_shelf",
+                    {
+                      "not": {
+                        "any": [
+                          "b_item00_on_b_stage",
+                          "b_item01_on_b_stage",
+                          "b_item02_on_b_stage",
+                          "b_item03_on_b_stage",
+                          "b_item04_on_b_stage",
+                          "b_item05_on_b_stage",
+                          "b_item06_on_b_stage",
+                          "b_item07_on_b_stage",
+                          "b_item08_on_b_stage",
+                          "b_item09_on_b_stage",
+                          "b_item10_on_b_stage",
+                          "b_item11_on_b_stage"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "not": "b_stage_Covered_dust"
+                }
+              ]
+            },
+            {
+              "all": [
+                {
+                  "all": [
+                    "clutter0_on_clutter_home",
+                    {
+                      "not": "clutter0_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter1_on_clutter_home",
+                    {
+                      "not": "clutter1_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter2_on_clutter_home",
+                    {
+                      "not": "clutter2_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter3_on_clutter_home",
+                    {
+                      "not": "clutter3_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter4_on_clutter_home",
+                    {
+                      "not": "clutter4_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter5_on_clutter_home",
+                    {
+                      "not": "clutter5_on_shared_shelf"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "not": "shared_shelf_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "a_stage_clean",
+          "b_stage_clean"
+        ]
+      },
+      "a_lights_off": {
+        "when": {
+          "all": [
+            {
+              "not": "a_lamp0_ToggledOn"
+            },
+            {
+              "not": "a_lamp1_ToggledOn"
+            }
+          ]
+        },
+        "after": [
+          "rooms_ready"
+        ]
+      },
+      "b_lights_off": {
+        "when": {
+          "all": [
+            {
+              "not": "b_lamp0_ToggledOn"
+            },
+            {
+              "not": "b_lamp1_ToggledOn"
+            }
+          ]
+        },
+        "after": [
+          "rooms_ready"
+        ]
+      },
+      "tools_home": {
+        "when": {
+          "all": [
+            {
+              "not": "tool_ToggledOn"
+            },
+            "tool_on_tool_home",
+            "wipe_tool_on_wipe_home",
+            "hand_empty"
+          ]
+        },
+        "after": [
+          "rooms_ready"
+        ]
+      },
+      "complete": {
+        "when": {
+          "all": [
+            "clutter0_on_clutter_home",
+            "clutter1_on_clutter_home",
+            "clutter2_on_clutter_home",
+            "clutter3_on_clutter_home",
+            "clutter4_on_clutter_home",
+            "clutter5_on_clutter_home",
+            {
+              "not": "shared_shelf_Covered_dust"
+            },
+            {
+              "not": "a_stage_Covered_dust"
+            },
+            {
+              "not": "b_stage_Covered_dust"
+            },
+            "a_item00_on_a_destination",
+            "a_item01_on_shared_shelf",
+            "a_item02_on_a_destination",
+            "a_item03_on_shared_shelf",
+            "a_item04_on_a_destination",
+            "a_item05_on_shared_shelf",
+            "a_item06_on_a_destination",
+            "a_item07_on_shared_shelf",
+            "a_item08_on_a_destination",
+            "a_item09_on_shared_shelf",
+            "a_item10_on_a_destination",
+            "a_item11_on_shared_shelf",
+            {
+              "not": "floor_Covered_dust"
+            },
+            {
+              "not": {
+                "any": [
+                  "a_item00_on_a_stage",
+                  "a_item01_on_a_stage",
+                  "a_item02_on_a_stage",
+                  "a_item03_on_a_stage",
+                  "a_item04_on_a_stage",
+                  "a_item05_on_a_stage",
+                  "a_item06_on_a_stage",
+                  "a_item07_on_a_stage",
+                  "a_item08_on_a_stage",
+                  "a_item09_on_a_stage",
+                  "a_item10_on_a_stage",
+                  "a_item11_on_a_stage"
+                ]
+              }
+            },
+            "b_item00_on_b_destination",
+            "b_item01_on_shared_shelf",
+            "b_item02_on_b_destination",
+            "b_item03_on_shared_shelf",
+            "b_item04_on_b_destination",
+            "b_item05_on_shared_shelf",
+            "b_item06_on_b_destination",
+            "b_item07_on_shared_shelf",
+            "b_item08_on_b_destination",
+            "b_item09_on_shared_shelf",
+            "b_item10_on_b_destination",
+            "b_item11_on_shared_shelf",
+            {
+              "not": "floor_b_Covered_dust"
+            },
+            {
+              "not": {
+                "any": [
+                  "b_item00_on_b_stage",
+                  "b_item01_on_b_stage",
+                  "b_item02_on_b_stage",
+                  "b_item03_on_b_stage",
+                  "b_item04_on_b_stage",
+                  "b_item05_on_b_stage",
+                  "b_item06_on_b_stage",
+                  "b_item07_on_b_stage",
+                  "b_item08_on_b_stage",
+                  "b_item09_on_b_stage",
+                  "b_item10_on_b_stage",
+                  "b_item11_on_b_stage"
+                ]
+              }
+            },
+            {
+              "not": "a_lamp0_ToggledOn"
+            },
+            {
+              "not": "a_lamp1_ToggledOn"
+            },
+            {
+              "not": "b_lamp0_ToggledOn"
+            },
+            {
+              "not": "b_lamp1_ToggledOn"
+            },
+            {
+              "not": "tool_ToggledOn"
+            },
+            "tool_on_tool_home",
+            "wipe_tool_on_wipe_home",
+            "hand_empty"
+          ]
+        },
+        "after": [
+          "a_lights_off",
+          "b_lights_off",
+          "tools_home"
+        ]
+      }
+    },
+    "state_guards": [
+      {
+        "id": "clear_shelf_before_wipe",
+        "require": "shared_shelf_Covered_dust",
+        "until": "shelf_cleared"
+      },
+      {
+        "id": "keep_shelf_clear_until_wiped",
+        "require": {
+          "any": [
+            "shared_shelf_Covered_dust",
+            {
+              "all": [
+                {
+                  "all": [
+                    "clutter0_on_clutter_home",
+                    {
+                      "not": "clutter0_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter1_on_clutter_home",
+                    {
+                      "not": "clutter1_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter2_on_clutter_home",
+                    {
+                      "not": "clutter2_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter3_on_clutter_home",
+                    {
+                      "not": "clutter3_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter4_on_clutter_home",
+                    {
+                      "not": "clutter4_on_shared_shelf"
+                    }
+                  ]
+                },
+                {
+                  "all": [
+                    "clutter5_on_clutter_home",
+                    {
+                      "not": "clutter5_on_shared_shelf"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "until": "shelf_clean"
+      },
+      {
+        "id": "a_stage_before_vacuum",
+        "require": "floor_Covered_dust",
+        "until": "a_staged"
+      },
+      {
+        "id": "a_keep_staged_until_vacuum",
+        "require": {
+          "any": [
+            "floor_Covered_dust",
+            {
+              "all": [
+                "a_item00_on_a_stage",
+                "a_item01_on_a_stage",
+                "a_item02_on_a_stage",
+                "a_item03_on_a_stage",
+                "a_item04_on_a_stage",
+                "a_item05_on_a_stage",
+                "a_item06_on_a_stage",
+                "a_item07_on_a_stage",
+                "a_item08_on_a_stage",
+                "a_item09_on_a_stage",
+                "a_item10_on_a_stage",
+                "a_item11_on_a_stage"
+              ]
+            }
+          ]
+        },
+        "until": "a_floor_clean"
+      },
+      {
+        "id": "a_vacuum_before_restore",
+        "require": {
+          "not": {
+            "any": [
+              "a_item00_on_a_destination",
+              "a_item01_on_shared_shelf",
+              "a_item02_on_a_destination",
+              "a_item03_on_shared_shelf",
+              "a_item04_on_a_destination",
+              "a_item05_on_shared_shelf",
+              "a_item06_on_a_destination",
+              "a_item07_on_shared_shelf",
+              "a_item08_on_a_destination",
+              "a_item09_on_shared_shelf",
+              "a_item10_on_a_destination",
+              "a_item11_on_shared_shelf"
+            ]
+          }
+        },
+        "until": "a_floor_clean"
+      },
+      {
+        "id": "a_floor_currently_clean_for_restored_items",
+        "require": {
+          "any": [
+            {
+              "not": {
+                "any": [
+                  "a_item00_on_a_destination",
+                  "a_item01_on_shared_shelf",
+                  "a_item02_on_a_destination",
+                  "a_item03_on_shared_shelf",
+                  "a_item04_on_a_destination",
+                  "a_item05_on_shared_shelf",
+                  "a_item06_on_a_destination",
+                  "a_item07_on_shared_shelf",
+                  "a_item08_on_a_destination",
+                  "a_item09_on_shared_shelf",
+                  "a_item10_on_a_destination",
+                  "a_item11_on_shared_shelf"
+                ]
+              }
+            },
+            {
+              "not": "floor_Covered_dust"
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "a_restore_before_stage_wipe",
+        "require": "a_stage_Covered_dust",
+        "until": "a_restored"
+      },
+      {
+        "id": "b_stage_before_vacuum",
+        "require": "floor_b_Covered_dust",
+        "until": "b_staged"
+      },
+      {
+        "id": "b_keep_staged_until_vacuum",
+        "require": {
+          "any": [
+            "floor_b_Covered_dust",
+            {
+              "all": [
+                "b_item00_on_b_stage",
+                "b_item01_on_b_stage",
+                "b_item02_on_b_stage",
+                "b_item03_on_b_stage",
+                "b_item04_on_b_stage",
+                "b_item05_on_b_stage",
+                "b_item06_on_b_stage",
+                "b_item07_on_b_stage",
+                "b_item08_on_b_stage",
+                "b_item09_on_b_stage",
+                "b_item10_on_b_stage",
+                "b_item11_on_b_stage"
+              ]
+            }
+          ]
+        },
+        "until": "b_floor_clean"
+      },
+      {
+        "id": "b_vacuum_before_restore",
+        "require": {
+          "not": {
+            "any": [
+              "b_item00_on_b_destination",
+              "b_item01_on_shared_shelf",
+              "b_item02_on_b_destination",
+              "b_item03_on_shared_shelf",
+              "b_item04_on_b_destination",
+              "b_item05_on_shared_shelf",
+              "b_item06_on_b_destination",
+              "b_item07_on_shared_shelf",
+              "b_item08_on_b_destination",
+              "b_item09_on_shared_shelf",
+              "b_item10_on_b_destination",
+              "b_item11_on_shared_shelf"
+            ]
+          }
+        },
+        "until": "b_floor_clean"
+      },
+      {
+        "id": "b_floor_currently_clean_for_restored_items",
+        "require": {
+          "any": [
+            {
+              "not": {
+                "any": [
+                  "b_item00_on_b_destination",
+                  "b_item01_on_shared_shelf",
+                  "b_item02_on_b_destination",
+                  "b_item03_on_shared_shelf",
+                  "b_item04_on_b_destination",
+                  "b_item05_on_shared_shelf",
+                  "b_item06_on_b_destination",
+                  "b_item07_on_shared_shelf",
+                  "b_item08_on_b_destination",
+                  "b_item09_on_shared_shelf",
+                  "b_item10_on_b_destination",
+                  "b_item11_on_shared_shelf"
+                ]
+              }
+            },
+            {
+              "not": "floor_b_Covered_dust"
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "b_restore_before_stage_wipe",
+        "require": "b_stage_Covered_dust",
+        "until": "b_restored"
+      },
+      {
+        "id": "shelf_clean_before_books",
+        "require": {
+          "not": {
+            "any": [
+              "a_item01_on_shared_shelf",
+              "a_item03_on_shared_shelf",
+              "a_item05_on_shared_shelf",
+              "a_item07_on_shared_shelf",
+              "a_item09_on_shared_shelf",
+              "a_item11_on_shared_shelf",
+              "b_item01_on_shared_shelf",
+              "b_item03_on_shared_shelf",
+              "b_item05_on_shared_shelf",
+              "b_item07_on_shared_shelf",
+              "b_item09_on_shared_shelf",
+              "b_item11_on_shared_shelf"
+            ]
+          }
+        },
+        "until": "shelf_clean"
+      },
+      {
+        "id": "shelf_currently_clean_under_books",
+        "require": {
+          "any": [
+            {
+              "not": {
+                "any": [
+                  "a_item01_on_shared_shelf",
+                  "a_item03_on_shared_shelf",
+                  "a_item05_on_shared_shelf",
+                  "a_item07_on_shared_shelf",
+                  "a_item09_on_shared_shelf",
+                  "a_item11_on_shared_shelf",
+                  "b_item01_on_shared_shelf",
+                  "b_item03_on_shared_shelf",
+                  "b_item05_on_shared_shelf",
+                  "b_item07_on_shared_shelf",
+                  "b_item09_on_shared_shelf",
+                  "b_item11_on_shared_shelf"
+                ]
+              }
+            },
+            {
+              "not": "shared_shelf_Covered_dust"
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "a_lamp0_last",
+        "require": "a_lamp0_ToggledOn",
+        "until": "rooms_ready"
+      },
+      {
+        "id": "a_lamp1_last",
+        "require": "a_lamp1_ToggledOn",
+        "until": "rooms_ready"
+      },
+      {
+        "id": "b_lamp0_last",
+        "require": "b_lamp0_ToggledOn",
+        "until": "rooms_ready"
+      },
+      {
+        "id": "b_lamp1_last",
+        "require": "b_lamp1_ToggledOn",
+        "until": "rooms_ready"
+      }
+    ],
+    "motion_guards": [],
+    "carry_guards": [
+      {
+        "id": "individual_handling",
+        "mode": "single_object"
+      }
+    ],
+    "score_type": "custom_branching_library_terminal_history_and_handling_v2"
+  },
+  "acceptance_cases": {
+    "reference_orders": [
+      "library_then_a_then_b",
+      "b_then_library_then_a",
+      "interleave_both_rooms"
+    ],
+    "physical_negative_cases": [
+      "early_shelf_wipe",
+      "early_stage_wipe",
+      "early_lights_off"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 1000
+  },
+  "settle_steps": 45,
+  "reference_plan": {
+    "kind": "branching_library",
+    "rooms": [
+      {
+        "id": "a",
+        "floor": "floor",
+        "work": [
+          {
+            "item": "a_item00",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.909999999999999,
+              0.675
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.67,
+              2.1
+            ]
+          },
+          {
+            "item": "a_item01",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.609999999999999,
+              0.675
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -5.35,
+              -0.9
+            ]
+          },
+          {
+            "item": "a_item02",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.31,
+              0.675
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.67,
+              2.3400000000000003
+            ]
+          },
+          {
+            "item": "a_item03",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.909999999999999,
+              0.925
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -5.05,
+              -0.9
+            ]
+          },
+          {
+            "item": "a_item04",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.609999999999999,
+              0.925
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.67,
+              2.58
+            ]
+          },
+          {
+            "item": "a_item05",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.31,
+              0.925
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -4.75,
+              -0.9
+            ]
+          },
+          {
+            "item": "a_item06",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.909999999999999,
+              1.175
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.67,
+              2.8200000000000003
+            ]
+          },
+          {
+            "item": "a_item07",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.609999999999999,
+              1.175
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -4.449999999999999,
+              -0.9
+            ]
+          },
+          {
+            "item": "a_item08",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.31,
+              1.175
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.67,
+              3.06
+            ]
+          },
+          {
+            "item": "a_item09",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.909999999999999,
+              1.425
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -4.1499999999999995,
+              -0.9
+            ]
+          },
+          {
+            "item": "a_item10",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.609999999999999,
+              1.425
+            ],
+            "destination": "a_destination",
+            "destination_xy": [
+              -3.67,
+              3.3000000000000003
+            ]
+          },
+          {
+            "item": "a_item11",
+            "source": "floor",
+            "stage": "a_stage",
+            "stage_xy": [
+              -5.31,
+              1.425
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -3.8499999999999996,
+              -0.9
+            ]
+          }
+        ]
+      },
+      {
+        "id": "b",
+        "floor": "floor_b",
+        "work": [
+          {
+            "item": "b_item00",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.02,
+              0.125
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.319999999999999,
+              0.525
+            ]
+          },
+          {
+            "item": "b_item01",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.32,
+              0.125
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -5.35,
+              -1.2
+            ]
+          },
+          {
+            "item": "b_item02",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.6199999999999997,
+              0.125
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.919999999999999,
+              0.525
+            ]
+          },
+          {
+            "item": "b_item03",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.02,
+              0.375
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -5.05,
+              -1.2
+            ]
+          },
+          {
+            "item": "b_item04",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.32,
+              0.375
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.619999999999999,
+              0.775
+            ]
+          },
+          {
+            "item": "b_item05",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.6199999999999997,
+              0.375
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -4.75,
+              -1.2
+            ]
+          },
+          {
+            "item": "b_item06",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.02,
+              0.625
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.319999999999999,
+              1.025
+            ]
+          },
+          {
+            "item": "b_item07",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.32,
+              0.625
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -4.449999999999999,
+              -1.2
+            ]
+          },
+          {
+            "item": "b_item08",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.6199999999999997,
+              0.625
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.919999999999999,
+              1.025
+            ]
+          },
+          {
+            "item": "b_item09",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.02,
+              0.875
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -4.1499999999999995,
+              -1.2
+            ]
+          },
+          {
+            "item": "b_item10",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.32,
+              0.875
+            ],
+            "destination": "b_destination",
+            "destination_xy": [
+              5.619999999999999,
+              1.275
+            ]
+          },
+          {
+            "item": "b_item11",
+            "source": "floor_b",
+            "stage": "b_stage",
+            "stage_xy": [
+              3.6199999999999997,
+              0.875
+            ],
+            "destination": "shared_shelf",
+            "destination_xy": [
+              -3.8499999999999996,
+              -1.2
+            ]
+          }
+        ]
+      }
+    ],
+    "lights": [
+      "a_lamp0",
+      "a_lamp1",
+      "b_lamp0",
+      "b_lamp1"
+    ],
+    "tool": "tool",
+    "tool_home": "tool_home",
+    "tool_xy": [
+      -3.0,
+      0.65
+    ],
+    "toggle": true,
+    "clutter": [
+      {
+        "item": "clutter0",
+        "destination": "clutter_home",
+        "destination_xy": [
+          -3.3,
+          -2.5
+        ]
+      },
+      {
+        "item": "clutter1",
+        "destination": "clutter_home",
+        "destination_xy": [
+          -2.9,
+          -2.5
+        ]
+      },
+      {
+        "item": "clutter2",
+        "destination": "clutter_home",
+        "destination_xy": [
+          -2.5,
+          -2.5
+        ]
+      },
+      {
+        "item": "clutter3",
+        "destination": "clutter_home",
+        "destination_xy": [
+          -3.3,
+          -2.1
+        ]
+      },
+      {
+        "item": "clutter4",
+        "destination": "clutter_home",
+        "destination_xy": [
+          -2.9,
+          -2.1
+        ]
+      },
+      {
+        "item": "clutter5",
+        "destination": "clutter_home",
+        "destination_xy": [
+          -2.5,
+          -2.1
+        ]
+      }
+    ],
+    "wipe_tool": "wipe_tool",
+    "wipe_home": "wipe_home",
+    "wipe_xy": [
+      -5.7,
+      -2.4
+    ],
+    "schedules": {
+      "library_then_a_then_b": [
+        "library",
+        "a_stage",
+        "a_vacuum",
+        "a_restore",
+        "a_wipe",
+        "b_stage",
+        "b_vacuum",
+        "b_restore",
+        "b_wipe",
+        "close"
+      ],
+      "b_then_library_then_a": [
+        "b_stage",
+        "b_vacuum",
+        "library",
+        "b_restore",
+        "b_wipe",
+        "a_stage",
+        "a_vacuum",
+        "a_restore",
+        "a_wipe",
+        "close"
+      ],
+      "interleave_both_rooms": [
+        "a_stage",
+        "b_stage",
+        "a_vacuum",
+        "library",
+        "b_vacuum",
+        "a_restore",
+        "b_restore",
+        "b_wipe",
+        "a_wipe",
+        "close"
+      ]
+    }
+  },
+  "construction_source": "inspected_native_public_templates",
+  "design_ledger": {
+    "conditional_useful_calls": 117,
+    "measured_useful_calls": null,
+    "reference_attempt_budget": 1000,
+    "proposed_model_act_look_budget": 600
+  },
+  "scene_exclusions": [
+    "ottoman_qsnawv_0"
+  ],
+  "robot_start": {
+    "position": [
+      -4.65,
+      -2.15,
+      0.02
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      0.70710678,
+      0.70710678
+    ]
+  },
+  "design_deviations": [
+    "Native kmuacd bookcase is scaled to about 1.93 x 0.62 x 0.86 m; books occupy its accessible top, not interior compartments.",
+    "Six native pencil cases instantiate the designated shelf clutter; their destination is the blue storage stand.",
+    "Yellow stages, green toy destinations and tool/storage stands remain explicit fixed primitive task fixtures.",
+    "Initial stage dust is authored independently of object movement; no motion-induced dust is assumed.",
+    "Both bedroom doors are initialized with native Open(fully=True); Open state and measured joint angles are recorded, while route feasibility still requires checked navigation.",
+    "Robot starts on unoccupied common-area floor; the inherited vacuuming spawn overlapped the A-room item grid in r2.",
+    "Remove only the unbound B-bedroom ottoman that overlapped the prior floor-item grid."
+  ]
+}

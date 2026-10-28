@@ -3,11 +3,80 @@
 The official gallery supplies prose for 50 tasks. The other 50 below are project
 translations of the pinned static BDDL goals, not runtime state observations.
 No live object IDs, simulator coordinates, scores or solution traces enter them.
+The optional mixed-coarse mode retains the 50 official instructions and uses
+task-title-level goals for the other 50; their detailed BDDL translations are
+not included in the model input. Official scoring is unchanged.
 """
 import argparse
 import hashlib
 import json
 from pathlib import Path
+from collections import Counter
+
+
+# Written from task titles, without object counts, BDDL arrangements or a recipe.
+COARSE_GOALS = {
+    'freeze_fruit': 'Freeze the fruit.',
+    'cook_a_brisket': 'Cook a brisket.',
+    'sorting_bottles_cans_and_paper': 'Sort the bottles, cans, and paper for recycling.',
+    'tidying_living_room': 'Tidy up the living room.',
+    'putting_away_toys': 'Put away the toys.',
+    're_shelving_library_books': 'Reshelve the library books.',
+    'make_rose_centerpieces': 'Make a rose centerpiece.',
+    'sweeping_garage': 'Sweep the garage.',
+    'stacking_wood': 'Stack the wood.',
+    'organizing_art_supplies': 'Organize the art supplies.',
+    'scrubbing_bathroom_floor': 'Scrub the bathroom floor.',
+    'bringing_paper_to_recycling': 'Take the paper to recycling.',
+    'halve_an_egg': 'Halve the egg.',
+    'installing_smoke_detectors': 'Install the smoke detector.',
+    'setting_the_table': 'Set the table.',
+    'unloading_the_car': 'Unload the car.',
+    'turning_out_all_lights_before_sleep': 'Turn out all the lights before going to sleep.',
+    'boxing_food_after_dinner': 'Pack away the leftover food after dinner.',
+    'cleaning_up_branches_and_twigs': 'Clean up the branches and twigs.',
+    'vacuuming_floors': 'Vacuum the floor.',
+    'thawing_frozen_food': 'Thaw the frozen food.',
+    'clean_your_rusty_garden_tools': 'Clean the rusty garden tools.',
+    'cook_a_frozen_pie': 'Cook the frozen pie.',
+    'organizing_school_stuff': 'Organize the school supplies.',
+    'carrying_out_garden_furniture': 'Take the garden furniture outside.',
+    'put_together_a_basic_pruning_kit': 'Put together a basic pruning kit.',
+    'dispose_of_glass': 'Dispose of the unwanted drinking glasses.',
+    'installing_a_modem': 'Set up the modem.',
+    'make_cabinet_doors': 'Install the cabinet door.',
+    'polishing_shoes': 'Polish the shoes.',
+    'clean_up_broken_glass': 'Clean up the broken glass.',
+    'packing_meal_for_delivery': 'Pack the meal for delivery.',
+    'store_batteries': 'Store the batteries.',
+    'store_honey': 'Put away the honey.',
+    'tidying_bathroom': 'Tidy up the bathroom.',
+    'putting_dirty_dishes_in_sink': 'Put the dirty dishes in the sink.',
+    'make_gift_bags_for_baby_showers': 'Prepare gift bags for a baby shower.',
+    'collecting_aluminum_cans': 'Collect the aluminum cans.',
+    'rearrange_your_room': 'Rearrange the room.',
+    'installing_a_fax_machine': 'Set up the fax machine.',
+    'composting_waste': 'Compost the food waste.',
+    'store_produce': 'Store the produce.',
+    'installing_a_scanner': 'Set up the scanner.',
+    'clean_a_keyboard': 'Clean the keyboard.',
+    'dispose_of_batteries': 'Dispose of the used batteries.',
+    'cook_brussels_sprouts': 'Cook the Brussels sprouts.',
+    'cook_broccolini': 'Cook the broccolini.',
+    'setup_a_bar_for_a_cocktail_party': 'Set up a bar for a cocktail party.',
+    'laying_tile_floors': 'Lay the floor tiles.',
+    'sorting_books_on_shelf': 'Sort the books on the shelf.',
+}
+
+
+def task_instruction(task, mode='existing'):
+    if mode not in {'existing', 'mixed-coarse'}:
+        raise ValueError('Unknown instruction mode')
+    if task.get('instruction'):
+        return task['instruction'], 'official_gallery'
+    if mode == 'mixed-coarse':
+        return COARSE_GOALS[task['id']], 'project_coarse_task_goal_v1'
+    return DERIVED[task['id']], 'project_translation_of_static_bddl_goal'
 
 
 DERIVED = {
@@ -44,7 +113,7 @@ DERIVED = {
     'clean_up_broken_glass': 'Put all three pieces of broken glass inside the trash can.',
     'packing_meal_for_delivery': 'Put the three wrapped hamburgers into the three paper bags, one hamburger per bag, and place all three bags on top of the storage container.',
     'store_batteries': 'Put all three batteries inside the same cabinet; either cabinet is acceptable.',
-    'store_honey': 'Put the jar of honey inside the cabinet.',
+    'store_honey': 'Store the jar of honey inside the cabinet in the entryway.',
     'tidying_bathroom': 'Put the bar of soap on the soap dish, the tissue dispenser on the sink, the toilet paper on the toilet, and the cork inside the trash can.',
     'putting_dirty_dishes_in_sink': 'Put both bowls and both plates inside the sink.',
     'make_gift_bags_for_baby_showers': 'Place both gift bags on the coffee table. Put one toy die and one wafer into each bag.',
@@ -65,28 +134,33 @@ DERIVED = {
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--official',type=Path,required=True);p.add_argument('--bddl',type=Path,required=True);p.add_argument('--capabilities',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--official',type=Path,required=True);p.add_argument('--bddl',type=Path,required=True);p.add_argument('--capabilities',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--instruction-mode', choices=['existing','mixed-coarse'], default='existing');a=p.parse_args()
     raw=json.loads(a.official.read_text());tasks=raw['tasks'] if isinstance(raw,dict) else raw
     assert len(tasks)==len({t['id'] for t in tasks})==100
     caps={t['id']:t for t in json.loads(a.capabilities.read_text())}
     missing={t['id'] for t in tasks if not t.get('instruction')}
     assert missing==set(DERIVED), (missing-set(DERIVED),set(DERIVED)-missing)
+    assert missing==set(COARSE_GOALS)
     rows=[]
     for i,t in enumerate(tasks):
         task=t['id'];bddl=(a.bddl/task/'problem0.bddl').read_bytes()
         sha=hashlib.sha256(bddl).hexdigest();assert sha==caps[task]['bddl_sha256']
-        instruction=t.get('instruction') or DERIVED[task]
+        instruction,instruction_source=task_instruction(t,a.instruction_mode)
         rows.append({'index':i,'task':task,'name':t['name'],'scene':t['scene_model'],'instance':301,'seed':0,
             'split':'public_test','instruction':instruction,'instruction_sha256':hashlib.sha256(instruction.encode()).hexdigest(),
-            'instruction_source':'official_gallery' if t.get('instruction') else 'project_translation_of_static_bddl_goal',
+            'instruction_source':instruction_source,
             'bddl_sha256':sha,'goal_predicates_offline_only':caps[task]['goal_predicates'],
             'candidate_capabilities_offline_only':caps[task]['candidate_capabilities'],
             'run_id':f'mas_b100_{i:03d}_{task.lower()}_i301_s0_r1','status':'planned'})
     result={'schema_version':1,'benchmark':'BEHAVIOR Challenge 2026','protocol':'RGB four fixed cameras + ideal executor; one public instance per task',
         'official_submission_eligible':False,'official_catalog_sha256':hashlib.sha256(a.official.read_bytes()).hexdigest(),
-        'instruction_counts':{'official_gallery':50,'project_translation_of_static_bddl_goal':50},
-        'model':'gpt-6-astra','agent_profile':'skills','max_actions':80,'max_sim_steps':20000,'model_timeout_seconds':1800,
-        'simulator_runtime_max_seconds':3300,'startup_timeout_seconds':1200,'tasks':rows}
+        'instruction_mode':a.instruction_mode,
+        'instruction_counts':dict(Counter(row['instruction_source'] for row in rows)),
+        'model':'gpt-6.1-sol','model_reasoning_effort':'low','agent_profile':'skills',
+        'episode_budget_policy':'agent_steps','max_agent_steps':50,
+        'max_actions':50,'max_sim_steps':20000,'model_timeout_seconds':None,
+        'simulator_runtime_max_seconds':None,'startup_timeout_seconds':1200,'tasks':rows}
     a.output.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');print(json.dumps({'tasks':len(rows),'instruction_counts':result['instruction_counts']}))
 
 

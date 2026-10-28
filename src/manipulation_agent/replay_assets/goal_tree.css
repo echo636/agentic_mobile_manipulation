@@ -1,0 +1,27 @@
+/* Model-authored trees of varying depth, inside each recorded goal panel. */
+.goal-notes{--goal-bg:#fff;--goal-soft:#f4f7fa;--goal-ink:#263e50;--goal-muted:#5c7182;--goal-line:#c2ced9;--goal-active:#306db6;--goal-done:#28805d;--goal-blocked:#aa672a;color:var(--goal-ink);overflow-wrap:anywhere}
+html[data-mas-theme="dark"] .goal-notes{--goal-bg:#182535;--goal-soft:#203044;--goal-ink:#e0e9f2;--goal-muted:#aec0d2;--goal-line:#526a80;--goal-active:#88baff;--goal-done:#86d4b1;--goal-blocked:#e8b67d}
+.goal-notes .goal-caption{color:var(--goal-muted);margin-bottom:12px;font-size:11px}
+.goal-inline-tree{max-width:850px;margin:0 0 10px;overflow-x:auto;padding:1px}
+.goal-root-node{border:1px solid var(--goal-line);border-left:3px solid var(--goal-active);border-radius:7px;padding:10px 13px;background:var(--goal-soft)}
+.goal-level-label{display:block;color:var(--goal-muted);font-size:11px;margin-bottom:3px}
+.goal-root{line-height:1.55;font-size:14px}
+.goal-inline-tree .goal-children{list-style:none;margin:0 0 0 17px;padding:3px 0 0 18px;border-left:1px solid var(--goal-line)}
+.goal-inline-tree .goal-child{position:relative;min-width:140px;margin:8px 0 0;padding:9px 12px;border:1px solid var(--goal-line);border-left:3px solid var(--goal-line);border-radius:6px;background:var(--goal-bg)}
+.goal-child:before{content:'';position:absolute;left:-22px;top:19px;width:19px;border-top:1px solid var(--goal-line)}
+.goal-child-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 9px}
+.goal-id,.goal-dependencies{color:var(--goal-muted);font-size:11px}
+.goal-child-title{font-size:13px;font-weight:550;flex:1 1 160px;line-height:1.55}
+.goal-state-pill{font-size:11px;white-space:nowrap;color:var(--goal-muted)}
+.goal-state-done{color:var(--goal-done)}.goal-state-active,.goal-focus-tag{color:var(--goal-active)}.goal-state-blocked{color:var(--goal-blocked)}
+.goal-inline-tree .goal-done{border-left-color:var(--goal-done)}.goal-inline-tree .goal-active{border-left-color:var(--goal-active)}.goal-inline-tree .goal-blocked{border-left-color:var(--goal-blocked)}
+.goal-inline-tree .goal-current{outline:1px solid var(--goal-active);background:var(--goal-soft)}.goal-focus-tag{font-size:11px;font-weight:650}
+.goal-inline-tree .goal-retired{opacity:.7}.goal-child .goal-dependencies{margin:5px 0 0}
+.goal-support{margin-top:5px}.goal-notes summary{cursor:pointer;font-size:12px;color:var(--goal-muted)}
+.goal-support p{font-size:12px;line-height:1.6;margin:6px 0}.goal-empty{font-size:12px;padding:8px;color:var(--goal-muted)}
+.goal-notes .goal-local{max-width:850px;background:var(--goal-soft);border-radius:6px;padding:9px 12px;margin-top:10px;font-size:12px;line-height:1.6}
+.goal-local ol{padding-left:20px;margin:8px 0}.goal-notes .goal-change{max-width:850px;border:0;padding:0;font-size:12px;line-height:1.6;color:var(--goal-muted);margin:9px 0}
+.goal-raw{margin-top:8px}.goal-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto;font:11px/1.6 ui-monospace,monospace;background:var(--goal-soft);padding:10px;border-radius:5px}
+.goal-plain{font-size:13px;line-height:1.65;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.goal-warning{color:var(--goal-blocked);font-size:12px}.goal-notes:focus-visible{outline:2px solid var(--goal-active)}
+#video-task-notes{max-height:none;overflow:visible}
+@media(max-width:700px){.goal-inline-tree .goal-children{margin-left:9px;padding-left:13px}.goal-child:before{left:-17px;width:14px}.goal-child-title{flex-basis:125px}.goal-inline-tree .goal-child{padding:8px}.goal-notes .goal-caption{line-height:1.6}}

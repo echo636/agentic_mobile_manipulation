@@ -4,6 +4,8 @@ Run from a clean, frozen checkout on the controller host. JSON config supplies
 site paths; authentication stays in the existing local SSH/model clients.
 """
 import argparse
+import base64
+import errno
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import fcntl
@@ -27,9 +29,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'src'))
 from manipulation_agent.records import now, write_json, read_run, source_version
 from manipulation_agent.replay import render_replay
 from manipulation_agent.tools import tool_specs
-from manipulation_agent.batch_lifecycle import WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
+from manipulation_agent.batch.batch_lifecycle import ExecutionCapacity, FileLease, WorkerLease, classify_episode_outcome, validate_manifest_coverage, require_completed_scope, preferred_gpu_worker, gpu_lease_available
+from manipulation_agent.batch.startup_progress import STARTUP_POLICY, startup_progress_update
+from manipulation_agent.batch.startup_logs import startup_reader_code
+from manipulation_agent.runtime.closure import closure_watchdog
+from manipulation_agent.clients.events import parse_events
+from manipulation_agent.batch.batch_storage import BatchStorage
 
 FINAL = {'passed','failed','blocked'}
+TRANSIENT_STORAGE_ERRORS = {errno.EIO, errno.ESTALE, errno.ETIMEDOUT,
+                            errno.ENOTCONN, errno.ECONNRESET, errno.EHOSTUNREACH,
+                            errno.EAGAIN}
 
 
 def inline_systemd_launcher(script):
@@ -44,7 +54,7 @@ def evaluation_summary(evaluation):
     if not isinstance(evaluation, dict):
         return evaluation
     return {key: value for key, value in evaluation.items()
-            if key not in {'goal_options', 'initial_goal_options'}}
+            if key not in {'goal_options', 'initial_goal_options', 'goal_events'}}
 
 
 def episode_artifact_hashes(runid, episode, controller):
@@ -66,6 +76,8 @@ def infrastructure_failure(row):
     if row.get('archive_failure'):
         return 'archive_failure'
     for field in ('video_validation','observation_validation','evidence_alignment'):
+        if field=='video_validation' and row.get('record_video') is False and row.get(field)=='not_requested':
+            continue
         if row.get(field)!='passed':
             return field
     return None
@@ -81,7 +93,10 @@ def worker_configs(config):
     allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env',
                'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
                'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib', 'admission_delay_seconds',
-               'simulator_appdata_path'}
+               'simulator_appdata_path', 'simulator_tmpdir', 'startup_memory_gib',
+               'validated_driver_version', 'driver_validation_evidence',
+               'runtime_source_path', 'runtime_scheduler_path', 'runtime_manifest_path', 'runtime_staging',
+               'runtime_staging_root'}
     result=[]; ids=set(); devices=set(); ports=set()
     for lane in lanes:
         if set(lane)-allowed: raise ValueError('Unsupported worker fields')
@@ -96,19 +111,54 @@ def worker_configs(config):
         if type(budget) is not int or not 12<=budget<=28: raise ValueError('Invalid memory budget')
         if merged.get('simulator_memory_max',str(budget)+'G')!=str(budget)+'G':
             raise ValueError('Resource admission and hard simulator memory limit must agree')
-        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES'}:
-            raise ValueError('Only reviewed recording options may be worker environment overrides')
+        if not 12<=merged.get('startup_memory_gib',budget)<=budget:
+            raise ValueError('Startup estimate must fit the simulator hard limit')
+        if merged.get('validated_driver_version'):
+            evidence=json.loads(Path(merged['driver_validation_evidence']).read_text())
+            if evidence.get('status')!='passed' or evidence.get('driver')!=merged['validated_driver_version']:
+                raise ValueError('Driver exception requires passed renderer evidence for that exact version')
+        if set(env)-{'MAS_VIDEO_RENDER_STRIDE','MAS_VIDEO_RENDER_FLUSHES','MAS_RGB_IMAGE_SIZE',
+                     'MAS_LOCAL_MANIPULATION','MAS_RENDERER_PIXEL_OWNER'}:
+            raise ValueError('Only reviewed observation, recording, local manipulation and pixel ownership options may be worker environment overrides')
+        for flag in ('MAS_LOCAL_MANIPULATION', 'MAS_RENDERER_PIXEL_OWNER'):
+            if flag in env and env[flag] not in ('0','1'):
+                raise ValueError(flag+' must be an explicit string 0 or 1')
         if merged.get('simulator_appdata_path') and not Path(merged['simulator_appdata_path']).is_absolute():
             raise ValueError('Simulator appdata path must be absolute')
+        if merged.get('simulator_tmpdir') and not Path(merged['simulator_tmpdir']).is_absolute():
+            raise ValueError('Simulator temporary directory must be absolute')
+        if merged.get('runtime_staging_root') and not Path(merged['runtime_staging_root']).is_absolute():
+            raise ValueError('Runtime staging root must be absolute')
         ids.add(worker_id);devices.add((host,gpu));ports.add((host,port));result.append(merged)
     # Workers are candidates, not simultaneous reservations. Shared host/GPU
     # leases below constrain actual admission across both comparison arms.
     slot_size=config.get('host_slot_memory_gib',28)
+    adaptive=config.get('adaptive_memory_admission',False)
+    if type(adaptive) is not bool:
+        raise ValueError('adaptive_memory_admission must be boolean')
+    if adaptive and not 1<=config.get('adaptive_host_slot_count',4)<=16:
+        raise ValueError('Invalid adaptive host slot count')
+    profile=config.get('memory_admission_profile','observed_peak')
+    if profile not in ('observed_peak','throughput') or (profile=='throughput' and not adaptive):
+        raise ValueError('Invalid memory admission profile')
     for worker in result:
         limit=config.get('host_worker_memory_budget_gib',{}).get(worker['ssh'][-1],slot_size)
-        if worker.get('memory_budget_gib',28)>slot_size or limit<slot_size:
+        if limit is None and profile!='throughput':raise ValueError('Dynamic host budget requires throughput admission')
+        if worker.get('memory_budget_gib',28)>slot_size or (limit is not None and limit<slot_size):
             raise ValueError('Worker memory exceeds shared host slot capacity')
     return result
+
+
+def runtime_storage_args(config):
+    """Check scratch/cache disks separately from potentially remote run output."""
+    paths = [config.get(key) for key in ('simulator_appdata_path', 'simulator_tmpdir')]
+    return [arg for path in dict.fromkeys(p for p in paths if p)
+            for arg in ('--runtime-storage-path', str(path))]
+
+
+def driver_admission_args(config):
+    version=config.get('validated_driver_version')
+    return ['--validated-driver-version',version] if version else []
 
 
 def controller_process_alive(pid, output):
@@ -129,13 +179,36 @@ def controller_process_alive(pid, output):
 
 
 def prepolicy_failure(record, controller):
-    if record.get('status')!='failed' or record.get('actions')!=0: return False
+    if record.get('status')!='failed': return False
     stream=controller/'model_events.jsonl'
+    if record.get('actions') is None:
+        # A pre-recorder startup failure has no action counter; archival may
+        # preserve that unknown value as JSON null. Admit only the
+        # explicitly pre-policy stages, without inventing fields in its record.
+        if record.get('failure_stage') not in {'asset_preflight','simulator_starting'}:
+            return False
+        started=('controller_pid','controller_wrapper_pid','controller_status',
+                 'execution_started_at_unix','episode_deadline_unix','bridge_ready_at')
+        if any(record.get(key) is not None for key in started): return False
+        if (controller/'controller.json').exists(): return False
+        return not stream.exists() or stream.stat().st_size==0
+    if record.get('actions')!=0: return False
     if not stream.exists(): return record.get('controller_pid') is None
     events=[json.loads(s) for s in stream.read_text().splitlines()]
     # Client error items are not model decisions. Any generated policy item,
     # including reasoning or a started tool call, prevents this retry route.
     return all(e.get('item',{}).get('type') in (None,'error') for e in events)
+
+
+def startup_resource_rejection(record, controller, preflight):
+    """Only a documented dynamic resource race may requeue without a policy run."""
+    if not prepolicy_failure({**record,'status':'failed'},controller):return None
+    if preflight.get('status')!='blocked':return None
+    failed={key for key,value in preflight.get('checks',{}).items() if value is False}
+    dynamic={'gpu_capacity','cgroup_reclaimable_headroom','bridge_port_free',
+             'host_memory_including_peer_reservations','adaptive_account_memory',
+             'host_working_memory_headroom','data_disk_free_40GiB','runtime_storage_headroom_16GiB'}
+    return sorted(failed) if failed and failed<=dynamic else None
 
 
 def summarize(rows):
@@ -176,13 +249,24 @@ def render_dashboard(progress):
             if previous.get('replay_url'):
                 links.append(f'<a href="{esc(previous["replay_url"])}">历史尝试</a>')
         outcome='成功' if r.get('task_success') is True else ('未成功' if r.get('task_success') is False else '未取得最终评分')
-        rows.append(f'<tr data-status="{esc(r["status"])}"><td>{r["index"]+1}</td><td>{esc(r["name"])}<small>{esc(r["task"])}</small><details><summary>任务输入与来源</summary><p>{esc(r["instruction"])}</p><p>{esc(r["instruction_source"])}</p></details></td><td class="{r["status"]}">{esc(r["status"])}<small>{esc(r.get("stage","queued"))}</small></td><td>{outcome}<small>Q={esc(r.get("q_score","—"))}</small></td><td>{esc(r.get("actions","—"))}<small>{esc(r.get("tool_calls","—"))} tool calls</small></td><td>{esc(r.get("evidence_alignment","—"))}<small>video: {esc(r.get("video_validation","—"))}</small></td><td>{" · ".join(links)}<small>{esc(r.get("failure",""))}</small></td></tr>')
+        rows.append(f'<tr data-status="{esc(r["status"])}"><td>{r["index"]+1}</td><td>{esc(r["name"])}<small>{esc(r["task"])}</small><details><summary>任务输入与来源</summary><p>{esc(r["instruction"])}</p><p>{esc(r["instruction_source"])}</p></details></td><td class="{r["status"]}">{esc(r["status"])}<small>{esc(r.get("stage","queued"))}</small></td><td>{outcome}<small>Q={esc(r.get("q_score","—"))}</small></td><td>{esc(r.get("agent_steps",r.get("actions","—")))}<small>{esc(r.get("actions","—"))} executor actions</small><small>{esc(r.get("tool_calls","—"))} tool calls</small></td><td>{esc(r.get("evidence_alignment","—"))}<small>video: {esc(r.get("video_validation","—"))}</small></td><td>{" · ".join(links)}<small>{esc(r.get("failure",""))}</small></td></tr>')
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BEHAVIOR 100 · 批量测试</title>
 <style>body{font:16px system-ui;background:#eef3f8;color:#142c43;margin:25px auto;max-width:1500px;padding:0 18px}a{color:#07599b}article,.cards>div{background:white;border:1px solid #d3dfe9;border-radius:10px;padding:18px;margin:14px 0}.cards{display:flex;gap:14px;flex-wrap:wrap}.cards>div{flex:1;min-width:150px}.cards strong{font-size:30px;display:block}table{border-collapse:collapse;width:100%;min-width:1050px}td,th{text-align:left;border-bottom:1px solid #ddd;padding:12px;vertical-align:top}small{display:block;color:#586d81;margin-top:7px;overflow-wrap:anywhere}td:nth-child(2){max-width:360px}td:last-child{max-width:270px}summary{cursor:pointer}input,select{font:inherit;padding:8px;margin:8px}.table{overflow-x:auto}.passed{color:#087044}.failed{color:#ad3030}.blocked{color:#9c6700}.running{color:#065fa7}p{line-height:1.65}code{overflow-wrap:anywhere}</style>
 <h1>BEHAVIOR 2026 · 100 项任务测试</h1><p>RGB agent + ideal motor executor · gpt-6-astra · public instance 301 · seed 0</p>''' + f'''
 <div class="cards"><div><strong>{s['completed']} / {s['total']}</strong>已结束（包括失败和受阻）</div><div><strong>{s['task_successes']} / {s['total']}</strong>独立评估成功 / 固定总数</div><div><strong>{s['final_evaluations']}</strong>取得最终评分</div><div><strong>{s['complete_videos']}</strong>录像完整性验证通过</div></div>
 <article><p><b>失败与重试：</b>首次尝试成功 {s['first_attempt_task_successes']} / {s['total']}；另有 {s['extra_infrastructure_attempts']} 次模型启动前的基础设施重试、{s['extra_policy_attempts']} 次执行器修复后重测。上方成功数含修复后的最新尝试，原始失败记录保留在该任务行，任务总数始终为 100。</p><p><b>协议：</b>每种任务运行一个公开测试实例，共 100 个 episode，不等于所有公开实例或官方排行榜提交。机器人输入是同时采集的前、后、左、右 RGB，无腕部相机；模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。切割、擦洗等能力未扩展，相关失败保留在总数中。</p><p><b>输入来源：</b>50 项使用官方原文，50 项按静态 BDDL 目标补写，逐项标注。独立评估、几何和 spectator 录像只供执行器或离线审阅，不作为模型观测。</p><p><b>回放：</b>连续录像记录实际控制步；模型等待时间不铺成静止画面。Replay 同步四路 RGB、模型公开 assistant 原文、工具参数和返回结果。不补写思考，不展示隐藏推理；原始私有运行记录保存在实验目录。</p><p><b>状态：</b>passed 要求任务成功、控制器正常结束、证据对齐、四相机观测和录像验证通过；failed/blocked 分别保留具体阶段。失败任务有最终评分时显示 Q，仿真在初始化前失败时无法生成观测或视频。部分录像不标成完整。</p><p>批次状态：{esc(s['execution_status'])} · 更新：{esc(progress['updated_at'])} · <a href="behavior100/progress.json">实时 JSON</a> · <a href="behavior100/manifest.json">冻结清单</a> · <a href="behavior100/validation.json">验证记录</a> · <a href="behavior100/journal.md">迭代日志</a></p></article>
 <input id="search" placeholder="搜索任务 / 阶段"><select id="status"><option value="">所有状态</option><option>planned</option><option>running</option><option>passed</option><option>failed</option><option>blocked</option></select><label><input id="refresh" type="checkbox" checked>每 60 秒刷新</label><div class="table"><table><thead><tr><th>#</th><th>任务</th><th>运行状态</th><th>独立评估</th><th>动作数</th><th>证据与录像</th><th>回放 / 原始记录</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>''' + '''<script>const search=document.querySelector('#search'), status=document.querySelector('#status');function filter(){document.querySelectorAll('tbody tr').forEach(r=>r.hidden=!(r.textContent.toLowerCase().includes(search.value.toLowerCase())&&(!status.value||r.dataset.status===status.value)))}search.oninput=status.onchange=filter;setInterval(()=>{if(document.querySelector('#refresh').checked&&!search.value&&!status.value)location.reload()},60000)</script></html>'''
+    protocol=progress.get('protocol',{})
+    model=protocol.get('model','gpt-6-astra')
+    effort=protocol.get('model_reasoning_effort')
+    page=page.replace(' · gpt-6-astra · ', ' · '+esc(model)+((' / '+esc(effort)) if effort else '')+' · ')
+    if protocol.get('episode_budget_policy')=='agent_steps':
+        page=page.replace('模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。',
+            '模型通过 MCP 工具和任务分解 skill 操作当前理想执行器。每项上限 '+str(protocol['max_agent_steps'])+' 个 agent step（act/look 请求，失败计步，重复传输不计）；无任务执行时间上限。初始化与结束归档单独监控。')
+        page=page.replace('动作数</th>','agent step / 执行动作</th>')
+    elif protocol.get('episode_budget_policy')=='unbounded':
+        page=page.replace('模型通过 9 个 MCP tools 和 4 个可读取 skills 操作当前理想执行器。每项上限 80 次动作、20,000 控制步、模型 30 分钟。',
+            '后续新启动任务不设动作数、回合控制步或执行时间上限；继续记录每次act/look。此前已启动任务保留原配置，逐项记录。初始化与结束归档单独监控。')
     total = s['total']
     official=sum(r['instruction_source']=='official_gallery' for r in progress['tasks'])
     page=page.replace('50 项使用官方原文，50 项按静态 BDDL 目标补写',f'{official} 项使用官方原文，{total-official} 项按静态 BDDL 目标补写')
@@ -206,16 +290,35 @@ class Batch:
     def c(self):
         return getattr(self._worker_local, 'config', self._config)
 
+    @property
+    def remote_source(self):
+        return Path(self.c.get('runtime_source_path', self.source))
+
+    @property
+    def remote_scheduler(self):
+        return Path(self.c.get('runtime_scheduler_path', getattr(self, 'scheduler_source', self.source)))
+
+    @property
+    def remote_manifest(self):
+        return Path(self.c.get('runtime_manifest_path', self.root / 'manifest.json'))
+
     def __init__(self, config):
         self._config=config; self._worker_local=threading.local(); self.workers=worker_configs(config)
-        self.root=Path(config['batch']); self.source=Path(__file__).resolve().parents[1]
+        self.root=Path(config['batch']); self.scheduler_source=Path(__file__).resolve().parents[1]
+        self.source=Path(config.get('source_path',self.scheduler_source)).resolve()
         self.manifest=json.loads((self.root/'manifest.json').read_text()); self.reports=Path(config['reports'])
         self.lock=threading.RLock(); self.queue=queue.Queue(); self.rows=self.manifest['tasks']
         self.worker_states={};self._archive_pool=None
+        self._draining=False
+        self.storage=BatchStorage(self.root,self.reports,self.manifest,
+            spool=config.get('supervisor_spool_dir'),retry_seconds=config.get('publication_retry_seconds',5),
+            renderer=render_dashboard)
+        recovered=self.storage.recovered_rows()
         validate_manifest_coverage(self.rows,config.get('expected_task_count'))
         expected_tasks={r['index']:r['task'] for r in self.rows}
         for directory in ('records','preflight','controllers','runs','launchers','logs'):
             (self.root/directory).mkdir(exist_ok=True)
+        (self.root/'journal.md').touch(exist_ok=True)
         selection_path=self.root/'infrastructure_retries.json'
         selections=json.loads(selection_path.read_text()) if selection_path.exists() else {}
         for r in self.rows:
@@ -225,12 +328,26 @@ class Batch:
                 previous=[]
                 for runid in selection.get('previous_run_ids',[r['run_id']]):
                     record=json.loads((self.root/'records'/f'{runid}.json').read_text())
-                    if not prepolicy_failure(record,self.root/'controllers'/runid):
+                    if not prepolicy_failure(record,Path(record.get('controller_output',self.root/'controllers'/runid))):
                         raise RuntimeError('Only failed attempts before any policy output may be retried here')
                     previous.append({k:v for k,v in record.items() if k!='previous_attempts'})
                 r.update(run_id=selection['run_id'],attempt=len(previous)+1,previous_attempts=previous,retry_reason=selection['reason'])
                 saved=self.root/'records'/f"{r['run_id']}.json"
-            if saved.exists(): r.update(json.loads(saved.read_text()))
+            local=recovered.get(r['run_id'])
+            try:r.update(json.loads(saved.read_text()))
+            except FileNotFoundError:pass
+            except json.JSONDecodeError as exc:
+                # A complete identity-checked local checkpoint is authoritative
+                # when publication on shared storage produced invalid JSON.
+                # Never guess a score or retry a task from a partial record.
+                if not local:raise
+                self.storage.journal(f'Recover invalid shared record {saved.name} from durable local checkpoint: {exc.msg}')
+            except OSError:
+                if not local:raise
+            if local and local.get('updated_at','')>r.get('updated_at',''):
+                if (local['index'],local['task'])!=(r['index'],r['task']):
+                    raise RuntimeError('Local checkpoint task identity mismatch')
+                r.update(local)
             if (r['status']=='running' or (r.get('simulator_cleanup') or {}).get('status')=='blocked') and r['run_id'] not in config.get('adopt_inflight',{}):
                 if r.get('execution_finished_at') and (r.get('simulator_cleanup') or {}).get('status')=='passed':
                     continue  # CPU archival is recovered independently below.
@@ -246,8 +363,18 @@ class Batch:
             if row is None or worker is None: raise RuntimeError('Unknown adoption target')
             if row['status']=='running' and (row.get('gpu_index')!=worker['gpu'] or row.get('simulator_interpreter')!=worker['sim_python']):
                 raise RuntimeError('Inflight task must retain its original execution lane')
-        self.source_info=source_version()
+        self.scheduler_info=source_version()
+        self.source_info=self.scheduler_info
+        if self.source!=self.scheduler_source:
+            probe=subprocess.run([sys.executable,'-c',
+                'import json; from manipulation_agent.records import source_version; print(json.dumps(source_version()))'],
+                cwd=self.source,env={**os.environ,'PYTHONPATH':str(self.source/'src')},
+                check=True,capture_output=True,text=True,timeout=30)
+            self.source_info=json.loads(probe.stdout)
+        if self.scheduler_info['dirty']:raise RuntimeError('Scheduler source must be a clean frozen checkout')
         if self.source_info['dirty']: raise RuntimeError('Batch source must be a clean frozen checkout')
+        if config.get('source_commit') and self.source_info['commit']!=config['source_commit']:
+            raise RuntimeError('Frozen executor commit mismatch')
         self.environment={**os.environ,'PYTHONPATH':str(self.source/'src')}
         missing=[k for k in config.get('required_controller_env',[]) if not self.environment.get(k)]
         if missing: raise RuntimeError('Required controller environment variables absent: '+','.join(missing))
@@ -262,46 +389,119 @@ class Batch:
 
     def journal(self, message):
         with self.lock:
-            with (self.root/'journal.md').open('a') as f: f.write(f'\n- {now()} · {message}\n')
+            self.storage.journal(message)
+
+    def drain_requested(self):
+        # Only admission reads the shared control file. Publication during an
+        # active episode must not depend on even a stat() against shared storage.
+        try:self._draining=(self.root/'drain_requested.json').exists()
+        except OSError as exc:
+            self.journal('Admission held: cannot read drain control: '+str(exc))
+            self._draining=True
+        return self._draining
 
     def publish(self):
         with self.lock:
             progress={'updated_at':now(),'source':self.source_info,'supervisor':{'host':os.uname().nodename,'pid':os.getpid(),'unit':os.environ.get('MAS_UNIT'),'interpreter':sys.executable},
+                      'scheduler_source':getattr(self,'scheduler_info',self.source_info),
                       'protocol':{k:v for k,v in self.manifest.items() if k!='tasks'},'summary':summarize(self.rows),'tasks':self.rows,'comparison':self.manifest.get('comparison'),
                       'workers':[{'id':w['id'],'host':w['ssh'][-1], 'gpu':w['gpu'],
                           'port':w['base_port']+w['gpu'], 'interpreter':w['sim_python'],
                           'recording_options':w.get('simulator_env',{})} for w in self.workers],
-                      'draining':(self.root/'drain_requested.json').exists(),
+                      'draining':getattr(self,'_draining',False),
+                      'storage_sync':self.storage.status(),
                       'worker_states':self.worker_states,
                       'run_source_commits':dict(Counter((r.get('run_source') or r.get('source') or {}).get('commit','pending') for r in self.rows))}
             progress['summary']['waiting_resource_workers']=sum(v.get('stage') in
-                {'waiting_for_lease','waiting_for_resources'} for v in self.worker_states.values())
-            write_json(self.root/'progress.json',progress)
-            write_json(self.root/'run_records.json',{'updated_at':now(),'runs':self.rows})
+                {'waiting_for_lease','waiting_for_resources','waiting_for_initialization'} for v in self.worker_states.values())
             validation={'status':'running' if progress['summary']['execution_status']=='running' else ('passed' if all(r['status']=='passed' for r in self.rows) else 'failed'),
                         'level':'real_rgb_simulator_batch','task_count':len(self.rows),'summary':progress['summary'],
                         'source':progress['source'],'official_submission_eligible':False,
                         'note':'Task success, controller termination, transport alignment and video completeness are separate fields.'}
-            write_json(self.root/'validation.json',validation)
-            public=self.reports/'behavior100';public.mkdir(parents=True,exist_ok=True)
-            for name in ('progress.json','manifest.json','validation.json','journal.md'):
-                temp=public/(name+'.tmp');shutil.copyfile(self.root/name,temp);temp.replace(public/name)
-            target=self.reports/'behavior100.html'; tmp=target.with_suffix('.html.tmp')
-            tmp.write_text(render_dashboard(progress));tmp.replace(target)
+            self.storage.submit(progress,validation)
 
     def update(self, row, **values):
         with self.lock:
             row.update(values,updated_at=now())
-            write_json(self.root/'records'/f"{row['run_id']}.json",row)
             self.publish()
 
     def unit_state(self, unit):
-        p=self.ssh(['systemctl','--user','show',unit,'-p','ActiveState','-p','MainPID','-p','ExecMainStatus','-p','Result','-p','Description','-p','MemoryPeak'])
+        try:
+            p=self.ssh(['systemctl','--user','show',unit,'-p','ActiveState','-p','MainPID','-p','ExecMainStatus','-p','Result','-p','Description','-p','MemoryPeak'])
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            return {'query_status':'unavailable','reason':type(exc).__name__}
+        if p.returncode:
+            return {'query_status':'unavailable','returncode':p.returncode}
         return dict(line.split('=',1) for line in p.stdout.splitlines() if '=' in line)
 
+    def initializing_unit_state(self, unit):
+        """An unavailable SSH query is not evidence that the simulator exited."""
+        state=self.unit_state(unit)
+        if state.get('ActiveState') in {'inactive','failed'} and state.get('MainPID')=='0':
+            raise RuntimeError('Simulator exited before bridge ready: '+str(state))
+        if state.get('ActiveState') not in {'active','activating'} or not state.get('MainPID'):
+            self.journal({'event':'startup_unit_query_unavailable','unit':unit,'query':state})
+            return None
+        return state
+
+    def confirm_simulator_launch(self, row, launch):
+        """Reconcile a lost launch reply without launching the episode twice."""
+        try:
+            response=self.ssh(launch)
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            response=None
+            self.update(row,launch_acknowledgment={'status':'unavailable','reason':type(exc).__name__})
+        else:
+            (self.root/'logs'/f"{row['run_id']}_launch.log").write_text(response.stdout+response.stderr)
+            if response.returncode not in (0,255):
+                raise RuntimeError('Simulator unit launch failed')
+        while True:
+            state=self.unit_state(row['simulator_unit'])
+            if state.get('ActiveState') in {'active','activating','deactivating'}:
+                if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}":
+                    raise RuntimeError('Simulator launch ownership mismatch')
+                if int(state.get('MainPID') or 0)>0:
+                    self.update(row,launch_acknowledgment={'status':'passed',
+                        'recovered_missing_reply':response is None or response.returncode!=0})
+                    return state
+            if state.get('Description')==f"BEHAVIOR100 owned {row['run_id']}" and state.get('ActiveState') in {'inactive','failed'}:
+                raise RuntimeError('Owned simulator exited during launch: '+str(state))
+            # A lost SSH reply does not prove the remote systemd request failed.
+            # Keep the declared unit leased until confirmed or its existing
+            # initialization watchdog expires; never resend the launch blindly.
+            if time.time()>=row['startup_deadline_unix']:
+                raise TimeoutError('Simulator launch could not be confirmed before startup watchdog expiry')
+            self.journal({'event':'launch_confirmation_pending','unit':row['simulator_unit'],'query':state})
+            time.sleep(4)
+
+    def adopted_unit_state(self, row):
+        """Unavailable transport cannot be interpreted as an absent process."""
+        while True:
+            state=self.unit_state(row['simulator_unit'])
+            if state.get('ActiveState') in {'active','activating','deactivating','inactive','failed'}:
+                return state
+            self.update(row,adoption_transport={'status':'unavailable','at':now(),'query':state})
+            self.journal({'event':'adoption_waiting_for_unit_query','run_id':row['run_id']})
+            time.sleep(4)
+
     def health(self, port):
-        p=self.ssh(['curl','--noproxy','*','-fsS','--max-time','3',f'http://127.0.0.1:{port}/healthz'])
-        return json.loads(p.stdout) if p.returncode==0 else None
+        # This is an observation, not a simulator operation. Failure to obtain
+        # it must not escape into run_one's controller-stop / forced-finish path.
+        # Callers retain the last closure state and check unit liveness; the
+        # existing startup and post-finish watchdogs still apply.
+        try:
+            p=self.ssh(['curl','--noproxy','*','-fsS','--max-time','3',f'http://127.0.0.1:{port}/healthz'])
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            self.journal({'event':'health_query_unavailable','port':port,
+                          'reason':type(exc).__name__})
+            return None
+        if p.returncode:return None
+        try:health=json.loads(p.stdout)
+        except (ValueError,TypeError):
+            self.journal({'event':'health_query_unavailable','port':port,
+                          'reason':'invalid_json'})
+            return None
+        return health if isinstance(health,dict) else None
 
     def cleanup_owned_unit(self, row):
         """Verify this lane is reusable; episode evidence never decides that."""
@@ -351,44 +551,97 @@ class Batch:
         directory=self._config.get('shared_lease_dir',str(self.root.parent/'resource_leases'))
         slot_size=self._config.get('host_slot_memory_gib',28)
         host_budget=self._config.get('host_worker_memory_budget_gib',{}).get(self.c['ssh'][-1],slot_size)
+        if host_budget is None:host_budget=slot_size*self._config.get('adaptive_host_slot_count',4)
+        def owner_active(previous):
+            state=self.unit_state(previous['unit'])
+            return state.get('ActiveState') not in {'inactive','failed'} or state.get('MainPID')!='0'
         lease=WorkerLease(directory,self.c,host_budget_gib=host_budget,slot_memory_gib=slot_size,
-                          owner={'batch':str(self.root),'coordinator_pid':os.getpid()})
-        if not lease.acquire():
-            self.worker_state('waiting_for_lease')
+                          owner={'batch':str(self.root),'coordinator_pid':os.getpid()},
+                          adaptive_slot_count=self._config.get('adaptive_host_slot_count',4)
+                          if self._config.get('adaptive_memory_admission') else None,
+                          owner_active=owner_active)
+        if not lease.acquire(adopting=adopting):
+            self.worker_state('waiting_for_lease',previous_unit=(lease.blocked_owner or {}).get('unit'))
             return None
         # A supervisor crash releases flock, but its remote simulator may live.
         # Do not reuse that slot until its unit is terminal, or explicitly adopt
         # exactly that existing attempt without starting another model.
         try:
-            for previous in lease.previous_owners:
-                if previous.get('released') or not previous.get('unit'):
-                    continue
-                if adopting and previous.get('run_id')==adopting['run_id']:
-                    continue
-                state=self.unit_state(previous['unit'])
-                if state.get('ActiveState') not in {'inactive','failed'} or state.get('MainPID')!='0':
-                    lease.release()
-                    self.worker_state('waiting_for_lease',previous_unit=previous['unit'])
-                    return None
             lease.record(released=False,run_id=adopting['run_id'] if adopting else None,
-                         unit=adopting.get('simulator_unit') if adopting else None)
+                         unit=adopting.get('simulator_unit') if adopting else None,
+                         startup_memory_gib=self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)))
         except BaseException:
             lease.release()
             raise
         return lease
 
+    def acquire_startup_gate(self):
+        """Serialize reservation publication; legacy mode also holds through init."""
+        if not self._config.get('adaptive_memory_admission'):
+            return True
+        directory=self._config['shared_lease_dir']
+        host_key=hashlib.sha256(self.c['ssh'][-1].encode()).hexdigest()[:20]
+        throughput=self._config.get('memory_admission_profile')=='throughput'
+        prefix='admission' if throughput else 'startup'
+        gate=FileLease(Path(directory)/f'{prefix}-{host_key}.lock',
+                       {'batch':str(self.root),'worker_id':self.c['id']})
+        if not gate.acquire():
+            self.worker_state('waiting_for_admission' if throughput else 'waiting_for_initialization');return False
+        self._worker_local.startup_gate=gate
+        return True
+
+    def release_startup_gate(self):
+        gate=getattr(self._worker_local,'startup_gate',None)
+        if gate:
+            gate.release();self._worker_local.startup_gate=None
+
+    def memory_policy_args(self):
+        if not self._config.get('adaptive_memory_admission'):
+            return []
+        lease=self._worker_local.lease
+        policy={'peers':lease.active_peers(),
+                'candidate_gib':self.c.get('memory_budget_gib',28),
+                'startup_gib':self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)),
+                'profile':self._config.get('memory_admission_profile','observed_peak'),
+                'account_margin_gib':self._config.get('account_memory_margin_gib',2),
+                'host_budget_gib':self._config['host_worker_memory_budget_gib'][self.c['ssh'][-1]]}
+        # GDB with startup-with-shell disabled does not round-trip quoted JSON
+        # arguments. A single ASCII token survives both systemd and GDB argv.
+        encoded=base64.b64encode(json.dumps(policy).encode()).decode('ascii')
+        return ['--memory-policy-base64',encoded]
+
     def resource_admission(self):
         """No task is claimed here; immutable host checks run once per worker."""
         self.worker_state('admitting')
-        args=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'preflight',
-              '--manifest',str(self.root/'manifest.json'),'--gpu',str(self.c['gpu']),
+        args=[self.c['sim_python'],str(self.remote_scheduler/'scripts/behavior100_remote.py'),'preflight',
+              '--manifest',str(self.remote_manifest),'--gpu',str(self.c['gpu']),
               '--port',str(self.c['base_port']+self.c['gpu']),'--data-root',self.c['data_root'],
               '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
               '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0))]
+        args += runtime_storage_args(self.c)
+        args += driver_admission_args(self.c)
+        args += self.memory_policy_args()
         lease=getattr(self._worker_local,'lease',None)
         if lease:args+=['--reserved-host-memory-gib',str(lease.other_reserved_gib(self._config.get('host_slot_memory_gib',28)))]
         if getattr(self._worker_local,'static_ready',False):args.append('--light')
-        response=self.ssh(args)
+        # SSH normally starts in /home, while the simulator unit runs from its
+        # frozen source directory. Probe the actual working filesystem: a full
+        # home quota must not reject a run whose output/cache/temp are elsewhere.
+        # Full admission runs six bounded host commands (up to 30s each).
+        # The general 40s transport timeout can truncate a healthy composite
+        # check before it reports resources. This is separate from episode time.
+        query_timeout=self._config.get('resource_preflight_timeout_seconds',210)
+        try:
+            response=self.ssh(['/bin/bash','-lc',
+                              'cd '+shlex.quote(str(self.remote_source))+'\nexec '+shlex.join(args)],
+                              timeout=query_timeout)
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            self.worker_state('waiting_for_resources',reason='Resource query unavailable',
+                              query_error=type(exc).__name__,query_timeout_seconds=query_timeout)
+            self.journal({'event':'resource_query_unavailable','worker':self.c['id'],
+                          'reason':type(exc).__name__,'timeout_seconds':query_timeout,
+                          'task_claimed':False})
+            return False
         if response.returncode:
             self.worker_state('waiting_for_resources',reason='Resource query unavailable')
             return False
@@ -442,8 +695,7 @@ class Batch:
                 def kill(self):
                     if self.poll() is None:os.kill(wrapper_pid,signal.SIGKILL)
             process=AdoptedProcess()
-        metadata_path=controller/'controller.json'
-        metadata=json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
+        metadata=self.read_controller_metadata(controller)
         pid=metadata.get('pid')
         identity=None
         def owned_model():
@@ -487,7 +739,7 @@ class Batch:
 
     def capture_result(self, row, remote_run):
         """Fetch the compact immutable outcome before potentially large media IO."""
-        keys=('task_success','actions','tool_calls','sim_steps','agent_outcome','finish_reason','failure',
+        keys=('task_success','actions','agent_steps','max_agent_steps','agent_step_budget_exhausted','tool_calls','sim_steps','agent_outcome','finish_reason','failure','termination_reason',
               'source','backend','execution_finished_at_unix','deadline_expired_at_finish',
               'evaluation_finished_at_unix','evaluation_finished_after_deadline','episode_deadline_unix','execution_started_at_unix','episode_outcome')
         code=("import json; from pathlib import Path; p=Path("+repr(str(remote_run/'run.json'))+
@@ -499,6 +751,8 @@ class Batch:
         values={key:raw[key] for key in keys if key in raw and key not in {'failure','source','episode_outcome'}}
         values.update(evaluation=raw.get('evaluation'),q_score=(raw.get('evaluation') or {}).get('official_metrics',{}).get('q_score',{}).get('final'),
                       result_capture_status='passed')
+        if (raw.get('evaluation') or {}).get('score_type') in ('custom_joint_terminal_and_public_history_v1', 'custom_joint_terminal_and_public_history_v2'):
+            values['custom_score']=raw['evaluation']['goal_satisfaction_fraction']
         if raw.get('source'):values['run_source']=raw['source']
         if raw.get('failure') and raw.get('task_success') is None:values['simulator_failure_type']=raw['failure']
         if row.get('outcome_provisional') and isinstance(raw.get('task_success'),bool):
@@ -515,31 +769,117 @@ class Batch:
             reason=('episode_deadline_exceeded' if outcome=='timeout' else
                     'task_completed' if outcome=='success' else
                     'execution_error' if row.get('failure') else
+                    'task_goal_not_satisfied' if row.get('task_success') is False and (
+                        row.get('controller_finish_acknowledged') or
+                        ((row.get('episode_closure') or {}).get('origin')=='controller' and
+                         (row.get('episode_closure') or {}).get('phase')=='result_ready')) else
                     'controller_failed' if row.get('controller_status')!='passed' else
                     'task_goal_not_satisfied')
         self.update(row,status='passed' if outcome=='success' else 'failed',episode_outcome=outcome,
                     termination_reason=reason,stage='complete',finished_at=now())
         self.journal(f"END {row['run_id']}: outcome={outcome}; reason={reason}; task_success={row.get('task_success')}; Q={row.get('q_score')}.")
 
-    def execution_clock_command(self, path, seconds, runtime=None):
-        runtime=Path(runtime or self.source)
-        code=('import json; from manipulation_agent.deadline import write_execution_clock; '
-              'print(json.dumps(write_execution_clock('+repr(str(path))+','+repr(seconds)+')))')
+    def execution_clock_command(self, path, seconds, runtime=None, row=None):
+        runtime=Path(runtime or self.remote_source)
+        manifest=getattr(self,'manifest',{})
+        policy=(row or {}).get('episode_budget_policy',manifest.get('episode_budget_policy'))
+        if policy in {'agent_steps','unbounded'}:seconds=None
+        options=(',max_agent_steps='+repr((row or {}).get('max_agent_steps',manifest.get('max_agent_steps')))
+                 if policy=='agent_steps' else ',unbounded=True' if policy=='unbounded' else '')
+        code=('import json; from manipulation_agent.runtime.deadline import write_execution_clock; '
+              'print(json.dumps(write_execution_clock('+repr(str(path))+','+repr(seconds)+options+')))')
         remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-c',code])
         return self.c['ssh']+[remote]
 
+    def collect_runtime_preflight(self, row):
+        """Keep in-unit admission evidence when its manifest lives on a worker disk."""
+        manifest = Path(row.get('runtime_manifest', self.root / 'manifest.json'))
+        if manifest == self.root / 'manifest.json':
+            return
+        names = [row['run_id'] + suffix for suffix in ('_in_unit.json', '_assets_in_unit.json')]
+        code = ('import json;from pathlib import Path;p=Path(' + repr(str(manifest.parent / 'preflight')) + ');'
+                'print(json.dumps({n:json.loads((p/n).read_text()) for n in ' + repr(names) + ' if (p/n).exists()}))')
+        result = self.ssh(['/usr/bin/python3', '-S', '-c', code], timeout=20)
+        if result.returncode:
+            raise RuntimeError('Worker admission evidence is temporarily unavailable')
+        for name, data in json.loads(result.stdout).items():
+            if name not in names:
+                raise ValueError('Unexpected worker admission artifact')
+            write_json(self.root / 'preflight' / name, data)
+
+    def read_controller_metadata(self, controller):
+        """A telemetry read failure must not terminate a healthy model episode."""
+        key=str(controller)
+        cache=getattr(self._worker_local,'controller_metadata_cache',None)
+        if cache is None:
+            cache={}
+            self._worker_local.controller_metadata_cache=cache
+        degraded=getattr(self._worker_local,'controller_metadata_degraded',None)
+        if degraded is None:
+            degraded=set()
+            self._worker_local.controller_metadata_degraded=degraded
+        try:
+            metadata=json.loads((controller/'controller.json').read_text())
+        except (FileNotFoundError,json.JSONDecodeError):
+            return cache.get(key,{})
+        except OSError as exc:
+            if exc.errno not in TRANSIENT_STORAGE_ERRORS:
+                raise
+            if key not in degraded:
+                degraded.add(key)
+                self.journal(f'Controller metadata temporarily unavailable: {key}; errno={exc.errno}; retain last observed clock and continue live health checks.')
+            return cache.get(key,{})
+        if not isinstance(metadata,dict):
+            return cache.get(key,{})
+        cache[key]=metadata
+        if key in degraded:
+            degraded.remove(key)
+            self.journal(f'Controller metadata read recovered: {key}.')
+        return metadata
+
+    def controller_directory(self, runid):
+        """Keep live client writes on local storage, with a stable evidence link."""
+        shared=self.root/'controllers'/runid
+        spool=self._config.get('controller_spool_dir')
+        if not spool:
+            if getattr(self,'storage',None) is None:
+                return shared
+            # Default local storage needs no shared symlink during execution.
+            local=self.storage.spool/'controllers'/runid
+            local.parent.mkdir(parents=True,exist_ok=True)
+            return local
+        local=(Path(spool)/runid).absolute()
+        if shared.is_symlink():
+            if shared.resolve()!=local.resolve():
+                raise RuntimeError('Controller evidence link points to another attempt')
+            return local
+        if shared.exists() or local.exists():
+            raise RuntimeError('Controller output exists; immutable attempt cannot be overwritten')
+        local.parent.mkdir(parents=True,exist_ok=True)
+        # The controller creates its own output directory. Its command receives
+        # the direct local path so later NAS failures cannot break client writes.
+        shared.symlink_to(local,target_is_directory=True)
+        return local
+
     def controller_metadata(self, row, controller):
-        path=controller/'controller.json'
-        try:metadata=json.loads(path.read_text())
-        except (FileNotFoundError,json.JSONDecodeError):return {}
+        metadata=self.read_controller_metadata(controller)
+        degraded=str(controller) in getattr(self._worker_local,'controller_metadata_degraded',set())
+        if degraded and (row.get('controller_storage') or {}).get('status')!='degraded':
+            self.update(row,controller_storage={'status':'degraded','at':now(),
+                'path':str(controller/'controller.json')})
+        elif not degraded and (row.get('controller_storage') or {}).get('status')=='degraded':
+            self.update(row,controller_storage={'status':'passed','recovered_at':now(),
+                'path':str(controller/'controller.json')})
         deadline=metadata.get('episode_deadline_unix')
         started=metadata.get('execution_started_at_unix')
-        if isinstance(deadline,(int,float)) and isinstance(started,(int,float)):
-            if row.get('episode_deadline_unix')!=deadline:
+        policy=(metadata.get('execution_clock') or {}).get('budget_policy')
+        no_wall=policy in {'agent_steps','unbounded'}
+        if isinstance(started,(int,float)) and (isinstance(deadline,(int,float)) or no_wall):
+            if row.get('execution_started_at_unix')!=started or row.get('episode_deadline_unix')!=deadline:
                 self.update(row,execution_started_at_unix=started,episode_deadline_unix=deadline,
                             execution_budget_seconds=metadata.get('execution_budget_seconds',row.get('episode_timeout_seconds')),
                             deadline_origin='model_start_after_mcp_handshake',
-                            budget_basis='model_execution_excludes_initialization',stage='policy_running')
+                            budget_basis=policy if no_wall else 'model_execution_excludes_initialization',stage='policy_running')
                 self.worker_state('running',run_id=row['run_id'],deadline_unix=deadline)
         return metadata
 
@@ -547,9 +887,20 @@ class Batch:
         """Simulator/handshake startup and actual model execution have separate clocks."""
         while process.poll() is None:
             self.controller_metadata(row,controller)
+            self.refresh_startup_progress(row)
             deadline=row.get('episode_deadline_unix')
-            cutoff=deadline or row['startup_deadline_unix']
-            if time.time()>=cutoff:
+            cutoff=deadline or (None if row.get('execution_started_at_unix') else row['startup_deadline_unix'])
+            if not row.get('execution_started_at_unix') and (row.get('controller_storage') or {}).get('status')=='degraded':
+                # A missing first clock due to EIO is not evidence that startup
+                # stalled. Continue checking the process and simulator lifecycle.
+                cutoff=None
+            closing=self.step_episode_closed(row)
+            if closing:
+                reason=self.closure_timeout(row)
+                if reason:
+                    self.cleanup_controller_after_finish(row,process,controller,reason)
+                    break
+            elif cutoff is not None and time.time()>=cutoff:
                 if deadline:self.update(row,episode_timed_out=True)
                 else:self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
                 if deadline:
@@ -557,30 +908,175 @@ class Batch:
                     except subprocess.TimeoutExpired:self.stop_controller(process,controller)
                 else:self.stop_controller(process,controller)
                 break
-            time.sleep(min(2,max(0,cutoff-time.time())))
+            time.sleep(2 if closing or cutoff is None else min(2,max(0,cutoff-time.time())))
             if time.monotonic()-getattr(process,'last_heartbeat',0)>30:
                 process.last_heartbeat=time.monotonic();self.update(row,heartbeat_at=now())
         return self.controller_metadata(row,controller)
+
+    def step_episode_closed(self, row):
+        if not row.get('port'):return False
+        last=getattr(self._worker_local,'closure_poll',None);current=time.monotonic()
+        known=row.get('episode_closure') or {}
+        if last and last[0]==row['run_id'] and current-last[1]<2:
+            return known.get('phase','running')!='running'
+        self._worker_local.closure_poll=(row['run_id'],current)
+        health=self.health(row['port'])
+        if health is not None:
+            if not health.get('closed'):return False
+            state=health.get('closure') or {'phase':'legacy_closed'}
+            # An early closed flag is not a completed evaluation or reply.
+            if state.get('phase')=='running':state={'phase':'legacy_closed'}
+            if state!=known:self.update(row,episode_closure=state)
+            return True
+        state=self.unit_state(row['simulator_unit'])
+        exited=state.get('ActiveState') in {'inactive','failed'} and str(state.get('MainPID'))=='0'
+        if exited:
+            if known.get('phase')!='result_ready':
+                self.update(row,episode_closure={**known,'phase':'simulator_exited'})
+            return True
+        # A transient health failure must not erase observed shutdown progress.
+        return known.get('phase','running')!='running'
+
+    def closure_timeout(self, row):
+        previous=dict(row.get('closure_watchdog') or {})
+        reason=closure_watchdog(row,now=time.time(),
+            stage_seconds=self._config.get('finish_stage_timeout_seconds',600),
+            client_seconds=self._config.get('controller_exit_grace_seconds',120))
+        if previous!=row.get('closure_watchdog'):
+            self.update(row,closure_watchdog=row['closure_watchdog'])
+        return reason
+
+    def cleanup_controller_after_finish(self,row,process,controller,reason,wrapper_pid=None):
+        cleanup={'status':'forced','reason':reason,'at':now(),
+                 'episode_closure':row.get('episode_closure')}
+        self.update(row,controller_cleanup=cleanup)
+        write_json(controller/'controller_cleanup.json',cleanup)
+        self.stop_controller(process,controller,wrapper_pid=wrapper_pid)
+
+    def record_controller_end(self,row,controller,metadata):
+        """Keep original client metadata; record receipt and cleanup separately."""
+        receipt=bool(metadata.get('formal_finish_observed'))
+        evidence_error=None
+        try:
+            client=self.manifest.get('controller_client','codex_cli').removesuffix('_cli')
+            receipt=receipt or parse_events(controller/'model_events.jsonl',client).formal_finish_observed
+        except (OSError,ValueError,TypeError) as exc:
+            evidence_error=type(exc).__name__
+        status=metadata.get('status')
+        if status in {None,'running'}:
+            status=('not_started' if not metadata and not row.get('controller_wrapper_pid') and not row.get('controller_pid')
+                    else 'terminated' if row.get('controller_cleanup') else 'exited_without_final_metadata')
+        fields={'controller_pid':metadata.get('pid'),'controller_status':status,
+                'controller_timeout':bool(metadata.get('timeout')),
+                'model_duration_seconds':metadata.get('duration_seconds'),
+                'controller_finish_acknowledged':receipt}
+        self.update(row,**fields)
+        controller.mkdir(parents=True,exist_ok=True)
+        write_json(controller/'controller_closure.json',{
+            'at':now(),'formal_finish_observed':receipt,'process_status':status,
+            'exit_code':metadata.get('exit_code'),'cleanup':row.get('controller_cleanup'),
+            'evidence_error':evidence_error})
+        return {**metadata,'formal_finish_observed':receipt}
+
+    def refresh_startup_progress(self, row):
+        """Read actual remote milestones, never mistake polling for progress."""
+        if row.get('startup_watchdog_policy') != STARTUP_POLICY or row.get('execution_started_at_unix') or row.get('episode_deadline_unix'):
+            return
+        # Avoid launching a Python reader on every two-second health poll.
+        last=getattr(self._worker_local,'startup_progress_poll',None)
+        current=time.time()
+        if (last and last[0]==row['run_id'] and current-last[1]<10
+                and current<row['startup_deadline_unix']):
+            return
+        self._worker_local.startup_progress_poll=(row['run_id'],current)
+        code=startup_reader_code(row['simulator_output'], row)
+        try:
+            result=self.ssh(['/usr/bin/python3','-c',code],timeout=15)
+            if result.returncode:
+                raise OSError('Remote startup reader exited with code '+str(result.returncode))
+            payload=json.loads(result.stdout)
+            events=payload['events']
+            if not isinstance(events,list):raise ValueError('Invalid startup events')
+            tracking={**row,'startup_pending_operations':row.get('startup_pending_operations',[])}
+            # Merge independent logs chronologically so an early native event
+            # can bridge a long constructor before its later return milestone.
+            events.sort(key=lambda event: event.get('at_unix', 0)
+                        if isinstance(event, dict) and isinstance(event.get('at_unix'), (int, float)) else 0)
+            updates=startup_progress_update(tracking,events,time.time())
+            for key,value in [('startup_log_offset',payload['offset']),
+                              ('startup_log_identity',payload['identity']),
+                              ('startup_native_log_offset',payload['native_offset']),
+                              ('startup_native_log_identity',payload['native_identity'])]:
+                if row.get(key)!=value:updates[key]=value
+            if row.get('startup_progress_read_error'):
+                updates['startup_progress_read_error']=None
+        except (subprocess.TimeoutExpired,OSError,ValueError,KeyError) as exc:
+            self.update(row,startup_progress_read_error={'at':now(),'type':type(exc).__name__})
+            return  # Unreadable progress cannot extend the watchdog.
+        if updates:self.update(row,**updates)
+
+    def wait_simulator_ready(self, row, unit, port):
+        """Check live readiness before deciding that the startup idle clock expired."""
+        while True:
+            self.refresh_startup_progress(row)
+            self.initializing_unit_state(unit)
+            health = self.health(port)
+            if health and health.get('ready') and not health.get('closed'):
+                if {t['name'] for t in health['tools']} != {t['name'] for t in tool_specs(self.manifest['agent_profile'])}:
+                    raise RuntimeError('Bridge tool profile mismatch')
+                return health
+            if time.time() >= row['startup_deadline_unix']:
+                self.update(row, startup_timed_out=True, termination_reason='startup_timeout')
+                raise TimeoutError('Simulator initialization made no milestone progress before watchdog expiry')
+            time.sleep(min(2, max(0, row['startup_deadline_unix'] - time.time())))
+
+    def controller_paths(self, runid):
+        controller=self.controller_directory(runid)
+        root=self.storage.spool if getattr(self,'storage',None) is not None else self.root
+        log=root/'logs'/f'{runid}_controller.log'
+        log.parent.mkdir(parents=True,exist_ok=True)
+        return controller,log
 
     def run_one(self, row, gpu):
         runid=row['run_id'];port=self.c['base_port']+gpu
         unit=f"mas-b100-{row['index']:03d}-r{row.get('attempt',1)}-{self.c['batch_tag']}.service"
         remote_run=Path(self.c['data_root'])/'runs'/runid
-        controller=self.root/'controllers'/runid
+        # Model events, project files and status updates must not depend on NAS
+        # publication during execution. Archive this local directory afterwards.
+        controller,controller_log=self.controller_paths(runid)
         own_unit=False;launch_requested=False;process=None;deadline=None;startup_deadline=None
         native_fault_capture=self.c.get('native_fault_capture',False) is True
         self.update(row,status='running',stage='asset_preflight',started_at=now(),gpu_index=gpu,
                     simulator_unit=unit,simulator_output=str(remote_run),controller_output=str(controller),
-                    worker_id=self.c['id'],worker_host=self.c['ssh'][-1],runtime_source=str(self.source),
+                    controller_log=str(controller_log),controller_storage_policy='local_during_execution',
+                    worker_id=self.c['id'],worker_host=self.c['ssh'][-1],runtime_source=str(self.remote_source),
+                    runtime_manifest=str(self.remote_manifest),runtime_staging=self.c.get('runtime_staging'),
                     port=port,simulator_interpreter=self.c['sim_python'],source=self.source_info,
+                    scheduler_source=getattr(self,'scheduler_info',self.source_info),
                     recording_options=self.c.get('simulator_env',{}),
                     native_fault_capture=native_fault_capture)
+        if self.c.get('driver_validation_evidence'):
+            self.update(row,driver_validation_evidence=self.c['driver_validation_evidence'],
+                        validated_driver_version=self.c['validated_driver_version'])
         self.journal(f'START {runid}; admitted worker {self.c["id"]}; unit {unit}.')
         try:
-            asset_cmd=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'assets',
-                       '--manifest',str(self.root/'manifest.json'),'--index',str(row['index']),
+            asset_cmd=[self.c['sim_python'],str(self.remote_source/'scripts/behavior100_remote.py'),'assets',
+                       '--manifest',str(self.remote_manifest),'--index',str(row['index']),
                        '--data-root',self.c['data_root']]
-            checked=self.ssh(asset_cmd)
+            # Task assets include hashing shared-storage files. A short SSH
+            # telemetry timeout can expire before a healthy preflight finishes
+            # while other instances initialize; no simulator exists yet.
+            asset_timeout=self._config.get('asset_preflight_timeout_seconds',180)
+            try:
+                checked=self.ssh(asset_cmd,timeout=asset_timeout)
+            except subprocess.TimeoutExpired:
+                # This command only inspects assets. A timeout says nothing
+                # about their validity, and no simulator launch was requested.
+                unavailable={'status':'unavailable','error_type':'TimeoutExpired',
+                             'timeout_seconds':asset_timeout,'launch_requested':False}
+                write_json(self.root/'preflight'/f'{runid}_assets.json',unavailable)
+                self.update(row,asset_preflight_unavailable=unavailable)
+                raise
             if checked.returncode:raise RuntimeError('Task asset preflight command failed')
             asset_check=json.loads(checked.stdout)
             write_json(self.root/'preflight'/f'{runid}_assets.json',asset_check)
@@ -592,103 +1088,114 @@ class Batch:
                 raise RuntimeError('Unit collision; refusing to reuse')
             if self.ssh(['test','-e',str(remote_run)]).returncode==0:
                 raise RuntimeError('Output exists; immutable attempt cannot be overwritten')
-            # Initialization has its own watchdog. The 30-minute execution
-            # clock is armed by the controller only after its MCP handshake.
-            seconds=self._config.get('episode_timeout_seconds',self.manifest.get('model_timeout_seconds',1800))
+            # Initialization has its own watchdog; the execution clock is
+            # armed after MCP handshake, with no duration in step-only mode.
+            seconds=(None if self.manifest.get('episode_budget_policy') in {'agent_steps','unbounded'} else
+                     self._config.get('episode_timeout_seconds',self.manifest.get('model_timeout_seconds',1800)))
             startup_seconds=self._config.get('startup_timeout_seconds',1800)
             started=time.time();startup_deadline=started+startup_seconds
             clock_path=remote_run/'execution_clock.json'
             grace=self._config.get('cleanup_grace_seconds',120)
             launcher=self.root/'launchers'/f'{runid}.sh';q=shlex.quote
-            command=[self.c['sim_python'],str(self.source/'scripts/behavior100_remote.py'),'simulate',
-                '--manifest',str(self.root/'manifest.json'),'--index',str(row['index']),'--run-id',runid,
+            command=[self.c['sim_python'],str(self.remote_scheduler/'scripts/behavior100_remote.py'),'simulate',
+                '--executor-source',str(self.remote_source),
+                '--manifest',str(self.remote_manifest),'--index',str(row['index']),'--run-id',runid,
                 '--gpu',str(gpu),'--port',str(port),'--unit',unit,'--data-root',self.c['data_root'],
                 '--memory-budget-gib',str(self.c.get('memory_budget_gib',28)),
                 '--min-free-gpu-mib',str(self.c.get('minimum_free_gpu_mib',0)),
                 '--light']
+            command += runtime_storage_args(self.c)
+            command += driver_admission_args(self.c)
+            command += self.memory_policy_args()
             # Optional external first-fault capture; no in-process tracing thread.
             # GDB follows the helper's execv into vision_cli and preserves normal
             # exit codes. The capture script creates files only on a native fault.
             fault_env=''
             if native_fault_capture:
                 command=['/usr/bin/gdb','--batch','-q','-nx','-x',
-                    str(self.source/'scripts/capture_native_fault.gdb'),'--args',*command]
+                    str(self.remote_source/'scripts/capture_native_fault.gdb'),'--args',*command]
                 fault_env='\nexport MAS_NATIVE_FAULT_DIR='+q(str(remote_run))
             overrides=''.join('\nexport '+key+'='+q(str(value)) for key,value in self.c.get('simulator_env',{}).items())
             appdata=self.c.get('simulator_appdata_path',self.c['data_root']+'/cache/behavior100/gpu'+str(gpu))
+            scratch=('\nexport TMPDIR='+q(self.c['simulator_tmpdir'])+
+                     '\nmkdir -p "$TMPDIR"') if self.c.get('simulator_tmpdir') else ''
             launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\nexport GAP_BEHAVIOR_GPU_ID='+str(gpu)+
                 '\nsource '+q(self.c['sim_env'])+overrides+fault_env+'\nunset MAS_EPISODE_DEADLINE_UNIX'+
                 '\nexport MAS_EXECUTION_CLOCK_PATH='+q(str(clock_path))+
-                '\nexport PYTHONPATH='+q(str(self.source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(appdata)+
-                '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"\nexec '+shlex.join(command)+'\n')
+                '\nexport PYTHONPATH='+q(str(self.remote_source/'src'))+':${PYTHONPATH:-}\nexport OMNIGIBSON_APPDATA_PATH='+q(appdata)+
+                '\nmkdir -p "$OMNIGIBSON_APPDATA_PATH"'+scratch+'\nexec '+shlex.join(command)+'\n')
             launch=['systemd-run','--user',f'--unit={unit}',f'--description=BEHAVIOR100 owned {runid}',
                 '-p','MemoryMax='+self.c.get('simulator_memory_max',str(self.c.get('memory_budget_gib',28))+'G'),
-                '-p','CPUQuota=800%','-p',f'RuntimeMaxSec={startup_seconds+seconds+grace}',
+                '-p','CPUQuota=800%',
                 '-p','TasksMax=2048','-p','LimitCORE=0','-p','TimeoutStopSec=30',
-                '-p','KillMode=control-group','-p','SuccessExitStatus=2','-p','WorkingDirectory='+str(self.source)]
+                '-p','KillMode=control-group','-p','SuccessExitStatus=2','-p','WorkingDirectory='+str(self.remote_source)]
             launch+=inline_systemd_launcher(launcher.read_text())
             lease=getattr(self._worker_local,'lease',None)
-            if lease:lease.record(run_id=runid,unit=unit,released=False)
+            if lease:lease.record(run_id=runid,unit=unit,released=False,runtime_stage='starting')
             self.update(row,stage='simulator_starting',simulator_started_at_unix=started,
                         startup_deadline_unix=startup_deadline,startup_timeout_seconds=startup_seconds,
+                        startup_watchdog_policy=STARTUP_POLICY,
                         execution_clock_path=str(clock_path),deadline_origin='model_start_after_mcp_handshake',
-                        budget_basis='model_execution_excludes_initialization',
+                        budget_basis=self.manifest.get('episode_budget_policy') if self.manifest.get('episode_budget_policy') in {'agent_steps','unbounded'} else 'model_execution_excludes_initialization',
+                        episode_budget_policy=self.manifest.get('episode_budget_policy'),
+                        max_agent_steps=self.manifest.get('max_agent_steps'),
                         episode_timeout_seconds=seconds,
                         cleanup_grace_seconds=grace,port=port,simulator_interpreter=self.c['sim_python'],
                         source=getattr(self,'source_info',None) or source_version())
             launch_requested=True
-            response=self.ssh(launch)
-            (self.root/'logs'/f'{runid}_launch.log').write_text(response.stdout+response.stderr)
-            if response.returncode:raise RuntimeError('Simulator unit launch failed')
+            state=self.confirm_simulator_launch(row,launch)
             own_unit=True
+            # The shared lease already publishes the starting unit and its
+            # estimate. Other coordinators can now admit another initialization.
+            if self._config.get('memory_admission_profile')=='throughput':
+                self.release_startup_gate()
             check=getattr(self._worker_local,'admission',{})
-            state=self.unit_state(unit)
             self.update(row,stage='simulator_starting',simulator_owned=True,simulator_pid=int(state.get('MainPID',0)),
                 gpu_uuid=check.get('gpu_uuid',self.c.get('expected_gpu_uuid')),simulator_host=check.get('host'),
                 simulator_interpreter=self.c['sim_python'],source=getattr(self,'source_info',None) or source_version(),
                 port=port,simulator_started_at_unix=started,startup_deadline_unix=startup_deadline,
                 episode_timeout_seconds=seconds,cleanup_grace_seconds=grace)
             self.worker_state('starting',run_id=runid,startup_deadline_unix=startup_deadline)
-            while time.time()<startup_deadline:
-                state=self.unit_state(unit)
-                if state.get('ActiveState') not in {'active','activating'}:
-                    raise RuntimeError('Simulator exited before bridge ready: '+str(state))
-                health=self.health(port)
-                if health and health.get('ready') and not health.get('closed'):
-                    if {t['name'] for t in health['tools']}!={t['name'] for t in tool_specs(self.manifest['agent_profile'])}:
-                        raise RuntimeError('Bridge tool profile mismatch')
-                    write_json(self.root/'logs'/f'{runid}_health.json',health)
-                    break
-                time.sleep(min(2,max(0,startup_deadline-time.time())))
-            else:
-                self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
-                raise TimeoutError('Simulator initialization watchdog expired before model start')
+            health = self.wait_simulator_ready(row, unit, port)
+            write_json(self.root/'logs'/f'{runid}_health.json', health)
             self.update(row,stage='controller_starting',bridge_ready_at=now())
-            self.worker_state('controller_starting',run_id=runid,startup_deadline_unix=startup_deadline)
-            remote=shlex.join(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],
+            if lease:lease.record(runtime_stage='ready')
+            self.release_startup_gate()
+            self.worker_state('controller_starting',run_id=runid,startup_deadline_unix=row['startup_deadline_unix'])
+            remote=shlex.join(['env','PYTHONPATH='+str(self.remote_source/'src'),self.c['sim_python'],
                 '-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
             cmd=[sys.executable,str(self.source/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
                  '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
                  '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
-                 '--timeout',str(seconds),'--execution-clock-command-json',
-                 json.dumps(self.execution_clock_command(clock_path,seconds)),
-                 '--agent-profile',self.manifest['agent_profile']]
+                 '--timeout',str(seconds if seconds is not None else 0),'--execution-clock-command-json',
+                 json.dumps(self.execution_clock_command(clock_path,seconds,row=row)),
+                 '--agent-profile',self.manifest['agent_profile'],'--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+            if self.manifest.get('model_reasoning_effort'):
+                cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
+            if self.c.get('model_provider_profile'):
+                cmd += ['--model-provider-profile',self.c['model_provider_profile']]
+            if self.c.get('model_provider_gateway'):
+                cmd += ['--model-provider-gateway',self.c['model_provider_gateway']]
             if self.c.get('isolate_client_storage'):cmd.append('--isolate-client-storage')
-            with (self.root/'logs'/f'{runid}_controller.log').open('w') as log:
+            if self.c.get('provider_transient_resumes'):
+                cmd += ['--rate-limit-resumes',str(self.c['provider_transient_resumes']),
+                        '--resume-backoff-seconds',str(self.c.get('provider_resume_backoff_seconds',90))]
+            if self.c.get('provider_permanent_route_forks'):
+                cmd += ['--permanent-route-forks',str(self.c['provider_permanent_route_forks'])]
+            with controller_log.open('w') as log:
                 process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,env=self.environment)
                 self.update(row,controller_wrapper_pid=process.pid,controller_host=os.uname().nodename,
                             controller_interpreter=sys.executable)
                 self.wait_controller(row,process,controller)
                 self.update(row,controller_wrapper_exit_code=process.returncode,stage='finishing')
             metadata=self.controller_metadata(row,controller)
-            self.update(row,controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),
-                controller_timeout=bool(metadata.get('timeout')),model_duration_seconds=metadata.get('duration_seconds'))
             if not metadata:self.update(row,failure='Controller metadata unavailable',failure_stage='controller_launch')
+            metadata=self.record_controller_end(row,controller,metadata)
             self.finish_and_wait(row,metadata)
         except Exception as exc:
             deadline=row.get('episode_deadline_unix')
             expired=deadline is not None and time.time()>=deadline
-            if deadline is None and startup_deadline is not None and time.time()>=startup_deadline:
+            if deadline is None and not row.get('execution_started_at_unix') and startup_deadline is not None and time.time()>=row['startup_deadline_unix']:
                 self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
             self.update(row,failure=f'{type(exc).__name__}: {exc}',failure_stage=row.get('stage'),
                         episode_timed_out=bool(row.get('episode_timed_out') or expired))
@@ -699,6 +1206,11 @@ class Batch:
                 except Exception as finish_error:
                     self.update(row,finish_failure=f'{type(finish_error).__name__}: {finish_error}')
         finally:
+            try:
+                self.collect_runtime_preflight(row)
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+                self.journal({'event': 'worker_preflight_collection_unavailable',
+                              'run_id': runid, 'error_type': type(exc).__name__})
             # An SSH timeout may hide a successful remote systemd launch. The
             # declared unit remains reserved until cleanup is positively verified.
             if launch_requested:own_unit=True
@@ -715,29 +1227,52 @@ class Batch:
         return (controller,remote_run) if own_unit else None
 
     def finish_and_wait(self, row, metadata):
-        """Execution deadline is fixed; score/cleanup receives a separate grace."""
-        now_unix=time.time();deadline=row.get('episode_deadline_unix') or row.get('startup_deadline_unix') or now_unix
-        end=min(deadline+row.get('cleanup_grace_seconds',120),now_unix+row.get('cleanup_grace_seconds',120))
-        if not metadata.get('formal_finish_observed') and now_unix<end:
+        """An accepted finish gets time to score, persist, reply and exit."""
+        state=self.unit_state(row['simulator_unit'])
+        if state.get('ActiveState') in {'inactive','failed'} and str(state.get('MainPID'))=='0':return
+        health=self.health(row['port'])
+        known=(row.get('episode_closure') or {}).get('phase','running')!='running'
+        if not metadata.get('formal_finish_observed') and not (health or {}).get('closed') and not known:
             self.update(row,supervisor_intervention=True,stage='finishing')
-            timeout=max(1,end-time.time()-10)
-            code=("from manipulation_agent.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{row["port"]}')+
-                ",'finish',{'outcome':'aborted','reason':'Controller ended or episode deadline reached'},'batch-supervisor-finish',timeout="+str(timeout)+"))")
-            result=self.ssh(['env','PYTHONPATH='+str(self.source/'src'),self.c['sim_python'],'-c',code],timeout=timeout+5)
+            timeout=self._config.get('finish_stage_timeout_seconds',600)
+            code=("from manipulation_agent.transport.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{row["port"]}')+
+                ",'finish',{'outcome':'aborted','reason':'Controller ended or episode deadline reached'},'batch-supervisor-finish',timeout="+str(timeout)+",origin='supervisor'))")
+            result=self.ssh(['env','PYTHONPATH='+str(Path(row.get('runtime_source', self.remote_source))/'src'),self.c['sim_python'],'-c',code],timeout=timeout+5)
             (self.root/'logs'/f'{row["run_id"]}_forced_finish.log').write_text(result.stdout+result.stderr)
             self.update(row,supervisor_finish_exit_code=result.returncode)
-        while time.time()<end:
+        fallback_end=time.time()+self._config.get('finish_stage_timeout_seconds',600)
+        while True:
             state=self.unit_state(row['simulator_unit'])
-            if state.get('ActiveState') in {'inactive','failed'} and state.get('MainPID')=='0':return
-            time.sleep(min(2,max(0,end-time.time())))
+            if state.get('ActiveState') in {'inactive','failed'} and str(state.get('MainPID'))=='0':return
+            if self.step_episode_closed(row):
+                reason=self.closure_timeout(row)
+                if reason:
+                    self.update(row,simulator_closure_timeout=reason)
+                    return
+            elif time.time()>=fallback_end:
+                self.update(row,simulator_closure_timeout='finish_unresponsive')
+                return
+            time.sleep(2)
 
     def archive(self,row,controller,remote_run):
         dest=self.root/'runs'/row['run_id'];dest.mkdir(exist_ok=True)
+        archived_controller=self.root/'controllers'/row['run_id']
+        if controller.resolve()!=archived_controller.resolve() and controller.is_dir():
+            # Only the archival worker touches shared storage here. Failure
+            # retains the local raw evidence and cannot cancel a live episode.
+            shutil.copytree(controller,archived_controller,dirs_exist_ok=True,symlinks=True)
+            self.update(row,controller_archive_output=str(archived_controller))
+        if row.get('controller_log'):
+            source_log=Path(row['controller_log'])
+            if source_log.is_file():shutil.copyfile(source_log,self.root/'logs'/source_log.name)
         log=self.ssh(['journalctl','--user','-u',row['simulator_unit'],'--no-pager','-o','short-iso'],timeout=60)
         (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
         # rsync needs the SSH command without the final host argument.
-        cmd=['rsync','-a','-e',shlex.join(self.c['ssh'][:-1]),self.c['ssh'][-1]+':'+str(remote_run)+'/',str(dest)+'/']
-        p=subprocess.run(cmd,capture_output=True,text=True,timeout=180)
+        # Full episodes can contain many camera frames. Bound stalled I/O, not
+        # total copy time: a healthy transfer must not lose its replay at 180s.
+        # Partial files make a later archival recovery resume the original data.
+        cmd=['rsync','-a','--partial','--timeout=180','-e',shlex.join(self.c['ssh'][:-1]),self.c['ssh'][-1]+':'+str(remote_run)+'/',str(dest)+'/']
+        p=subprocess.run(cmd,capture_output=True,text=True)
         (self.root/'logs'/f"{row['run_id']}_archive.log").write_text(p.stdout+p.stderr)
         if p.returncode:raise RuntimeError('Episode rsync failed; remote raw output retained')
         simlog=self.root/'logs'/f"{row['run_id']}_simulator.log"
@@ -750,10 +1285,13 @@ class Batch:
             write_json(dest/'termination.json',{'status':'failed','at':now(),'reason':row.get('failure') or 'Simulator ended without final recorder',
                        'unit':row['simulator_unit'],'unit_state':row.get('unit_final_state'),'final_evaluation_available':False})
         run=read_run(dest)
+        if (dest/'closure.json').exists():
+            self.update(row,episode_closure=json.loads((dest/'closure.json').read_text()))
         if row.get('outcome_provisional') and isinstance(run.get('task_success'),bool):
             self.update(row,episode_outcome=None,outcome_provisional=False,termination_reason=None)
         self.update(row,**{key:run[key] for key in ('execution_finished_at_unix','deadline_expired_at_finish',
-            'evaluation_finished_at_unix','evaluation_finished_after_deadline','episode_deadline_unix','execution_started_at_unix') if key in run})
+            'evaluation_finished_at_unix','evaluation_finished_after_deadline','episode_deadline_unix','execution_started_at_unix',
+            'agent_steps','max_agent_steps','agent_step_budget_exhausted','termination_reason') if key in run})
         if run.get('deadline_expired_at_finish') is True or run.get('episode_outcome')=='timeout':
             self.update(row,episode_timed_out=True)
         if run.get('failure') and run.get('task_success') is None:
@@ -764,17 +1302,43 @@ class Batch:
                     sim_steps=run.get('sim_steps'),evaluation=evaluation_summary(run.get('evaluation')),
                     evaluation_record='runs/'+row['run_id']+'/run.json',
                     q_score=(run.get('evaluation') or {}).get('official_metrics',{}).get('q_score',{}).get('final'),
+                    custom_score=((run.get('evaluation') or {}).get('goal_satisfaction_fraction')
+                                  if (run.get('evaluation') or {}).get('score_type') in ('custom_joint_terminal_and_public_history_v1', 'custom_joint_terminal_and_public_history_v2') else None),
                     run_source=run.get('source'),backend=run.get('backend'),agent_outcome=run.get('agent_outcome'),finish_reason=run.get('finish_reason'))
         errors=[]
+        record_video=self.manifest.get('record_video') is not False
+        self.update(row,record_video=record_video)
         for script,filename in [('validate_async_observation.py','observation_validation.json'),('validate_episode_video.py','video_validation.json')]:
+            if script=='validate_episode_video.py' and not record_video:
+                write_json(dest/filename,{'status':'not_requested','record_video':False,
+                    'reason':'Continuous video disabled in the frozen experiment manifest'})
+                continue
             cmd=[sys.executable,str(self.source/'scripts'/script)]
             if script=='validate_async_observation.py': cmd.extend(['--allow-sync-only','--run-dir'])
             cmd.append(str(dest))
-            p=subprocess.run(cmd,capture_output=True,text=True,timeout=300,env=self.environment)
+            # Full video decoding scales with an unbounded episode's frame
+            # count. A fixed five-minute deadline discarded valid long-run
+            # replays after the simulator had already finished and scored.
+            timeout=300 if script=='validate_async_observation.py' else None
+            p=subprocess.run(cmd,capture_output=True,text=True,timeout=timeout,env=self.environment)
             (dest/(script+'.log')).write_text(p.stdout+p.stderr)
             # Failed validation never gets converted to success merely because the file exists.
             if not (dest/filename).exists(): write_json(dest/filename,{'status':'failed','reason':'Validator could not complete','exit_code':p.returncode})
         controller_ready=(controller/'controller.json').is_file() and (controller/'model_events.jsonl').is_file()
+        if record_video and self.c.get('export_spectator_video'):
+            media_validation_field='spectator_video_validation'
+            try:
+                from manipulation_agent.reporting.spectator_video import export_spectator_video
+                spectator = export_spectator_video(dest)
+                self.update(row,spectator_video_validation=spectator['status'])
+                if controller_ready:
+                    media_validation_field='spectator_walltime_validation'
+                    from manipulation_agent.reporting.spectator_video import export_spectator_walltime
+                    walltime_spectator = export_spectator_walltime(dest,controller)
+                    self.update(row,spectator_walltime_validation=walltime_spectator['status'])
+            except Exception as exc:
+                errors.append(media_validation_field+' failed: '+str(exc))
+                self.update(row,**{media_validation_field:'failed'})
         try:
             replay=render_replay(dest,controller if controller_ready else None)
         except Exception as exc:
@@ -789,8 +1353,12 @@ class Batch:
         prefix='manipulation_runs/'+row['run_id']+'/'
         observation=json.loads((dest/'observation_validation.json').read_text())
         self.update(row,video_validation=video['status'],observation_validation=observation['status'],evidence_alignment=audit.get('evidence_alignment','unavailable'),
+                    model_finish=audit.get('model_finish','unavailable'),controller_exit=audit.get('controller_exit','unavailable'),
+                    supervisor_finish_calls=audit.get('supervisor_finish_calls'),
+                    planning_metrics=replay.get('planning_metrics'),
                     model_usage=audit.get('usage'),replay_url=prefix+'replay.html',record_url=prefix+'run.json',
                     video_url=prefix+'episode.mp4' if (dest/'episode.mp4').exists() else None,
+                    spectator_video_url=prefix+'spectator.mp4' if (dest/'spectator.mp4').exists() else None,
                     replay_errors=errors,recording_warnings=sum(1 for _ in (dest/'recording_warnings.jsonl').open()) if (dest/'recording_warnings.jsonl').exists() else 0,video_frames=video.get('frame_count'),video_seconds=video.get('duration_seconds'))
         # Checksums cover original evidence as well as exports; streamed for large videos.
         hashes=episode_artifact_hashes(row['run_id'],dest,controller)
@@ -800,7 +1368,16 @@ class Batch:
     def adopt_one(self, row):
         """Resume supervision of this exact attempt; never restart its model."""
         controller=Path(row['controller_output']);remote_run=Path(row['simulator_output'])
-        state=self.unit_state(row['simulator_unit']);process=None;metadata={}
+        if (row.get('stage')=='asset_preflight' and not row.get('simulator_started_at_unix')
+                and not row.get('controller_wrapper_pid') and not row.get('controller_pid')):
+            # Restart interrupted only a read-only asset check. No launch was
+            # submitted, so there is no simulator/controller to finish or stop.
+            self.update(row,status='planned',stage='queued',
+                prelaunch_coordinator_recovery={'at':now(),'previous_stage':'asset_preflight'})
+            self.queue.put(row)
+            self.journal('REQUEUE PRELAUNCH '+row['run_id']+'; no simulator or model had been launched.')
+            return None
+        state=self.adopted_unit_state(row);process=None;metadata={}
         if state.get('ActiveState') in {'active','activating','deactivating'}:
             if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}":
                 raise RuntimeError('Inflight simulator ownership check failed')
@@ -811,8 +1388,8 @@ class Batch:
             return controller,remote_run
         try:
             path=controller/'controller.json'
-            if path.exists():metadata=self.controller_metadata(row,controller)
-            if not row.get('episode_deadline_unix') and not row.get('execution_clock_path'):
+            metadata=self.controller_metadata(row,controller)
+            if not row.get('episode_deadline_unix') and not row.get('execution_clock_path') and self.manifest.get('episode_budget_policy') not in {'agent_steps','unbounded'}:
                 started=datetime.fromisoformat(metadata.get('started_at') or row['started_at']).timestamp()
                 row['episode_deadline_unix']=started+self.manifest['model_timeout_seconds']
             row.setdefault('cleanup_grace_seconds',self._config.get('cleanup_grace_seconds',120))
@@ -821,9 +1398,17 @@ class Batch:
                 process=self.start_adopted_policy(row);pid=process.pid
             while pid and controller_process_alive(pid,controller):
                 self.controller_metadata(row,controller)
+                self.refresh_startup_progress(row)
                 deadline=row.get('episode_deadline_unix')
-                cutoff=deadline or row['startup_deadline_unix']
-                if time.time()>=cutoff:
+                cutoff=deadline or (None if row.get('execution_started_at_unix') else row['startup_deadline_unix'])
+                if not row.get('execution_started_at_unix') and (row.get('controller_storage') or {}).get('status')=='degraded':cutoff=None
+                closing=self.step_episode_closed(row)
+                if closing:
+                    reason=self.closure_timeout(row)
+                    if reason:
+                        self.cleanup_controller_after_finish(row,process,controller,reason,wrapper_pid=pid)
+                        break
+                elif cutoff is not None and time.time()>=cutoff:
                     if deadline:self.update(row,episode_timed_out=True)
                     else:self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
                     if process is not None:self.stop_controller(process,controller)
@@ -835,11 +1420,10 @@ class Batch:
                 self.update(row,heartbeat_at=now());time.sleep(2)
             if process is not None:process.wait(timeout=10)
             if path.exists():metadata=self.controller_metadata(row,controller)
-            self.update(row,controller_pid=metadata.get('pid'),controller_status=metadata.get('status'),
-                        controller_timeout=bool(metadata.get('timeout')),model_duration_seconds=metadata.get('duration_seconds'))
+            metadata=self.record_controller_end(row,controller,metadata)
             self.finish_and_wait(row,metadata)
         except Exception as exc:
-            if not row.get('episode_deadline_unix') and row.get('startup_deadline_unix',float('inf'))<=time.time():
+            if not row.get('execution_started_at_unix') and not row.get('episode_deadline_unix') and row.get('startup_deadline_unix',float('inf'))<=time.time():
                 self.update(row,startup_timed_out=True,termination_reason='startup_timeout')
             self.update(row,failure=f'{type(exc).__name__}: {exc}',failure_stage='adopted_controller')
         finally:
@@ -859,9 +1443,17 @@ class Batch:
         if original!=row['source']['commit']:raise RuntimeError('Original inflight runtime source mismatch')
         controller=Path(row['controller_output']);unit=row['simulator_unit'];port=row['port']
         if (controller/'controller.json').exists():raise RuntimeError('Refusing to launch a duplicate model controller')
-        while time.time()<deadline:
-            state=self.unit_state(unit)
-            if state.get('ActiveState') not in {'active','activating'}:raise RuntimeError('Original simulator exited during initialization')
+        while True:
+            self.refresh_startup_progress(row)
+            cutoff=row['startup_deadline_unix'] if row.get('startup_watchdog_policy')==STARTUP_POLICY else deadline
+            if time.time()>=cutoff:
+                raise TimeoutError('Original simulator startup exceeded its progress watchdog' if
+                    row.get('startup_watchdog_policy')==STARTUP_POLICY else
+                    'Original simulator startup exceeded its unchanged deadline')
+            state=self.initializing_unit_state(unit)
+            if state is None:
+                time.sleep(4)
+                continue
             if state.get('Description')!=f"BEHAVIOR100 owned {row['run_id']}" or int(state['MainPID'])!=spec['simulator_pid']:
                 raise RuntimeError('Original simulator identity changed during initialization')
             h=self.health(port)
@@ -870,17 +1462,26 @@ class Batch:
                     raise RuntimeError('Original bridge tool catalog mismatch')
                 break
             self.update(row,heartbeat_at=now(),simulator_pid=spec['simulator_pid']);time.sleep(4)
-        else:raise TimeoutError('Original simulator startup exceeded its unchanged deadline')
         self.update(row,stage='controller_starting' if row.get('execution_clock_path') else 'policy_running',
                     bridge_ready_at=now(),simulator_pid=spec['simulator_pid'])
         remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
         cmd=[sys.executable,str(runtime/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
              '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
-             '--timeout',str(self.manifest['model_timeout_seconds']),'--agent-profile',self.manifest['agent_profile']]
+             '--timeout',str(self.manifest['model_timeout_seconds'] or 0),'--agent-profile',self.manifest['agent_profile'],
+             '--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+        if self.manifest.get('model_reasoning_effort'):
+            cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
+        if self.c.get('model_provider_profile'):
+            cmd += ['--model-provider-profile',self.c['model_provider_profile']]
+        if self.c.get('provider_transient_resumes'):
+            cmd += ['--rate-limit-resumes',str(self.c['provider_transient_resumes']),
+                    '--resume-backoff-seconds',str(self.c.get('provider_resume_backoff_seconds',90))]
+        if self.c.get('model_provider_gateway'):
+            cmd += ['--model-provider-gateway',self.c['model_provider_gateway']]
         if row.get('execution_clock_path'):
             cmd+=['--execution-clock-command-json',json.dumps(self.execution_clock_command(
-                row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime))]
+                row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime,row=row))]
         elif row.get('episode_deadline_unix'):cmd+=['--deadline-unix',str(row['episode_deadline_unix'])]
         with (self.root/'logs'/f"{row['run_id']}_controller.log").open('x') as log:
             process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT,
@@ -889,6 +1490,67 @@ class Batch:
         self.journal('READY adopted initialization '+row['run_id']+'; first model policy starts against the unchanged original simulator and source.')
         return process
 
+    def requeue_resource_rejection(self,row):
+        """Preserve the rejected attempt, then wait for admission again.
+
+        No episode exists when the in-unit check rejects startup. Archiving a
+        nonexistent directory used to turn this recoverable race into a final
+        task failure. Cleanup must be positively verified before another try.
+        """
+        unavailable=row.get('asset_preflight_unavailable') or {}
+        asset_timeout=(row.get('failure_stage')=='asset_preflight'
+            and unavailable.get('status')=='unavailable'
+            and unavailable.get('error_type')=='TimeoutExpired'
+            and unavailable.get('launch_requested') is False
+            and not any(row.get(k) is not None for k in
+                        ('simulator_started_at_unix','episode_started_at_unix','simulator_pid'))
+            and prepolicy_failure({**row,'status':'failed'},self.root/'controllers'/row['run_id']))
+        if asset_timeout:
+            failed=['asset_preflight_timeout']
+            reason='Read-only asset preflight timed out before any simulator launch request'
+            failure_kind='infrastructure_asset_preflight_unavailable'
+        else:
+            if (row.get('simulator_cleanup') or {}).get('status')!='passed':return False
+            check_path=self.root/'preflight'/f"{row['run_id']}_in_unit.json"
+            try:preflight=json.loads(check_path.read_text())
+            except (OSError,ValueError):return False
+            failed=startup_resource_rejection(row,self.root/'controllers'/row['run_id'],preflight)
+            if not failed:return False
+            # Preserve startup logs even though there is no simulator episode.
+            log=self.ssh(['journalctl','--user','-u',row['simulator_unit'],'--no-pager','-o','short-iso'],timeout=60)
+            (self.root/'logs'/f"{row['run_id']}_simulator.log").write_text(log.stdout+log.stderr)
+            reason='In-unit dynamic resource rejection before simulator/controller startup: '+', '.join(failed)
+            failure_kind='infrastructure_resource_admission'
+        identity_keys={'index','task','name','scene','instance','seed','split','instruction',
+            'instruction_sha256','instruction_source','bddl_sha256','asset_sha256',
+            'goal_predicates_offline_only','candidate_capabilities_offline_only',
+            'source_commit','source_tree','evaluation_revision','model_provider_profile',
+            'original_instruction','original_instruction_source','original_instruction_sha256',
+            'instruction_correction','task_instructions_changed','episode_budget_policy',
+            'max_agent_steps','custom_task_spec','custom_task_spec_sha256',
+            'custom_instance_id','custom_instance_sha256','instruction_language',
+            'catalog_task_spec','catalog_task_spec_sha256','catalog_instance_sha256'}
+        with self.lock:
+            old={**row,'status':'failed','task_success':None,'failure_kind':failure_kind,
+                 'resource_rejected_checks':failed,'archive_status':'not_applicable_before_simulator_start',
+                 'stage':'resource_admission_rejected','updated_at':now()}
+            write_json(self.root/'records'/f"{old['run_id']}.json",old)
+            previous=[*old.get('previous_attempts',[]),{k:v for k,v in old.items() if k!='previous_attempts'}]
+            runid=old['run_id'].rsplit('_r',1)[0]+'_r'+str(int(old.get('attempt',1))+1)
+            path=self.root/'infrastructure_retries.json'
+            selections=json.loads(path.read_text()) if path.exists() else {}
+            selections[str(row['index'])]={'run_id':runid,'previous_run_ids':[p['run_id'] for p in previous],
+                                          'reason':reason}
+            write_json(path,selections)
+            identity={k:v for k,v in row.items() if k in identity_keys}
+            row.clear();row.update(identity,run_id=runid,status='planned',stage='queued',
+                attempt=len(previous)+1,previous_attempts=previous,retry_kind='infrastructure',retry_reason=reason)
+            write_json(self.root/'records'/f'{runid}.json',row)
+            self.update(row)
+            self.queue.put(row)
+        self.journal('RESOURCE RETRY '+old['run_id']+' -> '+runid+'; '+reason)
+        return True
+
     def run(self,limit=None):
         self.publish()
         self.queue=queue.Queue()
@@ -896,10 +1558,19 @@ class Batch:
         selected=planned if limit is None else planned[:limit]
         required_rows=list(self.rows) if limit is None else [r for r in self.rows if r['status']!='planned' or r in selected]
         for row in selected:self.queue.put(row)
-        archived=[];archive_lock=threading.Lock()
+        archived=[];archive_lock=threading.Lock();active_assignments=set();host_cooldowns={}
         archive_slots=threading.BoundedSemaphore(self._config.get('max_pending_archives',4))
-        capacity=threading.BoundedSemaphore(self._config.get('max_active_workers',len(self.workers)))
+        inherited=[r for r in self.rows if
+            (r['status']=='running' or (r.get('simulator_cleanup') or {}).get('status')=='blocked') and
+            r['run_id'] in self._config.get('adopt_inflight',{}) and
+            not (r.get('execution_finished_at') and (r.get('simulator_cleanup') or {}).get('status')=='passed')]
+        capacity=ExecutionCapacity(self._config.get('max_active_workers',len(self.workers)),
+                                   [r['run_id'] for r in inherited])
         poll=self._config.get('resource_poll_seconds',30)
+        def work_pending():
+            # Keep other candidates alive while the last queued task is in
+            # preflight: it may need a different host after a transient failure.
+            with self.lock:return not self.queue.empty() or bool(active_assignments)
         def submit_archive(row,paths,config):
             if paths is None:return
             archive_slots.acquire()
@@ -909,17 +1580,23 @@ class Batch:
         def worker(config):
             self._worker_local.config=config;self._worker_local.defer_archive=True
             time.sleep(config.get('admission_delay_seconds',0))
-            inflight=[r for r in self.rows if (r['status']=='running' or (r.get('simulator_cleanup') or {}).get('status')=='blocked') and
-                self._config.get('adopt_inflight',{}).get(r['run_id'])==config['id'] and
-                not (r.get('execution_finished_at') and (r.get('simulator_cleanup') or {}).get('status')=='passed')]
-            while inflight or not self.queue.empty():
+            inflight=[r for r in inherited if self._config['adopt_inflight'][r['run_id']]==config['id']]
+            while inflight or work_pending():
                 adopting=inflight[0] if inflight else None
-                if not adopting and (self.root/'drain_requested.json').exists():
+                if not adopting and self.drain_requested():
                     self.worker_state('drained');return
-                if not capacity.acquire(blocking=False):
+                with self.lock:cooldown=host_cooldowns.get(config['ssh'][-1],0)
+                if not adopting and time.monotonic()<cooldown:
+                    self.worker_state('waiting_for_resources',reason='Recent asset preflight timeout on this host')
+                    time.sleep(poll);continue
+                if not adopting and getattr(self,'storage',None) and self.storage.status()['local_checkpoint_error']:
+                    self.worker_state('waiting_for_local_storage');time.sleep(poll);continue
+                capacity_key=adopting['run_id'] if adopting else config['id']
+                if not capacity.acquire(capacity_key,adopting=adopting is not None):
                     self.worker_state('waiting_for_capacity');time.sleep(poll);continue
                 lease=None;row=None;paths=None;cleared=True
                 try:
+                    if not adopting and not self.acquire_startup_gate():continue
                     lease=self.acquire_worker_lease(adopting=adopting)
                     if lease is None:continue
                     self._worker_local.lease=lease
@@ -927,9 +1604,12 @@ class Batch:
                         row=inflight.pop(0);cleared=False;paths=self.adopt_one(row)
                     else:
                         if not self.resource_admission():continue
-                        if (self.root/'drain_requested.json').exists():continue
-                        try:row=self.queue.get_nowait()
-                        except queue.Empty:return
+                        if self.drain_requested():continue
+                        with self.lock:
+                            if time.monotonic()<host_cooldowns.get(config['ssh'][-1],0):continue
+                            try:row=self.queue.get_nowait()
+                            except queue.Empty:continue
+                            active_assignments.add(config['id'])
                         cleared=False;paths=self.run_one(row,config['gpu'])
                     if (row.get('simulator_cleanup') or {}).get('status')=='blocked':
                         try:self.capture_result(row,Path(row['simulator_output']))
@@ -958,14 +1638,26 @@ class Batch:
                         if row is not None:self.update(row,lease_metadata_cleanup_error=f'{type(exc).__name__}: {exc}')
                         self.journal('LEASE METADATA CLEANUP '+config['id']+': '+str(exc))
                     finally:
-                        self._worker_local.lease=None;capacity.release()
+                        self._worker_local.lease=None;self.release_startup_gate()
+                        capacity.release(capacity_key,preserve=adopting is not None and adopting in inflight)
                     if row is None:time.sleep(poll)
                 # GPU and host capacity are free before any bulk copy or decode.
                 if row is not None:
-                    if cleared:self.worker_state('archive_pending')
-                    submit_archive(row,paths,config)
-                    if cleared:self.worker_state('available')
-                    time.sleep(self._config.get('worker_yield_seconds',1))
+                    try:
+                        unavailable=row.get('asset_preflight_unavailable')
+                        if cleared and unavailable:
+                            with self.lock:
+                                host_cooldowns[config['ssh'][-1]]=time.monotonic()+self._config.get('asset_preflight_retry_cooldown_seconds',60)
+                        if cleared and self.requeue_resource_rejection(row):
+                            self.worker_state('waiting_for_resources')
+                            time.sleep(poll)
+                            continue
+                        if cleared:self.worker_state('archive_pending')
+                        submit_archive(row,paths,config)
+                        if cleared:self.worker_state('available')
+                        time.sleep(self._config.get('worker_yield_seconds',1))
+                    finally:
+                        with self.lock:active_assignments.discard(config['id'])
             self.worker_state('idle')
         with ThreadPoolExecutor(max_workers=self._config.get('archive_workers',2)) as archive_pool:
             self._archive_pool=archive_pool
@@ -978,7 +1670,7 @@ class Batch:
                 for future in futures:
                     try:future.result()
                     except Exception as exc:self.journal('WORKER EXIT: '+str(exc))
-            if not self.queue.empty() and not (self.root/'drain_requested.json').exists() and all(
+            if not self.queue.empty() and not self.drain_requested() and all(
                     self.worker_states.get(w['id'],{}).get('stage')=='disabled' for w in self.workers):
                 raise RuntimeError('No usable worker: static admission failed; unstarted tasks remain planned')
             for future in archived:
@@ -986,7 +1678,7 @@ class Batch:
                 except Exception as exc:self.journal('ARCHIVE EXIT: '+str(exc))
         self._archive_pool=None
         self.publish()
-        require_completed_scope(required_rows,draining=(self.root/'drain_requested.json').exists())
+        require_completed_scope(required_rows,draining=self.drain_requested())
 
 
 def main():
@@ -995,15 +1687,24 @@ def main():
     with (root/'supervisor.lock').open('w') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         batch=Batch(config)
-        if a.publish_only:batch.publish()
-        elif a.bootstrap_first:
-            first=next(r for r in batch.rows if r['status']=='planned')
-            batch.run(1)
-            if first.get('evidence_alignment')!='passed' or first.get('video_validation')!='passed':
-                raise RuntimeError('First episode did not validate the real model/replay pipeline; remaining tasks stay planned')
-            batch.journal('Real model/replay pipeline passed; continuing all remaining planned tasks on the configured GPU slots.')
-            batch.run(a.limit)
-        else:batch.run(a.limit)
+        try:
+            if a.publish_only:batch.publish()
+            elif a.bootstrap_first:
+                first=next(r for r in batch.rows if r['status']=='planned')
+                batch.run(1)
+                if first.get('evidence_alignment')!='passed' or first.get('video_validation')!='passed':
+                    raise RuntimeError('First episode did not validate the real model/replay pipeline; remaining tasks stay planned')
+                batch.journal('Real model/replay pipeline passed; continuing all remaining planned tasks on the configured GPU slots.')
+                batch.run(a.limit)
+            else:batch.run(a.limit)
+        finally:
+            if not batch.storage.close(config.get('publication_flush_seconds',30)):
+                print('Supervisor metadata sync pending; durable local checkpoint: '+str(batch.storage.spool),file=sys.stderr)
+                # Restart-on-failure must retry the durable final checkpoint.
+                # A clean exit stranded completed tasks at the last published
+                # stage (often "archiving") after a final NAS write failed.
+                # Batch recovery retains terminal rows; it does not rerun them.
+                raise SystemExit(75)
 
 
 if __name__=='__main__':main()

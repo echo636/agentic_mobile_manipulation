@@ -1,15 +1,13 @@
 ---
 name: visual-exploration
-description: Search and revisit places using current RGB, bounded turns, visible navigation points and conversation history.
+description: Find objects, inspect storage and travel using visible landmarks and current RGB.
 ---
-# Visual exploration
+# Explore and travel
 
-Call start_observation({}) to queue a four-camera capture without waiting, then get_observation(job_id). Read relevant skills while capture runs. When passed, inspect front/back/left/right RGB; these are simultaneous fixed-camera views, not a robot turn or panorama sweep. All four share a capture timestamp and simulation step. No wrist images are available.
+Inspect all four current views; they already cover front, back, left and right. `look` turns the robot when a different physical orientation is useful. Reselect targets from the latest images after moving.
 
-Choose visible openings and target candidates from any of the four images. Only current refs are valid act targets. If a completed job is marked stale, request a new capture; previous images remain historical evidence. look(yaw_degrees, revision) still turns the robot explicitly when a new physical orientation is useful, but it is not needed merely to collect surround RGB.
+For `navigate_to`, a visible floor pixel requests that floor location, with bounded projection if occupied and no viewing standoff. An elevated object pixel requests a nearby approach position. Select floor beyond a visible opening for travel through it. A point near your feet may produce no movement; a point beside a small object can put it below the cameras. The executor follows the pixel, not a named destination.
 
-For movement use act(navigate_to, target={image_ref, point:[x,y]}, revision). Mark an object surface or visible floor beyond an opening. The executor follows only that pixel; it will not find a named room or object. A floor point near your feet may produce no movement; select a clearly farther visible surface. Do not try to act through a wall or remember an expired pixel.
+Break travel into visible stages. Record useful return landmarks, inspected places and unchecked openings in your notes. Stop navigating when the intended manipulation target becomes selectable. If a route fails, inspect the new views and choose a materially different approach.
 
-Use your conversation history to keep track of which opening was inspected, which remains unexplored, what a return landmark looks like, and why a direction is useful. No explicit memory or recall tool is required. Prior observations do not give you simulator coordinates or a global map. On return, identify the landmark again in RGB.
-
-Approach in short visible stages. Inspect each new view before another hop. If blocked, change the visual approach or viewpoint rather than repeating the same point. A room guess or empty image does not prove the entire scene has been searched.
+When expected items remain unaccounted for, revisit their last known source and places affected by handling before widening the search. A container's rim or upper interior does not reveal its bottom: change viewpoint or stage it on a stable support to expose the interior. Keep occluded contents uncertain; a partial view does not erase the last observed inventory. Then inspect other plausible storage and record unchecked areas. Opening storage requires an empty hand: stage and later retrieve held tools. Repeated views of the same area do not establish complete coverage.

@@ -1,0 +1,205 @@
+"""Historical GT regressions and current RGB boundary, not simulator acceptance."""
+import copy
+import hashlib
+import json
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace, ModuleType
+import unittest
+from unittest.mock import Mock, patch
+
+import numpy as np
+
+from manipulation_agent.contracts import SkillError
+from manipulation_agent.runtime.deadline import EpisodeDeadline
+from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
+from manipulation_agent.observations.rig import DIRECTIONS
+from manipulation_agent.records import Recorder
+from manipulation_agent.runtime.vision_harness import VisionHarness
+
+
+class Tensor:
+    """Only the tensor operations used by capture and GT map conversion."""
+    def __init__(self, value): self.value = np.asarray(value)
+    def clone(self): return Tensor(self.value.copy())
+    def detach(self): return self
+    def cpu(self): return self
+    def numpy(self): return self.value
+    def tolist(self): return self.value.tolist()
+    def __getitem__(self, key):
+        value = self.value[key]
+        return value.item() if np.ndim(value) == 0 else Tensor(value)
+
+
+class GTBackendTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.output = Path(folder.name)/'episode'
+
+    def backend(self, *, blocked=False):
+        self.output.mkdir(exist_ok=True)
+        b = RGBBackend.__new__(RGBBackend)
+        b.output = self.output
+        b.steps = b.capture_index = 0
+        b.navigation_distance = 0.
+        b.deadline = EpisodeDeadline()
+        b.ideal_carry = True
+        b.record_video = False
+        b.video = None
+        b.video_render_stride, b.video_render_flushes = 2, 4
+        b.image_size, b.rgb_jpeg_quality, b.rig_radius, b.rig_height = 8, 92, .35, 1.8
+        b.rig_pitch_degrees = 35.
+        b.image_files, b.current_frames = {}, {}
+        b._position = Tensor([-1., 0., 0.])
+        b._orientation = Tensor([0., 0., 0., 1.])
+        b.robot = SimpleNamespace(
+            get_position_orientation=lambda: (b._position, b._orientation),
+            get_joint_positions=lambda: Tensor([0., 0.]), sensors={})
+        b.torch = SimpleNamespace(equal=lambda x, y: np.array_equal(x.value, y.value))
+        b.og = SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda: 1/30))
+        occupancy = np.full((60, 60), 255, dtype=np.uint8)
+        occupancy[:, 30] = 0
+        if not blocked:
+            occupancy[35:41, 30] = 255  # Route must go through this doorway.
+        trav = SimpleNamespace(floor_heights=[0.], map_resolution=.1,
+                               floor_map=[Tensor(occupancy)], _erode_trav_map=lambda x: x)
+        b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav))
+        # Exercise the historical planner without importing/constructing Isaac
+        # Sim. Its live substrate is covered by test_live_gt_map separately.
+        from manipulation_agent.executors.navigation.gt_navigation import GridMap, NavigationError
+        grid = GridMap(60, 60, .1, (-3., -3.), (occupancy > 0).astype('uint8').tobytes())
+        b._navigation_clearance = (grid.free, np.zeros_like(occupancy), .35)
+        b._navigation_layers = [(occupancy > 0, np.zeros((4,2)))]
+        b._navigation_support = np.ones_like(occupancy)
+        modules = {name: ModuleType(name) for name in
+                   ('omnigibson', 'omnigibson.utils', 'omnigibson.utils.transform_utils')}
+        modules['omnigibson'].utils = modules['omnigibson.utils']
+        modules['omnigibson.utils'].transform_utils = modules['omnigibson.utils.transform_utils']
+        modules['omnigibson.utils.transform_utils'].quat2mat = lambda _: np.eye(3)
+        def select_route(options,*args,**kwargs):
+            from manipulation_agent.executors.navigation.forward_navigation import ForwardRoute
+            plan=min(options,key=lambda p:p.score)
+            return plan,ForwardRoute((plan,),plan.geodesic_m,0,'fixture'),{'fixture':True}
+        patches = [patch.dict('sys.modules', modules),
+                   patch('manipulation_agent.executors.navigation.heading_collision.HeadingCollisionChecker',
+                         return_value=SimpleNamespace(motion_free=lambda a,b:True,grid_at_heading=lambda yaw:grid)),
+                   patch('manipulation_agent.executors.navigation.forward_navigation.select_forward_route',
+                         side_effect=select_route),
+                   patch('manipulation_agent.executors.navigation.live_gt_map.build_navigation_grid', return_value=(grid,
+                       {'chassis_footprint_world_offsets': [], 'collision_layers': [],
+                        'dynamic_collision_check': False, 'collision_substrate': 'static_fixture'})),
+                   patch('manipulation_agent.executors.navigation.live_gt_map.feasible_heading_grids', return_value=[]),
+                   patch('manipulation_agent.executors.navigation.live_gt_map.rotation_staging_plan',
+                         side_effect=NavigationError('No fixture staging'))]
+        for mocked in patches:
+            mocked.start()
+            self.addCleanup(mocked.stop)
+        b._navigation_self_hulls = lambda: ((), {'hulls_prepared': 0})
+        b._approach_visible = lambda xy, point, selected, **kwargs: xy[0] >= .5
+        b._ground = Mock(return_value=(None, Tensor([1., 0., 0.]),
+                                       {'object': 'PRIVATE_OBJECT', 'world_point': [1., 0., 0.]}))
+        b.rig = {v: SimpleNamespace(name='camera_'+v,
+                 get_position_orientation=lambda: (b._position, b._orientation)) for v in DIRECTIONS}
+        b._sensor_intrinsics = {v: Tensor([[4., 0., 4.], [0., 4., 4.], [0., 0., 1.]]) for v in DIRECTIONS}
+        b._sensor_packets = {v: ({'depth_linear': Tensor(np.ones((8, 8)))}, {}) for v in DIRECTIONS}
+        b._render_rgb_views = Mock(side_effect=lambda **_: {
+            v: np.full((8, 8, 3), b.steps*10+i, dtype=np.uint8) for i, v in enumerate(DIRECTIONS)})
+        b._video_frame = Mock()
+        def execute(grid, plan, max_steps, **kwargs):
+            self.assertTrue(all(grid.segment_free(a, c) for a, c in zip(plan.points, plan.points[1:])))
+            b._position = Tensor([*plan.goal, 0.])
+            b.steps += 3
+            return {'actual_path_distance_m': plan.geodesic_m, 'nav_status': 'reached', 'steps': 3, 'motion_steps': 3}
+        b._execute_gt_plan = Mock(side_effect=execute)
+        def turn(degrees, max_steps):
+            b.steps += 1
+            return {'steps': 1}
+        b._turn = turn
+        return b
+
+    def test_default_scene_config_and_cleanup_use_base_adapter(self):
+        b = self.backend()
+        original = {'scene': {'type': 'InteractiveTraversableScene', 'scene_model': 'fixture'}}
+        with patch.object(OmniGibsonBackend, '_config', return_value=copy.deepcopy(original)):
+            self.assertEqual(b._config('fixture', 0, 100), original)
+        with patch.object(OmniGibsonBackend, 'close') as close:
+            b.close()
+            close.assert_called_once_with()
+
+    def test_static_grid_plans_through_doorway_and_records_private_provenance(self):
+        b = self.backend()
+        target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 1.]), None))
+        result = b._navigate(target, 700)
+        grid, plan, limit = b._execute_gt_plan.call_args.args
+        self.assertFalse(grid.segment_free((-1., 0.), plan.goal))
+        self.assertGreater(plan.geodesic_m, 1.5)
+        self.assertEqual(limit, 700)
+        self.assertEqual(result['strategy'], 'visual_point_connected_projection_gt_grid_v3')
+        self.assertFalse(result['dynamic_collision_check'])
+        record = json.loads((self.output/'navigation_plans.jsonl').read_text())
+        self.assertEqual(record['audience'], 'executor_private')
+        self.assertEqual(record['collision_substrate'], 'static_fixture')
+        self.assertTrue(record['precomputed_walkability'])
+        self.assertFalse(record['online_mapping'])
+
+    def test_only_manipulation_approach_checks_visibility(self):
+        b=self.backend()
+        target=SimpleNamespace(get_position_orientation=lambda:(Tensor([1.,0.,1.]),None))
+        seen=[]
+        b._approach_visible=lambda xy,point,selected,**kw:(seen.append(xy) or xy[0]>=.5)
+        b._navigate(target,700)
+        self.assertFalse(seen)
+        seen.clear()
+        b._navigate(target,700,for_manipulation=True)
+        self.assertTrue(seen)
+
+    def test_disconnected_static_grid_fails_before_any_actuator(self):
+        b = self.backend(blocked=True)
+        target = SimpleNamespace(get_position_orientation=lambda: (Tensor([1., 0., 1.]), None))
+        with self.assertRaises(SkillError) as error:
+            b._navigate(target, 700, for_manipulation=True)
+        self.assertEqual(error.exception.code, 'navigation_search_exhausted')
+        b._execute_gt_plan.assert_not_called()
+        self.assertEqual(b.steps, 0)
+
+    def test_default_gt_action_keeps_initialize_four_rgb_and_private_boundary(self):
+        recorder = Recorder(self.output, {'backend': 'cpu_gt_fixture', 'observation_mode': 'rgb_only'})
+        b = self.backend()
+        with patch.object(OmniGibsonBackend, 'provenance', return_value={}):
+            h = VisionHarness(b, recorder)
+        self.assertTrue(recorder.run['backend']['navigation']['precomputed_walkability'])
+        self.assertFalse(recorder.run['backend']['navigation']['model_visible_gt'])
+        initial = h.call('initialize', {}, 'initial')
+        self.assertTrue(initial['initialized'])
+        self.assertEqual(b._render_rgb_views.call_count, 1)
+        self.assertEqual(initial['observation']['capture']['capture_id'], 'capture-00001')
+        self.assertEqual(set(h.catalog), {'initialize', 'look', 'act', 'finish', 'list_skills', 'read_skill', 'task_notes'})
+        first_image = initial['observation']['images'][1]
+        target = {'image_ref': first_image['image_ref'], 'point': [.5, .5]}
+        action = h.call('act', {'primitive': 'navigate_to', 'target': target, 'revision': 0}, 'navigate')
+        self.assertTrue(action['ok'], action)
+        b._ground.assert_called_once_with(target, require_object=False, reject_particles=False)
+        looked = h.call('look', {'yaw_degrees': 45, 'revision': 1}, 'look')
+        self.assertTrue(looked['ok'], looked)
+        for result, revision in [(initial, 0), (action, 1), (looked, 2)]:
+            observation = result['observation']
+            self.assertEqual(observation['revision'], revision)
+            self.assertEqual([x['view'] for x in observation['images']], list(DIRECTIONS))
+            self.assertEqual(observation['capture']['capture_id'], f'capture-{revision+1:05d}')
+            for frame in observation['images']:
+                data, _ = h.image_bytes(frame['image_ref'])
+                self.assertEqual(hashlib.sha256(data).hexdigest(), frame['sha256'])
+            public = json.dumps(result)
+            for private in ['PRIVATE_OBJECT', 'world_point', 'static_eroded_grid', 'planned_path_distance_m', 'depth_linear']:
+                self.assertNotIn(private, public)
+        self.assertEqual(b._render_rgb_views.call_count, 3)
+        self.assertEqual(len(h.surround.jobs), 0)
+        audits = [json.loads(line) for line in (self.output/'observation_capture_audit.jsonl').read_text().splitlines()]
+        self.assertTrue(all(row['no_robot_motion'] for row in audits))
+        self.assertEqual(len(list((self.output/'executor_frames').glob('*.npz'))), 12)
+
+
+if __name__ == '__main__':
+    unittest.main()

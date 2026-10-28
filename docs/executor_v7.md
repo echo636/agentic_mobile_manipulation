@@ -1,5 +1,10 @@
 # Executor v7 candidate — validation in progress
 
+Historical iteration notes below. Current target grounding uses direct depth
+backprojection without the former mesh/depth agreement gate; navigation skips
+object lookup, while manipulation uses a separate first-hit visual ray for object
+identity. See the [current RGB protocol](rgb_protocol.md).
+
 This iteration is a research motor protocol behind the unchanged RGB-only model boundary. Candidate implementation and CPU tests do not establish simulator stability or benchmark success. The previous 32-task result (2/32) remains frozen; operations/executor_retest_20261001 records each subsequent environment probe, component attempt and matched retest.
 
 ## Candidate changes

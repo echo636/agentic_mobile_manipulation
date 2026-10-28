@@ -131,6 +131,7 @@ class RenderTests(unittest.TestCase):
         pixels={view:object() for view in ['front','back','left','right','spectator']}
         b._video_frame('observation_boundary',rendered=pixels)
         args,kwargs=b.video.append.call_args
+        self.assertTrue(callable(kwargs.pop('check_active')))
         self.assertIs(args[0],pixels);self.assertEqual(kwargs,{'capture_env_step':7,'repeated':False})
 
     def test_video_flush_option_does_not_reduce_observation_barrier(self):
@@ -145,7 +146,7 @@ class RenderTests(unittest.TestCase):
 
     def test_real_encoder_preserves_hold_hashes_and_new_frames(self):
         import numpy as np
-        from manipulation_agent.video import EpisodeVideo
+        from manipulation_agent.reporting.video import EpisodeVideo
         with tempfile.TemporaryDirectory() as d:
             out=Path(d);views=('front','back','left','right','spectator')
             v=EpisodeVideo(out,30,size=32,views=views)

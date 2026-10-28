@@ -1,0 +1,134 @@
+/* Render only explicit model-authored notes, at their original point in the replay. */
+window.renderTaskNotes = function(root, notes, options = {}) {
+  root.replaceChildren();
+  root.hidden = !notes?.content;
+  if (root.hidden) return;
+  const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cls)e.className=cls;return e;};
+  const list=value=>Array.isArray(value)?value:[];
+  const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+  const text=value=>typeof value==='string'?value:JSON.stringify(value);
+  root.classList.add('goal-notes');
+  root.dataset.version=String(notes.version??'');
+  root.setAttribute('aria-label','目标与当前计划');
+  const when=notes.agent_step===0?'行动前':`step ${notes.agent_step??'?'} 后`;
+  root.append(node('div',`目标 · v${notes.version??'?'} · ${when} · 状态由模型记录`,'goal-caption'));
+  let state;
+  try{state=JSON.parse(notes.content);}catch{state=null;}
+  const v2=state?.format==='goal-tree-v2'&&typeof state.root_id==='string'&&Array.isArray(state.goals)&&state.goals.every(object);
+  const v1=state?.format==='goal-tree-v1'&&object(state.L1)&&Array.isArray(state.L2)&&state.L2.every(object);
+  if(!v1&&!v2){root.append(node('pre',notes.content,'goal-plain'));return;}
+  const goals=v2?state.goals:state.L2;
+  const byId=new Map(goals.map(g=>[g.id,g]));
+  const childrenById=new Map();
+  let rootGoal=v2?byId.get(state.root_id):state.L1;
+  if(v2){
+    let invalid=byId.size!==goals.length||goals.some(g=>typeof g.id!=='string'||!g.id)||!rootGoal||rootGoal.parent_id!==null;
+    for(const g of goals){
+      if(g.id===state.root_id)continue;
+      if(!byId.has(g.parent_id)){invalid=true;continue;}
+      if(!childrenById.has(g.parent_id))childrenById.set(g.parent_id,[]);
+      childrenById.get(g.parent_id).push(g);
+    }
+    // Iterative traversal also handles deep authored trees without recursive calls.
+    const seen=new Set(),pending=rootGoal?[rootGoal]:[];
+    while(pending.length){
+      const g=pending.pop();
+      if(seen.has(g.id)){invalid=true;break;}
+      seen.add(g.id);pending.push(...(childrenById.get(g.id)??[]));
+    }
+    if(invalid||seen.size!==goals.length){
+      root.append(node('p','目标树存在重复 ID、缺失父节点或循环关系；保留原文，未推断层级。','goal-warning'),node('pre',notes.content,'goal-plain'));
+      return;
+    }
+  }
+  const labels={pending:'待做',active:'进行中',done:'已完成',blocked:'受阻',retired:'已撤销'};
+  const activeId=v2?state.active?.goal_id:state.active?.subgoal_id;
+  const tree=node('div',null,'goal-inline-tree');tree.setAttribute('aria-label','总目标与子目标');
+  const renderGoal=(g,isRoot)=>{
+    const status=Object.hasOwn(labels,g.status)?g.status:'unknown';
+    const item=node(isRoot?'div':'li',null,(isRoot?'goal-root-node':'goal-child')+' goal-'+status);
+    if(v2||!isRoot)item.dataset.goalId=String(g.id??'');
+    const current=(v2||!isRoot)&&g.id===activeId;
+    if(current)item.classList.add('goal-current');
+    if(isRoot)item.append(node('span','总目标','goal-level-label'));
+    const head=node('div',null,'goal-child-head');
+    if(v2||!isRoot)head.append(node('span',g.id??'','goal-id'));
+    head.append(node('strong',text(g.goal??g.instruction??''),isRoot?'goal-root':'goal-child-title'));
+    if(v2||!isRoot)head.append(node('span',labels[status]??'未记录状态','goal-state-pill goal-state-'+status));
+    if(current)head.append(node('span','当前','goal-focus-tag'));
+    item.append(head);
+    const deps=list(g.depends_on);
+    if(deps.length){
+      const dependency=node('p','前置：'+deps.map(text).join('、'),'goal-dependencies');
+      dependency.title=deps.map(id=>`${id} · ${text(byId.get(id)?.goal??'未记录的目标')}`).join('；');item.append(dependency);
+    }
+    if(g.check||list(g.evidence).length||list(g.covers).length){
+      const detail=node('details',null,'goal-support');detail.append(node('summary','完成依据'));
+      if(list(g.covers).length)detail.append(node('p','覆盖要求：'+g.covers.map(text).join('、')));
+      if(g.check)detail.append(node('p',text(g.check)));
+      for(const evidence of list(g.evidence))detail.append(node('p',text(evidence)));
+      item.append(detail);
+    }
+    return item;
+  };
+  tree.append(renderGoal(rootGoal,true));
+  const children=node('ul',null,'goal-children');
+  tree.append(children);
+  const pending=[{goals:v2?(childrenById.get(state.root_id)??[]):goals,container:children,depth:1}];
+  while(pending.length){
+    const branch=pending.pop();
+    for(const g of branch.goals){
+      const child=renderGoal(g,false);child.dataset.depth=String(branch.depth);
+      branch.container.append(child);
+      const descendants=v2?childrenById.get(g.id):null;
+      if(descendants?.length){
+        const nested=node('ul',null,'goal-children');child.append(nested);
+        pending.push({goals:descendants,container:nested,depth:branch.depth+1});
+      }
+    }
+  }
+  if(!children.childElementCount)children.append(node('li','尚未记录子目标','goal-empty'));
+  root.append(tree);
+  const requirements=v2?state.requirements:state.L1.criteria;
+  if(list(requirements).length){
+    const detail=node('details',null,'goal-support goal-requirements');detail.append(node('summary','要求与约束'));
+    for(const requirement of requirements)detail.append(node('p',text(requirement)));
+    root.append(detail);
+  }
+  const active=state.active;
+  if(active&&(list(active.steps).length||active.next_check)){
+    const local=node('details',null,'goal-local');local.open=!options.compact;
+    local.append(node('summary',`当前步骤${activeId?' · '+text(activeId):''}`));
+    if(list(active.steps).length){const steps=node('ol');for(const s of active.steps)steps.append(node('li',text(s)));local.append(steps);}
+    if(active.next_check)local.append(node('p','下一检查：'+text(active.next_check)));
+    root.append(local);
+  }
+  if(state.change)root.append(node('p','更新：'+text(state.change),'goal-change'));
+  const raw=node('details',null,'goal-raw');raw.append(node('summary','笔记原文'),node('pre',notes.content));root.append(raw);
+};
+
+/* Independent evidence is shown only in archived review, never policy input. */
+window.renderGoalEvidence = function(root, evaluation, envStep) {
+  root.replaceChildren();
+  root.hidden=!['custom_joint_terminal_and_public_history_v1','custom_joint_terminal_and_public_history_v2'].includes(evaluation?.score_type);
+  if(root.hidden)return;
+  root.classList.add('goal-notes');
+  const node=(tag,text)=>{const e=document.createElement(tag);if(text!=null)e.textContent=String(text);return e;};
+  const terminal={};
+  for(const event of evaluation.goal_events??[]){
+    if(event.kind==='terminal_state'&&event.env_step<=envStep)terminal[event.id]=event.satisfied;
+  }
+  const done=Object.values(terminal).filter(Boolean).length;
+  const total=Object.keys(evaluation.terminal_conditions??{}).length;
+  root.append(node('strong',`独立验证 · 当前终态条件 ${done}/${total} · 仅供回放，未提供给模型`));
+  const details=node('details'),list=node('ul');
+  details.append(node('summary','历史条件与过程中违反的约束'));
+  for(const id of Object.keys(evaluation.historical_conditions??{})){
+    const event=evaluation.milestone_events?.[id];
+    list.append(node('li',`${event&&event.env_step<=envStep?'已达成':'尚未达成'} · ${id}`));
+  }
+  for(const event of evaluation.public_constraint_violations??[]){
+    if(event.env_step<=envStep)list.append(node('li',`约束违反 · ${event.id} · 仿真步 ${event.env_step}`));
+  }
+  details.append(list);root.append(details);
+};

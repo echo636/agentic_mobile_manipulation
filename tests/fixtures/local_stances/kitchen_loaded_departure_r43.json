@@ -1,0 +1,8 @@
+{
+  "source_run": "long_horizon_full_v2_20261022/kitchen_order_2_r43",
+  "source_artifact": "navigation_grids/0013.npz",
+  "scope": "Cropped unchanged collision layers, support and rigid payload footprint; no simulator state or images",
+  "failure": "Three full navigation searches exhausted after the first refrigerator extraction; a holonomic guide took a corner the loaded robot could not turn",
+  "expected": "Keep the measured start and original visibility-admitted goal; retain the certified forward departure and find the other aisle with full swept collision checks",
+  "sha256": "1b16ed1721390778a1116bb05d3baa18c264358418b6ab978bc0f6e871353f50"
+}

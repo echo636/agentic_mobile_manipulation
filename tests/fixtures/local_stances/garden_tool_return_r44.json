@@ -1,0 +1,6 @@
+{
+  "source_run": "long_horizon_full_v2_20261022/garden_order_2_r44",
+  "artifact": "local_grids/0009.npz",
+  "scope": "Cropped unchanged collision geometry and payload footprint before wipe leg2. Two candidate visibility results were recorded by the original simulator; this fixture is not a complete task pass.",
+  "sha256": "c472c8e5b70debfc39833d87ff6b947070029c6ea31e1db6fb49faf842ad886b"
+}

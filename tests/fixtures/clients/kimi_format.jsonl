@@ -1,0 +1,4 @@
+{"role":"assistant","content":[{"type":"text","text":"I will inspect the scene."}],"tool_calls":[{"type":"function","id":"call-1","function":{"name":"mcp__manipulation__observe","arguments":"{}"}}]}
+{"role":"tool","tool_call_id":"call-1","content":[{"type":"text","text":"{\"ok\":true,\"observation\":{\"revision\":0},\"evidence_id\":\"obs-result\"}"},{"type":"image","data":"RklYVFVSRQ==","mimeType":"image/png"}]}
+{"role":"assistant","content":"I have completed the task.","tool_calls":[{"type":"function","id":"call-2","function":{"name":"mcp__manipulation__finish","arguments":"{}"}}]}
+{"role":"tool","tool_call_id":"call-2","content":"{\"ok\":true,\"closed\":true}"}

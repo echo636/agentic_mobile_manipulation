@@ -1,0 +1,2962 @@
+{
+  "schema_version": 3,
+  "id": "garage_cut_sort_store_113_v1",
+  "instance_id": "garage_cut_sort_store_113_v1_seed0_r5",
+  "status": "candidate_physics_unvalidated",
+  "official_submission_eligible": false,
+  "benchmark_ready": false,
+  "base": {
+    "task": "chopping_wood",
+    "instance": 301,
+    "seed": 0
+  },
+  "roles": {
+    "floor": "floors_irvmpb_0",
+    "background_log0": "log_174",
+    "background_log1": "log_175",
+    "background_log2": "log_176",
+    "background_log3": "log_177",
+    "background_axe": "axe_173",
+    "background_block": "chopping_block_172",
+    "source": "lh_source",
+    "destination": "lh_destination",
+    "tool_home": "lh_tool_home",
+    "block_base": "lh_block_base",
+    "block": "lh_block",
+    "tool": "lh_tool",
+    "broom": "lh_broom",
+    "sweep_floor": "floors_nbxnpk_0",
+    "log00": "lh_log00",
+    "log00_half0": "half_lh_log00_0",
+    "log00_half1": "half_lh_log00_1",
+    "log01": "lh_log01",
+    "log01_half0": "half_lh_log01_0",
+    "log01_half1": "half_lh_log01_1",
+    "log02": "lh_log02",
+    "log02_half0": "half_lh_log02_0",
+    "log02_half1": "half_lh_log02_1",
+    "log03": "lh_log03",
+    "log03_half0": "half_lh_log03_0",
+    "log03_half1": "half_lh_log03_1",
+    "log04": "lh_log04",
+    "log04_half0": "half_lh_log04_0",
+    "log04_half1": "half_lh_log04_1",
+    "log05": "lh_log05",
+    "log05_half0": "half_lh_log05_0",
+    "log05_half1": "half_lh_log05_1",
+    "log06": "lh_log06",
+    "log06_half0": "half_lh_log06_0",
+    "log06_half1": "half_lh_log06_1",
+    "log07": "lh_log07",
+    "log07_half0": "half_lh_log07_0",
+    "log07_half1": "half_lh_log07_1",
+    "log08": "lh_log08",
+    "log08_half0": "half_lh_log08_0",
+    "log08_half1": "half_lh_log08_1",
+    "log09": "lh_log09",
+    "log09_half0": "half_lh_log09_0",
+    "log09_half1": "half_lh_log09_1",
+    "log10": "lh_log10",
+    "log10_half0": "half_lh_log10_0",
+    "log10_half1": "half_lh_log10_1",
+    "log11": "lh_log11",
+    "log11_half0": "half_lh_log11_0",
+    "log11_half1": "half_lh_log11_1",
+    "log12": "lh_log12",
+    "log12_half0": "half_lh_log12_0",
+    "log12_half1": "half_lh_log12_1",
+    "log13": "lh_log13",
+    "log13_half0": "half_lh_log13_0",
+    "log13_half1": "half_lh_log13_1",
+    "log14": "lh_log14",
+    "log14_half0": "half_lh_log14_0",
+    "log14_half1": "half_lh_log14_1",
+    "log15": "lh_log15",
+    "log15_half0": "half_lh_log15_0",
+    "log15_half1": "half_lh_log15_1"
+  },
+  "asset_imports": [
+    {
+      "name": "lh_block",
+      "source_task": "chopping_wood",
+      "source_object": "chopping_block_172",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -9.0,
+        3.8,
+        0.13
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_tool",
+      "source_task": "chopping_wood",
+      "source_object": "axe_173",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -8.1,
+        4.65,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_broom",
+      "source_task": "sweeping_garage",
+      "source_object": "broom_60",
+      "source_sha256": "9f83c2c95b9c8d9cce3016e44104025c4dcbf12fc989478e8e0d70c5b2389fe9",
+      "position": [
+        -8.1,
+        5.25,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log00",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -12.700000000000001,
+        2.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log01",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -12.100000000000001,
+        2.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log02",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -11.5,
+        2.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log03",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -10.9,
+        2.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log04",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -12.700000000000001,
+        3.04,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log05",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -12.100000000000001,
+        3.04,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log06",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -11.5,
+        3.04,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log07",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -10.9,
+        3.04,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log08",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -12.700000000000001,
+        3.3600000000000003,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log09",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -12.100000000000001,
+        3.3600000000000003,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log10",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -11.5,
+        3.3600000000000003,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log11",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -10.9,
+        3.3600000000000003,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log12",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -12.700000000000001,
+        3.68,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log13",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -12.100000000000001,
+        3.68,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log14",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -11.5,
+        3.68,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_log15",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        -10.9,
+        3.68,
+        0.85
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "lh_source",
+      "position": [
+        -11.8,
+        3.2,
+        0.1
+      ],
+      "size": [
+        2.8,
+        1.4,
+        0.2
+      ],
+      "rgba": [
+        0.12,
+        0.32,
+        0.85,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_destination",
+      "position": [
+        -14.7,
+        4.7,
+        0.1
+      ],
+      "size": [
+        2.8,
+        1.3,
+        0.2
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_tool_home",
+      "position": [
+        -8.1,
+        5.05,
+        0.125
+      ],
+      "size": [
+        1.8,
+        1.5,
+        0.25
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_block_base",
+      "position": [
+        -9.0,
+        3.8,
+        0.04
+      ],
+      "size": [
+        0.55,
+        0.55,
+        0.08
+      ],
+      "rgba": [
+        0.95,
+        0.65,
+        0.08,
+        1.0
+      ],
+      "fixed_base": true
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "background_log0",
+      "position": [
+        -15.8,
+        2.4,
+        0.25
+      ],
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "background_log1",
+      "position": [
+        -15.8,
+        2.9,
+        0.25
+      ],
+      "orientation": [
+        0.03960626944899559,
+        -0.027805689722299576,
+        -0.5699037313461304,
+        0.8202852606773376
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "background_log2",
+      "position": [
+        -15.3,
+        2.4,
+        0.25
+      ],
+      "orientation": [
+        0.022789163514971733,
+        0.04268684983253479,
+        0.8834226131439209,
+        0.46607208251953125
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "background_log3",
+      "position": [
+        -15.3,
+        2.9,
+        0.25
+      ],
+      "orientation": [
+        -0.018181612715125084,
+        0.044833216816186905,
+        0.9237499237060547,
+        -0.3799284100532532
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "background_axe",
+      "position": [
+        -14.7,
+        2.1,
+        0.15
+      ],
+      "orientation": [
+        -0.0003442186862230301,
+        0.0008590972283855081,
+        0.9993802905082703,
+        -0.03519413620233536
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "background_block",
+      "position": [
+        -10.0,
+        4.5,
+        0.12
+      ],
+      "orientation": [
+        5.6386576034128666e-05,
+        5.213254553382285e-05,
+        0.9803332090377808,
+        -0.1973504275083542
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "tool",
+      "target": "tool_home",
+      "place_on_support": true,
+      "xy": [
+        -8.1,
+        4.65
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0003442186862230301,
+        0.0008590972283855081,
+        0.9993802905082703,
+        -0.03519413620233536
+      ]
+    },
+    {
+      "object": "broom",
+      "target": "tool_home",
+      "place_on_support": true,
+      "xy": [
+        -8.1,
+        5.25
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0007591545581817627,
+        0.0018248932901769876,
+        0.9844847917556763,
+        -0.17545926570892334
+      ]
+    },
+    {
+      "object": "sweep_floor",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "sweep_floor",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "sand"
+    },
+    {
+      "object": "log00",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -12.700000000000001,
+        2.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log01",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -12.100000000000001,
+        2.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log02",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -11.5,
+        2.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log03",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -10.9,
+        2.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log04",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -12.700000000000001,
+        3.04
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log05",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -12.100000000000001,
+        3.04
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log06",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -11.5,
+        3.04
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log07",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -10.9,
+        3.04
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log08",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -12.700000000000001,
+        3.3600000000000003
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log09",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -12.100000000000001,
+        3.3600000000000003
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log10",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -11.5,
+        3.3600000000000003
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log11",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -10.9,
+        3.3600000000000003
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log12",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -12.700000000000001,
+        3.68
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log13",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -12.100000000000001,
+        3.68
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log14",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -11.5,
+        3.68
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    },
+    {
+      "object": "log15",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -10.9,
+        3.68
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.011385337449610233,
+        0.047022853046655655,
+        0.9719247817993164,
+        0.2302643209695816
+      ]
+    }
+  ],
+  "initial_assertions": {
+    "tool_starts_on_tool_home": "tool_on_tool_home",
+    "broom_starts_on_tool_home": "broom_on_tool_home",
+    "sweep_floor_Covered_dust": "sweep_floor_Covered_dust",
+    "sweep_floor_Covered_sand": "sweep_floor_Covered_sand",
+    "log00_starts_on_source": "log00_on_source",
+    "log00_real": "log00_exists",
+    "log00_half0_future": {
+      "not": "log00_half0_exists"
+    },
+    "log00_half1_future": {
+      "not": "log00_half1_exists"
+    },
+    "log01_starts_on_source": "log01_on_source",
+    "log01_real": "log01_exists",
+    "log01_half0_future": {
+      "not": "log01_half0_exists"
+    },
+    "log01_half1_future": {
+      "not": "log01_half1_exists"
+    },
+    "log02_starts_on_source": "log02_on_source",
+    "log02_real": "log02_exists",
+    "log02_half0_future": {
+      "not": "log02_half0_exists"
+    },
+    "log02_half1_future": {
+      "not": "log02_half1_exists"
+    },
+    "log03_starts_on_source": "log03_on_source",
+    "log03_real": "log03_exists",
+    "log03_half0_future": {
+      "not": "log03_half0_exists"
+    },
+    "log03_half1_future": {
+      "not": "log03_half1_exists"
+    },
+    "log04_starts_on_source": "log04_on_source",
+    "log04_real": "log04_exists",
+    "log04_half0_future": {
+      "not": "log04_half0_exists"
+    },
+    "log04_half1_future": {
+      "not": "log04_half1_exists"
+    },
+    "log05_starts_on_source": "log05_on_source",
+    "log05_real": "log05_exists",
+    "log05_half0_future": {
+      "not": "log05_half0_exists"
+    },
+    "log05_half1_future": {
+      "not": "log05_half1_exists"
+    },
+    "log06_starts_on_source": "log06_on_source",
+    "log06_real": "log06_exists",
+    "log06_half0_future": {
+      "not": "log06_half0_exists"
+    },
+    "log06_half1_future": {
+      "not": "log06_half1_exists"
+    },
+    "log07_starts_on_source": "log07_on_source",
+    "log07_real": "log07_exists",
+    "log07_half0_future": {
+      "not": "log07_half0_exists"
+    },
+    "log07_half1_future": {
+      "not": "log07_half1_exists"
+    },
+    "log08_starts_on_source": "log08_on_source",
+    "log08_real": "log08_exists",
+    "log08_half0_future": {
+      "not": "log08_half0_exists"
+    },
+    "log08_half1_future": {
+      "not": "log08_half1_exists"
+    },
+    "log09_starts_on_source": "log09_on_source",
+    "log09_real": "log09_exists",
+    "log09_half0_future": {
+      "not": "log09_half0_exists"
+    },
+    "log09_half1_future": {
+      "not": "log09_half1_exists"
+    },
+    "log10_starts_on_source": "log10_on_source",
+    "log10_real": "log10_exists",
+    "log10_half0_future": {
+      "not": "log10_half0_exists"
+    },
+    "log10_half1_future": {
+      "not": "log10_half1_exists"
+    },
+    "log11_starts_on_source": "log11_on_source",
+    "log11_real": "log11_exists",
+    "log11_half0_future": {
+      "not": "log11_half0_exists"
+    },
+    "log11_half1_future": {
+      "not": "log11_half1_exists"
+    },
+    "log12_starts_on_source": "log12_on_source",
+    "log12_real": "log12_exists",
+    "log12_half0_future": {
+      "not": "log12_half0_exists"
+    },
+    "log12_half1_future": {
+      "not": "log12_half1_exists"
+    },
+    "log13_starts_on_source": "log13_on_source",
+    "log13_real": "log13_exists",
+    "log13_half0_future": {
+      "not": "log13_half0_exists"
+    },
+    "log13_half1_future": {
+      "not": "log13_half1_exists"
+    },
+    "log14_starts_on_source": "log14_on_source",
+    "log14_real": "log14_exists",
+    "log14_half0_future": {
+      "not": "log14_half0_exists"
+    },
+    "log14_half1_future": {
+      "not": "log14_half1_exists"
+    },
+    "log15_starts_on_source": "log15_on_source",
+    "log15_real": "log15_exists",
+    "log15_half0_future": {
+      "not": "log15_half0_exists"
+    },
+    "log15_half1_future": {
+      "not": "log15_half1_exists"
+    }
+  },
+  "public_instruction": "先扫净指定车库地面的砂尘，再把蓝台 16 根整木逐根放到黄色基座上的劈木墩切成两半，将 32 块产物逐件放到绿色收纳台；灰台的斧头和扫帚最后归位，手空。",
+  "public_context": [
+    "先把车库指定地面的砂尘扫净，再将蓝台的 16 根木料逐根放到黄色基座上的劈木墩劈开，每根生成的两半都归到绿台，共 32 半。",
+    "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。"
+  ],
+  "requirements": [
+    {
+      "id": "cut",
+      "text": "先把车库指定地面的砂尘扫净，再将蓝台的 16 根木料逐根放到黄色基座上的劈木墩劈开，每根生成的两半都归到绿台，共 32 半。",
+      "terminal": [
+        "floor_clean",
+        "log00_half0_stored",
+        "log00_half1_stored",
+        "log00_cut",
+        "log01_half0_stored",
+        "log01_half1_stored",
+        "log01_cut",
+        "log02_half0_stored",
+        "log02_half1_stored",
+        "log02_cut",
+        "log03_half0_stored",
+        "log03_half1_stored",
+        "log03_cut",
+        "log04_half0_stored",
+        "log04_half1_stored",
+        "log04_cut",
+        "log05_half0_stored",
+        "log05_half1_stored",
+        "log05_cut",
+        "log06_half0_stored",
+        "log06_half1_stored",
+        "log06_cut",
+        "log07_half0_stored",
+        "log07_half1_stored",
+        "log07_cut",
+        "log08_half0_stored",
+        "log08_half1_stored",
+        "log08_cut",
+        "log09_half0_stored",
+        "log09_half1_stored",
+        "log09_cut",
+        "log10_half0_stored",
+        "log10_half1_stored",
+        "log10_cut",
+        "log11_half0_stored",
+        "log11_half1_stored",
+        "log11_cut",
+        "log12_half0_stored",
+        "log12_half1_stored",
+        "log12_cut",
+        "log13_half0_stored",
+        "log13_half1_stored",
+        "log13_cut",
+        "log14_half0_stored",
+        "log14_half1_stored",
+        "log14_cut",
+        "log15_half0_stored",
+        "log15_half1_stored",
+        "log15_cut"
+      ],
+      "milestones": [
+        "swept",
+        "log00_loaded",
+        "log00_cut",
+        "log01_loaded",
+        "log01_cut",
+        "log02_loaded",
+        "log02_cut",
+        "log03_loaded",
+        "log03_cut",
+        "log04_loaded",
+        "log04_cut",
+        "log05_loaded",
+        "log05_cut",
+        "log06_loaded",
+        "log06_cut",
+        "log07_loaded",
+        "log07_cut",
+        "log08_loaded",
+        "log08_cut",
+        "log09_loaded",
+        "log09_cut",
+        "log10_loaded",
+        "log10_cut",
+        "log11_loaded",
+        "log11_cut",
+        "log12_loaded",
+        "log12_cut",
+        "log13_loaded",
+        "log13_cut",
+        "log14_loaded",
+        "log14_cut",
+        "log15_loaded",
+        "log15_cut"
+      ],
+      "constraints": [
+        "log00_not_cut_early",
+        "log00_half0_store_after_cut",
+        "log00_half1_store_after_cut",
+        "log01_not_cut_early",
+        "log01_half0_store_after_cut",
+        "log01_half1_store_after_cut",
+        "log02_not_cut_early",
+        "log02_half0_store_after_cut",
+        "log02_half1_store_after_cut",
+        "log03_not_cut_early",
+        "log03_half0_store_after_cut",
+        "log03_half1_store_after_cut",
+        "log04_not_cut_early",
+        "log04_half0_store_after_cut",
+        "log04_half1_store_after_cut",
+        "log05_not_cut_early",
+        "log05_half0_store_after_cut",
+        "log05_half1_store_after_cut",
+        "log06_not_cut_early",
+        "log06_half0_store_after_cut",
+        "log06_half1_store_after_cut",
+        "log07_not_cut_early",
+        "log07_half0_store_after_cut",
+        "log07_half1_store_after_cut",
+        "log08_not_cut_early",
+        "log08_half0_store_after_cut",
+        "log08_half1_store_after_cut",
+        "log09_not_cut_early",
+        "log09_half0_store_after_cut",
+        "log09_half1_store_after_cut",
+        "log10_not_cut_early",
+        "log10_half0_store_after_cut",
+        "log10_half1_store_after_cut",
+        "log11_not_cut_early",
+        "log11_half0_store_after_cut",
+        "log11_half1_store_after_cut",
+        "log12_not_cut_early",
+        "log12_half0_store_after_cut",
+        "log12_half1_store_after_cut",
+        "log13_not_cut_early",
+        "log13_half0_store_after_cut",
+        "log13_half1_store_after_cut",
+        "log14_not_cut_early",
+        "log14_half0_store_after_cut",
+        "log14_half1_store_after_cut",
+        "log15_not_cut_early",
+        "log15_half0_store_after_cut",
+        "log15_half1_store_after_cut"
+      ]
+    },
+    {
+      "id": "protocol",
+      "text": "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。",
+      "terminal": [
+        "broom_home",
+        "hand_empty",
+        "tool_home"
+      ],
+      "milestones": [],
+      "constraints": [
+        "individual_handling"
+      ]
+    }
+  ],
+  "evaluation": {
+    "predicates": {
+      "tool_on_tool_home": {
+        "object": "tool",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "broom_on_tool_home": {
+        "object": "broom",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "sweep_floor_Covered_dust": {
+        "object": "sweep_floor",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "sweep_floor_Covered_sand": {
+        "object": "sweep_floor",
+        "state": "Covered",
+        "system": "sand"
+      },
+      "log00_on_source": {
+        "object": "log00",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log00_exists": {
+        "object": "log00",
+        "state": "Exists"
+      },
+      "log00_on_block": {
+        "object": "log00",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log00_half0_exists": {
+        "object": "log00_half0",
+        "state": "Exists"
+      },
+      "log00_half0_on_destination": {
+        "object": "log00_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log00_half1_exists": {
+        "object": "log00_half1",
+        "state": "Exists"
+      },
+      "log00_half1_on_destination": {
+        "object": "log00_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log00_replaced": {
+        "object": "log00",
+        "state": "Replaced"
+      },
+      "log01_on_source": {
+        "object": "log01",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log01_exists": {
+        "object": "log01",
+        "state": "Exists"
+      },
+      "log01_on_block": {
+        "object": "log01",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log01_half0_exists": {
+        "object": "log01_half0",
+        "state": "Exists"
+      },
+      "log01_half0_on_destination": {
+        "object": "log01_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log01_half1_exists": {
+        "object": "log01_half1",
+        "state": "Exists"
+      },
+      "log01_half1_on_destination": {
+        "object": "log01_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log01_replaced": {
+        "object": "log01",
+        "state": "Replaced"
+      },
+      "log02_on_source": {
+        "object": "log02",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log02_exists": {
+        "object": "log02",
+        "state": "Exists"
+      },
+      "log02_on_block": {
+        "object": "log02",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log02_half0_exists": {
+        "object": "log02_half0",
+        "state": "Exists"
+      },
+      "log02_half0_on_destination": {
+        "object": "log02_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log02_half1_exists": {
+        "object": "log02_half1",
+        "state": "Exists"
+      },
+      "log02_half1_on_destination": {
+        "object": "log02_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log02_replaced": {
+        "object": "log02",
+        "state": "Replaced"
+      },
+      "log03_on_source": {
+        "object": "log03",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log03_exists": {
+        "object": "log03",
+        "state": "Exists"
+      },
+      "log03_on_block": {
+        "object": "log03",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log03_half0_exists": {
+        "object": "log03_half0",
+        "state": "Exists"
+      },
+      "log03_half0_on_destination": {
+        "object": "log03_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log03_half1_exists": {
+        "object": "log03_half1",
+        "state": "Exists"
+      },
+      "log03_half1_on_destination": {
+        "object": "log03_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log03_replaced": {
+        "object": "log03",
+        "state": "Replaced"
+      },
+      "log04_on_source": {
+        "object": "log04",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log04_exists": {
+        "object": "log04",
+        "state": "Exists"
+      },
+      "log04_on_block": {
+        "object": "log04",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log04_half0_exists": {
+        "object": "log04_half0",
+        "state": "Exists"
+      },
+      "log04_half0_on_destination": {
+        "object": "log04_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log04_half1_exists": {
+        "object": "log04_half1",
+        "state": "Exists"
+      },
+      "log04_half1_on_destination": {
+        "object": "log04_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log04_replaced": {
+        "object": "log04",
+        "state": "Replaced"
+      },
+      "log05_on_source": {
+        "object": "log05",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log05_exists": {
+        "object": "log05",
+        "state": "Exists"
+      },
+      "log05_on_block": {
+        "object": "log05",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log05_half0_exists": {
+        "object": "log05_half0",
+        "state": "Exists"
+      },
+      "log05_half0_on_destination": {
+        "object": "log05_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log05_half1_exists": {
+        "object": "log05_half1",
+        "state": "Exists"
+      },
+      "log05_half1_on_destination": {
+        "object": "log05_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log05_replaced": {
+        "object": "log05",
+        "state": "Replaced"
+      },
+      "log06_on_source": {
+        "object": "log06",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log06_exists": {
+        "object": "log06",
+        "state": "Exists"
+      },
+      "log06_on_block": {
+        "object": "log06",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log06_half0_exists": {
+        "object": "log06_half0",
+        "state": "Exists"
+      },
+      "log06_half0_on_destination": {
+        "object": "log06_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log06_half1_exists": {
+        "object": "log06_half1",
+        "state": "Exists"
+      },
+      "log06_half1_on_destination": {
+        "object": "log06_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log06_replaced": {
+        "object": "log06",
+        "state": "Replaced"
+      },
+      "log07_on_source": {
+        "object": "log07",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log07_exists": {
+        "object": "log07",
+        "state": "Exists"
+      },
+      "log07_on_block": {
+        "object": "log07",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log07_half0_exists": {
+        "object": "log07_half0",
+        "state": "Exists"
+      },
+      "log07_half0_on_destination": {
+        "object": "log07_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log07_half1_exists": {
+        "object": "log07_half1",
+        "state": "Exists"
+      },
+      "log07_half1_on_destination": {
+        "object": "log07_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log07_replaced": {
+        "object": "log07",
+        "state": "Replaced"
+      },
+      "log08_on_source": {
+        "object": "log08",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log08_exists": {
+        "object": "log08",
+        "state": "Exists"
+      },
+      "log08_on_block": {
+        "object": "log08",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log08_half0_exists": {
+        "object": "log08_half0",
+        "state": "Exists"
+      },
+      "log08_half0_on_destination": {
+        "object": "log08_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log08_half1_exists": {
+        "object": "log08_half1",
+        "state": "Exists"
+      },
+      "log08_half1_on_destination": {
+        "object": "log08_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log08_replaced": {
+        "object": "log08",
+        "state": "Replaced"
+      },
+      "log09_on_source": {
+        "object": "log09",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log09_exists": {
+        "object": "log09",
+        "state": "Exists"
+      },
+      "log09_on_block": {
+        "object": "log09",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log09_half0_exists": {
+        "object": "log09_half0",
+        "state": "Exists"
+      },
+      "log09_half0_on_destination": {
+        "object": "log09_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log09_half1_exists": {
+        "object": "log09_half1",
+        "state": "Exists"
+      },
+      "log09_half1_on_destination": {
+        "object": "log09_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log09_replaced": {
+        "object": "log09",
+        "state": "Replaced"
+      },
+      "log10_on_source": {
+        "object": "log10",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log10_exists": {
+        "object": "log10",
+        "state": "Exists"
+      },
+      "log10_on_block": {
+        "object": "log10",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log10_half0_exists": {
+        "object": "log10_half0",
+        "state": "Exists"
+      },
+      "log10_half0_on_destination": {
+        "object": "log10_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log10_half1_exists": {
+        "object": "log10_half1",
+        "state": "Exists"
+      },
+      "log10_half1_on_destination": {
+        "object": "log10_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log10_replaced": {
+        "object": "log10",
+        "state": "Replaced"
+      },
+      "log11_on_source": {
+        "object": "log11",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log11_exists": {
+        "object": "log11",
+        "state": "Exists"
+      },
+      "log11_on_block": {
+        "object": "log11",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log11_half0_exists": {
+        "object": "log11_half0",
+        "state": "Exists"
+      },
+      "log11_half0_on_destination": {
+        "object": "log11_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log11_half1_exists": {
+        "object": "log11_half1",
+        "state": "Exists"
+      },
+      "log11_half1_on_destination": {
+        "object": "log11_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log11_replaced": {
+        "object": "log11",
+        "state": "Replaced"
+      },
+      "log12_on_source": {
+        "object": "log12",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log12_exists": {
+        "object": "log12",
+        "state": "Exists"
+      },
+      "log12_on_block": {
+        "object": "log12",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log12_half0_exists": {
+        "object": "log12_half0",
+        "state": "Exists"
+      },
+      "log12_half0_on_destination": {
+        "object": "log12_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log12_half1_exists": {
+        "object": "log12_half1",
+        "state": "Exists"
+      },
+      "log12_half1_on_destination": {
+        "object": "log12_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log12_replaced": {
+        "object": "log12",
+        "state": "Replaced"
+      },
+      "log13_on_source": {
+        "object": "log13",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log13_exists": {
+        "object": "log13",
+        "state": "Exists"
+      },
+      "log13_on_block": {
+        "object": "log13",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log13_half0_exists": {
+        "object": "log13_half0",
+        "state": "Exists"
+      },
+      "log13_half0_on_destination": {
+        "object": "log13_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log13_half1_exists": {
+        "object": "log13_half1",
+        "state": "Exists"
+      },
+      "log13_half1_on_destination": {
+        "object": "log13_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log13_replaced": {
+        "object": "log13",
+        "state": "Replaced"
+      },
+      "log14_on_source": {
+        "object": "log14",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log14_exists": {
+        "object": "log14",
+        "state": "Exists"
+      },
+      "log14_on_block": {
+        "object": "log14",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log14_half0_exists": {
+        "object": "log14_half0",
+        "state": "Exists"
+      },
+      "log14_half0_on_destination": {
+        "object": "log14_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log14_half1_exists": {
+        "object": "log14_half1",
+        "state": "Exists"
+      },
+      "log14_half1_on_destination": {
+        "object": "log14_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log14_replaced": {
+        "object": "log14",
+        "state": "Replaced"
+      },
+      "log15_on_source": {
+        "object": "log15",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "log15_exists": {
+        "object": "log15",
+        "state": "Exists"
+      },
+      "log15_on_block": {
+        "object": "log15",
+        "state": "OnTop",
+        "target": "block"
+      },
+      "log15_half0_exists": {
+        "object": "log15_half0",
+        "state": "Exists"
+      },
+      "log15_half0_on_destination": {
+        "object": "log15_half0",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log15_half1_exists": {
+        "object": "log15_half1",
+        "state": "Exists"
+      },
+      "log15_half1_on_destination": {
+        "object": "log15_half1",
+        "state": "OnTop",
+        "target": "destination"
+      },
+      "log15_replaced": {
+        "object": "log15",
+        "state": "Replaced"
+      },
+      "hand_empty": {
+        "object": "tool",
+        "state": "HandEmpty"
+      }
+    },
+    "terminal": {
+      "floor_clean": {
+        "all": [
+          {
+            "not": "sweep_floor_Covered_dust"
+          },
+          {
+            "not": "sweep_floor_Covered_sand"
+          }
+        ]
+      },
+      "log00_half0_stored": "log00_half0_on_destination",
+      "log00_half1_stored": "log00_half1_on_destination",
+      "log00_cut": "log00_replaced",
+      "log01_half0_stored": "log01_half0_on_destination",
+      "log01_half1_stored": "log01_half1_on_destination",
+      "log01_cut": "log01_replaced",
+      "log02_half0_stored": "log02_half0_on_destination",
+      "log02_half1_stored": "log02_half1_on_destination",
+      "log02_cut": "log02_replaced",
+      "log03_half0_stored": "log03_half0_on_destination",
+      "log03_half1_stored": "log03_half1_on_destination",
+      "log03_cut": "log03_replaced",
+      "log04_half0_stored": "log04_half0_on_destination",
+      "log04_half1_stored": "log04_half1_on_destination",
+      "log04_cut": "log04_replaced",
+      "log05_half0_stored": "log05_half0_on_destination",
+      "log05_half1_stored": "log05_half1_on_destination",
+      "log05_cut": "log05_replaced",
+      "log06_half0_stored": "log06_half0_on_destination",
+      "log06_half1_stored": "log06_half1_on_destination",
+      "log06_cut": "log06_replaced",
+      "log07_half0_stored": "log07_half0_on_destination",
+      "log07_half1_stored": "log07_half1_on_destination",
+      "log07_cut": "log07_replaced",
+      "log08_half0_stored": "log08_half0_on_destination",
+      "log08_half1_stored": "log08_half1_on_destination",
+      "log08_cut": "log08_replaced",
+      "log09_half0_stored": "log09_half0_on_destination",
+      "log09_half1_stored": "log09_half1_on_destination",
+      "log09_cut": "log09_replaced",
+      "log10_half0_stored": "log10_half0_on_destination",
+      "log10_half1_stored": "log10_half1_on_destination",
+      "log10_cut": "log10_replaced",
+      "log11_half0_stored": "log11_half0_on_destination",
+      "log11_half1_stored": "log11_half1_on_destination",
+      "log11_cut": "log11_replaced",
+      "log12_half0_stored": "log12_half0_on_destination",
+      "log12_half1_stored": "log12_half1_on_destination",
+      "log12_cut": "log12_replaced",
+      "log13_half0_stored": "log13_half0_on_destination",
+      "log13_half1_stored": "log13_half1_on_destination",
+      "log13_cut": "log13_replaced",
+      "log14_half0_stored": "log14_half0_on_destination",
+      "log14_half1_stored": "log14_half1_on_destination",
+      "log14_cut": "log14_replaced",
+      "log15_half0_stored": "log15_half0_on_destination",
+      "log15_half1_stored": "log15_half1_on_destination",
+      "log15_cut": "log15_replaced",
+      "tool_home": "tool_on_tool_home",
+      "broom_home": "broom_on_tool_home",
+      "hand_empty": "hand_empty"
+    },
+    "milestones": {
+      "swept": {
+        "when": {
+          "all": [
+            {
+              "not": "sweep_floor_Covered_dust"
+            },
+            {
+              "not": "sweep_floor_Covered_sand"
+            }
+          ]
+        },
+        "after": []
+      },
+      "log00_loaded": {
+        "when": "log00_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log00_cut": {
+        "when": "log00_replaced",
+        "after": [
+          "log00_loaded"
+        ]
+      },
+      "log01_loaded": {
+        "when": "log01_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log01_cut": {
+        "when": "log01_replaced",
+        "after": [
+          "log01_loaded"
+        ]
+      },
+      "log02_loaded": {
+        "when": "log02_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log02_cut": {
+        "when": "log02_replaced",
+        "after": [
+          "log02_loaded"
+        ]
+      },
+      "log03_loaded": {
+        "when": "log03_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log03_cut": {
+        "when": "log03_replaced",
+        "after": [
+          "log03_loaded"
+        ]
+      },
+      "log04_loaded": {
+        "when": "log04_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log04_cut": {
+        "when": "log04_replaced",
+        "after": [
+          "log04_loaded"
+        ]
+      },
+      "log05_loaded": {
+        "when": "log05_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log05_cut": {
+        "when": "log05_replaced",
+        "after": [
+          "log05_loaded"
+        ]
+      },
+      "log06_loaded": {
+        "when": "log06_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log06_cut": {
+        "when": "log06_replaced",
+        "after": [
+          "log06_loaded"
+        ]
+      },
+      "log07_loaded": {
+        "when": "log07_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log07_cut": {
+        "when": "log07_replaced",
+        "after": [
+          "log07_loaded"
+        ]
+      },
+      "log08_loaded": {
+        "when": "log08_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log08_cut": {
+        "when": "log08_replaced",
+        "after": [
+          "log08_loaded"
+        ]
+      },
+      "log09_loaded": {
+        "when": "log09_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log09_cut": {
+        "when": "log09_replaced",
+        "after": [
+          "log09_loaded"
+        ]
+      },
+      "log10_loaded": {
+        "when": "log10_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log10_cut": {
+        "when": "log10_replaced",
+        "after": [
+          "log10_loaded"
+        ]
+      },
+      "log11_loaded": {
+        "when": "log11_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log11_cut": {
+        "when": "log11_replaced",
+        "after": [
+          "log11_loaded"
+        ]
+      },
+      "log12_loaded": {
+        "when": "log12_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log12_cut": {
+        "when": "log12_replaced",
+        "after": [
+          "log12_loaded"
+        ]
+      },
+      "log13_loaded": {
+        "when": "log13_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log13_cut": {
+        "when": "log13_replaced",
+        "after": [
+          "log13_loaded"
+        ]
+      },
+      "log14_loaded": {
+        "when": "log14_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log14_cut": {
+        "when": "log14_replaced",
+        "after": [
+          "log14_loaded"
+        ]
+      },
+      "log15_loaded": {
+        "when": "log15_on_block",
+        "after": [
+          "swept"
+        ]
+      },
+      "log15_cut": {
+        "when": "log15_replaced",
+        "after": [
+          "log15_loaded"
+        ]
+      }
+    },
+    "state_guards": [
+      {
+        "id": "log00_not_cut_early",
+        "require": "log00_exists",
+        "until": "log00_loaded"
+      },
+      {
+        "id": "log00_half0_store_after_cut",
+        "require": {
+          "not": "log00_half0_on_destination"
+        },
+        "until": "log00_cut"
+      },
+      {
+        "id": "log00_half1_store_after_cut",
+        "require": {
+          "not": "log00_half1_on_destination"
+        },
+        "until": "log00_cut"
+      },
+      {
+        "id": "log01_not_cut_early",
+        "require": "log01_exists",
+        "until": "log01_loaded"
+      },
+      {
+        "id": "log01_half0_store_after_cut",
+        "require": {
+          "not": "log01_half0_on_destination"
+        },
+        "until": "log01_cut"
+      },
+      {
+        "id": "log01_half1_store_after_cut",
+        "require": {
+          "not": "log01_half1_on_destination"
+        },
+        "until": "log01_cut"
+      },
+      {
+        "id": "log02_not_cut_early",
+        "require": "log02_exists",
+        "until": "log02_loaded"
+      },
+      {
+        "id": "log02_half0_store_after_cut",
+        "require": {
+          "not": "log02_half0_on_destination"
+        },
+        "until": "log02_cut"
+      },
+      {
+        "id": "log02_half1_store_after_cut",
+        "require": {
+          "not": "log02_half1_on_destination"
+        },
+        "until": "log02_cut"
+      },
+      {
+        "id": "log03_not_cut_early",
+        "require": "log03_exists",
+        "until": "log03_loaded"
+      },
+      {
+        "id": "log03_half0_store_after_cut",
+        "require": {
+          "not": "log03_half0_on_destination"
+        },
+        "until": "log03_cut"
+      },
+      {
+        "id": "log03_half1_store_after_cut",
+        "require": {
+          "not": "log03_half1_on_destination"
+        },
+        "until": "log03_cut"
+      },
+      {
+        "id": "log04_not_cut_early",
+        "require": "log04_exists",
+        "until": "log04_loaded"
+      },
+      {
+        "id": "log04_half0_store_after_cut",
+        "require": {
+          "not": "log04_half0_on_destination"
+        },
+        "until": "log04_cut"
+      },
+      {
+        "id": "log04_half1_store_after_cut",
+        "require": {
+          "not": "log04_half1_on_destination"
+        },
+        "until": "log04_cut"
+      },
+      {
+        "id": "log05_not_cut_early",
+        "require": "log05_exists",
+        "until": "log05_loaded"
+      },
+      {
+        "id": "log05_half0_store_after_cut",
+        "require": {
+          "not": "log05_half0_on_destination"
+        },
+        "until": "log05_cut"
+      },
+      {
+        "id": "log05_half1_store_after_cut",
+        "require": {
+          "not": "log05_half1_on_destination"
+        },
+        "until": "log05_cut"
+      },
+      {
+        "id": "log06_not_cut_early",
+        "require": "log06_exists",
+        "until": "log06_loaded"
+      },
+      {
+        "id": "log06_half0_store_after_cut",
+        "require": {
+          "not": "log06_half0_on_destination"
+        },
+        "until": "log06_cut"
+      },
+      {
+        "id": "log06_half1_store_after_cut",
+        "require": {
+          "not": "log06_half1_on_destination"
+        },
+        "until": "log06_cut"
+      },
+      {
+        "id": "log07_not_cut_early",
+        "require": "log07_exists",
+        "until": "log07_loaded"
+      },
+      {
+        "id": "log07_half0_store_after_cut",
+        "require": {
+          "not": "log07_half0_on_destination"
+        },
+        "until": "log07_cut"
+      },
+      {
+        "id": "log07_half1_store_after_cut",
+        "require": {
+          "not": "log07_half1_on_destination"
+        },
+        "until": "log07_cut"
+      },
+      {
+        "id": "log08_not_cut_early",
+        "require": "log08_exists",
+        "until": "log08_loaded"
+      },
+      {
+        "id": "log08_half0_store_after_cut",
+        "require": {
+          "not": "log08_half0_on_destination"
+        },
+        "until": "log08_cut"
+      },
+      {
+        "id": "log08_half1_store_after_cut",
+        "require": {
+          "not": "log08_half1_on_destination"
+        },
+        "until": "log08_cut"
+      },
+      {
+        "id": "log09_not_cut_early",
+        "require": "log09_exists",
+        "until": "log09_loaded"
+      },
+      {
+        "id": "log09_half0_store_after_cut",
+        "require": {
+          "not": "log09_half0_on_destination"
+        },
+        "until": "log09_cut"
+      },
+      {
+        "id": "log09_half1_store_after_cut",
+        "require": {
+          "not": "log09_half1_on_destination"
+        },
+        "until": "log09_cut"
+      },
+      {
+        "id": "log10_not_cut_early",
+        "require": "log10_exists",
+        "until": "log10_loaded"
+      },
+      {
+        "id": "log10_half0_store_after_cut",
+        "require": {
+          "not": "log10_half0_on_destination"
+        },
+        "until": "log10_cut"
+      },
+      {
+        "id": "log10_half1_store_after_cut",
+        "require": {
+          "not": "log10_half1_on_destination"
+        },
+        "until": "log10_cut"
+      },
+      {
+        "id": "log11_not_cut_early",
+        "require": "log11_exists",
+        "until": "log11_loaded"
+      },
+      {
+        "id": "log11_half0_store_after_cut",
+        "require": {
+          "not": "log11_half0_on_destination"
+        },
+        "until": "log11_cut"
+      },
+      {
+        "id": "log11_half1_store_after_cut",
+        "require": {
+          "not": "log11_half1_on_destination"
+        },
+        "until": "log11_cut"
+      },
+      {
+        "id": "log12_not_cut_early",
+        "require": "log12_exists",
+        "until": "log12_loaded"
+      },
+      {
+        "id": "log12_half0_store_after_cut",
+        "require": {
+          "not": "log12_half0_on_destination"
+        },
+        "until": "log12_cut"
+      },
+      {
+        "id": "log12_half1_store_after_cut",
+        "require": {
+          "not": "log12_half1_on_destination"
+        },
+        "until": "log12_cut"
+      },
+      {
+        "id": "log13_not_cut_early",
+        "require": "log13_exists",
+        "until": "log13_loaded"
+      },
+      {
+        "id": "log13_half0_store_after_cut",
+        "require": {
+          "not": "log13_half0_on_destination"
+        },
+        "until": "log13_cut"
+      },
+      {
+        "id": "log13_half1_store_after_cut",
+        "require": {
+          "not": "log13_half1_on_destination"
+        },
+        "until": "log13_cut"
+      },
+      {
+        "id": "log14_not_cut_early",
+        "require": "log14_exists",
+        "until": "log14_loaded"
+      },
+      {
+        "id": "log14_half0_store_after_cut",
+        "require": {
+          "not": "log14_half0_on_destination"
+        },
+        "until": "log14_cut"
+      },
+      {
+        "id": "log14_half1_store_after_cut",
+        "require": {
+          "not": "log14_half1_on_destination"
+        },
+        "until": "log14_cut"
+      },
+      {
+        "id": "log15_not_cut_early",
+        "require": "log15_exists",
+        "until": "log15_loaded"
+      },
+      {
+        "id": "log15_half0_store_after_cut",
+        "require": {
+          "not": "log15_half0_on_destination"
+        },
+        "until": "log15_cut"
+      },
+      {
+        "id": "log15_half1_store_after_cut",
+        "require": {
+          "not": "log15_half1_on_destination"
+        },
+        "until": "log15_cut"
+      }
+    ],
+    "motion_guards": [],
+    "carry_guards": [
+      {
+        "id": "individual_handling",
+        "mode": "single_object"
+      }
+    ],
+    "score_type": "custom_100plus_terminal_history_and_handling_v1"
+  },
+  "acceptance_cases": {
+    "reference_orders": [
+      "forward",
+      "reverse"
+    ],
+    "physical_negative_cases": [
+      "skip_work",
+      "skip_stage",
+      "missing_delivery"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 1000
+  },
+  "settle_steps": 45,
+  "reference_plan": {
+    "kind": "cut_store",
+    "work": [
+      {
+        "item": "log00",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log00_half0",
+          "log00_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -15.889999999999999,
+            4.25
+          ],
+          [
+            -15.889999999999999,
+            4.550000000000001
+          ]
+        ]
+      },
+      {
+        "item": "log01",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log01_half0",
+          "log01_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -15.549999999999999,
+            4.25
+          ],
+          [
+            -15.549999999999999,
+            4.550000000000001
+          ]
+        ]
+      },
+      {
+        "item": "log02",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log02_half0",
+          "log02_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -15.209999999999999,
+            4.25
+          ],
+          [
+            -15.209999999999999,
+            4.550000000000001
+          ]
+        ]
+      },
+      {
+        "item": "log03",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log03_half0",
+          "log03_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -14.87,
+            4.25
+          ],
+          [
+            -14.87,
+            4.550000000000001
+          ]
+        ]
+      },
+      {
+        "item": "log04",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log04_half0",
+          "log04_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -14.53,
+            4.25
+          ],
+          [
+            -14.53,
+            4.550000000000001
+          ]
+        ]
+      },
+      {
+        "item": "log05",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log05_half0",
+          "log05_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -14.19,
+            4.25
+          ],
+          [
+            -14.19,
+            4.550000000000001
+          ]
+        ]
+      },
+      {
+        "item": "log06",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log06_half0",
+          "log06_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -13.85,
+            4.25
+          ],
+          [
+            -13.85,
+            4.550000000000001
+          ]
+        ]
+      },
+      {
+        "item": "log07",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log07_half0",
+          "log07_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -13.51,
+            4.25
+          ],
+          [
+            -13.51,
+            4.550000000000001
+          ]
+        ]
+      },
+      {
+        "item": "log08",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log08_half0",
+          "log08_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -15.889999999999999,
+            4.85
+          ],
+          [
+            -15.889999999999999,
+            5.15
+          ]
+        ]
+      },
+      {
+        "item": "log09",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log09_half0",
+          "log09_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -15.549999999999999,
+            4.85
+          ],
+          [
+            -15.549999999999999,
+            5.15
+          ]
+        ]
+      },
+      {
+        "item": "log10",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log10_half0",
+          "log10_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -15.209999999999999,
+            4.85
+          ],
+          [
+            -15.209999999999999,
+            5.15
+          ]
+        ]
+      },
+      {
+        "item": "log11",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log11_half0",
+          "log11_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -14.87,
+            4.85
+          ],
+          [
+            -14.87,
+            5.15
+          ]
+        ]
+      },
+      {
+        "item": "log12",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log12_half0",
+          "log12_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -14.53,
+            4.85
+          ],
+          [
+            -14.53,
+            5.15
+          ]
+        ]
+      },
+      {
+        "item": "log13",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log13_half0",
+          "log13_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -14.19,
+            4.85
+          ],
+          [
+            -14.19,
+            5.15
+          ]
+        ]
+      },
+      {
+        "item": "log14",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log14_half0",
+          "log14_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -13.85,
+            4.85
+          ],
+          [
+            -13.85,
+            5.15
+          ]
+        ]
+      },
+      {
+        "item": "log15",
+        "source": "source",
+        "stage": "block",
+        "stage_xy": [
+          -9.0,
+          3.8
+        ],
+        "children": [
+          "log15_half0",
+          "log15_half1"
+        ],
+        "destination": "destination",
+        "destination_xy": [
+          [
+            -13.51,
+            4.85
+          ],
+          [
+            -13.51,
+            5.15
+          ]
+        ]
+      }
+    ],
+    "tool": "tool",
+    "tool_home": "tool_home",
+    "tool_xy": [
+      -8.1,
+      4.65
+    ],
+    "broom": "broom",
+    "broom_xy": [
+      -8.1,
+      5.25
+    ],
+    "sweep_floor": "sweep_floor",
+    "toggle": false
+  },
+  "construction_source": "inspected_native_public_templates",
+  "design_ledger": {
+    "conditional_useful_calls": 113,
+    "measured_useful_calls": null,
+    "reference_attempt_budget": 1000,
+    "proposed_model_act_look_budget": 600
+  },
+  "robot_start": {
+    "position": [
+      -14.2,
+      3.0,
+      0.015
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "future_roles": [
+    "log00_half0",
+    "log00_half1",
+    "log01_half0",
+    "log01_half1",
+    "log02_half0",
+    "log02_half1",
+    "log03_half0",
+    "log03_half1",
+    "log04_half0",
+    "log04_half1",
+    "log05_half0",
+    "log05_half1",
+    "log06_half0",
+    "log06_half1",
+    "log07_half0",
+    "log07_half1",
+    "log08_half0",
+    "log08_half1",
+    "log09_half0",
+    "log09_half1",
+    "log10_half0",
+    "log10_half1",
+    "log11_half0",
+    "log11_half1",
+    "log12_half0",
+    "log12_half1",
+    "log13_half0",
+    "log13_half1",
+    "log14_half0",
+    "log14_half1",
+    "log15_half0",
+    "log15_half1"
+  ],
+  "replacements": [
+    {
+      "parent": "log00",
+      "children": [
+        {
+          "role": "log00_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log00_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log01",
+      "children": [
+        {
+          "role": "log01_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log01_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log02",
+      "children": [
+        {
+          "role": "log02_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log02_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log03",
+      "children": [
+        {
+          "role": "log03_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log03_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log04",
+      "children": [
+        {
+          "role": "log04_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log04_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log05",
+      "children": [
+        {
+          "role": "log05_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log05_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log06",
+      "children": [
+        {
+          "role": "log06_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log06_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log07",
+      "children": [
+        {
+          "role": "log07_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log07_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log08",
+      "children": [
+        {
+          "role": "log08_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log08_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log09",
+      "children": [
+        {
+          "role": "log09_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log09_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log10",
+      "children": [
+        {
+          "role": "log10_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log10_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log11",
+      "children": [
+        {
+          "role": "log11_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log11_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log12",
+      "children": [
+        {
+          "role": "log12_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log12_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log13",
+      "children": [
+        {
+          "role": "log13_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log13_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log14",
+      "children": [
+        {
+          "role": "log14_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log14_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log15",
+      "children": [
+        {
+          "role": "log15_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log15_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4212 @@
+{
+  "schema_version": 3,
+  "id": "hotel_shoe_care_and_pairing_100_v1",
+  "instance_id": "hotel_shoe_care_and_pairing_100_v1_seed0_r6",
+  "status": "candidate_physics_unvalidated",
+  "official_submission_eligible": false,
+  "benchmark_ready": false,
+  "base": {
+    "task": "polishing_shoes",
+    "instance": 301,
+    "seed": 0
+  },
+  "roles": {
+    "floor": "floors_nwjrkc_0",
+    "source": "lh_source",
+    "stage": "lh_stage",
+    "tool_home": "lh_tool_home",
+    "background_desk": "desk_ohjotf_0",
+    "background_shoe0": "walker_43",
+    "background_shoe1": "walker_44",
+    "tool": "lh_tool",
+    "shoe00": "lh_shoe00",
+    "pair00": "lh_pair00",
+    "shoe01": "lh_shoe01",
+    "shoe02": "lh_shoe02",
+    "pair01": "lh_pair01",
+    "shoe03": "lh_shoe03",
+    "shoe04": "lh_shoe04",
+    "pair02": "lh_pair02",
+    "shoe05": "lh_shoe05",
+    "shoe06": "lh_shoe06",
+    "pair03": "lh_pair03",
+    "shoe07": "lh_shoe07",
+    "shoe08": "lh_shoe08",
+    "pair04": "lh_pair04",
+    "shoe09": "lh_shoe09",
+    "shoe10": "lh_shoe10",
+    "pair05": "lh_pair05",
+    "shoe11": "lh_shoe11",
+    "shoe12": "lh_shoe12",
+    "pair06": "lh_pair06",
+    "shoe13": "lh_shoe13",
+    "shoe14": "lh_shoe14",
+    "pair07": "lh_pair07",
+    "shoe15": "lh_shoe15",
+    "shoe16": "lh_shoe16",
+    "pair08": "lh_pair08",
+    "shoe17": "lh_shoe17",
+    "shoe18": "lh_shoe18",
+    "pair09": "lh_pair09",
+    "shoe19": "lh_shoe19"
+  },
+  "asset_imports": [
+    {
+      "name": "lh_tool",
+      "source_task": "polishing_shoes",
+      "source_object": "scrub_brush_42",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        2.02,
+        1.5,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe00",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        -0.36,
+        1.44,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe01",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.020000000000000018,
+        1.44,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe02",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.4,
+        1.44,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe03",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.78,
+        1.44,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe04",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        1.1600000000000001,
+        1.44,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe05",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        -0.36,
+        1.5799999999999998,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe06",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.020000000000000018,
+        1.5799999999999998,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe07",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.4,
+        1.5799999999999998,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe08",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.78,
+        1.5799999999999998,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe09",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        1.1600000000000001,
+        1.5799999999999998,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe10",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        -0.36,
+        1.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe11",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.020000000000000018,
+        1.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe12",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.4,
+        1.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe13",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.78,
+        1.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe14",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        1.1600000000000001,
+        1.72,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe15",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        -0.36,
+        1.8599999999999999,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe16",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.020000000000000018,
+        1.8599999999999999,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe17",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.4,
+        1.8599999999999999,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe18",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_43",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        0.78,
+        1.8599999999999999,
+        0.85
+      ]
+    },
+    {
+      "name": "lh_shoe19",
+      "source_task": "polishing_shoes",
+      "source_object": "walker_44",
+      "source_sha256": "74f9a552142c042a4c91b03ed4c0bed19ea941dd85f0192d2ed6966b5c436708",
+      "position": [
+        1.1600000000000001,
+        1.8599999999999999,
+        0.85
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "lh_source",
+      "position": [
+        0.4,
+        1.65,
+        0.225
+      ],
+      "size": [
+        2.2,
+        0.7,
+        0.45
+      ],
+      "rgba": [
+        0.12,
+        0.32,
+        0.85,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_stage",
+      "position": [
+        2.02,
+        0.35,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.6,
+        0.08
+      ],
+      "rgba": [
+        0.95,
+        0.65,
+        0.08,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_tool_home",
+      "position": [
+        2.02,
+        1.5,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.5,
+        0.08
+      ],
+      "rgba": [
+        0.7,
+        0.7,
+        0.7,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair00",
+      "position": [
+        2.02,
+        -4.95,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair01",
+      "position": [
+        2.02,
+        -4.45,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair02",
+      "position": [
+        2.02,
+        -3.95,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair03",
+      "position": [
+        2.02,
+        -3.45,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair04",
+      "position": [
+        2.02,
+        -2.95,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair05",
+      "position": [
+        2.02,
+        -2.45,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair06",
+      "position": [
+        2.02,
+        -1.9500000000000002,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair07",
+      "position": [
+        2.02,
+        -1.4500000000000002,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair08",
+      "position": [
+        2.02,
+        -0.9500000000000002,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "lh_pair09",
+      "position": [
+        2.02,
+        -0.4500000000000002,
+        0.45499999999999996
+      ],
+      "size": [
+        0.49,
+        0.4,
+        0.08
+      ],
+      "rgba": [
+        0.12,
+        0.7,
+        0.25,
+        1.0
+      ],
+      "fixed_base": true
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "background_shoe0",
+      "target": "background_desk",
+      "place_on_support": true,
+      "xy": [
+        -0.8,
+        -4.6
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "background_shoe1",
+      "target": "background_desk",
+      "place_on_support": true,
+      "xy": [
+        -0.30000000000000004,
+        -4.6
+      ],
+      "settle_steps": 10
+    },
+    {
+      "object": "tool",
+      "target": "tool_home",
+      "place_on_support": true,
+      "xy": [
+        2.02,
+        1.5
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0022537107579410076,
+        0.000608413596637547,
+        0.9194222092628479,
+        0.3932650685310364
+      ]
+    },
+    {
+      "object": "shoe00",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -0.36,
+        1.44
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe00",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe01",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.020000000000000018,
+        1.44
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe01",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe02",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.4,
+        1.44
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe02",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe03",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.78,
+        1.44
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe03",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe04",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        1.1600000000000001,
+        1.44
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe04",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe05",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -0.36,
+        1.5799999999999998
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe05",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe06",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.020000000000000018,
+        1.5799999999999998
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe06",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe07",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.4,
+        1.5799999999999998
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe07",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe08",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.78,
+        1.5799999999999998
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe08",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe09",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        1.1600000000000001,
+        1.5799999999999998
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe09",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe10",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -0.36,
+        1.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe10",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe11",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.020000000000000018,
+        1.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe11",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe12",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.4,
+        1.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe12",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe13",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.78,
+        1.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe13",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe14",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        1.1600000000000001,
+        1.72
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe14",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe15",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        -0.36,
+        1.8599999999999999
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe15",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe16",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.020000000000000018,
+        1.8599999999999999
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe16",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe17",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.4,
+        1.8599999999999999
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe17",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe18",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        0.78,
+        1.8599999999999999
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        -0.0011764499358832836,
+        -0.00021346531866583973,
+        0.9966649413108826,
+        0.08159364759922028
+      ]
+    },
+    {
+      "object": "shoe18",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    },
+    {
+      "object": "shoe19",
+      "target": "source",
+      "place_on_support": true,
+      "xy": [
+        1.1600000000000001,
+        1.8599999999999999
+      ],
+      "settle_steps": 10,
+      "orientation": [
+        0.0002643459301907569,
+        0.002077644458040595,
+        -0.10618135333061218,
+        0.9943445324897766
+      ]
+    },
+    {
+      "object": "shoe19",
+      "state": "Covered",
+      "value": true,
+      "settle_steps": 1,
+      "max_sampling_attempts": 3,
+      "system": "dust"
+    }
+  ],
+  "initial_assertions": {
+    "background_shoe0_starts_on_background_desk": "background_shoe0_on_background_desk",
+    "background_shoe1_starts_on_background_desk": "background_shoe1_on_background_desk",
+    "tool_starts_on_tool_home": "tool_on_tool_home",
+    "shoe00_starts_on_source": "shoe00_on_source",
+    "shoe00_Covered_dust": "shoe00_Covered_dust",
+    "shoe01_starts_on_source": "shoe01_on_source",
+    "shoe01_Covered_dust": "shoe01_Covered_dust",
+    "shoe02_starts_on_source": "shoe02_on_source",
+    "shoe02_Covered_dust": "shoe02_Covered_dust",
+    "shoe03_starts_on_source": "shoe03_on_source",
+    "shoe03_Covered_dust": "shoe03_Covered_dust",
+    "shoe04_starts_on_source": "shoe04_on_source",
+    "shoe04_Covered_dust": "shoe04_Covered_dust",
+    "shoe05_starts_on_source": "shoe05_on_source",
+    "shoe05_Covered_dust": "shoe05_Covered_dust",
+    "shoe06_starts_on_source": "shoe06_on_source",
+    "shoe06_Covered_dust": "shoe06_Covered_dust",
+    "shoe07_starts_on_source": "shoe07_on_source",
+    "shoe07_Covered_dust": "shoe07_Covered_dust",
+    "shoe08_starts_on_source": "shoe08_on_source",
+    "shoe08_Covered_dust": "shoe08_Covered_dust",
+    "shoe09_starts_on_source": "shoe09_on_source",
+    "shoe09_Covered_dust": "shoe09_Covered_dust",
+    "shoe10_starts_on_source": "shoe10_on_source",
+    "shoe10_Covered_dust": "shoe10_Covered_dust",
+    "shoe11_starts_on_source": "shoe11_on_source",
+    "shoe11_Covered_dust": "shoe11_Covered_dust",
+    "shoe12_starts_on_source": "shoe12_on_source",
+    "shoe12_Covered_dust": "shoe12_Covered_dust",
+    "shoe13_starts_on_source": "shoe13_on_source",
+    "shoe13_Covered_dust": "shoe13_Covered_dust",
+    "shoe14_starts_on_source": "shoe14_on_source",
+    "shoe14_Covered_dust": "shoe14_Covered_dust",
+    "shoe15_starts_on_source": "shoe15_on_source",
+    "shoe15_Covered_dust": "shoe15_Covered_dust",
+    "shoe16_starts_on_source": "shoe16_on_source",
+    "shoe16_Covered_dust": "shoe16_Covered_dust",
+    "shoe17_starts_on_source": "shoe17_on_source",
+    "shoe17_Covered_dust": "shoe17_Covered_dust",
+    "shoe18_starts_on_source": "shoe18_on_source",
+    "shoe18_Covered_dust": "shoe18_Covered_dust",
+    "shoe19_starts_on_source": "shoe19_on_source",
+    "shoe19_Covered_dust": "shoe19_Covered_dust"
+  },
+  "public_instruction": "把蓝台的 20 只积尘鞋逐件放到黄色护理台去尘，再两只一组摆到 10 个绿色鞋位。每个鞋位恰好两只且两只相邻，同款鞋可互换，最后护理刷归位。",
+  "public_context": [
+    "蓝台 20 只鞋逐件在黄台去尘后归位；10 个绿色鞋位每个恰好两只，两只相邻。同款鞋可互换，不按隐藏主人编号评分。",
+    "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。"
+  ],
+  "requirements": [
+    {
+      "id": "care",
+      "text": "蓝台 20 只鞋逐件在黄台去尘后归位；10 个绿色鞋位每个恰好两只，两只相邻。同款鞋可互换，不按隐藏主人编号评分。",
+      "terminal": [
+        "shoe00_clean",
+        "shoe01_clean",
+        "shoe02_clean",
+        "shoe03_clean",
+        "shoe04_clean",
+        "shoe05_clean",
+        "shoe06_clean",
+        "shoe07_clean",
+        "shoe08_clean",
+        "shoe09_clean",
+        "shoe10_clean",
+        "shoe11_clean",
+        "shoe12_clean",
+        "shoe13_clean",
+        "shoe14_clean",
+        "shoe15_clean",
+        "shoe16_clean",
+        "shoe17_clean",
+        "shoe18_clean",
+        "shoe19_clean",
+        "pair00_ready",
+        "pair01_ready",
+        "pair02_ready",
+        "pair03_ready",
+        "pair04_ready",
+        "pair05_ready",
+        "pair06_ready",
+        "pair07_ready",
+        "pair08_ready",
+        "pair09_ready"
+      ],
+      "milestones": [
+        "shoe00_staged",
+        "shoe00_cleaned",
+        "shoe01_staged",
+        "shoe01_cleaned",
+        "shoe02_staged",
+        "shoe02_cleaned",
+        "shoe03_staged",
+        "shoe03_cleaned",
+        "shoe04_staged",
+        "shoe04_cleaned",
+        "shoe05_staged",
+        "shoe05_cleaned",
+        "shoe06_staged",
+        "shoe06_cleaned",
+        "shoe07_staged",
+        "shoe07_cleaned",
+        "shoe08_staged",
+        "shoe08_cleaned",
+        "shoe09_staged",
+        "shoe09_cleaned",
+        "shoe10_staged",
+        "shoe10_cleaned",
+        "shoe11_staged",
+        "shoe11_cleaned",
+        "shoe12_staged",
+        "shoe12_cleaned",
+        "shoe13_staged",
+        "shoe13_cleaned",
+        "shoe14_staged",
+        "shoe14_cleaned",
+        "shoe15_staged",
+        "shoe15_cleaned",
+        "shoe16_staged",
+        "shoe16_cleaned",
+        "shoe17_staged",
+        "shoe17_cleaned",
+        "shoe18_staged",
+        "shoe18_cleaned",
+        "shoe19_staged",
+        "shoe19_cleaned"
+      ],
+      "constraints": [
+        "shoe00_clean_at_stage",
+        "shoe01_clean_at_stage",
+        "shoe02_clean_at_stage",
+        "shoe03_clean_at_stage",
+        "shoe04_clean_at_stage",
+        "shoe05_clean_at_stage",
+        "shoe06_clean_at_stage",
+        "shoe07_clean_at_stage",
+        "shoe08_clean_at_stage",
+        "shoe09_clean_at_stage",
+        "shoe10_clean_at_stage",
+        "shoe11_clean_at_stage",
+        "shoe12_clean_at_stage",
+        "shoe13_clean_at_stage",
+        "shoe14_clean_at_stage",
+        "shoe15_clean_at_stage",
+        "shoe16_clean_at_stage",
+        "shoe17_clean_at_stage",
+        "shoe18_clean_at_stage",
+        "shoe19_clean_at_stage",
+        "shoe00_clean_before_pair",
+        "shoe01_clean_before_pair",
+        "shoe02_clean_before_pair",
+        "shoe03_clean_before_pair",
+        "shoe04_clean_before_pair",
+        "shoe05_clean_before_pair",
+        "shoe06_clean_before_pair",
+        "shoe07_clean_before_pair",
+        "shoe08_clean_before_pair",
+        "shoe09_clean_before_pair",
+        "shoe10_clean_before_pair",
+        "shoe11_clean_before_pair",
+        "shoe12_clean_before_pair",
+        "shoe13_clean_before_pair",
+        "shoe14_clean_before_pair",
+        "shoe15_clean_before_pair",
+        "shoe16_clean_before_pair",
+        "shoe17_clean_before_pair",
+        "shoe18_clean_before_pair",
+        "shoe19_clean_before_pair"
+      ]
+    },
+    {
+      "id": "protocol",
+      "text": "逐件搬运，不堆叠、套叠或批量携带。固定工作台保持原位，最后工具归位且手空。蓝台为来源，黄台为处理/暂存，绿台为终点，红台为勿动对照。",
+      "terminal": [
+        "hand_empty",
+        "tool_home"
+      ],
+      "milestones": [],
+      "constraints": [
+        "individual_handling"
+      ]
+    }
+  ],
+  "evaluation": {
+    "predicates": {
+      "background_shoe0_on_background_desk": {
+        "object": "background_shoe0",
+        "state": "OnTop",
+        "target": "background_desk"
+      },
+      "background_shoe1_on_background_desk": {
+        "object": "background_shoe1",
+        "state": "OnTop",
+        "target": "background_desk"
+      },
+      "tool_on_tool_home": {
+        "object": "tool",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "shoe00_on_source": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe00_Covered_dust": {
+        "object": "shoe00",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe00_on_stage": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe01_on_source": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe01_Covered_dust": {
+        "object": "shoe01",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe01_on_stage": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe02_on_source": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe02_Covered_dust": {
+        "object": "shoe02",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe02_on_stage": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe03_on_source": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe03_Covered_dust": {
+        "object": "shoe03",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe03_on_stage": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe04_on_source": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe04_Covered_dust": {
+        "object": "shoe04",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe04_on_stage": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe05_on_source": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe05_Covered_dust": {
+        "object": "shoe05",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe05_on_stage": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe06_on_source": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe06_Covered_dust": {
+        "object": "shoe06",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe06_on_stage": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe07_on_source": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe07_Covered_dust": {
+        "object": "shoe07",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe07_on_stage": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe08_on_source": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe08_Covered_dust": {
+        "object": "shoe08",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe08_on_stage": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe09_on_source": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe09_Covered_dust": {
+        "object": "shoe09",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe09_on_stage": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe10_on_source": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe10_Covered_dust": {
+        "object": "shoe10",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe10_on_stage": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe11_on_source": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe11_Covered_dust": {
+        "object": "shoe11",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe11_on_stage": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe12_on_source": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe12_Covered_dust": {
+        "object": "shoe12",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe12_on_stage": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe13_on_source": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe13_Covered_dust": {
+        "object": "shoe13",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe13_on_stage": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe14_on_source": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe14_Covered_dust": {
+        "object": "shoe14",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe14_on_stage": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe15_on_source": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe15_Covered_dust": {
+        "object": "shoe15",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe15_on_stage": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe16_on_source": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe16_Covered_dust": {
+        "object": "shoe16",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe16_on_stage": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe17_on_source": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe17_Covered_dust": {
+        "object": "shoe17",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe17_on_stage": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe18_on_source": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe18_Covered_dust": {
+        "object": "shoe18",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe18_on_stage": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "shoe19_on_source": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "shoe19_Covered_dust": {
+        "object": "shoe19",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "shoe19_on_stage": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "stage"
+      },
+      "pair00_ready": {
+        "object": "pair00",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair01_ready": {
+        "object": "pair01",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair02_ready": {
+        "object": "pair02",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair03_ready": {
+        "object": "pair03",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair04_ready": {
+        "object": "pair04",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair05_ready": {
+        "object": "pair05",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair06_ready": {
+        "object": "pair06",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair07_ready": {
+        "object": "pair07",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair08_ready": {
+        "object": "pair08",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "pair09_ready": {
+        "object": "pair09",
+        "state": "PairedOnTop",
+        "members": [
+          "shoe00",
+          "shoe01",
+          "shoe02",
+          "shoe03",
+          "shoe04",
+          "shoe05",
+          "shoe06",
+          "shoe07",
+          "shoe08",
+          "shoe09",
+          "shoe10",
+          "shoe11",
+          "shoe12",
+          "shoe13",
+          "shoe14",
+          "shoe15",
+          "shoe16",
+          "shoe17",
+          "shoe18",
+          "shoe19"
+        ]
+      },
+      "shoe00_on_pair00": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe00_on_pair01": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe00_on_pair02": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe00_on_pair03": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe00_on_pair04": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe00_on_pair05": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe00_on_pair06": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe00_on_pair07": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe00_on_pair08": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe00_on_pair09": {
+        "object": "shoe00",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe01_on_pair00": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe01_on_pair01": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe01_on_pair02": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe01_on_pair03": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe01_on_pair04": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe01_on_pair05": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe01_on_pair06": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe01_on_pair07": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe01_on_pair08": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe01_on_pair09": {
+        "object": "shoe01",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe02_on_pair00": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe02_on_pair01": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe02_on_pair02": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe02_on_pair03": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe02_on_pair04": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe02_on_pair05": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe02_on_pair06": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe02_on_pair07": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe02_on_pair08": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe02_on_pair09": {
+        "object": "shoe02",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe03_on_pair00": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe03_on_pair01": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe03_on_pair02": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe03_on_pair03": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe03_on_pair04": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe03_on_pair05": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe03_on_pair06": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe03_on_pair07": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe03_on_pair08": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe03_on_pair09": {
+        "object": "shoe03",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe04_on_pair00": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe04_on_pair01": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe04_on_pair02": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe04_on_pair03": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe04_on_pair04": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe04_on_pair05": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe04_on_pair06": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe04_on_pair07": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe04_on_pair08": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe04_on_pair09": {
+        "object": "shoe04",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe05_on_pair00": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe05_on_pair01": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe05_on_pair02": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe05_on_pair03": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe05_on_pair04": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe05_on_pair05": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe05_on_pair06": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe05_on_pair07": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe05_on_pair08": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe05_on_pair09": {
+        "object": "shoe05",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe06_on_pair00": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe06_on_pair01": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe06_on_pair02": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe06_on_pair03": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe06_on_pair04": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe06_on_pair05": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe06_on_pair06": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe06_on_pair07": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe06_on_pair08": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe06_on_pair09": {
+        "object": "shoe06",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe07_on_pair00": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe07_on_pair01": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe07_on_pair02": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe07_on_pair03": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe07_on_pair04": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe07_on_pair05": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe07_on_pair06": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe07_on_pair07": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe07_on_pair08": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe07_on_pair09": {
+        "object": "shoe07",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe08_on_pair00": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe08_on_pair01": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe08_on_pair02": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe08_on_pair03": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe08_on_pair04": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe08_on_pair05": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe08_on_pair06": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe08_on_pair07": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe08_on_pair08": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe08_on_pair09": {
+        "object": "shoe08",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe09_on_pair00": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe09_on_pair01": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe09_on_pair02": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe09_on_pair03": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe09_on_pair04": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe09_on_pair05": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe09_on_pair06": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe09_on_pair07": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe09_on_pair08": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe09_on_pair09": {
+        "object": "shoe09",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe10_on_pair00": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe10_on_pair01": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe10_on_pair02": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe10_on_pair03": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe10_on_pair04": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe10_on_pair05": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe10_on_pair06": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe10_on_pair07": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe10_on_pair08": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe10_on_pair09": {
+        "object": "shoe10",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe11_on_pair00": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe11_on_pair01": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe11_on_pair02": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe11_on_pair03": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe11_on_pair04": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe11_on_pair05": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe11_on_pair06": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe11_on_pair07": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe11_on_pair08": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe11_on_pair09": {
+        "object": "shoe11",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe12_on_pair00": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe12_on_pair01": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe12_on_pair02": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe12_on_pair03": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe12_on_pair04": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe12_on_pair05": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe12_on_pair06": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe12_on_pair07": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe12_on_pair08": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe12_on_pair09": {
+        "object": "shoe12",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe13_on_pair00": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe13_on_pair01": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe13_on_pair02": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe13_on_pair03": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe13_on_pair04": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe13_on_pair05": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe13_on_pair06": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe13_on_pair07": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe13_on_pair08": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe13_on_pair09": {
+        "object": "shoe13",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe14_on_pair00": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe14_on_pair01": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe14_on_pair02": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe14_on_pair03": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe14_on_pair04": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe14_on_pair05": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe14_on_pair06": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe14_on_pair07": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe14_on_pair08": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe14_on_pair09": {
+        "object": "shoe14",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe15_on_pair00": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe15_on_pair01": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe15_on_pair02": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe15_on_pair03": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe15_on_pair04": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe15_on_pair05": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe15_on_pair06": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe15_on_pair07": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe15_on_pair08": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe15_on_pair09": {
+        "object": "shoe15",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe16_on_pair00": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe16_on_pair01": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe16_on_pair02": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe16_on_pair03": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe16_on_pair04": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe16_on_pair05": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe16_on_pair06": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe16_on_pair07": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe16_on_pair08": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe16_on_pair09": {
+        "object": "shoe16",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe17_on_pair00": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe17_on_pair01": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe17_on_pair02": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe17_on_pair03": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe17_on_pair04": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe17_on_pair05": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe17_on_pair06": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe17_on_pair07": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe17_on_pair08": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe17_on_pair09": {
+        "object": "shoe17",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe18_on_pair00": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe18_on_pair01": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe18_on_pair02": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe18_on_pair03": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe18_on_pair04": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe18_on_pair05": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe18_on_pair06": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe18_on_pair07": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe18_on_pair08": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe18_on_pair09": {
+        "object": "shoe18",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "shoe19_on_pair00": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair00"
+      },
+      "shoe19_on_pair01": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair01"
+      },
+      "shoe19_on_pair02": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair02"
+      },
+      "shoe19_on_pair03": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair03"
+      },
+      "shoe19_on_pair04": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair04"
+      },
+      "shoe19_on_pair05": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair05"
+      },
+      "shoe19_on_pair06": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair06"
+      },
+      "shoe19_on_pair07": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair07"
+      },
+      "shoe19_on_pair08": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair08"
+      },
+      "shoe19_on_pair09": {
+        "object": "shoe19",
+        "state": "OnTop",
+        "target": "pair09"
+      },
+      "hand_empty": {
+        "object": "tool",
+        "state": "HandEmpty"
+      }
+    },
+    "terminal": {
+      "shoe00_clean": {
+        "not": "shoe00_Covered_dust"
+      },
+      "shoe01_clean": {
+        "not": "shoe01_Covered_dust"
+      },
+      "shoe02_clean": {
+        "not": "shoe02_Covered_dust"
+      },
+      "shoe03_clean": {
+        "not": "shoe03_Covered_dust"
+      },
+      "shoe04_clean": {
+        "not": "shoe04_Covered_dust"
+      },
+      "shoe05_clean": {
+        "not": "shoe05_Covered_dust"
+      },
+      "shoe06_clean": {
+        "not": "shoe06_Covered_dust"
+      },
+      "shoe07_clean": {
+        "not": "shoe07_Covered_dust"
+      },
+      "shoe08_clean": {
+        "not": "shoe08_Covered_dust"
+      },
+      "shoe09_clean": {
+        "not": "shoe09_Covered_dust"
+      },
+      "shoe10_clean": {
+        "not": "shoe10_Covered_dust"
+      },
+      "shoe11_clean": {
+        "not": "shoe11_Covered_dust"
+      },
+      "shoe12_clean": {
+        "not": "shoe12_Covered_dust"
+      },
+      "shoe13_clean": {
+        "not": "shoe13_Covered_dust"
+      },
+      "shoe14_clean": {
+        "not": "shoe14_Covered_dust"
+      },
+      "shoe15_clean": {
+        "not": "shoe15_Covered_dust"
+      },
+      "shoe16_clean": {
+        "not": "shoe16_Covered_dust"
+      },
+      "shoe17_clean": {
+        "not": "shoe17_Covered_dust"
+      },
+      "shoe18_clean": {
+        "not": "shoe18_Covered_dust"
+      },
+      "shoe19_clean": {
+        "not": "shoe19_Covered_dust"
+      },
+      "pair00_ready": "pair00_ready",
+      "pair01_ready": "pair01_ready",
+      "pair02_ready": "pair02_ready",
+      "pair03_ready": "pair03_ready",
+      "pair04_ready": "pair04_ready",
+      "pair05_ready": "pair05_ready",
+      "pair06_ready": "pair06_ready",
+      "pair07_ready": "pair07_ready",
+      "pair08_ready": "pair08_ready",
+      "pair09_ready": "pair09_ready",
+      "tool_home": "tool_on_tool_home",
+      "hand_empty": "hand_empty"
+    },
+    "milestones": {
+      "shoe00_staged": {
+        "when": "shoe00_on_stage",
+        "after": []
+      },
+      "shoe00_cleaned": {
+        "when": {
+          "all": [
+            "shoe00_on_stage",
+            {
+              "not": "shoe00_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe00_staged"
+        ]
+      },
+      "shoe01_staged": {
+        "when": "shoe01_on_stage",
+        "after": []
+      },
+      "shoe01_cleaned": {
+        "when": {
+          "all": [
+            "shoe01_on_stage",
+            {
+              "not": "shoe01_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe01_staged"
+        ]
+      },
+      "shoe02_staged": {
+        "when": "shoe02_on_stage",
+        "after": []
+      },
+      "shoe02_cleaned": {
+        "when": {
+          "all": [
+            "shoe02_on_stage",
+            {
+              "not": "shoe02_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe02_staged"
+        ]
+      },
+      "shoe03_staged": {
+        "when": "shoe03_on_stage",
+        "after": []
+      },
+      "shoe03_cleaned": {
+        "when": {
+          "all": [
+            "shoe03_on_stage",
+            {
+              "not": "shoe03_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe03_staged"
+        ]
+      },
+      "shoe04_staged": {
+        "when": "shoe04_on_stage",
+        "after": []
+      },
+      "shoe04_cleaned": {
+        "when": {
+          "all": [
+            "shoe04_on_stage",
+            {
+              "not": "shoe04_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe04_staged"
+        ]
+      },
+      "shoe05_staged": {
+        "when": "shoe05_on_stage",
+        "after": []
+      },
+      "shoe05_cleaned": {
+        "when": {
+          "all": [
+            "shoe05_on_stage",
+            {
+              "not": "shoe05_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe05_staged"
+        ]
+      },
+      "shoe06_staged": {
+        "when": "shoe06_on_stage",
+        "after": []
+      },
+      "shoe06_cleaned": {
+        "when": {
+          "all": [
+            "shoe06_on_stage",
+            {
+              "not": "shoe06_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe06_staged"
+        ]
+      },
+      "shoe07_staged": {
+        "when": "shoe07_on_stage",
+        "after": []
+      },
+      "shoe07_cleaned": {
+        "when": {
+          "all": [
+            "shoe07_on_stage",
+            {
+              "not": "shoe07_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe07_staged"
+        ]
+      },
+      "shoe08_staged": {
+        "when": "shoe08_on_stage",
+        "after": []
+      },
+      "shoe08_cleaned": {
+        "when": {
+          "all": [
+            "shoe08_on_stage",
+            {
+              "not": "shoe08_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe08_staged"
+        ]
+      },
+      "shoe09_staged": {
+        "when": "shoe09_on_stage",
+        "after": []
+      },
+      "shoe09_cleaned": {
+        "when": {
+          "all": [
+            "shoe09_on_stage",
+            {
+              "not": "shoe09_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe09_staged"
+        ]
+      },
+      "shoe10_staged": {
+        "when": "shoe10_on_stage",
+        "after": []
+      },
+      "shoe10_cleaned": {
+        "when": {
+          "all": [
+            "shoe10_on_stage",
+            {
+              "not": "shoe10_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe10_staged"
+        ]
+      },
+      "shoe11_staged": {
+        "when": "shoe11_on_stage",
+        "after": []
+      },
+      "shoe11_cleaned": {
+        "when": {
+          "all": [
+            "shoe11_on_stage",
+            {
+              "not": "shoe11_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe11_staged"
+        ]
+      },
+      "shoe12_staged": {
+        "when": "shoe12_on_stage",
+        "after": []
+      },
+      "shoe12_cleaned": {
+        "when": {
+          "all": [
+            "shoe12_on_stage",
+            {
+              "not": "shoe12_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe12_staged"
+        ]
+      },
+      "shoe13_staged": {
+        "when": "shoe13_on_stage",
+        "after": []
+      },
+      "shoe13_cleaned": {
+        "when": {
+          "all": [
+            "shoe13_on_stage",
+            {
+              "not": "shoe13_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe13_staged"
+        ]
+      },
+      "shoe14_staged": {
+        "when": "shoe14_on_stage",
+        "after": []
+      },
+      "shoe14_cleaned": {
+        "when": {
+          "all": [
+            "shoe14_on_stage",
+            {
+              "not": "shoe14_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe14_staged"
+        ]
+      },
+      "shoe15_staged": {
+        "when": "shoe15_on_stage",
+        "after": []
+      },
+      "shoe15_cleaned": {
+        "when": {
+          "all": [
+            "shoe15_on_stage",
+            {
+              "not": "shoe15_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe15_staged"
+        ]
+      },
+      "shoe16_staged": {
+        "when": "shoe16_on_stage",
+        "after": []
+      },
+      "shoe16_cleaned": {
+        "when": {
+          "all": [
+            "shoe16_on_stage",
+            {
+              "not": "shoe16_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe16_staged"
+        ]
+      },
+      "shoe17_staged": {
+        "when": "shoe17_on_stage",
+        "after": []
+      },
+      "shoe17_cleaned": {
+        "when": {
+          "all": [
+            "shoe17_on_stage",
+            {
+              "not": "shoe17_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe17_staged"
+        ]
+      },
+      "shoe18_staged": {
+        "when": "shoe18_on_stage",
+        "after": []
+      },
+      "shoe18_cleaned": {
+        "when": {
+          "all": [
+            "shoe18_on_stage",
+            {
+              "not": "shoe18_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe18_staged"
+        ]
+      },
+      "shoe19_staged": {
+        "when": "shoe19_on_stage",
+        "after": []
+      },
+      "shoe19_cleaned": {
+        "when": {
+          "all": [
+            "shoe19_on_stage",
+            {
+              "not": "shoe19_Covered_dust"
+            }
+          ]
+        },
+        "after": [
+          "shoe19_staged"
+        ]
+      }
+    },
+    "state_guards": [
+      {
+        "id": "shoe00_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe00_Covered_dust",
+            "shoe00_on_stage"
+          ]
+        },
+        "until": "shoe00_cleaned"
+      },
+      {
+        "id": "shoe01_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe01_Covered_dust",
+            "shoe01_on_stage"
+          ]
+        },
+        "until": "shoe01_cleaned"
+      },
+      {
+        "id": "shoe02_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe02_Covered_dust",
+            "shoe02_on_stage"
+          ]
+        },
+        "until": "shoe02_cleaned"
+      },
+      {
+        "id": "shoe03_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe03_Covered_dust",
+            "shoe03_on_stage"
+          ]
+        },
+        "until": "shoe03_cleaned"
+      },
+      {
+        "id": "shoe04_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe04_Covered_dust",
+            "shoe04_on_stage"
+          ]
+        },
+        "until": "shoe04_cleaned"
+      },
+      {
+        "id": "shoe05_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe05_Covered_dust",
+            "shoe05_on_stage"
+          ]
+        },
+        "until": "shoe05_cleaned"
+      },
+      {
+        "id": "shoe06_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe06_Covered_dust",
+            "shoe06_on_stage"
+          ]
+        },
+        "until": "shoe06_cleaned"
+      },
+      {
+        "id": "shoe07_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe07_Covered_dust",
+            "shoe07_on_stage"
+          ]
+        },
+        "until": "shoe07_cleaned"
+      },
+      {
+        "id": "shoe08_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe08_Covered_dust",
+            "shoe08_on_stage"
+          ]
+        },
+        "until": "shoe08_cleaned"
+      },
+      {
+        "id": "shoe09_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe09_Covered_dust",
+            "shoe09_on_stage"
+          ]
+        },
+        "until": "shoe09_cleaned"
+      },
+      {
+        "id": "shoe10_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe10_Covered_dust",
+            "shoe10_on_stage"
+          ]
+        },
+        "until": "shoe10_cleaned"
+      },
+      {
+        "id": "shoe11_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe11_Covered_dust",
+            "shoe11_on_stage"
+          ]
+        },
+        "until": "shoe11_cleaned"
+      },
+      {
+        "id": "shoe12_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe12_Covered_dust",
+            "shoe12_on_stage"
+          ]
+        },
+        "until": "shoe12_cleaned"
+      },
+      {
+        "id": "shoe13_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe13_Covered_dust",
+            "shoe13_on_stage"
+          ]
+        },
+        "until": "shoe13_cleaned"
+      },
+      {
+        "id": "shoe14_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe14_Covered_dust",
+            "shoe14_on_stage"
+          ]
+        },
+        "until": "shoe14_cleaned"
+      },
+      {
+        "id": "shoe15_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe15_Covered_dust",
+            "shoe15_on_stage"
+          ]
+        },
+        "until": "shoe15_cleaned"
+      },
+      {
+        "id": "shoe16_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe16_Covered_dust",
+            "shoe16_on_stage"
+          ]
+        },
+        "until": "shoe16_cleaned"
+      },
+      {
+        "id": "shoe17_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe17_Covered_dust",
+            "shoe17_on_stage"
+          ]
+        },
+        "until": "shoe17_cleaned"
+      },
+      {
+        "id": "shoe18_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe18_Covered_dust",
+            "shoe18_on_stage"
+          ]
+        },
+        "until": "shoe18_cleaned"
+      },
+      {
+        "id": "shoe19_clean_at_stage",
+        "require": {
+          "any": [
+            "shoe19_Covered_dust",
+            "shoe19_on_stage"
+          ]
+        },
+        "until": "shoe19_cleaned"
+      },
+      {
+        "id": "shoe00_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe00_on_pair00",
+              "shoe00_on_pair01",
+              "shoe00_on_pair02",
+              "shoe00_on_pair03",
+              "shoe00_on_pair04",
+              "shoe00_on_pair05",
+              "shoe00_on_pair06",
+              "shoe00_on_pair07",
+              "shoe00_on_pair08",
+              "shoe00_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe00_cleaned"
+      },
+      {
+        "id": "shoe01_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe01_on_pair00",
+              "shoe01_on_pair01",
+              "shoe01_on_pair02",
+              "shoe01_on_pair03",
+              "shoe01_on_pair04",
+              "shoe01_on_pair05",
+              "shoe01_on_pair06",
+              "shoe01_on_pair07",
+              "shoe01_on_pair08",
+              "shoe01_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe01_cleaned"
+      },
+      {
+        "id": "shoe02_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe02_on_pair00",
+              "shoe02_on_pair01",
+              "shoe02_on_pair02",
+              "shoe02_on_pair03",
+              "shoe02_on_pair04",
+              "shoe02_on_pair05",
+              "shoe02_on_pair06",
+              "shoe02_on_pair07",
+              "shoe02_on_pair08",
+              "shoe02_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe02_cleaned"
+      },
+      {
+        "id": "shoe03_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe03_on_pair00",
+              "shoe03_on_pair01",
+              "shoe03_on_pair02",
+              "shoe03_on_pair03",
+              "shoe03_on_pair04",
+              "shoe03_on_pair05",
+              "shoe03_on_pair06",
+              "shoe03_on_pair07",
+              "shoe03_on_pair08",
+              "shoe03_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe03_cleaned"
+      },
+      {
+        "id": "shoe04_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe04_on_pair00",
+              "shoe04_on_pair01",
+              "shoe04_on_pair02",
+              "shoe04_on_pair03",
+              "shoe04_on_pair04",
+              "shoe04_on_pair05",
+              "shoe04_on_pair06",
+              "shoe04_on_pair07",
+              "shoe04_on_pair08",
+              "shoe04_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe04_cleaned"
+      },
+      {
+        "id": "shoe05_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe05_on_pair00",
+              "shoe05_on_pair01",
+              "shoe05_on_pair02",
+              "shoe05_on_pair03",
+              "shoe05_on_pair04",
+              "shoe05_on_pair05",
+              "shoe05_on_pair06",
+              "shoe05_on_pair07",
+              "shoe05_on_pair08",
+              "shoe05_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe05_cleaned"
+      },
+      {
+        "id": "shoe06_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe06_on_pair00",
+              "shoe06_on_pair01",
+              "shoe06_on_pair02",
+              "shoe06_on_pair03",
+              "shoe06_on_pair04",
+              "shoe06_on_pair05",
+              "shoe06_on_pair06",
+              "shoe06_on_pair07",
+              "shoe06_on_pair08",
+              "shoe06_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe06_cleaned"
+      },
+      {
+        "id": "shoe07_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe07_on_pair00",
+              "shoe07_on_pair01",
+              "shoe07_on_pair02",
+              "shoe07_on_pair03",
+              "shoe07_on_pair04",
+              "shoe07_on_pair05",
+              "shoe07_on_pair06",
+              "shoe07_on_pair07",
+              "shoe07_on_pair08",
+              "shoe07_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe07_cleaned"
+      },
+      {
+        "id": "shoe08_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe08_on_pair00",
+              "shoe08_on_pair01",
+              "shoe08_on_pair02",
+              "shoe08_on_pair03",
+              "shoe08_on_pair04",
+              "shoe08_on_pair05",
+              "shoe08_on_pair06",
+              "shoe08_on_pair07",
+              "shoe08_on_pair08",
+              "shoe08_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe08_cleaned"
+      },
+      {
+        "id": "shoe09_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe09_on_pair00",
+              "shoe09_on_pair01",
+              "shoe09_on_pair02",
+              "shoe09_on_pair03",
+              "shoe09_on_pair04",
+              "shoe09_on_pair05",
+              "shoe09_on_pair06",
+              "shoe09_on_pair07",
+              "shoe09_on_pair08",
+              "shoe09_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe09_cleaned"
+      },
+      {
+        "id": "shoe10_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe10_on_pair00",
+              "shoe10_on_pair01",
+              "shoe10_on_pair02",
+              "shoe10_on_pair03",
+              "shoe10_on_pair04",
+              "shoe10_on_pair05",
+              "shoe10_on_pair06",
+              "shoe10_on_pair07",
+              "shoe10_on_pair08",
+              "shoe10_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe10_cleaned"
+      },
+      {
+        "id": "shoe11_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe11_on_pair00",
+              "shoe11_on_pair01",
+              "shoe11_on_pair02",
+              "shoe11_on_pair03",
+              "shoe11_on_pair04",
+              "shoe11_on_pair05",
+              "shoe11_on_pair06",
+              "shoe11_on_pair07",
+              "shoe11_on_pair08",
+              "shoe11_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe11_cleaned"
+      },
+      {
+        "id": "shoe12_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe12_on_pair00",
+              "shoe12_on_pair01",
+              "shoe12_on_pair02",
+              "shoe12_on_pair03",
+              "shoe12_on_pair04",
+              "shoe12_on_pair05",
+              "shoe12_on_pair06",
+              "shoe12_on_pair07",
+              "shoe12_on_pair08",
+              "shoe12_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe12_cleaned"
+      },
+      {
+        "id": "shoe13_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe13_on_pair00",
+              "shoe13_on_pair01",
+              "shoe13_on_pair02",
+              "shoe13_on_pair03",
+              "shoe13_on_pair04",
+              "shoe13_on_pair05",
+              "shoe13_on_pair06",
+              "shoe13_on_pair07",
+              "shoe13_on_pair08",
+              "shoe13_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe13_cleaned"
+      },
+      {
+        "id": "shoe14_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe14_on_pair00",
+              "shoe14_on_pair01",
+              "shoe14_on_pair02",
+              "shoe14_on_pair03",
+              "shoe14_on_pair04",
+              "shoe14_on_pair05",
+              "shoe14_on_pair06",
+              "shoe14_on_pair07",
+              "shoe14_on_pair08",
+              "shoe14_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe14_cleaned"
+      },
+      {
+        "id": "shoe15_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe15_on_pair00",
+              "shoe15_on_pair01",
+              "shoe15_on_pair02",
+              "shoe15_on_pair03",
+              "shoe15_on_pair04",
+              "shoe15_on_pair05",
+              "shoe15_on_pair06",
+              "shoe15_on_pair07",
+              "shoe15_on_pair08",
+              "shoe15_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe15_cleaned"
+      },
+      {
+        "id": "shoe16_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe16_on_pair00",
+              "shoe16_on_pair01",
+              "shoe16_on_pair02",
+              "shoe16_on_pair03",
+              "shoe16_on_pair04",
+              "shoe16_on_pair05",
+              "shoe16_on_pair06",
+              "shoe16_on_pair07",
+              "shoe16_on_pair08",
+              "shoe16_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe16_cleaned"
+      },
+      {
+        "id": "shoe17_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe17_on_pair00",
+              "shoe17_on_pair01",
+              "shoe17_on_pair02",
+              "shoe17_on_pair03",
+              "shoe17_on_pair04",
+              "shoe17_on_pair05",
+              "shoe17_on_pair06",
+              "shoe17_on_pair07",
+              "shoe17_on_pair08",
+              "shoe17_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe17_cleaned"
+      },
+      {
+        "id": "shoe18_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe18_on_pair00",
+              "shoe18_on_pair01",
+              "shoe18_on_pair02",
+              "shoe18_on_pair03",
+              "shoe18_on_pair04",
+              "shoe18_on_pair05",
+              "shoe18_on_pair06",
+              "shoe18_on_pair07",
+              "shoe18_on_pair08",
+              "shoe18_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe18_cleaned"
+      },
+      {
+        "id": "shoe19_clean_before_pair",
+        "require": {
+          "not": {
+            "any": [
+              "shoe19_on_pair00",
+              "shoe19_on_pair01",
+              "shoe19_on_pair02",
+              "shoe19_on_pair03",
+              "shoe19_on_pair04",
+              "shoe19_on_pair05",
+              "shoe19_on_pair06",
+              "shoe19_on_pair07",
+              "shoe19_on_pair08",
+              "shoe19_on_pair09"
+            ]
+          }
+        },
+        "until": "shoe19_cleaned"
+      }
+    ],
+    "motion_guards": [],
+    "carry_guards": [
+      {
+        "id": "individual_handling",
+        "mode": "single_object"
+      }
+    ],
+    "score_type": "custom_100plus_terminal_history_and_handling_v1"
+  },
+  "acceptance_cases": {
+    "reference_orders": [
+      "forward",
+      "reverse"
+    ],
+    "physical_negative_cases": [
+      "skip_work",
+      "skip_stage",
+      "missing_delivery"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 1000
+  },
+  "settle_steps": 45,
+  "reference_plan": {
+    "kind": "service_items",
+    "work": [
+      {
+        "item": "shoe00",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair00",
+        "destination_xy": [
+          2.02,
+          -5.017
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe01",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair00",
+        "destination_xy": [
+          2.02,
+          -4.883
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe02",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair01",
+        "destination_xy": [
+          2.02,
+          -4.517
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe03",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair01",
+        "destination_xy": [
+          2.02,
+          -4.383
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe04",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair02",
+        "destination_xy": [
+          2.02,
+          -4.017
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe05",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair02",
+        "destination_xy": [
+          2.02,
+          -3.883
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe06",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair03",
+        "destination_xy": [
+          2.02,
+          -3.5170000000000003
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe07",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair03",
+        "destination_xy": [
+          2.02,
+          -3.383
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe08",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair04",
+        "destination_xy": [
+          2.02,
+          -3.0170000000000003
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe09",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair04",
+        "destination_xy": [
+          2.02,
+          -2.883
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe10",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair05",
+        "destination_xy": [
+          2.02,
+          -2.5170000000000003
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe11",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair05",
+        "destination_xy": [
+          2.02,
+          -2.383
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe12",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair06",
+        "destination_xy": [
+          2.02,
+          -2.0170000000000003
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe13",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair06",
+        "destination_xy": [
+          2.02,
+          -1.8830000000000002
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe14",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair07",
+        "destination_xy": [
+          2.02,
+          -1.5170000000000001
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe15",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair07",
+        "destination_xy": [
+          2.02,
+          -1.3830000000000002
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe16",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair08",
+        "destination_xy": [
+          2.02,
+          -1.0170000000000001
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe17",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair08",
+        "destination_xy": [
+          2.02,
+          -0.8830000000000002
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe18",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair09",
+        "destination_xy": [
+          2.02,
+          -0.5170000000000001
+        ],
+        "primitive": "wipe"
+      },
+      {
+        "item": "shoe19",
+        "source": "source",
+        "stage": "stage",
+        "stage_xy": [
+          2.02,
+          0.35
+        ],
+        "destination": "pair09",
+        "destination_xy": [
+          2.02,
+          -0.3830000000000002
+        ],
+        "primitive": "wipe"
+      }
+    ],
+    "tool": "tool",
+    "tool_home": "tool_home",
+    "tool_xy": [
+      2.02,
+      1.5
+    ],
+    "toggle": false
+  },
+  "construction_source": "inspected_native_public_templates",
+  "design_ledger": {
+    "conditional_useful_calls": 100,
+    "measured_useful_calls": null,
+    "reference_attempt_budget": 1000,
+    "proposed_model_act_look_budget": 600
+  },
+  "robot_start": {
+    "position": [
+      1.05,
+      -2.0,
+      0.02
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "scene_exclusions": [
+    "armchair_ybcnmu_0"
+  ],
+  "design_deviations": [
+    "No owner IDs or assigned left/right pairs: each green shoe stand must hold exactly two mutually adjacent cleaned shoes; interchangeable shoes accepted.",
+    "Colored destination, care and tool pads sit on the native wall stand; one non-task armchair is excluded for access. Two original distractor shoes remain on the desk."
+  ]
+}

@@ -17,19 +17,21 @@ class Budget:
     max_calls: int = 240
     max_sim_steps: int = 20000
     max_steps_per_action: int = 700
-    wall_seconds: float = 1800
+    wall_seconds: float | None = 1800
 
     def __post_init__(self):
-        for value in asdict(self).values():
+        for key,value in asdict(self).items():
+            if key=='wall_seconds' and value is None:continue
             if isinstance(value, bool) or value <= 0:
                 raise ValueError("Budgets must be positive")
 
 
 class SkillError(Exception):
-    def __init__(self, code: str, message: str, *, changed: bool = False):
+    def __init__(self, code: str, message: str, *, changed: bool = False, stage: str | None = None):
         super().__init__(message)
         self.code = code
         self.changed = changed
+        self.stage = stage
 
 
 class Backend(Protocol):
@@ -105,8 +107,10 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
         for i, v in enumerate(value):
             validate(v, schema["items"], f"{path}[{i}]")
     elif kind == "string":
-        if len(value) > schema.get('maxLength',8000) or len(value) < schema.get('minLength',0):
-            raise SkillError("invalid_arguments", f"{path} has invalid length")
+        minimum, maximum = schema.get('minLength', 0), schema.get('maxLength', 8000)
+        if not minimum <= len(value) <= maximum:
+            raise SkillError("invalid_arguments",
+                             f"{path} has {len(value)} characters; allowed length is {minimum}–{maximum}.")
     elif kind in {"integer", "number"}:
         if value < schema.get("minimum", value) or value > schema.get("maximum", value):
             raise SkillError("invalid_arguments", f"{path} is outside the allowed range")

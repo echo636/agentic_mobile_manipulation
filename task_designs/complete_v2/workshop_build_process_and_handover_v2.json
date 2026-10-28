@@ -1,0 +1,2350 @@
+{
+  "schema_version": 3,
+  "id": "workshop_build_process_and_handover_v2",
+  "instance_id": "workshop_build_process_and_handover_v2_seed0_r1",
+  "status": "complete_recipe_physics_pending",
+  "benchmark_ready": false,
+  "official_submission_eligible": false,
+  "base": {
+    "task": "outfit_a_basic_toolbox",
+    "instance": 301,
+    "seed": 0
+  },
+  "roles": {
+    "box": "toolbox_191",
+    "floor": "floors_hkdmte_0",
+    "source": "fv2_source",
+    "bench": "fv2_bench",
+    "shelf": "fv2_shelf",
+    "tool_home": "fv2_tool_home",
+    "products": "fv2_products",
+    "brush": "fv2_brush",
+    "axe": "fv2_axe",
+    "block": "fv2_block",
+    "crate": "fv2_crate",
+    "book": "fv2_book",
+    "can": "fv2_can",
+    "bin": "fv2_bin",
+    "broom": "fv2_broom",
+    "paintbrush": "fv2_paintbrush",
+    "ink": "fv2_ink",
+    "detergent_basin": "fv2_detergent_basin",
+    "log1": "fv2_log1",
+    "log2": "fv2_log2",
+    "parts": "fv2_parts",
+    "jig": "fv2_jig",
+    "table": "fv2_table",
+    "bracket": "fv2_bracket",
+    "leg1": "fv2_leg1",
+    "leg2": "fv2_leg2",
+    "leg3": "fv2_leg3",
+    "leg4": "fv2_leg4",
+    "log1_half0": "half_fv2_log1_0",
+    "log1_half1": "half_fv2_log1_1",
+    "log2_half0": "half_fv2_log2_0",
+    "log2_half1": "half_fv2_log2_1"
+  },
+  "asset_imports": [
+    {
+      "name": "fv2_brush",
+      "source_task": "clean_a_keyboard",
+      "source_object": "pipe_cleaner_120",
+      "source_sha256": "f8a478a306d8e97c8c3bc42f5b224558bd1a615ca22b88e73f5bae86a4a0d0dd",
+      "position": [
+        74.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_axe",
+      "source_task": "chopping_wood",
+      "source_object": "axe_173",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        77.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_block",
+      "source_task": "chopping_wood",
+      "source_object": "chopping_block_172",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        80.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_crate",
+      "source_task": "assembling_gift_baskets",
+      "source_object": "wicker_basket_89",
+      "source_sha256": "1c66f06ad635249ea0700537cdf1bb2196a1888701fe140ac20286eec6b369b8",
+      "position": [
+        83.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_book",
+      "source_task": "clean_up_your_desk",
+      "source_object": "paperback_book_225",
+      "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+      "position": [
+        86.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_can",
+      "source_task": "picking_up_trash",
+      "source_object": "can_of_soda_114",
+      "source_sha256": "e8e61d04e358fbf61ff04fed3f11e1f213433cb7d8a9ef263b62e16387d6c83a",
+      "position": [
+        89.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_bin",
+      "source_task": "picking_up_trash",
+      "source_object": "trash_can_116",
+      "source_sha256": "e8e61d04e358fbf61ff04fed3f11e1f213433cb7d8a9ef263b62e16387d6c83a",
+      "position": [
+        92.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_broom",
+      "source_task": "clean_a_patio",
+      "source_object": "broom_172",
+      "source_sha256": "e9440c9f057b752a316cdc60cb72c499b6837c03945db2c9dc2ca0ea4094458e",
+      "position": [
+        95.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_log1",
+      "source_task": "chopping_wood",
+      "source_object": "log_174",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        107.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "fv2_log2",
+      "source_task": "chopping_wood",
+      "source_object": "log_175",
+      "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+      "position": [
+        110.0,
+        50.0,
+        2.0
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "native_assets": [
+    {
+      "name": "fv2_paintbrush",
+      "category": "rag",
+      "model": "oocmed",
+      "usd_sha256": "732677fea4ca1e96c8b71f843249e2b5740287542aae48245871d7a6daeb7068",
+      "prim_type": 0,
+      "position": [
+        98.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_ink",
+      "category": "ink_bottle",
+      "model": "gcyvrx",
+      "usd_sha256": "ec732dfc8a8181fd0a325154691b9c01c3fcf7df6b9a96aaa60c63d297c24728",
+      "prim_type": 0,
+      "position": [
+        101.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_detergent_basin",
+      "category": "ink_bottle",
+      "model": "gcyvrx",
+      "usd_sha256": "ec732dfc8a8181fd0a325154691b9c01c3fcf7df6b9a96aaa60c63d297c24728",
+      "prim_type": 0,
+      "position": [
+        104.0,
+        50.0,
+        2.0
+      ],
+      "scale": [
+        3.0,
+        3.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_table",
+      "category": "desk_top",
+      "model": "eggere",
+      "usd_sha256": "525ecd8c5c841d8a5f18b9ac26fe2eddd2d4ec55ce766c32b6cac7ae903b66d6",
+      "prim_type": 0,
+      "position": [
+        119.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_bracket",
+      "category": "desk_bracket",
+      "model": "lwqwre",
+      "usd_sha256": "087535628976b293c502c23a6c3639360ada8915ea2362939b6298bb7a829210",
+      "prim_type": 0,
+      "position": [
+        122.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_leg1",
+      "category": "desk_leg",
+      "model": "qoerre",
+      "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
+      "prim_type": 0,
+      "position": [
+        125.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_leg2",
+      "category": "desk_leg",
+      "model": "qoerre",
+      "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
+      "prim_type": 0,
+      "position": [
+        128.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_leg3",
+      "category": "desk_leg",
+      "model": "qoerre",
+      "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
+      "prim_type": 0,
+      "position": [
+        131.0,
+        50.0,
+        2.0
+      ]
+    },
+    {
+      "name": "fv2_leg4",
+      "category": "desk_leg",
+      "model": "qoerre",
+      "usd_sha256": "7a97b8100c4f42dd66566584c47235f648cce15fa3af69811186e88f95019f85",
+      "prim_type": 0,
+      "position": [
+        134.0,
+        50.0,
+        2.0
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "name": "fv2_source",
+      "position": [
+        -13.2,
+        9.4,
+        0.325
+      ],
+      "size": [
+        1.8,
+        1.0,
+        0.65
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_bench",
+      "position": [
+        -12.3,
+        10.7,
+        0.35
+      ],
+      "size": [
+        0.7,
+        1.4,
+        0.7
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_shelf",
+      "position": [
+        -13.85,
+        17.7,
+        0.35
+      ],
+      "size": [
+        1.4,
+        0.7,
+        0.7
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_tool_home",
+      "position": [
+        -14.3,
+        11.0,
+        0.3
+      ],
+      "size": [
+        1.0,
+        1.8,
+        0.6
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_products",
+      "position": [
+        -12.2,
+        17.5,
+        0.3
+      ],
+      "size": [
+        0.7,
+        1.6,
+        0.6
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_parts",
+      "position": [
+        -14.0,
+        13.5,
+        0.325
+      ],
+      "size": [
+        1.7,
+        2.0,
+        0.65
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    },
+    {
+      "name": "fv2_jig",
+      "position": [
+        -14.3,
+        15.3,
+        0.43
+      ],
+      "size": [
+        0.42,
+        0.42,
+        0.86
+      ],
+      "rgba": [
+        0.32,
+        0.42,
+        0.52,
+        1.0
+      ],
+      "fixed_base": true
+    }
+  ],
+  "initial_layout": [
+    {
+      "object": "detergent_basin",
+      "target": "tool_home",
+      "place_on_support": true,
+      "support_uv": [
+        0.5,
+        0.08
+      ]
+    },
+    {
+      "object": "detergent_basin",
+      "state": "Filled",
+      "value": true,
+      "system": "detergent"
+    },
+    {
+      "object": "log1",
+      "target": "shelf",
+      "place_on_support": true,
+      "support_uv": [
+        0.16666666666666666,
+        0.5
+      ]
+    },
+    {
+      "object": "log2",
+      "target": "shelf",
+      "place_on_support": true,
+      "support_uv": [
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "object": "box",
+      "target": "source",
+      "place_on_support": true,
+      "support_uv": [
+        0.22,
+        0.5
+      ],
+      "orientation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "object": "axe",
+      "target": "source",
+      "place_on_support": true,
+      "support_uv": [
+        0.7,
+        0.25
+      ]
+    },
+    {
+      "object": "brush",
+      "target": "source",
+      "place_on_support": true,
+      "support_uv": [
+        0.7,
+        0.5
+      ]
+    },
+    {
+      "object": "paintbrush",
+      "target": "source",
+      "place_on_support": true,
+      "support_uv": [
+        0.7,
+        0.8
+      ]
+    },
+    {
+      "object": "book",
+      "target": "bench",
+      "place_on_support": true,
+      "support_uv": [
+        0.25,
+        0.5
+      ]
+    },
+    {
+      "object": "can",
+      "target": "bench",
+      "place_on_support": true,
+      "support_uv": [
+        0.75,
+        0.5
+      ]
+    },
+    {
+      "object": "crate",
+      "target": "shelf",
+      "place_on_support": true,
+      "support_uv": [
+        0.8333333333333334,
+        0.5
+      ]
+    },
+    {
+      "object": "ink",
+      "target": "source",
+      "place_on_support": true,
+      "support_uv": [
+        0.95,
+        0.8
+      ]
+    },
+    {
+      "object": "broom",
+      "target": "tool_home",
+      "place_on_support": true,
+      "support_uv": [
+        0.5,
+        0.93
+      ]
+    },
+    {
+      "object": "bin",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -12.0,
+        12.3
+      ]
+    },
+    {
+      "object": "block",
+      "target": "floor",
+      "place_on_support": true,
+      "xy": [
+        -13.9,
+        12.0
+      ]
+    },
+    {
+      "object": "box",
+      "state": "Open",
+      "value": false,
+      "kwargs": {
+        "fully": true
+      }
+    },
+    {
+      "object": "ink",
+      "state": "Filled",
+      "value": true,
+      "system": "ink"
+    },
+    {
+      "object": "bench",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "source",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "floor",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "table",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        -14.425,
+        13.5
+      ]
+    },
+    {
+      "object": "bracket",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        -13.575,
+        13.5
+      ]
+    },
+    {
+      "object": "leg1",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        -14.4,
+        12.65
+      ]
+    },
+    {
+      "object": "leg2",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        -13.6,
+        12.65
+      ]
+    },
+    {
+      "object": "leg3",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        -14.4,
+        14.35
+      ]
+    },
+    {
+      "object": "leg4",
+      "target": "parts",
+      "place_on_support": true,
+      "xy": [
+        -13.6,
+        14.35
+      ]
+    },
+    {
+      "object": "table",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "bracket",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "leg1",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "leg2",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "leg3",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    },
+    {
+      "object": "leg4",
+      "state": "Covered",
+      "value": true,
+      "max_sampling_attempts": 3,
+      "settle_steps": 1,
+      "system": "dust"
+    }
+  ],
+  "initial_assertions": {
+    "bench_dust": "bench_dust",
+    "source_dust": "source_dust",
+    "floor_dust": "floor_dust",
+    "table_dust": "table_dust",
+    "bracket_dust": "bracket_dust",
+    "leg1_dust": "leg1_dust",
+    "leg2_dust": "leg2_dust",
+    "leg3_dust": "leg3_dust",
+    "leg4_dust": "leg4_dust",
+    "initially_detached_bracket": {
+      "not": "bracket_attachedto_table"
+    },
+    "initially_detached_leg1": {
+      "not": "leg1_attachedto_bracket"
+    },
+    "initially_detached_leg2": {
+      "not": "leg2_attachedto_bracket"
+    },
+    "initially_detached_leg3": {
+      "not": "leg3_attachedto_bracket"
+    },
+    "initially_detached_leg4": {
+      "not": "leg4_attachedto_bracket"
+    },
+    "initial_detergent_basin_OnTop": "initial_detergent_basin_OnTop",
+    "initial_log1_OnTop": "initial_log1_OnTop",
+    "initial_log2_OnTop": "initial_log2_OnTop",
+    "initial_box_OnTop": "initial_box_OnTop",
+    "initial_axe_OnTop": "initial_axe_OnTop",
+    "initial_brush_OnTop": "initial_brush_OnTop",
+    "initial_paintbrush_OnTop": "initial_paintbrush_OnTop",
+    "initial_book_OnTop": "initial_book_OnTop",
+    "initial_can_OnTop": "initial_can_OnTop",
+    "initial_crate_OnTop": "initial_crate_OnTop",
+    "initial_ink_OnTop": "initial_ink_OnTop",
+    "initial_broom_OnTop": "initial_broom_OnTop",
+    "initial_bin_OnTop": "initial_bin_OnTop",
+    "initial_block_OnTop": "initial_block_OnTop",
+    "initial_table_OnTop": "initial_table_OnTop",
+    "initial_bracket_OnTop": "initial_bracket_OnTop",
+    "initial_leg1_OnTop": "initial_leg1_OnTop",
+    "initial_leg2_OnTop": "initial_leg2_OnTop",
+    "initial_leg3_OnTop": "initial_leg3_OnTop",
+    "initial_leg4_OnTop": "initial_leg4_OnTop",
+    "intact_log1": {
+      "not": "log1_replaced"
+    },
+    "intact_log2": {
+      "not": "log2_replaced"
+    },
+    "hand_empty": "hand_empty"
+  },
+  "future_roles": [
+    "log1_half0",
+    "log1_half1",
+    "log2_half0",
+    "log2_half1"
+  ],
+  "replacements": [
+    {
+      "parent": "log1",
+      "children": [
+        {
+          "role": "log1_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log1_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    },
+    {
+      "parent": "log2",
+      "children": [
+        {
+          "role": "log2_half0",
+          "category": "half_log",
+          "model": "bbieuz"
+        },
+        {
+          "role": "log2_half1",
+          "category": "half_log",
+          "model": "rvtvqc"
+        }
+      ]
+    }
+  ],
+  "public_instruction": "领用完整工具包，完成一张小桌装配及指定表面材料处理、两根木料加工和整箱产物交付，最后归还工具、周转箱和材料并恢复工作间。",
+  "public_context": [
+    "六个有尘部件先清洁，再用原生接合点装成一张桌子；完成后桌面正立、四条腿各自接触地板，移离临时装配支撑。",
+    "斧头、除尘刷、涂布布完整闭箱外运至工作台，展开同时盘点；工作后完整重装闭箱归还当前干净的原位。",
+    "桌面以原生油墨材料涂布；两根木料真实切成四块，完整装入同一周转箱送到柴架，卸货后空箱归还。",
+    "完成后放下所持物品。"
+  ],
+  "requirements": [
+    {
+      "id": "table_assembly",
+      "text": "六个有尘部件先清洁，再用原生接合点装成一张桌子；完成后桌面正立、四条腿各自接触地板，移离临时装配支撑。",
+      "terminal": [
+        "usable_table"
+      ],
+      "milestones": [
+        "table_assembled"
+      ],
+      "constraints": [
+        "clean_before_attach_bracket",
+        "clean_before_attach_leg1",
+        "clean_before_attach_leg2",
+        "clean_before_attach_leg3",
+        "clean_before_attach_leg4"
+      ]
+    },
+    {
+      "id": "kit",
+      "text": "斧头、除尘刷、涂布布完整闭箱外运至工作台，展开同时盘点；工作后完整重装闭箱归还当前干净的原位。",
+      "terminal": [
+        "kit_and_material_reset"
+      ],
+      "milestones": [
+        "kit_packed",
+        "kit_delivered",
+        "inventory_unpacked",
+        "complete_kit_returned"
+      ],
+      "constraints": [
+        "closed_complete_kit_transport"
+      ]
+    },
+    {
+      "id": "products",
+      "text": "桌面以原生油墨材料涂布；两根木料真实切成四块，完整装入同一周转箱送到柴架，卸货后空箱归还。",
+      "terminal": [
+        "processed_products"
+      ],
+      "milestones": [
+        "wood_packed",
+        "wood_delivered",
+        "wood_unloaded",
+        "empty_crate_returned"
+      ],
+      "constraints": [
+        "complete_wood_transport"
+      ]
+    },
+    {
+      "id": "hand_empty",
+      "text": "完成后放下所持物品。",
+      "terminal": [
+        "hand_empty"
+      ]
+    }
+  ],
+  "evaluation": {
+    "predicates": {
+      "bench_dust": {
+        "object": "bench",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "source_dust": {
+        "object": "source",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "floor_dust": {
+        "object": "floor",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "box_open": {
+        "object": "box",
+        "state": "Open"
+      },
+      "axe_inside_box": {
+        "object": "axe",
+        "state": "Inside",
+        "target": "box"
+      },
+      "brush_inside_box": {
+        "object": "brush",
+        "state": "Inside",
+        "target": "box"
+      },
+      "paintbrush_inside_box": {
+        "object": "paintbrush",
+        "state": "Inside",
+        "target": "box"
+      },
+      "table_dust": {
+        "object": "table",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "bracket_dust": {
+        "object": "bracket",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "leg1_dust": {
+        "object": "leg1",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "leg2_dust": {
+        "object": "leg2",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "leg3_dust": {
+        "object": "leg3",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "leg4_dust": {
+        "object": "leg4",
+        "state": "Covered",
+        "system": "dust"
+      },
+      "bracket_attachedto_table": {
+        "object": "bracket",
+        "state": "AttachedTo",
+        "target": "table"
+      },
+      "leg1_attachedto_bracket": {
+        "object": "leg1",
+        "state": "AttachedTo",
+        "target": "bracket"
+      },
+      "leg2_attachedto_bracket": {
+        "object": "leg2",
+        "state": "AttachedTo",
+        "target": "bracket"
+      },
+      "leg3_attachedto_bracket": {
+        "object": "leg3",
+        "state": "AttachedTo",
+        "target": "bracket"
+      },
+      "leg4_attachedto_bracket": {
+        "object": "leg4",
+        "state": "AttachedTo",
+        "target": "bracket"
+      },
+      "table_upright": {
+        "object": "table",
+        "state": "Upright",
+        "max_tilt_degrees": 10.0
+      },
+      "leg1_ontop_floor": {
+        "object": "leg1",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "leg2_ontop_floor": {
+        "object": "leg2",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "leg3_ontop_floor": {
+        "object": "leg3",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "leg4_ontop_floor": {
+        "object": "leg4",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "log1_replaced": {
+        "object": "log1",
+        "state": "Replaced"
+      },
+      "log2_replaced": {
+        "object": "log2",
+        "state": "Replaced"
+      },
+      "box_ontop_source": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "box_ontop_bench": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "axe_ontop_tool_home": {
+        "object": "axe",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "brush_ontop_tool_home": {
+        "object": "brush",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "paintbrush_ontop_tool_home": {
+        "object": "paintbrush",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "log1_half0_inside_crate": {
+        "object": "log1_half0",
+        "state": "Inside",
+        "target": "crate"
+      },
+      "log1_half1_inside_crate": {
+        "object": "log1_half1",
+        "state": "Inside",
+        "target": "crate"
+      },
+      "log2_half0_inside_crate": {
+        "object": "log2_half0",
+        "state": "Inside",
+        "target": "crate"
+      },
+      "log2_half1_inside_crate": {
+        "object": "log2_half1",
+        "state": "Inside",
+        "target": "crate"
+      },
+      "crate_ontop_bench": {
+        "object": "crate",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "crate_ontop_products": {
+        "object": "crate",
+        "state": "OnTop",
+        "target": "products"
+      },
+      "log1_half0_ontop_products": {
+        "object": "log1_half0",
+        "state": "OnTop",
+        "target": "products"
+      },
+      "log1_half1_ontop_products": {
+        "object": "log1_half1",
+        "state": "OnTop",
+        "target": "products"
+      },
+      "log2_half0_ontop_products": {
+        "object": "log2_half0",
+        "state": "OnTop",
+        "target": "products"
+      },
+      "log2_half1_ontop_products": {
+        "object": "log2_half1",
+        "state": "OnTop",
+        "target": "products"
+      },
+      "crate_ontop_shelf": {
+        "object": "crate",
+        "state": "OnTop",
+        "target": "shelf"
+      },
+      "table_coated": {
+        "object": "table",
+        "state": "Covered",
+        "system": "ink"
+      },
+      "ink_ontop_source": {
+        "object": "ink",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "book_ontop_shelf": {
+        "object": "book",
+        "state": "OnTop",
+        "target": "shelf"
+      },
+      "can_inside_bin": {
+        "object": "can",
+        "state": "Inside",
+        "target": "bin"
+      },
+      "broom_ontop_tool_home": {
+        "object": "broom",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "initial_detergent_basin_OnTop": {
+        "object": "detergent_basin",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "initial_log1_OnTop": {
+        "object": "log1",
+        "state": "OnTop",
+        "target": "shelf"
+      },
+      "initial_log2_OnTop": {
+        "object": "log2",
+        "state": "OnTop",
+        "target": "shelf"
+      },
+      "initial_box_OnTop": {
+        "object": "box",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_axe_OnTop": {
+        "object": "axe",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_brush_OnTop": {
+        "object": "brush",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_paintbrush_OnTop": {
+        "object": "paintbrush",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_book_OnTop": {
+        "object": "book",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "initial_can_OnTop": {
+        "object": "can",
+        "state": "OnTop",
+        "target": "bench"
+      },
+      "initial_crate_OnTop": {
+        "object": "crate",
+        "state": "OnTop",
+        "target": "shelf"
+      },
+      "initial_ink_OnTop": {
+        "object": "ink",
+        "state": "OnTop",
+        "target": "source"
+      },
+      "initial_broom_OnTop": {
+        "object": "broom",
+        "state": "OnTop",
+        "target": "tool_home"
+      },
+      "initial_bin_OnTop": {
+        "object": "bin",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "initial_block_OnTop": {
+        "object": "block",
+        "state": "OnTop",
+        "target": "floor"
+      },
+      "initial_table_OnTop": {
+        "object": "table",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_bracket_OnTop": {
+        "object": "bracket",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_leg1_OnTop": {
+        "object": "leg1",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_leg2_OnTop": {
+        "object": "leg2",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_leg3_OnTop": {
+        "object": "leg3",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "initial_leg4_OnTop": {
+        "object": "leg4",
+        "state": "OnTop",
+        "target": "parts"
+      },
+      "hand_empty": {
+        "object": "box",
+        "state": "HandEmpty"
+      }
+    },
+    "terminal": {
+      "usable_table": {
+        "all": [
+          {
+            "all": [
+              {
+                "all": [
+                  "bracket_attachedto_table",
+                  "leg1_attachedto_bracket",
+                  "leg2_attachedto_bracket",
+                  "leg3_attachedto_bracket",
+                  "leg4_attachedto_bracket"
+                ]
+              },
+              "table_upright",
+              "leg1_ontop_floor",
+              "leg2_ontop_floor",
+              "leg3_ontop_floor",
+              "leg4_ontop_floor"
+            ]
+          },
+          {
+            "not": "table_dust"
+          },
+          {
+            "not": "bracket_dust"
+          },
+          {
+            "not": "leg1_dust"
+          },
+          {
+            "not": "leg2_dust"
+          },
+          {
+            "not": "leg3_dust"
+          },
+          {
+            "not": "leg4_dust"
+          }
+        ]
+      },
+      "processed_products": {
+        "all": [
+          {
+            "all": [
+              {
+                "all": [
+                  "bracket_attachedto_table",
+                  "leg1_attachedto_bracket",
+                  "leg2_attachedto_bracket",
+                  "leg3_attachedto_bracket",
+                  "leg4_attachedto_bracket"
+                ]
+              },
+              "table_upright",
+              "leg1_ontop_floor",
+              "leg2_ontop_floor",
+              "leg3_ontop_floor",
+              "leg4_ontop_floor"
+            ]
+          },
+          "table_coated",
+          "log1_half0_ontop_products",
+          "log1_half1_ontop_products",
+          "log2_half0_ontop_products",
+          "log2_half1_ontop_products",
+          "log1_replaced",
+          "log2_replaced"
+        ]
+      },
+      "kit_and_material_reset": {
+        "all": [
+          {
+            "all": [
+              "axe_inside_box",
+              "brush_inside_box",
+              "paintbrush_inside_box",
+              {
+                "not": "box_open"
+              }
+            ]
+          },
+          "box_ontop_source",
+          "ink_ontop_source",
+          "crate_ontop_shelf",
+          "book_ontop_shelf",
+          "can_inside_bin",
+          "broom_ontop_tool_home",
+          {
+            "not": "bench_dust"
+          },
+          {
+            "not": "source_dust"
+          },
+          {
+            "not": "floor_dust"
+          }
+        ]
+      },
+      "hand_empty": "hand_empty"
+    },
+    "milestones": {
+      "table_assembled": {
+        "when": {
+          "all": [
+            "bracket_attachedto_table",
+            "leg1_attachedto_bracket",
+            "leg2_attachedto_bracket",
+            "leg3_attachedto_bracket",
+            "leg4_attachedto_bracket"
+          ]
+        },
+        "after": []
+      },
+      "kit_packed": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                "axe_inside_box",
+                "brush_inside_box",
+                "paintbrush_inside_box",
+                {
+                  "not": "box_open"
+                }
+              ]
+            },
+            "box_ontop_source"
+          ]
+        },
+        "after": []
+      },
+      "kit_delivered": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                "axe_inside_box",
+                "brush_inside_box",
+                "paintbrush_inside_box",
+                {
+                  "not": "box_open"
+                }
+              ]
+            },
+            "box_ontop_bench"
+          ]
+        },
+        "after": [
+          "kit_packed"
+        ]
+      },
+      "inventory_unpacked": {
+        "when": {
+          "all": [
+            "axe_ontop_tool_home",
+            "brush_ontop_tool_home",
+            "paintbrush_ontop_tool_home"
+          ]
+        },
+        "after": [
+          "kit_delivered"
+        ]
+      },
+      "wood_packed": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                "log1_half0_inside_crate",
+                "log1_half1_inside_crate",
+                "log2_half0_inside_crate",
+                "log2_half1_inside_crate",
+                "log1_replaced",
+                "log2_replaced"
+              ]
+            },
+            "crate_ontop_bench"
+          ]
+        },
+        "after": []
+      },
+      "wood_delivered": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                "log1_half0_inside_crate",
+                "log1_half1_inside_crate",
+                "log2_half0_inside_crate",
+                "log2_half1_inside_crate",
+                "log1_replaced",
+                "log2_replaced"
+              ]
+            },
+            "crate_ontop_products"
+          ]
+        },
+        "after": [
+          "wood_packed"
+        ]
+      },
+      "wood_unloaded": {
+        "when": {
+          "all": [
+            "log1_half0_ontop_products",
+            "log1_half1_ontop_products",
+            "log2_half0_ontop_products",
+            "log2_half1_ontop_products"
+          ]
+        },
+        "after": [
+          "wood_delivered"
+        ]
+      },
+      "empty_crate_returned": {
+        "when": {
+          "all": [
+            "crate_ontop_shelf",
+            {
+              "not": "log1_half0_inside_crate"
+            },
+            {
+              "not": "log1_half1_inside_crate"
+            },
+            {
+              "not": "log2_half0_inside_crate"
+            },
+            {
+              "not": "log2_half1_inside_crate"
+            }
+          ]
+        },
+        "after": [
+          "wood_unloaded"
+        ]
+      },
+      "complete_kit_returned": {
+        "when": {
+          "all": [
+            {
+              "all": [
+                "axe_inside_box",
+                "brush_inside_box",
+                "paintbrush_inside_box",
+                {
+                  "not": "box_open"
+                }
+              ]
+            },
+            "box_ontop_source",
+            {
+              "not": "source_dust"
+            }
+          ]
+        },
+        "after": [
+          "inventory_unpacked"
+        ]
+      }
+    },
+    "state_guards": [
+      {
+        "id": "clean_before_attach_bracket",
+        "require": {
+          "any": [
+            {
+              "not": "bracket_attachedto_table"
+            },
+            {
+              "all": [
+                {
+                  "not": "bracket_dust"
+                },
+                {
+                  "not": "table_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_leg1",
+        "require": {
+          "any": [
+            {
+              "not": "leg1_attachedto_bracket"
+            },
+            {
+              "all": [
+                {
+                  "not": "leg1_dust"
+                },
+                {
+                  "not": "bracket_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_leg2",
+        "require": {
+          "any": [
+            {
+              "not": "leg2_attachedto_bracket"
+            },
+            {
+              "all": [
+                {
+                  "not": "leg2_dust"
+                },
+                {
+                  "not": "bracket_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_leg3",
+        "require": {
+          "any": [
+            {
+              "not": "leg3_attachedto_bracket"
+            },
+            {
+              "all": [
+                {
+                  "not": "leg3_dust"
+                },
+                {
+                  "not": "bracket_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      },
+      {
+        "id": "clean_before_attach_leg4",
+        "require": {
+          "any": [
+            {
+              "not": "leg4_attachedto_bracket"
+            },
+            {
+              "all": [
+                {
+                  "not": "leg4_dust"
+                },
+                {
+                  "not": "bracket_dust"
+                }
+              ]
+            }
+          ]
+        },
+        "until": null
+      }
+    ],
+    "motion_guards": [
+      {
+        "id": "closed_complete_kit_transport",
+        "object": "box",
+        "since": "kit_packed",
+        "until": "kit_delivered",
+        "require": {
+          "all": [
+            "axe_inside_box",
+            "brush_inside_box",
+            "paintbrush_inside_box",
+            {
+              "not": "box_open"
+            }
+          ]
+        }
+      },
+      {
+        "id": "complete_wood_transport",
+        "object": "crate",
+        "since": "wood_packed",
+        "until": "wood_delivered",
+        "require": {
+          "all": [
+            "log1_half0_inside_crate",
+            "log1_half1_inside_crate",
+            "log2_half0_inside_crate",
+            "log2_half1_inside_crate",
+            "log1_replaced",
+            "log2_replaced"
+          ]
+        }
+      }
+    ],
+    "score_type": "custom_joint_terminal_and_public_history_v2"
+  },
+  "acceptance_cases": {
+    "reference_orders": [
+      "order_1",
+      "order_2"
+    ],
+    "physical_negative_cases": [
+      "omit_process",
+      "omit_delivery",
+      "omit_reset"
+    ],
+    "fresh_restore_repetitions": 2,
+    "max_reference_action_attempts": 600
+  },
+  "reference_plan": {
+    "kind": "full_workflow",
+    "phases": {
+      "clear_bench": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "book"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "shelf",
+            "uv": [
+              0.5,
+              0.85
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "can"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "bin"
+          },
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "bench"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "source",
+            "uv": [
+              0.7,
+              0.5
+            ]
+          }
+        ],
+        "after": []
+      },
+      "pack_kit": {
+        "actions": [
+          {
+            "primitive": "open",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "axe"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "paintbrush"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "close",
+            "role": "box"
+          }
+        ],
+        "after": [
+          "clear_bench"
+        ]
+      },
+      "deliver_kit": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "box"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "bench",
+            "uv": [
+              0.5,
+              0.25
+            ]
+          }
+        ],
+        "after": [
+          "pack_kit"
+        ]
+      },
+      "inventory": {
+        "actions": [
+          {
+            "primitive": "open",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "axe"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "paintbrush"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.73
+            ]
+          }
+        ],
+        "after": [
+          "deliver_kit"
+        ]
+      },
+      "assemble": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "table"
+          },
+          {
+            "primitive": "wipe",
+            "role": "bracket"
+          },
+          {
+            "primitive": "wipe",
+            "role": "leg1"
+          },
+          {
+            "primitive": "wipe",
+            "role": "leg2"
+          },
+          {
+            "primitive": "wipe",
+            "role": "leg3"
+          },
+          {
+            "primitive": "wipe",
+            "role": "leg4"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "table"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "jig",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "bracket"
+          },
+          {
+            "primitive": "attach",
+            "role": "table"
+          },
+          {
+            "primitive": "grasp",
+            "role": "leg1"
+          },
+          {
+            "primitive": "attach",
+            "role": "bracket"
+          },
+          {
+            "primitive": "grasp",
+            "role": "leg2"
+          },
+          {
+            "primitive": "attach",
+            "role": "bracket"
+          },
+          {
+            "primitive": "grasp",
+            "role": "leg3"
+          },
+          {
+            "primitive": "attach",
+            "role": "bracket"
+          },
+          {
+            "primitive": "grasp",
+            "role": "leg4"
+          },
+          {
+            "primitive": "attach",
+            "role": "bracket"
+          },
+          {
+            "primitive": "grasp",
+            "role": "table"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "floor",
+            "xy": [
+              -13.6,
+              15.8
+            ]
+          }
+        ],
+        "after": [
+          "inventory",
+          "clear_bench"
+        ]
+      },
+      "crate_ready": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "crate"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "bench",
+            "uv": [
+              0.5,
+              0.75
+            ]
+          }
+        ],
+        "after": [
+          "clear_bench"
+        ]
+      },
+      "cut_logs": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "log1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "block",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "axe"
+          },
+          {
+            "primitive": "cut",
+            "role": "log1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "log1_half0"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "crate"
+          },
+          {
+            "primitive": "grasp",
+            "role": "log1_half1"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "crate"
+          },
+          {
+            "primitive": "grasp",
+            "role": "log2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "block",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "axe"
+          },
+          {
+            "primitive": "cut",
+            "role": "log2"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.3
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "log2_half0"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "crate"
+          },
+          {
+            "primitive": "grasp",
+            "role": "log2_half1"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "crate"
+          }
+        ],
+        "after": [
+          "inventory",
+          "crate_ready"
+        ]
+      },
+      "coat": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "ink"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "bench",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "paintbrush"
+          },
+          {
+            "primitive": "soak",
+            "role": "detergent_basin"
+          },
+          {
+            "primitive": "soak",
+            "role": "ink"
+          },
+          {
+            "primitive": "spread",
+            "role": "table"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.73
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "ink"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "source",
+            "uv": [
+              0.95,
+              0.8
+            ]
+          }
+        ],
+        "after": [
+          "assemble",
+          "inventory"
+        ]
+      },
+      "deliver_wood": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "crate"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "products",
+            "uv": [
+              0.5,
+              0.2
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "log1_half0"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "products",
+            "uv": [
+              0.5,
+              0.4
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "log1_half1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "products",
+            "uv": [
+              0.5,
+              0.56
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "log2_half0"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "products",
+            "uv": [
+              0.5,
+              0.72
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "log2_half1"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "products",
+            "uv": [
+              0.5,
+              0.88
+            ]
+          },
+          {
+            "primitive": "grasp",
+            "role": "crate"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "shelf",
+            "uv": [
+              0.2,
+              0.5
+            ]
+          }
+        ],
+        "after": [
+          "cut_logs"
+        ]
+      },
+      "clean_return": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "wipe",
+            "role": "source"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.5
+            ]
+          }
+        ],
+        "after": [
+          "inventory"
+        ]
+      },
+      "return_kit": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "axe"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "brush"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "paintbrush"
+          },
+          {
+            "primitive": "place_inside",
+            "role": "box"
+          },
+          {
+            "primitive": "close",
+            "role": "box"
+          },
+          {
+            "primitive": "grasp",
+            "role": "box"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "source",
+            "uv": [
+              0.3,
+              0.5
+            ]
+          }
+        ],
+        "after": [
+          "coat",
+          "deliver_wood",
+          "clean_return"
+        ]
+      },
+      "floor": {
+        "actions": [
+          {
+            "primitive": "grasp",
+            "role": "broom"
+          },
+          {
+            "primitive": "sweep",
+            "role": "floor"
+          },
+          {
+            "primitive": "place_on_top",
+            "role": "tool_home",
+            "uv": [
+              0.5,
+              0.93
+            ]
+          }
+        ],
+        "after": []
+      }
+    },
+    "orders": {
+      "order_1": [
+        "clear_bench",
+        "pack_kit",
+        "deliver_kit",
+        "inventory",
+        "assemble",
+        "crate_ready",
+        "cut_logs",
+        "coat",
+        "deliver_wood",
+        "clean_return",
+        "return_kit",
+        "floor"
+      ],
+      "order_2": [
+        "clear_bench",
+        "pack_kit",
+        "deliver_kit",
+        "inventory",
+        "crate_ready",
+        "cut_logs",
+        "deliver_wood",
+        "clean_return",
+        "assemble",
+        "coat",
+        "floor",
+        "return_kit"
+      ]
+    },
+    "negative_omissions": {
+      "omit_process": "coat",
+      "omit_delivery": "deliver_wood",
+      "omit_reset": "return_kit"
+    }
+  },
+  "settle_steps": 30,
+  "design_source": {
+    "path": "task_designs/nonrepetitive_v2/catalog.json",
+    "sha256": "ce00403a302b3376c901932feb5c8ea122ed59e6cdeb9a33d270d5986fd93c52",
+    "conditional_design_count": 101,
+    "recovery_status": "original_file"
+  },
+  "construction_asset_scales": [
+    {
+      "object": "box",
+      "scale": [
+        1.4,
+        1.4,
+        1.4
+      ],
+      "reason": "Workshop-size toolbox accommodates the full native axe, brush and rag below the closing lid."
+    }
+  ],
+  "scene_exclusions": [
+    "car_ssxsje_0"
+  ],
+  "scene_setup_note": "Native garage prepared as an empty workshop before the episode; the background car is absent from the frozen scene.",
+  "robot_start": {
+    "position": [
+      -13.2,
+      10.7,
+      0.02
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "physics": {
+    "use_gpu_dynamics": true
+  },
+  "representation": {
+    "coating_tool": "native_rigid_rag",
+    "reason": "Native paintbrush lacks ParticleRemover/Saturated; rag absorbs ink only after detergent preparation."
+  },
+  "compiled_action_count": 102,
+  "compiled_count_includes_waits": true,
+  "compiled_manipulation_count": 102
+}

@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from manipulation_agent.transcript import build_transcript
+from manipulation_agent.reporting.transcript import build_transcript
 
 
 def event(kind, ident, state='completed', **fields):

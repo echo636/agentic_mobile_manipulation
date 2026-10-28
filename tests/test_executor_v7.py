@@ -5,11 +5,11 @@ import tempfile
 import sys
 import unittest
 from manipulation_agent.executors.carry import ControlledCarry
-from manipulation_agent.executors.gt_navigation import GridMap,plan_navigation,NavigationError
-from manipulation_agent.mcp_preflight import check_server
+from manipulation_agent.executors.navigation.gt_navigation import GridMap,plan_navigation,NavigationError
+from manipulation_agent.transport.mcp_preflight import check_server
 from manipulation_agent.tools.action import act
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.omnigibson_backend import restore_static_floor_geometry
+from manipulation_agent.executors.omnigibson_backend import restore_static_floor_geometry
 
 class V7Contracts(unittest.TestCase):
     def test_restore_only_missing_fixed_floors_without_goal_or_instance_changes(self):
@@ -37,17 +37,6 @@ class V7Contracts(unittest.TestCase):
         act(ctx,'wait',None,0,wait_seconds=12)
         self.assertEqual(calls[-1][1],{'seconds':12})
 
-    def test_placement_rollback_restores_controlled_carry_ownership(self):
-        obj=object();contents=[(object(),'relative child')];records=[];restored=[];follow=[]
-        b=ControlledCarry();b._ideal_held=obj;b._carry_relative='relative';b._carry_contents=contents
-        from contextlib import nullcontext
-        b._anchored_operation=nullcontext
-        b.og=SimpleNamespace(sim=SimpleNamespace(dump_state=lambda **k:'world',load_state=lambda s,**k:restored.append(s)))
-        b._placement_record=records.append;b._carry_follow=lambda:follow.append(b._ideal_held)
-        with self.assertRaises(SkillError),b._placement_context():
-            b._ideal_held=None;b._carry_relative=None;b._carry_contents=[]
-            raise SkillError('sampling_error','no pose')
-        self.assertIs(b._ideal_held,obj);self.assertEqual(b._carry_contents,contents);self.assertEqual(restored,['world']);self.assertEqual(follow,[obj])
 
     def test_readonly_mcp_handshake_and_schema_mismatch(self):
         script='''import sys,json

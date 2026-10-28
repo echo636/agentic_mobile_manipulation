@@ -11,6 +11,7 @@ dependencies = []
 
 [project.optional-dependencies]
 mcp = ["mcp==1.28.1"]
+navigation = ["numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.scripts]
 manip-agent = "manipulation_agent.vision_cli:main"
@@ -20,11 +21,13 @@ manip-mcp = "manipulation_agent.mcp_server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-manipulation_agent = ["tasks.json", "replay_assets/*.html", "replay_assets/*.css", "replay_assets/*.js"]
+manipulation_agent = ["tasks.json", "replay_assets/*.html", "replay_assets/*.css", "replay_assets/*.js", "report_assets/*.css", "report_assets/*.js"]
 
 [tool.setuptools.data-files]
 "share/manipulation-agentic-system/skills/visual-manipulation" = ["skills/visual-manipulation/SKILL.md"]
-"share/manipulation-agentic-system/skills/visual-manipulation/references" = ["skills/visual-manipulation/references/evidence.md"]
+"share/manipulation-agentic-system/skills/visual-manipulation/references" = ["skills/visual-manipulation/references/evidence.md", "skills/visual-manipulation/references/material-actions.md"]
 "share/manipulation-agentic-system/skills/visual-exploration" = ["skills/visual-exploration/SKILL.md"]
 "share/manipulation-agentic-system/skills/pick-and-place" = ["skills/pick-and-place/SKILL.md"]
 "share/manipulation-agentic-system/skills/failure-recovery" = ["skills/failure-recovery/SKILL.md"]
+"share/manipulation-agentic-system/skills/goal-decomposition" = ["skills/goal-decomposition/SKILL.md"]
+"share/manipulation-agentic-system/skills/goal-decomposition/references" = ["skills/goal-decomposition/references/working-state.md"]

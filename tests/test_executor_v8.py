@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.carry import ControlledCarry, support_closure
-from manipulation_agent.executors.gt_navigation import GridMap
+from manipulation_agent.executors.navigation.gt_navigation import GridMap
 from manipulation_agent.executors.placement import CheckedPlacement
 from manipulation_agent.observations.rig import visible_rig_rays
 from manipulation_agent.observations.boundary import public_execution_error
@@ -45,6 +45,88 @@ class GridSupercoverRegression(unittest.TestCase):
 
 
 class MotorContractRegression(unittest.TestCase):
+    def test_attach_is_available_to_visual_skills_agent(self):
+        from manipulation_agent.tools import tool_specs
+        act=next(tool for tool in tool_specs('skills') if tool['name']=='act')
+        self.assertIn('attach',act['inputSchema']['properties']['primitive']['enum'])
+
+    @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
+    def test_distant_attach_requests_navigation_without_hidden_approach(self):
+        import torch
+        from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+        selected=types.SimpleNamespace(states={})
+        backend=types.SimpleNamespace(
+            _ground=lambda target,**kwargs:(selected,torch.tensor([2.,0.,0.]),{}),
+            _get_held=lambda:object(),
+            _navigate=lambda *a:self.fail('attach silently initiated navigation'),
+            robot=types.SimpleNamespace(get_position_orientation=lambda:(torch.zeros(3),None)),
+            torch=torch,steps=0)
+        backend._manipulation_preconditions=RGBBackend._manipulation_preconditions.__get__(backend)
+        backend._execute_bound_manipulation=RGBBackend._execute_bound_manipulation.__get__(backend)
+        states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            with self.assertRaises(SkillError) as failure:
+                RGBBackend._execute_visual(backend,'attach',object(),700)
+        self.assertEqual(failure.exception.code,'out_of_reach')
+
+    @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
+    def test_hang_routes_visible_nail_to_attachment_state(self):
+        import torch
+        from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+        nail=types.SimpleNamespace(states={},category='wall_nail')
+        backend=types.SimpleNamespace(
+            _ground=lambda target,**kwargs:(nail,torch.tensor([.5,0.,0.]),{}),
+            _get_held=lambda:object(),
+            _checked_attach=lambda obj,max_steps:{'primitive':'attach','selected':obj.category},
+            robot=types.SimpleNamespace(get_position_orientation=lambda:(torch.zeros(3),None)),
+            torch=torch,steps=0)
+        backend._manipulation_preconditions=RGBBackend._manipulation_preconditions.__get__(backend)
+        backend._execute_bound_manipulation=RGBBackend._execute_bound_manipulation.__get__(backend)
+        states=types.ModuleType('omnigibson.object_states');states.Open=type('Open',(),{});states.Inside=type('Inside',(),{})
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            result=RGBBackend._execute_visual(backend,'hang',object(),30)
+        self.assertEqual(result['primitive'],'hang')
+        self.assertEqual(result['selected'],'wall_nail')
+
+    def test_attach_rejects_unavailable_link_before_releasing_child(self):
+        attached=type('AttachedTo',(),{})
+        state=types.SimpleNamespace(parent=None,_find_attachment_links=lambda *a,**k:(None,None))
+        child=types.SimpleNamespace(states={attached:state})
+        parent=types.SimpleNamespace(states={attached:object()})
+        backend=ControlledCarry();backend.ideal_carry=True;backend._get_held=lambda:child
+        backend._carry_detach=lambda:self.fail('carry released before attachment preflight')
+        states=types.ModuleType('omnigibson.object_states');states.AttachedTo=attached
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            with self.assertRaises(SkillError) as failure:
+                backend._checked_attach(parent,30)
+        self.assertEqual(failure.exception.code,'unsupported_relation')
+
+    def test_attach_commits_only_after_official_state_persists(self):
+        attached=type('AttachedTo',(),{})
+        calls=[];linked=[False]
+        def set_value(parent,value,**options):
+            calls.append(options);linked[0]=value;return True
+        state=types.SimpleNamespace(parent=None,_find_attachment_links=lambda *a,**k:(object(),object()),
+                                    set_value=set_value,get_value=lambda parent:linked[0])
+        child=types.SimpleNamespace(states={attached:state})
+        parent=types.SimpleNamespace(states={attached:object()})
+        backend=ControlledCarry();backend.ideal_carry=True;backend._get_held=lambda:child
+        backend._grasp_dependencies=lambda obj:[];backend.frames_revision=0
+        backend._placement_context=lambda target:nullcontext()
+        backend._carry_detach=lambda:calls.append('released')
+        backend._relocate_contents=lambda *a:None
+        backend._verify_payload=lambda *a:None
+        backend._step=lambda *a:None
+        backend.primitives=types.SimpleNamespace(_empty_action=lambda:None)
+        backend.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
+        states=types.ModuleType('omnigibson.object_states');states.AttachedTo=attached
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            result=backend._checked_attach(parent,2)
+        self.assertEqual(result['primitive'],'attach')
+        self.assertEqual(calls[0],'released')
+        self.assertEqual(calls[1],{'bypass_alignment_checking':True,'check_physics_stability':True})
+        self.assertEqual(backend.frames_revision,-1)
+
     def test_support_payload_closure_includes_nested_items_without_cycles(self):
         plate,pizza,cup,contents,unrelated=[object() for _ in range(5)]
         relationships={(pizza,plate):'OnTop',(cup,plate):'OnTop',(contents,cup):'Inside',(plate,pizza):'OnTop'}
@@ -75,6 +157,12 @@ class MotorContractRegression(unittest.TestCase):
         self.assertNotIn('xyz',error['message'])
         self.assertIn('stop repeating',error['message'])
 
+    def test_blocked_navigation_feedback_preserves_actionable_code(self):
+        error=public_execution_error(SkillError('navigation_path_blocked','private map coordinate'))
+        self.assertEqual(error['code'],'navigation_path_blocked')
+        self.assertIn('different visible approach',error['message'])
+        self.assertNotIn('coordinate',error['message'])
+
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
 class AnchoringAndPlacementRegression(unittest.TestCase):
@@ -85,7 +173,11 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         plate,pizza,robot,table=[obj(name) for name in ('plate','pizza','robot','table')]
         plate.aabb=(torch.tensor([-.2,-.2,0.]),torch.tensor([.2,.2,.02]))
         plate.get_linear_velocity=lambda:torch.zeros(3)
+        plate.get_angular_velocity=lambda:torch.zeros(3)
         b=CheckedPlacement();b.robot=robot;b.torch=torch;b._get_held=lambda:None
+        b._collision_vertices=lambda obj:torch.tensor([[-.2,-.2,0.],[.2,.2,0.],[-.2,-.2,.02],[.2,.2,.02]]).numpy()
+        b._placement_contacts=lambda *args:[]
+        b._placement_contact_report=lambda *args, **kwargs:{'admissible':True}
         sampling=types.ModuleType('omnigibson.utils.sampling_utils');seen=[];support=['/table']
         def raytest(start,end,ignore_bodies):
             seen.append(ignore_bodies)
@@ -99,24 +191,8 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             valid,_=b._selected_surface_support(plate,table,torch.zeros(3),True,[pizza])
             self.assertFalse(valid)
 
-    def test_sampler_physics_cannot_displace_base_and_wrapper_restores_on_error(self):
-        import torch
-        pose=torch.tensor([1.,2.,3.]);quat=torch.tensor([0.,0.,0.,1.]);calls=[]
-        b=ControlledCarry();b.torch=torch;b._base_target=None;b._object_anchor=None
-        b.robot=types.SimpleNamespace(get_position_orientation=lambda:(pose.clone(),quat.clone()),
-            get_joint_positions=lambda:torch.zeros(5),base_idx=torch.tensor([0,1]))
-        def physics():pose.add_(10);calls.append('physics')
-        b.og=types.SimpleNamespace(sim=types.SimpleNamespace(step_physics=physics))
-        b._restore_base_target=lambda:pose.copy_(b._base_target['position'])
-        with self.assertRaisesRegex(ValueError,'injected'):
-            with b._anchored_operation():
-                b.og.sim.step_physics()
-                self.assertTrue(torch.equal(pose,torch.tensor([1.,2.,3.])))
-                raise ValueError('injected')
-        self.assertEqual(calls,['physics']);self.assertIs(b.og.sim.step_physics,physics)
-        self.assertIsNone(b._base_target);self.assertTrue(torch.equal(pose,torch.tensor([1.,2.,3.])))
 
-    def test_whole_object_ontop_cannot_override_wrong_selected_shelf(self):
+    def test_final_placement_checks_current_support_after_candidate_settling(self):
         import torch
         states=types.ModuleType('omnigibson.object_states')
         for name in ('OnTop','Touching','VerticalAdjacency'):setattr(states,name,type(name,(),{}))
@@ -125,16 +201,34 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             states.OnTop:types.SimpleNamespace(get_value=lambda t:True),
             states.Touching:types.SimpleNamespace(get_value=lambda t:True),
             states.VerticalAdjacency:types.SimpleNamespace(get_value=lambda:types.SimpleNamespace(negative_neighbors=[target],positive_neighbors=[]))},
-            set_position_orientation=lambda *a:None,keep_still=lambda:None,get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
-        target=types.SimpleNamespace(name='fridge');b=CheckedPlacement();b.ideal_carry=True;b._carry_contents=[]
-        b._placement_context=nullcontext;b._surface_pose=lambda *a:(torch.zeros(3),torch.tensor([0.,0.,0.,1.]))
+            set_position_orientation=lambda *a:None,keep_still=lambda:None,wake=lambda:None,get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
+        target=types.SimpleNamespace(name='fridge',links={'root':types.SimpleNamespace(prim_path='/fridge')});b=CheckedPlacement();b.ideal_carry=True;b._carry_contents=[]
+        b._surface_candidates=lambda *a:[{'index':0,'pose':(torch.zeros(3),torch.tensor([0.,0.,0.,1.])),
+            'clearance_m':.025,'support_position':[0.,0.,0.]}]
+        b.og=types.SimpleNamespace(sim=types.SimpleNamespace(dump_state=lambda **kw:{},get_physics_dt=lambda:1.,get_sim_step_dt=lambda:1.))
+        b._placement_physics_step=lambda:None;b._placement_contacts=lambda *args:[]
         b._carry_detach=lambda:None;b._relocate_contents=lambda *a:None;b._step=lambda action:None
         b.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
-        b._selected_surface_support=lambda *a:(False,{'selected_height_error_m':.692})
-        b._placement_record=lambda data:None;b._get_held=lambda:None;b._verify_payload=lambda x:None
-        with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.action_primitives.action_primitive_set_base':errors}):
-            with self.assertRaisesRegex(SkillError,'selected surface'):
-                b._try_place_on_top(held,target,1,torch.zeros(3))
+        b.primitives=types.SimpleNamespace(_empty_action=lambda:None)
+        b._placement_record=lambda data:None;b._get_held=lambda:None
+        b._verify_payload=lambda *a,**kw:None
+        b._surface_candidate_payload=lambda *a:None
+        b._settle_surface_contacts=lambda *a,**kw:None
+        with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.action_primitives.action_primitive_set_base':errors}), \
+                patch('manipulation_agent.executors.placement.placement_transaction',lambda *a:nullcontext()):
+            for correct_shelf in (False,True):
+                with self.subTest(correct_shelf=correct_shelf):
+                    # R387: the accepted placement retained support and native
+                    # OnTop, but a small residual rotation failed the rest window.
+                    checks=iter([(True,{}),(False,{'checks':{
+                        'selected_shelf_height':correct_shelf,'settled':False}})])
+                    b._selected_surface_support=lambda *a,**kw:next(checks)
+                    if correct_shelf:
+                        self.assertEqual(b._try_place_on_top(held,target,1,torch.zeros(3)),
+                                         'selected_surface_collision_support_after_free_settling')
+                    else:
+                        with self.assertRaisesRegex(SkillError,'selected surface'):
+                            b._try_place_on_top(held,target,1,torch.zeros(3))
 
 
 if __name__=='__main__':unittest.main()

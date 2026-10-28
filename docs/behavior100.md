@@ -1,3 +1,15 @@
+# Current experiment defaults (2026-10-13)
+
+New batches use `gpt-6.1-sol` with `low` reasoning effort, up to 50 unique
+`act` / `look` requests, and no episode wall-time deadline. Failed requests count;
+request-ID replays, initialization, skill reads and `finish` do not. Execution
+attempts (`actions`) and agent steps (`agent_steps`) are recorded separately.
+The final admitted action returns its RGB before a 120-second closure grace
+starts. `finish` always permits independent evaluation. Startup, transport and
+cleanup monitoring are separate from the task budget; legacy episode action,
+call and physics-step caps are inactive in this mode. Historical manifests
+retain their original models and budgets.
+
 # BEHAVIOR 100-task research evaluation
 
 The September 30, 2026 batch fixes one public instance (301), seed 0, for each of the 100 task types. This is 100 episodes, not all public instances and not a leaderboard submission. Existing fixed front/back/left/right RGB cameras and the ideal motor executor are unchanged. The model is gpt-6-astra with the nine-tool skills profile and four readable skills; no plan or memory tools are enabled.

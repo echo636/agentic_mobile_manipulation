@@ -1,5 +1,7 @@
 import copy
 import importlib.util
+import json
+import re
 from pathlib import Path
 import unittest
 
@@ -58,7 +60,10 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(result['paired_scored_tasks'],1)
         self.assertEqual(result['paired_goal_successes'],{'original':1,'official':1})
         page=comparison.render_comparison_page(('original','official'))
-        self.assertIn('const arms=["original", "official"]',page)
+        # The page receives exactly this cohort, without importing Motor history.
+        configured = re.search(r'\bconfiguredArms\s*=\s*(\[[^\]]*\])', page)
+        self.assertIsNotNone(configured)
+        self.assertEqual(json.loads(configured.group(1)), ['original', 'official'])
         self.assertNotIn('data.paired_goal_successes.motor',page)
         self.assertNotIn('<th>Motor</th>',page)
 

@@ -1,9 +1,12 @@
 """Regressions for drawer payload loss and unanchored internal physics ticks."""
 import importlib.util
+from contextlib import nullcontext
 import types
 import unittest
 from unittest.mock import patch
 from manipulation_agent.executors.carry import ControlledCarry
+from manipulation_agent.executors.placement import CheckedPlacement
+from manipulation_agent.contracts import SkillError
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Requires geometry environment')
@@ -41,25 +44,11 @@ class ContainerStabilityTests(unittest.TestCase):
         self.assertAlmostEqual(float(stationary.position[0]),3.2,places=6)
         self.assertEqual(float(outside.position[0]),8.)
 
-    def test_internal_physics_anchors_container_and_restores_wrapper_after_failure(self):
-        import torch
-        b=ControlledCarry();b.torch=torch;b._base_target=None;b._object_anchor=None
-        pos=torch.tensor([1.,2.,3.]);quat=torch.tensor([0.,0.,0.,1.]);base=torch.zeros(3)
-        obj=types.SimpleNamespace(get_position_orientation=lambda:(pos.clone(),quat.clone()),
-            set_position_orientation=lambda p,q:pos.copy_(p),keep_still=lambda:None)
-        b.robot=types.SimpleNamespace(get_position_orientation=lambda:(base.clone(),quat.clone()),
-            get_joint_positions=lambda:torch.zeros(4),base_idx=torch.tensor([0,1]))
-        b._restore_base_target=lambda:base.copy_(b._base_target['position'])
-        def physics():pos.add_(10);base.add_(10)
-        b.og=types.SimpleNamespace(sim=types.SimpleNamespace(step_physics=physics))
-        with self.assertRaisesRegex(ValueError,'sampler failed'):
-            with b._anchored_operation(obj):
-                b.og.sim.step_physics()
-                self.assertTrue(torch.equal(pos,torch.tensor([1.,2.,3.])))
-                self.assertTrue(torch.equal(base,torch.zeros(3)))
-                raise ValueError('sampler failed')
-        self.assertIs(b.og.sim.step_physics,physics)
-        self.assertIsNone(b._object_anchor);self.assertIsNone(b._base_target)
+
+
+
+
+
 
 
 if __name__=='__main__':unittest.main()

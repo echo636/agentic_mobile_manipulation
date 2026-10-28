@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from manipulation_agent.audit import audit_episode, audit_rgb_transport
+from manipulation_agent.reporting.audit import audit_episode, audit_rgb_transport
 from manipulation_agent.replay import build_replay, render_replay
 
 
@@ -138,6 +138,19 @@ class ReplayEvidenceTests(unittest.TestCase):
 
     def test_timeout_with_normal_finish_still_fails_complete_episode_evidence(self):
         self.append_observation_after_action()
+        # This case declares the current minimal profile. Keep other fixtures as
+        # historical observe traces, but use its initialize contract here.
+        for event in self.events:
+            if event.get('name') == 'observe':
+                event['name'] = 'initialize'
+                if event['kind'] == 'tool_result':
+                    event['result']['initialized'] = True
+        for event in self.models:
+            item = event['item']
+            if item['tool'] == 'observe':
+                item['tool'] = 'initialize'
+                block = item['result']['content'][0]
+                block['text'] = json.dumps({**json.loads(block['text']), 'initialized': True})
         source={'commit':'abc','source_sha256':'digest','dirty':False}
         run={'run_id':'test','config':{'backend':'omnigibson','observation_mode':'rgb_only','agent_profile':'minimal'},
              'source':source,'task_success':False,'evaluation':{'official_task_success':False}}

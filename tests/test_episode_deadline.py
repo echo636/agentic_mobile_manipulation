@@ -7,11 +7,13 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from manipulation_agent.deadline import EpisodeDeadline, write_execution_clock
-from manipulation_agent import bridge
+from manipulation_agent.runtime.deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline, write_execution_clock
+from manipulation_agent.transport import bridge
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
-from manipulation_agent.vision_harness import VisionHarness
+from manipulation_agent.runtime.vision_harness import VisionHarness
+from manipulation_agent.clients.types import ClientCapability
+from manipulation_agent.clients.base import run_process
 
 
 class EpisodeDeadlineTests(unittest.TestCase):
@@ -23,7 +25,7 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.backend=MockRGBBackend(self.output)
         self.backend.deadline=EpisodeDeadline(200)
         self.clock=100.0
-        self.clock_patch=patch('manipulation_agent.deadline.time.time',side_effect=lambda:self.clock)
+        self.clock_patch=patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:self.clock)
         self.clock_patch.start();self.addCleanup(self.clock_patch.stop)
         self.h=VisionHarness(self.backend,self.recorder,profile='minimal')
 
@@ -31,6 +33,30 @@ class EpisodeDeadlineTests(unittest.TestCase):
         return self.h.call('act',{'primitive':'toggle_on','revision':self.h.revision,
                                  'target':{'image_ref':self.h.snapshot['images'][0]['image_ref'],
                                            'point':[.5,.5]}},request_id)
+
+    def test_public_remaining_time_is_after_execution_without_rearming_or_scene_state(self):
+        initialized = self.h.call('initialize', {}, 'first')
+        self.assertEqual(initialized['execution_budget']['remaining_seconds'], 100)
+        original = self.backend.execute_visual
+        def slow_action(*args, **kwargs):
+            result = original(*args, **kwargs)
+            self.clock += 35
+            return result
+        self.backend.execute_visual = slow_action
+        reply = self.act()
+        self.assertEqual(reply['execution_budget'], {
+            'remaining_seconds': 65.0,
+            'scope': 'execution_wall_time_excluding_initialization',
+        })
+        self.assertEqual(self.h.deadline.unix, 200)
+        self.clock = 150
+        # Historical retry evidence remains idempotent, including its timestamped budget.
+        self.assertEqual(self.h.call('initialize', {}, 'first'), initialized)
+        self.clock = 201
+        expired = self.act('late')
+        self.assertEqual(expired['execution_budget']['remaining_seconds'], 0)
+        self.assertEqual(expired['error']['code'], 'episode_timeout')
+        self.assertTrue(self.h.call('finish', {'outcome':'blocked','reason':'time'}, 'finish')['closed'])
 
     def test_video_failure_does_not_prevent_or_replace_score_and_finish_event(self):
         self.act()
@@ -70,6 +96,41 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.assertEqual(self.recorder.run['episode_outcome'],'timeout')
         self.assertEqual(self.recorder.run['termination_reason'],'episode_deadline_exceeded')
         self.assertEqual(self.recorder.run['status'],'failed')
+
+    def test_managed_execution_continues_past_all_legacy_episode_counters(self):
+        self.h.actions=self.h.budget.max_actions
+        self.h.calls=self.h.budget.max_calls
+        self.backend.steps=self.h.budget.max_sim_steps
+        before_steps=self.backend.steps
+        self.backend.execute_visual=Mock(wraps=self.backend.execute_visual)
+        reply=self.act('after-legacy-limits')
+        self.assertTrue(reply['ok'])
+        self.assertEqual(self.h.actions,81)
+        self.assertEqual(self.h.calls,241)
+        self.assertEqual(self.backend.steps,20001)
+        self.assertEqual(self.backend.execute_visual.call_args.args[2],DEADLINE_STEP_SENTINEL-before_steps)
+        self.assertFalse(self.recorder.run['execution_limit_policy']['legacy_limits_active'])
+        # The real deadline still wins, including after those counters overflow.
+        self.clock=200
+        self.assertEqual(self.act('after-real-deadline')['error']['code'],'episode_timeout')
+        self.backend.execute_visual.assert_called_once()
+
+    def test_unmanaged_and_locally_armed_episodes_retain_explicit_counter_limits(self):
+        for arm_local in (False,True):
+            with self.subTest(arm_local=arm_local):
+                self.backend.deadline=EpisodeDeadline()
+                self.backend.steps=0
+                self.h=VisionHarness(self.backend,self.recorder,profile='minimal')
+                if arm_local:self.h.start_standalone_clock()
+                self.h.actions=self.h.budget.max_actions
+                self.assertEqual(self.act('action-limit')['error']['code'],'budget_exhausted')
+                self.h.actions=0
+                self.backend.steps=self.h.budget.max_sim_steps
+                self.assertEqual(self.act('step-limit')['error']['code'],'budget_exhausted')
+                self.backend.steps=0
+                self.h.calls=self.h.budget.max_calls
+                self.assertEqual(self.h.call('initialize',{},'call-limit')['error']['code'],'budget_exhausted')
+                self.assertTrue(self.h.call('finish',{'outcome':'aborted','reason':'fixture'},'finish-limit')['closed'])
 
     def test_expiry_inside_action_stops_refresh_and_invalidates_old_revision(self):
         def execute(*args,**kwargs):
@@ -120,13 +181,15 @@ class EpisodeDeadlineTests(unittest.TestCase):
         self.h.deadline=self.backend.deadline=EpisodeDeadline(clock_path=path)
         self.h.started=time.monotonic()-4000
         self.clock=4100
-        reply=self.h.call('observe',{},'before-model')
+        reply=self.h.call('initialize',{},'before-model')
         self.assertTrue(reply['ok'])
         self.assertFalse(self.h.deadline.expired)
         self.assertIsNone(self.h.deadline.unix)
+        self.assertNotIn('execution_budget', reply)
         clock=write_execution_clock(path,1800)
-        reply=self.h.call('observe',{},'model-first-observe')
+        reply=self.h.call('initialize',{},'model-first-observe')
         self.assertTrue(reply['ok'])
+        self.assertEqual(reply['execution_budget']['remaining_seconds'],1800)
         self.assertEqual(self.recorder.run['execution_started_at_unix'],4100)
         self.assertEqual(self.recorder.run['episode_deadline_unix'],5900)
         self.assertLess(time.monotonic()-self.h.started,1)
@@ -139,26 +202,35 @@ class ExecutionClockFileTests(unittest.TestCase):
     def test_clock_is_atomic_idempotent_and_loaded_only_once(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'execution_clock.json';reader=EpisodeDeadline(clock_path=path)
-            with patch('manipulation_agent.deadline.time.time',return_value=100):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=100):
                 self.assertTrue(reader.managed)
                 self.assertIsNone(reader.unix)
                 self.assertFalse(reader.expired)
-            with patch('manipulation_agent.deadline.time.time',return_value=4000):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=4000):
                 self.assertFalse(reader.expired)  # Arbitrarily long startup has no task deadline.
                 first=write_execution_clock(path,1800)
                 raw=path.read_bytes();mtime=path.stat().st_mtime_ns
                 self.assertEqual(reader.unix,5800)
-            with patch('manipulation_agent.deadline.time.time',return_value=4100):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=4100):
                 second=write_execution_clock(path,3600)
                 self.assertEqual(first,second)
                 self.assertEqual(path.read_bytes(),raw)
                 self.assertEqual(path.stat().st_mtime_ns,mtime)
             path.unlink()  # Proves a loaded reader does not poll or reset its clock.
-            with patch('manipulation_agent.deadline.time.time',return_value=5800):
+            with patch('manipulation_agent.runtime.deadline.time.time',return_value=5800):
                 self.assertTrue(reader.expired)
 
 
 class ControllerDeadlineTests(unittest.TestCase):
+    def setUp(self):
+        # These tests mock model execution; local CLI installation is unrelated
+        # to the deadline, handshake and controller-closure contracts below.
+        capability = ClientCapability('codex', 'available', 'fixture', '/fixture/codex')
+        probe = patch('manipulation_agent.clients.codex.CodexAdapter.probe',
+                      return_value=capability)
+        probe.start()
+        self.addCleanup(probe.stop)
+
     def test_handshake_consumes_remaining_task_time_before_model_wait(self):
         path=Path(__file__).resolve().parents[1]/'scripts'/'run_codex_controller.py'
         spec=importlib.util.spec_from_file_location('deadline_controller',path)
@@ -172,21 +244,25 @@ class ControllerDeadlineTests(unittest.TestCase):
             class Process:
                 pid=123456;returncode=0
                 def __init__(self,*args,**kwargs):self.stdout=kwargs['stdout']
+                def poll(self):return self.returncode
                 def communicate(self,text,timeout):
-                    observed['model_timeout']=timeout
                     self.stdout.write(json.dumps({'type':'item.completed','item':{
                         'type':'mcp_tool_call','server':'manipulation','tool':'finish',
-                        'result':{'content':[{'type':'text','text':'{"closed":true}'}]}}})+'\n')
+                        'result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}})+'\n')
                     clock[0]=149.0
                     return None,None
+            def run(project, output, timeout, on_start):
+                observed['model_timeout']=timeout
+                return run_process(project, output, timeout, on_start)
             decode=json.loads
             def decode_after_policy(text,*args,**kwargs):
                 if text.startswith('{"type": "item.completed"'):clock[0]=151.0
                 return decode(text,*args,**kwargs)
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
-            with patch('sys.argv',argv), patch('manipulation_agent.deadline.time.time',side_effect=lambda:clock[0]), \
+            with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:clock[0]), \
                  patch.object(controller,'check_server',side_effect=preflight), \
+                 patch('manipulation_agent.clients.codex.CodexAdapter.run',side_effect=run), \
                  patch.object(controller.subprocess,'Popen',Process), \
                  patch.object(controller.subprocess,'check_output',return_value='fixture'), \
                  patch.object(controller,'source_version',return_value={'fixture':True}), \
@@ -209,6 +285,7 @@ class ControllerDeadlineTests(unittest.TestCase):
             class Process:
                 pid=123456;returncode=-15
                 def __init__(self,*args,**kwargs):self.stdout=kwargs['stdout']
+                def poll(self):return None
                 def communicate(self,text,timeout):
                     self.stdout.write('{"type":"unfinished')
                     clock[0]=151
@@ -216,7 +293,8 @@ class ControllerDeadlineTests(unittest.TestCase):
                 def wait(self,timeout):return self.returncode
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800','--deadline-unix','150']
-            with patch('sys.argv',argv), patch('manipulation_agent.deadline.time.time',side_effect=lambda:clock[0]), \
+            with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:clock[0]), \
+                 patch('manipulation_agent.clients.base.time.monotonic',side_effect=lambda:clock[0]), \
                  patch.object(controller,'check_server',return_value={'status':'passed'}), \
                  patch.object(controller.subprocess,'Popen',Process), \
                  patch.object(controller.subprocess,'check_output',return_value='fixture'), \
@@ -251,17 +329,21 @@ class ControllerDeadlineTests(unittest.TestCase):
                 def __init__(self,*args,**kwargs):
                     assert clock_path.exists()
                     order.append('model');self.stdout=kwargs['stdout']
+                def poll(self):return self.returncode
                 def communicate(self,text,timeout):
-                    waits['model']=timeout
                     self.stdout.write(json.dumps({'type':'item.completed','item':{
                         'type':'mcp_tool_call','server':'manipulation','tool':'finish',
-                        'result':{'content':[{'type':'text','text':'{"closed":true}'}]}}})+'\n')
+                        'result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}})+'\n')
                     return None,None
+            def run(project, output, timeout, on_start):
+                waits['model']=timeout
+                return run_process(project, output, timeout, on_start)
             argv=['controller','--model','fixture','--instruction','fixture','--mcp-command','fixture',
                   '--mcp-args-json','[]','--output',str(output),'--timeout','1800',
                   '--execution-clock-command-json','["fixture-clock"]']
-            with patch('sys.argv',argv), patch('manipulation_agent.deadline.time.time',side_effect=lambda:now[0]), \
+            with patch('sys.argv',argv), patch('manipulation_agent.runtime.deadline.time.time',side_effect=lambda:now[0]), \
                  patch.object(controller,'check_server',side_effect=preflight), \
+                 patch('manipulation_agent.clients.codex.CodexAdapter.run',side_effect=run), \
                  patch.object(controller.subprocess,'run',side_effect=arm), \
                  patch.object(controller.subprocess,'Popen',Process), \
                  patch.object(controller.subprocess,'check_output',return_value='fixture'), \

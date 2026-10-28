@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 
 from manipulation_agent.contracts import Budget, tool_specs, validate
-from manipulation_agent.fake_backend import FakeBackend
-from manipulation_agent.harness import Harness
-from manipulation_agent.policies import scripted_episode
+from manipulation_agent.executors.fake_backend import FakeBackend
+from manipulation_agent.runtime.harness import Harness
+from manipulation_agent.agent.policies import scripted_episode
 from manipulation_agent.records import Recorder
 
 

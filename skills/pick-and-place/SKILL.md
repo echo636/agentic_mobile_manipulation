@@ -1,17 +1,26 @@
 ---
 name: pick-and-place
-description: Prepare a destination, visually select and grasp one object, carry it and verify placement using RGB.
+description: Prepare access, grasp the intended item, and place or attach it to the requested destination.
 ---
-# Pick and place
+# Carry and place
 
-1. Identify the item and intended destination in RGB. If the destination is not visible, search for it first or remember the item's visual location before exploring.
-2. If the destination visibly has a closed door/lid, approach and open it before grasping the item. Do not call open just because an object is a container; an open bin may have no opening mechanism.
-3. Approach the item by marking it in the current RGB. Reinspect after navigation; mark its body again for grasp. Do not mark the supporting table/floor.
-4. Inspect the new four-camera RGB and action feedback for evidence of the result. Gripper visibility may be limited; do not infer held-object truth from an unavailable wrist camera. Maintain this as your belief. Carry only one item with the default arm.
-5. Approach the destination using fresh RGB points. Mark the visible container body/interior for place_inside or the support surface for place_on_top.
-6. Inspect the returned RGB to verify visible placement and, if visible, the released object. If uncertain, change viewpoint rather than inventing an Inside/OnTop flag.
-7. Record completed items and remaining ones with visual descriptions. Repeat, then close containers if the instruction requires it.
+1. Identify the item and destination. Open a visibly closed destination before grasping; open bins need no opening action. The default hand carries one item or supported assembly.
+2. Grasp an exposed patch of the item's body, avoiding its support or carried contents. Check all current views if it is cropped. With target-locked approach, a selectable item can be grasped directly.
+3. Confirm the carried item and its contents from RGB and feedback. If the wrong support or object moved, put it down safely before reselecting. Check that supported contents remain with the carrier.
+4. Select the intended destination using the relation below. Inspect the returned result, then update completed and pending items. Close storage after dependent transfers if required.
 
-release and wait require target=null. open/close/toggle operations require an empty default hand. Failed placement restores the pre-action state when recovery succeeds. Inspect post-failure RGB and error feedback before retrying; do not assume either an empty hand or a successful placement.
+| Action | Select in current RGB |
+|---|---|
+| `place_inside` | Container body or open interior, clear of the held item and floor |
+| `place_on_top` | The intended free support surface and shelf level |
+| `place_under` | The fixture the item must be under |
+| `place_next_to` | The reference object's body, rather than nearby ground |
+| `attach` / `hang` | The compatible parent, mount, nail or hook for the held child |
 
-For place_on_top, click the actual intended empty support surface and shelf level. Optional placement_yaw_degrees rotates the carried item about vertical relative to its current orientation; use it to arrange items side by side, then verify from a clear RGB viewpoint. A neighboring shelf or a different part of a large support is not evidence that the intended arrangement succeeded. Use null for this option on other actions.
+For two items that must be beside each other, use the first item as the second's `place_next_to` reference. Their both being near other furniture is insufficient. If the reference is unreachable, navigate toward visible nearby floor and reselect its body.
+
+`placement_yaw_degrees` rotates a `place_on_top` item about vertical relative to its current orientation; use null for other actions. Preserve the requested shelf and relation when choosing an alternative pose.
+
+Open/close requires an empty hand. You can toggle the currently held object; toggling another object requires an empty hand. Release/wait takes a null target.
+
+A failed placement may leave the object moved or released; use RGB and feedback to establish the current hand and object state. `place_inside: unsupported_relation` can mean the pixel hit the held item or a surface without a fillable volume. If still holding the item, reselect the container without grasping again.

@@ -4,14 +4,17 @@ from __future__ import annotations
 import argparse
 import copy
 from datetime import datetime
-import html
 import json
 import subprocess
 from pathlib import Path
 
-from .audit import audit_episode
+from .replay_shell import render_replay_shell
+from .reporting.audit import audit_episode
 from .records import now, write_json, read_run
-from .transcript import build_transcript
+from .reporting.transcript import build_transcript
+from .reporting.tool_trace import enrich_tool_trace
+from .clients.events import event_path
+from .reporting.goal_replay import goal_state, planning_metrics
 
 
 def lines(path: Path) -> list[dict]:
@@ -26,6 +29,10 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
     video_path = run_dir / 'video.json'
     video = json.loads(video_path.read_text()) if video_path.exists() else None
+    spectator_path = run_dir / 'spectator_video.json'
+    spectator = json.loads(spectator_path.read_text()) if spectator_path.exists() else None
+    spectator_walltime_path = run_dir / 'spectator_walltime_video.json'
+    spectator_walltime = json.loads(spectator_walltime_path.read_text()) if spectator_walltime_path.exists() else None
     explained_path = run_dir / 'explained_video.json'
     explained = json.loads(explained_path.read_text()) if explained_path.exists() else None
     walltime_path = run_dir / 'walltime_video.json'
@@ -37,11 +44,12 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     video_markers = {m['request_id']:m for m in (video or {}).get('markers', [])}
     audit = audit_episode(run_dir, controller_dir) if controller_dir else None
     model_messages = {}; model_payloads = {}; pending = []; public_events = []; model_index = 0
-    summaries=lines(controller_dir/'model_reasoning_summaries.jsonl') if controller_dir else []
+    summaries=lines((controller_dir or run_dir)/'model_reasoning_summaries.jsonl')
     summaries=[r for r in summaries if r.get('source')=='provider_returned_reasoning_summary' and r.get('verbatim') is True]
     summary_index=0
-    model_events = lines(controller_dir/'model_events.jsonl') if controller_dir else []
-    if controller_dir:
+    model_source = event_path(controller_dir or run_dir)
+    model_events = lines(model_source)
+    if model_events:
         for event_index, event in enumerate(model_events):
             item = event.get('item',{})
             if item.get('type') in {'agent_message','mcp_tool_call'}:
@@ -90,6 +98,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     last_observation = None
     results = {e['request_id']: e for e in events if e['kind'] == 'tool_result'}
     decisions = []; plan = []; notes = {}; steps = []
+    task_notes = None; note_versions = []; agent_step = 0; model_call_index = 0
+    admitted = {e['request_id']: e['step'] for e in events if e['kind']=='agent_step_admitted'}
     calls = [e for e in events if e['kind'] == 'tool_call']
     start = datetime.fromisoformat(calls[0]['at']) if calls else None
     for call in calls:
@@ -98,7 +108,11 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             step_summaries.append(summaries[summary_index]);summary_index+=1
         event = results.get(call['request_id']); result = event.get('result') if event else None
         args = call['arguments']; name = call['name']
+        model_origin=call.get('origin')!='supervisor'
+        if model_origin: model_call_index+=1
+        if name in {'act','look'}: agent_step=admitted.get(call['request_id'],agent_step+1)
         before = copy.deepcopy(last_observation)
+        notes_before=copy.deepcopy(task_notes)
         new_obs = observation(result.get('observation')) if result else None
         if new_obs is not None:
             last_observation = new_obs
@@ -110,14 +124,23 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         if result and result.get('ok'):
             if name == 'update_plan': plan = copy.deepcopy(args['subgoals'])
             if name == 'remember': notes[args['key']] = {'text': args['text'], 'revision': args['revision']}
+            if name == 'task_notes' and args.get('operation') == 'write':
+                task_notes=copy.deepcopy(result['notes'])
+                # New write receipts acknowledge metadata; the accepted text is
+                # already archived in the model's tool call. Preserve old receipts.
+                if 'content' not in task_notes:
+                    task_notes['content'] = args['content']
+                note_versions.append({**task_notes,'tool_step':len(steps)+1,'result_event_id':event['id']})
         seconds = (datetime.fromisoformat(event['at']) - datetime.fromisoformat(call['at'])).total_seconds() if event else None
         steps.append({'index': len(steps) + 1, 'event_id': call['id'], 'result_event_id': event['id'] if event else None,
                       'tool': name, 'arguments': args, 'result': result,
                       'observation_job': copy.deepcopy((result or {}).get('job')),
                       'request_id':call['request_id'], 'decision':copy.deepcopy(args.get('decision')),
-                      'model_messages':copy.deepcopy(model_messages.get(len(steps)+1,[])),
+                      'origin':call.get('origin','controller'), 'agent_step':agent_step,
+                      'task_notes_before':notes_before, 'task_notes':copy.deepcopy(task_notes), 'goal_state':goal_state(task_notes or {}),
+                      'model_messages':copy.deepcopy(model_messages.get(model_call_index,[])) if model_origin else [],
                       'model_reasoning_summaries':step_summaries,
-                      **model_payloads.get(len(steps)+1,{}),
+                      **(model_payloads.get(model_call_index,{}) if model_origin else {}),
                       'at': call['at'], 'elapsed_seconds': (datetime.fromisoformat(call['at']) - start).total_seconds(),
                       'video_start_seconds': video_markers.get(call['request_id'],{}).get('seconds'),
                       'tool_seconds': seconds, 'is_motor_action': name in {'act', 'look'},
@@ -136,9 +159,10 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             'source': run.get('source', {}), 'execution': {k: run.get(k) for k in
                 ('host', 'pid', 'interpreter', 'unit', 'gpu_uuid', 'output_path', 'actions', 'tool_calls', 'sim_steps', 'wall_seconds')},
             'backend': run.get('backend', {}),
-            'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else None,
-            'audit': audit, 'steps': steps, 'video':video, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review, 'inspection_video':inspection,
-            'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(controller_dir),
+            'model': json.loads((controller_dir / 'controller.json').read_text()).get('model') if controller_dir else run.get('native_loop', {}).get('model', run.get('config', {}).get('model')),
+            'audit': audit, 'steps': steps, 'video':video, 'spectator_video':spectator, 'spectator_walltime_video':spectator_walltime, 'explained_video':explained, 'walltime_video':walltime, 'review_video':review, 'inspection_video':inspection,
+            'task_note_versions':note_versions, 'planning_metrics':planning_metrics(steps),
+            'model_public_events':public_events, 'model_final_messages':pending, 'has_public_trace':bool(model_events),
             'model_transcript':build_transcript(model_events, steps, summaries),
             'model_reasoning_summaries':summaries,
             'model_final_reasoning_summaries':summaries[summary_index:],
@@ -157,7 +181,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
 def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     data = build_replay(run_dir, controller_dir)
     if data['video'] and data['video'].get('status') == 'passed':
-        from .streaming_video import prepare_browser_video
+        from .reporting.streaming_video import prepare_browser_video
         try:
             browser = prepare_browser_video(run_dir, data['video']['file'])
             data['video']['playback_file'] = browser['file']
@@ -166,19 +190,23 @@ def render_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
             write_json(run_dir / 'browser_video_warning.json', {'status':'failed', 'error':str(exc)})
     # Keep the downloadable original public stream separate: images may be large.
     public_events = data.pop('model_public_events')
-    if controller_dir:
+    if data.get('has_public_trace'):
         (run_dir/'model_public_events.jsonl').write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in public_events))
+    data = enrich_tool_trace(data, run_dir, run_dir)
     write_json(run_dir / 'replay.json', data)
     if data['audit']:
         write_json(run_dir / 'replay_audit.json', data['audit'])
-    (run_dir / 'replay.html').write_text(render_replay_page(data))
+    (run_dir / 'replay.html').write_text(render_replay_page(data, source_dir=run_dir, asset_dir=run_dir))
     return data
 
 
-def render_replay_page(data: dict) -> str:
+
+def render_replay_page(data: dict, source_dir: Path | None = None,
+                       asset_dir: Path | None = None, *, trace_stats: dict | None = None) -> str:
     """Render archived replay data without rebuilding or changing experiment evidence."""
-    assets = Path(__file__).with_name('replay_assets')
-    template = (assets / 'index.html').read_text()
+    data = enrich_tool_trace(data, source_dir, asset_dir)
+    if trace_stats is not None:
+        trace_stats.update(data['tool_trace_stats'])
     # Combinatorial evaluator arrays can exceed hundreds of MB. They remain
     # in raw run.json, but scores and scalar metrics suffice for the viewer.
     offline = dict(data.get('evaluation_offline_only') or {})
@@ -189,9 +217,7 @@ def render_replay_page(data: dict) -> str:
     data = {**data, 'evaluation_offline_only': offline}
     # Escape < so task text cannot close a JSON script element.
     embedded = json.dumps(data, ensure_ascii=False, allow_nan=False).replace('<', '\\u003c').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
-    page = template.replace('@@TITLE@@', html.escape(data['run_id']))
-    page = page.replace('@@CSS@@', (assets / 'style.css').read_text() + (assets / 'transcript.css').read_text())
-    page = page.replace('@@DATA@@', embedded).replace('@@JS@@', '\n'.join((assets / name).read_text() for name in ('timing.js', 'transcript.js', 'navigation_target.js', 'player.js')))
+    page = render_replay_shell(embedded, title=data['run_id'])
     if not data['audit']:
         page = page.replace(' href="replay_audit.json"', '')
     if not data['video']:
