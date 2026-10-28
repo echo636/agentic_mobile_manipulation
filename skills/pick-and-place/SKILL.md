@@ -9,7 +9,7 @@ description: Prepare access, grasp the intended item, and place or attach it to 
 3. Confirm the carried item and its contents from RGB and feedback. If the wrong support or object moved, put it down safely before reselecting. Check that supported contents remain with the carrier.
 4. Select the intended destination using the relation below. Inspect the returned result, then update completed and pending items. Close storage after dependent transfers if required.
 
-For several items sharing a route, compare individual trips with loading a tray, board or container at the source. Grasping that carrier transports its supported contents together. At a common receiving vessel, `pour` can transfer loose objects as well as material while keeping the carrier in hand; distinct final placements still need distribution. Batch only when the saved travel outweighs loading, unloading and carrier handling, and keep the load stable and identifiable.
+For several items sharing a route, compare individual trips with loading a tray, board or container at the source. Grasping that carrier transports its supported contents together. Use `pour` to unload loose objects into a common vessel or onto a work surface while keeping the carrier in hand. Loose material requires a receiving vessel; distinct final placements still need distribution. Batch only when the saved travel outweighs loading, unloading and carrier handling, and keep the load stable and identifiable.
 
 | Action | Select in current RGB |
 |---|---|

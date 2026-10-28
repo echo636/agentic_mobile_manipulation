@@ -43,8 +43,9 @@ continuous recording is optional in iteration batches.
 | `hang` | Movable item | Use the same verified `AttachedTo` operation as `attach`, with a selected nail/hook/hanger |
 
 The material transfer actions also include `pour` and `scoop`. `pour` takes a
-held vessel, board or ready dispenser and a selected open receiving vessel. It
-attempts loose rigid contents with native `Inside` placement and transfers a
+held vessel, board or ready dispenser and a selected receiver. It
+attempts loose rigid contents with native `Inside` placement into vessels or
+`OnTop` placement onto work surfaces, and transfers a
 material portion, retaining the source in hand. `scoop` transfers material from
 the selected source into the held vessel. Both preserve existing contents;
 dispensers supply only their authored material. Receiving capacity can leave

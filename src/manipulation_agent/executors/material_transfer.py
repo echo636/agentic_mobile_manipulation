@@ -126,14 +126,15 @@ class CheckedMaterialTransfer:
             for other in candidates)]
 
     def _pour_rigid_objects(self, source, destination, objects, max_steps):
-        """Use native Inside placement, then leave the result to free physics.
+        """Use native containment/support placement, then leave free physics.
 
         Stop when the receiver cannot accept the next object. Earlier transfers
         remain real progress; never roll back the scene or reconstruct food.
         """
-        from omnigibson.object_states import Inside
+        from omnigibson.object_states import ContainedParticles, Inside, OnTop
         from omnigibson.utils import transform_utils as T
         from .particle_payload import relocate_particles
+        relation = Inside if ContainedParticles in destination.states else OnTop
         moved = []
         for obj in objects:
             self.deadline.check(changed=bool(moved))
@@ -143,19 +144,19 @@ class CheckedMaterialTransfer:
                 for child, _, _ in dependencies]
             particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
                                            include_supported=True)
-            if Inside not in obj.states or not obj.states[Inside].set_value(destination, True):
+            if relation not in obj.states or not obj.states[relation].set_value(destination, True):
                 break
             self._relocate_contents(obj, contents)
             relocate_particles(self.env.scene, particles)
             moved.append(obj)
         if not moved:
-            raise SkillError('sampling_error', 'The receiving vessel could not accept a loose object', changed=True)
+            raise SkillError('sampling_error', 'The receiver could not accept a loose object', changed=True)
         for _ in range(min(6, max_steps)):
             self._step(self.primitives._empty_action())
         return moved
 
     def _checked_transfer(self, primitive, target, max_steps):
-        from omnigibson.object_states import Inside
+        from omnigibson.object_states import ContainedParticles, Inside, OnTop
 
         source, destination = self._transfer_preconditions(primitive, target)
         objects = self._pour_objects(source) if primitive == 'pour' else []
@@ -165,13 +166,14 @@ class CheckedMaterialTransfer:
         if moved:
             # Material transfer can advance physics again. Count rigid contents
             # after that settling, so the receipt describes the returned scene.
-            retained = sum(bool(obj.states[Inside].get_value(destination)) for obj in moved)
+            relation = Inside if ContainedParticles in destination.states else OnTop
+            retained = sum(bool(obj.states[relation].get_value(destination)) for obj in moved)
             rigid = {'moved_objects': len(moved), 'retained_objects': retained,
                      'source_remaining_objects': len(self._pour_objects(source))}
             self._placement_record({'status': 'rigid_contents_poured', 'source': source.name,
                 'destination': destination.name, 'objects': [obj.name for obj in moved], **rigid})
             if not retained:
-                raise SkillError('postcondition_error', 'Poured objects did not remain in the receiving vessel', changed=True)
+                raise SkillError('postcondition_error', 'Poured objects did not remain at the receiver', changed=True)
             result.update(rigid_transfer=rigid, implementation='native_rigid_and_particle_transfer')
         return result
 
@@ -183,8 +185,10 @@ class CheckedMaterialTransfer:
         source, destination = (held, target) if primitive == 'pour' else (target, held)
         if source is destination:
             raise SkillError('same_transfer_vessel', 'Material source and destination are the same vessel')
-        if ContainedParticles not in destination.states:
-            raise SkillError('invalid_transfer_destination', 'Selected receiver has no supported material volume')
+        if (ContainedParticles not in destination.states
+                and not (primitive == 'pour' and self._pour_objects(source))):
+            raise SkillError('invalid_transfer_destination',
+                'Loose material needs a receiving vessel; only loose rigid objects can be poured onto a surface')
         for obj in (source, destination):
             if Open in obj.states and not obj.states[Open].get_value():
                 raise SkillError('container_closed', 'Open the material source and receiving vessel before transfer')
@@ -238,6 +242,13 @@ class CheckedMaterialTransfer:
         modifier, emitted = (None, [])
         if not captured:
             modifier, emitted = self._ready_dispenser(source, tilt=primitive == 'pour')
+        if ContainedParticles not in destination.states:
+            # A rigid batch can be emptied onto a board/table. Keep particles in
+            # their source until a vessel with a receiving volume is selected.
+            return {'primitive': primitive, 'materials': [],
+                    'source_has_more_material': bool(captured or emitted),
+                    'held_vessel_retained': True,
+                    'postcondition': 'rigid_surface_transfer; loose_material_not_transferred'}
         systems = {record.system.name: record.system for record in captured}
         systems.update((system.name, system) for system in emitted)
         if not systems:

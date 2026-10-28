@@ -70,11 +70,13 @@ class MaterialActionTests(unittest.TestCase):
         from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
 
         inside = type('Inside', (), {})
+        on_top = type('OnTop', (), {})
+        volume = type('ContainedParticles', (), {})
         retained = [True, True]
         objects = [types.SimpleNamespace(name=str(i), states={inside: types.SimpleNamespace(
             get_value=lambda destination, i=i: retained[i])}) for i in range(2)]
         source = types.SimpleNamespace(name='source')
-        destination = types.SimpleNamespace(name='receiver')
+        destination = types.SimpleNamespace(name='receiver', states={volume: object()})
         remaining = []
         backend = CheckedMaterialTransfer()
         backend._transfer_preconditions = lambda *args: (source, destination)
@@ -90,10 +92,29 @@ class MaterialActionTests(unittest.TestCase):
             return {'materials': [{'moved_particles': 3, 'retained_particles': 3}]}
 
         backend._transfer_material_portion = transfer_material
-        with self.modules, patch.object(sys.modules['omnigibson.object_states'], 'Inside', inside, create=True):
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
+                Inside=inside, OnTop=on_top, ContainedParticles=volume, create=True):
             result = backend._checked_transfer('pour', destination, 6)
         self.assertEqual(result['rigid_transfer'], {
             'moved_objects': 2, 'retained_objects': 1, 'source_remaining_objects': 1})
+
+    def test_pour_surface_accepts_rigid_contents_but_not_material_only_or_scoop(self):
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        states = {name: type(name, (), {}) for name in ('Inside', 'Open', 'ContainedParticles')}
+        source = types.SimpleNamespace(states={})
+        board = types.SimpleNamespace(states={})
+        backend = CheckedMaterialTransfer()
+        backend._get_held = lambda: source
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(objects=[]))
+        backend._pour_objects = lambda obj: [object()]
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'], **states, create=True):
+            self.assertEqual(backend._transfer_preconditions('pour', board), (source, board))
+            with self.assertRaises(SkillError):
+                backend._transfer_preconditions('scoop', board)
+            backend._pour_objects = lambda obj: []
+            with self.assertRaises(SkillError):
+                backend._transfer_preconditions('pour', board)
 
     def test_sweep_removes_only_compatible_selected_material(self):
         with self.modules:

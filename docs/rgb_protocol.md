@@ -84,8 +84,9 @@ particle frames, before committing a pose. A committed physical outcome is not
 rewound. This remains ideal pose actuation, not physical grasp or pour control.
 
 Carrying a board alone does not empty it. The explicit `pour` action transfers
-loose rigid contents with native `Inside` placement and transfers a portion of
-loose material into the selected open receiver. It preserves existing object and
+loose rigid contents with native `Inside` placement into vessels or `OnTop`
+placement onto work surfaces. Loose material still requires an open receiving
+vessel. It preserves existing object and
 particle identities and keeps the carrier held. Capacity can leave a remainder;
 feedback reports moved/retained rigid counts and remaining source contents.
 Nested vessels keep their contents. `scoop` transfers loose material into the
