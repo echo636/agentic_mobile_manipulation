@@ -111,10 +111,6 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
-        # Navigation and manipulation must use the same robot footprint.
-        # Unfolding only at the first grasp can intersect nearby furniture.
-        with self._startup_stage('initialize_manipulation_arm'):
-            self._initialize_manipulation_arm()
         self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
                                  if self.demo_motion else None)
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
@@ -142,6 +138,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         self.rig_height = centered_head_height(
             visual_points, base_pos.detach().cpu().tolist(),
             pitch_degrees=self.rig_pitch_degrees, radius=self.rig_radius)
+        # Mount the cameras from the restored body, as before. An extended
+        # arm must not raise the virtual head into a ceiling. Then use the
+        # grasp posture for the first observation and every navigation plan.
+        with self._startup_stage('initialize_manipulation_arm'):
+            self._initialize_manipulation_arm()
         with self._startup_stage('surround_camera_setup_and_warmup'):
             for direction in DIRECTIONS:
                 sensor = self._preloaded_rgb_sensor('mas_rgb_'+direction)
