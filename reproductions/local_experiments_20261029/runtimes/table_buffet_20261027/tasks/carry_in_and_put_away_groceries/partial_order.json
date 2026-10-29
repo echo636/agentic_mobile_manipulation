@@ -1,0 +1,50 @@
+{
+  "retrieve_bag": {
+    "kind": "causal_prerequisite",
+    "goal_indices": [],
+    "requires": [],
+    "evidence": "The bag leaves the car trunk; this is not an extra final goal."
+  },
+  "open_garage_passage": {
+    "kind": "causal_prerequisite",
+    "goal_indices": [],
+    "requires": [],
+    "evidence": "The interior garage door is open. If the bag is held, release it before opening the door and regrasp it afterward."
+  },
+  "carry_bag_inside": {
+    "kind": "causal_prerequisite",
+    "goal_indices": [],
+    "requires": ["retrieve_bag", "open_garage_passage"],
+    "evidence": "The bag and its two contained groceries pass from the garage into the house. This is a process milestone, not an additional final BDDL goal."
+  },
+  "store_tomato": {
+    "kind": "final_goal",
+    "goal_indices": [0],
+    "requires": ["carry_bag_inside"],
+    "evidence": "(inside beefsteak_tomato.n.01_1 electric_refrigerator.n.01_1)"
+  },
+  "store_milk": {
+    "kind": "final_goal",
+    "goal_indices": [1],
+    "requires": ["carry_bag_inside"],
+    "evidence": "(inside carton__of__milk.n.01_1 electric_refrigerator.n.01_1)"
+  },
+  "park_bag": {
+    "kind": "final_goal",
+    "goal_indices": [2],
+    "requires": ["carry_bag_inside"],
+    "evidence": "(nextto sack.n.01_1 electric_refrigerator.n.01_1)"
+  },
+  "close_trunk": {
+    "kind": "final_goal",
+    "goal_indices": [3],
+    "requires": ["retrieve_bag"],
+    "evidence": "(not (open car.n.01_1))"
+  },
+  "close_fridge": {
+    "kind": "final_goal",
+    "goal_indices": [4],
+    "requires": ["store_tomato", "store_milk"],
+    "evidence": "(not (open electric_refrigerator.n.01_1))"
+  }
+}

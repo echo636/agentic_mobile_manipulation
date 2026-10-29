@@ -1,0 +1,15 @@
+prepare_and_serve_hot_drink:
+- load_room_instances:
+  - kitchen_0
+  - living_room_0
+  online_object_sampling: true
+  robot_start_orientation:
+  - 0.0
+  - 0.0
+  - -0.7934740781784058
+  - 0.6086040735244752
+  robot_start_position:
+  - 6.06195068359375
+  - -0.887542724609375
+  - 0.0050048828125
+  scene_model: house_single_floor

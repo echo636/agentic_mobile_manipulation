@@ -1,0 +1,9 @@
+{
+  "files": {
+    "scripts/audit_demo_trial.py": "4adb4d4a5c6b695921b4600f4e0c8509f59ce7fd0f86fc4a68b7a6b188747970",
+    "scripts/run_demo_trial.py": "544b8f1187a3c335030611764c26acaf90bd6f13ecb1c79c2cb15aad1a148313",
+    "src/manipulation_agent/executors/omnigibson_rgb.py": "aa8094da94f2d5bf92783f7fb999a76e487330b1a63861f557d3f495c4a1c106",
+    "src/manipulation_agent/omnigibson_backend.py": "e89a9933d1234870be7f9cf675c9ddb713ce4d539fc9b3dcdcf9960572b193cb"
+  },
+  "executable_files": []
+}

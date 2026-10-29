@@ -1,0 +1,9 @@
+{
+  "files": {
+    "cloth_compatibility_candidate.py": "302fc196cfc6b5b8830152f78019b77e8a664e2dfaf0c3ae44006d8a775e2863",
+    "sample_native_task.py": "fa6d39a987d16e723e6f4e632725b5430f15a307cf0c6fc4370e01c8bd171501",
+    "simulator_contact_candidate.py": "e4a0b765fd2e430cafd19da6430e9054f348742f083d04821398471ea26b4390",
+    "simulator_device_candidate.py": "b123d881fae73cbd10a960f13b3da98a73232bbd857903790b150a86b38781b2"
+  },
+  "executable_files": []
+}

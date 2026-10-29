@@ -1,0 +1,14 @@
+{
+  "files": {
+    "before_omnigibson_rgb.py": "c8258d21a53999401012628d3711a64792b5bad9689b6b04df38b8fa1add4e2d",
+    "build_scene_overlay.py": "283c46d666bdbbd051b7df2a8e53514dea6a8dba3037db636c441ff5f4ac2251",
+    "gt_navigation.py": "3d6ec02a8656bc05546a7fb6a8de2522708fd7605bd0d6be20461e38f8024eed",
+    "omnigibson_rgb.py": "74bb8c80dd3b9c6bc7fde89d43b27494fded806e4c9d116d6318cef7059cbd13",
+    "probe_navigation_reach.py": "cbc59b60894fcf849e1df03b723c25300892429210c37af43205c9101e044c6d",
+    "problem0.bddl": "b38c56b63e8df759072e2736d1471e051b0d7392c1f744743d3d7757c3348da1",
+    "rig.py": "753243c06da1956778aea1e1cf4cd60dd91b95296fe6aa5a3ac52874feea778b",
+    "run_readiness_probe.py": "fcdbe5d47777551757e2d7fc7b37c1006bf7a8ae01a4f780b8c38a4b55979ab1",
+    "visual_mesh_grounding.py": "5525c79466f09af9cb73def72267225eae59c1c517919b8063850d7c5b4bb6ce"
+  },
+  "executable_files": []
+}

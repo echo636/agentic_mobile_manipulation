@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-29",
+  "remote_base_commit": "1174b3b8c1bf947b9d33876dbb193cb26f720b85",
+  "indexed_directories": 756,
+  "cache_directories_index_only": 180,
+  "credential_directories_excluded": 1,
+  "snapshot_references": 2137,
+  "readable_runtimes": 6,
+  "selected_metadata_records": 3622,
+  "deeper_directories_not_walked": 114,
+  "environment_records_with_versions": 626,
+  "scope": "Versioned code and environment/asset provenance archive; not a claim that all indexed directories are autonomous experiments or portable complete packages.",
+  "external": [
+    "large assets",
+    "full environment installation",
+    "credentials",
+    "client binaries",
+    "raw sessions",
+    "images and video",
+    "native generated binary state/topology caches"
+  ],
+  "new_gpu_or_model_runs": 0,
+  "unique_code_and_config_snapshots": 742
+}

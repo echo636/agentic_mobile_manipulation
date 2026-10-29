@@ -1,0 +1,11 @@
+{
+  "files": {
+    "build_scene_overlay.py": "283c46d666bdbbd051b7df2a8e53514dea6a8dba3037db636c441ff5f4ac2251",
+    "gt_navigation.py": "3d6ec02a8656bc05546a7fb6a8de2522708fd7605bd0d6be20461e38f8024eed",
+    "omnigibson_rgb.py": "f31b52ec7e6b61e081c011890f6f0ae25496a38988a09c16fe9cbf7beba1cb5c",
+    "problem0.bddl": "b38c56b63e8df759072e2736d1471e051b0d7392c1f744743d3d7757c3348da1",
+    "run_demo_trial.py": "f96bfd7f4dcad87fda43eac3446bda1d75c448c83141812f83368d023620fe8d",
+    "run_no_demo_trial.py": "c400961dd5757ad04966733e66cdbb77db180f361879b493d6503d2761f6d7d0"
+  },
+  "executable_files": []
+}

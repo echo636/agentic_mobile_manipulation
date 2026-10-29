@@ -1,0 +1,16 @@
+{
+  "files": {
+    "failure-recovery/SKILL.md": "0f6d8c520c48e197ce326c02af828bd4ac050300d4b630588f02e1597470e0c1",
+    "long-horizon-planning/SKILL.md": "493e574dce3c898b1b19626f1d55a992bbe9211b945c5ecbfc298497a6ae30a8",
+    "long-horizon-planning/references/bddl-goals.md": "5198e3fa09d58c041ed30cfed3d3e9ff99ffacb5c136af430f407df222e0791b",
+    "pick-and-place/SKILL.md": "e2ee5d306c87bd55ad2c19cc2c56cdfd17952a46240716d508f2aa5b751381c3",
+    "pick-and-place/references/placement.md": "209f4ed1862373c0bd4abf335ffafb65cac1d3de793c58efce7d1d62044e5832",
+    "pick-and-place/references/staging-and-doors.md": "c2f2175c375613f27a9b59a2dea01b207315669e37d5d267277cb75a29c43607",
+    "pick-and-place/references/target-selection.md": "03a1d7f7a5180d36645bc9bf97b49d6c4e3b85c748d0dc4d4d4ce96c941778dc",
+    "visual-exploration/SKILL.md": "b4db804fcb5b6a3d6edc244bcf4a77154653b6ceac2dd2b505c57133bc74114d",
+    "visual-manipulation/SKILL.md": "36758273604f88dbe2f1e4dc3c86a974c259e501beb9c9dab1cff46ea2db6a9d",
+    "visual-manipulation/references/evidence.md": "a7094a92ebed86eabaaec96521300fb4c267fc7b5d11286429b3bc4cd8afba87",
+    "visual-manipulation/references/material-actions.md": "c18426fbc44d059fffe3f267f60e118149c6eceb5e55b1d59605842c16b7dae9"
+  },
+  "executable_files": []
+}

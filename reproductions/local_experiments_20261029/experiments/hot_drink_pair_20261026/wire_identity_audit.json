@@ -1,0 +1,42 @@
+{
+  "checks": {
+    "models_equal_as_planned": true,
+    "efforts_equal_as_planned": true,
+    "strict_all_requests": true,
+    "same_client_version": true
+  },
+  "passed": true,
+  "evidence": {
+    "without_long_horizon": {
+      "api_requests": 187,
+      "model_values": [
+        "gpt-6-astra"
+      ],
+      "effort_values": [
+        "low"
+      ],
+      "transport_modes": [
+        "strict_mcp_tools_v1"
+      ],
+      "client_version": "codex-cli 0.157.1",
+      "formal_finish": true,
+      "exit_code": 0
+    },
+    "with_long_horizon": {
+      "api_requests": 170,
+      "model_values": [
+        "gpt-6-astra"
+      ],
+      "effort_values": [
+        "low"
+      ],
+      "transport_modes": [
+        "strict_mcp_tools_v1"
+      ],
+      "client_version": "codex-cli 0.157.1",
+      "formal_finish": true,
+      "exit_code": 0
+    }
+  },
+  "limit": "Only requested identity is attested by captured requests; provider internals unverified."
+}

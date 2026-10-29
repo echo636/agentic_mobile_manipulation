@@ -1,0 +1,5 @@
+"""Robot action primitives, distinct from agent workflow skills in skills/."""
+PRIMITIVES = ("navigate_to", "grasp", "attach", "hang", "place_inside", "place_on_top", "place_under", "place_next_to",
+              "pour", "place_near_heating_element", "boil",
+              "open", "close", "toggle_on", "toggle_off", "release", "wait",
+              "wipe", "sweep", "vacuum", "spray", "spread", "soak", "cut")

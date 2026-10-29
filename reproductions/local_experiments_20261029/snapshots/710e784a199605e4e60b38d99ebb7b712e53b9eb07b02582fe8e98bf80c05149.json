@@ -1,0 +1,9 @@
+{
+  "files": {
+    "collect_inventory.py": "ced56cfc6c6fc75ebe05c41c91cd30e4f69cf85f190cdc59138c85f730ff02d9",
+    "complete_staging.py": "3325f777980cc465b7e7adeec1b5a2cc9a0fde21ef21385aaf28ceb67f47c95d",
+    "hash_raw_evidence.py": "7adf00cf7d6a6a5a33fb1bfbb3e4a237edb5b5705e8699a4537185d63d219754",
+    "verify_staging.py": "b3f0894768e4a084bacceb05535d6142240a4cb5e552c63d95bc31dd46625270"
+  },
+  "executable_files": []
+}

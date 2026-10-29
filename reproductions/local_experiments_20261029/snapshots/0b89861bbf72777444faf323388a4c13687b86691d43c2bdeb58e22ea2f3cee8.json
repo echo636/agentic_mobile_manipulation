@@ -1,0 +1,14 @@
+{
+  "files": {
+    "failure-recovery/SKILL.md": "a0d224de91e26f613ce1c877a1061255c8423ee2951b3f788706fa72edbeba3b",
+    "pick-and-place/SKILL.md": "1defba7913c1e59c306f358f0d490380db9dfaeab7f32a71e82d1c35b8469e58",
+    "pick-and-place/references/placement.md": "209f4ed1862373c0bd4abf335ffafb65cac1d3de793c58efce7d1d62044e5832",
+    "pick-and-place/references/staging-and-doors.md": "c2f2175c375613f27a9b59a2dea01b207315669e37d5d267277cb75a29c43607",
+    "pick-and-place/references/target-selection.md": "73554c005ffb35c24450697896dd4694d878d4d2739916092f5a6359e0a56916",
+    "visual-exploration/SKILL.md": "778eb0cb89b4d4eb249d8cc871c86cc3bb16d473f75294cd02fa7b2f06997273",
+    "visual-manipulation/SKILL.md": "d1a0d5ff1f40f3f94a1f5283c345a36e1cc7eba50c0371bab884266bfc787cd3",
+    "visual-manipulation/references/evidence.md": "a7094a92ebed86eabaaec96521300fb4c267fc7b5d11286429b3bc4cd8afba87",
+    "visual-manipulation/references/material-actions.md": "a9d25ce4eb72ada5dbfab39c8d83349d0a6a4f29f4b20a07edb18bd1499a206e"
+  },
+  "executable_files": []
+}

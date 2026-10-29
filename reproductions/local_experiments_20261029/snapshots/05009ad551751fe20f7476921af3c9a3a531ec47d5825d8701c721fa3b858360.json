@@ -1,0 +1,9 @@
+{
+  "files": {
+    "canonical_export_fix.patch": "82f912b140e34da8a95623f1b3560ae3afeb888873bf1a126de1fe9212e3b367",
+    "src/manipulation_agent/clients/events.py": "b16a81bca6bd5318f09a624c90bf549dc0e25935950045b4d691343140c43a9f",
+    "tests/test_client_event_sessions.py": "1df5b6417b713cf808917d17e1675e63ba6c12a5c831cfc24bc7c022ae365b38",
+    "validation.json": "35077c6b91f05f966275daae7e90cd8ecb7300793fc94b8862e69405ceba4181"
+  },
+  "executable_files": []
+}

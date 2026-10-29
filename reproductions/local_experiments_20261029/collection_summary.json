@@ -1,0 +1,22 @@
+{
+  "experiments": 756,
+  "families": {
+    "runtime_cache_excluded": 180,
+    "executor_camera_transport_and_other": 67,
+    "model_batches_and_demos": 42,
+    "clear_dinner": 2,
+    "credential_or_client_state_excluded": 1,
+    "hot_drink": 260,
+    "groceries": 139,
+    "native_table_and_buffet": 45,
+    "skill_and_protocol_comparisons": 18,
+    "native_wild_party": 2
+  },
+  "snapshot_references": 2137,
+  "unique_snapshot_trees": 742,
+  "unique_file_objects": 2146,
+  "environment_version_sets": 1,
+  "directories_examined": 4329,
+  "omitted_deeper_directories": 114,
+  "snapshot_omissions": 0
+}

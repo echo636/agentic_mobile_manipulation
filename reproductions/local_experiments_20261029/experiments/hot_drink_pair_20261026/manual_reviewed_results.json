@@ -1,0 +1,115 @@
+{
+  "protocol": "hot_drink_intent_v2_blocked_v2_environment_v1_astra_pair_20261026",
+  "sample_size_per_group": 1,
+  "results": [
+    {
+      "group": "without_long_horizon",
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "task_success": true,
+      "goals": "11/11",
+      "actions_including_look": 106,
+      "act_calls": 104,
+      "failed_actions": 11,
+      "failure_rate": 0.10377358490566038,
+      "wall_seconds": 4417.335083177313,
+      "motor_seconds": 2147.267513999999,
+      "sim_steps": 6279,
+      "navigation_calls": 43,
+      "failed_motor_seconds": 18.189258,
+      "failure_counts": {
+        "unsupported_relation": 3,
+        "out_of_reach": 3,
+        "navigation_unreachable": 4,
+        "invalid_visual_target": 1
+      },
+      "planning_calls": {
+        "update_plan": 0,
+        "remember": 0,
+        "recall": 0,
+        "read_skill": 7
+      },
+      "environment_operations": 4,
+      "first_finish_accepted": true,
+      "review": "hot_drink_lh_repaired_pair_20261026/without_long_horizon/review_5view.html",
+      "skill_bundle_sha256": "decb1cfe9840f1bbad77e780482f22334aacb8147eeb0282e7a93f6aa233b045"
+    },
+    {
+      "group": "with_long_horizon",
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "task_success": true,
+      "goals": "11/11",
+      "actions_including_look": 96,
+      "act_calls": 93,
+      "failed_actions": 7,
+      "failure_rate": 0.07291666666666667,
+      "wall_seconds": 4885.664545014035,
+      "motor_seconds": 2689.9097249999995,
+      "sim_steps": 8201,
+      "navigation_calls": 45,
+      "failed_motor_seconds": 10.638727999999999,
+      "failure_counts": {
+        "navigation_unreachable": 3,
+        "unsupported_relation": 4
+      },
+      "planning_calls": {
+        "update_plan": 5,
+        "remember": 2,
+        "recall": 0,
+        "read_skill": 8
+      },
+      "environment_operations": 4,
+      "first_finish_accepted": true,
+      "review": "hot_drink_lh_repaired_pair_20261026/with_long_horizon/review_5view.html",
+      "skill_bundle_sha256": "f7a1993ac9dfabe73e09667e517b14f19d07e8f6a88272d04496cba6f4b64d8f"
+    }
+  ],
+  "relative_change_with_vs_without": {
+    "actions_including_look": -0.09433962264150944,
+    "failed_actions": -0.36363636363636365,
+    "wall_seconds": 0.10602081413752755,
+    "motor_seconds": 0.25271290487189874,
+    "sim_steps": 0.30609969740404525,
+    "navigation_calls": 0.046511627906976744
+  },
+  "configuration_verified": true,
+  "runtime_and_scene_equivalence": {
+    "checks": {
+      "runtime_source_matches_frozen": true,
+      "four_base_skills_identical": true,
+      "task_scene_input_hashes_identical": true,
+      "physical_environment_equal_except_trial_output_path": true,
+      "same_gpu_uuid": true,
+      "termination_contract_identical": true
+    },
+    "passed": true,
+    "runtime_source": {
+      "without_long_horizon": {
+        "compared_python_files": 78,
+        "mismatches": [],
+        "passed": true
+      },
+      "with_long_horizon": {
+        "compared_python_files": 78,
+        "mismatches": [],
+        "passed": true
+      }
+    },
+    "base_skills": {
+      "visual-exploration": true,
+      "visual-manipulation": true,
+      "pick-and-place": true,
+      "failure-recovery": true
+    },
+    "scope": "Physical/runtime inputs and shared skills only; intentional profile/tools/decision differences recorded separately."
+  },
+  "recovery_scope": "Selected windows are reviewed examples; automated intervals overlap and must not be summed.",
+  "causal_limits": [
+    "Single development seed, non-randomized order.",
+    "Bundle includes long skill, three tools and active_subgoal requirement.",
+    "Both high-level semantic successes; not official native-BDDL success.",
+    "Historical sol model/protocol differs; no single-factor cross-round attribution."
+  ],
+  "all_source_upstream_assets_still_match": true
+}

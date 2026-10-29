@@ -1,0 +1,12 @@
+test_corrupt_object_fails_before_creating_output (test_archive.ArchiveTests.test_corrupt_object_fails_before_creating_output) ... ok
+test_manifest_tamper_is_rejected (test_archive.ArchiveTests.test_manifest_tamper_is_rejected) ... ok
+test_never_overwrites_existing_directory (test_archive.ArchiveTests.test_never_overwrites_existing_directory) ... ok
+test_publication_manifest_detects_changed_environment_metadata (test_archive.ArchiveTests.test_publication_manifest_detects_changed_environment_metadata) ... ok
+test_restores_exact_bytes_and_exec_mode (test_archive.ArchiveTests.test_restores_exact_bytes_and_exec_mode) ... ok
+test_snapshot_id_cannot_be_a_path (test_archive.ArchiveTests.test_snapshot_id_cannot_be_a_path) ... ok
+test_traversal_even_with_valid_manifest_hash_is_rejected (test_archive.ArchiveTests.test_traversal_even_with_valid_manifest_hash_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.010s
+
+OK

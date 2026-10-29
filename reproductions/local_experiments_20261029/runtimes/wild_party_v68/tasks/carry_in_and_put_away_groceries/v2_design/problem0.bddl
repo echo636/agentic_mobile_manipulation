@@ -1,0 +1,57 @@
+(define (problem carrying_in_groceries-0)
+    (:domain behavior-1k)
+
+    (:objects
+        car.n.01_1 - car.n.01
+        sack.n.01_1 sack.n.01_2 - sack.n.01
+        beefsteak_tomato.n.01_1 - beefsteak_tomato.n.01
+        carton__of__milk.n.01_1 carton__of__milk.n.01_2 - carton__of__milk.n.01
+        swiss_cheese.n.01_1 - swiss_cheese.n.01
+        butter_cookie.n.01_1 butter_cookie.n.01_2 - butter_cookie.n.01
+        cabinet.n.01_1 cabinet.n.01_2 - cabinet.n.01
+        electric_refrigerator.n.01_1 - electric_refrigerator.n.01
+        floor.n.01_1 - floor.n.01
+        agent.n.01_1 - agent.n.01
+    )
+
+    (:init
+        (inroom car.n.01_1 garage)
+        (open car.n.01_1)
+        (inside sack.n.01_1 car.n.01_1)
+        (inside sack.n.01_2 car.n.01_1)
+        (inside beefsteak_tomato.n.01_1 sack.n.01_1)
+        (inside carton__of__milk.n.01_1 sack.n.01_1)
+        (inside swiss_cheese.n.01_1 sack.n.01_1)
+        (inside carton__of__milk.n.01_2 sack.n.01_2)
+        (inside butter_cookie.n.01_1 sack.n.01_2)
+        (inside butter_cookie.n.01_2 sack.n.01_2)
+        (inroom cabinet.n.01_1 kitchen)
+        (inroom cabinet.n.01_2 kitchen)
+        (inroom electric_refrigerator.n.01_1 kitchen)
+        (inroom floor.n.01_1 garage)
+        (ontop agent.n.01_1 floor.n.01_1)
+    )
+
+    (:goal
+        (and
+            (inside beefsteak_tomato.n.01_1 electric_refrigerator.n.01_1)
+            (inside carton__of__milk.n.01_1 electric_refrigerator.n.01_1)
+            (inside carton__of__milk.n.01_2 electric_refrigerator.n.01_1)
+            (inside swiss_cheese.n.01_1 electric_refrigerator.n.01_1)
+            (or
+                (inside butter_cookie.n.01_1 cabinet.n.01_1)
+                (inside butter_cookie.n.01_1 cabinet.n.01_2)
+            )
+            (or
+                (inside butter_cookie.n.01_2 cabinet.n.01_1)
+                (inside butter_cookie.n.01_2 cabinet.n.01_2)
+            )
+            (nextto sack.n.01_1 electric_refrigerator.n.01_1)
+            (nextto sack.n.01_2 electric_refrigerator.n.01_1)
+            (not (open car.n.01_1))
+            (not (open electric_refrigerator.n.01_1))
+            (not (open cabinet.n.01_1))
+            (not (open cabinet.n.01_2))
+        )
+    )
+)

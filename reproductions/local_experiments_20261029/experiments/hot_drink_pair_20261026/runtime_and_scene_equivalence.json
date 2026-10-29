@@ -1,0 +1,30 @@
+{
+  "checks": {
+    "runtime_source_matches_frozen": true,
+    "four_base_skills_identical": true,
+    "task_scene_input_hashes_identical": true,
+    "physical_environment_equal_except_trial_output_path": true,
+    "same_gpu_uuid": true,
+    "termination_contract_identical": true
+  },
+  "passed": true,
+  "runtime_source": {
+    "without_long_horizon": {
+      "compared_python_files": 78,
+      "mismatches": [],
+      "passed": true
+    },
+    "with_long_horizon": {
+      "compared_python_files": 78,
+      "mismatches": [],
+      "passed": true
+    }
+  },
+  "base_skills": {
+    "visual-exploration": true,
+    "visual-manipulation": true,
+    "pick-and-place": true,
+    "failure-recovery": true
+  },
+  "scope": "Physical/runtime inputs and shared skills only; intentional profile/tools/decision differences recorded separately."
+}

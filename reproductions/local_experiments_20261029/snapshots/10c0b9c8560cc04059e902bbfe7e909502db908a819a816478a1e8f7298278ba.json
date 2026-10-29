@@ -1,0 +1,8 @@
+{
+  "files": {
+    "omnigibson_rgb.py": "c8258d21a53999401012628d3711a64792b5bad9689b6b04df38b8fa1add4e2d",
+    "test_gt_backend.py": "c520fffa628f62729ab9a4b099fc9ca8bce7b59d02698365d424819be4d009bc",
+    "test_visual_manipulation_navigation.py": "a3ccb11e37d0600cbf51b94104869304448877b6877c53b5b2b4479b4f43ae00"
+  },
+  "executable_files": []
+}

@@ -1,0 +1,50 @@
+{
+  "source_experiment": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_lh_repaired_pair_20261026",
+  "remote_host": "master",
+  "remote_address": "10.70.160.59",
+  "remote_port": 26529,
+  "remote_root": "/data/zx/sunyujie/robot_manipulation/experiments/hot_drink_lh_repaired_pair_remote_20261026",
+  "created_unix": 1793031387.0431519,
+  "frozen_source_modified": false,
+  "migration_changes": {
+    "gpu_uuid": {
+      "original": "GPU-2f2ab185-9827-23e7-6e54-ca06c0f214f3",
+      "remote": "GPU-82875626-2b46-d877-466e-74fadb85959b"
+    },
+    "hardware": "NVIDIA RTX PRO 6000 Blackwell Server Edition; Ubuntu 24.04.3; driver 575.57.08",
+    "paths": "Relocated plan, template-hash keys, Python environment prefix and asset links; original plan retained.",
+    "upstream": "Materialized frozen upstream snapshot instead of original absolute link.",
+    "task_data": "Materialized nested task-data links and made base asset links relative.",
+    "model_client": "Isolated copy of original codex-cli 0.157.1; existing system client untouched.",
+    "credentials": "Only necessary provider login/config installed in restricted private directory outside experiment; session and history databases excluded.",
+    "diagnostics": "Offline byte checks, original scoring replay, and separate scene-readiness probe precede formal pair.",
+    "conda_cache_correction": "Conda-pack initially read cached tracked files that differed from the installed pip-overwritten environment. Replaced all 7816 cache-sourced files (514370887 installed bytes) from the actual installed prefix, applying relocation to that prefix. Preserved initial and corrected stream hashes and scripts. Runtime imports and complete original distribution enumeration match after correction.",
+    "tf32": "NVIDIA_TF32_OVERRIDE=0 restores float32 rotation accuracy on Blackwell. Same setting for both arms; frozen assertions unchanged. Differential 100-rotation probe: RTX4090 0 failures, Blackwell default 95 failures, Blackwell override 0 failures.",
+    "client_host_repair": {
+      "cause": "Initially copied only codex; bundled sibling codex-code-mode-host was missing, causing model tool execution to fail before any robot tool could run.",
+      "repair": "Copied exact matching host binary from original standalone bundle.",
+      "recovery": "Frozen controller resumed the same thread and same simulator under its existing unfinished-recovery protocol. No reset or score-based replacement.",
+      "comparison_limit": "Initial client infrastructure failures and extra model history/usage affect first-arm overhead; keep raw costs and disclose separately."
+    }
+  },
+  "preserved_protocol": {
+    "instance": 301,
+    "seed": 0,
+    "max_actions": 120,
+    "max_sim_steps": 20000,
+    "wall_timeout_seconds": null,
+    "model": "gpt-6-astra",
+    "reasoning_effort": "low",
+    "order": [
+      "without_long_horizon",
+      "with_long_horizon"
+    ],
+    "scene": "complete_static_shell_v2"
+  },
+  "limitations": [
+    "A single non-randomized pair is descriptive.",
+    "External model outputs need not match the original action counts.",
+    "High-level semantic success is not official native BDDL success.",
+    "Remote visual evidence requires review before declaring validated reproduction."
+  ]
+}

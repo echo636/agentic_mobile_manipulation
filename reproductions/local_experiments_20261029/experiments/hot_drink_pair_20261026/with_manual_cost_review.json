@@ -1,0 +1,42 @@
+{
+  "scope": "Selected verified, non-overlapping recovery windows; coverage differs from without-group windows, so totals are not a between-group metric.",
+  "windows": [
+    {
+      "failed_action": 46,
+      "recovered_action": 47,
+      "basis": "Pour selected stove rather than mug; retry on mug wall",
+      "additional_actions": 1,
+      "motor_seconds_after_failure_including_success": 2.178,
+      "wall_seconds_result_to_result": 19.032,
+      "sim_steps_after_failure": 6
+    },
+    {
+      "failed_action": 63,
+      "recovered_action": 74,
+      "basis": "Teaspoon selection recovery, including tray discovery/staging and second failed grasp",
+      "additional_actions": 11,
+      "motor_seconds_after_failure_including_success": 214.121,
+      "wall_seconds_result_to_result": 566.602,
+      "sim_steps_after_failure": 582
+    },
+    {
+      "failed_action": 85,
+      "recovered_action": 89,
+      "basis": "Cookie selection recovery through navigation rejection, new viewpoint and door opening",
+      "additional_actions": 4,
+      "motor_seconds_after_failure_including_success": 46.815,
+      "wall_seconds_result_to_result": 173.934,
+      "sim_steps_after_failure": 110
+    }
+  ],
+  "failure_contact_sheet_viewed": true,
+  "door_pair_review": {
+    "actions": [
+      6,
+      7
+    ],
+    "same_object": true,
+    "classification": "Wrong-fridge hypothesis inspected and closed; information gain and restoration, not established redundancy."
+  },
+  "other_redundancy": "Repeated successful navigation/opening and single-item trips remain cost candidates; no exact avoidable-action total established."
+}

@@ -1,0 +1,26 @@
+{
+  "base_task": "carrying_in_groceries",
+  "scene_model": "house_double_floor_lower",
+  "instance_id": 301,
+  "rooms": ["garage_0", "kitchen_0"],
+  "initial_locations": {
+    "sack.n.01_1": "car.n.01_1",
+    "beefsteak_tomato.n.01_1": "sack.n.01_1",
+    "carton__of__milk.n.01_1": "sack.n.01_1"
+  },
+  "fixed_objects": {
+    "car.n.01_1": "garage_0",
+    "electric_refrigerator.n.01_1": "kitchen_0"
+  },
+  "initial_container_states": {
+    "car.n.01_1": "open",
+    "electric_refrigerator.n.01_1": "closed"
+  },
+  "asset_models": {
+    "car.n.01_1": "car/ssxsje",
+    "sack.n.01_1": "paper_bag/bzsxgw",
+    "beefsteak_tomato.n.01_1": "beefsteak_tomato/altlfz",
+    "carton__of__milk.n.01_1": "carton_of_milk/xmugpm",
+    "electric_refrigerator.n.01_1": "fridge/petcxr"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "files": {
+    "failure-recovery/SKILL.md": "ff4abfeed129ae27427a90c41495df5cfb8571c858f3ff36d6a65ccf3da7a93b",
+    "pick-and-place/SKILL.md": "e8061c726dd9a3598bcaefb541151e4b8bff59bf42ec93d4746b19fb8c7d44f0",
+    "visual-exploration/SKILL.md": "d51af2747031ca49e37df50e97ac5340adeb29b93a3ff9d797cc94380ac6f1ce",
+    "visual-manipulation/SKILL.md": "ffd2b73ef9ca4f5eeed96c1106d518a9a23d152435b9e36dc9b100fa662a293e",
+    "visual-manipulation/references/evidence.md": "a7094a92ebed86eabaaec96521300fb4c267fc7b5d11286429b3bc4cd8afba87",
+    "visual-manipulation/references/material-actions.md": "f8d80302498b763957037da9343c6cc99e9143656198c7fd6becefd5c5bf32a6"
+  },
+  "executable_files": []
+}
