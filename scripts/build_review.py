@@ -6,6 +6,10 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+from manipulation_agent.reporting.streaming_video import prepare_browser_video
 
 
 def review_metadata(data, run_record, controller_record=None):
@@ -105,10 +109,7 @@ def main():
     if not ffmpeg:
         raise SystemExit("ffmpeg is required")
     source_video = run / video["file"]
-    browser_video = run / "episode_browser.mp4"
-    if not browser_video.exists() or browser_video.stat().st_mtime < source_video.stat().st_mtime:
-        subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(source_video),
-                        "-c", "copy", "-movflags", "+faststart", str(browser_video)], check=True)
+    browser_video = run / prepare_browser_video(run, video['file'])['file']
     frames = [json.loads(line) for line in (run / "video_frames.jsonl").read_text().splitlines()]
     boundaries = {}
     for frame in frames:
@@ -133,9 +134,10 @@ def main():
             name = f"step_{step['index']:03d}_spectator.jpg"
             still = still_dir / name
             if not still.exists():
-                subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+                subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-threads", "2",
                                 "-ss", str(frame["video_seconds"]), "-i", str(source_video),
                                 "-frames:v", "1", "-vf", f"crop={tile}:{tile}:{crop_x}:{crop_y}",
+                                "-threads", "2",
                                 str(still)], check=True)
             spectator_html = f'<img loading="lazy" src="review_stills/{h(name)}" alt="第三视角">'
         images = []
@@ -207,15 +209,16 @@ def main():
     pre{{background:#0b1726;border-radius:8px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto;font-size:13px}}
     video{{display:block;width:100%;background:black}}.video-wrap{{width:min(100%,640px);background:var(--panel);padding:12px;border-radius:14px}}
     a{{color:var(--accent)}}@media(max-width:1100px){{.views{{grid-template-columns:repeat(3,1fr)}}}}@media(max-width:650px){{.views{{grid-template-columns:repeat(2,1fr)}}.detailsgrid{{grid-template-columns:1fr}}}}
-    </style></head><body><header><a href="#video">① 连续视频</a><a href="#steps">② 逐次工具调用</a></header><main>
+    </style></head><body><header><a href="#video">① 连续视频</a><a href="#steps">② 逐次工具调用</a><a href="replay.html?view=video&amp;edition=raw&amp;camera=spectator">同步动作与目标树</a></header><main>
     <h1>机器人实验审阅</h1><p class="meta">{h(args.label)} · {len(cards)} 次工具调用 · {h(data.get('status'))} · 独立任务成功 {h(success)} · {h(score_label)} {h(score)}</p>
     <div class="run-meta"><div><small>任务</small>{h(metadata['task'])}</div><div><small>实例 / 种子</small>{h(metadata['instance'])} / {h(metadata['seed'])}</div><div><small>执行方式</small>{h(metadata['execution'])}</div><div><small>模型</small>{h(metadata['model'])}</div><div><small>推理强度</small>{h(metadata['reasoning_effort'])}</div><div><small>动作呈现</small>{h(demo_mode)}</div></div>
     <p class="meta">任务指令：{h(data.get('instruction') or '未记录')}</p>
     <p class="meta">四路 RGB 是执行器录制的机器人观测；第三视角仅供审阅。视频按模拟控制步连续记录，等待时间不计入片长。{h(reasoning_note)}</p>
-    <section id="video"><h2>① 连续视频</h2><div class="video-wrap"><video controls preload="metadata" poster="video_poster.jpg" src="episode_browser.mp4"></video>
+    <section id="video"><h2>① 连续视频</h2><div class="video-wrap"><video id="review-video" controls playsinline preload="metadata" poster="video_poster.jpg" src="{h(browser_video.name)}"></video>
+    <label>播放速度 <select id="review-speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
     <p class="meta">原始视频：<a href="episode.mp4">episode.mp4</a> · <a href="video.json">录像证据</a> · <a href="run.json">模拟器记录</a> · <a href="replay.json">审阅数据</a></p></div></section>
     <section id="steps"><h2>② 逐次工具调用</h2>{''.join(cards)}</section>
-    </main></body></html>'''
+    </main><script>document.getElementById('review-speed').onchange=function(){{document.getElementById('review-video').playbackRate=Number(this.value)}};</script></body></html>'''
     target = run / "review_5view.html"
     target.write_text(html_doc)
     print(json.dumps({"page": str(target), "steps": len(cards), "video": str(browser_video)}))

@@ -11,11 +11,14 @@ if(!(D.model_transcript||[]).length&&D.steps.length){
  }
 }
 D.review_timeline=ReplayTiming.review(D);
-const embedded=new URLSearchParams(location.search).has('embed');if(embedded)document.body.classList.add('embedded');
+const params=new URLSearchParams(location.search),embedded=params.has('embed');if(embedded)document.body.classList.add('embedded');
 const views=['front','back','left','right','spectator'],names={front:'前视 RGB',back:'后视 RGB',left:'左视 RGB',right:'右视 RGB',spectator:'第三人称 · 回放'};
 const tiles=new Map(),imageCache=new Map(),chips=new Map();
 let mode='execution',index=-1,phase='initial',zoomView=null,state=null,pendingIndex=-1,loading=false,primary='front';
 let edition='review',record=null,reviewTime=0,reviewPlaying=false,reviewMediaKey=null,lastTick=performance.now(),lastPaint=-1;
+const requestedEdition=params.get('edition'),editionKeys={raw:'video',inspection:'inspection_video',walltime:'walltime_video'};
+if(editionKeys[requestedEdition]&&D[editionKeys[requestedEdition]]?.status==='passed')edition=requestedEdition;
+if([...$('video-speed').options].some(option=>option.value===params.get('speed')))$('video-speed').value=params.get('speed');
 const text=(id,value)=>{if($(id))$(id).textContent=value??'—'},clock=s=>Number.isFinite(s)?Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'):'—';
 const step=()=>D.steps[index],action=s=>s?.arguments?.primitive||s?.tool||'等待记录';
 const phaseLabels={initial:'初始画面',decision:'模型输出',execution:'执行中',tool:'执行中',result:'工具返回',final:'结束输出',evaluation:'离线评分',unmapped:'未标注区间',outside_tool_wait:'调用间等待'};
@@ -35,7 +38,7 @@ for(const name of views){
  tile.onclick=()=>{if(primary!==name){setPrimary(name);return}if(!tile.classList.contains('has-image'))return;zoomView=name;text('zoom-title',names[name]);paintZoom();$('zoom').showModal()};
  tile.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();tile.click()}};
 }
-setPrimary(D.spectator_video?.status==='passed'?'spectator':'front');
+setPrimary(views.includes(params.get('camera'))?params.get('camera'):D.spectator_video?.status==='passed'?'spectator':'front');
 function paintZoom(){if(!zoomView)return;const source=zoomView==='target'?navigationTarget.canvas:tiles.get(zoomView).canvas,target=$('zoom-canvas');if(target.width!==source.width||target.height!==source.height){target.width=source.width;target.height=source.height}target.getContext('2d').drawImage(source,0,0)}
 $('close-zoom').onclick=()=>{$('zoom').close();zoomView=null};
 function blank(name,message){const t=tiles.get(name);t.tile.classList.remove('has-image');t.empty.textContent=message;t.canvas.getContext('2d').clearRect(0,0,t.canvas.width,t.canvas.height);delete t.canvas.dataset.imageRef}
