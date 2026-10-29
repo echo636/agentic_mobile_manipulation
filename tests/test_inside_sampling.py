@@ -261,6 +261,23 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertLessEqual(records[-1]['attempted'],5)
         self.assertGreater(float((held.position+held.offset)[2]),.3)
 
+    def test_conservative_overlap_keeps_supported_pose_ahead_of_low_colliding_volume(self):
+        import numpy as np
+        b,held,target,_,state,records,modules=self.fixture()
+        target.states[modules['omnigibson.object_states'].Open]=SimpleNamespace(get_value=lambda:True)
+        b._inside_support_centers=lambda *a,**kw:[(.2,.2,.525)]
+        b._inside_overlap_ranker=lambda assembly:lambda center,extent:1
+        b._inside_pose_overlap_ranker=lambda held,assembly:lambda position,quat:1
+        modules['omnigibson.utils.usd_utils'].RigidContactAPI.is_in_contact=lambda **kw:(
+            float((held.position+held.offset)[2])<.3 if state['steps']==1 else True)
+        geometry=([],{'volume':(np.eye(3),np.zeros(3))})
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',return_value=geometry), \
+             patch('manipulation_agent.executors.closure_clearance.check_closure_clearance',return_value={'clear':True}):
+            self.assertTrue(sample_assembly_inside(b,held,target,[],max_candidates=1))
+        self.assertEqual(records[-1]['attempted'],1)
+        self.assertGreater(float((held.position+held.offset)[2]),.3)
+
     def test_passive_lid_motion_does_not_reject_stationary_open_interior(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         target.n_joints=1

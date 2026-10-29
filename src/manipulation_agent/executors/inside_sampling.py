@@ -425,10 +425,14 @@ Rejected candidate poses never become committed actions or task evidence.
                         ranking['scored']+=1
                         ranking['clear']+=int(not overlap)
                         if pose_score is not None and not payload_locked and overlap:
-                            deferred.append((priority,c));ranking['deferred']+=1
+                            deferred.append(c);ranking['deferred']+=1
                         else:ranked.append((priority,c))
                     yield from (c for _,c in sorted(ranked,key=lambda pair:pair[0]))
-                yield from (c for _,c in sorted(deferred,key=lambda pair:pair[0]))
+                # Enclosure hits can cover a hollow container's usable space.
+                # Preserve the support/face/position schedule for real physics
+                # trials; sorting all deferrals by height starves those supports
+                # behind many equivalent poses intersecting the container bottom.
+                yield from deferred
             candidates=ranked_windows(iter(candidates))
         generation_seconds=time.monotonic()-start
         seen=set();locations=set();duplicates=0
