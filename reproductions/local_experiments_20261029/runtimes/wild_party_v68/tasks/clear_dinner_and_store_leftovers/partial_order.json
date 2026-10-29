@@ -1,0 +1,84 @@
+{
+  "version": "design_v1",
+  "semantics": "作者侧终态义务汇合；不是动作先后限制，不接入时间门控评分；临时搬运带载盘/托盘合法",
+  "model_visible": false,
+  "goal_index_scope": "每个完整OR分支内部的11项，两个分支分别整体评分",
+  "nodes": {
+    "pack_chicken": {
+      "goal_indices": [
+        0
+      ],
+      "requires": []
+    },
+    "pack_spinach": {
+      "goal_indices": [
+        1
+      ],
+      "requires": []
+    },
+    "cold_storage": {
+      "goal_indices": [
+        2,
+        3
+      ],
+      "requires": [
+        "pack_chicken",
+        "pack_spinach"
+      ]
+    },
+    "spoon_to_sink": {
+      "goal_indices": [
+        7
+      ],
+      "requires": []
+    },
+    "plate_to_sink": {
+      "goal_indices": [
+        4
+      ],
+      "requires": [
+        "pack_chicken",
+        "pack_spinach",
+        "spoon_to_sink"
+      ]
+    },
+    "mug_1_to_sink": {
+      "goal_indices": [
+        5
+      ],
+      "requires": []
+    },
+    "mug_2_to_sink": {
+      "goal_indices": [
+        6
+      ],
+      "requires": []
+    },
+    "empty_tray_stored": {
+      "goal_indices": [
+        8
+      ],
+      "requires": [
+        "plate_to_sink",
+        "mug_1_to_sink",
+        "mug_2_to_sink"
+      ]
+    },
+    "fridge_closed": {
+      "goal_indices": [
+        9
+      ],
+      "requires": [
+        "cold_storage"
+      ]
+    },
+    "cabinet_closed": {
+      "goal_indices": [
+        10
+      ],
+      "requires": [
+        "empty_tray_stored"
+      ]
+    }
+  }
+}

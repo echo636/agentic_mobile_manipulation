@@ -1,0 +1,8 @@
+{
+  "files": {
+    "review.json": "5cb4f89fec08aca74258d197a65b9f79464f5e4057dbdd18c95f01883e550b61",
+    "src/manipulation_agent/executors/placement.py": "1c10eb3baa982efd698e16e6af68bdfe54dfd7652ba4baa2e60d375118c43435",
+    "tests/test_placement_self_target.py": "59d94f075343df81c13627743139e0fd096dffe2f1a50792a321a238e5da9919"
+  },
+  "executable_files": []
+}

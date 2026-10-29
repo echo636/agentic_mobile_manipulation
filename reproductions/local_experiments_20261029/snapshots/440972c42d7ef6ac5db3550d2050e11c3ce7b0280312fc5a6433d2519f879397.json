@@ -1,0 +1,9 @@
+{
+  "files": {
+    "prepare_native_scenes.py": "4853dae3abfbfb5d11cf8ba8df7386eb9dfbca8705cda50f632e5db2bb2bbdf0",
+    "run_cohort.py": "2bdc62af8d0aecbd1d37e84b0a69e8192ef4e4360c47932ac5a81edc3eccf94d",
+    "sample_task.py": "a70ec04cac0b1d9000a8d6de2ca132b5a61e1f76bec4699dda9702388f47e6fa",
+    "watch_cohort.py": "a50ea09c375a710d337c54dc5444a90581599f870a6e9b3e95ef851898e92cf3"
+  },
+  "executable_files": []
+}

@@ -1,0 +1,41 @@
+{
+  "passed": true,
+  "runtimes": {
+    "local_development": {
+      "files": 379,
+      "mismatches": [],
+      "python_files_compiled": 268,
+      "passed": true
+    },
+    "hot_drink_pair_20261026": {
+      "files": 180,
+      "mismatches": [],
+      "python_files_compiled": 142,
+      "passed": true
+    },
+    "wild_party_v68": {
+      "files": 214,
+      "mismatches": [],
+      "python_files_compiled": 159,
+      "passed": true
+    },
+    "groceries_groc026": {
+      "files": 181,
+      "mismatches": [],
+      "python_files_compiled": 151,
+      "passed": true
+    },
+    "table_buffet_20261027": {
+      "files": 214,
+      "mismatches": [],
+      "python_files_compiled": 159,
+      "passed": true
+    },
+    "remaining_four_20261027": {
+      "files": 214,
+      "mismatches": [],
+      "python_files_compiled": 159,
+      "passed": true
+    }
+  }
+}

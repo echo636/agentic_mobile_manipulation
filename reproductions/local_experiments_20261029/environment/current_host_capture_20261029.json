@@ -1,0 +1,37 @@
+{
+  "captured_at": "2026-10-29T13:59:33.019321+08:00",
+  "scope": "Current host capture on 2026-10-29; not retroactively the exact driver/environment state of every historical run.",
+  "python": "3.11.16 (main, Sep  2 2026, 23:39:52) [GCC 15.3.0]",
+  "interpreter": "/mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python",
+  "platform": "Linux-7.0.0-29-generic-x86_64-with-glibc2.39",
+  "gpus": [
+    [
+      "0",
+      "NVIDIA GeForce RTX 4090",
+      "GPU-2f2ab185-9827-23e7-6e54-ca06c0f214f3",
+      "580.173.02",
+      "49140"
+    ],
+    [
+      "1",
+      "NVIDIA GeForce RTX 4090",
+      "GPU-2046ca69-7015-b42f-3abd-f219e4cdd1b0",
+      "580.173.02",
+      "49140"
+    ],
+    [
+      "2",
+      "NVIDIA GeForce RTX 4090",
+      "GPU-22ab12a0-af14-fa8c-44a7-a869af82e244",
+      "580.173.02",
+      "49140"
+    ],
+    [
+      "3",
+      "NVIDIA GeForce RTX 4090",
+      "GPU-acb96bd8-3857-7998-31a9-9414cb9e3a4e",
+      "580.173.02",
+      "49140"
+    ]
+  ]
+}

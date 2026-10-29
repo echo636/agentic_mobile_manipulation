@@ -1,0 +1,6 @@
+{
+  "passed_for_other_staged_files": true,
+  "preserved_exception": "runtimes/local_development/native/cartographer/upstream/patches/authoritative_odometry.patch",
+  "sha256": "9b8ebb36314b47075fdb06400e725922fcf3223402d7ffce548893c785dac817",
+  "reason": "Historical unified diff contains required space-prefixed blank context lines. Original bytes are retained and match the archived source; stripping them would alter the patch."
+}

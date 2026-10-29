@@ -1,0 +1,41 @@
+{
+  "version": "position_split_20261025_r1",
+  "task": "carry_in_and_put_away_groceries/v2_design",
+  "scope": "Same-room cargo-position transfer, not independent-house-layout validation",
+  "development": [
+    {
+      "instance": 301,
+      "cargo_offset_xy_m": [
+        0,
+        0
+      ],
+      "role": "Extensively used for policy and facility diagnosis"
+    },
+    {
+      "instance": 301,
+      "cargo_offset_xy_m": [
+        0.08,
+        0
+      ],
+      "role": "Former evaluation candidate; results used for public-history continuation harness repair GROC-016",
+      "original_result": "experiments/groceries_v2_position_transfer_20261025/terminal_review.json"
+    }
+  ],
+  "evaluation_candidates": [
+    {
+      "instance": 301,
+      "cargo_offset_xy_m": [
+        0.08,
+        0
+      ],
+      "status": "reclassified_development_after_harness_diagnosis",
+      "geometry_manifest": "experiments/groceries_v2_cargo_offset_candidate_20261025/variant_review.json",
+      "mechanics": "22/22 private helper checks; no autonomous evidence yet",
+      "policy_bundle_sha256": "b2da7969fbeb23a38c0fa4bfe67555e877ce5f9809b68e9092527489c70c0932",
+      "frozen_source_manifest_sha256": "8d8aeec29dee2d2f23fe589cf77d1fb8c17e9091a5295d4483748ca3c4097b88",
+      "evaluation_plan": "experiments/groceries_v2_position_transfer_20261025/plan.json",
+      "result": "experiments/groceries_v2_position_transfer_20261025/terminal_review.json"
+    }
+  ],
+  "rule": "Freeze inputs before policy evaluation. Retain every attempt. If outcomes drive policy, facility or scene tuning, reclassify configuration as development and reserve a new evaluation configuration."
+}

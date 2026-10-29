@@ -1,0 +1,10 @@
+{
+  "files": {
+    "cloth_compatibility_candidate.py": "302fc196cfc6b5b8830152f78019b77e8a664e2dfaf0c3ae44006d8a775e2863",
+    "material_conditions_candidate.py": "fae3a660e27e007cdf46f57e5151fa3cfbe89780261a5c3c12c66f49bb0ff305",
+    "sample_native_task_curated_retry.py": "af8aadb45f59d516ec93c83ddf7ce59784cb1ad1adccf5c4c5e48ef4daf120da",
+    "simulator_contact_candidate.py": "e4a0b765fd2e430cafd19da6430e9054f348742f083d04821398471ea26b4390",
+    "simulator_particle_candidate.py": "1b5d54b41aabeef632d5014f5d32a56b8df8fb2f555c2a12ba3e2c243c6ba57d"
+  },
+  "executable_files": []
+}

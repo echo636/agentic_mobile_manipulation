@@ -1,0 +1,11 @@
+# BDDL goal interpretation
+
+When a BDDL definition is the task input, `:goal` defines the final obligations. `:objects` provides logical categories and counts; `:init` is only a starting search hint. A `*` object denotes a scene-dependent set, not one known visual instance. BDDL symbols are not visual IDs. Ground each candidate in fresh RGB; hidden evaluator state and current simulator bindings are unavailable.
+
+Translate every goal branch into the goal ledger before acting. `and` joins obligations; `or` permits alternative branches, so select a feasible branch and keep the others as fallback; `not` requires an absent final relation or state. `exists` needs at least one witness; `forall` covers every scoped instance; `forn` needs the stated count. `forpairs` requires distinct pairings forming a matching of size `min(number of sources, number of destinations)`; unmatched members of the larger category are not required by that quantifier alone. Expand nested quantifiers and alternatives before estimating actions.
+
+For each required relation or state, record its candidate objects, count or pairing, visual evidence, uncertainty, and prerequisites. Choose existential witnesses jointly: positive and negative conditions can require different witnesses even without an explicit `different` clause. Preserve category distinctions between containers and contents. A goal that appears true initially still needs visual confirmation. If an action breaks a completed relation, reopen that ledger node.
+
+After each action, update the ledger from fresh RGB and bounded feedback. A successful call supports its local effect, not the independent evaluator outcome. If a relation is obscured, mark it uncertain and inspect another view when possible. Before `finish(achieved)`, check all witnesses, pairs, counts, alternatives, and negated final states against the latest available evidence.
+
+Example: `(exists (?stand - stand) (ontop tissue_dispenser ?stand))` allows any valid stand. `(forpairs (?pillow - pillow) (?bed - bed) (ontop ?pillow ?bed))` with two pillows and two beds requires a distinct bed for each pillow. Their initial positions are starting state, not additional final-state obligations.

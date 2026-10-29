@@ -1,0 +1,18 @@
+{
+  "source_prefix": "/mnt/data/home/sunyujie/miniforge3/envs/behavior",
+  "destination_prefix": "/data/zx/sunyujie/envs/behavior",
+  "conda_pack_version": "0.9.2",
+  "files": 7816,
+  "excluded_generated_cache": [
+    "lib/python3.11/site-packages/isaacsim/kit/data/*",
+    "lib/python3.11/site-packages/isaacsim/kit/cache/*",
+    "lib/python3.11/site-packages/isaacsim/kit/logs/*"
+  ],
+  "prefer_actual_installed_files_over_conda_cache": true,
+  "repair_conda_cache_only": true,
+  "archive_bytes": 258058240,
+  "archive_sha256": "c3e99dc7c025a11fcb08c3bd30e19d3ae935de4fd9efe01e7f116ecbe28c75df",
+  "started_unix": 1793032274.0770721,
+  "finished_unix": 1793032284.1946867,
+  "returncode": 0
+}

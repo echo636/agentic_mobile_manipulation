@@ -1,0 +1,11 @@
+{
+  "base_task": "carrying_in_groceries",
+  "instance_id": 301,
+  "split": "public_test",
+  "source_files": {
+    "bddl3/bddl/activity_definitions/carrying_in_groceries/problem0.bddl": "ac2895980b3688800a188814b6d47f248ec74be2d779c1126cb27a0eff6ae236",
+    "datasets/2026-challenge-task-instances/scene_test/public/house_double_floor_lower/json/house_double_floor_lower_task_carrying_in_groceries_0_0_template.json": "ac83c21116152dc9e5adf1a027017ee4b3b6f40531651431312c2bd2ce9ba8d5",
+    "datasets/2026-challenge-task-instances/scene_test/public/house_double_floor_lower/json/house_double_floor_lower_task_carrying_in_groceries_0_0_template-partial_rooms.json": "53c12bcaf57076d984c12011e6a415d5707cb89b99756b721d80ed3ab569cab0",
+    "datasets/2026-challenge-task-instances/scene_test/public/house_double_floor_lower/json/house_double_floor_lower_task_carrying_in_groceries_instances/house_double_floor_lower_task_carrying_in_groceries_0_301_template-tro_state.json": "56f8a28650456f32fe633813e4c8c55432db1c0956c34f6666547b48485a8fec"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "files": {
+    "inspect_navigation_components.py": "f56a3c07e8ce19116ecb63f48fc942cf80e28a6408a8044d7a22b3f92a6fb157",
+    "inspect_progress.py": "1d17ea7886635ca7272be3bf766a164525a97f2c274b1280d74f3f7d2b6ff486",
+    "problem0.bddl": "b38c56b63e8df759072e2736d1471e051b0d7392c1f744743d3d7757c3348da1",
+    "replay_navigation_failures.py": "0bfaf461d5623effd06188890afdc50c7d75d234e3bd9700a9dc01e5cd4e2a28",
+    "run_controlled.py": "4eb4664f3b47a321fc9ea60fa956c32058747ef81bb772c147b0b109fe3eecea",
+    "summarize_cohort.py": "6754442d7fb44141112ac1f6a7d25fae85ea2401b75e5db65048680db1658939"
+  },
+  "executable_files": []
+}

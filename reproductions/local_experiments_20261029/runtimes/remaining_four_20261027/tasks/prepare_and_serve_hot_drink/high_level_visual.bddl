@@ -1,0 +1,102 @@
+(define (problem prepare_and_serve_hot_drink-0)
+    (:domain behavior-1k)
+
+    (:objects
+        water_bottle.n.01_1 - water_bottle.n.01
+        coffee_table.n.01_1 - coffee_table.n.01
+        countertop.n.01_1 - countertop.n.01
+        cabinet.n.01_1 - cabinet.n.01
+        electric_refrigerator.n.01_1 - electric_refrigerator.n.01
+        stove.n.01_1 - stove.n.01
+        kettle.n.01_1 - kettle.n.01
+        water.n.06_1 - water.n.06
+        cooked__water.n.01_1 - cooked__water.n.01
+        mug.n.04_1 - mug.n.04
+        plate.n.04_1 - plate.n.04
+        dinner_napkin.n.01_1 - dinner_napkin.n.01
+        place_mat.n.01_1 - place_mat.n.01
+        teaspoon.n.02_1 - teaspoon.n.02
+        tray.n.01_1 - tray.n.01
+        sugar_cookie.n.01_1 - sugar_cookie.n.01
+        honey__jar.n.01_1 - honey__jar.n.01
+        floor.n.01_1 - floor.n.01
+        agent.n.01_1 - agent.n.01
+    )
+
+    (:init
+        ; The only water source is in the refrigerator.
+        (inside water_bottle.n.01_1 electric_refrigerator.n.01_1)
+        ; High-level harness tracks water symbolically; no physical particles.
+
+        ; All drinkware and tableware must be gathered from the cabinet.
+        (inside kettle.n.01_1 cabinet.n.01_1)
+        (inside mug.n.04_1 cabinet.n.01_1)
+        (inside dinner_napkin.n.01_1 cabinet.n.01_1)
+        (inside place_mat.n.01_1 cabinet.n.01_1)
+        (inside plate.n.04_1 cabinet.n.01_1)
+        (inside teaspoon.n.02_1 cabinet.n.01_1)
+        (inside tray.n.01_1 cabinet.n.01_1)
+        (inside sugar_cookie.n.01_1 cabinet.n.01_1)
+        (inside honey__jar.n.01_1 cabinet.n.01_1)
+
+        (inroom coffee_table.n.01_1 living_room)
+        (inroom countertop.n.01_1 kitchen)
+        (inroom cabinet.n.01_1 kitchen)
+        (inroom electric_refrigerator.n.01_1 kitchen)
+        (inroom stove.n.01_1 kitchen)
+        (inroom floor.n.01_1 kitchen)
+        (ontop agent.n.01_1 floor.n.01_1)
+        (future cooked__water.n.01_1)
+    )
+
+    (:goal
+        (and
+            ; Water branch: the only source starts in the refrigerator.
+            ; Its final location is not prescribed by the human instruction.
+            (real cooked__water.n.01_1)
+            (filled kettle.n.01_1 cooked__water.n.01_1)
+
+            ; Table branch: gather and arrange the tableware.
+            ; A place setting can rest directly on the table or on the
+            ; table's mat / tray.  The instruction prescribes no stack order.
+            (or
+                (ontop dinner_napkin.n.01_1 coffee_table.n.01_1)
+                (ontop dinner_napkin.n.01_1 place_mat.n.01_1)
+                (ontop dinner_napkin.n.01_1 tray.n.01_1)
+            )
+            (ontop place_mat.n.01_1 coffee_table.n.01_1)
+            (or
+                (ontop plate.n.04_1 coffee_table.n.01_1)
+                (ontop plate.n.04_1 place_mat.n.01_1)
+                (ontop plate.n.04_1 tray.n.01_1)
+            )
+            (or
+                (ontop teaspoon.n.02_1 coffee_table.n.01_1)
+                (ontop teaspoon.n.02_1 dinner_napkin.n.01_1)
+                (ontop teaspoon.n.02_1 place_mat.n.01_1)
+                (ontop teaspoon.n.02_1 plate.n.04_1)
+                (ontop teaspoon.n.02_1 tray.n.01_1)
+            )
+            (ontop tray.n.01_1 coffee_table.n.01_1)
+            ; The human instruction asks for snacks on the coffee table,
+            ; without prescribing whether the plate or tray holds them.
+            (or
+                (ontop sugar_cookie.n.01_1 tray.n.01_1)
+                (ontop sugar_cookie.n.01_1 plate.n.04_1)
+                (ontop sugar_cookie.n.01_1 coffee_table.n.01_1)
+            )
+            (or
+                (ontop honey__jar.n.01_1 tray.n.01_1)
+                (ontop honey__jar.n.01_1 coffee_table.n.01_1)
+            )
+
+            ; The drink can be served only after boiling and table preparation.
+            (contains mug.n.04_1 cooked__water.n.01_1)
+            (or
+                (ontop mug.n.04_1 coffee_table.n.01_1)
+                (ontop mug.n.04_1 place_mat.n.01_1)
+                (ontop mug.n.04_1 tray.n.01_1)
+            )
+        )
+    )
+)

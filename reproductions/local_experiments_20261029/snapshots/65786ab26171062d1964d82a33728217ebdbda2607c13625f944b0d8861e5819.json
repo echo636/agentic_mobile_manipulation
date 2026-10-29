@@ -1,0 +1,9 @@
+{
+  "files": {
+    "test_native_barrier_state.py": "c5b3b4b4e63c04a571cb9626321e1ad43510f498cf298b1a8a0d39d8656aee1d",
+    "test_research_articulation_barrier.py": "d5f7c5fee00f32fbc7163cb012276b956fe2f330082c4170c4a0a3a53eeb0931",
+    "test_research_camera_barrier.py": "a693b4c40c0fb6142014173d42b8341e1932849b2661f622de5afa3271a16a2b",
+    "test_research_native.py": "a166ff7b67a697ba544972536bea663f7919ff906bdd5b0e33ce3e0a55dc43c7"
+  },
+  "executable_files": []
+}

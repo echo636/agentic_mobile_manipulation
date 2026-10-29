@@ -1,0 +1,13 @@
+{
+  "version": "0.157.1",
+  "files": {
+    "codex": {
+      "sha256": "3e2584f3f3829a43a0495011a1cecb2facbe64a2403e2b682351fd9c2983f970",
+      "bytes": 285340072
+    },
+    "codex-code-mode-host": {
+      "sha256": "67b86142bac5cead11b8420cf32d3a2bf88c8868d71733f351ed7c5d95a953e0",
+      "bytes": 73962384
+    }
+  }
+}

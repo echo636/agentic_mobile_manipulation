@@ -1,0 +1,4 @@
+/mnt/data/home/sunyujie/miniforge3/envs/behavior/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.8.0) or chardet (7.6.0)/charset_normalizer (3.3.2) doesn't match a supported version!
+  warnings.warn(
+.......                                                                  [100%]
+7 passed in 0.04s

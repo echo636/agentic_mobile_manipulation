@@ -1,0 +1,10 @@
+{
+  "files": {
+    "original_thread_public_history.json": "559a1ab67a5eaba48deb5ab4d8475c79e169c45a70cda321bee490a236c349ac",
+    "review.json": "e5441e8619fc83111e87ade270d03473dad73105f34b49df38df5f7daadead92",
+    "scripts/run_codex_controller.py": "d30e8549cea2ec5fb2407190d566c019f9e54a7037f46428e2c8492a208dbd6e",
+    "src/manipulation_agent/clients/recovery.py": "4bfd36402156d73e6433cceab8a0852a39395c818f309f11366045628e459072",
+    "tests/test_controller_public_recovery.py": "92f3b9839cd67aeb671283c137a58647e6b17d603b0f357861c3af8e6e55e48d"
+  },
+  "executable_files": []
+}

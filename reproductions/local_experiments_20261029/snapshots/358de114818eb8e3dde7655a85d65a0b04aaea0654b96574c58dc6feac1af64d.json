@@ -1,0 +1,13 @@
+{
+  "files": {
+    "scripts/run_codex_controller.py": "acfe5bca692e317ad3b161dca46291a3746fd83eee511ead2923d42fee676de7",
+    "scripts/run_demo_trial.py": "37fb60044b1c3cb977e0f806849c7e54cbda6eef991fa3dc07570c058937fb9d",
+    "src/manipulation_agent/tools/__init__.py": "ca27288ebbf1e024594724d9a2d06b158f5f35edc1205940e11ebf4d3883100f",
+    "src/manipulation_agent/vision_cli.py": "655d2bf853e69bd274dd78c3167d7f2f53bcd08058606436ade1ccf4bcd4674b",
+    "src/manipulation_agent/vision_harness.py": "2ad525a66f0649018e848eeebb16ed5a39f2004baca7fb8b064f65ac07643855",
+    "src/manipulation_agent/vision_policy.py": "8ed1c50f006e096ebb5151b80dd61fdf77d561cd82dc151e94517d162f772148",
+    "tests/test_clients.py": "3b95a196bc0afdfed4f456194fcf536a2ba00c2d9d923b2a2283fde13469bc9b",
+    "tests/test_long_horizon_planning.py": "39da0508cbfce4b669aae4220d91787ba50f7e70b5b52abd543eeb3b5bca1627"
+  },
+  "executable_files": []
+}

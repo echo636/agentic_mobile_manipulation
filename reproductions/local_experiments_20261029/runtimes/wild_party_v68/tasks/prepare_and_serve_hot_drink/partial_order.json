@@ -1,0 +1,8 @@
+{
+  "boil_water": {"goal_indices": [0, 1], "requires": []},
+  "gather_tableware": {"goal_indices": [2, 3, 4, 5], "requires": []},
+  "set_table": {"goal_indices": [6], "requires": ["gather_tableware"]},
+  "prepare_snacks": {"goal_indices": [7, 8], "requires": ["set_table"]},
+  "pour_drink": {"goal_indices": [9], "requires": ["boil_water"]},
+  "serve_drink": {"goal_indices": [10], "requires": ["pour_drink", "prepare_snacks"]}
+}

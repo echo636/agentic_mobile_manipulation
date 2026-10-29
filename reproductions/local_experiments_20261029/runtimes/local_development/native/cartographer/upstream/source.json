@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/dadwadw233/habitat-gs",
+  "branch": "jiarui/memory-slam",
+  "commit": "136950b2fb419b90d2607d4cfc6832f3957eeaa5",
+  "sha256": {
+    "worker.cpp": "43a2424e4610204ee506816829f75fc2b8bd12b1712d619c7f50f420063a6ea5",
+    "scan.cpp": "2d90f512799a9d3270d22b0292bd70e6d496fc38913819665de8c2cbdadc03ab",
+    "scan.h": "bc813e11f64ec60f1eb60295de299debce8ad8e132dae00f0d7e9511f527c0e2",
+    "delayed_relocalization.cpp": "23bd04ddd38c2d257d171de0f2cb3dd4ee27494ba24f698f4ab04fc9d55e6d67",
+    "delayed_relocalization.h": "2fa14b7dd5998273ae63dff90a7c95e6193cd14cbb605ba5b60f962c8d898559",
+    "CMakeLists.txt": "647430524dc8b9ad2042d61d254d10e99ddd480ef338e8fa7d0a752ba0584e75",
+    "README.md": "18f2e5279108dfd8a6022b48c79bc5e86448ec9ada5eb7088bc004a93baa38af",
+    "patches/authoritative_odometry.patch": "9b8ebb36314b47075fdb06400e725922fcf3223402d7ffce548893c785dac817"
+  }
+}

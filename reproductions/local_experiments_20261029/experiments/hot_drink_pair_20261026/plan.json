@@ -1,0 +1,90 @@
+{
+  "created_at": "2026-10-26T12:14:09.219358+00:00",
+  "protocol_version": "hot_drink_intent_v2_blocked_v2_environment_v1_astra_pair_20261026",
+  "purpose": "Autonomous paired development-instance regression after independently verified facility repair; long-horizon skill plus tools vs four base skills.",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "low",
+  "instance": 301,
+  "seed": 0,
+  "max_actions": 120,
+  "max_sim_steps": 20000,
+  "wall_timeout_seconds": null,
+  "startup_watchdog_seconds": 900,
+  "closure_watchdog_seconds": 180,
+  "minimum_free_gpu_mib": 19000,
+  "gpu_selection": "GPU0 only; same UUID and lock for both arms; >=19000MiB",
+  "order": [
+    "without_long_horizon",
+    "with_long_horizon"
+  ],
+  "order_randomized": false,
+  "no_resampling": true,
+  "source": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_lh_repaired_pair_20261026/source",
+  "dataset_overlay": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_skill_transfer_20261021_frozen/dataset_overlay",
+  "bddl": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_lh_repaired_pair_20261026/source/tasks/prepare_and_serve_hot_drink/high_level_visual.bddl",
+  "bddl_sha256": "4be5469c5eff25f59504c90c4d78d04312057353ae35a0bf007012c2d0a9b915",
+  "scene_version": "complete_static_shell_v2",
+  "instruction": "请准备一份热饮和点心：把冰箱里的水烧开，橱柜里有水壶、杯子、餐巾、餐垫、盘子、茶匙、托盘、糖饼干和蜂蜜；将饮品、餐具和点心布置在客厅茶几上。",
+  "provider_profile": "demo_experiment",
+  "provider_host": "api.gpt.ge",
+  "codex_home": "/mnt/data/home/sunyujie/robot_manipulation/experiments/demo_motion_codex_home",
+  "omnigibson_source": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_lh_tools_pair_20261026/upstream/OmniGibson",
+  "wire_protocol": "strict_mcp_tools_v1",
+  "same_thread_unfinished_recoveries": 3,
+  "shared_environment": {
+    "MAS_REQUIRE_DECISION": "1",
+    "MAS_TASK_DATA_PATH": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_skill_transfer_20261021_frozen/dataset_overlay",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "OMNIGIBSON_DEBUG": "1",
+    "MAS_HIGH_LEVEL_BLOCKED_POLICY": "accept"
+  },
+  "group_tools": {
+    "without_long_horizon": [
+      "initialize",
+      "look",
+      "act",
+      "finish",
+      "list_skills",
+      "read_skill"
+    ],
+    "with_long_horizon": [
+      "initialize",
+      "look",
+      "act",
+      "finish",
+      "list_skills",
+      "read_skill",
+      "update_plan",
+      "remember",
+      "recall"
+    ]
+  },
+  "validation_level": "autonomous model trials with high-level hot-drink evaluation; not native BDDL success",
+  "configuration_authorization": "User: 以后实验前不需要跟我确认配置，直接跑; 继续",
+  "gpu": 0,
+  "gpu_uuid": "GPU-2f2ab185-9827-23e7-6e54-ca06c0f214f3",
+  "source_parent_manifest": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_benchmark_repair_20261026/source_v2_manifest.json",
+  "known_validation": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_drink_benchmark_repair_20261026/INTERFACE_REGRESSION_REPORT.md",
+  "primary_outcome": "Independent whole-task high-level semantic completion; never official native-BDDL success",
+  "stop_policy": "Accept factual blocked; incomplete remains failure",
+  "development_instance": true,
+  "technical_interruption_policy": "Preserve all attempts; stop and diagnose on infrastructure failure; never replace because of score",
+  "decision_fields": {
+    "without_long_horizon": [
+      "state",
+      "reason",
+      "expected"
+    ],
+    "with_long_horizon": [
+      "state",
+      "active_subgoal",
+      "reason",
+      "expected"
+    ]
+  },
+  "comparison_limits": [
+    "One non-randomized seed pair is descriptive, not a population success-rate estimate.",
+    "Model differs from historical sol pair; do not attribute cross-cohort differences solely to repair.",
+    "Known cabinet recognition mistakes and non-task grasp/place restrictions remain."
+  ]
+}

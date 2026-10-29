@@ -1,0 +1,39 @@
+{
+  "scope": "Selected non-overlapping verified recovery windows; not total recovery cost, not a lower bound on avoidable actions.",
+  "windows": [
+    {
+      "failed_action": 8,
+      "recovered_action": 14,
+      "basis": "Mistaken fridge shelf grasp to successful water-bottle grasp",
+      "additional_actions": 6,
+      "motor_seconds_after_failure_including_success": 90.376,
+      "wall_seconds_result_to_result": 160.542,
+      "sim_steps_after_failure": 336,
+      "verified_by": "intent, actual grounded object identity, tool success and failure contact sheet; not same-primitive heuristic"
+    },
+    {
+      "failed_action": 21,
+      "recovered_action": 23,
+      "basis": "Same upper cabinet: reach failure, approach, successful open",
+      "additional_actions": 2,
+      "motor_seconds_after_failure_including_success": 31.84,
+      "wall_seconds_result_to_result": 50.993,
+      "sim_steps_after_failure": 121,
+      "verified_by": "intent, actual grounded object identity, tool success and failure contact sheet; not same-primitive heuristic"
+    },
+    {
+      "failed_action": 76,
+      "recovered_action": 78,
+      "basis": "Same task cabinet: reach failure, approach, successful open",
+      "additional_actions": 2,
+      "motor_seconds_after_failure_including_success": 36.441,
+      "wall_seconds_result_to_result": 94.635,
+      "sim_steps_after_failure": 113,
+      "verified_by": "intent, actual grounded object identity, tool success and failure contact sheet; not same-primitive heuristic"
+    }
+  ],
+  "selected_windows_additional_actions": 10,
+  "selected_windows_motor_seconds": 158.657,
+  "redundancy": "Repeated open/navigation are candidates only; distinct views and geometry need review. Presentation rearrangement is not automatically redundant.",
+  "failure_contact_sheet_viewed": true
+}

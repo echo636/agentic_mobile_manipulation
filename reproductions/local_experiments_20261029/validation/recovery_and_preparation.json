@@ -1,0 +1,25 @@
+{
+  "hot_drink_20261026": {
+    "passed": true,
+    "files": 1393,
+    "overrides": 20,
+    "output": "/tmp/robot_reproduction_archive_validation_7c8wmofs/hot_drink_20261026"
+  },
+  "wild_party_20261026": {
+    "passed": true,
+    "files": 1389,
+    "overrides": 20,
+    "output": "/tmp/robot_reproduction_archive_validation_7c8wmofs/wild_party_20261026"
+  },
+  "prepared_workspace": {
+    "prepared": true,
+    "output": "/tmp/robot_reproduction_archive_validation_7c8wmofs/prepared_pair",
+    "gpu_simulation_started": false,
+    "model_contacted": false,
+    "runtime_code_changed": false
+  },
+  "prepared_source_files_match": 180,
+  "report_output_confined_to_new_workspace": true,
+  "no_gpu_or_model_started": true,
+  "recorded_scope": "Offline recovery of exact source/upstream and preparation in a fresh directory. This is not a fresh-environment GPU/model replication."
+}

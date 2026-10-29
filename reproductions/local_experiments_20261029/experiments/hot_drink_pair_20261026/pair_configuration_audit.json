@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "both_configuration_audits_passed": true,
+    "both_videos_decode": true,
+    "both_formal_finishes": true,
+    "base_skill_bytes_identical": true,
+    "model_simulator_calls_align": true,
+    "independent_semantic_trace_matches": true
+  },
+  "passed": true,
+  "sample_size_per_arm": 1,
+  "scope": "Long-horizon skill plus three tools bundle; high-level hot-drink development instance; no population-level causal claim."
+}

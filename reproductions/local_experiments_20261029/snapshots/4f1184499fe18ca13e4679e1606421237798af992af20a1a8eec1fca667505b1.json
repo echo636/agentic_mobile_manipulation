@@ -1,0 +1,10 @@
+{
+  "files": {
+    "omnigibson_rgb.py": "769ac1325d8ebcc69d5f4545bef45b69960b82b01651e2acfe270750e40d2407",
+    "test_transport_trace.py": "a3fe40eadadbfb6b562dc773f4566101c5a1ac8fca69b278b624f42748c8ca34",
+    "test_visual_manipulation_navigation.py": "19ff37332d5ad7545024f7a41fc3fd3a730e1d62f39e89b19db9116a87a076d9",
+    "test_visual_state_target.py": "60c9ccedcda8c25710b02d785d99aa104096d1db3bcb111f1ca94412034cb879",
+    "trace_responses_transport.py": "241885d2215f57a0eaed7f89079578edd321d8104d6b3f32c535732c1b85b7ce"
+  },
+  "executable_files": []
+}
