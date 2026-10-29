@@ -348,20 +348,36 @@ class LocalRGBManipulation:
             # A free pose may still lack a short exit certificate. Try a
             # checked forward route to a nearby pose with a certified exit.
             from .navigation.gt_navigation import NavigationPlan,NavigationError,PlanningBudget
-            from .navigation.forward_navigation import plan_forward_route
+            from .navigation.forward_navigation import plan_forward_route, search_holonomic_exit, route_from_poses
             actual=self._local_pose();grid,collision,_,_,_=geometry
-            budget=PlanningBudget(operation.check,seconds=6.)
+            holonomic=bool(getattr(self.robot,'is_holonomic_base',False))
+            budget=PlanningBudget(operation.check,seconds=30. if holonomic else 6.)
             collision.check_cancelled=budget.check
             try:
-                for pose in stance_candidates(actual,operation.origin,(*actual[:2],0.),operation.limits):
-                    budget.check()
-                    if math.dist(actual[:2],pose[:2])>.75:continue
-                    if not collision.motion_free(pose,pose):continue
-                    if local_exit_certificate(pose,collision,check_cancelled=budget.check,allow_lateral=getattr(self.robot,'is_holonomic_base',False)) is None:continue
-                    plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],pose[:2],pose[2],
-                        math.dist(actual[:2],pose[:2]),0.,1,1,0.,0,pose[2],'forward')
-                    try:route=plan_forward_route(plan,actual,collision,check_cancelled=budget.check,max_expansions=2000)
-                    except NavigationError:continue
+                if holonomic:
+                    poses=search_holonomic_exit(actual,collision,check_cancelled=budget.check)
+                    if poses is None:return 'blocked'
+                    end=poses[-1]
+                    plan=NavigationPlan(tuple(p[:2] for p in poses),end[:2],end[:2],end[2],
+                        sum(math.dist(a[:2],b[:2]) for a,b in zip(poses,poses[1:])),0.,1,1,0.,0,end[2],'holonomic')
+                    route=route_from_poses(plan,poses,collision,allow_lateral=True,
+                        method='checked_holonomic_departure',check_cancelled=budget.check)
+                else:
+                    route=None
+                    for pose in stance_candidates(actual,operation.origin,(*actual[:2],0.),operation.limits):
+                        budget.check()
+                        if math.dist(actual[:2],pose[:2])>.75:continue
+                        if not collision.motion_free(pose,pose):continue
+                        if local_exit_certificate(pose,collision,check_cancelled=budget.check) is None:continue
+                        plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],pose[:2],pose[2],
+                            math.dist(actual[:2],pose[:2]),0.,1,1,0.,0,pose[2],'forward')
+                        try:route=plan_forward_route(plan,actual,collision,check_cancelled=budget.check,max_expansions=2000)
+                        except NavigationError:continue
+                        break
+                if route is not None:
+                    # The search budget does not cover executing the certified
+                    # route; the follower and operation own their step budgets.
+                    collision.check_cancelled=operation.check
                     operation.record('departure_recovery',route=asdict(route))
                     result=self._execute_gt_plan(grid,plan,operation.step_limit-(self.steps-operation.start_steps),prepared_route=route)
                     self.navigation_distance+=result['actual_path_distance_m'];operation.repositions+=1

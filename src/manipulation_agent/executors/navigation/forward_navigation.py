@@ -175,6 +175,53 @@ def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, chec
     return None
 
 
+def search_holonomic_exit(start, collision, *, distance=.3, check_cancelled=lambda: None,
+                          max_expansions=512):
+    """Find a short swept-checked shuffle out of a tight continuous pose.
+
+    Intended for an actual holonomic base after a simple exit fails, not for
+    every proposed endpoint. Keep exact poses; quantization only deduplicates
+    search states. No obstacle is removed and no body is moved by this search.
+    """
+    start = tuple(map(float, start))
+    if not collision.motion_free(start, start):
+        return None
+    spacing = min(collision.grid.resolution/2, distance/48)
+    nodes = [(start, None)]
+    queue = [(0., 0)]
+    seen = set()
+    for _ in range(max_expansions):
+        check_cancelled()
+        if not queue:
+            return None
+        _, index = heapq.heappop(queue)
+        current, _ = nodes[index]
+        if math.dist(current[:2], start[:2]) >= distance and local_exit_certificate(
+                current, collision, check_cancelled=check_cancelled, allow_lateral=True) is not None:
+            poses = []
+            while index is not None:
+                pose, index = nodes[index]
+                poses.append(pose)
+            return poses[::-1]
+        proposals = [(*current[:2], current[2]+math.radians(turn)) for turn in (-15, 15, -5, 5)]
+        for length in (distance/12, distance/6, distance/3):
+            for offset in (0., math.pi/2, math.pi, 3*math.pi/2):
+                yaw = current[2]+offset
+                proposals.append((current[0]+length*math.cos(yaw), current[1]+length*math.sin(yaw), current[2]))
+        for pose in proposals:
+            check_cancelled()
+            key = (round((pose[0]-start[0])/spacing), round((pose[1]-start[1])/spacing),
+                   round(math.degrees(pose[2]) % 360 / 5))
+            if key in seen or math.dist(pose[:2], start[:2]) > distance+.2:
+                continue
+            if collision.motion_free(current, pose):
+                seen.add(key)
+                node = len(nodes)
+                nodes.append((pose, index))
+                heapq.heappush(queue, (-math.dist(pose[:2], start[:2]), node))
+    return None
+
+
 def simplify_forward_poses(poses, collision, *, check_cancelled=lambda: None, max_checks=128, allow_lateral=False):
     """Remove checked detours only when full motion time decreases.
 
