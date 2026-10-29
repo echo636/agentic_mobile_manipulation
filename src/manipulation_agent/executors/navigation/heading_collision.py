@@ -17,6 +17,12 @@ class HeadingCollisionChecker:
                             np.asarray(support, dtype='uint8').tobytes())
         self.layers = [(np.asarray(raw, dtype='uint8'), np.asarray(points, dtype=float))
                        for raw, points in collision_layers]
+        self.footprint_bounds = []
+        for _, points in self.layers:
+            radius = float(np.linalg.norm(points, axis=1).max())
+            margin = self.grid.resolution/2 + radius*(1-math.cos(math.radians(1)))
+            half = math.ceil((radius+math.sqrt(2)*margin)/self.grid.resolution)+1
+            self.footprint_bounds.append((margin, half))
         self.reference_yaw = reference_yaw
         self.check_cancelled = check_cancelled
         self.kernels = OrderedDict()
@@ -68,9 +74,13 @@ class HeadingCollisionChecker:
         return value
 
     def _kernels(self, key):
-        if key in self.kernels:
-            self.kernels.move_to_end(key)
-            return self.kernels[key]
+        return [self._kernel(key, i) for i in range(len(self.layers))]
+
+    def _kernel(self, key, layer):
+        cache_key = (layer, key)
+        if cache_key in self.kernels:
+            self.kernels.move_to_end(cache_key)
+            return self.kernels[cache_key]
         self.check_cancelled()
         low, span = key
         # Compose every sweep from the SAME integer-degree bins. Rasterizing
@@ -82,48 +92,44 @@ class HeadingCollisionChecker:
         # Cached dyadic unions reproduce the exact same integer-degree bins
         # with at most two block unions for any requested sweep.
         size = 1 << (span.bit_length()-1)
-        first = self._angular_block(low, size)
+        first = self._angular_block(low, size, layer)
         if size == span:
             result = first
         else:
-            last = self._angular_block(low+span-size, size)
-            result = [a | b for a,b in zip(first,last)]
-        return self._put(self.kernels, key, result, 256)
+            last = self._angular_block(low+span-size, size, layer)
+            result = first | last
+        return self._put(self.kernels, cache_key, result, 256*len(self.layers))
 
-    def _angular_block(self, low, size):
+    def _angular_block(self, low, size, layer):
         import numpy as np
         from .live_gt_map import footprint_kernel
         self.check_cancelled()
         low %= 360
-        key = (low,size)
+        key = (layer,low,size)
         if key in self.angular_blocks:
             self.angular_blocks.move_to_end(key)
             return self.angular_blocks[key]
         if size > 1:
-            first = self._angular_block(low,size//2)
-            last = self._angular_block(low+size//2,size//2)
-            result = [a | b for a,b in zip(first,last)]
+            first = self._angular_block(low,size//2,layer)
+            last = self._angular_block(low+size//2,size//2,layer)
+            result = first | last
         else:
-            result = self.angular_bins.get(low)
+            result = self.angular_bins.get((layer,low))
             if result is None:
-                result = []
-                for _, points in self.layers:
-                    radius = float(np.linalg.norm(points, axis=1).max())
-                    margin = self.grid.resolution/2 + radius*(1-math.cos(math.radians(1)))
-                    offsets = np.array([[-margin,-margin], [-margin,margin],
-                                        [margin,-margin], [margin,margin]])
-                    swept = []
-                    for a in (low, low+.5, low+1):
-                        yaw = math.radians(a)-self.reference_yaw
-                        c, s = math.cos(yaw), math.sin(yaw)
-                        rotated = points @ np.array([[c,s], [-s,c]])
-                        swept.append((rotated[:,None,:]+offsets).reshape(-1,2))
-                    kernel = footprint_kernel(np.concatenate(swept), self.grid.resolution)
-                    half = math.ceil((radius+math.sqrt(2)*margin)/self.grid.resolution)+1
-                    pad = half-kernel.shape[0]//2
-                    result.append(np.pad(kernel, pad))
-                self._put(self.angular_bins, low, result, 360)
-        return self._put(self.angular_blocks,key,result,2048)
+                points = self.layers[layer][1]
+                margin, half = self.footprint_bounds[layer]
+                offsets = np.array([[-margin,-margin], [-margin,margin],
+                                    [margin,-margin], [margin,margin]])
+                swept = []
+                for a in (low, low+.5, low+1):
+                    yaw = math.radians(a)-self.reference_yaw
+                    c, s = math.cos(yaw), math.sin(yaw)
+                    rotated = points @ np.array([[c,s], [-s,c]])
+                    swept.append((rotated[:,None,:]+offsets).reshape(-1,2))
+                kernel = footprint_kernel(np.concatenate(swept), self.grid.resolution)
+                result = np.pad(kernel, half-kernel.shape[0]//2)
+                self._put(self.angular_bins, (layer,low), result, 360*len(self.layers))
+        return self._put(self.angular_blocks,key,result,2048*len(self.layers))
 
     def _sweep_grid(self, key):
         import cv2
@@ -180,16 +186,23 @@ class HeadingCollisionChecker:
         cached = self.turns.get(turn_key)
         if cached is not None:
             return cached
-        for (raw, _), kernel in zip(self.layers, self._kernels(key)):
-            half = kernel.shape[0]//2
+        for i, (raw, _) in enumerate(self.layers):
+            self.check_cancelled()
+            half = self.footprint_bounds[i][1]
             r0, r1 = max(0, row-half), min(self.grid.height, row+half+1)
             c0, c1 = max(0, col-half), min(self.grid.width, col+half+1)
+            window = raw[r0:r1, c0:c1]
+            # A clear enclosing square proves this whole layer's turn free.
+            # Only layers near obstacles need their canonical angular masks.
+            # At a map edge, retain the occupied-mask check below.
+            if window.shape == (2*half+1, 2*half+1) and np.all(window):
+                continue
+            kernel = self._kernel(key, i)
             visible = kernel[r0-row+half:r1-row+half, c0-col+half:c1-col+half]
             # An offset payload's square kernel includes empty padding. Only
             # occupied swept cells outside the map make the pose unknown.
             if visible.shape != kernel.shape and np.count_nonzero(visible) != np.count_nonzero(kernel):
                 return self._put(self.turns,turn_key,False,65536)
-            window = raw[r0:r1, c0:c1]
             if np.any((window == 0) & (visible != 0)):
                 return self._put(self.turns,turn_key,False,65536)
         return self._put(self.turns,turn_key,True,65536)
