@@ -79,6 +79,8 @@ class MaterialActionTests(unittest.TestCase):
         destination = types.SimpleNamespace(name='receiver', states={volume: object()})
         remaining = []
         backend = CheckedMaterialTransfer()
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
+            object_registry=lambda key, name: next((obj for obj in objects if obj.name == name), None)))
         backend._transfer_preconditions = lambda *args: (source, destination)
         backend._pour_objects = lambda source: remaining or objects
         backend._pour_rigid_objects = lambda *args: objects
@@ -96,7 +98,42 @@ class MaterialActionTests(unittest.TestCase):
                 Inside=inside, OnTop=on_top, ContainedParticles=volume, create=True):
             result = backend._checked_transfer('pour', destination, 6)
         self.assertEqual(result['rigid_transfer'], {
-            'moved_objects': 2, 'retained_objects': 1, 'source_remaining_objects': 1})
+            'moved_objects': 2, 'retained_objects': 1, 'source_remaining_objects': 1,
+            'identities_changed_during_settling': False})
+
+    def test_pour_receipt_does_not_query_objects_replaced_by_native_transition(self):
+        from unittest.mock import Mock
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        states = {name: type(name, (), {}) for name in ('Inside', 'OnTop', 'ContainedParticles')}
+        stale_contact = Mock(side_effect=KeyError('removed_object/base_link'))
+        original = types.SimpleNamespace(name='food', states={states['OnTop']:
+            types.SimpleNamespace(get_value=stale_contact)})
+        replacement = types.SimpleNamespace(name='food')
+        scene_objects = {'food': original}
+        source = types.SimpleNamespace(name='source')
+        receiver = types.SimpleNamespace(name='receiver', states={})
+        backend = CheckedMaterialTransfer()
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
+            object_registry=lambda key, name: scene_objects.get(name)))
+        backend._transfer_preconditions = lambda *args: (source, receiver)
+        backend._pour_objects = lambda source: [original] if scene_objects['food'] is original else []
+        backend._pour_rigid_objects = lambda *args: [original]
+        backend._placement_record = lambda record: None
+
+        def settle(*args, **kwargs):
+            # A transition removes the original during free physics. Even a
+            # new object with the same name must not revive its stale handle.
+            scene_objects['food'] = replacement
+            return {'materials': []}
+
+        backend._transfer_material_portion = settle
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'], **states, create=True):
+            result = backend._checked_transfer('pour', receiver, 6)
+        stale_contact.assert_not_called()
+        self.assertEqual(result['rigid_transfer'], {
+            'moved_objects': 1, 'retained_objects': 0, 'source_remaining_objects': 0,
+            'identities_changed_during_settling': True})
 
     def test_pour_accepts_surfaces_while_scoop_requires_a_vessel(self):
         from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer

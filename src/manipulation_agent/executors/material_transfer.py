@@ -209,13 +209,19 @@ class CheckedMaterialTransfer:
         if moved:
             # Material transfer can advance physics again. Count rigid contents
             # after that settling, so the receipt describes the returned scene.
+            # Native slicing/cooking may replace an object during those steps;
+            # its old contact-state handle is no longer valid.
+            present = [obj for obj in moved
+                       if self.env.scene.object_registry('name', obj.name) is obj]
+            changed = len(present) != len(moved)
             relation = Inside if ContainedParticles in destination.states else OnTop
-            retained = sum(bool(obj.states[relation].get_value(destination)) for obj in moved)
+            retained = sum(bool(obj.states[relation].get_value(destination)) for obj in present)
             rigid = {'moved_objects': len(moved), 'retained_objects': retained,
+                     'identities_changed_during_settling': changed,
                      'source_remaining_objects': len(self._pour_objects(source))}
             self._placement_record({'status': 'rigid_contents_poured', 'source': source.name,
                 'destination': destination.name, 'objects': [obj.name for obj in moved], **rigid})
-            if not retained:
+            if not retained and not changed:
                 raise SkillError('postcondition_error', 'Poured objects did not remain at the receiver', changed=True)
             result.update(rigid_transfer=rigid, implementation='native_rigid_and_particle_transfer')
         return result
