@@ -111,6 +111,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        # Navigation and manipulation must use the same robot footprint.
+        # Unfolding only at the first grasp can intersect nearby furniture.
+        with self._startup_stage('initialize_manipulation_arm'):
+            self._initialize_manipulation_arm()
         self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
                                  if self.demo_motion else None)
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the

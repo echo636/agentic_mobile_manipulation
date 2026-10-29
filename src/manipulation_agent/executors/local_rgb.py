@@ -377,11 +377,7 @@ class LocalRGBManipulation:
 
     def _execute_local_manipulation(self,primitive,obj,point,grounding,max_steps,options):
         binding=LockedTarget.bind(obj,point,grounding)
-        prepared_grasp = primitive == 'grasp' and self._get_held() is None
-        if prepared_grasp:
-            self._prepare_grasp_arm()
         operation=LocalOperation(self,primitive,binding,max_steps,options)
-        operation.changed = prepared_grasp
         self._local_operation=operation
         try:return operation.run()
         finally:self._local_operation=None

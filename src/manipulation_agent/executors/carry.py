@@ -41,7 +41,8 @@ def attachment_relation(candidate, member):
 
 class ControlledCarry:
 
-    def _prepare_grasp_arm(self):
+    def _initialize_manipulation_arm(self):
+        """Use the grasp posture from the first observation and navigation plan."""
         arm = self.primitives.arm
         indices = self.robot.arm_control_idx[arm]
         ready = self.robot.untucked_default_joint_pos[indices]
@@ -61,10 +62,6 @@ class ControlledCarry:
         if obj.fixed_base:
             raise SkillError('fixed_object', 'The selected object has a fixed base')
         arm = self.primitives.arm
-        # Local approach planning already uses this arm posture. Changing it
-        # only after arriving invalidates the geometry used for that approach.
-        if getattr(self, '_local_operation', None) is None:
-            self._prepare_grasp_arm()
         original = obj.get_position_orientation()
         dependencies = self._grasp_dependencies(obj)
         contents = [(child, T.relative_pose_transform(*child.get_position_orientation(), *original))
