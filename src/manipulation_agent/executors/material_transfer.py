@@ -323,11 +323,12 @@ class CheckedMaterialTransfer:
                     'source': source.name, 'destination': destination.name, 'material': name,
                     'accepted': len(positions), **sampling})
                 orientations = None
-                if (not surface and not len(positions) and not generating and available
+                if (not len(positions) and not generating and available
                         and getattr(system, 'particles_view', None) is not None):
-                    from .material_geometry import macro_receiving_poses
+                    from .material_geometry import macro_receiving_poses, macro_surface_poses
                     geometry = {}
-                    positions, orientations = macro_receiving_poses(
+                    sampler = macro_surface_poses if surface else macro_receiving_poses
+                    positions, orientations = sampler(
                         scene, destination, system, min(512, available), diagnostics=geometry)
                     self._placement_record({'status': 'material_geometry_sampling', 'primitive': primitive,
                         'source': source.name, 'destination': destination.name, 'material': name,

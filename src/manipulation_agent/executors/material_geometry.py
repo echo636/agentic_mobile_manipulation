@@ -17,6 +17,57 @@ def convex_sphere_overlap(mesh, equations, centers, radii):
     return bool((distances < np.asarray(radii)).any())
 
 
+def macro_surface_poses(scene, destination, system, limit, *, diagnostics):
+    """Place native particle boxes on a surface when enclosing spheres do not fit."""
+    import torch
+    from omnigibson.utils import transform_utils as T
+    from omnigibson.utils.sampling_utils import sample_cuboid_on_object_full_grid_topdown
+    from .particle_view import physical_particle_view
+
+    template = system.particle_object
+    points = (torch.as_tensor(template.get_attribute('points'), dtype=torch.float32)
+              * template.scale * system.max_scale - system._particle_offset)
+    low, high = points.amin(0), points.amax(0)
+    extent, box_center = high - low, (high + low) / 2
+    surface_low, surface_high = destination.aabb
+    rest = float(system.particle_particle_rest_distance)
+    spacing = max(rest, math.sqrt(float((surface_high[:2]-surface_low[:2]).prod()) / max(1, limit*4)))
+    samples = sample_cuboid_on_object_full_grid_topdown(
+        destination, ray_spacing=spacing, cuboid_dimensions=extent,
+        cuboid_bottom_padding=.001, undo_cuboid_bottom_padding=False)
+    valid = [sample for sample in samples if sample[0] is not None]
+    diagnostics.update(method='native_oriented_macro_surface', template_extent_m=extent.tolist(),
+                       sphere_radius_m=float(system.particle_radius), candidates=len(samples),
+                       native_box_candidates=len(valid), sampling_distance_m=spacing)
+    if not valid:
+        return _pose_result([], [])
+    orientations = torch.stack([sample[2] for sample in valid])
+    # The native sampler returns box centers; particle transforms use the
+    # enclosing-sphere center. Keep that offset consistent with volume pouring.
+    positions = torch.stack([sample[0] for sample in valid]) - T.quat2mat(orientations) @ box_center
+    clear = torch.ones(len(positions), dtype=torch.bool, device=positions.device)
+    for other in scene.active_systems.values():
+        if (not other.n_particles or getattr(other, 'particles_view', None) is not None
+                or physical_particle_view(other) is None):
+            continue
+        # Native box queries already include macro rigid shapes. Only PBD
+        # particles, absent from those queries, need this separate sphere test.
+        reach = float(system.particle_radius + other.particle_radius)
+        centers = other.get_particles_position_orientation()[0]
+        near = ((centers >= positions.amin(0)-reach) & (centers <= positions.amax(0)+reach)).all(dim=1)
+        for chunk in centers[near].split(512):
+            clear &= (torch.cdist(positions, chunk) >= reach).all(dim=1)
+    positions, orientations = positions[clear], orientations[clear]
+    selected = []
+    for index in torch.randperm(len(positions)).tolist():
+        if selected and bool(((positions[selected]-positions[index]).norm(dim=1) < rest-1e-7).any()):
+            continue
+        selected.append(index)
+        if len(selected) >= limit:
+            break
+    return positions[selected], orientations[selected]
+
+
 def macro_receiving_poses(scene, destination, system, limit, *, diagnostics):
     """Query the same convex mesh geometry used by native macro rigid bodies.
 
