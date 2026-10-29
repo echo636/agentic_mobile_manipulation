@@ -141,10 +141,28 @@ class CoordinationTests(unittest.TestCase):
         with self.assertRaises(SkillError) as cm:b.run()
         self.assertEqual(cm.exception.code,'sampling_error');self.assertTrue(cm.exception.changed)
         self.assertEqual(len(b.executions),1)
-    def test_zero_motion_stops_without_loop(self):
+    def test_zero_motion_stops_at_reposition_limit_without_execution(self):
         b=Motor();b._local_reposition=lambda *args:None
         with self.assertRaises(SkillError) as cm:b.run()
-        self.assertEqual(cm.exception.code,'local_adjustment_blocked');self.assertEqual(b.executions,[])
+        self.assertEqual(cm.exception.code,'local_adjustment_exhausted');self.assertEqual(b.executions,[])
+        self.assertEqual(b.refreshes,b.local_limits.max_repositions)
+
+    def test_small_approach_can_replan_after_target_settles_outside_reach(self):
+        b=Motor();b.point=(1.404754,0.,.7)
+        normal_approach=b._local_reposition
+        def approach(primitive,obj,point,op):
+            if op.repositions==0:
+                # The selected stance is 1.395 m from the bound surface, but
+                # free settling moves that surface beyond reach on arrival.
+                b.pose=(.009754,0.,0.);op.admit_pose(b.pose);b.steps+=1
+                b.point=(1.414754,0.,.7)
+            else:normal_approach(primitive,obj,point,op)
+        b._local_reposition=approach
+        result=b.run()['local_manipulation']
+        self.assertEqual(result['repositions'],2)
+        self.assertEqual(len(b.executions),1)
+        self.assertIs(b.executions[0][0],b.target)
+        self.assertEqual(b.executions[0][1],b.point)
     def test_stationary_preparation_executes_only_after_readiness_is_confirmed(self):
         b=Motor();prepared=[False]
         b._local_ready=lambda *args:prepared[0]
@@ -157,7 +175,7 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(result['repositions'],1)
         self.assertEqual(result['path_m'],0.)
         self.assertEqual(b.refreshes,1)
-        self.assertTrue(next(e for e in b.events if e['phase']=='stationary_recheck')['ready'])
+        self.assertTrue([e for e in b.events if e['phase']=='check'][-1]['ready'])
 
     def test_motion_accounting_has_no_start_radius_or_distance_cap(self):
         b=Motor();op=LocalOperation(b,'grasp',b.binding,100,{})

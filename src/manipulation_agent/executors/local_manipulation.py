@@ -187,22 +187,11 @@ class LocalOperation:
                 self.record('align')
                 self.backend._local_reposition(self.primitive, obj, point, self)
                 self.repositions += 1
-                after = tuple(self.backend._local_pose())
-                if (math.dist(before[:2], after[:2]) < .01 and
-                        abs(math.atan2(math.sin(after[2]-before[2]), math.cos(after[2]-before[2]))) < math.radians(2)):
-                    # Refined geometry can certify the current pose without
-                    # moving the base. Accept that only when the same locked
-                    # target now passes the full operation readiness check.
-                    self.check()
-                    obj, point = self.backend._resolve_local_target(self.binding)
-                    self.backend._manipulation_preconditions(self.primitive, obj)
-                    ready = self.backend._local_ready(self.primitive, obj, point, self)
-                    self.record('stationary_recheck', ready=ready)
-                    if not ready:
-                        raise SkillError('local_adjustment_blocked', 'Local adjustment made no progress')
                 self.visited.append(before)
                 # Refresh only internal sensor packets; never re-ground an old
-                # pixel in a new image. The bound link-relative point is used.
+                # pixel in a new image. Re-resolve and check readiness on the
+                # next iteration: even a tiny move can let the target settle
+                # outside reach. The reposition limit already bounds retries.
                 self.backend._local_reobserve(self.binding)
                 self.record('reobserve')
         except SkillError as exc:
