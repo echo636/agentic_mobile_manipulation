@@ -1,6 +1,30 @@
 """Conservative door/lid clearance without advancing the live physics world."""
 
 
+def native_group_filter():
+    """Read OG's collision groups; geometric overlap queries lack a source body."""
+    from omnigibson.utils.usd_utils import CollisionAPI
+    from omnigibson.lazy import pxr
+
+    groups = {str(group.GetPath()): (
+        group.GetCollidersCollectionAPI().ComputeMembershipQuery(),
+        {str(path) for path in group.GetFilteredGroupsRel().GetTargets()})
+        for group in CollisionAPI.ACTIVE_COLLISION_GROUPS.values()}
+    memberships = {}
+
+    def member_groups(path):
+        if path not in memberships:
+            memberships[path] = {name for name, (query, _) in groups.items()
+                                 if query.IsPathIncluded(pxr.Sdf.Path(path))}
+        return memberships[path]
+
+    def filtered(first, second):
+        return any(b in groups[a][1] or a in groups[b][1]
+                   for a in member_groups(first) for b in member_groups(second))
+
+    return filtered
+
+
 def collision_piece_enclosures(vertices, transform):
     """Enclose the same mesh in its authored axes and its principal axes.
 
@@ -35,6 +59,7 @@ def moving_link_clearance(backend, links, moving, ignored, check):
     from omnigibson.utils import transform_utils as T
 
     query = lazy.omni.physx.get_physx_scene_query_interface()
+    filtered = native_group_filter()
     blocked = set()
     pieces = 0
     missing = []
@@ -70,7 +95,8 @@ def moving_link_clearance(backend, links, moving, ignored, check):
                 def hit(row):
                     try:
                         body = str(row.rigid_body)
-                        if body not in ignored:
+                        collider = str(getattr(row, 'collision', body))
+                        if body not in ignored and not filtered(str(mesh.prim_path), collider):
                             hits.add(body)
                     except Exception as exc:
                         errors.append(exc)

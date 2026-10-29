@@ -10,7 +10,7 @@ import torch
 
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.articulation_goal import checked_open_goal
-from manipulation_agent.executors.articulation_clearance import moving_link_clearance, collision_piece_enclosures
+from manipulation_agent.executors.articulation_clearance import moving_link_clearance, collision_piece_enclosures, native_group_filter
 
 
 class EndpointTests(unittest.TestCase):
@@ -143,7 +143,9 @@ class EndpointTests(unittest.TestCase):
         utils = ModuleType('omnigibson.utils')
         utils.transform_utils = transforms
         with patch.dict(sys.modules, {'omnigibson': ModuleType('omnigibson'),
-                                     'omnigibson.lazy': lazy, 'omnigibson.utils': utils}):
+                                     'omnigibson.lazy': lazy, 'omnigibson.utils': utils}), \
+             patch('manipulation_agent.executors.articulation_clearance.native_group_filter',
+                   return_value=lambda a, b: False):
             backend = SimpleNamespace(torch=torch)
             result = moving_link_clearance(backend, [link], {'/door/leaf'}, {'/door/leaf'}, lambda: None)
             self.assertTrue(result['clear'])
@@ -182,13 +184,37 @@ class EndpointTests(unittest.TestCase):
         utils.transform_utils = SimpleNamespace(mat2quat=lambda value:
             torch.tensor(Rotation.from_matrix(value.numpy()).as_quat()))
         with patch.dict(sys.modules, {'omnigibson':ModuleType('omnigibson'),
-                                     'omnigibson.lazy':lazy, 'omnigibson.utils':utils}):
+                                     'omnigibson.lazy':lazy, 'omnigibson.utils':utils}), \
+             patch('manipulation_agent.executors.articulation_clearance.native_group_filter',
+                   return_value=lambda a, b: False):
             args = (SimpleNamespace(torch=torch), [link], {'/door/leaf'}, set(), lambda:None)
             self.assertTrue(moving_link_clearance(*args)['clear'])
             wall[0] = True
             result = moving_link_clearance(*args)
             self.assertFalse(result['clear'])
             self.assertEqual(result['overlapping_enclosures'], [('/door/leaf', '/wall')])
+
+    def test_native_sliding_door_filter_preserves_robot_and_movable_obstacles(self):
+        def group(name, members, exclusions):
+            query = SimpleNamespace(IsPathIncluded=lambda path:
+                any(path == root or path.startswith(root + '/') for root in members))
+            return SimpleNamespace(GetPath=lambda: name,
+                GetCollidersCollectionAPI=lambda: SimpleNamespace(ComputeMembershipQuery=lambda: query),
+                GetFilteredGroupsRel=lambda: SimpleNamespace(GetTargets=lambda: exclusions))
+        groups = {'doors': group('/groups/doors', ['/door/leaf'], ['/groups/fixed']),
+                  'fixed': group('/groups/fixed', ['/wall'], [])}
+        usd = ModuleType('omnigibson.utils.usd_utils')
+        usd.CollisionAPI = SimpleNamespace(ACTIVE_COLLISION_GROUPS=groups)
+        lazy = ModuleType('omnigibson.lazy')
+        lazy.pxr = SimpleNamespace(Sdf=SimpleNamespace(Path=str))
+        with patch.dict(sys.modules, {'omnigibson': ModuleType('omnigibson'),
+                'omnigibson.utils': ModuleType('omnigibson.utils'),
+                'omnigibson.utils.usd_utils': usd, 'omnigibson.lazy': lazy}):
+            filtered = native_group_filter()
+        self.assertTrue(filtered('/door/leaf/collisions/panel', '/wall/collisions/mesh'))
+        self.assertTrue(filtered('/wall/collisions/mesh', '/door/leaf/collisions/panel'))
+        self.assertFalse(filtered('/door/leaf/collisions/panel', '/robot/body'))
+        self.assertFalse(filtered('/door/leaf/collisions/panel', '/movable_box/body'))
 
 
 if __name__ == '__main__':
