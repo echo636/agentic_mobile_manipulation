@@ -598,7 +598,7 @@ class CheckedPlacement:
         payload = [obj for obj, _ in self._carry_contents]
         candidates = self._surface_candidates(held, target, point, yaw_degrees, payload)
         if not candidates:
-            raise SkillError('sampling_error', 'No upward surface of the selected object near the selected point')
+            raise SkillError('placement_surface_unavailable', 'No upward surface of the selected object near the selected point')
         return candidates[0]['pose']
 
     def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None):
@@ -814,6 +814,9 @@ class CheckedPlacement:
                         'support': support, 'contact_bodies': contacts})
                     break
                 if accepted is None:
+                    if not tried_poses:
+                        raise SkillError('placement_surface_unavailable',
+                            'No upward receiving surface near the selected point', changed=True)
                     raise SkillError('sampling_error', 'No collision-free, stable pose on the selected surface', changed=True)
         # Only the accepted physical result advances environment metrics,
         # object-state transition rules and the recorded replay.

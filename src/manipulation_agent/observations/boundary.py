@@ -46,6 +46,7 @@ ERROR_MESSAGES = {
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
     "no_removable_material":"The held tool found no material it can remove from the selected surface. The surface may already be clean, or the tool conditions may not match. Inspect RGB before repeating the operation.",
     "sampling_error":"The executor could not find a valid placement; inspect the new RGB before recovery.",
+    "placement_surface_unavailable":"No upward receiving surface was found near the selected point. Select a clear, visible top surface in the returned RGB.",
     "post_condition_error":"The executor could not verify its operation after settling; inspect the new RGB.",
     "physics_instability":"The simulator reported an unstable physical state; do not repeat this action blindly.",
     "postcondition_error":"The requested effect did not remain valid after physics settling. Inspect the new RGB. For placement or closing, check for obstructing contents and try a different placement before retrying; repeating the same command may repeat the failure.",

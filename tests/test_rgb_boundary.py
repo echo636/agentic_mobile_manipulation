@@ -39,16 +39,17 @@ class RGBBoundary(unittest.TestCase):
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
-    def test_transfer_failure_categories_survive_the_public_boundary(self):
+    def test_action_failure_categories_survive_the_public_boundary(self):
         from manipulation_agent.contracts import SkillError
         for code, phrase in [('same_transfer_vessel','same object'),
                              ('invalid_transfer_destination','receiving object'),
                              ('material_dispenser_off','switched off'),
-                             ('material_source_empty','no accessible loose material')]:
+                             ('material_source_empty','No transferable contents'),
+                             ('placement_surface_unavailable','visible top surface')]:
             def fail(*args, **kwargs):
                 raise SkillError(code, 'PRIVATE_OBJECT_NAME / private geometry and diagnostics')
             self.backend.execute_visual=fail
-            result=self.act('pour')
+            result=self.act('place_on_top' if code=='placement_surface_unavailable' else 'pour')
             self.assertFalse(result['ok'])
             self.assertEqual(result['error']['code'],code)
             self.assertIn(phrase,result['error']['message'])
