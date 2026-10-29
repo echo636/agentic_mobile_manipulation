@@ -675,6 +675,20 @@ class HeadingCollisionTests(unittest.TestCase):
         self.assertFalse(checker.motion_free((0.,0.,0.),(0.,0.,math.pi/2)))
         self.assertFalse(checker.measured_motion_free((0.,0.,0.),(0.,0.,math.pi/2)))
 
+    def test_offset_payload_at_map_edge_checks_occupied_sweep_not_padding(self):
+        import numpy as np
+        raw = np.ones((41,41), dtype='uint8')
+        footprint = [[-.1,-.8],[.1,-.8],[.1,-.5],[-.1,-.5]]
+        pose = (0., .85, 0.)
+        checker = self.checker(raw, footprint)
+        self.assertTrue(checker.motion_free(pose, pose))
+        self.assertTrue(checker._sweep_grid(checker._key(0.,0.)).navigable(checker.grid.cell(pose[:2])))
+        # An actual obstacle or a turn that sends the payload outside the map
+        # still fails, even though the robot base itself fits.
+        raw[24,20] = 0
+        self.assertFalse(self.checker(raw, footprint).motion_free(pose, pose))
+        self.assertFalse(checker.motion_free(pose, (0., .85, math.pi)))
+
     def test_measured_sweep_keeps_feedback_inside_planning_angular_reserve(self):
         import numpy as np
         checker=self.checker(np.ones((81,81),dtype='uint8'),

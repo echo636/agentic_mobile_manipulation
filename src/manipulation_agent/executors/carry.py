@@ -222,8 +222,11 @@ class ControlledCarry:
             # constraint solver and can inject energy into the whole assembly.
             # Native joint constraints and contacts determine the outcome.
             self._carry_detach()
+            # The native stability probe steps physics and may detach/rewind
+            # before queued joint-break callbacks run. Set the joint once;
+            # ordinary environment steps below process breaks and verify it.
             accepted=state.set_value(parent,True,bypass_alignment_checking=True,
-                                     check_physics_stability=True)
+                                     check_physics_stability=False)
             if not accepted:
                 raise SkillError('execution_error','Attachment state setter rejected the selected pair',changed=True)
             self._relocate_contents(child,contents)

@@ -182,10 +182,15 @@ class HeadingCollisionChecker:
             return cached
         for (raw, _), kernel in zip(self.layers, self._kernels(key)):
             half = kernel.shape[0]//2
-            if row-half < 0 or col-half < 0 or row+half >= self.grid.height or col+half >= self.grid.width:
+            r0, r1 = max(0, row-half), min(self.grid.height, row+half+1)
+            c0, c1 = max(0, col-half), min(self.grid.width, col+half+1)
+            visible = kernel[r0-row+half:r1-row+half, c0-col+half:c1-col+half]
+            # An offset payload's square kernel includes empty padding. Only
+            # occupied swept cells outside the map make the pose unknown.
+            if visible.shape != kernel.shape and np.count_nonzero(visible) != np.count_nonzero(kernel):
                 return self._put(self.turns,turn_key,False,65536)
-            window = raw[row-half:row+half+1, col-half:col+half+1]
-            if np.any((window == 0) & (kernel != 0)):
+            window = raw[r0:r1, c0:c1]
+            if np.any((window == 0) & (visible != 0)):
                 return self._put(self.turns,turn_key,False,65536)
         return self._put(self.turns,turn_key,True,65536)
 
