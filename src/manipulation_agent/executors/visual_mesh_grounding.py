@@ -201,7 +201,7 @@ def query_visual_surface(backend, point, *, reject_particles=False, camera_posit
                              'coincident_surface_roundoff_m': roundoff,
                              'coincident_surface_resolution': resolution}
     if best is None or best[1] is backend.robot:
-        exc = SkillError('invalid_visual_target',
+        exc = SkillError('robot_surface_selected' if best else 'invalid_visual_target',
                          'Selected surface belongs to the robot' if best else 'No visible mesh surface')
         exc.diagnostics = {'reason': 'robot_surface' if best else 'no_visual_surface',
                            'meshes_tested': checked, 'guide_meshes_skipped': guides_skipped,

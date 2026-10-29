@@ -121,7 +121,8 @@ class CheckedMaterialActions:
             systems = [system for system in systems if system is not None]
             candidates = eligible_systems(systems, modifier, ideal_projection=primitive == 'spray')
         if not candidates:
-            raise SkillError('pre_condition_error', 'No material on the selected surface matches the ready tool')
+            raise SkillError('no_removable_material' if removing else 'pre_condition_error',
+                             'No material on the selected surface matches the ready tool')
 
         return covered, removing, candidates
 

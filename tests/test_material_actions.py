@@ -220,11 +220,17 @@ class MaterialActionTests(unittest.TestCase):
         self.assertTrue(result['source_has_more_material'])
 
     def test_sweep_removes_only_compatible_selected_material(self):
+        from manipulation_agent.observations.boundary import public_execution_error
         with self.modules:
             result = self.backend._checked_surface_action('sweep', self.target, 6)
         self.assertFalse(self.covered_value[0])
         self.assertEqual(result['material_systems'], ['dust'])
         self.assertEqual(result['postcondition'], 'Covered.get_value_after_settling')
+        with self.modules, self.assertRaises(SkillError) as failure:
+            self.backend._checked_surface_action('sweep', self.target, 6)
+        public = public_execution_error(failure.exception)
+        self.assertEqual(public['code'], 'no_removable_material')
+        self.assertIn('may already be clean', public['message'])
 
     def test_sweep_rejects_wrong_tool_before_state_change(self):
         self.tool.category = 'cloth'

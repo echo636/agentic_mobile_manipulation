@@ -125,11 +125,15 @@ class VisualPointOwnership(unittest.TestCase):
         self.assertIs(query_visual_surface(backend, point)[0], stretched)
 
     def test_robot_surface_rejected_without_selecting_object_behind(self):
+        from manipulation_agent.observations.boundary import public_execution_error
         robot, _ = self.box('robot', [0., 0., 1.])
         far, _ = self.box('far', [0., 0., -2.])
         with self.assertRaises(SkillError) as error:
             query_visual_surface(self.backend([far, robot], robot), self.torch.tensor([0., 0., 1.5]))
-        self.assertEqual(error.exception.code, 'invalid_visual_target')
+        self.assertEqual(error.exception.code, 'robot_surface_selected')
+        public = public_execution_error(error.exception)
+        self.assertIn("robot's own body or arm", public['message'])
+        self.assertNotIn('meshes_tested', json.dumps(public))
 
     def test_cloth_uses_current_deformed_vertices(self):
         torch = self.torch
