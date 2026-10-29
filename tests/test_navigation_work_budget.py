@@ -8,6 +8,38 @@ from manipulation_agent.executors.navigation.gt_navigation import (
 
 
 class NavigationWorkBudgetTests(unittest.TestCase):
+    def test_custom_start_diagnostic_write_does_not_consume_search_budget(self):
+        import json
+        from pathlib import Path
+        from types import SimpleNamespace
+        import tempfile
+        import numpy as np
+        from manipulation_agent.executors.custom_task import CustomTaskBackend
+
+        grid = GridMap(61, 61, .05, (0., 0.), bytes([1]) * 61**2)
+        support = np.ones((61, 61), dtype='uint8')
+        clock = [100.]
+
+        def slow_save(path, **arrays):
+            clock[0] += 20.  # Slow compression/storage, not collision work.
+            path.write_bytes(b'fixture')
+
+        with tempfile.TemporaryDirectory() as directory:
+            backend = SimpleNamespace(
+                output=Path(directory), deadline=SimpleNamespace(check=lambda: None),
+                robot=SimpleNamespace(get_position_orientation=lambda: ([1.5, 1.5, 0.], [0., 0., 0., 1.])),
+                env=SimpleNamespace(scene=SimpleNamespace(trav_map=SimpleNamespace(floor_heights=[0.]))),
+                _local_pose=lambda: (1.5, 1.5, 0.), _navigation_support=support,
+                _navigation_layers=[(support, np.array([[-.1, -.1], [-.1, .1], [.1, .1], [.1, -.1]]))])
+            with patch('manipulation_agent.executors.navigation.live_gt_map.build_navigation_grid', return_value=(grid, {})), \
+                 patch('numpy.savez_compressed', side_effect=slow_save), \
+                 patch('manipulation_agent.executors.navigation.gt_navigation.time.monotonic', side_effect=lambda: clock[0]):
+                CustomTaskBackend._validate_custom_robot_start(backend)
+            record = json.loads((backend.output/'custom_robot_start_validation.json').read_text())
+            self.assertEqual(record['status'], 'passed')
+            self.assertTrue(record['collision_free'])
+            self.assertTrue(record['departure_available'])
+
     def test_occluded_target_does_not_scan_every_cell_for_one_heading(self):
         grid = GridMap(61, 61, .05, (0., 0.), bytes([1]) * 61**2)
         visible = Mock(return_value=False)

@@ -163,9 +163,8 @@ class CustomTaskBackend(RGBBackend):
             floor=min(range(len(trav.floor_heights)),key=lambda i:abs(position[2]-trav.floor_heights[i]))
             grid,details=build_navigation_grid(self,floor)
             pose=self._local_pose()
-            budget=PlanningBudget(self.deadline.check,seconds=10.)
             collision=HeadingCollisionChecker(grid,self._navigation_layers,pose[2],self._navigation_support,
-                                               check_cancelled=budget.check)
+                                               check_cancelled=self.deadline.check)
             path=self.output/'custom_robot_start_grid.npz'
             np.savez_compressed(path,
                 free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
@@ -175,6 +174,10 @@ class CustomTaskBackend(RGBBackend):
                 layer_footprints_json=json.dumps([{'footprint':layer[1].tolist()} for layer in collision.layers]))
             record.update(floor=floor,map_sha256=hashlib.sha256(grid.free).hexdigest(),
                           grid_artifact=path.name,grid_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+            # Saving diagnostic geometry is not route-search work. Start the
+            # search clock after compression / I/O, just before checking poses.
+            budget=PlanningBudget(self.deadline.check,seconds=10.)
+            collision.check_cancelled=budget.check
             try:
                 record['collision_free']=collision.motion_free(pose,pose)
                 if record['collision_free']:
