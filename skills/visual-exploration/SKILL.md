@@ -4,7 +4,7 @@ description: Find objects, inspect storage and travel using visible landmarks an
 ---
 # Explore and travel
 
-Inspect all four current views; they already cover front, back, left and right. `look` turns the robot when a different physical orientation is useful. Reselect targets from the latest images after moving.
+Inspect all four current views; they already cover front, back, left and right. `look` turns the robot when a different physical orientation is useful. Reselect targets from the latest images after moving. Pixels on mirrors or screens select that surface, not depicted objects; move to a direct view of a reflected object before targeting it.
 
 For `navigate_to`, a visible floor pixel requests that floor location, with bounded projection if occupied and no viewing standoff. An elevated object pixel requests a nearby approach position. Select floor beyond a visible opening for travel through it. A point near your feet may produce no movement; a point beside a small object can put it below the cameras. The executor follows the pixel, not a named destination.
 
