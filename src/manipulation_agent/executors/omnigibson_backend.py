@@ -227,6 +227,9 @@ class OmniGibsonBackend:
             from .compat.inside_fabric import install_inside_sampling_fabric_sync
             write_json(output/'inside_sampling_fabric_sync.json',
                        install_inside_sampling_fabric_sync())
+            from .compat.attachment_break import install_attachment_break_deferral
+            write_json(output/'attachment_break_compatibility.json',
+                       install_attachment_break_deferral())
             from .compat.contact_manifold_capacity import install_contact_manifold_capacity
             write_json(output/'contact_manifold_capacity.json', install_contact_manifold_capacity())
             from .compat.temperature_indices import install_temperature_index_repair
