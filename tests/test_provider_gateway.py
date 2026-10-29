@@ -91,6 +91,39 @@ class ProviderGatewayTests(unittest.TestCase):
             self.assertEqual(forwarded['input'][-1], payload['input'][-1])
             self.assertEqual(forwarded['input'][0]['call_id'], payload['input'][0]['call_id'])
 
+    def test_large_image_history_is_pruned_before_body_limit(self):
+        seen = []
+
+        class Provider(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                seen.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'ok')
+
+        payload = {'input': [self.observation(1), self.observation(2)]}
+        payload['input'][0]['output'][1]['image_url'] += 'a' * 8192
+        with patch('manipulation_agent.provider_gateway.MAX_FORWARDED_BYTES', 4096):
+            with serving(ThreadingHTTPServer(('127.0.0.1', 0), Provider)) as upstream:
+                with serving(make_server(('127.0.0.1', 0), upstream, 1, keep_latest_image_items=1)) as local:
+                    for path in ('/responses', '/responses/compact'):
+                        with urlopen(Request(local + path, json.dumps(payload).encode()), timeout=5) as result:
+                            self.assertEqual(result.read(), b'ok')
+                    # Text is never discarded to make an oversized request fit.
+                    oversized_text = {'input': [{'role': 'user', 'content': 'x' * 8192}]}
+                    with self.assertRaises(HTTPError) as raised:
+                        urlopen(Request(local + '/responses', json.dumps(oversized_text).encode()), timeout=5)
+                    raised.exception.close()
+                    self.assertEqual(raised.exception.code, 413)
+        self.assertEqual(len(seen), 2)
+        for forwarded in seen:
+            self.assertEqual(forwarded['input'][-1], payload['input'][-1])
+            self.assertEqual(forwarded['input'][0]['output'][0], payload['input'][0]['output'][0])
+            self.assertEqual(count_images(forwarded), 4)
+
     def test_concurrency_waits_and_retries_without_changing_request_or_stream(self):
         lock = threading.Lock()
         state = dict(active=0, peak=0, calls={}, seen=[])

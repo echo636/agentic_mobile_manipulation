@@ -18,6 +18,7 @@ from .agent.image_pruning import prune_stale_images
 
 HOP_HEADERS = {'host', 'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
                'te', 'trailer', 'transfer-encoding', 'upgrade', 'content-length'}
+MAX_FORWARDED_BYTES = 128 * 1024 * 1024
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -118,7 +119,9 @@ def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None, max
                 self.send_error(411)
                 return
             length = int(self.headers['Content-Length'])
-            if not 0 <= length <= 128 * 1024 * 1024:
+            # The local client retains old images even when the provider does
+            # not. Apply the provider-body limit after pruning that history.
+            if length < 0 or (not keep_latest_image_items and length > MAX_FORWARDED_BYTES):
                 self.send_error(413)
                 return
             body = self.rfile.read(length)
@@ -135,6 +138,9 @@ def make_server(address, upstream, capacity, *, retry_base=2., ca_file=None, max
                     image_stats = prune_stale_images(payload, keep_latest_image_items)
                     if image_stats['dropped_images']:
                         body = json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode()
+            if len(body) > MAX_FORWARDED_BYTES:
+                self.send_error(413)
+                return
             headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP_HEADERS}
             request = Request(upstream.rstrip('/') + self.path, body, headers, method='POST')
             # Local instrumentation may read these counts; they are not HTTP headers.
