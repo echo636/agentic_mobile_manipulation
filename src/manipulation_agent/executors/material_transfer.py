@@ -151,6 +151,47 @@ def free_surface_positions(scene, destination, system, limit, *, diagnostics):
 
 
 class CheckedMaterialTransfer:
+    def _volume_pour_pose(self, obj, destination, contents):
+        """Find free release space above the cavity without moving the scene.
+
+        Native Inside.set_value rejection sampling rewinds the entire scene,
+        including particles, for each trial. Pouring only needs one release
+        pose; gravity determines whether the receiver retains the object.
+        """
+        from omnigibson.object_states import ContainedParticles
+        from .inside_sampling import volume_center_domains
+        torch = self.torch
+        volume = destination.states[ContainedParticles].link
+        low, high = volume.visual_aabb
+        position, orientation = obj.get_position_orientation()
+        assembly = [obj, *[child for child, _ in contents]]
+        vertices = torch.cat([torch.as_tensor(self._collision_vertices(child),
+            dtype=position.dtype, device=position.device) for child in assembly])
+        bottom, top = vertices.amin(0), vertices.amax(0)
+        extent, offset = top-bottom, (top+bottom)/2-position
+        overlap = self._inside_overlap_ranker(assembly)
+        # Inset XY proposals prefer an envelope over the opening. Full-volume
+        # proposals also admit long/thin shapes; containment is checked after
+        # free settling, not inferred from conservative bounding boxes.
+        mid = float((low[2]+high[2])/2)
+        domains = volume_center_domains([*low[:2].tolist(), mid],
+            [*high[:2].tolist(), mid], [*extent[:2].tolist(), 0.])
+        clearance = .002 + .5 * 9.81 * self.og.sim.get_physics_dt()**2
+        for domain, centers in domains:
+            for center in centers:
+                self.deadline.check()
+                center = position.new_tensor(center)
+                if not bool(volume.check_points_in_volume(center.unsqueeze(0))[0]):
+                    continue
+                center[2] = high[2] + extent[2]/2 + clearance
+                if overlap(center.tolist(), extent.tolist()):
+                    continue
+                self._placement_record({'status': 'rigid_volume_pour_release',
+                    'object': obj.name, 'destination': destination.name,
+                    'domain': domain, 'release_center': center.tolist()})
+                return center-offset, orientation
+        return None
+
     def _pour_objects(self, source):
         """Pour loose stacked items separately; nested vessels keep contents."""
         from omnigibson.object_states import ContainedParticles, Inside, OnTop, AttachedTo
@@ -202,20 +243,31 @@ class CheckedMaterialTransfer:
                     break
                 obj.set_position_orientation(*candidates[0]['pose'])
                 obj.keep_still()
-            elif not obj.states[relation].set_value(destination, True):
-                break
+            else:
+                pose = self._volume_pour_pose(obj, destination, contents)
+                if pose is None:
+                    break
+                obj.set_position_orientation(*pose)
+                obj.keep_still()
             self._relocate_contents(obj, contents)
             relocate_particles(self.env.scene, particles)
             moved.append(obj)
+            # This is a committed transfer, so use ordinary environment steps:
+            # native state transitions, contacts and video must all advance.
+            for _ in range(min(max_steps, max(1, round(.5 / self.og.sim.get_sim_step_dt())))):
+                self._step(self.primitives._empty_action())
+            retained = (self.env.scene.object_registry('name', obj.name) is obj and
+                        bool(obj.states[relation].get_value(destination)))
             if relation is OnTop:
-                for _ in range(max(1, round(.5 / self.og.sim.get_physics_dt()))):
-                    self._placement_physics_step()
-                retained = bool(obj.states[OnTop].get_value(destination))
                 self._placement_record({'status': 'rigid_surface_pour_settled',
                     'object': obj.name, 'destination': destination.name,
                     'candidate': candidates[0]['index'], 'official_on_top': retained})
-                if not retained:
-                    break
+            else:
+                self._placement_record({'status': 'rigid_volume_pour_settled',
+                    'object': obj.name, 'destination': destination.name,
+                    'official_inside': retained})
+            if not retained:
+                break
         if not moved:
             raise SkillError('sampling_error', 'The receiver could not accept a loose object', changed=True)
         for _ in range(min(6, max_steps)):
