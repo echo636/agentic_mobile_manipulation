@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "source_pr": "https://github.com/echo636/agentic_mobile_manipulation/pull/6",
+  "source_commit": "bbe9b5f230cae81c58bc945ccb15aaaf4c01a206",
+  "source_runtime": "reproductions/local_experiments_20261029/runtimes/local_development",
+  "scope": "Declarative definitions only; source scene assets and runtime are referenced, not installed.",
+  "files": [
+    {
+      "path": "task_designs/imported/yujie/prepare_and_serve_hot_drink/instruction.txt",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/instruction.txt",
+      "sha256": "ff7f8bf8affb6c27fdf0d5cd95697c7b3177238d0bdb47effcd1bb5cdc06a8f6",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/instruction.txt"
+    },
+    {
+      "path": "task_designs/imported/yujie/prepare_and_serve_hot_drink/high_level_visual.bddl",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/high_level_visual.bddl",
+      "sha256": "4be5469c5eff25f59504c90c4d78d04312057353ae35a0bf007012c2d0a9b915",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/high_level_visual.bddl"
+    },
+    {
+      "path": "task_designs/imported/yujie/prepare_and_serve_hot_drink/partial_order.json",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/partial_order.json",
+      "sha256": "69ca5f994b9ffec7885e7d0d5366910bd440e99dff60f557aeddab8080366176",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/partial_order.json"
+    },
+    {
+      "path": "task_designs/imported/yujie/prepare_and_serve_hot_drink/scene_layout.json",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/scene_layout.json",
+      "sha256": "ac05367a1780e68a546bfdf3ee56238e59e973bd8cb24a0f55d72049f5690f9a",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/scene_layout.json"
+    },
+    {
+      "path": "task_designs/imported/yujie/carry_in_and_put_away_groceries/v2_design/instruction.txt",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/instruction.txt",
+      "sha256": "596258ee4710a4fe9c07c36e7895715cef0f4a7f13f0510ad16d52e4dc81b947",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/instruction.txt"
+    },
+    {
+      "path": "task_designs/imported/yujie/carry_in_and_put_away_groceries/v2_design/problem0.bddl",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/problem0.bddl",
+      "sha256": "b38c56b63e8df759072e2736d1471e051b0d7392c1f744743d3d7757c3348da1",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/problem0.bddl"
+    },
+    {
+      "path": "task_designs/imported/yujie/carry_in_and_put_away_groceries/v2_design/evaluation_split.json",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/evaluation_split.json",
+      "sha256": "3e83ca64f909080c1fd43334d082524e690a6b6a7229a99afa9abd4d3c052b56",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/evaluation_split.json"
+    }
+  ],
+  "external_support": [
+    {
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/README.md",
+      "sha256": "057e6b10bc389cd46a70cccdd028be6e999081637f7d0f14346579ef3c5b93c0",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/README.md"
+    },
+    {
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/scene/house_single_floor/json/house_single_floor_task_prepare_and_serve_hot_drink_0_0_template.json",
+      "sha256": "94870bb3ad4596a99b736305c583609fab4016189bb60b633c9c6f050a819519",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/scene/house_single_floor/json/house_single_floor_task_prepare_and_serve_hot_drink_0_0_template.json"
+    },
+    {
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/scene/house_single_floor/json/house_single_floor_task_prepare_and_serve_hot_drink_instances/house_single_floor_task_prepare_and_serve_hot_drink_0_301_template-tro_state.json",
+      "sha256": "0c3c89338f65d78d84b9de3f8840b5bb7f00aa568cdab2a70bc451deb69667d7",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/scene/house_single_floor/json/house_single_floor_task_prepare_and_serve_hot_drink_instances/house_single_floor_task_prepare_and_serve_hot_drink_0_301_template-tro_state.json"
+    },
+    {
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/build_scene_overlay.py",
+      "sha256": "0e4af03012cc29ce1fa203c1d947f5842e2bad45dbeae7b1e1fc1163f4843d77",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/build_scene_overlay.py"
+    },
+    {
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/benchmark_card.md",
+      "sha256": "3cf024760d89b5010b0dde3b21a471bcde770817e45c27a1da11c29c78e8c6c5",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/benchmark_card.md"
+    },
+    {
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/README.md",
+      "sha256": "8143a2fa2c290cf18f9fcd05971b2524a9a1e746443f5ebacf122ff0729b2d29",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/README.md"
+    }
+  ],
+  "recorded_evidence": {
+    "source_path": "reproductions/local_experiments_20261029/recorded_metadata.json",
+    "sha256": "ee879d469b300476c023ea79b46f77bec5fea9250ada572f8c59353b43440f12",
+    "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/recorded_metadata.json"
+  }
+}

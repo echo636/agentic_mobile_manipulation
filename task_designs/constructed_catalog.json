@@ -1,0 +1,358 @@
+{
+  "schema_version": 1,
+  "kind": "constructed_custom_task_catalog",
+  "as_of": "2026-10-30",
+  "scope": "Only authored tasks with constructed simulator scenes; unchanged BEHAVIOR tasks and unbuilt designs are excluded.",
+  "counting_unit": "distinct task contract; historical versions and duplicate runtime snapshots are not extra tasks",
+  "path_roots": {
+    "definition": "repository",
+    "built_instance": "shared_workspace",
+    "evidence": "shared_workspace"
+  },
+  "official_submission_eligible": false,
+  "construction_is_not_autonomous_success": true,
+  "tasks": [
+    {
+      "id": "kitchen_reopen_meal_and_cold_storage_v2",
+      "name_zh": "厨房启用、双人备餐与留餐冷藏",
+      "origin": "long_horizon_branch",
+      "collection": "current_complex",
+      "construction_status": "built",
+      "definition": "task_designs/complete_v2/kitchen_reopen_meal_and_cold_storage_v2.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "preparing_lunch_box",
+      "built_instance": {
+        "spec": "operations/long_horizon_full_v2_20261022/autonomous_r248/inputs/0.json",
+        "spec_sha256": "d0159512a424e63899c0cd9d8282cd0550fb3658d4b02c69f17d219ab0dd54f9",
+        "scene": "operations/long_horizon_full_v2_20261022/runs/build_kitchen_r54/initial_scene.json",
+        "scene_sha256": "9b1bb2e6f561831283ea52b13f9f4adcff4a1a74e308882d6a153ccf4b157e1e",
+        "instance_id": "kitchen_reopen_meal_and_cold_storage_v2_seed0_r1"
+      },
+      "evidence": [
+        "operations/long_horizon_full_v2_20261022/autonomous_custom_r510/manifest.json"
+      ],
+      "note_zh": "已构建冻结场景并进行完整自主实验；此清单不汇报实时进度或宣称任务成功。"
+    },
+    {
+      "id": "workshop_build_process_and_handover_v2",
+      "name_zh": "工作间家具装配、备柴与物资交接",
+      "origin": "long_horizon_branch",
+      "collection": "current_complex",
+      "construction_status": "built",
+      "definition": "task_designs/complete_v2/workshop_build_process_and_handover_v2.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "outfit_a_basic_toolbox",
+      "built_instance": {
+        "spec": "operations/long_horizon_full_v2_20261022/autonomous_r248/inputs/1.json",
+        "spec_sha256": "635afbaf071db2884caef99bfe31575b5c383a3a4d7080047bdbdffe350f63b6",
+        "scene": "operations/long_horizon_full_v2_20261022/runs/build_workshop_r61/initial_scene.json",
+        "scene_sha256": "517aed3f96246a5252e7b1b574362c924cf1e65f734336c06f53cbe4467528c9",
+        "instance_id": "workshop_build_process_and_handover_v2_seed0_r1"
+      },
+      "evidence": [
+        "operations/long_horizon_full_v2_20261022/autonomous_custom_r510/manifest.json"
+      ],
+      "note_zh": "已构建冻结场景并进行完整自主实验；此清单不汇报实时进度或宣称任务成功。"
+    },
+    {
+      "id": "garden_maintenance_and_guest_setup_v2",
+      "name_zh": "庭院维护、设施装配与双人休息区布置",
+      "origin": "long_horizon_branch",
+      "collection": "current_complex",
+      "construction_status": "built",
+      "definition": "task_designs/complete_v2/garden_maintenance_and_guest_setup_v2.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "spraying_for_bugs",
+      "built_instance": {
+        "spec": "operations/long_horizon_full_v2_20261022/autonomous_r248/inputs/2.json",
+        "spec_sha256": "78a954c63fadc1bc27917766ff0e4e324b5c06a799bd64271dfe02ab9ed922c5",
+        "scene": "operations/long_horizon_full_v2_20261022/runs/build_garden_r66/initial_scene.json",
+        "scene_sha256": "809863d0e1ddb24f271a66394725df4de633939fece64e496dd9964a30228652",
+        "instance_id": "garden_maintenance_and_guest_setup_v2_seed0_r1"
+      },
+      "evidence": [
+        "operations/long_horizon_full_v2_20261022/autonomous_custom_r510/manifest.json"
+      ],
+      "note_zh": "已构建冻结场景并进行完整自主实验；此清单不汇报实时进度或宣称任务成功。"
+    },
+    {
+      "id": "study_guest_room_and_laundry_v2",
+      "name_zh": "书房维护、洗烘与客房入住准备",
+      "origin": "long_horizon_branch",
+      "collection": "current_complex",
+      "construction_status": "built",
+      "definition": "task_designs/complete_v2/study_guest_room_and_laundry_v2.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "clean_up_your_desk",
+      "built_instance": {
+        "spec": "operations/long_horizon_full_v2_20261022/autonomous_r248/inputs/3.json",
+        "spec_sha256": "c0e20f323a0812bfb1c4ccff0727712536dedcd63b62a9b400a898f30a30d52b",
+        "scene": "operations/long_horizon_full_v2_20261022/runs/build_study_r65/initial_scene.json",
+        "scene_sha256": "8b3cc8531ada05dddfcde4df1c2830378d1121d621b460cef259eec67e600625",
+        "instance_id": "study_guest_room_and_laundry_v2_seed0_r1"
+      },
+      "evidence": [
+        "operations/long_horizon_full_v2_20261022/autonomous_recovery_r519/manifest.json"
+      ],
+      "note_zh": "已构建冻结场景并进行完整自主实验；此清单不汇报实时进度或宣称任务成功。"
+    },
+    {
+      "id": "garden_treatment_and_distribution_100_v1",
+      "name_zh": "庭院盆栽处理与分区布置",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/constructed_100plus/garden_treatment_and_distribution_100_v1.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "spraying_for_bugs",
+      "built_instance": {
+        "spec": "operations/long_horizon_build_20261020/runs/build_garden_r5/task.json",
+        "spec_sha256": "e69e0bb3c461910078986470358497dd8564f09c8050e79359c9d58d95f3e329",
+        "scene": "operations/long_horizon_build_20261020/runs/build_garden_r5/initial_scene.json",
+        "scene_sha256": "1fb79fa8af95831d577c1775195b61b1920c8292c547f24cb70a996d2ab1bb7e",
+        "instance_id": "garden_treatment_and_distribution_100_v1_seed0_r5"
+      },
+      "evidence": [
+        "operations/long_horizon_build_20261020/frozen_tasks.json",
+        "operations/long_horizon_build_20261020/runs/build_garden_r5/validation.json"
+      ],
+      "note_zh": "已构建并核对初态；历史版本，当前不作为主要调试任务。"
+    },
+    {
+      "id": "hotel_shoe_care_and_pairing_100_v1",
+      "name_zh": "酒店鞋履除尘、配对与归位",
+      "origin": "long_horizon_branch",
+      "collection": "retained_baseline",
+      "construction_status": "built",
+      "definition": "task_designs/constructed_100plus/hotel_shoe_care_and_pairing_100_v1.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "polishing_shoes",
+      "built_instance": {
+        "spec": "operations/long_horizon_build_20261020/runs/build_hotel_r6/task.json",
+        "spec_sha256": "8eda2bf829d566c34c758185924b529b46d3764cec3e9d31e1f71a58c377fe9c",
+        "scene": "operations/long_horizon_build_20261020/runs/build_hotel_r6/initial_scene.json",
+        "scene_sha256": "285273b216eae0cac005135735c4e13145950f5a1e8340bba9fc828130613f46",
+        "instance_id": "hotel_shoe_care_and_pairing_100_v1_seed0_r6"
+      },
+      "evidence": [
+        "operations/long_horizon_build_20261020/frozen_tasks.json",
+        "operations/long_horizon_build_20261020/runs/build_hotel_r6/validation.json"
+      ],
+      "note_zh": "已构建并核对初态；保留的重复搬运基线。"
+    },
+    {
+      "id": "bedroom_vacuum_reset_close_102_v1",
+      "name_zh": "双卧室腾空吸尘、归位与夜间闭场",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/constructed_100plus/bedroom_vacuum_reset_close_102_v1.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "vacuuming_floors",
+      "built_instance": {
+        "spec": "operations/long_horizon_build_20261020/runs/build_bedroom_r5/task.json",
+        "spec_sha256": "5e896ab91ab7bb6a55efc6fafe48fdb851a16d6a0fe693ae907955aeb97f882a",
+        "scene": "operations/long_horizon_build_20261020/runs/build_bedroom_r5/initial_scene.json",
+        "scene_sha256": "820866d5f952ee243041b2ce87ca25bc1a68235ae176baa11fbf569ce3516dcb",
+        "instance_id": "bedroom_vacuum_reset_close_102_v1_seed0_r5"
+      },
+      "evidence": [
+        "operations/long_horizon_build_20261020/frozen_tasks.json",
+        "operations/long_horizon_build_20261020/runs/build_bedroom_r5/validation.json"
+      ],
+      "note_zh": "已构建并核对初态；历史版本，当前不作为主要调试任务。"
+    },
+    {
+      "id": "garage_cut_sort_store_113_v1",
+      "name_zh": "车库与庭院劈木、产物归置及扫地",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/constructed_100plus/garage_cut_sort_store_113_v1.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "chopping_wood",
+      "built_instance": {
+        "spec": "operations/long_horizon_build_20261020/runs/build_garage_r5/task.json",
+        "spec_sha256": "95143c464c2155216c50986bcce1f47303595d7c02e54cb8c7004230616f44f9",
+        "scene": "operations/long_horizon_build_20261020/runs/build_garage_r5/initial_scene.json",
+        "scene_sha256": "704b62c82d43317ff3018341047ec8ae62ff71d3c3f1342f584f09273c023f83",
+        "instance_id": "garage_cut_sort_store_113_v1_seed0_r5"
+      },
+      "evidence": [
+        "operations/long_horizon_build_20261020/frozen_tasks.json",
+        "operations/long_horizon_build_20261020/runs/build_garage_r5/validation.json"
+      ],
+      "note_zh": "已构建并核对初态；历史版本，当前不作为主要调试任务。"
+    },
+    {
+      "id": "bedroom_shared_library_branching_v2",
+      "name_zh": "双卧室清洁与共用书柜整理",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/constructed_branching/bedroom_shared_library_branching_v2.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "vacuuming_floors",
+      "built_instance": {
+        "spec": "operations/long_horizon_branching_20261020/runs/build_library_r4/task.json",
+        "spec_sha256": "10594c39337193b8e2945c6f7906b1b096ca46caea0431c2aa682b2fa1408f69",
+        "scene": "operations/long_horizon_branching_20261020/runs/build_library_r4/initial_scene.json",
+        "scene_sha256": "775ca00cffa54d932f461d4b85c2bc623eb37aa7503f33cac821f70f2c6637cf",
+        "instance_id": "bedroom_shared_library_branching_v2_seed0_r4"
+      },
+      "evidence": [
+        "operations/long_horizon_branching_20261020/validation.json"
+      ],
+      "note_zh": "49 条初态检查及独立恢复通过；完整参考流程未通过。"
+    },
+    {
+      "id": "warm_lunch_and_restore_v2",
+      "name_zh": "双人热午餐配送与厨房复原",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/evaluation_v2/warm_lunch_and_restore_v2.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "preparing_lunch_box",
+      "built_instance": {
+        "spec": "operations/long_horizon_readiness_20261019/instances_r2/warm_lunch_and_restore_v2/task.json",
+        "spec_sha256": "c1821479ff2197fa54b7329718ed4f88b47fc6703874d7365789e980953dd81a",
+        "scene": "operations/long_horizon_execution_20261015/custom_pilot/instances/warm_lunch_and_restore_v1/initial_scene.json",
+        "scene_sha256": "5443f0651fa9364f7ffc183077d6ba664fe1dbbf677593dfb2830d28bdc393ec",
+        "instance_id": "pilot_001"
+      },
+      "evidence": [
+        "operations/long_horizon_readiness_20261019/manifest_r2.json",
+        "operations/long_horizon_repair_20261020/current_progress.json"
+      ],
+      "note_zh": "早期已构建任务；v1/v2 在清单中合计一项。后续配方变更不自动继承旧版本物理验证。",
+      "historical_versions_not_counted_separately": [
+        "warm_lunch_and_restore_v1"
+      ]
+    },
+    {
+      "id": "movie_night_and_restore_v2",
+      "name_zh": "观影准备与客厅复原",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/evaluation_v2/movie_night_and_restore_v2.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "make_microwave_popcorn",
+      "built_instance": {
+        "spec": "operations/long_horizon_readiness_20261019/instances_r2/movie_night_and_restore_v2/task.json",
+        "spec_sha256": "6f820b22bdd37041be23a24189640a29018c9a37a134a5ecbd2869e14328f9db",
+        "scene": "operations/long_horizon_execution_20261015/custom_pilot/instances/movie_night_and_restore_v1/initial_scene.json",
+        "scene_sha256": "8785f94e31d828645991cfe77e3d862c0b687a73f35a79efbcbaf3a3c4e79f66",
+        "instance_id": "pilot_001"
+      },
+      "evidence": [
+        "operations/long_horizon_readiness_20261019/manifest_r2.json",
+        "operations/long_horizon_repair_20261020/current_progress.json"
+      ],
+      "note_zh": "早期已构建任务；v1/v2 在清单中合计一项。后续配方变更不自动继承旧版本物理验证。",
+      "historical_versions_not_counted_separately": [
+        "movie_night_and_restore_v1"
+      ]
+    },
+    {
+      "id": "workshop_setup_and_return_v2",
+      "name_zh": "工具箱整套配送、卸载与空箱归还",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/evaluation_v2/workshop_setup_and_return_v2.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "outfit_a_basic_toolbox",
+      "built_instance": {
+        "spec": "operations/long_horizon_readiness_20261019/instances_r2/workshop_setup_and_return_v2/task.json",
+        "spec_sha256": "5391404cd5331ff299db7e078d6be1bd182fada795cd38b69a7fa5dd6faa11de",
+        "scene": "operations/long_horizon_execution_20261015/custom_pilot/instances/workshop_setup_and_return_v1/initial_scene.json",
+        "scene_sha256": "a88e268a8e1ce20baf1348f911be1734b561260213ddb31678a329ceeef94140",
+        "instance_id": "pilot_001"
+      },
+      "evidence": [
+        "operations/long_horizon_readiness_20261019/manifest_r2.json",
+        "operations/long_horizon_repair_20261020/current_progress.json"
+      ],
+      "note_zh": "早期已构建任务；v1/v2 在清单中合计一项。后续配方变更不自动继承旧版本物理验证。",
+      "historical_versions_not_counted_separately": [
+        "workshop_setup_and_return_v1"
+      ]
+    },
+    {
+      "id": "kitchen_service_and_reset_v1",
+      "name_zh": "双人整盒送餐、分餐与空盒归还",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/candidates/kitchen_service_and_reset_v1.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "preparing_lunch_box",
+      "built_instance": {
+        "spec": "operations/long_horizon_candidates_20261020/instances/kitchen_service_and_reset_v1/task.json",
+        "spec_sha256": "36bc12c0cbb1bdfab065f0dd8df57394d133e4a28011c7a0276e7ed0a8729862",
+        "scene": "operations/long_horizon_execution_20261015/custom_pilot/instances/warm_lunch_and_restore_v1/initial_scene.json",
+        "scene_sha256": "5443f0651fa9364f7ffc183077d6ba664fe1dbbf677593dfb2830d28bdc393ec",
+        "instance_id": "pilot_001"
+      },
+      "evidence": [
+        "operations/long_horizon_repair_20261020/r8/runs/kitchen_service_and_reset_v1_cleanup_first_r8/validation.json"
+      ],
+      "note_zh": "复用早期已构建场景、采用独立目标，并已进入真实参考执行；计为不同任务，不计为新场景。"
+    },
+    {
+      "id": "workshop_inventory_roundtrip_v1",
+      "name_zh": "工具箱往返配送与完整盘点",
+      "origin": "long_horizon_branch",
+      "collection": "historical_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/candidates/workshop_inventory_roundtrip_v1.json",
+      "evaluation_protocol": "custom_state_and_history",
+      "base_task": "outfit_a_basic_toolbox",
+      "built_instance": {
+        "spec": "operations/long_horizon_candidates_20261020/instances/workshop_inventory_roundtrip_v1/task.json",
+        "spec_sha256": "e7af55c112f27ee1761928aa2ddd0da7302a0cb9469e163fb06d6e5b9d80f823",
+        "scene": "operations/long_horizon_execution_20261015/custom_pilot/instances/workshop_setup_and_return_v1/initial_scene.json",
+        "scene_sha256": "a88e268a8e1ce20baf1348f911be1734b561260213ddb31678a329ceeef94140",
+        "instance_id": "pilot_001"
+      },
+      "evidence": [
+        "operations/long_horizon_repair_20261020/inventory_first_order_r19_validation.json"
+      ],
+      "note_zh": "复用早期已构建场景、采用独立目标，并已进入真实参考执行；计为不同任务，不计为新场景。"
+    },
+    {
+      "id": "prepare_and_serve_hot_drink",
+      "name_zh": "准备并端上热饮与点心",
+      "origin": "yujie_pr6",
+      "collection": "imported_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/imported/yujie/prepare_and_serve_hot_drink/high_level_visual.bddl",
+      "evaluation_protocol": "custom_high_level_hot_drink",
+      "current_runner_integration": "pending",
+      "provenance": "task_designs/imported/yujie/provenance.json",
+      "evidence": [
+        "operations/yujie_pr6_review_20261030/PORTING_PLAN.md"
+      ],
+      "historical_run": "hot_drink_lh_repaired_pair_20261026",
+      "note_zh": "已有构建场景和视觉自主回合；历史结果按高层热饮状态机评分，不能当作原生水粒子/加热成功。当前执行器接入尚未完成。"
+    },
+    {
+      "id": "carry_in_and_put_away_groceries",
+      "name_zh": "两袋杂货搬入、分类收纳与关门",
+      "origin": "yujie_pr6",
+      "collection": "imported_constructed",
+      "construction_status": "built",
+      "definition": "task_designs/imported/yujie/carry_in_and_put_away_groceries/v2_design/problem0.bddl",
+      "evaluation_protocol": "custom_native_bddl",
+      "current_runner_integration": "pending",
+      "provenance": "task_designs/imported/yujie/provenance.json",
+      "evidence": [
+        "operations/yujie_pr6_review_20261030/PORTING_PLAN.md"
+      ],
+      "historical_run": "groceries_v2_robust_gpt61sol_low_20261021_r1",
+      "note_zh": "已有双袋六件食品场景；历史 sol/low 回合 105 次 act/look、原生自定义 BDDL 12/12。当前执行器接入尚未完成，历史成绩不是当前源码复测。"
+    }
+  ]
+}

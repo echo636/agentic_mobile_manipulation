@@ -9,6 +9,8 @@ runtime, executor, task, skill and reporting code. See
 [task cards and the readiness protocol](docs/custom_long_horizon.md) for custom
 long-horizon tasks and their versioned public/scoring contracts. Recipes,
 scripted references and CPU tests alone do not establish autonomous task success.
+The [constructed custom-task catalog](task_designs/README.md) lists only tasks
+with built scenes, including the two constructed tasks from yujie's PR #6.
 
 ## Observation: four fixed cameras
 
