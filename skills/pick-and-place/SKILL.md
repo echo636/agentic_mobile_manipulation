@@ -11,6 +11,8 @@ description: Prepare access, grasp the intended item, and place or attach it to 
 
 For several items sharing a route, compare individual trips with loading a tray, board or container at the source. Grasping that carrier transports its supported contents together. Use `pour` to unload loose objects into a common vessel or onto a work surface while keeping the carrier in hand. Loose material can also be poured onto a receiving surface; distinct final placements still need distribution. Batch only when the saved travel outweighs loading, unloading and carrier handling, and keep the load stable and identifiable.
 
+Stage items where they remain visible and reachable after the next door movement, outside its swing. Place loaded carriers where their openings and contents can be inspected; if a door hides a staged item, change its staging position before reopening the door.
+
 | Action | Select in current RGB |
 |---|---|
 | `place_inside` | Container body or open interior, clear of the held item and floor |
