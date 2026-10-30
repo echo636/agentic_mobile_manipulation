@@ -5,6 +5,8 @@ import queue
 import tempfile
 import threading
 import os
+import subprocess
+import sys
 from datetime import datetime, timezone
 from types import SimpleNamespace
 import unittest
@@ -96,6 +98,23 @@ class WorkerTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):batch.controller_process_alive(os.getpid(),'/not-this-controller')
         c=self.config();c['workers'][0].update(memory_budget_gib=14,simulator_memory_max='28G')
         with self.assertRaises(ValueError):batch.worker_configs(c)
+
+    def test_handoff_recognizes_recorded_recovery_wrapper(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)
+            process=subprocess.Popen([sys.executable,'-c','import sys; sys.stdin.read()',
+                                      '--output',str(output)],stdin=subprocess.PIPE)
+            try:
+                metadata=output/'controller.json'
+                metadata.write_text(json.dumps({'reboot_recovery':{'wrapper_pid':process.pid}}))
+                self.assertTrue(batch.controller_process_alive(process.pid,output))
+                with self.assertRaises(RuntimeError):
+                    batch.controller_process_alive(process.pid,output/'other')
+                metadata.write_text(json.dumps({'reboot_recovery':{'wrapper_pid':process.pid+1}}))
+                with self.assertRaises(RuntimeError):
+                    batch.controller_process_alive(process.pid,output)
+            finally:
+                process.communicate(timeout=5)
 
     def test_initializing_handoff_preserves_source_and_deadline(self):
         with tempfile.TemporaryDirectory() as d:

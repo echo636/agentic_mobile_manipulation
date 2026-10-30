@@ -171,10 +171,17 @@ def controller_process_alive(pid, output):
         args=(proc/'cmdline').read_bytes().decode().split('\0')
     except FileNotFoundError:
         return False
-    if not any(x.endswith('/scripts/run_codex_controller.py') for x in args):
-        raise RuntimeError('Controller PID reused by another process')
     if '--output' not in args or args[args.index('--output')+1]!=str(output):
         raise RuntimeError('Controller output ownership mismatch')
+    if not any(x.endswith('/scripts/run_codex_controller.py') for x in args):
+        # Reboot recovery resumes the original model session through its own
+        # wrapper. Its recorded PID and output identify that same controller.
+        try:
+            recovery=json.loads((Path(output)/'controller.json').read_text()).get('reboot_recovery',{})
+        except (OSError,ValueError):
+            recovery={}
+        if recovery.get('wrapper_pid')!=pid:
+            raise RuntimeError('Controller PID reused by another process')
     return True
 
 
