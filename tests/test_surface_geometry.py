@@ -69,6 +69,29 @@ class SelectedSurfaceGeometry(unittest.TestCase):
         self.np.testing.assert_allclose(rotated, local, atol=1e-7)
         self.assertAlmostEqual(float(anchor[2]), -.02)
 
+    def test_native_bowl_resting_pose_corrects_recorded_sideways_tilt(self):
+        from scipy.spatial.transform import Rotation
+        from manipulation_agent.executors.surface_geometry import native_resting_orientation
+        # R502's frozen bowl starts on its side. Merely rotating about world Z
+        # preserves that tilt and lets peas roll out after placement.
+        current = self.np.array([.7035646439, -.0719344616, -.4848582447, .5145237446])
+        original = Rotation.from_quat(current)
+        quaternion, delta = native_resting_orientation(current, [])
+        result = Rotation.from_quat(quaternion)
+        self.np.testing.assert_allclose(result.apply([0., 0., 1.]), [0., 0., 1.], atol=1e-7)
+        self.np.testing.assert_allclose(delta @ original.as_matrix(), result.as_matrix(), atol=1e-7)
+        # The proposed root offset must use the reoriented real geometry.
+        local = self.box_points([-.07, -.07, -.03], [.07, .07, .03])
+        origin = self.np.array([7.6681, -1.9802, .5477])
+        vertices = original.apply(local) + origin
+        upright = (vertices-origin) @ delta.T + origin
+        relative, anchor = self.rotated_surface_geometry(upright, origin, 90.)
+        self.assertAlmostEqual(float(self.np.ptp(relative[:, 2])), .06)
+        self.assertAlmostEqual(float(anchor[2]), -.03)
+        # Already upright native poses remain unchanged.
+        same, _ = native_resting_orientation(quaternion, [])
+        self.assertAlmostEqual(abs(float(self.np.dot(same, quaternion))), 1.)
+
     def test_curved_log_can_rest_on_narrow_bottom_contact(self):
         # The support strip is narrow; empty corners of its box need not hit.
         angles = self.np.arange(0., 2*self.np.pi, self.np.pi/8)

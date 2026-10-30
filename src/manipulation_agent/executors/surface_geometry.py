@@ -71,6 +71,33 @@ def rotated_surface_geometry(points_world, origin, yaw_degrees=None):
     return relative, bottom_anchor(relative)
 
 
+def native_resting_orientation(current, orientations):
+    """Use the nearest authored resting tilt while preserving world heading.
+
+    DatasetObject.sample_orientation uses identity for an empty orientation
+    table. Reuse those native poses without its random yaw. This constructs a
+    proposal only; collision, support and payload still need free settling.
+    """
+    import numpy as np
+    from scipy.spatial.transform import Rotation
+    current = Rotation.from_quat(current)
+    poses = [entry['rotation'] for entry in orientations.values()
+             if entry['prob'] > 0] if orientations else [[0., 0., 0., 1.]]
+    candidates = []
+    for pose in poses:
+        stable = Rotation.from_quat(pose)
+        old_axes, new_axes = current.as_matrix(), stable.as_matrix()
+        # Use a shared horizontal axis even if the object's X axis is vertical.
+        axis = int(np.argmax(np.minimum(np.linalg.norm(old_axes[:2], axis=0),
+                                        np.linalg.norm(new_axes[:2], axis=0))))
+        yaw = (np.arctan2(old_axes[1, axis], old_axes[0, axis]) -
+               np.arctan2(new_axes[1, axis], new_axes[0, axis]))
+        aligned = Rotation.from_rotvec([0., 0., yaw]) * stable
+        candidates.append(aligned)
+    selected = min(candidates, key=lambda pose: (pose * current.inv()).magnitude())
+    return selected.as_quat(), (selected * current.inv()).as_matrix()
+
+
 def overlapping_surface_probes(lower_faces, support_faces, height, maximum=32):
     """Find interior witnesses of overlapping physical faces near a support plane.
 

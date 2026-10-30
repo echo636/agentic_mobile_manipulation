@@ -360,14 +360,25 @@ class CheckedPlacement:
 
         Surface rays ignore the moving assembly at its OLD pose. Space at the
         NEW pose is checked by PhysX after moving it there, not by a cuboid.
+        Fillable vessels use their authored resting tilt rather than preserving
+        a sideways pose inherited from the scene or an earlier collision.
         """
         import math
         from .surface_geometry import rotated_surface_geometry
         from omnigibson.utils.sampling_utils import raytest
         from omnigibson.utils import transform_utils as T
         position, orientation = held.get_position_orientation()
-        vertices, anchor = rotated_surface_geometry(self._collision_vertices(held),
-                                                    position.detach().cpu().numpy(), yaw_degrees)
+        origin = position.detach().cpu().numpy()
+        geometry = self._collision_vertices(held)
+        orientations = getattr(held, 'orientations', None)
+        if 'fillable' in getattr(held, 'abilities', {}) and orientations is not None:
+            from .surface_geometry import native_resting_orientation
+            quaternion, rotation = native_resting_orientation(
+                orientation.detach().cpu().numpy(), orientations)
+            geometry = (geometry-origin) @ rotation.T + origin
+            orientation = self.torch.as_tensor(quaternion, dtype=orientation.dtype,
+                                                device=orientation.device)
+        vertices, anchor = rotated_surface_geometry(geometry, origin, yaw_degrees)
         if yaw_degrees is not None:
             rotation = T.euler2quat(self.torch.tensor([0., 0., math.radians(yaw_degrees)],
                                                       device=orientation.device))
@@ -436,7 +447,7 @@ class CheckedPlacement:
         """Cover nearby diagonal positions and yaw after ordinary trials fail.
 
         The selected object, shelf and 20 cm verification neighborhood stay
-        unchanged. Loaded items rotate only around gravity; an explicit yaw
+        unchanged. Vessels retain their authored resting tilt; an explicit yaw
         remains binding. Overlap scores order proposals without rejecting any.
         """
         import math
