@@ -221,6 +221,8 @@ class OmniGibsonBackend:
             from .compat.particle_emission import install_particle_emission_clearance
             write_json(output/'particle_emission_compatibility.json',
                        install_particle_emission_clearance(output))
+            from .compat.material_conditions import install_default_saturation_names
+            write_json(output/'default_saturation_names.json', install_default_saturation_names())
             from .compat.macro_particle_pose import install_macro_particle_pose_repair
             write_json(output/'macro_particle_pose_compatibility.json',
                        install_macro_particle_pose_repair())
