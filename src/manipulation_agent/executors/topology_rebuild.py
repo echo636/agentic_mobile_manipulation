@@ -92,9 +92,11 @@ def rebuild_cut_topology(backend):
                 gm.ENABLE_TRANSITION_RULES = False
             sim.stop()
             sim.play()
+            sim.load_state(copy.deepcopy(snapshot), serialized=False)
+            # Loading scene state can render while restoring native resources.
+            # Restore all clocks after that work, including the Kit timeline.
             context._timeline.set_current_time(timeline_time)
             context._timeline.commit()
-            sim.load_state(copy.deepcopy(snapshot), serialized=False)
             context._current_time = clock
             context._number_of_steps = native_steps
         finally:
