@@ -7,6 +7,37 @@ from .heading_collision import HeadingCollisionChecker
 from .forward_navigation import local_exit_certificate, select_forward_route
 
 
+def approach_refinement_window(collision, actual, point, reach_m, check_cancelled):
+    """Keep the full-floor detour and its collision halo in a finer query.
+
+    The sampled-heading guide only chooses query bounds. A projected start or
+    guide path never authorizes motion; the finer native map checks the actual
+    start, admitted stance and complete swept route afterward.
+    """
+    margin = reach_m + .7
+    window = [min(actual[i], float(point[i]))-margin for i in (0, 1)] + [
+        max(actual[i], float(point[i]))+margin for i in (0, 1)]
+    budget = PlanningBudget(check_cancelled, seconds=3.)
+    previous_check = collision.check_cancelled
+    collision.check_cancelled = budget.check
+    try:
+        guide = collision.guidance_grid()
+        start = guide.snap(actual[:2], .75)
+        if start is None:
+            return window
+        plan = plan_navigation(guide, guide.world(start), point[:2],
+            goal_mode='point', max_snap=reach_m, check_cancelled=budget.check)
+        halo = max(math.hypot(*p) for _, points in collision.layers for p in points) + 2*guide.resolution
+        for i in (0, 1):
+            window[i] = min(window[i], min(p[i] for p in plan.points)-halo)
+            window[i+2] = max(window[i+2], max(p[i] for p in plan.points)+halo)
+    except NavigationError:
+        pass
+    finally:
+        collision.check_cancelled = previous_check
+    return window
+
+
 def refine_in_place_turn(backend, floor, grid, start, end):
     """Recheck the same full turn against finer live collision geometry.
 

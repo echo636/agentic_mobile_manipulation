@@ -1,10 +1,33 @@
 """World coordinates and floor limits for action-local map refinement."""
 import unittest
+import importlib.util
 
 import numpy as np
 
 from manipulation_agent.executors.navigation.gt_navigation import GridMap
 from manipulation_agent.executors.navigation.live_gt_map import floor_support_window, repair_floor_support
+
+
+@unittest.skipUnless(importlib.util.find_spec('cv2'), 'navigation geometry dependency')
+class ApproachWindowTests(unittest.TestCase):
+    def test_refinement_keeps_detour_around_long_obstacle_and_body_halo(self):
+        from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.navigation.navigation_refinement import approach_refinement_window
+        support = np.ones((100, 100), dtype='uint8')
+        raw = support.copy()
+        raw[:75, 47:54] = 0
+        grid = GridMap(100, 100, .1, (-5., -4.), support.tobytes())
+        footprint = np.array([[-.2,-.2], [.2,-.2], [.2,.2], [-.2,.2]])
+        check = lambda: None
+        collision = HeadingCollisionChecker(grid, [(raw, footprint)], 0., support, check_cancelled=check)
+        window = approach_refinement_window(collision, (-1.,0.,0.), (1.,0.), 1.4, check)
+        # The old y<=2.1 crop removes the only route, even after resampling.
+        # Query space must cover the detour's body, not just its base centre.
+        self.assertGreater(window[3], 4.)
+        self.assertLessEqual(window[0], -3.1 + 1e-9)
+        self.assertGreaterEqual(window[2], 3.1 - 1e-9)
+        self.assertIs(collision.check_cancelled, check)
+        self.assertTrue(np.array_equal(collision.layers[0][0], raw))
 
 
 class FloorWindowTests(unittest.TestCase):

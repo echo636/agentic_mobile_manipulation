@@ -93,6 +93,7 @@ class LocalRGBManipulation:
                                          checked_connection, route_from_poses, angle)
         from .local_stances import local_stance_proposals
         geometry=getattr(operation,'geometry',None) or self._local_geometry(operation)
+        operation.geometry=geometry
         grid,collision,details,hulls,_=geometry
         actual=self._local_pose()
         if not collision.motion_free(actual,actual):
@@ -268,11 +269,11 @@ class LocalRGBManipulation:
         if grid.resolution<=.0125:return False
         desired=max(.0125,grid.resolution/2)
         actual=self._local_pose()
-        margin=operation.limits.reach_m+.7
-        window=[min(actual[0],float(point[0]))-margin,
-                min(actual[1],float(point[1]))-margin,
-                max(actual[0],float(point[0]))+margin,
-                max(actual[1],float(point[1]))+margin]
+        if not hasattr(operation,'refinement_window'):
+            from .navigation.navigation_refinement import approach_refinement_window
+            operation.refinement_window=approach_refinement_window(
+                operation.geometry[1],actual,point,operation.limits.reach_m,operation.check)
+        window=operation.refinement_window
         def cells(resolution):
             return math.prod(math.ceil((window[i+2]-window[i])/resolution)+2 for i in (0,1))
         resolution=desired
