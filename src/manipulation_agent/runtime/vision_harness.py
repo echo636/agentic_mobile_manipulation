@@ -166,7 +166,7 @@ class VisionHarness:
             # Compatibility for archived callers; model schema explicitly carries
             # nullable action options. Original input remains in the event ledger.
             if name=='act' and isinstance(arguments,dict):
-                arguments={'placement_yaw_degrees':None,'wait_seconds':None,**arguments}
+                arguments={'placement_yaw_degrees':None,'placement_roll_degrees':None,'wait_seconds':None,**arguments}
             validate(arguments,self.catalog[name]['inputSchema'])
             if name in {'act','look'} and self.require_task_notes and not self.task_notes.state['content']:
                 raise SkillError('task_notes_required','Before acting, write your intended approach with task_notes. Choose your own note format.')

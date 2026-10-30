@@ -1349,7 +1349,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         elif primitive in {'open','close','toggle_on','toggle_off'}:
             result=self._state_action(primitive,obj,max_steps)
         elif primitive in {'place_on_top','place_inside','place_under','place_next_to'}:
-            result=self._place_state(primitive,obj,max_steps,point,kwargs.get('placement_yaw_degrees'))
+            result=self._place_state(primitive,obj,max_steps,point,kwargs.get('placement_yaw_degrees'),
+                                     roll_degrees=kwargs.get('placement_roll_degrees'))
         else:
             # Native symbolic actions own their state change and settling.
             result=self.execute(primitive,obj.name,max_steps)

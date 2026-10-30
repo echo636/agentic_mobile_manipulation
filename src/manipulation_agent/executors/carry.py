@@ -110,7 +110,7 @@ class ControlledCarry:
                 'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
                 'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
 
-    def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None):
+    def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
         """Snapshot transported material once; never pin it during settling."""
         held=self._get_held()
         contents=self._carry_contents
@@ -121,8 +121,10 @@ class ControlledCarry:
                 return self._checked_place_inside(target,max_steps,point=point)
             if primitive=='place_under':
                 return self._checked_place_under(target,max_steps)
-            method=self._checked_place_on_top if primitive=='place_on_top' else self._checked_place_next_to
-            return method(target,max_steps,point,yaw_degrees)
+            if primitive=='place_on_top':
+                return self._checked_place_on_top(target,max_steps,point,yaw_degrees,
+                                                   roll_degrees=roll_degrees)
+            return self._checked_place_next_to(target,max_steps,point,yaw_degrees)
         finally:
             self._placement_particle_payload=(None,[])
 

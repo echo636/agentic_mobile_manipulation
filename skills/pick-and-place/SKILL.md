@@ -23,7 +23,7 @@ Stage items where they remain visible and reachable after the next door movement
 
 For two items that must be beside each other, use the first item as the second's `place_next_to` reference. Their both being near other furniture is insufficient. If the reference is unreachable, navigate toward visible nearby floor and reselect its body.
 
-`placement_yaw_degrees` rotates a `place_on_top` item about vertical relative to its current orientation; use null for other actions. Preserve the requested shelf and relation when choosing an alternative pose.
+`placement_yaw_degrees` rotates a `place_on_top` or `place_next_to` item about vertical. For `place_on_top`, `placement_roll_degrees` first rotates about world X; 180 flips an upright item upside down. Use null unless changing orientation is needed. For assembly, choose a supported orientation that exposes the connection sites and leaves room for the attached parts. Preserve the requested shelf and relation; the simulator must still support the released pose.
 
 Open/close requires an empty hand. Close refrigerator and cabinet doors after the current retrieval or storage batch, before departing or doing unrelated work, unless the task requires them open. If carrying the retrieved load, stage it on a nearby stable surface, close the door, then retrieve it. Keep a door open only for the access still underway, not until a later return or task completion. You can toggle the currently held object; toggling another object requires an empty hand. Release/wait takes a null target.
 

@@ -59,8 +59,8 @@ def bottom_support_points(points, maximum=17):
     return np.asarray(probes)
 
 
-def rotated_surface_geometry(points_world, origin, yaw_degrees=None):
-    """Rotate the current shape about its root by a relative world-Z yaw.
+def rotated_surface_geometry(points_world, origin, yaw_degrees=None, roll_degrees=None):
+    """Rotate about the root by world-X roll, then world-Z yaw.
 
     Returns root-relative rotated vertices and their bottom anchor. A null yaw
     preserves the held orientation; this never expands the shape to a square.
@@ -73,6 +73,13 @@ def rotated_surface_geometry(points_world, origin, yaw_degrees=None):
     # Validate before subtraction so malformed shapes have a useful error.
     bottom_anchor(points)
     relative = points - origin
+    if roll_degrees is not None:
+        angle = np.deg2rad(float(roll_degrees))
+        if not np.isfinite(angle):
+            raise ValueError('Placement roll must be finite')
+        cosine, sine = np.cos(angle), np.sin(angle)
+        rotation = np.array([[1., 0., 0.], [0., cosine, -sine], [0., sine, cosine]])
+        relative = relative @ rotation.T
     if yaw_degrees is not None:
         angle = np.deg2rad(float(yaw_degrees))
         if not np.isfinite(angle):

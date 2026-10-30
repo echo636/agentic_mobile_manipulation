@@ -355,7 +355,8 @@ class CheckedPlacement:
             raise SkillError('invalid_geometry', 'Carried object collision geometry is not finite')
         return result
 
-    def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=(), *, offsets=None):
+    def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=(), *, offsets=None,
+                            roll_degrees=None):
         """Propose root poses at the selected collision surface, with the actual shape.
 
         Surface rays ignore the moving assembly at its OLD pose. Space at the
@@ -378,7 +379,11 @@ class CheckedPlacement:
             geometry = (geometry-origin) @ rotation.T + origin
             orientation = self.torch.as_tensor(quaternion, dtype=orientation.dtype,
                                                 device=orientation.device)
-        vertices, anchor = rotated_surface_geometry(geometry, origin, yaw_degrees)
+        vertices, anchor = rotated_surface_geometry(geometry, origin, yaw_degrees, roll_degrees)
+        if roll_degrees is not None:
+            rotation = T.euler2quat(self.torch.tensor([math.radians(roll_degrees), 0., 0.],
+                                                      device=orientation.device))
+            orientation = T.quat_multiply(rotation, orientation)
         if yaw_degrees is not None:
             rotation = T.euler2quat(self.torch.tensor([0., 0., math.radians(yaw_degrees)],
                                                       device=orientation.device))
@@ -431,7 +436,7 @@ class CheckedPlacement:
                                'bottom_anchor_offset': anchor.tolist(), 'clearance_m': clearance})
         self._placement_record({'status': 'candidates_constructed', 'method': 'selected_surface_collision_geometry',
             'target': target.name, 'held': held.name, 'selected_point': point.tolist(),
-            'yaw_degrees': yaw_degrees, 'collision_vertex_count': len(vertices),
+            'yaw_degrees': yaw_degrees, 'roll_degrees': roll_degrees, 'collision_vertex_count': len(vertices),
             'rotated_geometry_extent': (vertices.max(axis=0)-vertices.min(axis=0)).tolist(),
             'bottom_anchor_offset': anchor.tolist(), 'candidate_count': len(candidates)})
         rim_candidates = self._open_rim_candidates(held,target,point,vertices,anchor,orientation,
@@ -451,12 +456,13 @@ class CheckedPlacement:
                 projected = point.clone()
                 projected[2] = height
                 candidates = self._surface_candidates(held, target, projected,
-                    yaw_degrees, payload, offsets=offsets)
+                    yaw_degrees, payload, offsets=offsets, roll_degrees=roll_degrees)
                 for candidate in candidates:
                     candidate.update(verification_point=projected, surface_kind='single_support_plane')
         return candidates + rim_candidates
 
-    def _surface_fallback_candidates(self, held, target, point, yaw_degrees=None, payload=()):
+    def _surface_fallback_candidates(self, held, target, point, yaw_degrees=None, payload=(), *,
+                                     roll_degrees=None):
         """Cover nearby diagonal positions and yaw after ordinary trials fail.
 
         The selected object, shelf and 20 cm verification neighborhood stay
@@ -480,7 +486,8 @@ class CheckedPlacement:
             local = getattr(self, '_local_operation', None)
             if local is not None:
                 local.check()
-            for candidate in self._surface_candidates(held, target, point, angle, payload, offsets=offsets):
+            for candidate in self._surface_candidates(held, target, point, angle, payload,
+                                                       offsets=offsets, roll_degrees=roll_degrees):
                 position, orientation = candidate['pose']
                 key = tuple(round(float(v), 5) for v in (*position, *orientation))
                 if key in seen:
@@ -612,25 +619,27 @@ class CheckedPlacement:
                 'method':'selected_open_cavity_and_actual_upward_rim_collision_faces'})
         return proposals
 
-    def _surface_pose(self, held, target, point, yaw_degrees=None):
+    def _surface_pose(self, held, target, point, yaw_degrees=None, *, roll_degrees=None):
         """Compatibility pose proposal; the caller must still check physical settling."""
         from omnigibson.object_states import OnTop
         if point is None:
-            if yaw_degrees is not None:
+            if yaw_degrees is not None or roll_degrees is not None:
                 raise SkillError('sampling_error', 'A selected surface is required for oriented placement')
             return self.primitives._sample_pose_with_object_and_predicate(OnTop, held, target)
         payload = [obj for obj, _ in self._carry_contents]
-        candidates = self._surface_candidates(held, target, point, yaw_degrees, payload)
+        candidates = self._surface_candidates(held, target, point, yaw_degrees, payload,
+                                              roll_degrees=roll_degrees)
         if not candidates:
             raise SkillError('placement_surface_unavailable', 'No upward surface of the selected object near the selected point')
         return candidates[0]['pose']
 
-    def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None):
+    def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None, *, roll_degrees=None):
         held = self._get_held()
         if held is None:
             raise SkillError('empty_hand', 'No object is held')
         try:
-            check = self._try_place_on_top(held, target, max_steps, point, yaw_degrees)
+            check = self._try_place_on_top(held, target, max_steps, point, yaw_degrees,
+                                           roll_degrees=roll_degrees)
         finally:
             self.frames_revision = -1
         return {'primitive': 'place_on_top', 'implementation': 'selected_surface_collision_geometry_and_settling',
@@ -704,7 +713,7 @@ class CheckedPlacement:
         self._verify_payload(dependencies, support_target=target,
                              support_resting={key:window.report() for key,window in resting.items()})
 
-    def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None):
+    def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
         from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
         from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
         from .resting_motion import RestingMotionWindow
@@ -714,7 +723,7 @@ class CheckedPlacement:
         verification_point=point
         if point is None:
             try:
-                pose = self._surface_pose(held, target, point, yaw_degrees)
+                pose = self._surface_pose(held, target, point, yaw_degrees, roll_degrees=roll_degrees)
             except ActionPrimitiveError as exc:
                 raise SkillError('sampling_error', str(exc)) from exc
             self._carry_detach()
@@ -722,7 +731,8 @@ class CheckedPlacement:
             self._relocate_contents(held, contents)
             held.keep_still()
         else:
-            candidates = self._surface_candidates(held, target, point, yaw_degrees, payload)
+            candidates = self._surface_candidates(held, target, point, yaw_degrees, payload,
+                                                  roll_degrees=roll_degrees)
             with placement_transaction(self.og.sim, self._placement_record):
                 self._carry_detach()
                 trial_state = self.og.sim.dump_state(serialized=False)
@@ -735,7 +745,7 @@ class CheckedPlacement:
                     self.og.sim.load_state(trial_state, serialized=False)
                     start_index = 1 + max((c['index'] for c in candidates), default=-1)
                     for index, candidate in enumerate(self._surface_fallback_candidates(
-                            held, target, point, yaw_degrees, payload)):
+                            held, target, point, yaw_degrees, payload, roll_degrees=roll_degrees)):
                         candidate['index'] = start_index + index
                         yield candidate
 

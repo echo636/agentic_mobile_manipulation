@@ -69,6 +69,17 @@ class SelectedSurfaceGeometry(unittest.TestCase):
         self.np.testing.assert_allclose(rotated, local, atol=1e-7)
         self.assertAlmostEqual(float(anchor[2]), -.02)
 
+    def test_flip_uses_new_bottom_and_applies_yaw_after_roll(self):
+        from scipy.spatial.transform import Rotation
+        origin = self.np.array([7., -4., 2.])
+        local = self.box_points([.1, -.2, -.05], [.3, .1, .02])
+        rotated, anchor = self.rotated_surface_geometry(local + origin, origin, 90., 180.)
+        expected = Rotation.from_euler('xyz', [180., 0., 90.], degrees=True).apply(local)
+        self.np.testing.assert_allclose(rotated, expected, atol=1e-8)
+        self.assertAlmostEqual(float(anchor[2]), -.02)
+        landed = rotated + self.np.array([1., 2., .6]) - anchor
+        self.assertAlmostEqual(float(landed[:, 2].min()), .6)
+
     def test_native_bowl_resting_pose_corrects_recorded_sideways_tilt(self):
         from scipy.spatial.transform import Rotation
         from manipulation_agent.executors.surface_geometry import native_resting_orientation
@@ -225,10 +236,10 @@ class PlacementRejectionTransactions(unittest.TestCase):
         backend._carry_detach = lambda: None
         backend._placement_record = records.append
         backend._relocate_contents = lambda *args: None
-        backend._surface_candidates = lambda *args: [
+        backend._surface_candidates = lambda *args, **kwargs: [
             {'index': i, 'pose': ([float(i+5), 0., 1.], [0.,0.,0.,1.]), 'clearance_m': .025}
             for i in range(2)]
-        def fallback(*args):
+        def fallback(*args, **kwargs):
             # Generate alternatives from the original scene, not a failed
             # collision trial. A repeated pose must not be simulated twice.
             self.assertEqual(world, initial)
