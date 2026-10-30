@@ -3,7 +3,7 @@
   "source_pr": "https://github.com/echo636/agentic_mobile_manipulation/pull/6",
   "source_commit": "bbe9b5f230cae81c58bc945ccb15aaaf4c01a206",
   "source_runtime": "reproductions/local_experiments_20261029/runtimes/local_development",
-  "scope": "Declarative definitions only; source scene assets and runtime are referenced, not installed.",
+  "scope": "Constructed task definitions, original grocery scene builder, hot-drink registration metadata and pinned scene assets. Runtime executor and high-level evaluator are not installed.",
   "files": [
     {
       "path": "task_designs/imported/yujie/prepare_and_serve_hot_drink/instruction.txt",
@@ -46,6 +46,24 @@
       "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/evaluation_split.json",
       "sha256": "3e83ca64f909080c1fd43334d082524e690a6b6a7229a99afa9abd4d3c052b56",
       "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/evaluation_split.json"
+    },
+    {
+      "path": "task_designs/imported/yujie/carry_in_and_put_away_groceries/v2_design/build_scene_overlay.py",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/build_scene_overlay.py",
+      "sha256": "0e4af03012cc29ce1fa203c1d947f5842e2bad45dbeae7b1e1fc1163f4843d77",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/build_scene_overlay.py"
+    },
+    {
+      "path": "task_designs/imported/yujie/prepare_and_serve_hot_drink/problem0.bddl",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/problem0.bddl",
+      "sha256": "30fd46781286f62f08bff1090bd6ac09dcc69050c63e13acc150c46914162f5d",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/problem0.bddl"
+    },
+    {
+      "path": "task_designs/imported/yujie/prepare_and_serve_hot_drink/available_tasks_entry.yaml",
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/available_tasks_entry.yaml",
+      "sha256": "be358eed5e766eb89df1c00aca4021d06f43c0b91dc791fc1b8c515a78d001d2",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/available_tasks_entry.yaml"
     }
   ],
   "external_support": [
@@ -78,6 +96,11 @@
       "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/README.md",
       "sha256": "8143a2fa2c290cf18f9fcd05971b2524a9a1e746443f5ebacf122ff0729b2d29",
       "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/carry_in_and_put_away_groceries/v2_design/README.md"
+    },
+    {
+      "source_path": "reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/scene/house_single_floor/json/house_single_floor_task_prepare_and_serve_hot_drink_0_0_template-partial_rooms.json",
+      "sha256": "3dfc27f8b63c0790922b4fbf80a69113124870059e5553818dd961dc755120ba",
+      "source_url": "https://github.com/echo636/agentic_mobile_manipulation/blob/bbe9b5f230cae81c58bc945ccb15aaaf4c01a206/reproductions/local_experiments_20261029/runtimes/local_development/tasks/prepare_and_serve_hot_drink/scene/house_single_floor/json/house_single_floor_task_prepare_and_serve_hot_drink_0_0_template-partial_rooms.json"
     }
   ],
   "recorded_evidence": {

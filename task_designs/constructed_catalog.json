@@ -333,10 +333,13 @@
       "current_runner_integration": "pending",
       "provenance": "task_designs/imported/yujie/provenance.json",
       "evidence": [
-        "operations/yujie_pr6_review_20261030/PORTING_PLAN.md"
+        "operations/yujie_pr6_review_20261030/PORTING_PLAN.md",
+        "operations/custom_task_catalog_20261030/task_package_validation.json"
       ],
       "historical_run": "hot_drink_lh_repaired_pair_20261026",
-      "note_zh": "已有构建场景和视觉自主回合；历史结果按高层热饮状态机评分，不能当作原生水粒子/加热成功。当前执行器接入尚未完成。"
+      "note_zh": "已有构建场景和视觉自主回合；历史结果按高层热饮状态机评分，不能当作原生水粒子/加热成功。当前执行器接入尚未完成。",
+      "instruction_en": "task_designs/imported/yujie/prepare_and_serve_hot_drink/instruction_en.txt",
+      "asset_preparation": "task_designs/imported/yujie/prepare_and_serve_hot_drink/restore_scene.py"
     },
     {
       "id": "carry_in_and_put_away_groceries",
@@ -349,10 +352,13 @@
       "current_runner_integration": "pending",
       "provenance": "task_designs/imported/yujie/provenance.json",
       "evidence": [
-        "operations/yujie_pr6_review_20261030/PORTING_PLAN.md"
+        "operations/yujie_pr6_review_20261030/PORTING_PLAN.md",
+        "operations/custom_task_catalog_20261030/task_package_validation.json"
       ],
       "historical_run": "groceries_v2_robust_gpt61sol_low_20261021_r1",
-      "note_zh": "已有双袋六件食品场景；历史 sol/low 回合 105 次 act/look、原生自定义 BDDL 12/12。当前执行器接入尚未完成，历史成绩不是当前源码复测。"
+      "note_zh": "已有双袋六件食品场景；历史 sol/low 回合 105 次 act/look、原生自定义 BDDL 12/12。当前执行器接入尚未完成，历史成绩不是当前源码复测。",
+      "instruction_en": "task_designs/imported/yujie/carry_in_and_put_away_groceries/v2_design/instruction_en.txt",
+      "asset_preparation": "task_designs/imported/yujie/carry_in_and_put_away_groceries/v2_design/build_scene_overlay.py"
     }
   ]
 }

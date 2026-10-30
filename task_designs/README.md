@@ -43,7 +43,7 @@
 - 原有定义保留原路径；现有运行、冻结源码和评测输入不因整理而改变。
 - yujie 的两项任务定义放在 [imported/yujie](imported/yujie/README.md)，来源固定为 PR #6 的 `bbe9b5f230cae81c58bc945ccb15aaaf4c01a206`。本次未合并整个 PR，也未导入其执行器实现。
 - `constructed_catalog.json` 的 `definition` 相对仓库根目录；`built_instance` 和 `evidence` 相对共享工作根目录 `/mnt/nas/home--xujingyi/agentic_mobile_manip`。本地 14 项逐项记录冻结任务和场景 SHA-256。
-- yujie 的构建与运行来自作者归档证据；定义文件已迁入，场景资源和历史运行协议通过固定版本来源索引保留。整理文件不等于已在当前执行器上复测。
+- yujie 的构建与运行来自作者归档证据；定义、英文输入、杂货构建器和热饮场景恢复入口已迁入。场景产物保存在 Git 外，历史运行协议通过固定版本来源索引保留。文件准备不等于已在当前执行器上复测。
 - 本次核对记录：共享根目录 `operations/custom_task_catalog_20261030/`。只验证清单、文件来源和已有冻结资产，没有新 GPU/模型试验。
 
 ## 不纳入统计
