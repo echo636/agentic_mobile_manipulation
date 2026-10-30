@@ -441,6 +441,19 @@ class CheckedPlacement:
         # open cavity first; each still needs actual collision and settling.
         if any(c.get('selected_rim_surface') for c in rim_candidates):
             return rim_candidates + candidates
+        if not candidates and not rim_candidates:
+            # A side click on a single-level support still identifies its
+            # receiving surface. Only project when actual collision triangles
+            # have one upward plane; multi-shelf objects retain click height.
+            from .surface_geometry import single_support_height
+            height = single_support_height(self._collision_triangles(target))
+            if height is not None and abs(height-float(point[2])) > .05:
+                projected = point.clone()
+                projected[2] = height
+                candidates = self._surface_candidates(held, target, projected,
+                    yaw_degrees, payload, offsets=offsets)
+                for candidate in candidates:
+                    candidate.update(verification_point=projected, surface_kind='single_support_plane')
         return candidates + rim_candidates
 
     def _surface_fallback_candidates(self, held, target, point, yaw_degrees=None, payload=()):

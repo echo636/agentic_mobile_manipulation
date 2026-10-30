@@ -110,6 +110,44 @@ class SelectedSurfaceGeometry(unittest.TestCase):
 
 
 class PlacementRejectionTransactions(unittest.TestCase):
+    def test_side_click_projects_only_when_receiver_has_one_support_level(self):
+        import sys
+        import numpy as np
+        import torch
+        from types import ModuleType, SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.placement import CheckedPlacement
+        backend = CheckedPlacement()
+        backend.torch = torch
+        backend.og = SimpleNamespace(sim=SimpleNamespace(get_physics_dt=lambda: 1/120))
+        backend.robot = SimpleNamespace(links={})
+        held = SimpleNamespace(name='lamp', links={}, get_position_orientation=lambda:
+            (torch.zeros(3), torch.tensor([0., 0., 0., 1.])))
+        target = SimpleNamespace(name='support', links={'base': SimpleNamespace(prim_path='/support/base')})
+        backend._collision_vertices = lambda obj: np.array([
+            [x, y, z] for x in [-.05, .05] for y in [-.05, .05] for z in [0., .2]])
+        backend._placement_record = lambda record: None
+        backend._open_rim_candidates = lambda *args, **kwargs: []
+        def raytest(start, end, **kwargs):
+            z = min(float(start[2]), .6)
+            return dict(hit=True, position=[0., 0., z], normal=[0., 0., 1.],
+                distance=float(start[2])-z, rigidBody='/support/base')
+        utils = ModuleType('omnigibson.utils')
+        utils.transform_utils = ModuleType('transform_utils')
+        sampling = ModuleType('omnigibson.utils.sampling_utils'); sampling.raytest = raytest
+        for heights in ((.6,), (.6, .9)):
+            with self.subTest(heights=heights), patch.dict(sys.modules,
+                    {'omnigibson.utils': utils, 'omnigibson.utils.sampling_utils': sampling}):
+                backend._collision_triangles = lambda obj: np.array([
+                    [[-.5, -.5, z], [.5, -.5, z], [.5, .5, z]] for z in heights])
+                candidates = backend._surface_candidates(held, target,
+                    torch.tensor([0., 0., .48755]), offsets=[(0., 0.)])
+            if len(heights) == 1:
+                self.assertEqual(len(candidates), 1)
+                self.assertAlmostEqual(float(candidates[0]['verification_point'][2]), .6, places=6)
+            else:
+                self.assertEqual(candidates, [])
+
     def test_surface_ray_start_inside_collider_uses_higher_origin(self):
         import sys
         import numpy as np

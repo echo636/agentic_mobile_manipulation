@@ -5,6 +5,18 @@ in world coordinates, including the object's current orientation and scale.
 """
 
 
+def single_support_height(triangles):
+    """Identify a single horizontal receiving plane, never choose among shelves."""
+    import numpy as np
+    faces = np.asarray(triangles, dtype=float).reshape(-1, 3, 3)
+    normals = np.cross(faces[:, 1]-faces[:, 0], faces[:, 2]-faces[:, 0])
+    lengths = np.linalg.norm(normals, axis=1)
+    upward = faces[(lengths > 1e-10) & (normals[:, 2] > .9*lengths)]
+    if not len(upward) or np.ptp(upward[:, :, 2]) > .01:
+        return None
+    return float(np.mean(upward[:, :, 2]))
+
+
 def bottom_anchor(points):
     """Return the center of the lowest collision-geometry patch.
 
