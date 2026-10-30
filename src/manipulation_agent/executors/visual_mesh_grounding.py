@@ -5,11 +5,12 @@ from types import SimpleNamespace
 
 def query_visual_surface(backend, point, *, reject_particles=False, camera_position=None,
                          renderer_object=None):
-    """Find the rendered mesh surface at the measured world-space point.
+    """Resolve the selected pixel's mesh at the measured world-space depth.
 
-    Do not cast another ray, replace the point, search neighboring pixels, or
-    reject selections with a depth/mesh distance threshold. Bounds only supply
-    a conservative lower bound for accelerating the exact surface query.
+    Intersect the original camera ray with visual geometry; an off-ray surface
+    cannot own this pixel merely because it is spatially closer to the point.
+    Keep the measured point, with no neighboring-pixel search or distance cutoff.
+    Without camera calibration, retain point-to-surface ownership.
     Numerically coincident surfaces use optional same-capture instance ownership,
     falling back to camera order within float32 roundoff.
     """
@@ -166,8 +167,28 @@ def query_visual_surface(backend, point, *, reject_particles=False, camera_posit
         if not len(triangles):
             continue
         with np.errstate(divide='ignore', invalid='ignore'):
-            nearest = trimesh.triangles.closest_point(
-                triangles, np.broadcast_to(world_point, (len(triangles), 3)))
+            if toward_camera is None:
+                nearest = trimesh.triangles.closest_point(
+                    triangles, np.broadcast_to(world_point, (len(triangles), 3)))
+            else:
+                # Moller-Trumbore on the same ray used for depth backprojection.
+                # In a filled pan, the depth can land on loose material. A
+                # nearby stove button is not a substitute for that pixel's
+                # receiving surface: it must intersect the pixel's ray.
+                ray = -toward_camera
+                edge1, edge2 = triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]
+                cross = np.cross(ray, edge2)
+                determinant = np.einsum('ij,ij->i', edge1, cross)
+                offset = camera - triangles[:, 0]
+                u = np.einsum('ij,ij->i', offset, cross) / determinant
+                q = np.cross(offset, edge1)
+                v = np.einsum('j,ij->i', ray, q) / determinant
+                t = np.einsum('ij,ij->i', edge2, q) / determinant
+                intersects = ((determinant != 0) & (u >= 0) & (v >= 0)
+                              & (u + v <= 1) & (t >= 0) & np.isfinite(t))
+                nearest = camera + t[intersects, None] * ray
+                if not len(nearest):
+                    continue
         distances = np.linalg.norm(nearest-world_point, axis=1)
         finite = np.isfinite(distances)
         invalid_surface_points += int((~finite).sum())
@@ -219,7 +240,8 @@ def query_visual_surface(backend, point, *, reject_particles=False, camera_posit
     return obj, {'visual_mesh': path, 'visual_triangle_position': nearest,
                  'visual_mesh_purpose': purpose, 'guide_meshes_skipped': guides_skipped,
                  'surface_point_distance_m': distance, 'visual_meshes_tested': checked,
-                 'method': 'nearest_visual_surface_to_backprojected_point',
+                 'method': ('same_pixel_visual_ray_at_measured_depth' if toward_camera is not None
+                            else 'nearest_visual_surface_to_backprojected_point'),
                  'surface_kind': 'attached_material' if path in attached_surfaces else 'object_mesh',
                  'material_system': attached_surfaces[path][1] if path in attached_surfaces else None,
                  'depth_consistency_check': False, **numerical_diagnostics}

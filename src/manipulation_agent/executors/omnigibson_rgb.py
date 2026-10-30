@@ -507,9 +507,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
     def _ground(self,target, *, require_object=True, reject_particles=False):
         """Use the chosen pixel's depth backprojection directly as the target.
 
-        Navigation needs only this point. Manipulation resolves the visible
-        surface nearest this same point, solely for its simulator handle.
-        No mesh/collision depth comparison, point replacement, alternate pixel,
+        Navigation needs only this point. Manipulation resolves visual geometry
+        along this pixel's original camera ray at the measured depth, solely for
+        its simulator handle. The point is unchanged; no alternate pixel,
         semantic target search or task-scope lookup occurs.
         """
         import omnigibson.utils.transform_utils as T
@@ -1379,7 +1379,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
             'depth_consistency_check':False, 'navigation_object_lookup':False,
             'pixel_sample':'renderer_pixel_center_index_plus_half',
-            'manipulation_object_lookup':'nearest_visual_surface_to_backprojected_point',
+            'manipulation_object_lookup':'same_pixel_visual_ray_at_measured_depth',
             'coincident_surface_resolution':('same_frame_renderer_instance_within_float32_roundoff'
                 if getattr(self,'renderer_pixel_owner',False) else 'camera_frontmost_within_float32_roundoff'),
             'private_instance_labels':getattr(self,'renderer_pixel_owner',False),
@@ -1445,9 +1445,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             'pixel_grounding':'pixel-center backprojection; no neighboring-pixel substitution',
             'model_visible_gt':False}
         result['robot_camera_views'] = list(DIRECTIONS)
-        result['private_grounding_provider']=('selected-pixel depth point to nearest visible mesh surface; same-capture private instance labels resolve numerical ties'
+        result['private_grounding_provider']=('same-pixel visual ray at measured depth; same-capture private instance labels resolve numerical ties'
             if getattr(self,'renderer_pixel_owner',False) else
-            'selected-pixel depth point to nearest visible mesh surface; no segmentation annotator')
+            'same-pixel visual ray at measured depth; no segmentation annotator')
         result['surround'] = 'four_fixed_cameras_one_simulation_state_no_robot_rotation'
         result['camera_rig'] = {'horizontal_fov_degrees':90,'pitch_down_degrees':self.rig_pitch_degrees,
             'mount_radius_m':self.rig_radius,'mount_height_m':self.rig_height,'views':list(DIRECTIONS),

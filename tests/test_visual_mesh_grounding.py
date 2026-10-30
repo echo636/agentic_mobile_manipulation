@@ -67,6 +67,22 @@ class VisualPointOwnership(unittest.TestCase):
         point = self.torch.tensor([.5, 0., 0.])
         self.assertIs(query_visual_surface(self.backend([outer, inner]), point)[0], inner)
 
+    def test_nearby_off_pixel_surface_cannot_steal_a_material_pixel(self):
+        support, _ = self.box('pan', [0., 0., -.5])
+        button, mesh = self.box('nearby_button', [.08, 0., .15])
+        mesh.scaled_transform[:3, :3] *= .05
+        point = self.torch.tensor([0., 0., .15])
+        backend = self.backend([button, support])
+        # R500's failure mechanism: an off-ray button is nearer to the selected
+        # material point than the receiving pan underneath it.
+        self.assertIs(query_visual_surface(backend, point)[0], button)
+        before = point.clone()
+        selected, result = query_visual_surface(backend, point,
+                                               camera_position=self.torch.tensor([0., 0., 2.]))
+        self.assertIs(selected, support)
+        self.assertEqual(result['method'], 'same_pixel_visual_ray_at_measured_depth')
+        self.torch.testing.assert_close(point, before, rtol=0, atol=0)
+
     def test_float32_coincident_surfaces_resolve_toward_camera(self):
         # Archived box-bottom/table ambiguity: RGB shows the upper surface,
         # but rounded depth is closer to the lower one by a fraction of a µm.
