@@ -166,7 +166,7 @@ class CheckedMaterialTransfer:
             for other in members)]
 
     def _pour_rigid_objects(self, source, destination, objects, max_steps):
-        """Use native containment/support placement, then leave free physics.
+        """Set containment or a measured support pose, then leave free physics.
 
         Stop when the receiver cannot accept the next object. Earlier transfers
         remain real progress; never roll back the scene or reconstruct food.
@@ -187,11 +187,35 @@ class CheckedMaterialTransfer:
                 for child, _, _ in dependencies]
             particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
                                            include_supported=True)
-            if relation not in obj.states or not obj.states[relation].set_value(destination, True):
+            if relation not in obj.states:
+                break
+            if relation is OnTop:
+                # Native cuboid sampling rejects an entire footprint when
+                # existing loose material covers part of the receiver. Use
+                # the same exposed collision surface as individual placement.
+                # Commit one pose, with no scene rewind or contents pinning.
+                low, high = destination.aabb
+                point = (low + high) / 2
+                point[2] = high[2]
+                candidates = self._surface_candidates(obj, destination, point)
+                if not candidates:
+                    break
+                obj.set_position_orientation(*candidates[0]['pose'])
+                obj.keep_still()
+            elif not obj.states[relation].set_value(destination, True):
                 break
             self._relocate_contents(obj, contents)
             relocate_particles(self.env.scene, particles)
             moved.append(obj)
+            if relation is OnTop:
+                for _ in range(max(1, round(.5 / self.og.sim.get_physics_dt()))):
+                    self._placement_physics_step()
+                retained = bool(obj.states[OnTop].get_value(destination))
+                self._placement_record({'status': 'rigid_surface_pour_settled',
+                    'object': obj.name, 'destination': destination.name,
+                    'candidate': candidates[0]['index'], 'official_on_top': retained})
+                if not retained:
+                    break
         if not moved:
             raise SkillError('sampling_error', 'The receiver could not accept a loose object', changed=True)
         for _ in range(min(6, max_steps)):

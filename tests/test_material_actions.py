@@ -174,6 +174,46 @@ class MaterialActionTests(unittest.TestCase):
             selected = backend._pour_objects(source)
         self.assertEqual([obj.name for obj in selected], ['bottom_piece', 'top_piece', 'nested_vessel'])
 
+    def test_rigid_surface_pour_commits_once_and_keeps_failed_physical_result(self):
+        import numpy as np
+        from unittest.mock import Mock
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        states = {name: type(name, (), {}) for name in ('Inside', 'OnTop', 'ContainedParticles')}
+        receiver = types.SimpleNamespace(name='receiver', states={},
+            aabb=(np.zeros(3), np.ones(3)))
+        for retained in (False, True):
+            with self.subTest(retained=retained):
+                objects = [types.SimpleNamespace(name=str(i), states={states['OnTop']:
+                    types.SimpleNamespace(set_value=Mock(side_effect=AssertionError('cuboid sampler')),
+                                          get_value=lambda target: retained)},
+                    set_position_orientation=Mock(), keep_still=Mock()) for i in range(2)]
+                backend = CheckedMaterialTransfer()
+                backend.env = types.SimpleNamespace(scene=object())
+                backend.og = types.SimpleNamespace(sim=types.SimpleNamespace(
+                    get_physics_dt=lambda: 1/120,
+                    load_state=Mock(side_effect=AssertionError('scene rewind'))))
+                backend.deadline = types.SimpleNamespace(check=lambda **kw: None)
+                backend._grasp_dependencies = lambda obj: []
+                backend._surface_candidates = lambda *args: [dict(index=2, pose=(np.zeros(3), np.ones(4)))]
+                backend._relocate_contents = Mock()
+                backend._placement_physics_step = Mock()
+                backend._placement_record = Mock()
+                backend.primitives = types.SimpleNamespace(_empty_action=lambda: [])
+                backend._step = Mock()
+                with self.modules, patch.multiple(sys.modules['omnigibson.object_states'], **states, create=True), \
+                        patch.object(sys.modules['omnigibson.utils'], 'transform_utils', object(), create=True), \
+                        patch('manipulation_agent.executors.material_transfer.snapshot_particles', return_value=[]), \
+                        patch('manipulation_agent.executors.particle_payload.relocate_particles'):
+                    moved = backend._pour_rigid_objects(object(), receiver, objects, 6)
+                self.assertEqual(moved, objects if retained else objects[:1])
+                for obj in moved:
+                    obj.set_position_orientation.assert_called_once()
+                if not retained:
+                    objects[1].set_position_orientation.assert_not_called()
+                backend._placement_physics_step.assert_called()
+                self.assertEqual(backend._placement_record.call_args.args[0]['official_on_top'], retained)
+
     def test_surface_pour_moves_existing_portion_and_measures_contact_after_settling(self):
         import numpy as np
         from unittest.mock import Mock
