@@ -69,6 +69,7 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
                            reachability_context=None):
     from omnigibson.object_states import OnTop
     from omnigibson.utils.object_state_utils import is_pose_reachable_for_predicate
+    from omnigibson.utils.sampling_utils import raytest
     from .particle_payload import snapshot_particle_state, restore_particle_state, particle_state_unchanged
     from .resting_motion import RestingMotionWindow
 
@@ -83,9 +84,23 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
         # Cover the support itself. Bounds only generate ray origins; every
         # proposal must hit an actual upward-facing collider of this target.
         points = surface_proposal_points(low, high, torch, reachability_context)
+        # Offline construction selects a support object, not a clicked shelf.
+        # Its AABB top is not the receiving surface of a concave vessel: the
+        # runtime click-local ray would miss a basin deeper than eight cm.
+        # Resolve each column's actual surface before reusing that sampler.
+        ignored = [link.prim_path for obj in (held, backend.robot) for link in obj.links.values()]
+        target_paths = {link.prim_path for link in target.links.values() if not link.is_meta_link}
+        surfaces = []
+        for point in points:
+            start, end = point.clone(), point.clone()
+            start[2], end[2] = high[2] + .03, low[2] - .03
+            hit = raytest(start, end, ignore_bodies=ignored)
+            if (hit.get('hit') and hit.get('rigidBody') in target_paths
+                    and float(hit['normal'][2]) >= .9 and float(hit['distance']) > 0.):
+                surfaces.append(torch.as_tensor(hit['position'], dtype=point.dtype, device=point.device))
         candidates = []
         for angle in (None, 90., 180., 270.):
-            for point in points:
+            for point in surfaces:
                 backend.deadline.check(changed=True)
                 candidates.extend(backend._surface_candidates(
                     held, target, point, angle, offsets=[(0., 0.)]))
