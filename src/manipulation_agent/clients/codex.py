@@ -72,7 +72,15 @@ class CodexAdapter(ClientAdapter):
                 raise ValueError('Provider endpoint must be HTTPS or private-network HTTP without embedded credentials')
             command += ['-c', 'model_provider=' + json.dumps(profile)]
             for key in ('name', 'base_url', 'requires_openai_auth', 'wire_api'):
-                command += ['-c', f'model_providers.{profile}.{key}=' + json.dumps(provider[key])]
+                value = provider[key]
+                if key == 'base_url' and (proxy := os.environ.get('MAS_RESPONSES_PROXY_URL')):
+                    parsed = urlsplit(proxy)
+                    if (parsed.scheme != 'http' or parsed.hostname != '127.0.0.1'
+                            or parsed.path != '/v1' or parsed.username or parsed.password
+                            or parsed.query or parsed.fragment):
+                        raise ValueError('Responses proxy must be an HTTP loopback /v1 endpoint')
+                    value = proxy
+                command += ['-c', f'model_providers.{profile}.{key}=' + json.dumps(value)]
         native_sessions = None
         storage = None
         prefix = []
@@ -106,6 +114,10 @@ class CodexAdapter(ClientAdapter):
                   "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
         for key, value in server.items():
             command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
+        if pythonpath := os.environ.get('PYTHONPATH'):
+            command += ["-c", 'mcp_servers.manipulation.env.PYTHONPATH=' + json.dumps(pythonpath)]
+        if os.environ.get('MAS_QWEN_TARGET_JSON_COMPAT') == '1':
+            command += ["-c", 'mcp_servers.manipulation.env.MAS_QWEN_TARGET_JSON_COMPAT="1"']
         command += ["-"]
         return PreparedProject(command, None, config.prompt, native_sessions=native_sessions,
                                client_storage=storage, mcp_prefix=prefix)

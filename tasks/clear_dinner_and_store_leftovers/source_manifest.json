@@ -1,0 +1,18 @@
+{
+  "version": "design_v1",
+  "reference_date": "2026-10-22",
+  "status": "design_references_only_no_scene_provenance",
+  "path_base": "workspace root robot_manipulation",
+  "source_files": {
+    "agentic_mobile_manipulation_7f388e4/tasks/prepare_and_serve_hot_drink/README.md": "a31d71949742e9181a1ffe20669818831bbe0d24a25242f1dfa95039ad4fa6fd",
+    "agentic_mobile_manipulation_7f388e4/tasks/prepare_and_serve_hot_drink/problem0.bddl": "30fd46781286f62f08bff1090bd6ac09dcc69050c63e13acc150c46914162f5d",
+    "agentic_mobile_manipulation_7f388e4/tasks/prepare_and_serve_hot_drink/scene_layout.json": "ac05367a1780e68a546bfdf3ee56238e59e973bd8cb24a0f55d72049f5690f9a",
+    "agentic_mobile_manipulation_7f388e4/tasks/carry_in_and_put_away_groceries/v2_design/benchmark_card.md": "94fc014785350682cc6729f4c79ad7aad5ac9ffcf458f6c56cc3add3e4420e69",
+    "agentic_mobile_manipulation_7f388e4/docs/long_horizon_task_workflow.md": "947a7deacadf3dc5651944dbed28e4d3a101e52bc4b83ba11e19c5927faff7af",
+    "agentic_mobile_manipulation_7f388e4/docs/long_horizon_benchmark_suite.md": "b29e33b292e8c3f685d0020f64db0372fe0e5746382de28214ab1021f84edb7e",
+    "agentic_mobile_manipulation_7f388e4/docs/bugfix_journal.md": "460bd88822d310ec31038c6b683443f987f40636ee2a84bb33d5a5aac34cc38b",
+    "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clearing_table_after_dinner/problem0.bddl": "6d336624f25d8058f2ca1d52c18a5ef9a78223b049c8da646dda519432b97170",
+    "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clearing_food_from_table_into_fridge/problem0.bddl": "840d8330b9a0e3d93f5d0f5ceb1880b4cd00c6fc44caac2eed002d9339f6b872",
+    "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/putting_dirty_dishes_in_sink/problem0.bddl": "d4ebcc9e444c6b9f448330623d0a4eaef0af1fc2fe8a650e2e8174c61200053b"
+  }
+}

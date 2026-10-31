@@ -60,6 +60,20 @@ def placement_transaction(sim, record):
         record({'status': 'committed'})
 
 
+@contextmanager
+def project_before_post_step(env, project):
+    """Commit the ideal motor projection before observations and task metrics."""
+    original = env._post_step
+    def post_step(*args, **kwargs):
+        project()
+        return original(*args, **kwargs)
+    env._post_step = post_step
+    try:
+        yield
+    finally:
+        env._post_step = original
+
+
 class CheckedPlacement:
     def _placement_record(self, data):
         with (self.output / 'placement_diagnostics.jsonl').open('a') as stream:
@@ -204,6 +218,13 @@ class CheckedPlacement:
                     radius * math.sin(theta)], device=point.device)
                 candidates.append((radius,angle,xy))
         target_lo,target_hi=target.aabb
+        body_bounds = target.root_link.aabb if len(target.links) > 1 else None
+        if body_bounds is not None:
+            body_lo, body_hi = body_bounds
+            # An empty structural root is not a physical adjacency anchor.
+            if not bool((self.torch.isfinite(body_lo) & self.torch.isfinite(body_hi)
+                         & ((body_hi-body_lo) > .00001)).all()):
+                body_bounds = None
         half=(hi-lo)[:2]/2
         # A model may click a table leg or a corner well away from its center.
         # Use the selected target's actual current bounds to find adjacent
@@ -220,12 +241,32 @@ class CheckedPlacement:
                     delta=xy-point[:2]
                     candidates.append((float(self.torch.linalg.norm(delta)),
                         math.degrees(math.atan2(float(delta[1]),float(delta[0]))),xy))
+        # Fallback coverage near the fixed body, including perimeter ends.
+        # Open leaves can make the union perimeter miss narrow floor strips.
+        # Preserve the existing search order and all downstream acceptance gates.
+        edge_lo,edge_hi=body_bounds if body_bounds is not None else (target_lo,target_hi)
+        nx=min(32,max(1,math.ceil(float(edge_hi[0]-edge_lo[0])/.05)))
+        ny=min(32,max(1,math.ceil(float(edge_hi[1]-edge_lo[1])/.05)))
+        for gap in (.02,.06,.12,.20):
+            perimeter=[]
+            for index in range(ny+1):
+                y=edge_lo[1]+index/ny*(edge_hi[1]-edge_lo[1])
+                perimeter.extend(((edge_lo[0]-half[0]-gap,y),(edge_hi[0]+half[0]+gap,y)))
+            for index in range(nx+1):
+                x=edge_lo[0]+index/nx*(edge_hi[0]-edge_lo[0])
+                perimeter.extend(((x,edge_lo[1]-half[1]-gap),(x,edge_hi[1]+half[1]+gap)))
+            for cx,cy in perimeter:
+                xy=self.torch.stack((cx,cy));delta=xy-point[:2]
+                candidates.append((float(self.torch.linalg.norm(delta)),
+                    math.degrees(math.atan2(float(delta[1]),float(delta[0]))),xy))
+        egress_check=(self._next_to_egress_checker()
+                      if hasattr(self,'_next_to_egress_checker') else None)
         with self._placement_context(target):
             contents = list(self._carry_contents) if self.ideal_carry else []
             dependencies = list(getattr(self, '_carry_dependencies', []))
             self._carry_detach()
             accepted = None
-            rejected={'no_floor_hit':0,'overlap':0,'not_next_to':0}
+            rejected={'no_floor_hit':0,'overlap':0,'not_next_to':0,'far_from_fixed_body':0,'blocks_exit':0}
             for radius, angle, xy in candidates:
                 start = self.torch.tensor([float(xy[0]), float(xy[1]), float(point[2]) + .6], device=point.device)
                 end = start.clone(); end[2] = min(float(point[2]) - 1.5, -.5)
@@ -237,8 +278,22 @@ class CheckedPlacement:
                 place = pose[0].clone(); place[:2] = xy
                 place[2] = hit['position'][2] + bottom_offset + .003
                 candidate_lo=lo+(place-pose[0]);candidate_hi=hi+(place-pose[0])
-                blocked=bool(((candidate_hi>target_lo+.005)&
-                              (candidate_lo<target_hi-.005)).all())
+                # Articulated leaves leave empty space inside the union AABB.
+                # Keep overlap rejection at link granularity for such targets.
+                target_boxes = ([link.aabb for link in target.links.values()]
+                                if len(target.links) > 1 else [(target_lo,target_hi)])
+                blocked=any(bool(((candidate_hi>box_lo+.005)&
+                                  (candidate_lo<box_hi-.005)).all())
+                            for box_lo,box_hi in target_boxes
+                            if bool(((box_hi-box_lo) > .00001).all()))
+                # The floor ray ignores the robot to find support beneath it,
+                # but a released pose must still avoid the robot's link boxes.
+                # Use individual links instead of its broad articulated union.
+                if any(bool(((candidate_hi>box_lo+.005)&
+                             (candidate_lo<box_hi-.005)).all())
+                       for box_lo,box_hi in (link.aabb for link in self.robot.links.values())
+                       if bool(((box_hi-box_lo) > .00001).all())):
+                    blocked=True
                 for other in self.env.scene.objects:
                     if other in (held,target,self.robot) or other in supports or getattr(other,'fixed_base',True):
                         continue
@@ -250,7 +305,21 @@ class CheckedPlacement:
                     continue
                 held.set_position_orientation(place, pose[1]); held.keep_still()
                 self._relocate_contents(held, contents)
+                # Experimental conservative filter for articulated targets:
+                # keep adjacency near their root body, not only an open leaf.
+                if body_bounds is not None:
+                    body_lo, body_hi = body_bounds
+                    held_lo, held_hi = held.aabb
+                    gap = self.torch.maximum(self.torch.maximum(body_lo, held_lo)
+                        - self.torch.minimum(body_hi, held_hi), self.torch.zeros_like(body_lo))
+                    limit = self.torch.mean((body_hi-body_lo)+(held_hi-held_lo))/6
+                    if float(self.torch.linalg.norm(gap)) > float(limit):
+                        rejected['far_from_fixed_body'] += 1
+                        continue
                 if held.states[NextTo].get_value(target):
+                    if egress_check is not None and not egress_check(held.aabb):
+                        rejected['blocks_exit']+=1
+                        continue
                     accepted = (radius, angle, place.clone(), support_by_link[hit['rigidBody']],
                                 hit['position'].clone())
                     break
@@ -283,6 +352,8 @@ class CheckedPlacement:
                     'support_above':accepted[3] in adjacency.positive_neighbors,
                     'support_on_top':False})
                 raise SkillError('postcondition_error','NextTo placement is not supported by the sampled floor or lawn',changed=True)
+            if egress_check is not None and not egress_check(held.aabb):
+                raise SkillError('postcondition_error','Settled placement blocks the robot exit',changed=True)
             self._verify_payload(dependencies)
             self._placement_record({'status': 'next_to_verified', 'target': target.name,
                                     'held': held.name, 'radius_m': accepted[0], 'angle_deg': accepted[1]})
@@ -367,11 +438,11 @@ class CheckedPlacement:
         return pose
 
     def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None):
-        from omnigibson.object_states import OnTop
-        from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
         held = self._get_held()
         if held is None:
             raise SkillError('empty_hand','No object is held')
+        if held is target:
+            raise SkillError('unsupported_relation','An object cannot be placed on top of itself')
         check = self._try_place_on_top(held, target, max_steps, point, yaw_degrees)
         self.frames_revision = -1
         return {'primitive':'place_on_top','implementation':'strict_selected_surface_placement',
@@ -828,12 +899,16 @@ class CheckedPlacement:
                 settling_payload.extend(record for record in self._container_payload(target)
                                         if record[0] is held)
                 self._relocate_contents(held,contents)
-                for _ in range(min(50,max_steps)):
-                    # Environment.step does not dispatch through the patched
-                    # sim.step_physics method used by the official sampler.
-                    preserve_payload_poses()
-                    try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
-                    finally:preserve_payload_poses()
+                # Environment.step dispatches its own physics ticks and then
+                # reads task state inside _post_step. Apply the already
+                # verified payload projection before that read, rather than
+                # only after env.step has returned (or raised on transient
+                # nonfinite resident state).
+                with project_before_post_step(self.env, preserve_payload_poses):
+                    for _ in range(min(50,max_steps)):
+                        preserve_payload_poses()
+                        try:self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                        finally:preserve_payload_poses()
             finally:
                 self.og.sim.step_physics=original_step
             if not held.states[Inside].get_value(target):

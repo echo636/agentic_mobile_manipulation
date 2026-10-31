@@ -6,11 +6,18 @@ VISUAL_TARGET = object_schema({"image_ref": {"type":"string"}, "point": {
     "type":"array", "minItems":2, "maxItems":2, "items":{"type":"number","minimum":0,"maximum":1}}})
 VISUAL_TARGET["type"] = ["object", "null"]
 
-@register("act", "Execute one robot primitive on a point YOU select in the latest RGB. x: left=0/right=1, y: top=0/bottom=1. No object IDs or names accepted. A successful grasp effect reports grasped_category for the item actually picked; check it before choosing a destination. attach/hang connect a held object to the selected compatible parent. place_under uses the simulator's Under placement sampler for the carried item and selected parent. place_next_to searches floor poses near the selected parent point and verifies the simulator's NextTo relation. wipe/sweep/vacuum/spray/spread/soak/cut require a compatible held tool and a selected target surface, source, or cuttable object. For the high-level hot-drink task, boil targets a visible kettle or stove and returns water_boiled=true after successful heating. release/wait use target=null. For wait use wait_seconds (0.1–20 simulation seconds, null defaults to 5). For place_on_top placement_yaw_degrees optionally rotates the carried item about world-up relative to its current orientation. For grasp, confirm_bulk_grasp=true deliberately permits lifting a support with multiple loose items or furniture-sized object after a confirmation error; leave false for ordinary objects. A confirmation error makes no grasp and returns fresh RGB. Tool completion is not task success; inspect returned RGB.", object_schema({
+
+def action_schema(schema):
+    # These have defaults in act(); they are meaningful only for selected
+    # primitives and should not be forced into every navigation call.
+    schema['required'] = ['primitive', 'target', 'revision']
+    return schema
+
+@register("act", "Execute one robot primitive on a point YOU select in the latest RGB. x: left=0/right=1, y: top=0/bottom=1. No object IDs or names accepted. A successful grasp effect reports grasped_category for the item actually picked; check it before choosing a destination. attach/hang connect a held object to the selected compatible parent. place_under uses the simulator's Under placement sampler for the carried item and selected parent. place_next_to searches floor poses near the selected parent point and verifies the simulator's NextTo relation. wipe/sweep/vacuum/spray/soak/cut require a compatible held tool and a selected target surface, source, or cuttable object. For the high-level hot-drink task, boil targets a visible kettle or stove and returns water_boiled=true after successful heating. release/wait use target=null. For wait use wait_seconds (0.1–20 simulation seconds, null defaults to 5). For place_on_top placement_yaw_degrees optionally rotates the carried item about world-up relative to its current orientation. For grasp, confirm_bulk_grasp=true deliberately permits lifting a support with multiple loose items or furniture-sized object after a confirmation error; leave false for ordinary objects. A confirmation error makes no grasp and returns fresh RGB. Tool completion is not task success; inspect returned RGB.", action_schema(object_schema({
     "primitive":{"type":"string","enum":list(PRIMITIVES)}, "target":VISUAL_TARGET, "revision":INT,
     "placement_yaw_degrees":{"type":["number","null"],"minimum":-180,"maximum":180},
     "wait_seconds":{"type":["number","null"],"minimum":0.1,"maximum":20},
-    "confirm_bulk_grasp":{"type":"boolean"}}))
+    "confirm_bulk_grasp":{"type":"boolean"}})))
 def act(ctx, primitive, target, revision, placement_yaw_degrees=None, wait_seconds=None, confirm_bulk_grasp=False):
     if placement_yaw_degrees is not None and primitive!='place_on_top':
         raise SkillError('invalid_arguments','placement_yaw_degrees is supported only for place_on_top')

@@ -28,7 +28,7 @@ def rpc(url: str, name: str, arguments: dict, request_id: str,
 def serve(harness, port: int) -> None:
     jobs = queue.Queue(maxsize=32)
     shutdown = threading.Event()
-    rpc_timeout=tool_wait_seconds(harness.budget.wall_seconds)
+    rpc_timeout=tool_wait_seconds(harness.budget.wall_seconds if harness.budget.wall_seconds is not None else 900)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
@@ -49,7 +49,9 @@ def serve(harness, port: int) -> None:
             if self.path == "/healthz":
                 catalog = harness.tool_specs() if hasattr(harness, "tool_specs") else tool_specs()
                 self.send(200, {"ready": True, "closed": harness.closed, "tools": catalog,
-                                "rpc_timeout_seconds":rpc_timeout})
+                                "rpc_timeout_seconds":rpc_timeout,
+                                "budget_exhausted": (harness.deadline.stop_requested or
+                                                     harness.calls > harness.budget.max_calls)})
             elif self.path.startswith("/image/") and hasattr(harness, "image_bytes"):
                 ref = self.path.removeprefix("/image/")
                 try:
@@ -110,7 +112,8 @@ def serve(harness, port: int) -> None:
                     break
             elif harness.deadline.expired:
                 harness.call('finish', {'outcome':'aborted','reason':'Episode wall-clock deadline exhausted'}, 'episode-deadline-finish')
-            elif not harness.deadline.managed and time.monotonic() - harness.started > harness.budget.wall_seconds:
+            elif (not harness.deadline.managed and harness.budget.wall_seconds is not None
+                  and time.monotonic() - harness.started > harness.budget.wall_seconds):
                 harness.call("finish", {"outcome": "aborted", "reason": "Service wall-clock budget exhausted"}, "service-timeout")
             if hasattr(harness, 'tick_background') and not harness.closed and not harness.deadline.stop_requested:
                 harness.tick_background()

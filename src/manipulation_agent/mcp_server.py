@@ -13,12 +13,31 @@ from copy import deepcopy
 import hashlib
 import ipaddress
 import json
+import os
 import uuid
 import urllib.request
 from urllib.parse import quote
 
 from .bridge import rpc
 from .deadline import tool_wait_seconds
+
+
+def normalize_qwen_target(name, arguments):
+    """Decode a JSON-object target emitted as a string by qwen3.8-flash.
+
+    This changes only the transport representation, never the selected RGB
+    image reference, pixel, or action. The simulator still validates the
+    decoded object against the ordinary act schema.
+    """
+    if name != 'act' or not isinstance(arguments.get('target'), str):
+        return arguments
+    try:
+        target = json.loads(arguments['target'])
+    except json.JSONDecodeError:
+        return arguments
+    if not isinstance(target, dict):
+        return arguments
+    return {**arguments, 'target': target}
 
 
 def fetch(url):
@@ -72,6 +91,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
             # Serialize actions and RGB downloads: another HTTP client cannot
             # expire returned image refs midway through response assembly.
             async with lock:
+                if os.environ.get('MAS_QWEN_TARGET_JSON_COMPAT') == '1':
+                    arguments = normalize_qwen_target(name, arguments)
                 result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
                 observation = result.get('observation', {})

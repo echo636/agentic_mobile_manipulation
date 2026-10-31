@@ -6,6 +6,7 @@ from ..contracts import SkillError
 OBS_KEYS = {"images", "observation_mode"}
 IMAGE_KEYS = {"image_ref", "view", "width", "height", "mime_type", "sha256"}
 CAPTURE_KEYS = {'capture_id','captured_at','sim_step','sim_time_seconds'}
+ERROR_FEEDBACK_VERSION = 'rgb_error_feedback_preparation_v1'
 
 def public_observation(value: dict, revision: int) -> dict:
     mode = value.get('observation_mode')
@@ -41,14 +42,15 @@ ERROR_MESSAGES = {
     "navigation_stalled":"The navigation executor made no progress. Inspect the fresh RGB before trying one alternative; do not repeat the same request.",
     "navigation_path_blocked":"The selected navigation endpoint became blocked or unobserved. Inspect fresh RGB and choose a different visible approach.",
     "navigation_unobserved_route":"No observed free route reaches this point. Inspect fresh RGB and choose a different visible approach.",
-    "out_of_reach":"The selected surface is beyond the executor's manipulation reach. Approach using RGB first.",
+    "out_of_reach":"The selected point is beyond the executor's manipulation reach; other points on the same surface may still be reachable. Select a nearer visible point on the intended surface, or navigate to a different clear approach and reselect from fresh RGB.",
     "posture_limited_reach":"The robot cannot reach this selected surface patch without excessive body lean. Select a nearer visible patch on the same support or approach from another side; do not retry the same pixel.",
     "hand_occupied":"The executor cannot perform this action while carrying an object.",
-    "empty_hand":"The executor cannot place, attach or release without a held object.",
+    "empty_hand":"The requested action requires a held object. Grasp an appropriate visible object before retrying.",
     "container_closed":"The executor could not access the requested placement or grasp. Reinspect the opening in RGB.",
     "fixed_object":"The selected object cannot be moved by this executor.",
     "bulk_grasp_confirmation_required":"The selected pixel resolves to a support carrying multiple movable items or furniture-sized object. No grasp occurred. Choose a clearly exposed pixel on the intended smaller item in fresh RGB; if you deliberately want the whole support, retry grasp with confirm_bulk_grasp=true.",
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
+    "invalid_precondition":"The required preparation for this action is incomplete. Check the selected object's preparation and current RGB before retrying.",
     "sampling_error":"The executor could not find a valid placement; inspect the new RGB before recovery.",
     "post_condition_error":"The executor could not verify its operation after settling; inspect the new RGB.",
     "physics_instability":"The simulator reported an unstable physical state; do not repeat this action blindly.",
@@ -58,7 +60,7 @@ ERROR_MESSAGES = {
     "episode_timeout":"The episode wall-clock deadline has expired; no further action can start.",
     "episode_cancelled":"Episode closure was requested; the active action stopped before final scoring.",
     "sampling_budget_exhausted":"The executor exhausted its placement sampling budget.",
-    "unsupported_relation":"The selected object does not support this placement or attachment operation.",
+    "unsupported_relation":"The selected object does not support the requested action. Inspect RGB and choose an appropriate object or action.",
 }
 
 def public_execution_error(exc: SkillError) -> dict:

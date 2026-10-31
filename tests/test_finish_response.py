@@ -16,6 +16,7 @@ from manipulation_agent.vision_harness import VisionHarness
 
 
 class FinishResponseTests(unittest.TestCase):
+    @patch.dict('os.environ', {'MAS_HIGH_LEVEL_BLOCKED_POLICY': 'exhaust_budget'})
     def test_hot_drink_rejects_early_blocked_without_stopping_recovery(self):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'episode'
@@ -39,6 +40,7 @@ class FinishResponseTests(unittest.TestCase):
             self.assertTrue(continued['ok'])
             self.assertEqual(continued['actions_used'],6)
 
+    @patch.dict('os.environ', {'MAS_HIGH_LEVEL_BLOCKED_POLICY': 'exhaust_budget'})
     def test_hot_drink_accepts_blocked_after_action_budget_or_fatal_error(self):
         for exhausted in (True,False):
             with self.subTest(exhausted=exhausted),tempfile.TemporaryDirectory() as folder:

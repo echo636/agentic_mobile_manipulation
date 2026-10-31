@@ -38,7 +38,7 @@ def check_server(command,args,expected,output,timeout=90):
             send({'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}});tools=receive(2)['tools']
             wanted={t['name']:t['inputSchema'] for t in expected};found={t['name']:t['inputSchema'] for t in tools}
             if wanted!=found:raise RuntimeError('MCP tool names or schemas differ from frozen controller catalog')
-            record.update(status='passed',protocol_version=initialized.get('protocolVersion'),tool_names=sorted(found),
+            record.update(status='passed',protocol_version=initialized.get('protocolVersion'),tool_names=sorted(found),tool_schemas=found,
                           schema_sha256=hashlib.sha256(json.dumps(found,sort_keys=True).encode()).hexdigest())
             selector.close()
     except Exception as exc:

@@ -18,10 +18,12 @@ class Budget:
     max_calls: int = 240
     max_sim_steps: int = 20000
     max_steps_per_action: int = 700
-    wall_seconds: float = 1800
+    wall_seconds: float | None = 1800
 
     def __post_init__(self):
-        for value in asdict(self).values():
+        for key, value in asdict(self).items():
+            if key == "wall_seconds" and value is None:
+                continue
             if isinstance(value, bool) or value <= 0:
                 raise ValueError("Budgets must be positive")
 
@@ -95,8 +97,9 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
         raise SkillError("invalid_arguments", f"{path} is not an allowed value")
     if kind == "object":
         props = schema["properties"]
-        if set(value) != set(props):
-            raise SkillError("invalid_arguments", f"{path} needs exactly {sorted(props)}")
+        required = set(schema.get("required", props))
+        if not required <= set(value) or not set(value) <= set(props):
+            raise SkillError("invalid_arguments", f"{path} needs fields {sorted(required)} and only {sorted(props)}")
         for k, v in value.items():
             validate(v, props[k], f"{path}.{k}")
     elif kind == "array":

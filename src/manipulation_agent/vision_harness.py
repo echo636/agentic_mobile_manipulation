@@ -1,16 +1,17 @@
 """RGB-only model boundary, workflow tools, bounded actions and private evaluation."""
 import copy
 import json
+import os
 import threading
 import time
 from dataclasses import asdict
 from .contracts import Budget, SkillError, validate
 from .deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
 from .harness import Harness as LegacyPlanHelpers
-from .observations.boundary import public_observation, public_execution_error, public_action_effect
+from .observations.boundary import public_observation, public_execution_error, public_action_effect, ERROR_FEEDBACK_VERSION
 from .records import write_json
 from .skill_runtime import SkillLibrary
-from .tools import REGISTRY, tool_specs
+from .tools import REGISTRY, tool_specs, PLANNING_PROFILES
 from .tool_context import ToolContext
 from .surround import SurroundJobs
 
@@ -18,11 +19,18 @@ TIME_EXHAUSTION_CLAIMS = ('execution window', 'time window', 'time budget',
                           'time limit', 'deadline', 'out of time',
                           'running out of time', 'available time',
                           '时间不够', '时间不足', '时限', '时间窗口')
+SESSION_EXHAUSTION_CLAIMS = ('within this session', 'session time limit',
+                             'session budget exhausted')
 TERMINAL_ACTION_ERRORS = frozenset({'navigation_invalid_start', 'physics_instability'})
 SUPERVISOR_FINISH_ID = 'demo-supervisor-finish'
 
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills'):
+        blocked_policy = os.environ.get('MAS_HIGH_LEVEL_BLOCKED_POLICY', 'accept')
+        if blocked_policy not in {'accept', 'exhaust_budget'}:
+            raise ValueError('MAS_HIGH_LEVEL_BLOCKED_POLICY must be accept or exhaust_budget')
+        self.early_blocked_guard = (bool(getattr(backend, 'high_level_harness', False))
+                                    and blocked_policy == 'exhaust_budget')
         self.backend,self.recorder,self.budget=backend,recorder,budget
         self.owner=threading.get_ident(); self.started=time.monotonic()
         self.deadline=getattr(backend,'deadline',None) or EpisodeDeadline.from_env()
@@ -34,12 +42,14 @@ class VisionHarness:
         self._video_finalized=False
         self.revision=self.actions=self.calls=0; self.closed=False
         self._last_action_error=None
+        # Opt-in native protocol; archived runs retain their accepted-blocked rule.
+        self.correct_false_clock_claims = os.environ.get('MAS_REJECT_FALSE_TIME_CLAIMS') == '1'
         self.profile = profile
         self.surround = SurroundJobs(self)
         self.catalog = {t['name']: t for t in tool_specs(profile)}
         self.cache,self.evidence={},{}
         self.skills = None
-        if profile in {'workflow','planning'}:
+        if profile=='workflow' or profile in PLANNING_PROFILES:
             self.plan,self.memory=[],{}
         if profile in {'skills','workflow','planning'}:
             self.skills=SkillLibrary(recorder.output)
@@ -58,6 +68,22 @@ class VisionHarness:
             'limits_still_configured':{'actions':budget.max_actions,'tool_calls':budget.max_calls,
                                        'environment_steps':budget.max_sim_steps},
             'legacy_limits_active':True}
+        recorder.run['termination_contract']={
+            'false_time_claims': ('clock_claim_correction_v1' if self.correct_false_clock_claims
+                                 else 'legacy_demo_only'),
+            'blocked_policy': blocked_policy if getattr(backend,'high_level_harness',False) else 'accept',
+            'version': ('high_level_budget_guard_v1' if self.early_blocked_guard else
+                        'reported_blocked_v2'),
+            'early_blocked_guard': self.early_blocked_guard,
+            'private_achieved_feedback': bool(getattr(backend,'high_level_harness',False))}
+        decision_fields = {
+            name: sorted(tool['inputSchema']['properties']['decision']['required'])
+            for name, tool in self.catalog.items()
+            if 'decision' in tool['inputSchema']['properties']}
+        recorder.run['public_decision_contract'] = {
+            'version': 'profiled_public_intent_v2' if decision_fields else 'none',
+            'required_fields_by_tool': decision_fields}
+        recorder.run['action_error_feedback_protocol'] = ERROR_FEEDBACK_VERSION
         write_json(recorder.output/'run.json',recorder.run)
         recorder.event('episode_started',{'observation':self.snapshot})
 
@@ -79,13 +105,21 @@ class VisionHarness:
     def _false_time_exhaustion_claim(self, outcome, reason):
         """Reject only a concrete false clock claim, without using goal state."""
         remaining=self.deadline.remaining()
-        return (getattr(self.backend,'demo_motion',False) and outcome=='blocked'
+        enabled = getattr(self.backend,'demo_motion',False) or self.correct_false_clock_claims
+        native_limits_available = (self.actions < self.budget.max_actions
+                                   and self.calls < self.budget.max_calls
+                                   and self.backend.steps < self.budget.max_sim_steps
+                                   and not self.deadline.stop_requested)
+        terms = TIME_EXHAUSTION_CLAIMS + (SESSION_EXHAUSTION_CLAIMS
+                                        if self.correct_false_clock_claims else ())
+        return (enabled and outcome=='blocked'
+                and (not self.correct_false_clock_claims or native_limits_available)
                 and remaining is not None and remaining>600
-                and any(term in reason.casefold() for term in TIME_EXHAUSTION_CLAIMS))
+                and any(term in reason.casefold() for term in terms))
 
     def _premature_blocked_finish(self, outcome):
-        """A recoverable visual error is not a terminal result for this long task."""
-        return (getattr(self.backend,'high_level_harness',False) and outcome=='blocked'
+        """Retain the explicit historical budget-exhaustion protocol."""
+        return (self.early_blocked_guard and outcome=='blocked'
                 and self.actions < self.budget.max_actions
                 and self.calls < self.budget.max_calls
                 and self.backend.steps < self.budget.max_sim_steps
@@ -99,14 +133,16 @@ class VisionHarness:
     def _validation_arguments(self, name, arguments, request_id):
         # The supervisor may close a controller failure without impersonating
         # a model decision. All model-visible planning calls require one.
-        if (self.profile=='planning' and name=='finish' and
+        if ('decision' in self.catalog.get('finish', {}).get('inputSchema', {}).get('required', []) and name=='finish' and
                 request_id==SUPERVISOR_FINISH_ID and isinstance(arguments,dict) and
                 'decision' not in arguments):
-            return {**arguments,'decision':{
+            values = {
                 'state':'Controller stopped before formal finish',
                 'active_subgoal':'Close the episode',
                 'reason':'Supervisor cleanup',
-                'expected':'Independent evaluation is recorded'}}
+                'expected':'Independent evaluation is recorded'}
+            fields = self.catalog['finish']['inputSchema']['properties']['decision']['required']
+            return {**arguments, 'decision': {key: values[key] for key in fields}}
         return arguments
 
     def request_finish(self, arguments, request_id):
@@ -171,7 +207,7 @@ class VisionHarness:
                      self.catalog[name]['inputSchema'])
             if name!='finish': self.deadline.check()
             if name!='finish' and (self.calls>self.budget.max_calls or
-                    (not self.deadline.managed and time.monotonic()-self.started>self.budget.wall_seconds)):
+                    (not self.deadline.managed and self.budget.wall_seconds is not None and time.monotonic()-self.started>self.budget.wall_seconds)):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')
             execution_args = {k:v for k,v in arguments.items() if k != 'decision'}
             context=ToolContext(self, request_id=request_id, tool_name=name)
@@ -244,6 +280,9 @@ class VisionHarness:
         if self._false_time_exhaustion_claim(outcome,reason):
             raise SkillError('time_budget_available',
                              f'About {int(self.deadline.remaining())} seconds remain. '
+                             + (f'{self.budget.max_actions-self.actions} actions remain; '
+                                'the harness has reported no separate session limit. '
+                                if self.correct_false_clock_claims else '') +
                              'Inspect the current RGB and try a materially different recovery, '
                              'or name the actual technical blocker without claiming time ran out.')
         if (outcome=='achieved' and getattr(self.backend,'ideal_carry',False) and

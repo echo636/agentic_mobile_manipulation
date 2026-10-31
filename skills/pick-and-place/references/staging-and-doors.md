@@ -1,0 +1,11 @@
+# Staging, containers and doors
+
+Before staging, choose a visible support that will keep the item stable, reachable and recognizable **after the next operation**. Check the door's opening/swing region and the path from staging to the destination. A patch that is clear while a door is closed can disappear behind it when opened. Prefer a position visible from outside the swing region. If uncertain, establish a useful view while empty-handed before picking the item.
+
+For a loaded carrier, choose a position from which the contents can be inspected. A tall bag or basket on a high counter may hide its contents behind the side walls; a lower stable support or clear floor may give a view through the opening. This depends on the current RGB, not a universal preference for floor or counter. If the contents are hidden, move viewpoint first; relocate the carrier when its walls still prevent selection. Keep the contents clear of the robot's path.
+
+After placing or removing an item, inspect both the opening and nearby support/floor. Account for exposed or displaced items individually before calling the carrier empty. Select exposed top items before their supporting items when visible stacking makes this possible; grasping a support can move an unintended group.
+
+If a door hides a staged item, identify a visible retrieval approach. If none is available, close the door while empty-handed, retrieve the item, and stage it outside the region the door will cover. Then open the destination, verify the staged item is still visible, retrieve it and place it. Reopening the door before changing the obscured staging position recreates the same problem. Once a workable staging position and viewpoint are established, reuse their visual landmarks while they remain clear.
+
+A door may be open without its interior being visible from your side. Compare current views with the last successful door action before acting. If uncertain, obtain a view of the opening; use open/close to change an observed state or a specific obstruction, not as a substitute for checking the view. Group items using the same prepared destination when doing so preserves their required relations; close it after the batch rather than between items.

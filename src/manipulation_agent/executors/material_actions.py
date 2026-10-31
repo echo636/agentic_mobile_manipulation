@@ -62,7 +62,9 @@ class CheckedMaterialActions:
             candidates = [system for system in sorted(systems, key=lambda item: item.name)
                           if modifier.get_value(system)]
         elif removing:
-            systems = [system for system in scene.system_registry.objects if covered.get_value(system)]
+            # eligible_systems checks tool support before consulting Covered.
+            # Cloth is a registered system but has no material particle count.
+            systems = list(scene.system_registry.objects)
             candidates = eligible_systems(systems, modifier, covered=covered)
         else:
             systems = [scene.get_system(name, force_init=False) for name in modifier.conditions]
@@ -77,6 +79,9 @@ class CheckedMaterialActions:
             for system in candidates:
                 if not covered.set_value(system, not removing):
                     raise SkillError('execution_error', 'Material state setter rejected the action', changed=True)
+            if getattr(self.og.sim, '_native_particle_edit_barrier', False) is True:
+                self.og.sim.note_material_edit(
+                    primitive=primitive, target=target.name, materials=[system.name for system in candidates])
             for _ in range(min(6, max_steps)):
                 self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             if any(bool(covered.get_value(system)) == removing for system in candidates):
@@ -102,7 +107,8 @@ class CheckedMaterialActions:
                            if source.check_conditions_for_system(system.name))
         if Contains in target.states:
             systems.extend(system for system in scene.system_registry.objects
-                           if target.states[Contains].get_value(system))
+                           if tool.states[ParticleRemover].supports_system(system.name)
+                           and target.states[Contains].get_value(system))
         candidates = eligible_systems({system.name: system for system in systems}.values(),
                                       tool.states[ParticleRemover])
         if not candidates:

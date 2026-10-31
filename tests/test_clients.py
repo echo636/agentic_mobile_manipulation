@@ -134,7 +134,7 @@ wire_api = "responses"
                     self.assertEqual(set(json.loads((prepared.cwd/'mcp.json').read_text())['mcpServers']), {'manipulation'})
 
     def test_each_client_receives_the_selected_profile_prompt_and_catalog(self):
-        for profile in ['minimal', 'skills', 'workflow']:
+        for profile in ['minimal', 'skills', 'workflow', 'planning', 'planning_no_skills']:
             instructions = system_prompt(profile)
             names = [tool['name'] for tool in tool_specs(profile)]
             self.assertIn('initialize', names)
@@ -157,7 +157,9 @@ wire_api = "responses"
                         self.assertIn('system_prompt_path: ./system.md',
                                       (prepared.cwd / 'agent.yaml').read_text())
                     self.assertEqual(actual, instructions)
-                    self.assertIn('First call initialize({})', actual)
+                    initialize_instruction=('First call initialize with the required decision object'
+                        if profile in {'planning','planning_no_skills'} else 'First call initialize({})')
+                    self.assertIn(initialize_instruction, actual)
 
     def test_default_prompts_and_skills_do_not_require_hidden_observation_tools(self):
         hidden_tools = r'\b(?:observe|start_observation|get_observation|cancel_observation)\b'

@@ -128,6 +128,20 @@ class GTBackendTests(unittest.TestCase):
         self.assertFalse(record['online_mapping'])
         b._update_online_map.assert_not_called()
 
+    def test_model_selected_floor_waypoint_crosses_doorway(self):
+        b = self.backend()
+        selected_floor = Tensor([1., 0., 0.])
+        target = SimpleNamespace(get_position_orientation=lambda: (selected_floor, None),
+                                 selected_object=SimpleNamespace(category='floors'))
+        b._navigate(target, 700)
+        _, plan, _ = b._execute_gt_plan.call_args.args
+        self.assertGreater(plan.goal[0], .5)
+        self.assertLess(abs(plan.goal[0]-1.), .5)
+        record = json.loads((self.output/'navigation_plans.jsonl').read_text())
+        self.assertTrue(record['floor_waypoint'])
+        self.assertFalse(record['require_endpoint_visibility'])
+
+
     def test_current_movable_furniture_is_selected_without_task_bindings(self):
         b=self.backend()
         table=SimpleNamespace(name='table',category='breakfast_table',fixed_base=False,
@@ -214,7 +228,7 @@ class GTBackendTests(unittest.TestCase):
         target = {'image_ref': first_image['image_ref'], 'point': [.5, .5]}
         action = h.call('act', {'primitive': 'navigate_to', 'target': target, 'revision': 0}, 'navigate')
         self.assertTrue(action['ok'], action)
-        b._ground.assert_called_once_with(target, require_object=False)
+        b._ground.assert_called_once_with(target, require_object=True)
         looked = h.call('look', {'yaw_degrees': 45, 'revision': 1}, 'look')
         self.assertTrue(looked['ok'], looked)
         for result, revision in [(initial, 0), (action, 1), (looked, 2)]:

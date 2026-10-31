@@ -3,7 +3,7 @@ import unittest
 
 from manipulation_agent.executors.gt_navigation import (
     GridMap, GreedyGridFollower, NavigationError, NavigationPlan, candidate_score, plan_navigation,
-    visual_approach_settings,
+    navigation_approach_settings, visual_approach_settings,
 )
 from manipulation_agent.observations.rig import visible_rig_rays
 
@@ -15,6 +15,20 @@ def grid(width=81, height=81, resolution=.05, blocked=()):
 
 
 class GTNavigationTests(unittest.TestCase):
+    def test_grocery_door_floor_click_crosses_selected_waypoint(self):
+        # The recorded grocery run clicked visible floor beyond the garage door.
+        # Treating that click like a low handheld object kept the base 1.4 m
+        # away, outside the doorway, despite a free route to the selected cell.
+        g=GridMap(200,200,.05,(-7.,-4.),bytes([1])*(200*200))
+        start=(-3.7999997,2.6999998)
+        selected_floor=(-2.7683582,1.3365023)
+        standoff,_,require_visible=navigation_approach_settings(
+            1.81,0.005,0.00294,floor_waypoint=True,pitch_degrees=35,radius=.35)
+        plan=plan_navigation(g,start,selected_floor,standoff=standoff)
+        self.assertFalse(require_visible)
+        self.assertLess(math.dist(plan.goal,selected_floor),.5)
+        self.assertLess(plan.goal[1],2.)
+
     def test_elevated_target_keeps_lower_robot_band_outside_selected_point(self):
         standoff,margin=visual_approach_settings(1.83,0.,.7)
         self.assertEqual(standoff,.7)

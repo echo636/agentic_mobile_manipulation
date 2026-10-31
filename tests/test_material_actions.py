@@ -70,6 +70,33 @@ class MaterialActionTests(unittest.TestCase):
         self.assertEqual(failure.exception.code, 'pre_condition_error')
         self.assertTrue(self.covered_value[0])
 
+    def test_cleaning_does_not_query_unsupported_cloth_system(self):
+        self.scene.system_registry.objects.insert(0, types.SimpleNamespace(name='cloth'))
+        self.modifier.supports_system = lambda name: name == 'dust'
+        def covered(system):
+            if system.name == 'cloth':
+                raise NotImplementedError('Native cloth has no particle counter')
+            return self.covered_value[0]
+        self.covered.get_value = covered
+        with self.modules:
+            result = self.backend._checked_surface_action('sweep', self.target, 6)
+        self.assertEqual(result['material_systems'], ['dust'])
+
+    def test_soak_does_not_query_unsupported_cloth_in_source(self):
+        self.scene.system_registry.objects.insert(0, types.SimpleNamespace(name='cloth'))
+        self.modifier.supports_system = lambda name: name == 'dust'
+        def contains(system):
+            if system.name == 'cloth':
+                raise NotImplementedError('Native cloth has no particle counter')
+            return True
+        self.target.states[self.Contains] = types.SimpleNamespace(get_value=contains)
+        self.tool.states[self.Saturated] = types.SimpleNamespace(
+            set_value=lambda system, value: setattr(self, 'saturated', value) or True,
+            get_value=lambda system: getattr(self, 'saturated', False))
+        with self.modules:
+            result = self.backend._checked_soak(self.target, 6)
+        self.assertEqual(result['material_systems'], ['dust'])
+
     def test_spray_requires_projection_applicator_and_applies_material(self):
         self.tool.category = 'atomizer'
         self.tool.states = {self.ParticleApplier: self.modifier}

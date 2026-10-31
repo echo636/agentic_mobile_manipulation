@@ -20,8 +20,18 @@ from .contracts import SkillError
 from .deadline import DEADLINE_STEP_SENTINEL, EpisodeDeadline
 from .records import write_json
 from .startup_progress import startup_stage
-from .goal_grounding import efficient_grounding, evaluate_once_per_literal
+from .goal_grounding import efficient_grounding, evaluate_once_per_literal, FactoredGroundOptions
 from .task_bindings import audit_wildcard_bindings, validate_runtime_bindings
+from .scene_geometry import CompleteShellAdmission, SHELL_VERSION, is_static_shell, restore_static_shell
+
+
+def register_complete_shell_scene():
+    """Register the research scene subclass lazily, without patching OmniGibson."""
+    from omnigibson.scenes import REGISTERED_SCENES
+    from omnigibson.scenes.interactive_traversable_scene import InteractiveTraversableScene
+    if 'CompleteShellInteractiveTraversableScene' not in REGISTERED_SCENES:
+        class CompleteShellInteractiveTraversableScene(CompleteShellAdmission, InteractiveTraversableScene):
+            pass
 
 
 def normalize_embedded_robot(data, *, reset_controller_state=False):
@@ -132,6 +142,14 @@ class OmniGibsonBackend:
         if version != "3.9.2":
             raise RuntimeError(f"This research adapter requires OmniGibson 3.9.2, got {version}")
         self.output = Path(output)
+        research_path = os.environ.get('MAS_RESEARCH_NATIVE_INSTANCE')
+        self.research_instance = None
+        if research_path:
+            from .research_native import load_instance
+            self.research_instance = load_instance(research_path, task=task, instance=instance)
+            if self.research_instance.get('requires_gpu_dynamics') and os.environ.get('MAS_CPU_DYNAMICS') == '1':
+                raise ValueError('This research instance requires native GPU particle/cloth dynamics')
+            write_json(self.output / 'research_native_instance.json', self.research_instance)
         with self._startup_stage('import_numpy_torch'):
             import numpy as np
             import torch
@@ -150,14 +168,14 @@ class OmniGibsonBackend:
             from omegaconf import OmegaConf
             from gello.utils.og_teleop_cfg import DISABLED_TRANSITION_RULES
 
-        if instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
+        if self.research_instance is None and instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
             raise ValueError("Instance must belong to this pinned source's public test split")
         gm.HEADLESS = True
         gm.RENDER_VIEWER_CAMERA = bool(getattr(self,'private_viewer_grounding',False))
         gm.ENABLE_HQ_RENDERING = False
-        # The hot-drink task includes water particles; GPU dynamics is required
-        # for the water system to initialize on the selected RTX GPU.
-        gm.USE_GPU_DYNAMICS = True
+        # Particle systems require GPU initialization. Rigid-only tasks may
+        # select CPU dynamics to avoid GPU PhysX failures during control steps.
+        gm.USE_GPU_DYNAMICS = os.environ.get('MAS_CPU_DYNAMICS') != '1'
         gm.ENABLE_TRANSITION_RULES = True
         self.og, self.torch = og, torch
         self.task_name, self.instance, self.seed, self.output = task, instance, seed, output
@@ -181,6 +199,53 @@ class OmniGibsonBackend:
 
         with self._startup_stage('prepare_environment_config'):
             config = self._config(task, gpu, max_steps)
+            if config['scene']['type'] == 'CompleteShellInteractiveTraversableScene':
+                register_complete_shell_scene()
+            if self.research_instance and self.research_instance.get('material_condition_compatibility'):
+                from .material_conditions import PROTOCOL, install
+                if self.research_instance['material_condition_compatibility'] != PROTOCOL:
+                    raise ValueError('Unknown native material condition protocol')
+                install(output / 'native_material_conditions.json')
+            if self.research_instance and self.research_instance.get('solvent_condition_compatibility'):
+                from .solvent_conditions import PROTOCOL, install
+                if self.research_instance['solvent_condition_compatibility'] != PROTOCOL:
+                    raise ValueError('Unknown native solvent condition protocol')
+                install(output / 'native_solvent_conditions.json')
+            if self.research_instance and self.research_instance.get('particle_compatibility'):
+                from .simulator_particles import PROTOCOL, install
+                if self.research_instance['particle_compatibility'] != PROTOCOL:
+                    raise ValueError('Unknown native particle runtime protocol')
+                install(output / 'native_particle_runtime.json',
+                        solver_type=self.research_instance.get('physics_solver_type'))
+            if self.research_instance and self.research_instance.get('contact_warmup_guard'):
+                from .simulator_contacts import PROTOCOL, install
+                if self.research_instance['contact_warmup_guard'] != PROTOCOL:
+                    raise ValueError('Unknown native contact warmup protocol')
+                install(output / 'native_contact_warmup.json')
+            if self.research_instance and self.research_instance.get('cloth_compatibility'):
+                from .cloth_compatibility import PROTOCOL, install
+                if self.research_instance['cloth_compatibility'] != PROTOCOL:
+                    raise ValueError('Unknown research cloth compatibility protocol')
+                install(output / 'cloth_import_compatibility.json')
+            if self.research_instance and self.research_instance.get('cloth_topology'):
+                from .cloth_topology import install
+                topology = self.research_instance['cloth_topology']
+                install(topology['directory'], output / 'cloth_topology_restore.json',
+                        manifest_sha256=topology['manifest_sha256'])
+            self._native_geometry_sync = None
+            if self.research_instance and self.research_instance.get('device_compatibility'):
+                from .simulator_devices import PROTOCOL, install
+                if self.research_instance['device_compatibility'] != PROTOCOL:
+                    raise ValueError('Unknown research native device/geometry protocol')
+                installed = install(output / 'native_device_compatibility.json')
+                self._native_geometry_sync = installed['ensure_pose_sync']
+            if self.research_instance and self.research_instance.get('physics_edit_barrier'):
+                from .simulator_barriers import PROTOCOL, SLEEP_PROTOCOL, install
+                barrier = self.research_instance['physics_edit_barrier']
+                if barrier not in (PROTOCOL, SLEEP_PROTOCOL):
+                    raise ValueError('Unknown native physics edit barrier protocol')
+                install(output / 'native_physics_edit_barriers.json',
+                        restore_sleep_flags=(barrier == SLEEP_PROTOCOL))
             write_json(output / "environment_config.json", config)
 
         class PassivePolicy:
@@ -191,8 +256,21 @@ class OmniGibsonBackend:
             def load_env(inner, env_wrapper):
                 for rule in DISABLED_TRANSITION_RULES:
                     rule.ENABLED = False
-                inner.human_stats = load_human_stats(task)
-                return og.Environment(configs=config)
+                inner.human_stats = None if self.research_instance else load_human_stats(task)
+                environment = og.Environment(configs=config)
+                if self._native_geometry_sync is not None:
+                    self._native_geometry_sync()
+                return environment
+
+            def load_task_instance(inner, instance_id):
+                if self.research_instance:
+                    from .research_native import restore_state
+                    if instance_id != self.research_instance['instance']:
+                        raise ValueError('Unexpected research instance restore request')
+                    restore_state(inner.env, self.research_instance['task_state'])
+                    inner._reset_light_synchronizer()
+                    return
+                return super().load_task_instance(instance_id)
 
             def load_policy(inner):
                 return PassivePolicy()
@@ -201,14 +279,27 @@ class OmniGibsonBackend:
                 return obs
 
             def load_metrics(inner):
-                metrics = super().load_metrics()
+                # No human reference is fabricated for a generated research
+                # instance. TaskMetric still tracks initial predicates/steps;
+                # its reference-normalized aggregate is never requested below.
+                metrics = [TaskMetric()] if self.research_instance else super().load_metrics()
                 # Preserve the pinned official metric implementation and formula.
                 # Only memoize identical predicate reads within a scoring pass.
                 for metric in metrics:
                     if isinstance(metric, TaskMetric):
                         reset = metric.reset
                         compute = metric._compute_episode_metrics
-                        def cached_reset(env, original=reset):
+                        def cached_reset(env, original=reset, metric=metric):
+                            if isinstance(env.task.ground_goal_state_options, FactoredGroundOptions):
+                                if not self.research_instance:
+                                    raise ValueError('Factored scoring is confined to native research instances')
+                                # These runs never request human-normalized TaskMetric
+                                # aggregates. Native task termination remains intact.
+                                metric.state[env.scene] = {}
+                                metric.timesteps = 0
+                                metric.render_timestep = og.sim.get_rendering_dt()
+                                metric.initial_predicate_states = []
+                                return
                             with evaluate_once_per_literal(env.task.ground_goal_state_options):
                                 return original(env)
                         def cached_compute(env, info, original=compute):
@@ -236,6 +327,18 @@ class OmniGibsonBackend:
         with self._startup_stage('instance_reset'):
             self.evaluator.reset()
         self.env, self.robot = self.evaluator.env, self.evaluator.robot
+        if getattr(self, '_expected_static_shell', None):
+            actual = {obj.name for obj in self.env.scene.objects}
+            missing = sorted(set(self._expected_static_shell) - actual)
+            write_json(output / 'scene_shell_validation.json', {
+                'version': SHELL_VERSION,
+                'expected': self._expected_static_shell,
+                'loaded': sorted(set(self._expected_static_shell) & actual),
+                'missing': missing, 'passed': not missing,
+                'scope': 'runtime_object_presence_not_render_or_navigation_acceptance',
+            })
+            if missing:
+                raise ValueError('Incomplete static scene shell: ' + str(missing))
         if task == 'prepare_and_serve_hot_drink' and os.environ.get('OG_SWITCH_TO_CPU_AFTER_WATER'):
             # GPU startup omits the contact cache to avoid its direct-GPU
             # articulation fault. After switching the scene to CPU, restore
@@ -339,10 +442,13 @@ class OmniGibsonBackend:
         scene = self.env.task.scene_name
         filename = self.env.task.get_cached_activity_scene_filename(
             scene_model=scene, activity_name=task, activity_definition_id=0, activity_instance_id=instance)
-        instance_path = Path(get_task_instance_path(scene, f"{scene}_task_{task}_instances/{filename}-tro_state", mode="public_test"))
+        instance_path = (Path(self.research_instance['task_state']) if self.research_instance else
+                         Path(get_task_instance_path(scene, f"{scene}_task_{task}_instances/{filename}-tro_state", mode="public_test")))
         self.input_hashes["task_instance_state"] = hashlib.sha256(instance_path.read_bytes()).hexdigest()
         definition_path = Path(bddl.__file__).parent / "activity_definitions" / task / "problem0.bddl"
         self.input_hashes["bddl_definition"] = hashlib.sha256(definition_path.read_bytes()).hexdigest()
+        if self.research_instance and self.input_hashes['bddl_definition'] != self.research_instance['bddl_definition_sha256']:
+            raise ValueError('Runtime BDDL differs from the frozen research definition')
         write_json(output / "dependency_versions.json", {d.metadata["Name"]: d.version for d in metadata.distributions() if d.metadata["Name"]})
         self.task_metric = next(m for m in self.evaluator.metrics if isinstance(m, TaskMetric))
         with self._startup_stage('construct_symbolic_primitives'):
@@ -352,8 +458,11 @@ class OmniGibsonBackend:
         with self._startup_stage('initial_goal_evaluation'):
             self.initial_goals = self._goal_options()
         # Keep original task-instance files intact. Evaluator performs its official restoration.
-        self.task_metadata = {"task": task, "instance": instance, "split": "public_test",
+        self.task_metadata = {"task": task, "instance": instance,
+                              "split": "research_development" if self.research_instance else "public_test",
                               "scene": self.env.task.scene_name, "seed": seed}
+        if self.research_instance:
+            self.task_metadata['scene_variant'] = self.research_instance.get('scene_variant', 'unrecorded')
 
     def _sync_diagnostic_articulation_visuals(self, obj):
         """Copy current articulated link poses into USD for frozen RGB diagnostics."""
@@ -373,7 +482,8 @@ class OmniGibsonBackend:
         root = Path(os.environ["OMNIGIBSON_DATA_PATH"])
         instances = root / "2026-challenge-task-instances"
         manifest = instances / "metadata" / "available_tasks.yaml"
-        task_cfg = yaml.safe_load(manifest.read_text())[task][0]
+        research = getattr(self, 'research_instance', None)
+        task_cfg = research if research else yaml.safe_load(manifest.read_text())[task][0]
         self._robot_start_position = task_cfg["robot_start_position"]
         self._robot_start_orientation = task_cfg["robot_start_orientation"]
         config = generate_basic_environment_config(task, task_cfg)
@@ -400,8 +510,10 @@ class OmniGibsonBackend:
         # HolonomicBaseJointController fixes this internally and has no such constructor argument.
         robot_cfg["controller_config"]["base"].pop("use_delta_commands")
         scene = task_cfg["scene_model"]
-        template = instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json"
-        instance_path = template.parent / f'{scene}_task_{task}_instances' / f'{scene}_task_{task}_0_{self.instance}_template-tro_state.json'
+        template = (Path(research['scene_template']) if research else
+                    instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json")
+        instance_path = (Path(research['task_state']) if research else
+                         template.parent / f'{scene}_task_{task}_instances' / f'{scene}_task_{task}_0_{self.instance}_template-tro_state.json')
         self.required_instance_bindings = set(json.loads(instance_path.read_text())) - {'robot_poses'}
         deferred = []
         template, data, rejected = select_compatible_scene(
@@ -415,17 +527,30 @@ class OmniGibsonBackend:
                 'selected': str(template), 'rejected': rejected,
                 'policy': 'use_supplied_full_template_with_matching_instance_bindings',
                 'original_assets_unmodified': True, 'task_instance_unchanged': True})
+        complete_shell = ((task == 'prepare_and_serve_hot_drink' and os.environ.get('MAS_HIGH_LEVEL_HARNESS') == '1')
+                          or bool(research and research.get('complete_static_shell')))
         full_template=template.with_name(template.name.replace('-partial_rooms',''))
         if full_template!=template and full_template.is_file():
             full_data=json.loads(full_template.read_text())
-            restored_floors=restore_static_floor_geometry(data,full_data)
+            restored_floors=(restore_static_shell(data, full_data) if complete_shell
+                             else restore_static_floor_geometry(data,full_data))
             if restored_floors:
                 write_json(self.output/'scene_geometry_repair.json',{
-                    'policy':'restore_absent_fixed_floors_from_same_supplied_full_template',
-                    'added_floors':restored_floors,'full_template_sha256':hashlib.sha256(full_template.read_bytes()).hexdigest(),
+                    'policy':SHELL_VERSION if complete_shell else 'restore_absent_fixed_floors_from_same_supplied_full_template',
+                    **({'added_shell_objects': restored_floors} if complete_shell else {'added_floors': restored_floors}),
+                    'full_template_sha256':hashlib.sha256(full_template.read_bytes()).hexdigest(),
                     'task_object_bindings_unchanged':True,'original_assets_unmodified':True,
                     'scope':'research_scene_geometry_repair_not_official_submission'})
+        if complete_shell:
+            self._expected_static_shell = {name: entry['args']['category']
+                for name, entry in data['objects_info']['init_info'].items() if is_static_shell(entry)}
+            config['scene']['type'] = 'CompleteShellInteractiveTraversableScene'
         migrations = normalize_embedded_robot(data, reset_controller_state=True)
+        if research and research.get('robot_base_frame'):
+            if research['robot_base_frame'] != 'holonomic_base_frame_at_start_pose_v1':
+                raise ValueError('Unsupported research robot base frame')
+            from .research_native import rebase_holonomic_robot
+            migrations.extend(rebase_holonomic_robot(data, research))
         if migrations:
             write_json(self.output/'scene_compatibility.json',{'changes':migrations,
                        'original_template_unmodified':True,'asset_hash_check_preserved':True})
@@ -433,6 +558,9 @@ class OmniGibsonBackend:
         if len(embedded) > 1:
             raise ValueError("Multiple embedded robots are unsupported")
         if embedded:
+            # The template owns this robot; do not filter it while also
+            # omitting the separately configured robot below.
+            config["scene"]["include_robots"] = True
             args = embedded[0]["args"]
             for key, value in robot_cfg.items():
                 if key not in {"type", "name", "position", "orientation"}:
@@ -446,19 +574,21 @@ class OmniGibsonBackend:
         encoded = json.dumps(data, sort_keys=True)
         patched = cache / (hashlib.sha256(encoded.encode()).hexdigest() + ".json")
         patched.write_text(encoded)
-        self.input_hashes = {"available_tasks": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        registry_hash = ({'research_instance_spec': research['spec_sha256']} if research else
+                         {'available_tasks': hashlib.sha256(manifest.read_bytes()).hexdigest()})
+        self.input_hashes = {**registry_hash,
                              "scene_template": hashlib.sha256(template.read_bytes()).hexdigest(),
                              "configured_scene": hashlib.sha256(encoded.encode()).hexdigest()}
         config["scene"].update(scene_file=str(patched), trav_map_resolution=0.05,
                               default_erosion_radius=0.57, waypoint_resolution=0.1)
         if os.environ.get('MAS_HIGH_LEVEL_HARNESS') == '1':
-            # The task rooms look through their windows into the garden.
-            # Include its floor and exterior backdrop. Loading corridor and
-            # dining geometry here is unsafe: their walls intersect the pinned
-            # kitchen/living traversability route used by the mobile base.
+            # Limit furniture to task rooms. The complete-shell subclass keeps
+            # fixed floors/windows beyond them, matching the globally loaded
+            # walls without admitting unrelated furniture.
             config['scene']['load_room_instances'] = [
                 'kitchen_0', 'living_room_0', 'garden_0']
-        config["env"].update(device=f"cuda:{gpu}", automatic_reset=False)
+        config["env"].update(device=(research.get("tensor_pipeline_device", f"cuda:{gpu}")
+                                     if research else f"cuda:{gpu}"), automatic_reset=False)
         if getattr(self,'private_viewer_grounding',False):
             # Set the initial product size; never resize it after rig creation.
             config.setdefault('render',{}).update(viewer_width=image_size,viewer_height=image_size)
@@ -475,6 +605,10 @@ class OmniGibsonBackend:
 
     def _goal_options(self) -> list[list[bool]]:
         options = self.env.task.ground_goal_state_options
+        if isinstance(options, FactoredGroundOptions):
+            if not self.research_instance:
+                raise ValueError('Factored scoring is confined to native research instances')
+            return [options.best_values(self.env.task._evaluate_predicate)]
         with evaluate_once_per_literal(options):
             return [[bool(pred.evaluate(self.env.task._evaluate_predicate)) for pred in option]
                     for option in options]
@@ -531,10 +665,13 @@ class OmniGibsonBackend:
                 "images": self._capture(), "available_skills": list(__import__("manipulation_agent.contracts", fromlist=["SKILLS"]).SKILLS)}
 
     def _step(self, action) -> None:
-        obs, reward, terminated, truncated, info = self.env.step(action)
+        from .executors.profiling import component
+        with component(self, 'environment_step'):
+            obs, reward, terminated, truncated, info = self.env.step(action)
         self.steps += 1
-        for metric in self.evaluator.metrics:
-            metric.step(self.env, action, obs, reward, terminated, truncated, info)
+        with component(self, 'evaluation_metrics_step'):
+            for metric in self.evaluator.metrics:
+                metric.step(self.env, action, obs, reward, terminated, truncated, info)
 
     def _navigate(self, target, max_steps: int) -> dict:
         """Ideal navigation: reachable eroded-map endpoint teleport, not physical path execution.
@@ -776,12 +913,20 @@ class OmniGibsonBackend:
         official_task_success = bool(
             self.env.task._termination_conditions['predicate']._check_goal_fn()[0])
         # This calls the pinned official TaskMetric, including its initial-state partial-credit convention.
-        official = self.task_metric._compute_episode_metrics(self.env, self.task_metric.state[self.env.scene])
-        if self.steps == 0:
+        research = getattr(self, 'research_instance', None)
+        official = (None if research else
+                    self.task_metric._compute_episode_metrics(self.env, self.task_metric.state[self.env.scene]))
+        if official is not None and self.steps == 0:
             official["time"]["normalized_time"] = None
         return {"task_success": task_success, "official_task_success": official_task_success,
                 "last_env_step_task_success": cached_step_success,
                 "goal_options": goals, "initial_goal_options": self.initial_goals,
+                "goal_options_representation": ({
+                    "protocol": self.env.task.ground_goal_state_options.protocol,
+                    "full_binding_count": len(self.env.task.ground_goal_state_options),
+                    "recorded_bindings": "one_exact_best_binding_per_scoring_pass",
+                } if isinstance(getattr(self.env.task, 'ground_goal_state_options', None), FactoredGroundOptions)
+                   else {"protocol": "exhaustive"}),
                 "goal_satisfaction_fraction": max((sum(o) / len(o) for o in goals if o), default=0),
                 "official_metrics": official, "ideal_navigation_distance_m": self.navigation_distance,
                 "inside_placement": self.inside_placement,
@@ -792,7 +937,24 @@ class OmniGibsonBackend:
 
     def provenance(self) -> dict:
         gpu = os.environ.get("OMNIGIBSON_GPU_ID", "0")
-        query = subprocess.run(["nvidia-smi", "-i", gpu, "--query-gpu=uuid", "--format=csv,noheader"], capture_output=True, text=True)
+        # CUDA ordinals and Kit device settings are not physical nvidia-smi
+        # indices. Record observed process membership rather than guessing.
+        gpu_uuids = []
+        gpu_identity_error = None
+        try:
+            query = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,gpu_uuid",
+                                    "--format=csv,noheader"], capture_output=True,
+                                   text=True, timeout=5)
+            if query.returncode == 0:
+                for line in query.stdout.splitlines():
+                    fields = [field.strip() for field in line.split(',')]
+                    if len(fields) == 2 and fields[0] == str(os.getpid()) and fields[1].startswith('GPU-'):
+                        gpu_uuids.append(fields[1])
+                gpu_uuids = sorted(set(gpu_uuids))
+            else:
+                gpu_identity_error = 'nvidia-smi query failed'
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            gpu_identity_error = type(exc).__name__
         packages = {p: metadata.version(p) for p in ("omnigibson", "torch", "isaacsim", "bddl", "mcp")}
         source = subprocess.run(["git", "-C", str(Path(self.og.__file__).parent), "rev-parse", "HEAD"], capture_output=True, text=True)
         versions = {}
@@ -802,9 +964,25 @@ class OmniGibsonBackend:
             versions[name] = version.read_text().strip() if version.exists() else "unresolved"
         return {"name": "OmniGibson", "executor": "official_symbolic_plus_ideal_navigation",
                 "observation_mode": self.mode, "packages": packages, "gpu_index": gpu,
+                "dynamics_mode": "cpu" if os.environ.get('MAS_CPU_DYNAMICS') == '1' else "gpu",
+                "tensor_pipeline_device": str(self.env.device),
+                "physics_solver_type": self.og.sim.get_physics_context().get_solver_type(),
+                "articulation_edit_barrier": (self.research_instance.get('articulation_edit_barrier')
+                                               if self.research_instance else None),
+                "camera_initialization_barrier": (self.research_instance.get('camera_initialization_barrier')
+                                                  if self.research_instance else None),
+                "physics_edit_barrier": (self.research_instance.get('physics_edit_barrier')
+                                         if self.research_instance else None),
+                "particle_compatibility": (self.research_instance.get("particle_compatibility")
+                                           if self.research_instance else None),
+                "factored_research_goals": (os.environ.get('MAS_FACTORED_RESEARCH_GOALS') == '1'),
                 "inside_placement": self.inside_placement,
                 "omnigibson_source_commit": source.stdout.strip(),
-                "gpu_uuid": query.stdout.strip(), "assets": versions, "input_hashes": self.input_hashes,
+                "gpu_uuid": gpu_uuids[0] if len(gpu_uuids) == 1 else None,
+                "gpu_uuids": gpu_uuids, "gpu_identity_source": "nvidia-smi process membership",
+                "gpu_identity_error": gpu_identity_error,
+                "cuda_visible_devices": os.environ.get('CUDA_VISIBLE_DEVICES'),
+                "assets": versions, "input_hashes": self.input_hashes,
                 "task_instance": self.task_metadata, "official_submission_eligible": False}
 
     def close(self) -> None:

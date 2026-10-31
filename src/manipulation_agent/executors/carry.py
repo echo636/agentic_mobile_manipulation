@@ -81,7 +81,34 @@ class ControlledCarry:
             for obj,pose in self._object_anchor:
                 obj.set_position_orientation(*pose);obj.keep_still()
 
+    def _record_open_joints(self, obj, state, phase, wanted):
+        """Private read-only evidence; never included in action feedback."""
+        record = {'status': 'open_joint_snapshot', 'phase': phase,
+                  'target': obj.name, 'requested_open': wanted, 'joints': []}
+        try:
+            record['observed_open'] = bool(state.get_value())
+            for joint in state.relevant_joints_info[1]:
+                record['joints'].append({'name': joint.name,
+                    'position': float(joint.get_state()[0]),
+                    'lower_limit': float(joint.lower_limit),
+                    'upper_limit': float(joint.upper_limit)})
+        except Exception as exc:
+            record['snapshot_error'] = type(exc).__name__
+        self._placement_record(record)
+
+    def _prepare_articulation_edit(self, primitive):
+        if primitive not in {'open', 'close'} or getattr(self.og.sim, '_native_particle_edit_barrier', False) is not True:
+            return
+        protocol = (getattr(self, 'research_instance', None) or {}).get('articulation_edit_barrier')
+        if protocol is None:
+            self.og.sim.prepare_articulation_after_material_edit()
+        elif protocol == 'native_state_checked_before_articulation_edit_v1':
+            self.og.sim.prepare_articulation_after_material_edit(force=True, reason='before_native_' + primitive)
+        else:
+            raise ValueError('Unsupported research articulation edit barrier')
+
     def _ideal_state_action(self, primitive, obj, max_steps):
+        self._prepare_articulation_edit(primitive)
         from omnigibson.object_states import Open,ToggledOn
         from .placement import placement_transaction
         state=Open if primitive in {'open','close'} else ToggledOn
@@ -91,6 +118,8 @@ class ControlledCarry:
         # with their supporting volume, not be left at the previous world pose.
         payload=self._container_payload(obj) if state is Open else []
         repaired_contents=0
+        if state is Open:
+            self._record_open_joints(obj,obj.states[state],"before",wanted)
         stabilized=getattr(self,'_stabilized_open_joints',{})
         prior=stabilized.get(obj) if state is Open else None
         try:
@@ -100,6 +129,7 @@ class ControlledCarry:
                 accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
                 if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
                 if state is Open:
+                    self._record_open_joints(obj,obj.states[state],"after_setter",wanted)
                     self._sync_diagnostic_articulation_visuals(obj)
                 if state is Open:
                     if wanted:
@@ -110,6 +140,8 @@ class ControlledCarry:
                     self._stabilized_open_joints=stabilized
                 self._relocate_container_payload(payload)
                 for _ in range(min(30,max_steps)):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
+                if state is Open:
+                    self._record_open_joints(obj,obj.states[state],"after_settling",wanted)
                 if bool(obj.states[state].get_value())!=wanted:
                     raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
                 if state is Open and not wanted:
@@ -252,7 +284,7 @@ class ControlledCarry:
         origin, orientation = obj.get_position_orientation()
         payload = []
         for system in self.env.scene.system_registry.objects:
-            if not system.n_particles or not self.env.scene.is_physical_particle_system(system_name=system.name):
+            if not self.env.scene.is_physical_particle_system(system_name=system.name) or not system.n_particles:
                 continue
             contained = obj.states[ContainedParticles].get_value(system)
             indices = self.torch.where(contained.in_volume)[0]

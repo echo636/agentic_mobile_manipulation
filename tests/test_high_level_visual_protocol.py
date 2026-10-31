@@ -86,11 +86,16 @@ def test_navigation_is_its_own_pixel_selected_action(tmp_path):
     backend.high_level_harness = True
     backend.semantic_magic = False
     backend._demo_focus = None
-    backend._ground = Mock(return_value=(None, 'point', {'selected_pixel': target['point']}))
+    selected_floor = SimpleNamespace(category='floors')
+    backend._ground = Mock(return_value=(selected_floor, 'point', {'selected_pixel': target['point']}))
     backend._navigate = Mock(return_value={'nav_status': 'reached'})
 
     result = backend.execute_visual('navigate_to', target, 100)
 
-    backend._ground.assert_called_once_with(target, require_object=False)
+    backend._ground.assert_called_once_with(target, require_object=True)
     backend._navigate.assert_called_once()
+    anchor, max_steps = backend._navigate.call_args.args
+    assert anchor.selected_object is selected_floor
+    assert anchor.aabb == ('point', 'point')
+    assert max_steps == 100
     assert result['nav_status'] == 'reached'

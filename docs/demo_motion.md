@@ -1,5 +1,26 @@
 # Visible manipulation for demos
 
+Two experiment entry points share the same RGB model controller and simulator
+setup. `scripts/run_demo_trial.py` sets `MAS_DEMO_MOTION=1`; the matching
+`scripts/run_no_demo_trial.py` sets it to `0`. For the first ten public tasks,
+use `scripts/run_demo_first10.py` or `scripts/run_no_demo_first10.py` with the
+same arguments. Give the two modes separate `--output` directories. Both
+write the selected mode to `summary.json`, and `scripts/audit_demo_trial.py`
+checks the mode against `run/run.json` before accepting the result. The
+no-demo audit does not require a visible-arm motion log; both modes still
+require model-selected actions, a successful whole-task evaluation, and a
+validated continuous video. Turning demo motion off does not restore the
+source version or other settings used by an older experiment cohort.
+
+For a single task, invoke either entry point with the same `--task`,
+`--instruction`, `--output`, `--omnigibson-source`, `--provider-profile`, and
+isolated `--codex-home` arguments. For a first-ten batch, use the corresponding
+`run_*_first10.py` script; it takes `--output`, `--omnigibson-source`,
+`--provider-profile`, and `--codex-home`. After the batch, publish each mode's
+output directory separately with `scripts/publish_demo_trials.py --trials
+<output> --site-root <site>`. Its default index names are
+`demo_motion_index.html` and `no_demo_motion_index.html`, respectively.
+
 `MAS_DEMO_MOTION=1` enables an opt-in presentation path in the RGB OmniGibson
 adapter. The public MCP `act` interface and the model-selected image pixel do
 not change. Before an ideal object-state operation, the adapter solves a

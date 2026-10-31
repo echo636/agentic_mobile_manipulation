@@ -13,12 +13,15 @@ from ..deadline import EpisodeDeadline
 from ..omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, centered_head_height, look_at_orientation
 from ..records import now
-from .placement import CheckedPlacement
+from .placement import CheckedPlacement, project_before_post_step
 from .profiling import component, action_profile
 from .carry import ControlledCarry, bulk_grasp_reason
 from .material_actions import CheckedMaterialActions
 from .demo_motion import DemoMotion
 from ..high_level_hot_drink import HighLevelHotDrink
+
+VISUAL_MANIPULATION_REACH_M = 1.4
+ENVIRONMENT_OPEN_CLOSE_PROTOCOL = 'non_task_open_close_v1'
 
 
 def env_flag(name):
@@ -413,7 +416,17 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         self._restore_object_anchor()
         self._restore_stabilized_containers()
         self._carry_follow()
-        with component(self,'physics_and_metrics'):super()._step(action)
+        # The ideal motor retains verified container contents and carried
+        # assemblies. Native env.step reads task state inside _post_step;
+        # commit that same projection before its reads on every control step,
+        # including a later grasp/navigation after the placement has ended.
+        def project_motor_state():
+            if self._base_target is not None:self._restore_base_target()
+            self._restore_object_anchor()
+            self._restore_stabilized_containers()
+            self._carry_follow()
+        with project_before_post_step(self.env, project_motor_state):
+            with component(self,'physics_and_metrics'):super()._step(action)
         if self._base_target is not None:
             self._restore_base_target()
         self._restore_object_anchor();self._restore_stabilized_containers();self._carry_follow()
@@ -545,7 +558,19 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             held=self._get_held()
             observation['semantic_targets']=list(targets)
             observation['held_target']=next((name for name,obj in targets.items() if obj is held),None)
+        self._prepare_research_camera_physics()
         return observation
+
+    def _prepare_research_camera_physics(self):
+        research = getattr(self, 'research_instance', None) or {}
+        protocol = research.get('camera_initialization_barrier')
+        if protocol is None or getattr(self, '_research_camera_physics_prepared', False):
+            return
+        if protocol != 'native_state_checked_post_rgb_startup_v1':
+            raise ValueError('Unsupported research camera initialization barrier')
+        self.og.sim.prepare_articulation_after_material_edit(
+            force=True, reason='initial_rgb_capture_complete')
+        self._research_camera_physics_prepared = True
 
     def _semantic_targets(self):
         scope=self.env.task.object_scope
@@ -799,8 +824,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
     def _ground(self,target, *, require_object=True):
         """Use the chosen pixel's depth backprojection directly as the target.
 
-        Navigation needs only this point. Manipulation additionally resolves the
-        first visual object on the same ray, solely for its simulator handle.
+        Resolve the first visual object on the same ray for its simulator handle
+        and navigation intent: a low item is not a floor waypoint. Navigation
+        and manipulation both keep the original depth-backprojected point.
         No mesh/collision depth comparison, point replacement, alternate pixel,
         semantic target search or task-scope lookup occurs.
         """
@@ -906,7 +932,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         return False
 
     def _dynamic_floor_obstacles(self, base_z):
-        """Current movable floor furniture, for private base-path clearance."""
+        """Current movable floor objects, for private base-path clearance."""
         held=self._get_held()
         carried={id(held),*(id(obj) for obj,_ in self._carry_contents)}
         boxes=[];names=[]
@@ -920,11 +946,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 continue
             lo,hi=obj.aabb
             width=float(hi[0]-lo[0]);depth=float(hi[1]-lo[1])
-            # Low floor containers still intersect the moving base: the
-            # Christmas basket reaches only 0.19 m yet a route through its
-            # footprint pushed it over two metres in the simulator.
+            # Small staged containers also intersect the moving base. Keep
+            # their non-degenerate footprint even below furniture dimensions.
             if (float(lo[2])>base_z+.12 or float(hi[2])<base_z+.08
-                    or max(width,depth)<.35):
+                    or min(width,depth)<=.00001):
                 continue
             boxes.append((float(lo[0]),float(lo[1]),float(hi[0]),float(hi[1])))
             names.append(obj.name)
@@ -950,11 +975,88 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 anchors.append(obj)
         return anchors
 
+    def _floor_map_with_open_garage_door(self, floor):
+        """Use the supplied open-door map only around this task's opened door."""
+        trav = self.env.scene.trav_map
+        original = trav.floor_map[floor]
+        if (floor != 0 or getattr(self, 'task_metadata', {}).get('task') != 'carrying_in_groceries'
+                or self.env.task.scene_name != 'house_double_floor_lower'):
+            return original, None
+        door = next((obj for obj in self.env.scene.objects if obj.name == 'door_bexenl_0'), None)
+        if door is None:
+            return original, None
+        from omnigibson import object_states
+        state = door.states.get(object_states.Open)
+        if state is None or not bool(state.get_value()):
+            return original, None
+        import cv2
+        from .doorway_traversability import merge_open_door_cells
+        source = Path(self.env.scene.scene_dir) / 'layout' / 'floor_trav_open_door_0.png'
+        if not source.is_file():
+            raise SkillError('navigation_map_missing', f'Open-door map is absent: {source}')
+        size = (int(original.shape[1]), int(original.shape[0]))
+        cached = getattr(self, '_grocery_open_door_map_cache', None)
+        if cached is None or cached[0] != (source, size):
+            image = cv2.imread(str(source), cv2.IMREAD_GRAYSCALE)
+            if image is None:
+                raise SkillError('navigation_map_missing', f'Open-door map cannot be read: {source}')
+            image = cv2.resize(image, size)
+            image[image < 255] = 0
+            cached = ((source, size), image, hashlib.sha256(source.read_bytes()).hexdigest())
+            self._grocery_open_door_map_cache = cached
+        center = door.get_position_orientation()[0][:2].cpu().tolist()
+        merged, added = merge_open_door_cells(
+            original.cpu().numpy(), cached[1], center_xy=center,
+            resolution=float(trav.map_resolution), radius_m=1.0)
+        return self.torch.tensor(merged, dtype=original.dtype, device=original.device), {
+            'door': door.name, 'door_open': True, 'added_raw_cells': added,
+            'local_radius_m': 1.0, 'source_sha256': cached[2],
+            'policy': 'supplied_open_door_map_only_near_open_garage_interior_door',
+        }
+
+    def _next_to_egress_checker(self):
+        """Freeze the walking substrate while the object is still held.
+
+        Candidate checks add its proposed floor AABB with the same margin as
+        navigation; no task goals or future model targets enter this filter.
+        """
+        from .gt_navigation import (GridMap, NavigationError, mask_dynamic_obstacles,
+                                    reachable_component, preserves_reachable_region)
+        position,_=self.robot.get_position_orientation()
+        current=position[:2].cpu().tolist()
+        trav=self.env.scene.trav_map
+        floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
+        floor_map,_=self._floor_map_with_open_garage_door(floor)
+        occupancy=trav._erode_trav_map(floor_map.clone()).cpu().numpy()
+        height,width=occupancy.shape
+        static=GridMap(width,height,float(trav.map_resolution),
+                       (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
+                       (occupancy!=0).astype('uint8').tobytes())
+        boxes,_=self._dynamic_floor_obstacles(float(position[2]))
+        try:before,_=mask_dynamic_obstacles(static,boxes,margin=.38,start=current)
+        except NavigationError as exc:raise SkillError(exc.code,str(exc)) from exc
+        baseline=reachable_component(before,current)
+        def accepts(bounds):
+            lo,hi=bounds
+            box=(float(lo[0]),float(lo[1]),float(hi[0]),float(hi[1]))
+            diagnostic={'status':'placement_egress_check','aabb':[lo.cpu().tolist(),hi.cpu().tolist()],
+                        'robot_xy':current,'margin_m':.38}
+            try:
+                after,_=mask_dynamic_obstacles(static,[*boxes,box],margin=.38,start=current)
+                accepted=preserves_reachable_region(before,after,current,
+                    baseline_component=baseline,diagnostics=diagnostic)
+            except NavigationError as exc:
+                accepted=False;diagnostic['navigation_error']=exc.code
+            diagnostic['accepted']=accepted
+            self._placement_record(diagnostic)
+            return accepted
+        return accepts
+
     def _navigate(self, target, max_steps, *, for_manipulation=False):
         """Jinkai visual-point GT strategy with a private OmniGibson substrate."""
         from dataclasses import asdict
         from .gt_navigation import (GridMap, NavigationError, mask_dynamic_obstacles,
-                                    plan_navigation, visual_approach_settings, STRATEGY)
+                                    plan_navigation, navigation_approach_settings, save_navigation_failure, STRATEGY)
         # A failed placement leaves the hand above the selected surface while
         # the item remains held. Carrying that long lever through a base turn
         # can knock over furniture even on a clear base path.
@@ -970,8 +1072,11 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         trav=self.env.scene.trav_map
         position,_=self.robot.get_position_orientation()
         point=target.get_position_orientation()[0]
-        standoff,margin=(.7,.04) if for_manipulation else visual_approach_settings(
-            self.rig_height,float(position[2]),float(point[2]),
+        floor_waypoint=(not for_manipulation
+                        and str(getattr(selected,'category','')).lower() in {'floor','floors'}
+                        and abs(float(point[2]-position[2]))<.12)
+        standoff,margin,require_endpoint_visibility=(.7,.04,True) if for_manipulation else navigation_approach_settings(
+            self.rig_height,float(position[2]),float(point[2]),floor_waypoint=floor_waypoint,
             pitch_degrees=self.rig_pitch_degrees,radius=self.rig_radius)
         if getattr(self, 'high_level_harness', False) and for_manipulation:
             # Semantic operations have no pixel-sized reach requirement.  The
@@ -979,7 +1084,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             # though the target is already within a safe named-action range.
             standoff = 1.5
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
-        occupancy=trav._erode_trav_map(trav.floor_map[floor].clone()).cpu().numpy()
+        floor_map,doorway_overlay=self._floor_map_with_open_garage_door(floor)
+        occupancy=trav._erode_trav_map(floor_map.clone()).cpu().numpy()
         height,width=occupancy.shape
         static_grid=GridMap(width,height,float(trav.map_resolution),
                             (-width*trav.map_resolution/2,-height*trav.map_resolution/2),
@@ -998,17 +1104,45 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         # no model-selected RGB pixel needs to remain visible at the endpoint.
         # Keep the same collision-filtered grid path and continuous walking.
         named_target_geometry=getattr(self, 'high_level_harness', False) and for_manipulation
+        # Public object navigation prepares a fresh pixel for an operation
+        # whose selected-point XY gate is 1.4 m. Leave one 5 cm grid cell of
+        # headroom for settling and a different visible point on that surface.
+        # This constrains endpoints without weakening visibility or clearance;
+        # legacy in-action/named navigation keeps its existing distance policy.
+        max_target_distance=(.5 if floor_waypoint else
+                             None if for_manipulation else 1.35)
         navigation_visibility_relaxed=False
+        planning_diagnostics={}
+        def record_planning_failure(exc):
+            # Private evidence only. Diagnostic I/O must not replace the motor error.
+            try:
+                save_navigation_failure(
+                    self.output, grid=grid, static_grid=static_grid,
+                    diagnostics=planning_diagnostics, error=exc,
+                    context={'at':now(),'floor':floor,
+                             'dynamic_obstacles':furniture,
+                             'dynamic_obstacle_names':furniture_names,
+                             'dynamic_masked_cells':masked_cells,
+                             'doorway_overlay':doorway_overlay,
+                             'floor_waypoint':floor_waypoint,
+                             'for_manipulation':for_manipulation,
+                             'visibility_relaxed':navigation_visibility_relaxed})
+            except OSError as diagnostic_error:
+                import warnings
+                warnings.warn('Private navigation failure snapshot could not be saved: '
+                              +type(diagnostic_error).__name__, RuntimeWarning)
         try:
             with component(self,'navigation_planning'):
                 plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
-                                     standoff=standoff,
-                                     candidate_filter=(None if named_target_geometry else
+                                     standoff=standoff, diagnostics=planning_diagnostics,
+                                     max_target_distance=max_target_distance,
+                                     candidate_filter=(None if named_target_geometry or not require_endpoint_visibility else
                                          lambda xy:self._approach_visible(
                                              xy,point,getattr(target,'selected_object',None),
                                              margin=margin,max_distance=max(1.4,standoff+.35),
                                              self_hulls=self_hulls)))
         except NavigationError as exc:
+            record_planning_failure(exc)
             # In the frozen-physics diagnostic mode, a visually valid target can
             # be rejected solely because the strict approach-frustum check has
             # no candidate around a cabinet edge. Retry on the same static,
@@ -1018,15 +1152,22 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             if not env_flag('MAS_NAV_RELAXED'):
                 raise SkillError(exc.code,str(exc)) from exc
             navigation_visibility_relaxed=True
+            planning_diagnostics={}
             try:
                 with component(self,'navigation_planning_relaxed'):
                     plan=plan_navigation(grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
-                                         standoff=standoff,candidate_filter=None)
-            except NavigationError:
+                                         standoff=standoff,candidate_filter=None,
+                                         max_target_distance=max_target_distance,
+                                         diagnostics=planning_diagnostics)
+            except NavigationError as relaxed_error:
+                record_planning_failure(relaxed_error)
                 raise SkillError(exc.code,str(exc)) from exc
         details={'at':now(),'audience':'executor_private','strategy':STRATEGY,'floor':floor,
                  'plan':asdict(plan),'map_resolution_m':grid.resolution,
                  'visual_standoff_m':standoff,'visual_margin':margin,
+                 'floor_waypoint':floor_waypoint,
+                 'max_target_distance_m':max_target_distance,
+                 'require_endpoint_visibility':require_endpoint_visibility,
                  'navigation_visibility_relaxed':navigation_visibility_relaxed,
                  'named_target_geometry_only':named_target_geometry,
                  'self_occlusion_geometry':self_report,
@@ -1036,6 +1177,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                  'dynamic_obstacle_count':len(furniture),
                  'dynamic_masked_cells':masked_cells,
                  'dynamic_obstacle_names':furniture_names,
+                 'doorway_overlay':doorway_overlay,
                  'pre_navigation_transport_steps':transport_steps,
                  'pre_navigation_anchored_furniture':
                      [obj.name for obj in transport_anchors] if transport_anchors else [],
@@ -1190,6 +1332,27 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 'steps':self.steps-before,'max_speed_m_s':.5,'max_yaw_speed_deg_s':60,
                 'physical_controller':False,'posture_hold':'ideal_joint_position_projection_each_control_step'}
 
+    def _execute_high_level_environment_open_close(self, primitive, obj, point, max_steps):
+        """Operate the selected non-task fixture without changing task predicates."""
+        from omnigibson.object_states import Open
+        if Open not in obj.states:
+            raise SkillError('invalid_visual_target', 'Select a visible object supporting open/close')
+        if self._get_held() is not None or self.high_level_state.held is not None:
+            raise SkillError('hand_occupied', 'Place the carried object before operating the fixture')
+        base = self.robot.get_position_orientation()[0]
+        point = point.to(base.device)
+        if float(self.torch.linalg.norm(base[:2] - point[:2])) > VISUAL_MANIPULATION_REACH_M:
+            raise SkillError('out_of_reach', 'Use navigate_to to approach the selected surface and reselect it')
+        before = self.high_level_state.snapshot()
+        result = self._ideal_state_action(primitive, obj, max_steps)
+        if self.high_level_state.snapshot() != before:
+            raise SkillError('execution_error', 'Environment operation changed task-state bookkeeping', changed=True)
+        return {**result, 'primitive': primitive,
+                'environment_only_action': ENVIRONMENT_OPEN_CLOSE_PROTOCOL,
+                'environment_target_prim': str(obj.prim_path), 'semantic_target': None,
+                'high_level_state_sha256': hashlib.sha256(json.dumps(
+                    before, sort_keys=True, allow_nan=False).encode()).hexdigest()}
+
     @action_profile
     def execute_visual(self,primitive,target,max_steps,**kwargs):
         if primitive in {'look','navigate_to','release','wait'} and getattr(self,'_demo_focus',None) is not None:
@@ -1206,7 +1369,7 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 for _ in range(count):self._step(self.robot.q_to_action(self.robot.get_joint_positions()))
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
         if primitive=='release':return self.execute(primitive,None,max_steps)
-        obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to')
+        obj,point,grounding=self._ground(target,require_object=True)
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
@@ -1221,6 +1384,9 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                 # temporary supports. Keep the model-selected physical surface.
                 selected_name='countertop'
             if selected_name is None:
+                if primitive in {'open', 'close'}:
+                    result = self._execute_high_level_environment_open_close(primitive, obj, point, max_steps)
+                    return {**result, 'private_grounding': grounding}
                 raise SkillError('invalid_visual_target','The selected pixel is not a hot-drink task object')
             result=self._execute_high_level_semantic(primitive,selected_name,max_steps,
                                                       auto_navigate=False,
@@ -1232,6 +1398,17 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             raise SkillError('unsupported_relation','Select the visible tree or fixture itself for place_next_to')
         if primitive=='place_on_top' and str(getattr(obj,'category','')).lower() in {'wall','walls'}:
             raise SkillError('invalid_visual_target','Select a horizontal support patch, not the wall or counter backsplash')
+        if primitive in {'open','close','toggle_on','toggle_off'}:
+            if primitive in {'open','close'}:
+                from omnigibson.object_states import Open as required_state
+            else:
+                from omnigibson.object_states import ToggledOn as required_state
+            # A pixel on a floor or wall cannot become an operable door by
+            # approaching it or staging a held item. Validate this capability
+            # before reporting those recoverable reach/hand preconditions.
+            if required_state not in obj.states:
+                raise SkillError('invalid_visual_target',
+                                 'The selected surface does not support this operation; select the intended visible object again')
         held=self._get_held()
         if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
             self._demo_arm=None
@@ -1284,19 +1461,10 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             point = point.to(base.device)
         # A long cabinet/floor AABB can contain the base while the selected
         # visible surface is far away. Reach belongs to that selected point.
-        reach_limit=1.4
+        reach_limit=VISUAL_MANIPULATION_REACH_M
         if float(self.torch.linalg.norm(base[:2]-point[:2]))>reach_limit:
-            if primitive in {'attach','hang'}:
-                raise SkillError('out_of_reach','Navigate to a visible approach to the selected parent before attaching')
-            # Approach only the selected target, within this action's existing
-            # step budget; no new object discovery or goal access.
-            before_approach=self.steps
-            anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
-            self._navigate(anchor,max(1,max_steps-60),for_manipulation=True)
-            max_steps-=self.steps-before_approach
-            base=self.robot.get_position_orientation()[0]
-            if float(self.torch.linalg.norm(base[:2]-point[:2]))>reach_limit or max_steps<30:
-                raise SkillError('out_of_reach','No usable approach to the selected surface within this action budget',changed=True)
+            raise SkillError('out_of_reach',
+                             'Use navigate_to to approach the selected surface, then select it again in fresh RGB')
         shown = (self._demo_reach(point,max_steps,anchor=None if obj is held else grasp_reach_anchor,
                                   arm=self._demo_arm if held is not None else None,
                                   action=primitive,
@@ -1305,25 +1473,6 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
                  if getattr(self,'demo_motion',False) else 0)
         max_steps -= shown
         contact_limit=(.45 if primitive=='spray' else .30 if primitive=='vacuum' else .18)
-        if (shown and self._demo_last_reach_error>contact_limit and obj is not held
-                and max_steps>170):
-            # A visual standoff may keep the selected pixel in view while the
-            # posture-limited hand cannot touch it. Reuse that exact pixel for
-            # one closer, visibility-checked approach; never select a new goal.
-            first_error=self._demo_last_reach_error
-            anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),
-                                   selected_object=obj)
-            before_retry=self.steps
-            self._navigate(anchor,max_steps-120,for_manipulation=True)
-            max_steps-=self.steps-before_retry
-            self._demo_record(action=primitive,status='approach_retry',first_error_m=first_error,
-                              target_point=point.tolist())
-            retry=self._demo_reach(point,max_steps,anchor=grasp_reach_anchor,
-                                   arm=self._demo_arm if held is not None else None,
-                                   action=primitive+'_after_approach',
-                                   support_payload=pregrasp_payload[1] if pregrasp_payload else None,
-                                   trunk_budget_l1_rad=trunk_budget)
-            shown+=retry;max_steps-=retry
         if shown and self._demo_last_reach_error>contact_limit:
             if trunk_budget is not None:
                 # Leave the carried item in a safe, visible transport pose
@@ -1407,7 +1556,17 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             result['demo_motion']=self.demo_motion
             return result
         result=super().evaluate()
-        result['protocol']='rgb_agent_ideal_executor_v10_selected_grasp_category_feedback'
+        if getattr(self, 'research_instance', None):
+            result['native_research_task_success'] = result['official_task_success']
+            result['official_task_success'] = None
+            result['protocol'] = 'original_native_predicates_research_instance_v1'
+            result['human_reference_metrics_available'] = False
+        elif env_flag('MAS_CUSTOM_NATIVE_BDDL'):
+            result['custom_task_success']=result['official_task_success']
+            result['official_task_success']=None
+            result['protocol']='custom_native_bddl_rgb_agent_ideal_executor'
+        else:
+            result['protocol']='rgb_agent_ideal_executor_v10_selected_grasp_category_feedback'
         result['observation_mode']=self.mode
         result['demo_motion']=getattr(self,'demo_motion',False)
         return result
@@ -1417,13 +1576,27 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
         result=super().provenance()
         result.update(executor='controlled_carry_and_checked_placement_plus_jinkai_gt_navigation' if self.ideal_carry else 'symbolic_manipulation_plus_jinkai_gt_grid_navigation',
                       observation_mode=self.mode,image_size=self.image_size,demo_motion=getattr(self,'demo_motion',False),
+                      task_definition_origin='custom_bddl_overlay' if env_flag('MAS_CUSTOM_NATIVE_BDDL') else 'pinned_public',
                       grounding='direct_pixel_depth_backprojection_private_executor_only',
                       model_visible_truth={'successful_grasp_category':True,
                           'instance_id':False,'pose':False,'task_binding':False,
                           'goal_state':False,'evaluator':False})
         result['action_feedback_contract']='selected_object_category_after_successful_grasp_only'
+        if getattr(self, 'high_level_harness', False):
+            result['high_level_environment_open_close_protocol'] = ENVIRONMENT_OPEN_CLOSE_PROTOCOL
+        if getattr(self, 'research_instance', None):
+            result['task_definition_origin'] = 'original_bddl_generated_research_instance'
+            result['research_instance_spec_sha256'] = self.research_instance['spec_sha256']
+            result['human_reference_metrics_available'] = False
+        result['visual_navigation_contract'] = {
+            'version': 'explicit_navigate_to_only_v2',
+            'floor_waypoint_policy': 'selected_visual_floor_only',
+            'manipulation_auto_approach': False,
+            'far_selection': 'out_of_reach_without_base_motion',
+            'scope': 'execute_visual; historical named semantic mode is separate',
+        }
         result['grounding_protocol'] = {'position':'same_pixel_depth_linear_backprojection',
-            'depth_consistency_check':False, 'navigation_object_lookup':False,
+            'depth_consistency_check':False, 'navigation_object_lookup':True,
             'manipulation_object_lookup':'first_visual_surface_on_selected_ray',
             'mesh_hit_replaces_backprojected_point':False, 'robot_mesh_blocks_object_selection':True}
         result['grasp_protocol'] = {'mode':'controlled_pose_carry' if self.ideal_carry else 'official_symbolic_fixed_joint','fixed_joint':not self.ideal_carry,'collision_and_gravity_disabled':False,'rigid_contents_follow':self.ideal_carry,'payload_relations':['Inside','OnTop'],'payload_closure':'transitive_rigid_support_with_postplacement_verification'}
@@ -1434,6 +1607,8 @@ class RGBBackend(DemoMotion, CheckedMaterialActions, ControlledCarry, CheckedPla
             'intermediate_frames':'explicit_previous_frame_hold','no_motion_interpolation':True}
         result['placement'] = {'on_top':'strict_selected_surface_cuboid_no_object_wide_fallback',
             'inside':'official_volume','verification':'selected_surface_geometric_support_required; contact_predicate_diagnostic_only; official_Inside_and_payload_relations',
+            'inside_settling_projection':'verified_residents_before_env_post_step_metrics_v1',
+            'control_step_projection':'ideal_motor_state_before_env_post_step_metrics_v2',
             'base_anchor':'control_and_sampler_physics_steps',
             'failure_policy':'restore_pre_action_state','goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'

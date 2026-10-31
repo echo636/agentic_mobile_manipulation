@@ -1,104 +1,99 @@
-# 长程偏序机器人任务：构建到审阅的 workflow
+# 长程机器人任务：从目标到可审计实验
 
-本流程以 `prepare_and_serve_hot_drink` 为已落地样例，供下一项跨房间、多物体、有前后依赖的任务复用。它区分三件容易混在一起的东西：**人类指令**告诉机器人要完成什么；**任务定义和场景**规定初态与可验证的终态；**实验 harness**规定动作怎样执行、怎样计分。规划 skill 只帮助机器人管理自己的假设和步骤，不替代任务定义或独立评分。
+本文供**构建新任务的 agent** 执行，适用于跨房间、多物体、带前后依赖的任务，也适用于引入新物体、新交互机制或动态条件的任务。[热饮任务](../tasks/prepare_and_serve_hot_drink/) 是已落地样例，不是新任务的默认配置。先让风险最高的目标链在真实实例中贯通，再制作完整场景；每一步不通过就修正对应层，不把失败留到正式回合才发现。
 
-## 1. 先写人的目标，再设计偏序
+区分三个契约：**人类指令**说要完成什么；**任务定义与场景**规定初态和可验证终态；**实验协议**规定动作如何执行、由谁评分。规划 skill 只帮助机器人组织自己的假设与步骤，不代替任务定义或独立评分。沿途保留产物及证据；探针、脚本动作和模型正式回合分别标注。
 
-产物是 [`instruction.txt`](../tasks/prepare_and_serve_hot_drink/instruction.txt)、[`README.md`](../tasks/prepare_and_serve_hot_drink/README.md) 和 [`partial_order.json`](../tasks/prepare_and_serve_hot_drink/partial_order.json)。指令保持简短，只说明目标与机器人无法从初始画面得知的物品位置；不告诉机器人动作顺序。本例原文是：
+构建任务前按场景与机制查阅[任务失败案例与 benchmark 构建经验](bugfix_journal.md)，把相关失败转成当前任务的预防检查；出现失败后补录具体任务、实例、定义版本、失败子目标、证据、归属层和验证结果。该记录用于积累整套 benchmark 的构建经验，区分任务缺陷与应保留的 agent 能力失败。
 
-> 请准备一份热饮和点心：把冰箱里的水烧开，橱柜里有水壶、杯子、餐巾、餐垫、盘子、茶匙、托盘、糖饼干和蜂蜜；将饮品、餐具和点心布置在客厅茶几上。
+优化已有任务时，把任务、场景、观测/动作工具、执行器和评分一起作为 benchmark 维护范围，按[设施与任务优化队列](long_horizon_benchmark_suite.md#benchmark-设施与任务的持续优化)选择调查对象。先定位失败所在层，再选择修改 skill 或修复 benchmark；修复分别记录复现、版本与回归结果。
 
-在作者侧列出每个最终可观察关系，并画出**真正的因果前提**。本例的水链是“取得唯一水源 → 将水倒入水壶 → 烧开 → 倒入杯中 → 上桌”；取餐具和布置茶几可以与水链交错。不要把每件物品简单串成固定动作清单，也不要增添人没有要求的水瓶最终位置。`partial_order.json` 是可从最终 BDDL 目标追踪的里程碑图：它没有单独的 `retrieve_water` 目标索引，因为取水是烧水的因果前提，不是终态谓词。其可选评分器是 [`PartialOrderBehaviorTask`](../tasks/prepare_and_serve_hot_drink/optional_evaluator/partial_order_behavior_task.py)；目前热饮视觉正式回合**没有**用该评分器。
+## 1. 定义目标、边界和评分协议
 
-完成门槛：每个叶目标都有明确的终态证据；依赖图无环；并行分支没有被人为写死先后；人类指令没有泄露规划答案。
+先写简短的人类指令：只给任务目标及机器人无法从初始 RGB 得知的必要信息，不写动作顺序。另建作者侧目标表，逐项记录目标关系、对象绑定、初态、终态证据、评分来源和真正的因果前提。用 `partial_order.json` 表示里程碑 DAG；取得物品等过程前提可以是图中的依赖，但不必伪装成终态目标。并行分支保持可交错，额外的收尾要求必须能追溯到人类指令或任务定义。
 
-## 2. 固定场景、实例和真实物体
+当指令允许任一同类容器时，评分覆盖满足房间与用途条件的全部候选，测试同柜、分柜及非法容器；同类多件食品分别保留目标与完成证据。多对象绑定的歧义在正式回合前解决。
 
-在 [`available_tasks_entry.yaml`](../tasks/prepare_and_serve_hot_drink/available_tasks_entry.yaml) 指定场景与房间，在 [`scene_layout.json`](../tasks/prepare_and_serve_hot_drink/scene_layout.json) 记录预期物体位置与门的初态，再制作 `scene/` 中的模板与实例状态。本例固定 `house_single_floor` 的厨房和客厅，实例号 301；水瓶在关闭的冰箱中，水壶、杯子、餐具和点心在初始打开的橱柜中，茶几在客厅。橱柜初态必须同时与场景实例、机器人 RGB 和高层状态一致。
+在制作场景前选择并记录评分协议：
 
-模板中的物品必须是实际加载的可见资产，不能只在 BDDL 或符号状态里出现。核对对象绑定、资产类别、实例位姿、门状态、初始水源，并在首帧四路 RGB 和第三视角确认。安装到外部 BEHAVIOR checkout 用 [`install.py`](../tasks/prepare_and_serve_hot_drink/install.py)；写入前检查目标路径是否已有同名任务，写入后运行 `--check` 验证文件与 `available_tasks.yaml` 条目一致：
-
-```bash
-python tasks/prepare_and_serve_hot_drink/install.py \
-  --behavior-root ../behavior_challenge_sunyujie/BEHAVIOR-1K
-python tasks/prepare_and_serve_hot_drink/install.py \
-  --behavior-root ../behavior_challenge_sunyujie/BEHAVIOR-1K --check
-```
-
-完成门槛：所有目标物体真实存在、可被 RGB 看到或经开门/行走后看到；初始水与门状态相符；机器人有可行的房间通路。
-
-## 3. 分清原生任务与高层实验协议
-
-[`problem0.bddl`](../tasks/prepare_and_serve_hot_drink/problem0.bddl) 是带物理水粒子初态的原生任务定义。若要报告 BEHAVIOR 官方成绩，必须让官方目标在仿真状态上成立，用原生评分判定。
-
-当前评估**高层规划能力**的视觉回合使用 [`high_level_visual.bddl`](../tasks/prepare_and_serve_hot_drink/high_level_visual.bddl)：它保留场景对象与目标结构，但不生成初始水粒子。启动脚本为每个回合建立独立 BDDL overlay；[`HighLevelHotDrink`](../src/manipulation_agent/high_level_hot_drink.py) 以高层关系处理液体、烧水和摆放，并给出 11 项语义目标。该协议的 `official_task_success=null`，不能称为官方 BDDL 通过，也不能与物理回合混算。两种协议及已知失配见 [原生与高层差异](behavior_native_vs_hot_drink_20261017.md)。
-
-完成门槛：预先选定**一种**评分协议；报告里保留 BDDL SHA、实例号和协议名；执行反馈只确认本次操作，整任务成绩由独立评分给出。
-
-## 4. 从目标反查原子动作是否真的可执行
-
-先运行 [`check_atomic_action_coverage.py`](../scripts/check_atomic_action_coverage.py) 静态检查目标谓词，再对真实实例做动作级验证：每类目标物体是否可选点、可接近、可抓取、可放置；水瓶能否倒入水壶；水壶置于灶台后 `boil` 是否返回 `water_boiled=true`；热水能否倒入杯中。静态谓词映射**不能**证明像素、距离、场景资产和物理执行都可行。
-
-```bash
-python scripts/check_atomic_action_coverage.py \
-  ../behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions \
-  --task prepare_and_serve_hot_drink
-```
-
-机器人公开接口是 [`act`](../src/manipulation_agent/tools/action.py)：模型从最新 `image_ref` 选归一化 `point`，自己调用 `navigate_to`；抓取、放置、倒水、烧水不能偷偷替它导航。动作名来自全局 [`PRIMITIVES`](../src/manipulation_agent/executors/primitives.py)。目前 `boil` 在全局目录里，但实际成功实现位于 [`RGBBackend` 的热饮高层分支](../src/manipulation_agent/executors/omnigibson_rgb.py)；这是现存耦合，迁移任务时不能误认所有任务都有通用烧水动作。`carry.py`、`placement.py` 和 `omnigibson_backend.py` 中的抓取、放置、物理倒水等属于更通用的执行基础，改动前需跑其他任务回归。
-
-完成门槛：每项最终关系至少有一条在**当前协议和场景**中验证过的动作路径；失败反馈包含可恢复信息；不通过按名称目标代替 RGB 选点。
-
-## 5. 接入规划 skill，但不把任务答案放进提示词
-
-给模型加载 [统一长程规划 skill](../skills/long-horizon-planning/SKILL.md)，使它自己从指令、RGB 和工具反馈建立目标 DAG。`update_plan` 保存当前回合的子目标与依赖，`remember/recall` 保存可见事实和不确定性；每次工具调用附 `decision={state,active_subgoal,reason,expected}` 公开说明。计划是模型的假设，不是评分真值。BDDL 输入可参考 skill 内的 `references/bddl-goals.md`。不要重新启用旧 `task-decomposition` 文件或开关。
-
-完成门槛：模型实际读取 skill；初次计划把关键物品和独立分支列清；完成、失败或目标变化后修订 DAG；不得把所有剩余物品合成一个无法核对的粗节点。
-
-## 6. 固定协议运行，保存完整证据
-
-正式视觉回合使用 [`run_no_demo_trial.py`](../scripts/run_no_demo_trial.py)；完整参数、资源与监控见 [实验交接指南](experiment_handoff_guide_20261014.md)。下面是本例的核心参数；`--output` 每次换新目录，provider 与 GPU 按现场配置填写：
-
-```bash
-MAS_DEMO_MOTION=0 OG_SKIP_PHYSICS_STEPS=0 \
-OG_KINEMATIC_NAV_TELEPORT=0 MAS_NAV_RELAXED=0 \
-python scripts/run_no_demo_trial.py \
-  --task prepare_and_serve_hot_drink \
-  --instruction "$(cat tasks/prepare_and_serve_hot_drink/instruction.txt)" \
-  --bddl-source tasks/prepare_and_serve_hot_drink/high_level_visual.bddl \
-  --high-level-harness --long-horizon-planning-skill on \
-  --model gpt-6.1-sol --reasoning-effort low \
-  --max-actions 120 --max-sim-steps 20000 --timeout 14400 \
-  --output ../experiments/<new-run-name> \
-  --omnigibson-source ../behavior_challenge_sunyujie/BEHAVIOR-1K/OmniGibson \
-  --provider-profile <configured-profile> --codex-home <isolated-codex-home> \
-  --expected-provider-host <configured-host> --gpu <free-gpu>
-```
-
-`OG_SKIP_PHYSICS_STEPS=0` 和 `OG_KINEMATIC_NAV_TELEPORT=0` 保证连续控制步与实际行走轨迹。`reasoning-effort=low` 是本实验约定；提高档位或修改预算会引入新变量。120 是 2026-10-18 试验的预算，不是完成任务的保证。运行期间核对模型读取 skill、`update_plan` 写入、每步 `decision`、显式导航、动作失败后的策略变化和剩余预算；不要因为日志短时间安静就误判为结束。
-
-完成门槛：`summary.json` 记录模型、档位、预算、实例、指令、skill 开关；控制器正式结束；原始 `events.jsonl`、RGB、状态日志和连续视频完整保留。
-
-## 7. 独立审计、发布与比较
-
-用 [`audit_demo_trial.py`](../scripts/audit_demo_trial.py) 重放成功动作，核对 `high_level_state.jsonl`、模型与模拟器调用、每次公开决策、显式导航、底盘高度和视频。失败回合也要保留完整 HTML，不能以模型的 `finish(achieved)` 或工具 `ok=true` 代替独立目标判定。
-
-```bash
-PYTHONPATH=src python scripts/audit_demo_trial.py ../experiments/<run-name>
-```
-
-该脚本生成 `run/replay.json`、`run/review_5view.html` 和 `demo_audit.json`。再按 [实验交接指南第 6 节](experiment_handoff_guide_20261014.md) 用 `publish_demo_trials.py` 发布内网 index，`curl -I` 检查首页、完整审阅页和视频均为 HTTP 200。最终交付写明任务成功与否、11 项高层关系、动作预算使用、模型计划更新次数、主要失败类型、视频时长与内网 URL。
-
-比较 skill 效果必须有同实例、同模型、同档位、同指令、同预算、同原子动作接口的有效对照。2026-10-18 的 skill 回合是 120 次动作、8/11；旧 80 次回合与它预算不同，旧 120 次回合审计失败，所以**目前不能据此认定 skill 带来稳定提升**。该回合 DAG 后段未持续更新，模型还用 `wait` 消耗预算；这类行为应作为规划缺陷报告，不能被总体分数掩盖。
-
-## 文件边界与提交范围
-
-| 层 | 本例文件 | 迁移新任务时的处理 |
+| 协议 | 成功的依据 | 报告中的名称 |
 | --- | --- | --- |
-| 任务包 | `tasks/prepare_and_serve_hot_drink/`：指令、BDDL、偏序、场景、安装器 | 换任务名和目标，重新制作实例，不复用旧绑定 |
-| 任务注册 | `src/manipulation_agent/tasks.json` | 加新目录项，指令与 `instruction.txt` 保持一致 |
-| 任务专属高层协议 | `src/manipulation_agent/high_level_hot_drink.py`、`executors/omnigibson_rgb.py` 中的热饮分支 | 抽成独立任务适配器或明确继续使用原生评分；不要复制全局执行器分支 |
-| 通用动作与运行时 | `tools/action.py`、`executors/primitives.py`、`vision_harness.py`、`run_demo_trial.py` | 只增加真正通用的动作；其他任务必须回归 |
-| 规划与审计 | `skills/long-horizon-planning/`、`scripts/audit_demo_trial.py`、`scripts/build_review.py` | 复用流程，审计字段与新协议对应 |
+| 原生 BEHAVIOR/BDDL | 官方目标在仿真状态中成立，由官方评分器判定 | 官方任务成功或失败 |
+| 自定义原生 BDDL | 本地改写的 BDDL 目标在仿真状态中成立，由原生谓词判定 | 自定义任务成功或失败；`official_task_success=null` |
+| 明示的高层实验协议 | 独立高层评分器按声明的语义关系判定 | 高层协议成功或失败；`official_task_success=null` |
 
-当前工作树里的 `tasks/`、skill 和部分脚本仍未作为一组独立提交。准备 push 前应先核对 `git status`，按上述层次整理提交，并确保实验输出、凭据和大体积录像不进入源码提交。
+若任务含新机制，先说明它怎样改变仿真状态、目标谓词怎样观测该状态、由哪个评分器判定。若含动态条件或时间窗口，还要写明触发条件、允许的时间范围和失败判据。不同协议的数据不能混算。每次实验固定任务定义哈希、场景实例、协议名及评分器版本。
+
+结束监督也属于实验协议：写明剩余预算时是否接受`finish(blocked)`、是否用私有完成校验反馈拒绝`achieved`，以及无正式finish的客户端turn如何续接。当前热饮高层回合会拦截过早blocked，原生杂货回合会接受，因此不能用“热饮跑满120动作、杂货提前停”直接归因模型或skill；见[案例GROC-021](bugfix_journal.md#groc-021不同结束监督导致其他实验不会提前停的错误比较2026-10-25)。记录第一次正式finish尝试、所有拒绝及拒绝后新增的有效工作；终止规则改变时另立协议版本，保留原失败。
+
+工具协议还应记录实际发给模型的schema及`strict`，不能用MCP目录中的`required`代替。若出现漏参，先冻结失败前的公开对话/图像做接口重放，区分生成参数、传输与执行失败；严格模式变更须单独版本化，保留本地校验，不能由harness补选动作或像素。见[案例GROC-022](bugfix_journal.md#groc-022工具目录有必填字段但实际请求关闭严格模式2026-10-25)。
+
+**通过条件：** 每个叶目标都有可检查的终态证据和评分归属；DAG 无环；指令没有泄露规划答案；协议选择没有悬而未决的目标谓词。
+
+## 2. 先做最小可行性验证
+
+在完整搭建场景前，从目标表中选**风险最高的一条完整目标链**做探针。优先选择新机制、跨房间移动、封闭容器、液体或材料变化、时间条件、难以抓放的物体；如果各链的风险互不覆盖，分别探测。用真实资产与代表性实例验证：初态对象存在并可由 RGB 发现，当前图像中存在可选的目标像素和实际可走的导航路径，原子动作能执行，仿真或高层状态产生预期变化，独立评分能读取终态。静态谓词映射只用于发现缺口，不能替代实例与动作级验证。
+
+| 任务变化 | 最小探针须额外覆盖 |
+| --- | --- |
+| 换场景、房间或容器 | 首帧与开门后的可见性、实际通路、门状态一致性 |
+| 新物体或交互机制 | 真实资产、动作前置条件、状态转移、目标谓词与评分 |
+| 动态事件或时间窗口 | 触发、临界时刻、超时及失败后的可恢复性 |
+
+记录每个探针的输入、动作、前后状态、RGB/视频、评分结果和失败原因。探针可由开发者驱动，但只能证明机制可行；它不是视觉自主任务成功。若资产、动作或评分有一环不通，先修复对应层并重跑该链。新机制无法由现有协议表达时，回到第 1 步修订协议，而不是让执行反馈冒充目标成功。
+
+**通过条件：** 所有高风险目标链至少各有一次“可见对象 → 可执行动作 → 状态变化 → 独立评分”的闭环证据；尚未验证的链及其风险明确列出，不能被静态检查视为已通过。
+
+## 3. 制作完整场景和任务定义
+
+固定场景、房间、实例、物体资产、初始位姿、容器和门的状态、路径可达性，并分别写入任务包的场景配置、模板和实例状态。对象须实际加载；初态须同时与场景实例、首帧四路 RGB 和高层状态一致。封闭容器内的目标物体可以在打开后可见；路径则须经过真实导航验证。
+
+写入与所选协议对应的任务定义。原生 BDDL 要在真实仿真状态上完成目标。复用公开实例但改写 BDDL 目标时，用回合本地 overlay 隔离定义，按**自定义原生 BDDL**报告结果，不能称为公开挑战成绩；[杂货任务变体](../tasks/carry_in_and_put_away_groceries/) 是这一分支的样例。高层协议要公开其与原生任务的差异，并使用独立 overlay 或等效隔离方式，避免改写原生定义。注册任务后，检查目标路径已有文件、安装结果和注册条目的一致性；安装器的 `--check` 可用于复核。这里完成的是**完整场景的构建**，不能用第 2 步的临时探针场景替代。
+
+**通过条件：** 每个目标对象的绑定、资产、初态与可达路径均在指定实例上核实；任务定义与所选协议一致；重新加载后仍得到相同初态。
+
+## 4. 覆盖所有目标的动作路径
+
+从每个终态谓词反查动作路径，在完整实例上逐类验证“发现 → 接近 → 操作 → 反馈 → 终态”。先运行 [`check_atomic_action_coverage.py`](../scripts/check_atomic_action_coverage.py) 做静态检查，再验证真实像素、距离、抓取、放置及专属交互。机器人从最新 `image_ref` 选归一化 `point`，并自行调用 `navigate_to`；操作动作不能替它暗中导航。动作目录以 [`PRIMITIVES`](../src/manipulation_agent/executors/primitives.py) 为准，公开接口以 [`act`](../src/manipulation_agent/tools/action.py) 为准。
+
+若新目标需要新增动作，先确定它属于任务专属机制还是跨任务的通用能力，再实现并验证。修改通用执行基础时，对受影响旧任务做回归。动作失败后返回可恢复信息和最新 RGB；动作 `ok=true` 只能证明本次操作，不证明整任务成功。
+
+**通过条件：** 每个目标关系在**当前实例与协议**下有经过验证的动作路径；失败路径可被模型识别和恢复；没有依赖名称绑定、隐藏状态或预设像素来替模型完成选择。
+
+## 5. 接入规划并做小规模端到端试跑
+
+给模型加载 [长程规划 skill](../skills/long-horizon-planning/SKILL.md)，让它从人类指令、RGB 和工具反馈建立自己的目标 DAG。`update_plan` 保存子目标与依赖，`remember/recall` 保存可见事实和不确定性；每次工具调用的 `decision={state,active_subgoal,reason,expected}` 说明当前判断。计划是模型的假设，不是评分真值；作者侧 `partial_order.json` 不作为答案交给模型。
+
+先用短试跑检查模型确实读取 skill、初次计划覆盖独立分支、显式导航、失败后修订计划、完成后更新 DAG，以及动作与仿真步的消耗速度。短试跑用于发现协议和提示问题，不能单独证明预算足以完成任务；保留失败证据。若改变了任务、协议、动作接口或预算，后续正式回合应使用新的固定配置。
+
+**通过条件：** 模型能用公开 RGB 与反馈推进各分支，计划可追踪且随证据更新；剩余缺陷有具体归因，不用提高动作预算掩盖动作或评分缺口。
+
+## 6. 固定配置运行正式回合
+
+正式视觉回合使用 [`run_no_demo_trial.py`](../scripts/run_no_demo_trial.py)。按 [实验交接指南](experiment_handoff_guide_20261014.md) 核对命令、资源和监控，先固定任务/实例、指令、协议、BDDL 哈希、模型与档位、动作及仿真步预算、控制器版本和 skill 开关，再为每次运行使用独立输出目录。显式设置 `OG_SKIP_PHYSICS_STEPS=0`、`OG_KINEMATIC_NAV_TELEPORT=0` 和 `MAS_NAV_RELAXED=0`，记录连续物理步与真实行走轨迹；每次回合记录模型是否读取 skill、计划更新、公开决策、显式导航、动作失败后的变化及预算消耗。日志短时间安静不等于控制器已结束。
+
+**通过条件：** 控制器正式结束；`summary.json` 能关联固定配置与实例；原始 `events.jsonl`、RGB、状态日志及连续视频完整保留。所有尝试，包括失败回合，各用独立目录保留。
+
+## 7. 独立审计，再比较或发布
+
+用 [`audit_demo_trial.py`](../scripts/audit_demo_trial.py) 核对 `finish`、模型与模拟器的有序调用、公开决策、导航、视频和独立评分。它目前只会重放**热饮任务**的高层状态；新任务若采用高层协议，须先实现并验证该协议的独立状态重放与审计，再把审计结果用于成功声明。原生协议也要核对官方评分及证据完整性。`finish(achieved)` 或工具 `ok=true` 均不代替任务成功。失败回合也保留完整审阅页。发布步骤和内网可访问性检查见 [实验交接指南第 6 节](experiment_handoff_guide_20261014.md)。
+
+比较规划 skill 或其他变量时，保持实例、模型、档位、指令、预算、原子动作接口和评分协议相同，并审计双方回合。报告每次尝试的任务结果、各目标关系、预算、计划更新、主要失败类型、视频时长与审阅链接；不把不同协议或审计失败的回合纳入同一结论。
+
+**通过条件：** 报告中的每一项成功声明都可追溯到独立评分和原始回合证据；比较仅包含可比、审计通过的回合。
+
+## 8. 冻结 benchmark 版本与任务集
+
+按[任务构建检查表](bugfix_journal.md#怎样把案例用于构建-benchmark)验收任务：合理解与评分一致，目标可从允许观测发现，关键链可执行，动作协议与独立评分通过。任务中的 agent 失败作为能力测量保留；任务定义或设施缺陷修复后另立版本，旧结果保留。
+
+任务集记录各任务所测能力、场景/机制差异和依赖结构，减少仅更换物品名称的重复；每个长程任务的子目标服务同一用户目标。按场景或布局/对象组合设置开发与留出实例，分别记录机制验证和模型表现，固定定义与场景哈希、实例、种子、观测、预算和评分协议。当前杂货单实例仍是研究候选，尚不足以代表已验收任务集。
+
+**通过条件：** 每个收录任务有冻结配置、验收证据、已知限制与失败案例；任务集有能力覆盖表和开发/留出划分。模型必须成功不属于验收条件。
+
+## 已落地样例：热饮任务
+
+样例任务包在 [`tasks/prepare_and_serve_hot_drink/`](../tasks/prepare_and_serve_hot_drink/)。其中 `instruction.txt` 是人类目标，`partial_order.json` 是作者侧里程碑图，`scene_layout.json` 与 `scene/` 固定实例 301；`problem0.bddl` 是带物理水粒子的原生定义，`high_level_visual.bddl` 是不生成初始水粒子的视觉高层定义。两种协议及已知失配见 [原生与高层差异](behavior_native_vs_hot_drink_20261017.md)。热饮视觉正式回合使用 [`HighLevelHotDrink`](../src/manipulation_agent/high_level_hot_drink.py) 给出的 11 项语义目标，`official_task_success=null`；可选的 `PartialOrderBehaviorTask` 评分器未用于该正式回合。
+
+样例的关键链是“取冰箱中的唯一水源 → 倒入水壶 → 烧开 → 倒入杯中 → 上桌”，餐具和点心可以并行处理。水瓶的最终位置不是额外目标。`boil` 虽在全局动作目录，成功实现目前位于 [`RGBBackend` 热饮高层分支](../src/manipulation_agent/executors/omnigibson_rgb.py)；迁移任务时应按第 2、4 步重新验证新机制，不能据动作名称推断通用支持。历史的 120 动作、8/11 回合与旧回合预算或审计条件不同，不能据此声称 skill 稳定提升。
+
+热饮实例的安装器在任务包中；静态动作检查、正式运行和审计命令应从相应脚本及 [实验交接指南](experiment_handoff_guide_20261014.md) 核对。新任务不继承样例的模型、GPU、预算或 provider。源码提交前检查任务包、注册、任务专属协议、通用动作与审计代码的改动范围；实验输出、凭据及大体积录像留在源码仓库之外。

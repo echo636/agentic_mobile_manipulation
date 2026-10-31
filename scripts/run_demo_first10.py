@@ -1,4 +1,4 @@
-"""Run and audit the first ten pinned public tasks with visible model actions.
+"""Run and audit the first ten pinned public tasks in either motion mode.
 
 Existing attempt directories are immutable. A preexisting incomplete attempt is
 observed until it has a summary; this supports resuming after a supervisor
@@ -19,14 +19,17 @@ def has_unfinished_trial(active):
                for entry in active.values())
 
 
-def main():
+def main(*, demo_motion=True):
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--omnigibson-source', type=Path, required=True)
     parser.add_argument('--provider-profile', required=True)
     parser.add_argument('--codex-home', type=Path, required=True,
                         help='Isolated experiment Codex login; never use the desktop login')
-    parser.add_argument('--timeout', type=int, default=1500)
+    parser.add_argument('--timeout', type=int, default=3600,
+                        help='Hard wall-clock watchdog; normal task budget is action-based')
+    parser.add_argument('--max-actions', type=int, default=80)
+    parser.add_argument('--max-sim-steps', type=int, default=20000)
     parser.add_argument('--attempt', type=int, default=1)
     parser.add_argument('--retry-failures', action='store_true',
                         help='For attempt N>1, run only tasks without a passed earlier audit')
@@ -37,6 +40,11 @@ def main():
     repo = Path(__file__).resolve().parents[1]
     tasks = list(json.loads((repo / 'src/manipulation_agent/tasks.json').read_text())['tasks'].items())[:10]
     args.output.mkdir(parents=True, exist_ok=True)
+    for summary_path in args.output.glob('[0-9][0-9]_*_r*/summary.json'):
+        recorded_mode = json.loads(summary_path.read_text()).get('demo_motion')
+        if recorded_mode is not demo_motion:
+            raise ValueError(f'{summary_path.parent} belongs to a different demo-motion mode; '
+                             'use a separate output directory')
     # The provider used by this cohort returns 429 under parallel model calls.
     # Preserve existing concurrently launched attempts, then serialize new ones.
     gpu_slots = (3, 0, 2)
@@ -62,14 +70,17 @@ def main():
             if not trial.exists():
                 if has_unfinished_trial(active):
                     continue
-                command = [sys.executable, str(repo / 'scripts/run_demo_trial.py'),
+                trial_script = 'run_demo_trial.py' if demo_motion else 'run_no_demo_trial.py'
+                command = [sys.executable, str(repo / 'scripts' / trial_script),
                            '--task', item['task'], '--instruction', item['instruction'],
                            '--output', str(trial), '--omnigibson-source', str(args.omnigibson_source),
                            '--provider-profile', args.provider_profile, '--gpu', str(item['gpu']),
                            '--codex-home', str(args.codex_home),
                            '--expected-provider-host', 'api.gpt.ge',
                            '--appdata', str(args.output / f'appdata_gpu{item["gpu"]}'),
-                           '--timeout', str(args.timeout)]
+                           '--timeout', str(args.timeout),
+                           '--max-actions', str(args.max_actions),
+                           '--max-sim-steps', str(args.max_sim_steps)]
                 log = (args.output / f'{index:02d}_{item["task"]}_r{args.attempt}_launcher.log').open('w')
                 item['process'] = subprocess.Popen(command, cwd=repo, stdout=log,
                                                    stderr=subprocess.STDOUT, start_new_session=True)

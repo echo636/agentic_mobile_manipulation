@@ -4,6 +4,7 @@ This is a policy under evaluation, not a coding worker. Shell, plugins, other ag
 web, browser and filesystem image tools are disabled. No authentication file is copied.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -16,6 +17,7 @@ from dataclasses import asdict, replace
 
 from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.events import write_derived_events
+from manipulation_agent.clients.recovery import public_action_history
 
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.vision_policy import system_prompt
@@ -58,6 +60,7 @@ def main(argv=None, *, allow_client=False):
     p.add_argument("--mcp-args-json", required=not probing)
     p.add_argument("--output", type=Path, required=not probing)
     p.add_argument("--timeout", type=int, default=900)
+    p.add_argument('--unbounded-episode', action='store_true', help='No controller wall deadline; action budgets remain enforced by the simulator')
     timing=p.add_mutually_exclusive_group()
     timing.add_argument('--deadline-unix', type=float,
                         help='Legacy absolute deadline; preserved for existing run configurations')
@@ -65,7 +68,7 @@ def main(argv=None, *, allow_client=False):
                         help='Private argv JSON: atomically arm remote execution clock after MCP handshake')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
-    p.add_argument('--agent-profile', choices=['minimal','skills','planning','workflow','semantic'], default='skills')
+    p.add_argument('--agent-profile', choices=['minimal','skills','planning','planning_no_skills','workflow','semantic'], default='skills')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
     p.add_argument('--rate-limit-resumes', type=int, default=0,
@@ -74,7 +77,9 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--provider-history-restarts', type=int, default=0,
                    help='Start a fresh Codex thread in the same live episode after malformed provider tool history')
     p.add_argument('--unfinished-restarts', type=int, default=0,
-                   help='Start a fresh Codex thread when the model ends without calling finish')
+                   help='Maximum same-episode recoveries when the model ends without calling finish')
+    p.add_argument('--unfinished-recovery', choices=['same_thread', 'fresh_thread'],
+                   default='same_thread', help='Preserve the conversation by default; fresh_thread reproduces the legacy protocol')
     args = p.parse_args(argv)
     client = getattr(args, 'client', 'codex')
     adapter = get_adapter(client)
@@ -84,6 +89,8 @@ def main(argv=None, *, allow_client=False):
         return 0 if capability.status == 'available' else 3
     deadline=(EpisodeDeadline() if args.execution_clock_command_json is not None else
               EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env())
+    if args.unbounded_episode and (deadline.managed or args.execution_clock_command_json):
+        p.error('--unbounded-episode cannot use an execution deadline')
     if args.timeout<=0:p.error('--timeout must be positive')
     if (args.rate_limit_resumes < 0 or args.resume_backoff_seconds < 1 or
             args.provider_history_restarts < 0 or args.unfinished_restarts < 0):
@@ -172,27 +179,30 @@ def main(argv=None, *, allow_client=False):
             write_json(args.output/'controller.json',metadata)
             return 2
         if deadline.expired:return expired_before_policy('execution_clock_already_expired')
-    metadata['effective_timeout_seconds']=deadline.remaining(args.timeout)
+    metadata['effective_timeout_seconds']=None if args.unbounded_episode else deadline.remaining(args.timeout)
     metadata['policy_started_at']=now();write_json(args.output/'controller.json',metadata)
     def on_start(pid):
         metadata['pid'] = pid
         write_json(args.output / 'controller.json', metadata)
     policy_started_monotonic=time.monotonic()
-    process = adapter.run(project, args.output, deadline.remaining(args.timeout), on_start)
+    def remaining_budget():
+        value=metadata['effective_timeout_seconds']
+        return None if value is None else value-(time.monotonic()-policy_started_monotonic)
+    process = adapter.run(project, args.output, None if args.unbounded_episode else deadline.remaining(args.timeout), on_start)
     raw_events=args.output/'model_events.jsonl'
     first_events=adapter.parse(raw_events).raw_events
     thread_id=codex_thread_id(first_events) if client == 'codex' else None
     segment_events=first_events
     continuations=[]
     for attempt in range(1,args.rate_limit_resumes+1):
-        remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
+        remaining=remaining_budget()
         if (process.returncode == 0 or process.timed_out or not thread_id or
                 not rate_limit_error(segment_events) or
-                remaining <= args.resume_backoff_seconds+30):
+                (remaining is not None and remaining <= args.resume_backoff_seconds+30)):
             break
         time.sleep(args.resume_backoff_seconds)
-        remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
-        if remaining <= 30:
+        remaining=remaining_budget()
+        if remaining is not None and remaining <= 30:
             break
         segment_dir=args.output/'continuations'/str(attempt)
         segment_dir.mkdir(parents=True,exist_ok=False)
@@ -217,11 +227,13 @@ def main(argv=None, *, allow_client=False):
     if continuations:
         metadata['rate_limit_continuations']=continuations
     fresh_restarts=[]
+    unfinished_continuations=[]
+    project_for_thread=project
     history_count=0
     unfinished_count=0
     for attempt in range(1,args.provider_history_restarts+args.unfinished_restarts+1):
-        remaining=metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic)
-        if process.timed_out or remaining <= 60:
+        remaining=remaining_budget()
+        if process.timed_out or (remaining is not None and remaining <= 60):
             break
         if provider_history_error(segment_events) and history_count<args.provider_history_restarts:
             reason='provider_tool_history_protocol_error'
@@ -233,24 +245,53 @@ def main(argv=None, *, allow_client=False):
             unfinished_count+=1
         else:
             break
-        segment_dir=args.output/'fresh_restarts'/str(attempt)
+        same_thread=(reason=='model_ended_without_formal_finish' and
+                     args.unfinished_recovery=='same_thread')
+        segment_dir=(args.output/'continuations'/f'unfinished_{attempt}' if same_thread
+                     else args.output/'fresh_restarts'/str(attempt))
         segment_dir.mkdir(parents=True,exist_ok=False)
-        restart_instruction=(args.instruction + '\n\nA previous model thread ended during this same '
+        if same_thread:
+            active_thread=codex_thread_id(segment_events)
+            if active_thread is None:
+                raise RuntimeError('Cannot resume an unfinished model turn without its recorded thread ID')
+            resume_instruction=('Continue the original robot task in this same simulator episode and '
+                'conversation. The previous turn ended before a formal finish; the task has not been '
+                'reset or completed. Retain the prior RGB, action feedback, plan and notes. Continue '
+                'feasible work using the latest observation and choose every action and pixel yourself. '
+                'Call finish when the instructed result is verified, an observed persistent blocker '
+                'prevents further recovery, or the tool reports an execution limit. An unverified '
+                'goal alone is not a reason to stop. Receive closed=true before final text.')
+            restart_project=adapter.prepare_resume(project_for_thread,active_thread,resume_instruction)
+        else:
+            restart_instruction=(args.instruction + '\n\nA previous model thread ended during this same '
                              'live simulator episode (' + reason + '). Call initialize to inspect the '
                              'current RGB observation; it does not reset the episode. Infer which goals '
                              'remain from visible evidence, choose all actions yourself, and call finish '
                              'with an evidence-based outcome before final text. Do not assume any earlier '
                              'action succeeded without checking.')
-        restart_config=replace(config,output=segment_dir,instruction=restart_instruction,
-                               timeout=remaining)
-        restart_project=adapter.prepare_project(restart_config,system_prompt(args.agent_profile),
+            history = public_action_history(adapter.parse(raw_events).raw_events)
+            history_text = json.dumps(history, ensure_ascii=False)
+            write_json(segment_dir/'public_action_history.json', history)
+            restart_instruction += '\n\nPreviously public action feedback:\n' + history_text
+            restart_config=replace(config,output=segment_dir,instruction=restart_instruction,
+                               timeout=args.timeout if remaining is None else remaining)
+            restart_project=adapter.prepare_project(restart_config,system_prompt(args.agent_profile),
                                                 [t['name'] for t in tool_specs(args.agent_profile)])
+            project_for_thread=restart_project
         restarted=adapter.run(restart_project,segment_dir,remaining,on_start)
         segment_path=segment_dir/'model_events.jsonl'
         segment_events=adapter.parse(segment_path).raw_events
         with raw_events.open('ab') as combined,segment_path.open('rb') as segment:
             combined.write(segment.read())
-        fresh_restarts.append({'attempt':attempt,'reason':reason,
+        if same_thread:
+            unfinished_continuations.append({'attempt':attempt,'reason':reason,
+                'thread_id':active_thread,'returned_thread_id':codex_thread_id(segment_events),
+                'returncode':restarted.returncode,'timed_out':restarted.timed_out,
+                'raw_events':str(segment_path.relative_to(args.output))})
+        else:
+            fresh_restarts.append({'attempt':attempt,'reason':reason,
+                               'public_action_history_sha256':hashlib.sha256((segment_dir/'public_action_history.json').read_bytes()).hexdigest(),
+                               'public_action_history_records':len(history['records']),
                                'thread_id':codex_thread_id(segment_events),
                                'returncode':restarted.returncode,'timed_out':restarted.timed_out,
                                'raw_events':str(segment_path.relative_to(args.output))})
@@ -262,6 +303,9 @@ def main(argv=None, *, allow_client=False):
         metadata['fresh_thread_restarts']=fresh_restarts
         metadata['provider_history_restarts']=[entry for entry in fresh_restarts
                                                if entry['reason']=='provider_tool_history_protocol_error']
+    metadata['unfinished_recovery']=args.unfinished_recovery
+    if unfinished_continuations:
+        metadata['unfinished_thread_continuations']=unfinished_continuations
     policy_finished_at = process.policy_finished_at_unix
     if process.timed_out:
         metadata['timeout'] = True

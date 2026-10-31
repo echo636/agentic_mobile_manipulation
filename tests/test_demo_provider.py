@@ -24,3 +24,19 @@ def test_dedicated_provider_guard_checks_endpoint_and_login(tmp_path):
         verify(tmp_path,'experiment','different.example')
     with pytest.raises(ValueError):
         verify(tmp_path,'desktop','api.gpt.ge')
+
+
+def test_custom_bddl_overlay_preserves_public_definition(tmp_path):
+    public=tmp_path/'behavior'/'bddl3'/'bddl'/'activity_definitions'/'example'/'problem0.bddl'
+    public.parent.mkdir(parents=True)
+    public.write_text('(define (problem example-0) (:goal (and)))')
+    prepare=_module().prepare_bddl_overlay
+    assert prepare(tmp_path/'behavior','example',public.read_text(),tmp_path/'unchanged')==(None,False)
+
+    overlay,custom=prepare(tmp_path/'behavior','example',
+                           '(define (problem example-0) (:goal (and (open door))))',
+                           tmp_path/'custom')
+    assert custom is True
+    assert overlay == tmp_path/'custom'/'bddl_overlay'
+    assert public.read_text() == '(define (problem example-0) (:goal (and)))'
+    assert '(open door)' in (overlay/'bddl'/'activity_definitions'/'example'/'problem0.bddl').read_text()

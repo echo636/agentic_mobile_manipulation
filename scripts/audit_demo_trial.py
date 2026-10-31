@@ -2,6 +2,7 @@
 import argparse
 from collections import Counter
 import json
+import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -9,6 +10,25 @@ import sys
 
 def jsonl(path):
     return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def visual_profile_checks(profile, skill_catalog_enabled, model):
+    """Audit document access separately from the shared planning protocol."""
+    allowed={'skills','planning'} if skill_catalog_enabled else {'minimal','planning_no_skills'}
+    checks={'visual_pixel_action_profile':profile in allowed}
+    if profile in {'planning','planning_no_skills'}:
+        checks['public_decision_every_robot_tool']=all(
+            isinstance(arguments.get('decision'),dict) and
+            set(arguments['decision'])=={'state','active_subgoal','reason','expected'} and
+            all(isinstance(value,str) and value.strip()
+                for value in arguments['decision'].values())
+            for name,arguments in model if name in
+            {'initialize','look','act','finish','list_skills','read_skill',
+             'update_plan','remember','recall'})
+    if profile=='planning_no_skills':
+        checks['skill_tools_absent_in_ablation']=all(
+            name not in {'list_skills','read_skill'} for name,_ in model)
+    return checks
 
 
 def model_calls(events):
@@ -23,6 +43,11 @@ def model_calls(events):
 
 
 def calls_align(model, simulator):
+    # qwen3.8-flash can emit a JSON object as the string value of act.target.
+    # The MCP transport decodes that representation without changing the
+    # selected RGB reference or pixel. Compare those equivalent values here.
+    from manipulation_agent.mcp_server import normalize_qwen_target
+    model = [(name, normalize_qwen_target(name, args)) for name, args in model]
     read_only = {'list_skills', 'read_skill'}
     ordered = lambda calls: [(name, args) for name, args in calls if name not in read_only]
     counted = lambda calls: Counter((name, json.dumps(args, sort_keys=True))
@@ -58,7 +83,8 @@ def motion_checks(run, summary, motion):
     return checks
 
 
-def replay_high_level_actions(events, state_rows, *, initial_open=None, legacy_wait_heating=False):
+def replay_high_level_actions(events, state_rows, *, initial_open=None, legacy_wait_heating=False,
+                              task_object_names=None):
     """Recompute the score from committed pixel or legacy named operations."""
     from manipulation_agent.high_level_hot_drink import HighLevelHotDrink
 
@@ -66,6 +92,7 @@ def replay_high_level_actions(events, state_rows, *, initial_open=None, legacy_w
     pending = None
     private_result = None
     committed = 0
+    environment_only = 0
     snapshots_match = True
     for event in events:
         if event.get('kind') == 'tool_call' and event.get('name') in {'act', 'act_semantic'}:
@@ -89,6 +116,27 @@ def replay_high_level_actions(events, state_rows, *, initial_open=None, legacy_w
                     grounding = private_result.get('private_grounding') or {}
                     if grounding.get('selected_pixel') != pending.get('target',{}).get('point'):
                         raise ValueError('Executor grounding differs from model pixel')
+                if 'environment_only_action' in private_result:
+                    grounding = private_result.get('private_grounding') or {}
+                    selected = grounding.get('selected_object_prim')
+                    digest = hashlib.sha256(json.dumps(state.snapshot(), sort_keys=True,
+                                                        allow_nan=False).encode()).hexdigest()
+                    valid = (private_result['environment_only_action'] == 'non_task_open_close_v1'
+                             and event['name'] == 'act' and primitive in {'open', 'close'}
+                             and private_result.get('primitive') == primitive and target is None
+                             and state.held is None
+                             and bool(task_object_names) and isinstance(selected, str)
+                             and selected.startswith('/World/scene_0/')
+                             and len(selected.split('/')) == 4 and bool(selected.rsplit('/', 1)[-1])
+                             and selected.rsplit('/', 1)[-1] not in task_object_names
+                             and private_result.get('environment_target_prim') == selected
+                             and grounding.get('image_ref') == pending.get('target', {}).get('image_ref')
+                             and private_result.get('high_level_state_sha256') == digest)
+                    if not valid:
+                        raise ValueError('Invalid or insufficient non-task environment-operation evidence')
+                    environment_only += 1
+                    pending = private_result = None
+                    continue
                 state.apply(primitive, target,
                             seconds=pending.get('wait_seconds') or 0)
                 if committed >= len(state_rows):
@@ -104,12 +152,14 @@ def replay_high_level_actions(events, state_rows, *, initial_open=None, legacy_w
     evaluation = state.evaluate()
     report = {'protocol': 'posthoc_action_trace_replay_v1',
             'evaluation': evaluation, 'committed_actions': committed,
+            'environment_only_actions': environment_only,
             'private_state_log_count': len(state_rows),
             'private_state_log_matches': snapshots_match and committed == len(state_rows)}
     # Runs recorded before the cabinet-state correction used a closed symbolic
     # cabinet. Preserve their auditability without changing their saved traces.
     if initial_open is None and not report['private_state_log_matches'] and state_rows:
-        legacy = replay_high_level_actions(events, state_rows, initial_open=(), legacy_wait_heating=True)
+        legacy = replay_high_level_actions(events, state_rows, initial_open=(), legacy_wait_heating=True,
+                                          task_object_names=task_object_names)
         if legacy['private_state_log_matches']:
             return legacy
     return report
@@ -171,16 +221,26 @@ def main():
     executed = [(effect.get('effect') or {}).get('primitive') for effect in effects if effect.get('ok')]
     demo_motion = summary.get('demo_motion') is True
     high_level = summary.get('high_level_harness') is True
+    custom_native = summary.get('task_definition_origin') == 'custom_bddl_overlay' and not high_level
+    research_native = summary.get('task_definition_origin') == 'original_bddl_generated_research_instance'
     visual_high_level = high_level and summary.get('semantic_magic') is not True
+    visual_pixel_protocol = visual_high_level or custom_native or research_native
     semantic_audit = None
     height_audit = None
     if high_level:
-        semantic_audit = replay_high_level_actions(events, jsonl(run_dir / 'high_level_state.jsonl'))
+        binding_path = run_dir / 'runtime_task_binding_validation.json'
+        binding = json.loads(binding_path.read_text()) if binding_path.exists() else {}
+        task_names = (set(binding['bindings_offline_only'].values())
+                      if binding.get('status') == 'passed' and binding.get('bindings_offline_only') else None)
+        semantic_audit = replay_high_level_actions(events, jsonl(run_dir / 'high_level_state.jsonl'),
+                                                  task_object_names=task_names)
         height_audit = base_height_report(run_dir)
         (run_dir / 'posthoc_semantic_audit.json').write_text(
             json.dumps(semantic_audit, ensure_ascii=False, indent=2) + '\n')
+    elif custom_native or research_native:
+        height_audit = base_height_report(run_dir)
     navigation = (explicit_navigation_report(events, jsonl(run_dir / 'navigation_plans.jsonl'))
-                  if visual_high_level else None)
+                  if visual_pixel_protocol else None)
     checks = {
         'model_controller_passed': controller.get('status') == 'passed'
                                    and controller.get('formal_finish_observed') is True,
@@ -193,32 +253,35 @@ def main():
             'visual_base_height_stable': height_audit['stable'],
             'official_submission_ineligible': run.get('backend', {}).get('official_submission_eligible') is False}
            if high_level else
+           {'custom_native_bddl_task_success':
+                (run.get('evaluation') or {}).get('custom_task_success') is True,
+            'not_claimed_as_public_task_success':
+                (run.get('evaluation') or {}).get('official_task_success') is None}
+           if custom_native else
+           {'native_research_task_success':
+                (run.get('evaluation') or {}).get('native_research_task_success') is True,
+            'not_claimed_as_public_task_success':
+                (run.get('evaluation') or {}).get('official_task_success') is None,
+            'no_fabricated_human_reference_metrics':
+                (run.get('evaluation') or {}).get('official_metrics') is None}
+           if research_native else
            {'official_task_success': (run.get('evaluation') or {}).get('official_task_success') is True}),
         'video_passed': (run.get('video') or {}).get('status') == 'passed',
         'agent_reported_achieved': run.get('agent_outcome') == 'achieved',
         'hand_empty_at_finish': not first_ten or hand_empty_after_events(events),
     }
     checks.update(motion_checks(run, summary, motion))
-    if visual_high_level:
+    if visual_pixel_protocol:
         profile = run['config'].get('agent_profile')
         checks.update({
-            'visual_pixel_action_profile': profile in ({'skills','planning'} if
-                summary.get('skill_catalog_enabled',summary.get('task_decomposition_skill_enabled'))
-                else {'minimal'}),
+            **visual_profile_checks(profile,
+                summary.get('skill_catalog_enabled',summary.get('task_decomposition_skill_enabled')), model),
             'no_named_action_calls': all(name != 'act_semantic' for name, _ in model),
             'model_chose_navigate_to': 'navigate_to' in acts,
             'all_paths_from_explicit_navigate_to': navigation['all_explicit'],
             'navigation_path_recorded': navigation['paths'] > 0,
+            **({'visual_base_height_stable': height_audit['stable']} if custom_native or research_native else {}),
         })
-        if profile == 'planning':
-            checks['public_decision_every_robot_tool'] = all(
-                isinstance(arguments.get('decision'),dict) and
-                set(arguments['decision']) == {'state','active_subgoal','reason','expected'} and
-                all(isinstance(value,str) and value.strip()
-                    for value in arguments['decision'].values())
-                for name,arguments in model if name in
-                {'initialize','look','act','finish','list_skills','read_skill',
-                 'update_plan','remember','recall'})
     if checks['video_passed']:
         replay = [sys.executable, '-m', 'manipulation_agent.replay', '--run-dir', str(run_dir)]
         if (controller_dir / 'model_events.jsonl').exists():

@@ -53,7 +53,8 @@ class Harness:
     def start_standalone_clock(self):
         if not self.deadline.managed:
             self.started=time.monotonic()
-            self.deadline.arm_local(self.budget.wall_seconds)
+            if self.budget.wall_seconds is not None:
+                self.deadline.arm_local(self.budget.wall_seconds)
         self.sync_execution_clock()
 
     def call(self, name: str, arguments: dict, request_id: str) -> dict:

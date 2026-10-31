@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Make a two-part, five-view review page from preserved simulator evidence."""
 import argparse
+import hashlib
 import html
 import json
 from pathlib import Path
@@ -54,6 +55,99 @@ def h(value):
 
 def j(value):
     return h(json.dumps(value, ensure_ascii=False, indent=2))
+
+
+def review_configuration(run, run_record, controller_record, events, controller_dir=None):
+    """Use archived evidence only; never substitute today's profile or prompt."""
+    def read(path):
+        return json.loads(path.read_text()) if path.exists() else {}
+
+    controller = controller_record or {}
+    summary = read(run.parent / 'summary.json')
+    manifest = read(run / 'skill_manifest.json')
+    controller_dir = controller_dir or run.parent / 'controller'
+    preflight = read(controller_dir / 'mcp_preflight.json')
+    config = run_record.get('config') or {}
+    backend = run_record.get('backend') or {}
+    prompt = None
+    for token in controller.get('command') or []:
+        if isinstance(token, str) and token.startswith('developer_instructions='):
+            value = token.partition('=')[2]
+            try:
+                prompt = json.loads(value)
+            except json.JSONDecodeError:
+                prompt = value
+    skills = [s['name'] for s in manifest.get('skills', [])]
+    tools = preflight.get('tool_names')
+    planning_tools = {'update_plan', 'remember', 'recall'}
+    group = '未记录：无法确认长程 skill 与配套工具配置'
+    if 'skills' in manifest and tools is not None:
+        if 'long-horizon-planning' in skills and planning_tools <= set(tools):
+            group = '有长程 skill＋三个计划/记忆工具'
+        elif 'long-horizon-planning' not in skills and not planning_tools.intersection(tools):
+            group = '无长程 skill＋无三个计划/记忆工具'
+        else:
+            group = '其他/历史配置：不符合当前两组组合'
+    reads = [e.get('arguments') or {} for e in events
+             if e.get('kind') == 'tool_call' and e.get('name') == 'read_skill']
+    calls = [e for e in events if e.get('kind') == 'tool_call']
+    return {
+        'evidence_note': '来自本轮保存的记录；未记录不等于关闭。配置展示不代表独立审计通过。',
+        'comparison_group': group,
+        'agent_profile': config.get('agent_profile'),
+        'model': review_metadata({}, run_record, controller),
+        'provider': {k: summary.get(k) for k in ('provider_profile', 'provider_host')},
+        'client_version': controller.get('client_version'),
+        'task': {k: config.get(k) for k in ('task', 'instance', 'seed')},
+        'task_instance': backend.get('task_instance'),
+        'task_definition_origin': backend.get('task_definition_origin'),
+        'research_instance_configuration': {key: (summary.get('research_native_instance') or {}).get(key)
+            for key in ('spec_sha256', 'scene_variant', 'construction_binding_selection',
+                        'construction_model_sizes', 'construction_open_cabinet', 'construction_sampler',
+                        'construction_reachability_point', 'particle_compatibility', 'tensor_pipeline_device',
+                        'cloth_compatibility', 'cloth_topology', 'contact_warmup_guard', 'material_condition_compatibility',
+                        'solvent_condition_compatibility', 'physics_solver_type',
+                        'robot_base_frame',
+                        'physics_edit_barrier', 'camera_initialization_barrier', 'articulation_edit_barrier',
+                        'human_reference_metrics_available')},
+        'input_hashes': backend.get('input_hashes'),
+        'skills': {'available': skills if 'skills' in manifest else None,
+                   'resources': manifest.get('skills'),
+                   'bundle_sha256': run_record.get('skill_bundle_sha256'),
+                   'read_requests': [{'name': r.get('name'), 'resource': r.get('resource')} for r in reads]},
+        'tools': {'enabled': tools, 'schema_sha256': preflight.get('schema_sha256'),
+                  'recorded_schemas': preflight.get('tool_schemas'),
+                  'decision_required': ({name: 'decision' in schema.get('required', [])
+                                         for name, schema in preflight['tool_schemas'].items()}
+                                        if 'tool_schemas' in preflight else None),
+                  'decision_fields': ({name: schema.get('properties', {}).get('decision', {}).get('required')
+                                       for name, schema in preflight['tool_schemas'].items()}
+                                      if 'tool_schemas' in preflight else None),
+                  'decision_protocol': run_record.get('public_decision_contract'),
+                  'decision_present_calls': sum('decision' in (e.get('arguments') or {}) for e in calls),
+                  'recorded_calls': len(calls)},
+        'prompt': {'custom_developer_text': prompt,
+                   'sha256': hashlib.sha256(prompt.encode()).hexdigest() if isinstance(prompt, str) else None,
+                   'scope': '本轮自定义 developer prompt；客户端基础指令不包含在此文本中',
+                   'task_instruction': controller.get('instruction') or config.get('instruction')},
+        'observation': {k: backend.get(k) for k in
+                        ('robot_camera_views', 'image_size', 'camera_rig', 'video_capture_policy', 'model_visible_truth', 'action_feedback_contract')},
+        'execution': {k: backend.get(k) for k in
+                      ('executor', 'dynamics_mode', 'tensor_pipeline_device', 'particle_compatibility', 'physics_solver_type', 'physics_edit_barrier', 'camera_initialization_barrier', 'articulation_edit_barrier',
+                       'demo_motion', 'visual_navigation_contract', 'placement',
+                       'high_level_environment_open_close_protocol')},
+        'evaluation_protocol': (run_record.get('evaluation') or {}).get('protocol'),
+        'scoring': run_record.get('scoring'),
+        'budget': run_record.get('budget'),
+        'execution_budget_seconds': run_record.get('execution_budget_seconds'),
+        'requested_timeout_seconds': controller.get('requested_timeout_seconds'),
+        'termination_contract': run_record.get('termination_contract'),
+        'unfinished_recovery': controller.get('unfinished_recovery'),
+        'wire_protocol': summary.get('wire_protocol') or config.get('wire_protocol'),
+        'provenance': {k: run_record.get(k) for k in ('source', 'gpu_uuid', 'interpreter')},
+        'sources': ['run.json', 'skill_manifest.json', 'events.jsonl',
+                    'controller/controller.json', 'controller/mcp_preflight.json', 'summary.json'],
+    }
 
 
 def main():
@@ -125,6 +219,19 @@ def main():
         summary = json.loads(summary_path.read_text())
         controller_record.setdefault('model_reasoning_effort', summary.get('reasoning_effort'))
     metadata = review_metadata(data, run_record, controller_record)
+    configuration = review_configuration(run, run_record, controller_record, executor_events,
+                                         args.controller_dir)
+    (run / 'review_configuration.json').write_text(
+        json.dumps(configuration, ensure_ascii=False, indent=2) + '\n')
+    configuration_html = (
+        '<section id="configuration"><h2>实验配置</h2>'
+        f'<p><b>{h(configuration["comparison_group"])}</b> · profile: '
+        f'{h(configuration["agent_profile"] or "未记录")}</p>'
+        '<p>下方 null 表示未记录，不能解释为关闭；skill 可用与实际读取分别列出。</p>'
+        '<p><a href="review_configuration.json">下载配置 JSON</a></p>'
+        + ''.join(f'<details{" open" if key in {"skills", "tools", "budget", "termination_contract"} else ""}>'
+                  f'<summary>{h(key)}</summary><pre>{j(value)}</pre></details>'
+                  for key, value in configuration.items()) + '</section>')
     transcript = data.get("model_transcript") or []
     trace_by_step = {}
     final_step = data["steps"][-1]["index"]
@@ -230,7 +337,7 @@ def main():
             labels = {'state': '当前状态', 'active_subgoal': '当前子目标',
                       'reason': '选择理由', 'expected': '预期结果'}
             fields = ''.join(f'<div class="trace-event"><div class="trace-label">{label}</div><p>{h(decision.get(key, ""))}</p></div>'
-                             for key, label in labels.items())
+                             for key, label in labels.items() if key in decision)
             decision_html = f'<div class="step-trace"><h4>本步公开决策</h4><div class="trace">{fields}</div></div>'
         motor = step.get("arguments", {}).get("primitive")
         badges = f'<span class="pill">{h(step.get("status", "unknown"))}</span> <span class="pill">env.step {h(env_step)}</span>'
@@ -274,6 +381,22 @@ def main():
                               '因此不能作为完全无任务提示的规划成绩；')
         protocol_note += ('本页按成功动作日志独立重算，高层状态日志逐项核对。'
                           '此结果不代表 BEHAVIOR 官方 BDDL 通过。')
+    elif not evaluation:
+        score_label = '终态评分缺失'
+        success_label = '独立任务完成情况：未知'
+        protocol_note = ('回合中断，记录中没有终态 evaluation。'
+                         '不根据运行失败状态推断任务得分，不将缺失评估标为官方失败。')
+    elif evaluation.get('protocol') == 'original_native_predicates_research_instance_v1':
+        options = evaluation.get('goal_options') or []
+        best = max(options, key=lambda row: sum(row) / len(row) if row else 0, default=[])
+        score_label = f"原生研究实例 {sum(best)}/{len(best)} 项达成"
+        success_label = f"独立原生任务成功 {evaluation.get('native_research_task_success')}"
+        protocol_note = ('目标保留原始 BDDL，场景为项目生成的研究实例，由仿真状态中的原生谓词独立判定。'
+                         '不属于公开挑战实例；没有人类参考数据，未计算官方 Q 或人类归一化成绩。')
+    elif str(evaluation.get('protocol', '')).startswith('custom_native_bddl'):
+        score_label = f"自定义 BDDL 原生指标 Q {((evaluation.get('official_metrics') or {}).get('q_score') or {}).get('final', '未评分')}"
+        success_label = f"自定义任务成功 {evaluation.get('custom_task_success')}"
+        protocol_note = '场景和谓词评分使用 OmniGibson；目标来自本次 BDDL overlay，不代表公开挑战任务成绩。'
     else:
         score_label = f"本地官方指标 Q {((evaluation.get('official_metrics') or {}).get('q_score') or {}).get('final', '未评分')}"
         success_label = f"独立任务成功 {evaluation.get('official_task_success', run_record.get('task_success'))}"
@@ -307,6 +430,9 @@ def main():
     )
     if action_budget is not None and action_budget != 80:
         termination_note += f" 本页面记录的是诊断用 {action_budget} 次预算；正式长程实验要求 80 次。"
+    protocol_note_html = (f'<p class="meta warn">{h(protocol_note)}'
+                          + (' <a href="posthoc_semantic_audit.json">查看重算证据</a>'
+                             if semantic_audit else '') + '</p>') if protocol_note else ''
     html_doc = f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>机器人实验审阅 · {h(data.get('run_id', ''))}</title><style>
     :root{{--bg:#0b1320;--panel:#142235;--line:#2c4058;--text:#e8f0f8;--muted:#a8bacb;--accent:#73d6ca}}
@@ -333,8 +459,9 @@ def main():
     </style></head><body><header><a href="#video">① 连续视频</a><a href="#navigation">② 导航记录</a><a href="#steps">③ 逐次工具调用</a></header><main>
     <h1>机器人实验审阅</h1><p class="meta">{h(args.label)} · {replay_steps} 条回放记录 · {h(success_label)} · {h(score_label)}</p>
     {f'<p class="meta warn" style="font-weight:bold">{h(height_warning)}</p>' if height_warning else ''}
-    {f'<p class="meta warn">{h(protocol_note)} <a href="posthoc_semantic_audit.json">查看重算证据</a></p>' if protocol_note else ''}
+    {protocol_note_html}
     <div class="run-meta"><div><small>任务</small>{h(metadata['task'])}</div><div><small>实例 / 种子</small>{h(metadata['instance'])} / {h(metadata['seed'])}</div><div><small>执行方式</small>{h(metadata['execution'])}</div><div><small>观察协议</small>{h(config.get('observation_mode', '未记录'))}</div><div><small>模型</small>{h(metadata['model'])}</div><div><small>推理强度</small>{h(metadata['reasoning_effort'])}</div><div><small>动作呈现</small>{h(demo_mode)}</div><div><small>计数口径</small>{h(count_note)}</div></div>
+    {configuration_html}
     <p class="meta">任务指令：{h(data.get('instruction') or '未记录')}</p>
     {f'<p class="meta">导航记录：{len(navigation_plans)} 段路径、{base_motion_count} 个实际底盘控制步、约 {run_record.get("evaluation", {}).get("ideal_navigation_distance_m", "未记录")} 米。{("导航由按名称操作在内部触发，模型没有单独调用 navigate_to。" if named_protocol else "每段路径对应模型通过 RGB 选点发出的 act(navigate_to)。")}对应视频展示行走过程。</p>' if navigation_plans else ''}
     <p class="meta">{h(count_note)}</p>

@@ -32,12 +32,15 @@ def main():
                              help='Read a long task specification without passing it in process argv')
     p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
-    p.add_argument('--agent-profile', choices=['minimal','skills','planning','workflow','semantic'], default='skills')
+    p.add_argument('--agent-profile', choices=['minimal','skills','planning','planning_no_skills','workflow','semantic'], default='skills')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
+    p.add_argument('--max-steps-per-action',type=int,default=700,
+                   help='Bound the simulator control steps available to one visual action')
     p.add_argument('--wall-seconds',type=float,default=1800,
                    help='Policy execution budget after bridge readiness (default: 1800 seconds)')
+    p.add_argument('--unbounded-episode', action='store_true', help='Disable wall cutoff; preserve action and simulator-step budgets')
     p.add_argument('--model-max-turns', type=int, default=100, help='Native Responses loop only')
     p.add_argument('--model-max-tokens', type=int, default=150000, help='Native Responses loop cumulative usage budget')
     p.add_argument('--image-history-captures', type=int, default=0,
@@ -72,7 +75,8 @@ def main():
         backend.deadline=deadline
         with startup_stage(a.output, 'first_observation_and_harness'):
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
-                                                          wall_seconds=a.wall_seconds),profile=a.agent_profile)
+                                                          max_steps_per_action=a.max_steps_per_action,
+                                                          wall_seconds=None if a.unbounded_episode else a.wall_seconds),profile=a.agent_profile)
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)

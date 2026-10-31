@@ -4,6 +4,8 @@
 
 ## 0. 强制实验配置
 
+启动、解释或比较实验配置前，查阅[实验配置清单](experiment_configuration_inventory.md)：当前有六种 agent profile；profile、skill 处理、执行/评分、预算、结束监督与线上 schema 必须分别核对。`--long-horizon-planning-skill on` 同时改变工具和提示协议，不能仅解释为增加一份 skill 文档。
+
 除非实验负责人明确指定其他配置，统一使用：
 
 - 模型：`gpt-6.1-sol`
@@ -62,6 +64,10 @@ OMNIGIBSON_DEBUG=1 /mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python \
 ## 3. 预算和运行监控
 
 `--max-actions` 是主要动作预算，`--max-sim-steps` 是仿真安全上限，`--timeout` 是墙钟 watchdog。运行较慢时先检查日志，不要因没有即时输出就终止。
+
+结束监督须单独核对：热饮高层协议会用`premature_finish`拒绝尚有预算时的`blocked`，当前原生杂货协议会接受正式`blocked`；两者的动作数不能直接解释成模型持续性差异。2026-10-25热饮120动作回合在第24动作已第一次请求blocked、共6次被拒绝。检查首次finish、全部拒绝及其后动作，而不只检查最后接受的finish；无正式finish的文本结束另查控制器续接。证据与造任务要求见[案例GROC-021](bugfix_journal.md#groc-021不同结束监督导致其他实验不会提前停的错误比较2026-10-25)。
+
+工具缺参时先核对实际HTTP请求中的schema和`strict`。GROC-022发现Codex导出的机器人工具为`strict:false`，即使目录声明`required`也会生成不完整调用；真实失败前缀重放比只有一句提示的探针更能复现。`scripts/trace_responses_transport.py`默认仍原样转发；显式加`--strict-mcp-tools`时改为`strict_mcp_tools_v1`，只将机器人函数设为严格模式、补齐schema的必填字段声明，保留输入历史/图像和响应字节。启动该进程后，用`MAS_RESPONSES_PROXY_URL=http://127.0.0.1:<port>/v1`连接本轮runner，并冻结代理源码与启动参数。该模式是协议变更，不能称为透明观察器；日志同时记录原始/转发请求哈希与schema。第三方端点的严格模式不能直接套用官方服务保证，仍检查实际返回参数、本地校验及独立评分；见[案例GROC-022](bugfix_journal.md#groc-022工具目录有必填字段但实际请求关闭严格模式2026-10-25)。
 
 热饮语义魔法正式回合按用户要求固定使用 `--reasoning-effort low`。曾误设为 `high` 的回合只保留为诊断，不计为正式结果。此前 7200 秒墙钟上限内只执行了 55/80 次动作，之后被 watchdog 中断；正式回合应使用至少 `--timeout 14400`，并保留 80 次动作预算。墙钟时长包括模型推理、连续行走、物理步进和逐帧视频编码，不等于机器人在仿真中的动作时长。该回合记录显示动作接口约占 6593/7202 秒，模型调用间隙约 577 秒；缩短模型推理不会消除逐步仿真的主要耗时。记录每次回合的 BDDL SHA：修订后的热饮定义接受茶匙放在茶几上的餐巾等合理叠放方式、点心放在盘子或托盘等摆法，并取消未告知机器人的空水瓶最终位置要求；不同 SHA 的分数不可直接比较。
 
@@ -157,6 +163,8 @@ scripts/run_no_demo_trial.py --high-level-harness --bddl-source tasks/prepare_an
 
 ## 6. 发布内网可视化网址（强制交付项）
 
+发布前按[回放 HTML 配置标注要求](replay_configuration_review.md)逐项核对：单场页面顶部展示实际配置及可下载 JSON，比较首页标出组别与协议差异。当前长程两组仅有长程 skill 组开放三个计划/记忆工具；两组均保留 decision。历史未知项明确标注，不能用最新默认值补齐。
+
 每次实验都必须有一个能从实验内网直接打开的 index 页面，并从该页面链接到五视角审查、回放和连续视频。`../experiments/<run-name>/run/review_5view.html` 是本地原始证据，不能替代内网网址。
 
 发布时使用服务器实际服务的目录（不要把页面只写入仓库内的同名目录）：
@@ -197,3 +205,6 @@ curl -fsSI --max-time 5 "$INTERNAL_URL"
 ```
 
 原始输出、`summary.json`、视频和 HTML 都保留后，才算完成一条可交接记录。
+
+
+原生任务可显式设置`MAS_REJECT_FALSE_TIME_CLAIMS=1`启用`clock_claim_correction_v1`（GROC-024）：公开预算充足时纠正显式虚假时间/会话耗尽声明，具体技术blocked仍接受。默认关闭；需冻结环境变量和harness源码，并读取run.json.termination_contract。它属于结束监督变化，不能当作模型主动坚持改善或与旧终止协议合并比较。

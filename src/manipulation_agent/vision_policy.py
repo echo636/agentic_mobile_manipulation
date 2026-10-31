@@ -82,6 +82,26 @@ PLANNING_PROMPT += ('\nRead long-horizon-planning/SKILL.md before the first moto
                     'do not ask the skill to choose actions or pixels. '
                     'If the task input is BDDL, also read long-horizon-planning/references/bddl-goals.md '
                     'and translate its formal goals into the same dependency graph.\n')
+# Ablate document access while retaining the planning protocol and motor guidance.
+PLANNING_NO_SKILLS_PROMPT = PLANNING_PROMPT
+for _skill_instruction, _replacement in (
+    ('nine tools: initialize, look, act, finish, list_skills, read_skill, update_plan, remember, recall.',
+     'seven tools: initialize, look, act, finish, update_plan, remember, recall.'),
+    ('Read visual-manipulation/SKILL.md through list_skills/read_skill. Read relevant skills as needed, including pick-and-place before carrying objects. ', ''),
+    (' Skills are workflow documents, not autonomous executors.', ''),
+    ('actually attempt initialize or list_skills', 'actually attempt initialize'),
+    ('Before a material or cutting action, read visual-manipulation/references/material-actions.md through read_skill.\n', ''),
+    ('\nRead long-horizon-planning/SKILL.md before the first motor action. '
+     'Derive dependencies from the human instruction and RGB yourself; '
+     'do not ask the skill to choose actions or pixels. '
+     'If the task input is BDDL, also read long-horizon-planning/references/bddl-goals.md '
+     'and translate its formal goals into the same dependency graph.\n',
+     '\nDerive dependencies from the human instruction and RGB yourself. '
+     'If the task input is BDDL, translate its formal goals into the same dependency graph.\n'),
+):
+    if _skill_instruction not in PLANNING_NO_SKILLS_PROMPT:
+        raise ValueError('Planning ablation prompt no longer matches its source')
+    PLANNING_NO_SKILLS_PROMPT = PLANNING_NO_SKILLS_PROMPT.replace(_skill_instruction, _replacement)
 SYSTEM_PROMPT = SKILLS_PROMPT
 
 SEMANTIC_PROMPT = '''You control a mobile robot through high-level actions.
@@ -96,11 +116,22 @@ factual reason and wait for closed=true. No shell, files, web or evaluator acces
 
 def system_prompt(profile='skills'):
     prompt = {'minimal':MINIMAL_PROMPT,'skills':SKILLS_PROMPT,'planning':PLANNING_PROMPT,
+              'planning_no_skills':PLANNING_NO_SKILLS_PROMPT,
               'workflow':WORKFLOW_PROMPT,'semantic':SEMANTIC_PROMPT}[profile]
+    if profile == 'skills' and os.environ.get('MAS_REQUIRE_DECISION') == '1':
+        prompt = prompt.replace('First call initialize({})', 'First call initialize with the required decision object')
+        prompt = prompt.replace(
+            'There is no extra decision-summary schema or required language.',
+            'Every tool call requires a short public decision object with state, reason, and expected. '
+            'Report observable evidence and the immediate purpose, not private hidden reasoning.')
     if os.environ.get('MAS_HIGH_LEVEL_HARNESS') == '1':
         prompt += ('\nFor this hot-drink task, act with primitive=boil selects '
                    'the visible kettle or stove. A successful boil result confirms the water is boiled; '
                    'do not use wait to heat water. Choose the action order yourself.\n')
+        if os.environ.get('MAS_HIGH_LEVEL_BLOCKED_POLICY', 'accept') == 'accept':
+            prompt += ('Report an observed blocker with finish(outcome=blocked) and a factual reason. '
+                       'This can close the episode with unused budget; independent task scoring is unchanged. '
+                       'Use further actions for task progress or a materially different recovery.\n')
     return prompt
 
 class RGBResponsesPolicy(ResponsesPolicy):

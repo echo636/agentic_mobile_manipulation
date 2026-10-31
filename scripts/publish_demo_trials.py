@@ -7,6 +7,7 @@ import shutil
 
 
 PUBLIC_FILES = ('review_5view.html', 'episode.mp4', 'episode_browser.mp4',
+                'review_configuration.json',
                 'video_poster.jpg', 'video.json', 'run.json', 'replay.json',
                 'replay_audit.json', 'posthoc_semantic_audit.json',
                 'scene_render_comparison.jpg')
@@ -35,6 +36,7 @@ def main():
     task_status = {}
     demo_motion = None
     high_level_present = False
+    custom_native_present = False
     reviewed = (path for path in sorted(args.trials.resolve().iterdir())
                 if path.is_dir() and ((path / 'demo_audit.json').exists()
                                       or (path / 'summary.json').exists()))
@@ -44,7 +46,9 @@ def main():
         audit = json.loads(audit_path.read_text()) if audit_path.exists() else None
         summary = json.loads((trial / 'summary.json').read_text())
         high_level = summary.get('high_level_harness') is True
+        custom_native = summary.get('task_definition_origin') == 'custom_bddl_overlay' and not high_level
         high_level_present |= high_level
+        custom_native_present |= custom_native
         controller_path = trial / 'controller' / 'controller.json'
         controller = json.loads(controller_path.read_text()) if controller_path.exists() else {}
         task_hint_in_prompt = any('To carry something' in str(token)
@@ -53,7 +57,9 @@ def main():
         if demo_motion is not None and trial_mode is not demo_motion:
             raise ValueError('Cannot publish demo and no-demo trials in one index')
         demo_motion = trial_mode
-        task_entry = task_status.setdefault(summary['task'], {'attempts': 0, 'passed': False})
+        task_key = ((summary.get('task_variant') or summary['task']) + ' [custom BDDL]'
+                    if custom_native else summary['task'])
+        task_entry = task_status.setdefault(task_key, {'attempts': 0, 'passed': False})
         task_entry['attempts'] += 1
         task_entry['passed'] |= bool(audit and audit.get('passed'))
         run = trial / 'run'
@@ -70,11 +76,13 @@ def main():
         copy_if_changed(trial / 'summary.json', destination / 'summary.json')
         if audit:
             copy_if_changed(audit_path, destination / 'demo_audit.json')
-        protocol_label = ('RGB 选点、显式导航' if high_level and not summary.get('semantic_magic')
+        protocol_label = ('RGB 选点；导航路径审计见 JSON' if custom_native else
+                          'RGB 选点、显式导航' if high_level and not summary.get('semantic_magic')
                           else '按名称、内部导航' if high_level else '')
         status = ('高层语义通过 · 含任务提示（非无提示规划）'
                   if audit and audit['passed'] and high_level and task_hint_in_prompt else
                   '高层语义通过（非官方）' if audit and audit['passed'] and high_level else
+                  '自定义 BDDL 通过（非公开成绩）' if audit and audit['passed'] and custom_native else
                   '通过' if audit and audit['passed'] else
                   '未通过 · 服务限流 429' if audit and audit.get('failure_category') == 'provider_rate_limit_429'
                   else '预检或运行中断' if not audit else '未通过')
@@ -84,17 +92,33 @@ def main():
             reason = ('控制器超时' if summary.get('controller_exit_code') == 241 else
                       audit.get('failure_category') or '未满足通过标准')
             status += ' · ' + escape(reason)
-        stages = '、'.join(audit['model_act_sequence']) if audit else '模型未启动'
+        stages = ('、'.join('缺少 primitive' if primitive is None else str(primitive)
+                           for primitive in audit['model_act_sequence'])
+                  if audit else '模型未启动')
         review = (f'<a href="{escape(target.name)}/{name}/review_5view.html">五视角审查与连续视频</a> · '
                   if (run / 'review_5view.html').exists() else '')
         detail = (f'<a href="{escape(target.name)}/{name}/demo_audit.json">审查 JSON</a>' if audit
                   else f'<a href="{escape(target.name)}/{name}/summary.json">运行摘要</a>')
-        rows.append(f'<tr><td>{number}</td><td>{escape(name)}<br>{escape(summary["task"])}</td>'
+        configuration_path = run / 'review_configuration.json'
+        if configuration_path.exists():
+            configuration = json.loads(configuration_path.read_text())
+            config_brief = {k: configuration.get(k) for k in
+                            ('comparison_group', 'agent_profile', 'budget',
+                             'execution_budget_seconds', 'evaluation_protocol', 'termination_contract')}
+            config_brief['skill_bundle'] = (configuration.get('skills') or {}).get('bundle_sha256')
+            config_brief['tools'] = (configuration.get('tools') or {}).get('enabled')
+            config_html = ('<details><summary>' + escape(configuration.get('comparison_group') or '未记录')
+                           + '</summary><pre>' + escape(json.dumps(config_brief, ensure_ascii=False, indent=2))
+                           + '</pre></details>'
+                           + f'<a href="{escape(target.name)}/{name}/review_configuration.json">完整配置</a>')
+        else:
+            config_html = '配置未核验：缺少配置导出'
+        rows.append(f'<tr><td>{number}</td><td>{escape(name)}<br>{escape(task_key)}</td>'
                     f'<td>{escape(summary["model"])} · {escape(summary["reasoning_effort"])}</td>'
                     f'<td>{escape(summary.get("observation_mode") or "未记录")}</td>'
                     f'<td>{escape(summary.get("provider_profile") or "旧记录：未记录")} · '
                     f'{escape(summary.get("provider_host") or "旧记录：未记录")}</td>'
-                    f'<td>{status}</td><td>{escape(stages)}</td>'
+                    f'<td>{config_html}</td><td>{status}</td><td>{escape(stages)}</td>'
                     f'<td>{review}{detail}</td></tr>')
     catalog = json.loads((Path(__file__).resolve().parents[1] /
                           'src/manipulation_agent/tasks.json').read_text())['tasks']
@@ -128,17 +152,22 @@ def main():
         context += ('<p>标为“高层语义通过”的回合按动作日志重算高层状态关系；'
                     'OmniGibson 提供场景、行走和录像。它不表示 BEHAVIOR 官方 BDDL 物理任务通过。'
                     '各回合的原始评分与独立重算证据可在审查页面核对。</p>')
-    passing_rule = ('模型正式 finish、调用序列对齐、模型选中且成功执行目标动作、'
+    passing_rule = ('模型正式 finish、调用序列对齐、模型 RGB 选点、自定义 BDDL 整任务成功、'
+                    '导航路径来自模型显式调用、连续五视角录像通过；不计为公开挑战成绩'
+                    if custom_native_present else
+                    '模型正式 finish、调用序列对齐、模型选中且成功执行目标动作、'
                     '高层语义目标或官方物理任务按对应协议通过、连续五视角录像通过'
                     if high_level_present else
                     '模型正式 finish、调用序列对齐、模型选中且成功执行目标动作、官方整项任务成功、连续五视角录像通过')
-    effect_description = ('不同回合分别由物理接触或高层状态关系判定，详情见审查记录。'
+    effect_description = ('本组使用自定义原生 BDDL，由仿真状态的原生谓词判定；不属于公开任务成绩。'
+                          if custom_native_present else
+                          '不同回合分别由物理接触或高层状态关系判定，详情见审查记录。'
                           if high_level_present else '物体接触和最终状态由执行器及模拟器检查。')
     page = '''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>'''+title+'''</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:1400px;margin:30px auto;padding:0 18px;background:#f4f7fa;color:#183041}section{background:white;padding:18px 24px;margin:18px 0;border:1px solid #d7e1e8;border-radius:10px}table{border-collapse:collapse;width:100%;background:white}th,td{padding:10px;border:1px solid #d7e1e8;text-align:left;vertical-align:top}a{color:#086b95}</style>
 <h1>'''+title+'''</h1><section><p>每条尝试标注观察协议：rgb_only 由模型在四路 RGB 上选像素；rgb_semantic_magic 还向模型提供物品类别名称，由模型按名称选择魔法动作。两种协议分开判断。'''+motion_description+effect_description+'''第三视角只供审阅，模型不可见。每次尝试均保留，不把脚本诊断计入模型成功。</p>'''+context+'''</section>
 '''+coverage+'''
-<table><thead><tr><th>尝试</th><th>任务</th><th>模型与推理强度</th><th>观察协议</th><th>模型服务线路</th><th>审查</th><th>模型动作序列</th><th>证据</th></tr></thead><tbody>'''+''.join(rows)+'''</tbody></table>
+<table><thead><tr><th>尝试</th><th>任务</th><th>模型与推理强度</th><th>观察协议</th><th>模型服务线路</th><th>实验配置</th><th>审查</th><th>模型动作序列</th><th>证据</th></tr></thead><tbody>'''+''.join(rows)+'''</tbody></table>
 <section><p>通过标准：'''+passing_rule+motion_gate+'''。各尝试的具体失败检查见审查 JSON。</p></section></html>'''
     (site / index_name).write_text(page)
     old_index = site / 'autonomous_model_index.html'

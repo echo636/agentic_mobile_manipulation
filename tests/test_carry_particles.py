@@ -90,6 +90,13 @@ class CarryParticleTests(unittest.TestCase):
         self.assertEqual(records[0]['status'], 'liquid_fill_restored_after_placement')
 
     def test_only_particles_inside_the_carried_container_move_with_it(self):
+        class NativeClothSystem:
+            name = 'cloth'
+
+            @property
+            def n_particles(self):
+                raise NotImplementedError('Cloth system has no particle counter')
+
         ContainedParticles = type('ContainedParticles', (), {})
         positions = torch.tensor([[0.0, 0.0, 0.0], [9.0, 9.0, 9.0], [0.1, 0.0, 0.0]])
         system = types.SimpleNamespace(name='water', initialized=True, n_particles=3)
@@ -106,7 +113,7 @@ class CarryParticleTests(unittest.TestCase):
                     in_volume=torch.tensor([True, False, True])))})
         vessel.get_position_orientation = lambda: tuple(pose)
         scene = types.SimpleNamespace(
-            system_registry=types.SimpleNamespace(objects=[system]),
+            system_registry=types.SimpleNamespace(objects=[NativeClothSystem(), system]),
             is_physical_particle_system=lambda system_name: system_name == 'water')
         carry = ControlledCarry()
         carry.env = types.SimpleNamespace(scene=scene)

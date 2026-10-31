@@ -47,6 +47,8 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
                         closed = closed or (result.get('ok') is True and result.get('closed') is True)
                     except (ValueError, AttributeError): pass
     same_commit = bool(run.get('source', {}).get('commit')) and run['source']['commit'] == controller.get('source', {}).get('commit')
+    evaluation = run.get('evaluation') or {}
+    custom_native = str(evaluation.get('protocol', '')).startswith('custom_native_bddl')
     checks = {
         'real_simulator': run['config']['backend'] == 'omnigibson',
         'real_controller_finished': controller.get('status') == 'passed' and controller.get('exit_code') == 0,
@@ -55,7 +57,10 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         'controller_calls_match_simulator_exactly': calls == sim_calls and bool(calls),
         'same_source_commit': same_commit,
         'independent_task_success': run.get('task_success') is True,
-        'official_task_success': run.get('evaluation', {}).get('official_task_success') is True,
+        **({'custom_native_bddl_task_success': evaluation.get('custom_task_success') is True,
+            'public_task_success_not_claimed': evaluation.get('official_task_success') is None}
+           if custom_native else
+           {'official_task_success': evaluation.get('official_task_success') is True}),
     }
     rgb_evidence = {}
     if rgb:
@@ -83,7 +88,9 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         else:
             checks['minimal_profile_on_both_sides'] = controller.get('agent_profile') == 'minimal'
             checks['no_workflow_tools_called'] = all(c['name'] in catalog for c in calls)
-    evidence_ok = all(v for k, v in checks.items() if k not in {'independent_task_success', 'official_task_success'})
+    evidence_ok = all(v for k, v in checks.items()
+                      if k not in {'independent_task_success', 'official_task_success',
+                                   'custom_native_bddl_task_success'})
     return {'schema_version': 1, 'audited_at': now(), 'run_id': run['run_id'], 'model': controller['model'],
             'status': 'passed' if all(checks.values()) else 'failed',
             'evidence_alignment': 'passed' if evidence_ok else 'failed',

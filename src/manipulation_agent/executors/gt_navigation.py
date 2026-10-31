@@ -150,6 +150,47 @@ def mask_dynamic_obstacles(grid, boxes, *, margin, start):
     return GridMap(grid.width,grid.height,grid.resolution,grid.origin,bytes(free)),changed
 
 
+
+def reachable_component(grid, start):
+    """Cells reachable under the planner's same eight-neighbor collision rules."""
+    cell=grid.cell(start)
+    if not grid.navigable(cell):return set()
+    seen={cell};pending=[cell]
+    while pending:
+        cell=pending.pop()
+        for neighbor,_ in grid.neighbors(cell):
+            if neighbor not in seen:seen.add(neighbor);pending.append(neighbor)
+    return seen
+
+
+def preserves_reachable_region(before, after, start, *, baseline_component=None, diagnostics=None):
+    """A placed obstacle may occupy cells, but must not isolate remaining ones.
+
+    This conservative grid condition is not a physical collision certificate.
+    Callers retain the original support, relation and contact checks.
+    """
+    if (before.width,before.height,before.resolution,before.origin)!=(
+            after.width,after.height,after.resolution,after.origin):
+        raise ValueError('Placement comparison requires the same map geometry')
+    baseline=reachable_component(before,start) if baseline_component is None else baseline_component
+    start_free=after.navigable(after.cell(start))
+    if not baseline or not start_free:
+        if diagnostics is not None:
+            diagnostics.update(baseline_cells=len(baseline),start_navigable=start_free,
+                               reason='empty_baseline' if not baseline else 'occupied_start')
+        return False
+    remaining={cell for cell in baseline if after.navigable(cell)}
+    reachable=reachable_component(after,start)
+    disconnected=remaining-reachable
+    if diagnostics is not None:
+        diagnostics.update(baseline_cells=len(baseline),start_navigable=True,
+                           remaining_cells=len(remaining),reachable_cells=len(reachable),
+                           disconnected_cells=len(disconnected),
+                           disconnected_area_m2=len(disconnected)*after.resolution**2,
+                           disconnected_sample=[list(cell) for cell in sorted(disconnected)[:20]])
+    return not disconnected
+
+
 def candidate_points(hint, current, standoff=.7):
     """Port of jinkai _candidate_points_for_hint, converting XZ to OG XY."""
     points=[tuple(hint)]
@@ -189,6 +230,19 @@ def visual_approach_settings(camera_height, base_z, target_z, *, pitch_degrees=2
     return standoff, .18
 
 
+def navigation_approach_settings(camera_height, base_z, target_z, *, floor_waypoint=False,
+                                 pitch_degrees=20, radius=0.):
+    """Select a base endpoint policy for a model-selected RGB point."""
+    if floor_waypoint:
+        # A visible floor pixel is a waypoint the base should traverse, not a
+        # low object to keep in view for a follow-up grasp. The grid still
+        # enforces clearance; the next RGB observation supplies a fresh view.
+        return .2, .0, False
+    standoff, margin = visual_approach_settings(
+        camera_height, base_z, target_z, pitch_degrees=pitch_degrees, radius=radius)
+    return standoff, margin, True
+
+
 @dataclass(frozen=True)
 class NavigationPlan:
     points: tuple[tuple[float,float], ...]
@@ -204,7 +258,8 @@ class NavigationPlan:
 
 
 def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
-                    horizon=10000., max_expansions=250000, candidate_filter=None):
+                    horizon=10000., max_expansions=250000, candidate_filter=None,
+                    max_target_distance=None, diagnostics=None):
     """Project candidate goals, validate reachability, rank and plan one GT hop.
 
     One multi-goal Dijkstra search supplies exact grid geodesics for all
@@ -212,12 +267,20 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     to teleport to another connected region.
     """
     current=tuple(map(float,current));hint=tuple(map(float,hint))
+    def record(**values):
+        if diagnostics is not None:diagnostics.update(values)
+    record(stage='start', current=current, hint=hint, standoff=standoff,
+           max_snap=max_snap, horizon=horizon, max_expansions=max_expansions,
+           max_target_distance=max_target_distance, filter_present=candidate_filter is not None)
     start=grid.cell(current);grid.cell(hint)
     if not grid.navigable(start):raise NavigationError('Start is outside the traversable grid; no unvalidated recovery teleport','navigation_invalid_start')
     visibility={}
     def acceptable(cell):
         if cell not in visibility:
             visibility[cell]=candidate_filter is None or bool(candidate_filter(grid.world(cell)))
+            if diagnostics is not None:
+                diagnostics.setdefault('candidate_filter_results', []).append(
+                    [cell[0],cell[1],visibility[cell]])
         return visibility[cell]
     def project(reachable=None):
         projected=[]
@@ -225,9 +288,12 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
             cell=grid.snap(raw,max_snap,lambda c:(reachable is None or c in reachable) and acceptable(c))
             if cell is not None:
                 goal=grid.world(cell)
+                if max_target_distance is not None and math.dist(goal,hint)>max_target_distance:
+                    continue
                 projected.append((cell,math.dist(goal,raw),math.dist(goal,hint)))
         return projected
     candidates=project()
+    record(stage='projection', projected_candidates=candidates)
     if not candidates:raise NavigationError('No bounded projection of the selected visual target is navigable')
     pending={c[0] for c in candidates};distances={start:0.};parents={};closed=set();queue=[(0.,start)]
     while queue and pending:
@@ -240,6 +306,8 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
             updated=distance+cost
             if updated<distances.get(neighbor,math.inf):
                 distances[neighbor]=updated;parents[neighbor]=cell;heapq.heappush(queue,(updated,neighbor))
+    record(stage='reachability', expanded_cells=len(closed),
+           search_queue_remaining=bool(queue), pending_candidates=len(pending))
     viable=[]
     for cell,snap_distance,target_distance in candidates:
         if cell not in closed or distances[cell]>horizon:continue
@@ -251,9 +319,11 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
         # Reproject within the same distance bound; never cross walls or move
         # the start pose to a different component.
         candidates=project(closed)
+        record(reprojected_candidates=candidates)
         for cell,snap_distance,target_distance in candidates:
             viable.append((candidate_score(target_distance,snap_distance,distances[cell],standoff),distances[cell],cell))
     if not viable:raise NavigationError('No candidate near the visual target is reachable from this start')
+    record(stage='path', reachable_candidates=len(viable))
     score,distance,goal_cell=min(viable)
     cells=[goal_cell]
     while cells[-1]!=start:cells.append(parents[cells[-1]])
@@ -272,6 +342,7 @@ def plan_navigation(grid, current, hint, *, standoff=.7, max_snap=.75,
     goal=grid.world(goal_cell)
     if not all(grid.segment_free(a,b) for a,b in zip(simplified,simplified[1:])):
         raise NavigationError('Planned segment failed static collision validation')
+    record(stage='passed')
     return NavigationPlan(tuple(simplified),goal,hint,math.atan2(hint[1]-goal[1],hint[0]-goal[0]),
                           distance,score,len(candidates),len(viable),math.dist(current,grid.world(start)),len(closed))
 
@@ -378,3 +449,30 @@ class GreedyGridFollower:
         self.last_phase=phase;self.last_index=self.index
         self.last_actual=(x,y,yaw);self.last_command=command
         return command
+
+
+def save_navigation_failure(output, *, grid, static_grid, diagnostics, error, context):
+    """Write private, lossless planner inputs; never expose them as tool feedback.
+
+    Candidate-filter evaluations are retained so the pure planner can replay
+    the observed decision without requiring simulator visibility queries.
+    This is a planning replay, not a reconstructed physical simulator state.
+    """
+    import gzip
+    import json
+    from pathlib import Path
+    from uuid import uuid4
+    def encode(value):
+        return {'width':value.width,'height':value.height,
+                'resolution':value.resolution,'origin':value.origin,
+                'free_hex':value.free.hex()}
+    folder=Path(output)/'navigation_failures'
+    folder.mkdir(parents=True,exist_ok=True)
+    path=folder/(uuid4().hex+'.json.gz')
+    payload={'schema_version':1,'audience':'executor_private',
+             'scope':'planner inputs; not complete simulator state',
+             'grid':encode(grid),'static_grid':encode(static_grid),
+             'diagnostics':diagnostics,'error':{'code':error.code,'message':str(error)},
+             'context':context}
+    with gzip.open(path,'xt',encoding='utf-8') as stream:json.dump(payload,stream)
+    return path

@@ -1,5 +1,6 @@
 """The planning profile requires a public decision at every robot tool boundary."""
 import json
+import pytest
 
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
@@ -16,18 +17,22 @@ DECISION = {
 }
 
 
-def test_planning_profile_keeps_pixel_actions_and_requires_public_decisions(tmp_path, monkeypatch):
+@pytest.mark.parametrize("profile", ["planning", "planning_no_skills"])
+def test_planning_profile_keeps_pixel_actions_and_requires_public_decisions(tmp_path, monkeypatch, profile):
     monkeypatch.setenv('MAS_LONG_HORIZON_PLANNING_SKILL','1')
     output=tmp_path/'episode'
     backend=MockRGBBackend(output)
-    harness=VisionHarness(backend,Recorder(output,{}),profile='planning')
+    harness=VisionHarness(backend,Recorder(output,{}),profile=profile)
     specs={row['name']:row for row in harness.tool_specs()}
-    assert set(specs)=={'initialize','look','act','finish','list_skills','read_skill',
-                        'update_plan','remember','recall'}
+    expected={'initialize','look','act','finish','update_plan','remember','recall'}
+    assert set(specs)==expected | ({'list_skills','read_skill'} if profile=='planning' else set())
     assert {'image_ref','point'} <= set(specs['act']['inputSchema']['properties']['target']['properties'])
     assert all('decision' in row['inputSchema']['required'] for row in specs.values())
-    assert 'long-horizon-planning' in {row['name'] for row in harness.skills.catalog()}
-    assert 'task-decomposition' not in {row['name'] for row in harness.skills.catalog()}
+    if profile=='planning':
+        assert 'long-horizon-planning' in {row['name'] for row in harness.skills.catalog()}
+    else:
+        assert harness.skills is None
+        assert harness.recorder.run['skill_bundle_sha256'] is None
 
     missing=harness.call('initialize',{},'initialize-without-decision')
     assert missing['error']['code']=='invalid_arguments'
@@ -40,6 +45,13 @@ def test_planning_profile_keeps_pixel_actions_and_requires_public_decisions(tmp_
     stored=harness.call('update_plan',{'reason':'The instruction has dependent outcomes',
                                       'subgoals':plan,'decision':DECISION},'plan')
     assert stored['ok']
+    remembered=harness.call('remember',{'key':'visible','text':'An appliance is visible',
+        'revision':first['observation']['revision'],'decision':DECISION},'remember')
+    assert remembered['ok']
+    assert harness.call('recall',{'decision':DECISION},'recall')['ok']
+    if profile=='planning_no_skills':
+        assert harness.call('read_skill',{'name':'visual-manipulation','resource':'SKILL.md',
+            'decision':DECISION},'denied-skill')['error']['code']=='unknown_tool'
     target={'image_ref':first['observation']['images'][0]['image_ref'],'point':[.5,.5]}
     args={'primitive':'toggle_on','target':target,'revision':first['observation']['revision'],
           'placement_yaw_degrees':None,'wait_seconds':None,'confirm_bulk_grasp':False}
@@ -53,10 +65,11 @@ def test_planning_profile_keeps_pixel_actions_and_requires_public_decisions(tmp_
     assert action['arguments']['decision']==DECISION
 
 
-def test_supervisor_can_close_planning_episode_without_model_decision(tmp_path, monkeypatch):
+@pytest.mark.parametrize("profile", ["planning", "planning_no_skills"])
+def test_supervisor_can_close_planning_episode_without_model_decision(tmp_path, monkeypatch, profile):
     monkeypatch.setenv('MAS_LONG_HORIZON_PLANNING_SKILL','1')
     output=tmp_path/'episode'
-    harness=VisionHarness(MockRGBBackend(output),Recorder(output,{}),profile='planning')
+    harness=VisionHarness(MockRGBBackend(output),Recorder(output,{}),profile=profile)
     arguments={'outcome':'aborted','reason':'Model ended without formal finish'}
     harness.request_finish(arguments,'demo-supervisor-finish')
     result=harness.call('finish',arguments,'demo-supervisor-finish')
@@ -72,3 +85,17 @@ def test_planning_skill_handles_natural_language_and_bddl(monkeypatch):
     assert 'First call initialize({})' not in prompt
     assert 'long-horizon-planning/references/bddl-goals.md' in prompt
     assert 'task-decomposition/SKILL.md' not in prompt
+
+
+def test_no_skills_retains_planning_contract():
+    from manipulation_agent.tools import tool_specs
+    baseline={t['name']:t for t in tool_specs('planning_no_skills')}
+    treatment={t['name']:t for t in tool_specs('planning')}
+    for name, spec in baseline.items():
+        assert spec['inputSchema']==treatment[name]['inputSchema']
+        assert spec['description']==treatment[name]['description']
+    prompt=system_prompt('planning_no_skills')
+    assert 'Every tool call requires a short public decision object' in prompt
+    assert 'read_skill' not in prompt and 'SKILL.md' not in prompt
+    assert 'remember/recall' in prompt
+    assert agent_profile(long_horizon_planning_skill=True, without_skills=True)=='planning_no_skills'

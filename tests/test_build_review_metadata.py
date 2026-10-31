@@ -1,5 +1,7 @@
 """Review pages must distinguish model runs from scripted executor trials."""
 import importlib.util
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +12,39 @@ spec.loader.exec_module(build_review)
 
 
 class ReviewMetadataTests(unittest.TestCase):
+    def test_saved_decision_fields_are_not_inferred_from_current_profile(self):
+        for fields in (['state', 'reason', 'expected'],
+                       ['state', 'active_subgoal', 'reason', 'expected']):
+            with self.subTest(fields=fields), tempfile.TemporaryDirectory() as root:
+                run = Path(root) / 'run'
+                run.mkdir()
+                controller = Path(root) / 'controller'
+                controller.mkdir()
+                (controller / 'mcp_preflight.json').write_text(json.dumps({
+                    'tool_names': ['initialize'], 'tool_schemas': {
+                        'initialize': {'required': ['decision'], 'properties': {
+                            'decision': {'required': fields}}}}}))
+                configuration = build_review.review_configuration(run, {}, {}, [])
+                self.assertEqual(configuration['tools']['decision_fields']['initialize'], fields)
+
+    def test_missing_catalog_is_unknown_even_when_no_planning_tool_was_called(self):
+        with tempfile.TemporaryDirectory() as root:
+            configuration = build_review.review_configuration(Path(root), {}, {}, [])
+        self.assertTrue(configuration['comparison_group'].startswith('未记录'))
+        self.assertIsNone(configuration['tools']['enabled'])
+
+    def test_archived_skill_ablation_is_not_relabelled_as_current_without_group(self):
+        with tempfile.TemporaryDirectory() as root:
+            run = Path(root) / 'run'
+            run.mkdir()
+            controller = Path(root) / 'controller'
+            controller.mkdir()
+            (run / 'skill_manifest.json').write_text(json.dumps({'skills': []}))
+            (controller / 'mcp_preflight.json').write_text(json.dumps(
+                {'tool_names': ['initialize', 'act', 'finish', 'update_plan', 'remember', 'recall']}))
+            configuration = build_review.review_configuration(run, {}, {}, [])
+        self.assertTrue(configuration['comparison_group'].startswith('其他/历史'))
+
     def test_scripted_trial_never_inherits_a_model_label(self):
         metadata = build_review.review_metadata(
             {'model': 'stale-model'},

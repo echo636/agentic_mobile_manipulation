@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from manipulation_agent.executors.placement import placement_transaction, rotated_footprint_extents
+from manipulation_agent.executors.placement import placement_transaction, rotated_footprint_extents, project_before_post_step
 import torch
 
 
@@ -16,6 +16,47 @@ class PlacementFootprint(unittest.TestCase):
   self.assertTrue(torch.allclose(rotated,torch.tensor([.42426407,.42426407,.1])))
 
 class PlacementTransactions(unittest.TestCase):
+ def test_later_control_step_projects_committed_residents_before_metrics(self):
+  import os
+  from unittest.mock import patch
+  from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+  from manipulation_agent.omnigibson_backend import OmniGibsonBackend
+  world={'resident':1.0};reads=[]
+  def metric(action):
+   self.assertTrue(torch.isfinite(torch.tensor(world['resident'])))
+   reads.append(action)
+  backend=RGBBackend.__new__(RGBBackend)
+  backend.deadline=SimpleNamespace(check=lambda **kw:None)
+  backend.env=SimpleNamespace(_post_step=metric)
+  backend._base_target=None
+  backend._restore_object_anchor=lambda:None
+  backend._restore_stabilized_containers=lambda:world.update(resident=1.0)
+  backend._carry_follow=lambda:None
+  backend._stabilize_high_level_base_height=lambda:None
+  backend._video_frame=lambda *args:None
+  def physics_then_metric(self,action):
+   world['resident']=float('nan')
+   self.env._post_step(action)
+  with patch.dict(os.environ,{},clear=True),patch.object(OmniGibsonBackend,'_step',physics_then_metric):
+   backend._step('later_grasp')
+  self.assertEqual(reads,['later_grasp'])
+  self.assertIs(backend.env._post_step,metric)
+
+ def test_ideal_residents_are_restored_before_independent_metric_reads(self):
+  state={'pose':float('nan')};seen=[]
+  def evaluate(action):
+   self.assertTrue(torch.isfinite(torch.tensor(state['pose'])))
+   seen.append(action)
+   return 'native_result'
+  env=SimpleNamespace(_post_step=evaluate)
+  original=env._post_step
+  with self.assertRaises(ValueError):
+   with project_before_post_step(env,lambda:state.update(pose=1.0)):
+    self.assertEqual(env._post_step('selected_action'),'native_result')
+    raise ValueError('later action failure')
+  self.assertEqual(seen,['selected_action'])
+  self.assertIs(env._post_step,original)
+
  def test_failed_sampling_restores_world_and_grasp(self):
   world={'held':'shoe','position':[1,2,3]};saved=[];records=[]
   def dump(**kw):return dict(world)

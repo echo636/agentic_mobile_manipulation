@@ -40,6 +40,14 @@ class ModelEvidenceAudit(unittest.TestCase):
         self.assertEqual(result['evidence_alignment'],'passed')
         self.assertEqual(result['status'],'failed')
 
+    def test_custom_native_bddl_success_is_not_public_task_success(self):
+        self.run['evaluation'] = {'protocol':'custom_native_bddl_rgb_agent_ideal_executor',
+                                  'custom_task_success':True,'official_task_success':None}
+        result=self.audit()
+        self.assertEqual(result['status'],'passed')
+        self.assertTrue(result['checks']['public_task_success_not_claimed'])
+        self.assertNotIn('official_task_success',result['checks'])
+
     def test_non_mcp_execution_invalidates_isolated_policy_claim(self):
         result=self.audit([{'type':'item.completed','item':{'type':'command_execution','id':'bad'}}])
         self.assertFalse(result['checks']['only_allowed_tools'])

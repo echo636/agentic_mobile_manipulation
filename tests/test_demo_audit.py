@@ -1,10 +1,55 @@
 """A geometrically satisfied goal can still leave a demo object in hand."""
 import json
+import hashlib
+import pytest
 
 from scripts.audit_demo_trial import (base_height_report, explicit_navigation_report,
                                       hand_empty_after_events, motion_checks,
                                       replay_high_level_actions)
 from manipulation_agent.high_level_hot_drink import HighLevelHotDrink
+
+
+def environment_events():
+    pixel = {'image_ref': 'rgb-00006-right', 'point': [.47, .404]}
+    prim = '/World/scene_0/bottom_cabinet_fancyy_0'
+    digest = hashlib.sha256(json.dumps(HighLevelHotDrink().snapshot(), sort_keys=True,
+                                     allow_nan=False).encode()).hexdigest()
+    return [
+        {'kind': 'tool_call', 'name': 'act', 'arguments': {'primitive': 'open', 'target': pixel}},
+        {'kind': 'private_executor_result', 'details': {
+            'primitive': 'open', 'environment_only_action': 'non_task_open_close_v1',
+            'semantic_target': None, 'environment_target_prim': prim,
+            'high_level_state_sha256': digest,
+            'private_grounding': {'selected_pixel': pixel['point'], 'image_ref': pixel['image_ref'],
+                                  'selected_object_prim': prim}}},
+        {'kind': 'tool_result', 'name': 'act', 'result': {'ok': True}},
+    ]
+
+
+@pytest.mark.parametrize('tamper', ['task_target', 'grasp', 'digest', 'image', 'identity', 'marker', 'bindings', 'bound_child'])
+def test_environment_marker_cannot_hide_task_actions_or_missing_evidence(tamper):
+    events = environment_events()
+    detail = events[1]['details']
+    names = {'kettle_276'}
+    if tamper == 'task_target':
+        names.add('bottom_cabinet_fancyy_0')
+    elif tamper == 'grasp':
+        events[0]['arguments']['primitive'] = 'grasp'
+    elif tamper == 'digest':
+        detail['high_level_state_sha256'] = '0' * 64
+    elif tamper == 'image':
+        detail['private_grounding']['image_ref'] = 'another-image'
+    elif tamper == 'identity':
+        detail['environment_target_prim'] = '/World/scene_0/other'
+    elif tamper == 'marker':
+        detail['environment_only_action'] = 'unknown-version'
+    elif tamper == 'bound_child':
+        detail['environment_target_prim'] = '/World/scene_0/kettle_276/base_link'
+        detail['private_grounding']['selected_object_prim'] = detail['environment_target_prim']
+    else:
+        names = None
+    with pytest.raises(ValueError):
+        replay_high_level_actions(events, [], task_object_names=names)
 
 
 def result(primitive, ok=True):
@@ -93,3 +138,20 @@ def test_hidden_navigation_fails_visual_protocol_audit():
     assert explicit_navigation_report([nav, end], [plan])['all_explicit'] is True
     nav['arguments']['primitive'] = 'grasp'
     assert explicit_navigation_report([nav, end], [plan])['all_explicit'] is False
+
+
+def test_planning_ablation_audit_keeps_decision_gate_and_rejects_skill_reads():
+    from scripts.audit_demo_trial import visual_profile_checks
+    decision={k:'Observed evidence' for k in ('state','active_subgoal','reason','expected')}
+    calls=[('initialize',{'decision':decision}),('act',{'decision':decision})]
+    checks=visual_profile_checks('planning_no_skills',False,calls)
+    assert checks['visual_pixel_action_profile']
+    assert checks['public_decision_every_robot_tool']
+    assert checks['skill_tools_absent_in_ablation']
+    missing=visual_profile_checks('planning_no_skills',False,[('act',{})])
+    assert not missing['public_decision_every_robot_tool']
+    forbidden=visual_profile_checks('planning_no_skills',False,calls+[('read_skill',{'decision':decision})])
+    assert not forbidden['skill_tools_absent_in_ablation']
+    assert not visual_profile_checks('planning_no_skills',True,calls)['visual_pixel_action_profile']
+    assert visual_profile_checks('planning',True,calls)['public_decision_every_robot_tool']
+    assert visual_profile_checks('minimal',False,[])=={'visual_pixel_action_profile':True}

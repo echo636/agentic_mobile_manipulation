@@ -40,9 +40,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("bddl_root", type=Path, help="bddl/activity_definitions directory")
     parser.add_argument("--json", type=Path, help="write the machine-readable report")
-    parser.add_argument("--task", help="check one task strictly and fail if it has an unmapped predicate")
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument("--task", help="check one installed task strictly")
+    target.add_argument("--bddl-file", type=Path, help="check a local task definition strictly")
     args = parser.parse_args()
-    files = sorted(args.bddl_root.glob("*/problem0.bddl"))
+    files = [args.bddl_file] if args.bddl_file else sorted(args.bddl_root.glob("*/problem0.bddl"))
+    if args.bddl_file and not args.bddl_file.is_file():
+        parser.error(f"task definition not found: {args.bddl_file}")
     if args.task:
         files = [path for path in files if path.parent.name == args.task]
         if not files:
@@ -62,7 +66,7 @@ def main() -> int:
     # quantified and thermal states) that are intentionally outside this
     # visual manipulation adapter. A strict single-task check is useful for a
     # formal run; the whole-catalog report remains informational.
-    return 1 if args.task and report["unsupported_predicates"] else 0
+    return 1 if (args.task or args.bddl_file) and report["unsupported_predicates"] else 0
 
 
 if __name__ == "__main__":
