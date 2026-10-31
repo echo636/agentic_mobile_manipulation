@@ -109,8 +109,8 @@ class ControlledCarry:
         from omnigibson.utils.constants import PrimType
         cloth = obj.prim_type == PrimType.CLOTH
         return {'primitive': 'grasp',
-                'implementation': 'native_cloth_attachment' if cloth else 'native_assisted_grasp_joint',
-                'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': not cloth,
+                'implementation': 'native_cloth_attachment_and_gripper_joint' if cloth else 'native_assisted_grasp_joint',
+                'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
                 'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
 
     def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
