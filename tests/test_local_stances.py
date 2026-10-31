@@ -60,6 +60,10 @@ class ArchivedStanceTests(unittest.TestCase):
             self.assertEqual(source, 'free_space')
             self.assertEqual(grid.cell(pose[:2]), (1, 1))
             self.assertLessEqual(math.dist(pose[:2], target[:2]), 1.395)
+            # R766's endpoint crossed a cell boundary after only 0.15 mm
+            # of native settling. Edge proposals must leave feedback room.
+            for dx, dy in ((.0002, 0.), (-.0002, 0.), (0., .0002), (0., -.0002)):
+                self.assertEqual(grid.cell((pose[0]+dx, pose[1]+dy)), (1, 1))
 
     @unittest.skipUnless(importlib.util.find_spec('scipy'), 'roadmap dependency')
     def test_surface_stance_keeps_checked_return_in_recorded_garden_pocket(self):

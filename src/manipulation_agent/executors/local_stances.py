@@ -47,7 +47,9 @@ def local_stance_proposals(actual, origin, point, limits, collision, visited=(),
     # A free cell can intersect the reach disk even when its center lies
     # outside it. Keep these continuous edge poses in the SAME checked cell;
     # endpoint visibility and full route sweeps still run in the caller.
-    half_cell = grid.resolution*.499999
+    # Leave room for native settling instead of targeting a cell boundary
+    # whose classification changes under sub-millimetre pose feedback.
+    half_cell = max(0., grid.resolution/2 - .002)
     xs = np.where(reach <= radius, xs, np.clip(float(point[0]), xs-half_cell, xs+half_cell))
     ys = np.where(reach <= radius, ys, np.clip(float(point[1]), ys-half_cell, ys+half_cell))
     reach = np.hypot(xs-float(point[0]), ys-float(point[1]))

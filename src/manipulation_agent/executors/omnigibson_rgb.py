@@ -1141,10 +1141,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 stream.write(json.dumps({'at':now(),'env_step':self.steps,
                     'commanded_position':new_pos.tolist(),'actual_position':actual_pos.tolist(),
                     'actual_orientation':actual_quat.tolist(),'commanded_yaw':plan.final_yaw,
+                    'position_error_m':final_error,'yaw_error_rad':final_yaw_error,
+                    'clearance_checked':bool(safe),
                     'follower':'symbolic_route_endpoint','continuous_motion_simulated':False,
                     'certified_route_distance_m':travelled,'audience':'executor_private'})+'\n')
             if final_error>.05 or final_yaw_error>math.radians(5) or not safe:
-                raise SkillError('navigation_unreachable','Native settling moved the base away from the selected endpoint',changed=True)
+                raise SkillError('navigation_unreachable','Settled endpoint failed the position, heading or clearance check',changed=True)
         except NavigationError as exc:
             raise SkillError(exc.code,str(exc),changed=self.steps>before) from exc
         finally:
