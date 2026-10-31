@@ -1,11 +1,51 @@
 """Collider enclosures must remain valid under the candidate root transform."""
 import itertools
+import sys
 import unittest
+from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 import numpy as np
-from manipulation_agent.executors.placement_overlap import oriented_piece_box
+from manipulation_agent.executors.placement_overlap import oriented_piece_box, assembly_overlap_ranker
 
 
 class ColliderPieceBoundsTests(unittest.TestCase):
+    def test_surface_ordering_ignores_receiver_but_keeps_contents_and_neighbors(self):
+        import torch
+        mesh = SimpleNamespace(points=torch.tensor(list(itertools.product((-.1,.1), repeat=3))),
+                               scaled_transform=torch.eye(4))
+        def body(path, meshes=None):
+            return SimpleNamespace(links={'base': SimpleNamespace(prim_path=path, is_meta_link=False,
+                collision_meshes=meshes or {})})
+        held = body('/chip', {'mesh': mesh})
+        held.get_position_orientation = lambda: (torch.zeros(3), torch.tensor([0.,0.,0.,1.]))
+        receiver, existing, neighbor = [body(path) for path in ('/tray', '/existing', '/counter')]
+        backend = SimpleNamespace(robot=body('/robot'), torch=torch,
+            env=SimpleNamespace(scene=SimpleNamespace(objects=[held, receiver, existing, neighbor])),
+            deadline=SimpleNamespace(check=lambda **kwargs: None))
+        hits = []
+        def overlap(half, center, orientation, callback, any_hit):
+            for path in hits:
+                if not callback(SimpleNamespace(rigid_body=path)):
+                    break
+        lazy = ModuleType('omnigibson.lazy')
+        lazy.omni = SimpleNamespace(physx=SimpleNamespace(
+            get_physx_scene_query_interface=lambda: SimpleNamespace(overlap_box=overlap)))
+        utils = ModuleType('omnigibson.utils')
+        utils.transform_utils = SimpleNamespace(quat2mat=lambda q: torch.eye(3),
+            mat2quat=lambda m: torch.tensor([0.,0.,0.,1.]))
+        modules = {'omnigibson': ModuleType('omnigibson'), 'omnigibson.lazy': lazy,
+                   'omnigibson.utils': utils}
+        with patch.dict(sys.modules, modules):
+            for paths, expected in ((['/tray'], 0), (['/tray', '/existing'], 1),
+                                    (['/tray', '/counter'], 1)):
+                with self.subTest(paths=paths):
+                    hits[:] = paths
+                    ordinary = assembly_overlap_ranker(backend, held, [held])
+                    supported = assembly_overlap_ranker(backend, held, [held], support_objects=(receiver,))
+                    pose = held.get_position_orientation()
+                    self.assertEqual(ordinary(*pose), 1)
+                    self.assertEqual(supported(*pose), expected)
+
     def test_rotated_scaled_piece_and_new_root_pose_enclose_every_vertex(self):
         vertices=np.array(list(itertools.product((-.3,.3),(-.04,.04),(-.01,.01))))
         angle=.63;c,s=np.cos(angle),np.sin(angle)

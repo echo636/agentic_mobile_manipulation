@@ -16,7 +16,7 @@ def oriented_piece_box(points):
     return mean+rotation@((low+high)/2),np.maximum((high-low)/2,1e-6),rotation
 
 
-def assembly_overlap_ranker(backend, held, assembly):
+def assembly_overlap_ranker(backend, held, assembly, *, support_objects=()):
     import omnigibson.lazy as lazy
     from omnigibson.utils import transform_utils as T
     root_position,root_quat=held.get_position_orientation()
@@ -36,7 +36,10 @@ def assembly_overlap_ranker(backend, held, assembly):
                 box=oriented_piece_box(points)
                 if box is not None:pieces.append(box)
     if not pieces:return None
-    ignored={str(link.prim_path) for obj in [backend.robot,*assembly] for link in obj.links.values()}
+    # A support can intersect a collider's enclosing box without intersecting
+    # the collider. Ignore it only when ordering supported surface proposals;
+    # contents and neighboring objects still contribute, and physics is unchanged.
+    ignored={str(link.prim_path) for obj in [backend.robot,*assembly,*support_objects] for link in obj.links.values()}
     ignored.update(str(link.prim_path) for obj in backend.env.scene.objects for link in obj.links.values() if link.is_meta_link)
     query=lazy.omni.physx.get_physx_scene_query_interface();cache={};stats=dict(poses=0,queries=0,pieces=len(pieces))
     def score(position,quaternion):

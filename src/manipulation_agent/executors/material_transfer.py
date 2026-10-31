@@ -264,7 +264,8 @@ class CheckedMaterialTransfer:
                 # Surface rays find support under a point, not free space for
                 # the whole item. Prefer an unoccupied pose before committing
                 # so a later pour does not push earlier contents off the tray.
-                ranker = self._inside_pose_overlap_ranker(obj, [obj, *[child for child, _ in contents]])
+                ranker = self._inside_pose_overlap_ranker(obj, [obj, *[child for child, _ in contents]],
+                                                         support_objects=(destination,))
                 if ranker is not None:
                     for candidate in candidates:
                         candidate['overlap_score'] = ranker(candidate['pose'][0].tolist(), candidate['pose'][1])

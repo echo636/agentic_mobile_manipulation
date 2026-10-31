@@ -208,7 +208,7 @@ class MaterialActionTests(unittest.TestCase):
                     [dict(index=1, pose=(np.ones(3), np.ones(4))),
                      dict(index=2, pose=(np.zeros(3), np.ones(4)))]
                     if np.array_equal(point, selected_point) else [])
-                backend._inside_pose_overlap_ranker = lambda *args: (
+                backend._inside_pose_overlap_ranker = lambda *args, **kwargs: (
                     lambda position, quaternion: int(np.any(position)))
                 backend._volume_pour_pose = lambda obj, *args: (
                     None if shallow and obj is objects[1] else (np.zeros(3), np.ones(4)))
