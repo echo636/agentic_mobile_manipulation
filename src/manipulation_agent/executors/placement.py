@@ -858,43 +858,51 @@ class CheckedPlacement:
                         raise SkillError('placement_surface_unavailable',
                             'No upward receiving surface near the selected point', changed=True)
                     raise SkillError('sampling_error', 'No collision-free, stable pose on the selected surface', changed=True)
-        # Only the accepted physical result advances environment metrics,
-        # object-state transition rules and the recorded replay.
-        resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
-        resting.add(*held.get_position_orientation())
-        payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
-                           for child, _, kind in dependencies if kind == 'OnTop'}
-        for child, _, _ in dependencies:
-            if id(child) in payload_resting:
-                payload_resting[id(child)].add(*child.get_position_orientation())
-        self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
-                                      payload_resting=payload_resting)
-        adjacency = held.states[VerticalAdjacency].get_value()
-        touching = any(path in self._placement_contacts(held,payload) for path in (link.prim_path for link in target.links.values()))
-        official_on_top = bool(held.states[OnTop].get_value(target))
-        supported, support = self._selected_surface_support(
-            held, target, verification_point, touching, payload, resting=resting.report())
-        # The candidate already passed free settling. Verify the current
-        # support after release; residual native motion is not a failed placement.
-        if point is not None:
-            supported = all(value for check, value in support['checks'].items() if check != 'settled')
-        self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
-            'position': held.get_position_orientation()[0].tolist(),
-            'touching': touching, 'official_on_top': official_on_top, 'selected_surface_support': support,
-            'supported': supported,
-            'verification_point':verification_point.tolist() if verification_point is not None else None,
-            'target_below': target in adjacency.negative_neighbors,
-            'target_above': target in adjacency.positive_neighbors,
-            'grasp_released': self._get_held() is None})
-        if not (supported if point is not None else official_on_top):
-            raise SkillError('postcondition_error', 'Object is not supported by the selected surface', changed=True)
-        self._verify_payload(dependencies, support_target=target,
-                             support_resting={key: window.report() for key, window in payload_resting.items()})
-        # Placement is now verified and released. Advance native cooking,
-        # slicing and task evaluation without watching or restoring the old
-        # assembly: a legitimate transition may consume it in this very step.
-        self._step(self.primitives._empty_action())
-        return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
+        local = getattr(self, '_local_operation', None)
+        substeps = max(1, round(self.og.sim.get_sim_step_dt() / self.og.sim.get_physics_dt()))
+        # As with Inside, finish the already verified pose with fixed native
+        # steps even when candidate search consumed its wall-clock allowance.
+        commit = (local.verified_placement_commit(1,
+                    settling_physics_steps=min(50, max_steps) * substeps)
+                  if local is not None and point is not None else nullcontext())
+        with commit:
+            # Only the accepted physical result advances environment metrics,
+            # object-state transition rules and the recorded replay.
+            resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
+            resting.add(*held.get_position_orientation())
+            payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
+                               for child, _, kind in dependencies if kind == 'OnTop'}
+            for child, _, _ in dependencies:
+                if id(child) in payload_resting:
+                    payload_resting[id(child)].add(*child.get_position_orientation())
+            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
+                                          payload_resting=payload_resting)
+            adjacency = held.states[VerticalAdjacency].get_value()
+            touching = any(path in self._placement_contacts(held,payload) for path in (link.prim_path for link in target.links.values()))
+            official_on_top = bool(held.states[OnTop].get_value(target))
+            supported, support = self._selected_surface_support(
+                held, target, verification_point, touching, payload, resting=resting.report())
+            # The candidate already passed free settling. Verify the current
+            # support after release; residual native motion is not a failed placement.
+            if point is not None:
+                supported = all(value for check, value in support['checks'].items() if check != 'settled')
+            self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
+                'position': held.get_position_orientation()[0].tolist(),
+                'touching': touching, 'official_on_top': official_on_top, 'selected_surface_support': support,
+                'supported': supported,
+                'verification_point':verification_point.tolist() if verification_point is not None else None,
+                'target_below': target in adjacency.negative_neighbors,
+                'target_above': target in adjacency.positive_neighbors,
+                'grasp_released': self._get_held() is None})
+            if not (supported if point is not None else official_on_top):
+                raise SkillError('postcondition_error', 'Object is not supported by the selected surface', changed=True)
+            self._verify_payload(dependencies, support_target=target,
+                                 support_resting={key: window.report() for key, window in payload_resting.items()})
+            # Placement is now verified and released. Advance native cooking,
+            # slicing and task evaluation without watching or restoring the old
+            # assembly: a legitimate transition may consume it in this very step.
+            self._step(self.primitives._empty_action())
+            return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
 
     def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=False, resting=None,
                                   require_neighborhood=True):

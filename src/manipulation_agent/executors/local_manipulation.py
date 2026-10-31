@@ -76,15 +76,16 @@ class LocalOperation:
                              changed=self.changed, stage='local_work_budget')
 
     @contextmanager
-    def verified_placement_commit(self, steps):
+    def verified_placement_commit(self, steps, *, settling_physics_steps=0):
         """Finish a verified pose with bounded environment steps, without searching.
 
         A search deadline cannot predict render/I/O time for a fixed sequence
         of physics steps. Once a stable candidate exists, mandatory settling
         keeps its own finite bound. Caller/operation step caps and episode
-        cancellation still apply; no more sampling is allowed in this phase.
+        cancellation still apply. Surface placement may reserve its fixed
+        native settling steps too; no new candidate search runs in this phase.
         """
-        if self.commit_limits is not None or steps <= 0:
+        if self.commit_limits is not None or steps <= 0 or settling_physics_steps < 0:
             raise ValueError('Expected a non-nested finite placement commit')
         self.backend.deadline.check(changed=self.changed)
         used = self.backend.steps-self.start_steps
@@ -94,8 +95,9 @@ class LocalOperation:
                              'Insufficient control steps to commit verified placement',
                              changed=self.changed, stage='local_commit_budget')
         sampled = getattr(self.backend, 'sampling_physics_steps', 0)-self.start_sampling
-        self.commit_limits = end, sampled
+        self.commit_limits = end, sampled + settling_physics_steps
         self.record('verified_placement_commit', reserved_steps=steps,
+                    reserved_physics_steps=settling_physics_steps,
                     search_sampling_steps=sampled, wall_policy='bounded_steps_with_episode_cancellation')
         try:
             yield

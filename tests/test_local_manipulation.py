@@ -295,6 +295,18 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(caught.exception.stage,'local_commit_budget')
         self.assertIsNone(op.commit_limits)
 
+    def test_surface_commit_finishes_fixed_physics_after_search_deadline(self):
+        b=Motor();clock=[0.]
+        op=LocalOperation(b,'place_on_top',b.binding,100,{},clock=lambda:clock[0])
+        clock[0]=301.;b.sampling_physics_steps=1200
+        with op.verified_placement_commit(1,settling_physics_steps=200):
+            for _ in range(200):
+                op.check();b.sampling_physics_steps+=1
+            op.check();b.steps+=1
+            with self.assertRaises(SkillError) as caught:op.check()
+            self.assertEqual(caught.exception.stage,'local_commit_budget')
+        self.assertEqual(b.sampling_physics_steps,1400)
+
     def test_verified_commit_keeps_episode_cancellation(self):
         b=Motor();op=LocalOperation(b,'place_inside',b.binding,100,{})
         def stop(**kw):raise SkillError('episode_cancelled','external cancellation')
