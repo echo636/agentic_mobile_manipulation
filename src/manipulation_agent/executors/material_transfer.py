@@ -47,8 +47,8 @@ def free_volume_positions(scene, destination, system, limit, *, diagnostics=None
     if limit <= 0:
         report['termination'] = 'no_source_material'
         return empty()
-    if bool(((high - low) <= 2 * radius).any()):
-        report['termination'] = 'sphere_diameter_exceeds_axis'
+    if bool(((high - low) <= 0).any()):
+        report['termination'] = 'empty_volume'
         return empty()
     occupied = []
     for other in scene.active_systems.values():
@@ -62,13 +62,16 @@ def free_volume_positions(scene, destination, system, limit, *, diagnostics=None
     deadline = time.monotonic() + 15.0
     report['termination'] = 'candidate_grids_exhausted'
     for refinement in (1., .5, .25):
-        axes = [torch.arange(float(a) + radius, float(b) - radius, spacing * refinement,
+        # The annotation defines valid centers, not collision walls. Insetting
+        # it removes usable layers in shallow vessels; native contacts below
+        # determine whether a full particle fits at each candidate center.
+        axes = [torch.arange(float(a), float(b), spacing * refinement,
                              dtype=low.dtype, device=low.device) for a, b in zip(low, high)]
         phase = dict(search_spacing_m=spacing * refinement, axis_counts=[len(a) for a in axes],
                      in_volume=0, particle_clear=0, rigid_checks=0, rigid_clear=0)
         report['passes'].append(phase)
         if any(len(axis) == 0 for axis in axes):
-            report['termination'] = 'sphere_diameter_exceeds_axis'
+            report['termination'] = 'empty_volume'
             return empty()
         xy = torch.cartesian_prod(axes[0], axes[1]).reshape(-1, 2)
         xy = xy[((xy - (low[:2] + high[:2]) / 2)**2).sum(dim=1).argsort()]
