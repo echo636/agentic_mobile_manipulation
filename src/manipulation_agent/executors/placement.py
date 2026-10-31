@@ -335,6 +335,9 @@ class CheckedPlacement:
     def _object_collision_vertices(self, held):
         """Read active physical geometry, including world scale, without a box proxy."""
         import numpy as np
+        from omnigibson.utils.constants import PrimType
+        if held.prim_type == PrimType.CLOTH:
+            return held.root_link.compute_particle_positions().detach().cpu().numpy()
         vertices = []
         for link in held.links.values():
             if getattr(link, 'is_meta_link', False) or getattr(link, 'visual_only', False):

@@ -106,8 +106,11 @@ class ControlledCarry:
         if self._get_held() is not obj:
             raise SkillError('postcondition_error', 'Native grasp did not hold the selected object', changed=True)
         self.frames_revision = -1
-        return {'primitive': 'grasp', 'implementation': 'native_assisted_grasp_joint',
-                'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
+        from omnigibson.utils.constants import PrimType
+        cloth = obj.prim_type == PrimType.CLOTH
+        return {'primitive': 'grasp',
+                'implementation': 'native_cloth_attachment' if cloth else 'native_assisted_grasp_joint',
+                'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': not cloth,
                 'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
 
     def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
@@ -341,9 +344,13 @@ class ControlledCarry:
     def _grasp_dependencies(self,obj):
         """Read-only closure shared by grasp and loaded-departure prediction."""
         from omnigibson.object_states import Inside,OnTop,Touching
+        from omnigibson.utils.constants import PrimType
         candidates=[child for child in self.env.scene.objects if child not in (obj,self.robot)
                     and hasattr(child,'states')]
         def relation(child,parent):
+            # Native OnTop/Inside do not define cloth as a support/container.
+            # Objects resting on fabric remain subject to ordinary contacts.
+            if parent.prim_type == PrimType.CLOTH:return None
             attached=attachment_relation(child,parent)
             if attached:return attached
             if getattr(child,'fixed_base',True):return None

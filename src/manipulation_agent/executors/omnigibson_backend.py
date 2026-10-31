@@ -242,6 +242,8 @@ class OmniGibsonBackend:
             write_json(output/'heat_source_links_compatibility.json', install_heat_source_links())
             from .compat.cloth_import import install_nested_cloth_import
             write_json(output/'cloth_import_compatibility.json', install_nested_cloth_import(output))
+            from .compat.cloth_grasp import install_native_cloth_grasp
+            write_json(output/'cloth_grasp_compatibility.json', install_native_cloth_grasp())
             from omnigibson.macros import gm
             from omnigibson.eval.evaluator import Evaluator, resolve_instance_ids
             from omnigibson.eval.utils.eval_utils import NUM_PUBLIC_TEST_INSTANCES
