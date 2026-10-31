@@ -1,4 +1,4 @@
-"""Adapt grouped cloth visuals to the pinned native cloth importer."""
+"""Adapt grouped cloth visuals and native cloth output to the pinned simulator."""
 from functools import wraps
 import hashlib
 import json
@@ -85,6 +85,14 @@ def install_nested_cloth_import(output):
                 def copy_prim(source, destination):
                     lazy.omni.kit.commands.execute('CopyPrim', path_from=source, path_to=str(destination))
                 with og.sim.editing_usd():
+                    # Isaac 5.1's PhysX Fabric output leaves legacy cloth points
+                    # stale (and can corrupt their GPU readback). Keep the
+                    # Fabric scene graph, but use native USD physics output in
+                    # scenes containing cloth. No geometry or physics changes.
+                    settings = lazy.carb.settings.get_settings()
+                    settings.set_bool('/physics/fabricEnabled', False)
+                    settings.set_bool('/physics/updateToUsd', True)
+                    settings.set_bool('/physics/updateParticlesToUsd', True)
                     record = prepare_nested_cloth_visual(entity._prim, copy_prim)
                 if record is not None:
                     with (Path(output) / 'cloth_imports.jsonl').open('a') as stream:
@@ -95,6 +103,7 @@ def install_nested_cloth_import(output):
         module.EntityPrim._post_load = post_load
     return dict(status='configured', scope='nested_visual_cloth_import',
                 optional_normals='derive missing normals from native mesh geometry',
+                cloth_scene_output='native_usd; Fabric scene graph retained',
                 upstream_path=module.__file__,
                 upstream_sha256=hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest(),
                 task_predicates_changed=False)
