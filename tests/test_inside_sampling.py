@@ -313,6 +313,26 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertTrue(b.torch.equal(held.position,original[0]))
         self.assertEqual(records[-1]['rejections']['initial_collision'],3)
 
+    def test_missing_rigid_contact_requires_native_containment_and_stability(self):
+        for stable in (True, False):
+            with self.subTest(stable=stable):
+                b, held, target, _, state, records, modules = self.fixture(collide=False)
+                # Native rigid-body contact views exclude physical particles;
+                # particle support must reach the existing resting check.
+                modules['omnigibson.utils.usd_utils'].RigidContactAPI.is_in_contact = lambda **kw: False
+                observed = []
+                def resting(*args, **kwargs):
+                    observed.append(state['steps'])
+                    return stable
+                b._inside_resting_check = resting
+                with patch.dict('sys.modules', modules):
+                    result = sample_assembly_inside(b, held, target, [], max_candidates=1)
+                self.assertEqual(result, stable)
+                self.assertTrue(observed)
+                self.assertGreaterEqual(observed[0], 60)
+                if not stable:
+                    self.assertEqual(records[-1]['rejections']['unstable_after_release'], 1)
+
     def test_slow_physics_finishes_admitted_trial(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         with patch.dict('sys.modules',modules), patch(

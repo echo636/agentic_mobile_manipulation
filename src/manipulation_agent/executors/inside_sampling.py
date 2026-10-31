@@ -487,9 +487,9 @@ Rejected candidate poses never become committed actions or task evidence.
                 # and the enclosing operation's work limits still apply.
                 check(admission=False); sim.step_physics()
                 if contact(): break
-            else:
-                reject('no_support_contact', candidate)
-                continue
+            # RigidContactAPI cannot report support from physical particles.
+            # A rigid-only contact is not required: native Inside and the
+            # measured free-settling check below still decide acceptance.
             for _ in range(5):
                 check(admission=False); sim.step_physics()
             for _ in range(limit):
