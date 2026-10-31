@@ -74,6 +74,10 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
     from .resting_motion import RestingMotionWindow
 
     sim, torch = backend.og.sim, backend.torch
+    # A movable support can be brought into reach with its contents. As with
+    # Inside proposals, a direct floor-map filter applies only to fixed supports.
+    if not target.fixed_base:
+        reachability_context = None
     particles = snapshot_particle_state(sim)
     initial = sim.dump_state(serialized=False)
     accepted = False
