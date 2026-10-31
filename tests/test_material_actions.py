@@ -198,7 +198,12 @@ class MaterialActionTests(unittest.TestCase):
                     load_state=Mock(side_effect=AssertionError('scene rewind'))))
                 backend.deadline = types.SimpleNamespace(check=lambda **kw: None)
                 backend._grasp_dependencies = lambda obj: []
-                backend._surface_candidates = lambda *args: [dict(index=2, pose=(np.zeros(3), np.ones(4)))]
+                selected_point = np.array([.8, .2, .3])
+                # A clear patch on a lower shelf; the box center is not a
+                # usable receiving surface (for example a countertop sink).
+                backend._surface_candidates = Mock(side_effect=lambda obj, target, point:
+                    [dict(index=2, pose=(np.zeros(3), np.ones(4)))]
+                    if np.array_equal(point, selected_point) else [])
                 backend._volume_pour_pose = lambda *args: (np.zeros(3), np.ones(4))
                 backend._relocate_contents = Mock()
                 backend._placement_physics_step = Mock()
@@ -209,7 +214,7 @@ class MaterialActionTests(unittest.TestCase):
                         patch.object(sys.modules['omnigibson.utils'], 'transform_utils', object(), create=True), \
                         patch('manipulation_agent.executors.material_transfer.snapshot_particles', return_value=[]), \
                         patch('manipulation_agent.executors.particle_payload.relocate_particles'):
-                    moved = backend._pour_rigid_objects(object(), receiver, objects, 6)
+                    moved = backend._pour_rigid_objects(object(), receiver, objects, 6, selected_point)
                 self.assertEqual(moved, objects if retained else objects[:1])
                 for obj in moved:
                     obj.set_position_orientation.assert_called_once()
@@ -217,6 +222,11 @@ class MaterialActionTests(unittest.TestCase):
                     objects[1].set_position_orientation.assert_not_called()
                 backend._placement_physics_step.assert_not_called()
                 backend._step.assert_called()
+                np.testing.assert_array_equal(selected_point, [.8, .2, .3])
+                if relation == 'OnTop':
+                    self.assertEqual(backend._surface_candidates.call_count, len(moved))
+                else:
+                    backend._surface_candidates.assert_not_called()
                 key = 'official_on_top' if relation == 'OnTop' else 'official_inside'
                 self.assertEqual(backend._placement_record.call_args.args[0][key], retained)
 

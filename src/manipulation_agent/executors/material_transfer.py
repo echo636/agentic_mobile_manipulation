@@ -206,7 +206,7 @@ class CheckedMaterialTransfer:
                     for state in (Inside, OnTop)))
             for other in members)]
 
-    def _pour_rigid_objects(self, source, destination, objects, max_steps):
+    def _pour_rigid_objects(self, source, destination, objects, max_steps, point=None):
         """Set containment or a measured support pose, then leave free physics.
 
         Stop when the receiver cannot accept the next object. Earlier transfers
@@ -235,10 +235,14 @@ class CheckedMaterialTransfer:
                 # existing loose material covers part of the receiver. Use
                 # the same exposed collision surface as individual placement.
                 # Commit one pose, with no scene rewind or contents pinning.
-                low, high = destination.aabb
-                point = (low + high) / 2
-                point[2] = high[2]
-                candidates = self._surface_candidates(obj, destination, point)
+                # Keep the RGB-selected surface, including its shelf height.
+                # A receiver's box center can lie in a sink or another shelf.
+                surface_point = point
+                if surface_point is None:
+                    low, high = destination.aabb
+                    surface_point = (low + high) / 2
+                    surface_point[2] = high[2]
+                candidates = self._surface_candidates(obj, destination, surface_point)
                 if not candidates:
                     break
                 obj.set_position_orientation(*candidates[0]['pose'])
@@ -274,12 +278,12 @@ class CheckedMaterialTransfer:
             self._step(self.primitives._empty_action())
         return moved
 
-    def _checked_transfer(self, primitive, target, max_steps):
+    def _checked_transfer(self, primitive, target, max_steps, point=None):
         from omnigibson.object_states import ContainedParticles, Inside, OnTop
 
         source, destination = self._transfer_preconditions(primitive, target)
         objects = self._pour_objects(source) if primitive == 'pour' else []
-        moved = self._pour_rigid_objects(source, destination, objects, max_steps) if objects else []
+        moved = self._pour_rigid_objects(source, destination, objects, max_steps, point) if objects else []
         result = self._transfer_material_portion(primitive, source, destination, max_steps,
                                                  empty_ok=bool(moved))
         if moved:

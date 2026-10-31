@@ -1343,7 +1343,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         elif primitive=='soak':
             result=self._checked_soak(obj,max_steps)
         elif primitive in {'pour','scoop'}:
-            result=self._checked_transfer(primitive,obj,max_steps)
+            result=self._checked_transfer(primitive,obj,max_steps,point)
         elif primitive=='cut':
             result=self._checked_cut(obj,max_steps)
         elif primitive in {'open','close','toggle_on','toggle_off'}:
