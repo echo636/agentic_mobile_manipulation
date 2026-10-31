@@ -161,7 +161,11 @@ def checked_initial_inside(env, output):
                 adapter._placement_record({'status': 'initial_geometric_work_limit',
                                            'held': held.name, 'target': target.name})
                 accepted = False
-            if accepted and relation is Inside and kwargs.get('use_trav_map', False):
+            # Contents of a movable vessel become accessible by moving that
+            # vessel. Its own initial placement establishes access; a static
+            # floor-map test on every nested item is not another prerequisite.
+            if (accepted and relation is Inside and target.fixed_base
+                    and kwargs.get('use_trav_map', False)):
                 from omnigibson.utils.object_state_utils import (
                     get_reachability_sampling_context, is_pose_reachable_for_predicate)
                 predicate = 'inside' if relation is Inside else 'onTop'
