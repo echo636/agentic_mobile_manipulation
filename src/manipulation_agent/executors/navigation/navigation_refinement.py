@@ -118,6 +118,26 @@ def detour_sampling(grid, actual, goal):
         previous = resolution
 
 
+def continued_navigation_sampling(grid, actual, goal, previous):
+    """Keep a certified local map's precision when navigating within its area.
+
+    Only the sampling resolution is retained. The caller rebuilds collision
+    geometry, so moved objects and doors are still included in the new query.
+    """
+    if not previous or previous['resolution'] >= grid.resolution:
+        return None
+    window = previous.get('window')
+    if window is None or any(not window[i] <= xy[i] <= window[i+2]
+                             for xy in (actual, goal) for i in (0, 1)):
+        return None
+    selected = None
+    for sampling in detour_sampling(grid, actual, goal):
+        selected = sampling
+        if sampling['resolution'] <= previous['resolution'] + 1e-6:
+            break
+    return selected
+
+
 def refine_navigation_detour(backend, floor, grid, map_details, actual,
                              options, plan, route, collision, selection):
     """Replace only with a faster certified route to an already admitted pose.

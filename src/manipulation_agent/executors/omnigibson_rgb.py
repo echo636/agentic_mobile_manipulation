@@ -698,6 +698,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             standoff=max(1.25,suggested)
         navigation_sampling=None
         grid,map_details=build_navigation_grid(self,floor)
+        from .navigation.navigation_refinement import continued_navigation_sampling
+        navigation_sampling=continued_navigation_sampling(
+            grid,position[:2].cpu().tolist(),point[:2].cpu().tolist(),
+            getattr(self,'_navigation_sampling_hint',None))
+        if navigation_sampling is not None:
+            grid,map_details=build_navigation_grid(self,floor,sampling=navigation_sampling)
         self._navigation_layer_yaw=travel_yaw
         if not grid.navigable(grid.cell(position[:2].cpu().tolist())):
             # Local manipulation can leave a valid pose in a narrow passage
@@ -1054,6 +1060,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         handoff=('travel_only' if mode=='point' else
                  'selected_surface_nearby' if projection<=reach else
                  'target_approach_available' if getattr(self,'local_manipulation',False) else 'needs_closer_approach')
+        self._navigation_sampling_hint={'resolution':grid.resolution,
+                                        'window':map_details.get('world_window')}
         return {**result,'nav_status':nav_status,'manipulation_handoff':handoff,
                 'strategy':STRATEGY,'planned_path_distance_m':plan.geodesic_m,
                 'candidate_count':plan.candidates_considered,'reachable_candidates':plan.candidates_reachable,
