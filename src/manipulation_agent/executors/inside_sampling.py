@@ -145,7 +145,7 @@ Rejected candidate poses never become committed actions or task evidence.
     from omnigibson.object_states import Inside, Open
     from omnigibson.utils import transform_utils as T
     from omnigibson.utils.usd_utils import RigidContactAPI
-    from .particle_payload import particle_bounds, particles_in_volumes, verify_particles
+    from .particle_payload import particle_bounds, verify_particles
     from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
     from .placement import scene_object_identities
     torch, sim = backend.torch, backend.og.sim
@@ -530,9 +530,8 @@ Rejected candidate poses never become committed actions or task evidence.
                 reject('unstable_after_release',candidate)
                 continue
             if particles:
-                if not particles_in_volumes(backend.env.scene, particles, [volume]):
-                    reject('particles_outside_destination', candidate)
-                    continue
+                # Contents stay with their vessel. A pot inside a shallow sink
+                # may hold food above the sink's fill annotation.
                 try:
                     verify_particles(backend.env.scene, particles)
                 except SkillError as exc:

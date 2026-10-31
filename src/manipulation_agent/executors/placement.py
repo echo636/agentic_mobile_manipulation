@@ -1138,10 +1138,6 @@ class CheckedPlacement:
             raise SkillError('postcondition_error','Object did not remain inside after settling; try another placement',changed=True)
         self._verify_container_payload(target,residents)
         self._verify_payload(dependencies)
-        if particle_payload:
-            from .particle_payload import particles_in_volumes
-            if not particles_in_volumes(self.env.scene,particle_payload,fillable):
-                raise SkillError('postcondition_error','Carried particles extend outside the destination volume',changed=True)
         if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
             raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
         return {'primitive':'place_inside','implementation':('assembly_volume_with_official_Inside'

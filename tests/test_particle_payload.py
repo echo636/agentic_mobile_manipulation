@@ -9,7 +9,7 @@ from contextlib import nullcontext
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.particle_payload import snapshot_particles, relocate_particles, verify_particles
 from manipulation_agent.executors.particle_payload import _particle_supports, particle_count
-from manipulation_agent.executors.particle_payload import particle_bounds, particles_in_volumes
+from manipulation_agent.executors.particle_payload import particle_bounds
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch') and importlib.util.find_spec('scipy'), 'Requires geometry environment')
@@ -107,16 +107,6 @@ class ParticlePayloadTests(unittest.TestCase):
         self.torch.testing.assert_close(self.raw[0, :3], before[0, :3] + self.torch.tensor([.3, 0., 0.]))
         self.torch.testing.assert_close(self.raw[1], before[1])
         verify_particles(self.scene, transferred)
-
-    def test_bag_support_does_not_substitute_for_destination_containment(self):
-        self.surface_scene()
-        payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
-        verify_particles(self.scene, payload)
-        low_ceiling = SimpleNamespace(check_points_in_volume=lambda points: points[:, 2] < .16)
-        self.assertFalse(particles_in_volumes(self.scene, payload, [low_ceiling]))
-        enough_room = SimpleNamespace(check_points_in_volume=lambda points: points[:, 2] < .25)
-        self.assertTrue(particles_in_volumes(self.scene, payload, [enough_room]))
-        self.assertFalse(particles_in_volumes(self.scene, payload, []))
 
     def test_surface_support_pile_excludes_table_below_floating_and_other_tray(self):
         self.surface_scene()

@@ -443,47 +443,42 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertEqual(records[-1]['rejections'],{'payload_outside_destination':1})
         self.assertEqual(float(held.position[0]),5.)
 
-    def test_carrier_fits_but_captured_particle_extent_is_too_large(self):
-        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+    def test_nested_particle_ownership_does_not_require_outer_volume(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False,oversize=True)
         b.env=SimpleNamespace(scene=object())
         b._placement_particle_payload=(held,[object()])
-        def oversized(*args):
+        def tall_contents(*args):
+            # A carrier's center can satisfy native Inside while its retained
+            # contents extend past the outer fill annotation (R670 pot/sink).
+            # Geometry remains a proposal input; ownership decides retention.
             return [(held.position-b.torch.tensor([.6,.1,.1]),
                      held.position+b.torch.tensor([.6,.1,.1]))]
         with patch.dict('sys.modules',modules), \
-             patch('manipulation_agent.executors.particle_payload.particle_bounds', side_effect=oversized), \
-             patch('manipulation_agent.executors.particle_payload.particles_in_volumes', return_value=False) as check:
-            self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+             patch('manipulation_agent.executors.particle_payload.particle_bounds', side_effect=tall_contents), \
+             patch('manipulation_agent.executors.particle_payload.verify_particles') as check:
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
         check.assert_called_once()
-        self.assertEqual(state['steps'],0)
-        self.assertEqual(records[-1]['attempted'],1)
         self.assertEqual(records[-1]['domain_attempts'],{'full_volume':1})
-        self.assertIn('particles_outside_destination',records[-1]['rejections'])
-        self.assertEqual(float(held.position[0]),5.)
+        self.assertTrue(held.states[modules['omnigibson.object_states'].Inside].get_value(target))
 
-    def test_destination_and_actual_particle_support_are_both_required(self):
-        for outside in (True,False):
-            with self.subTest(outside=outside):
-                b,held,target,contents,state,records,modules=self.fixture(collide=False)
-                b.env=SimpleNamespace(scene=object())
-                b._placement_particle_payload=(held,[object()])
-                with patch.dict('sys.modules',modules), \
-                     patch('manipulation_agent.executors.particle_payload.particle_bounds',return_value=[]), \
-                     patch('manipulation_agent.executors.particle_payload.particles_in_volumes',return_value=not outside), \
-                     patch('manipulation_agent.executors.particle_payload.verify_particles',
-                           side_effect=SkillError('postcondition_error','foreign support')) as check:
-                    self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
-                self.assertEqual(float(held.position[0]),5.)
-                reason='particles_outside_destination' if outside else 'particle_payload_postcondition'
-                self.assertEqual(records[-1]['rejections'][reason],1)
-                self.assertEqual(check.call_count,0 if outside else 1)
+    def test_spilled_particle_payload_is_still_rejected(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        b.env=SimpleNamespace(scene=object())
+        b._placement_particle_payload=(held,[object()])
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.particle_payload.particle_bounds',return_value=[]), \
+             patch('manipulation_agent.executors.particle_payload.verify_particles',
+                   side_effect=SkillError('postcondition_error','foreign support')) as check:
+            self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+        self.assertEqual(float(held.position[0]),5.)
+        self.assertEqual(records[-1]['rejections']['particle_payload_postcondition'],1)
+        check.assert_called_once()
 
     def test_particle_identity_change_aborts_search_instead_of_trying_another_pose(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         b.env=SimpleNamespace(scene=object());b._placement_particle_payload=(held,[object()])
         with patch.dict('sys.modules',modules), \
              patch('manipulation_agent.executors.particle_payload.particle_bounds',return_value=[]), \
-             patch('manipulation_agent.executors.particle_payload.particles_in_volumes',return_value=True), \
              patch('manipulation_agent.executors.particle_payload.verify_particles',
                    side_effect=SkillError('target_changed','cooking replaced captured particle')):
             with self.assertRaises(SkillError) as error:

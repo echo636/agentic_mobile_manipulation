@@ -254,24 +254,6 @@ def particle_bounds(scene, payload):
     return result
 
 
-def particles_in_volumes(scene, payload, volumes):
-    """Each captured center must belong to a destination fillable volume.
-
-    This is additional to original containment/support checks: a grain can
-    remain on its bag while protruding beyond the selected appliance interior.
-    """
-    import torch
-    for record in payload:
-        indices = _indices(scene, record)
-        centers = record.system.get_particles_position_orientation()[0][indices]
-        inside = centers.new_zeros(len(indices), dtype=torch.bool)
-        for volume in volumes:
-            inside |= volume.check_points_in_volume(centers)
-        if not bool(inside.all()):
-            return False
-    return True
-
-
 def verify_particles(scene, payload):
     # Validate every captured identity before accepting any support chain.
     # A solid grain can settle outside an annotated fill volume while still
