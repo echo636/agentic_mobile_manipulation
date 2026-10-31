@@ -376,7 +376,10 @@ Rejected candidate poses never become committed actions or task evidence.
             volume_bounds={v.prim_path:tuple(a.cpu().tolist() for a in v.visual_aabb) for v in volumes}
             settling_drop=.025+.5*9.81*sim.get_physics_dt()**2
             def priority(c):
-                return (closed_overlap(c), round(envelope_protrusion(c[1], extents[tuple(c[3].cpu().tolist())], *volume_bounds[c[0].prim_path], settling_drop), 6), round(occupancy(c),6), top_height(c) if was_open is True else 0.)
+                # A free support above existing contents can protrude while
+                # satisfying Inside. Try it before lower poses that overlap
+                # those contents; neither heuristic replaces native checks.
+                return (closed_overlap(c), round(occupancy(c),6), round(envelope_protrusion(c[1], extents[tuple(c[3].cpu().tolist())], *volume_bounds[c[0].prim_path], settling_drop), 6), top_height(c) if was_open is True else 0.)
             families={}
             for group in supported:
                 for candidate in group:
