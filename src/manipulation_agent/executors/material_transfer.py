@@ -244,7 +244,9 @@ class CheckedMaterialTransfer:
                                            include_supported=True)
             if relation not in obj.states:
                 break
-            if relation is OnTop:
+            pose = self._volume_pour_pose(obj, destination, contents) if relation is Inside else None
+            candidates = None
+            if pose is None:
                 # Native cuboid sampling rejects an entire footprint when
                 # existing loose material covers part of the receiver. Use
                 # the same exposed collision surface as individual placement.
@@ -259,14 +261,9 @@ class CheckedMaterialTransfer:
                 candidates = self._surface_candidates(obj, destination, surface_point)
                 if not candidates:
                     break
-                obj.set_position_orientation(*candidates[0]['pose'])
-                obj.keep_still()
-            else:
-                pose = self._volume_pour_pose(obj, destination, contents)
-                if pose is None:
-                    break
-                obj.set_position_orientation(*pose)
-                obj.keep_still()
+                pose = candidates[0]['pose']
+            obj.set_position_orientation(*pose)
+            obj.keep_still()
             self._relocate_contents(obj, contents)
             relocate_particles(self.env.scene, particles)
             moved.append(obj)
@@ -276,7 +273,7 @@ class CheckedMaterialTransfer:
                 self._step(self.primitives._empty_action())
             retained_relation = (rigid_receiver_relation(obj, destination)
                 if self.env.scene.object_registry('name', obj.name) is obj else None)
-            if relation is OnTop:
+            if candidates is not None:
                 self._placement_record({'status': 'rigid_surface_pour_settled',
                     'object': obj.name, 'destination': destination.name,
                     'candidate': candidates[0]['index'], 'official_on_top': retained_relation == 'OnTop'})
