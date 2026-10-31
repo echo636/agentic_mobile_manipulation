@@ -43,7 +43,15 @@ def local_stance_proposals(actual, origin, point, limits, collision, visited=(),
     xs = grid.origin[0] + cc * grid.resolution
     ys = grid.origin[1] + rr * grid.resolution
     reach = np.hypot(xs-float(point[0]), ys-float(point[1]))
-    domain = reach <= limits.reach_m-.005
+    radius = limits.reach_m-.005
+    # A free cell can intersect the reach disk even when its center lies
+    # outside it. Keep these continuous edge poses in the SAME checked cell;
+    # endpoint visibility and full route sweeps still run in the caller.
+    half_cell = grid.resolution*.499999
+    xs = np.where(reach <= radius, xs, np.clip(float(point[0]), xs-half_cell, xs+half_cell))
+    ys = np.where(reach <= radius, ys, np.clip(float(point[1]), ys-half_cell, ys+half_cell))
+    reach = np.hypot(xs-float(point[0]), ys-float(point[1]))
+    domain = reach <= radius
     travel = np.hypot(xs-actual[0], ys-actual[1])
     bearing = np.arctan2(ys-actual[1], xs-actual[0])
     turn = np.abs(np.arctan2(np.sin(bearing-actual[2]), np.cos(bearing-actual[2])))

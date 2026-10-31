@@ -45,6 +45,22 @@ class GeometryMotor(LocalRGBManipulation):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('numpy'), 'navigation geometry dependencies')
 class ArchivedStanceTests(unittest.TestCase):
+    def test_reach_disk_includes_free_cell_edge_outside_center_radius(self):
+        import numpy as np
+        # The only free cell center is 1.402m from the target, but its edge
+        # enters the unchanged 1.395m candidate disk (R639 action84 pattern).
+        raw = np.zeros((3, 116), dtype='uint8'); raw[1, 1] = 1
+        grid = GridMap(116, 3, .025, (0., -.025), raw.tobytes())
+        start = (.025, 0., 0.); target = (1.427, 0., .8)
+        collision = SimpleNamespace(grid=grid, grid_at_heading=lambda yaw: grid)
+        with patch('manipulation_agent.executors.local_stances.stance_candidates', return_value=[]):
+            poses = list(local_stance_proposals(start, start, target, LocalLimits(), collision))
+        self.assertTrue(poses)
+        for pose, source in poses:
+            self.assertEqual(source, 'free_space')
+            self.assertEqual(grid.cell(pose[:2]), (1, 1))
+            self.assertLessEqual(math.dist(pose[:2], target[:2]), 1.395)
+
     @unittest.skipUnless(importlib.util.find_spec('scipy'), 'roadmap dependency')
     def test_surface_stance_keeps_checked_return_in_recorded_garden_pocket(self):
         import numpy as np
