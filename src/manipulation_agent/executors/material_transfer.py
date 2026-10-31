@@ -382,7 +382,7 @@ class CheckedMaterialTransfer:
         modifier, emitted = (None, [])
         if not captured:
             modifier, emitted = self._ready_dispenser(source, tilt=primitive == 'pour')
-        surface = ContainedParticles not in destination.states
+        surface_receiver = ContainedParticles not in destination.states
         systems = {record.system.name: record.system for record in captured}
         systems.update((system.name, system) for system in emitted)
         if not systems:
@@ -400,6 +400,7 @@ class CheckedMaterialTransfer:
         # its earlier identity or silently create replacement ingredients.
         try:
             for name, system in sorted(systems.items()):
+                surface = surface_receiver
                 selected = [i for record in captured if record.system is system for i in _indices(scene, record)]
                 generating = system in emitted
                 available = len(selected)
@@ -425,6 +426,17 @@ class CheckedMaterialTransfer:
                     self._placement_record({'status': 'material_geometry_sampling', 'primitive': primitive,
                         'source': source.name, 'destination': destination.name, 'material': name,
                         'accepted': len(positions), **geometry})
+                if (not len(positions) and not surface and available and primitive == 'pour'
+                        and not getattr(system, 'is_fluid', False)):
+                    # Granules can rest above a shallow tray's fill annotation.
+                    # Keep their native size and use actual exposed support;
+                    # free physics and contact determine what remains there.
+                    surface, orientations, sampling = True, None, {}
+                    positions = free_surface_positions(scene, destination, system,
+                        min(512, available), diagnostics=sampling)
+                    self._placement_record({'status': 'material_surface_sampling', 'primitive': primitive,
+                        'source': source.name, 'destination': destination.name, 'material': name,
+                        'accepted': len(positions), **sampling})
                 if not len(positions):
                     continue
                 before = int(system.n_particles)
@@ -445,7 +457,7 @@ class CheckedMaterialTransfer:
                     raise SkillError('execution_error', 'Physical transfer did not reach the receiving volume', changed=True)
                 view = physical_particle_view(system)
                 changes.append(dict(system=system, paths=tuple(view.prim_paths[i] for i in indices),
-                                    count=len(indices), generated=generating,
+                                    count=len(indices), generated=generating, surface=surface,
                                     source_remaining=None if generating else available - len(indices)))
         finally:
             held = self._get_held()
@@ -463,6 +475,7 @@ class CheckedMaterialTransfer:
         materials = []
         for item in changes:
             system = item['system']
+            surface = item['surface']
             view = physical_particle_view(system) if scene.active_systems.get(system.name) is system else None
             lookup = {} if view is None else {path: i for i, path in enumerate(view.prim_paths)}
             retained = [lookup[path] for path in item['paths'] if path in lookup]

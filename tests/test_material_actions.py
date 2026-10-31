@@ -292,6 +292,61 @@ class MaterialActionTests(unittest.TestCase):
         self.assertEqual(receipt['retained_relation'], 'surface_contact')
         self.assertTrue(result['source_has_more_material'])
 
+    def test_shallow_tray_accepts_solid_surface_portion_without_relaxing_fluid_volume(self):
+        import numpy as np
+        from unittest.mock import Mock
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        volume, contact, modified = (type(name, (), {}) for name in
+                                     ('ContainedParticles', 'ContactParticles', 'ModifiedParticles'))
+        saturated = types.ModuleType('omnigibson.object_states.saturated')
+        saturated.ModifiedParticles = modified
+        solid, fluid = [types.SimpleNamespace(name=name, n_particles=1, is_fluid=is_fluid,
+            get_particles_position_orientation=lambda: (np.zeros((1, 3)), None))
+            for name, is_fluid in [('granules', False), ('water', True)]]
+        source = types.SimpleNamespace(name='source', states={})
+        receiver = types.SimpleNamespace(name='tray', states={
+            volume: types.SimpleNamespace(link=types.SimpleNamespace(
+                check_points_in_volume=lambda centers: np.ones(len(centers), dtype=bool))),
+            contact: types.SimpleNamespace(get_value=lambda system: {0})})
+        payload = [types.SimpleNamespace(container=source, system=system, paths=(system.name,))
+                   for system in (solid, fluid)]
+        backend = CheckedMaterialTransfer()
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
+            active_systems={system.name: system for system in (solid, fluid)}))
+        backend._grasp_dependencies = lambda obj: []
+        backend._get_held = lambda: source
+        backend._placement_record = lambda record: None
+        backend.primitives = types.SimpleNamespace(_empty_action=lambda: [])
+        backend._step = lambda action: None
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
+                ContainedParticles=volume, ContactParticles=contact, create=True), \
+                patch.dict(sys.modules, {'omnigibson.object_states.saturated': saturated}), \
+                patch('manipulation_agent.executors.material_transfer.snapshot_particles', return_value=payload) as capture, \
+                patch('manipulation_agent.executors.material_transfer._indices', return_value=[0]), \
+                patch('manipulation_agent.executors.material_transfer.physical_particle_view',
+                      side_effect=lambda system: types.SimpleNamespace(prim_paths=[system.name])), \
+                patch('manipulation_agent.executors.material_transfer.free_volume_positions',
+                      side_effect=lambda scene, dest, system, *args, **kw:
+                          np.zeros((1 if system.is_fluid else 0, 3))) as volume_sample, \
+                patch('manipulation_agent.executors.material_transfer.free_surface_positions',
+                      return_value=np.zeros((1, 3))) as surface_sample, \
+                patch('manipulation_agent.executors.material_transfer.move_particle_centers') as move:
+            result = backend._transfer_material_portion('pour', source, receiver, 6)
+            self.assertEqual([(x['material'], x['retained_relation']) for x in result['materials']],
+                             [('granules', 'surface_contact'), ('water', 'inside_volume')])
+            self.assertEqual(move.call_count, 2)
+            self.assertEqual(surface_sample.call_count, 1)
+            self.assertIs(surface_sample.call_args.args[2], solid)
+            # A fluid with no free receiving volume must never switch to a
+            # surface or claim success by wetting the tray's exterior.
+            capture.return_value = payload[1:]
+            volume_sample.side_effect = lambda *args, **kw: np.zeros((0, 3))
+            surface_sample.reset_mock()
+            with self.assertRaises(SkillError):
+                backend._transfer_material_portion('pour', source, receiver, 6)
+            surface_sample.assert_not_called()
+
     def test_sweep_removes_only_compatible_selected_material(self):
         from manipulation_agent.observations.boundary import public_execution_error
         with self.modules:
