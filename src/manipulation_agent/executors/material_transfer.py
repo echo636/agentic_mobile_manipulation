@@ -261,6 +261,18 @@ class CheckedMaterialTransfer:
                 candidates = self._surface_candidates(obj, destination, surface_point)
                 if not candidates:
                     break
+                # Surface rays find support under a point, not free space for
+                # the whole item. Prefer an unoccupied pose before committing
+                # so a later pour does not push earlier contents off the tray.
+                ranker = self._inside_pose_overlap_ranker(obj, [obj, *[child for child, _ in contents]])
+                if ranker is not None:
+                    for candidate in candidates:
+                        candidate['overlap_score'] = ranker(candidate['pose'][0].tolist(), candidate['pose'][1])
+                    candidates.sort(key=lambda candidate: candidate['overlap_score'])
+                    self._placement_record({'status': 'rigid_surface_pour_ordered',
+                        'object': obj.name, 'destination': destination.name,
+                        'candidates': [{'index': candidate['index'], 'overlap_score': candidate['overlap_score']}
+                                       for candidate in candidates]})
                 pose = candidates[0]['pose']
             obj.set_position_orientation(*pose)
             obj.keep_still()

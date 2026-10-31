@@ -205,8 +205,11 @@ class MaterialActionTests(unittest.TestCase):
                 # A clear patch on a lower shelf; the box center is not a
                 # usable receiving surface (for example a countertop sink).
                 backend._surface_candidates = Mock(side_effect=lambda obj, target, point:
-                    [dict(index=2, pose=(np.zeros(3), np.ones(4)))]
+                    [dict(index=1, pose=(np.ones(3), np.ones(4))),
+                     dict(index=2, pose=(np.zeros(3), np.ones(4)))]
                     if np.array_equal(point, selected_point) else [])
+                backend._inside_pose_overlap_ranker = lambda *args: (
+                    lambda position, quaternion: int(np.any(position)))
                 backend._volume_pour_pose = lambda obj, *args: (
                     None if shallow and obj is objects[1] else (np.zeros(3), np.ones(4)))
                 backend._relocate_contents = Mock()
@@ -222,6 +225,7 @@ class MaterialActionTests(unittest.TestCase):
                 self.assertEqual(moved, objects if retained else objects[:1])
                 for obj in moved:
                     obj.set_position_orientation.assert_called_once()
+                    np.testing.assert_array_equal(obj.set_position_orientation.call_args.args[0], np.zeros(3))
                 if not retained:
                     objects[1].set_position_orientation.assert_not_called()
                 backend._placement_physics_step.assert_not_called()
