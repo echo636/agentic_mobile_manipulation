@@ -1,6 +1,40 @@
 """Offline initial OnTop proposals using the runtime surface geometry checks."""
 import itertools
 import time
+from contextlib import contextmanager
+
+
+@contextmanager
+def native_initial_surface_proposals():
+    """Allow native centered proposals when a curved support rejects a cuboid.
+
+    Used only during offline scene construction. Native falling and OnTop
+    evaluation still decide success; the centered fallback must also pass
+    the reachability check that native sample_kinematics omits on that path.
+    """
+    from omnigibson.object_states import on_top
+    from omnigibson.utils.constants import GROUND_CATEGORIES
+    from omnigibson.utils.object_state_utils import (
+        get_reachability_sampling_context, is_pose_reachable_for_predicate)
+    original = on_top.sample_kinematics
+
+    def sample(predicate, objA, objB, **kwargs):
+        if objB.category in GROUND_CATEGORIES:
+            return original(predicate, objA, objB, **kwargs)
+        accepted = original(predicate, objA, objB, **dict(kwargs, use_last_ditch_effort=True))
+        if accepted and kwargs.get('use_trav_map', True):
+            context = kwargs.get('reachability_context')
+            if context is None:
+                context = get_reachability_sampling_context(objB, predicate)
+            accepted = is_pose_reachable_for_predicate(
+                objA.get_position_orientation()[0], objB, predicate, context)
+        return bool(accepted)
+
+    on_top.sample_kinematics = sample
+    try:
+        yield
+    finally:
+        on_top.sample_kinematics = original
 
 
 def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seconds=60.):
