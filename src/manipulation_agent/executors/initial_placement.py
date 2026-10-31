@@ -55,9 +55,15 @@ def checked_initial_inside(env, output):
                 from ..records import write_json
                 checkpoint_dir = output / 'partial_initial_instance'
                 try:
-                    env.task.save_task(env, save_dir=str(checkpoint_dir), task_relevant_only=False)
+                    # BehaviorTask assigns scene_name only after sampling
+                    # succeeds. Preserve the live scene before its failure
+                    # cleanup, without calling the not-yet-ready task saver.
+                    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                    env.scene.save(json_path=str(checkpoint_dir / 'scene.json'))
                     write_json(output / 'partial_initial_checkpoint.json', {
                         'status': 'passed', 'sampling_error': str(error),
+                        'object_bindings': {key: obj.name if obj is not None else None
+                                            for key, obj in sampler._object_scope.items()},
                         'files': sorted(p.name for p in checkpoint_dir.glob('*.json')),
                         'interpretation': 'Incomplete construction checkpoint; no valid episode or task success'})
                 except Exception as exc:
