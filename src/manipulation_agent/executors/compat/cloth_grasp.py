@@ -21,7 +21,7 @@ def install_native_cloth_grasp():
             cloth = target.root_link
             positions = cloth.compute_particle_positions()
             index = torch.linalg.vector_norm(positions - contact, dim=1).argmin()
-            parent_pos, parent_quat = robot.eef_links[arm].get_position_orientation()
+            parent_pos, parent_quat = robot.gripper_links[arm][0].get_position_orientation()
             local = T.quat2mat(parent_quat).T @ (positions[index] - parent_pos) / robot.scale
             # Reuse the native grasp-state fields, including serialized state.
             # A cloth attachment identifies the vertex in the mesh's rest frame;
@@ -40,7 +40,9 @@ def install_native_cloth_grasp():
             target = params['target_obj']
             if target.prim_type != PrimType.CLOTH:
                 return create(robot, arm, params)
-            parent = robot.eef_links[arm]
+            # PhysX particle attachments need a physical gripper body. The
+            # collision-free EEF marker is suitable for joint frames only.
+            parent = robot.gripper_links[arm][0]
             with og.sim.editing_usd():
                 attachment = PhysxSchema.PhysxPhysicsAttachment.Define(
                     og.sim.stage, parent.prim_path + '/ag_constraint')
