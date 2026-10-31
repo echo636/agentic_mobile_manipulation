@@ -65,7 +65,10 @@ def checked_open_goal(backend, obj, check):
                     goal=initial.clone()
                     for index in selected:
                         before=float((initial[index]-closed[index])/(opened[index]-closed[index]))
-                        goal[index]=closed[index]+(opened[index]-closed[index])*max(fraction,before)
+                        # Preserve an already-open angle exactly. A native
+                        # settled angle may exceed the endpoint by one ULP.
+                        if fraction>before:
+                            goal[index]=closed[index]+(opened[index]-closed[index])*fraction
                     yield 'selected_link',selected[0] if len(selected)==1 else None,fraction,goal
                 # A blocked selected leaf is not permission to open another.
                 return

@@ -15,7 +15,8 @@ from manipulation_agent.executors.articulation_clearance import moving_link_clea
 
 class EndpointTests(unittest.TestCase):
     def exercise(self, mode):
-        initial = torch.tensor([1., 0.] if mode=='selected_already_open' else
+        initial = torch.tensor([1.570796251296997, 0.] if mode=='selected_roundoff_open' else
+                               [1., 0.] if mode=='selected_already_open' else
                                [.75, 0.] if mode=='selected_partly_open' else
                                [0., 0.] if mode=='selected_blocked' else
                                [.2, 0.] if mode in ('independent','selected','partial_common') else [.2])
@@ -32,7 +33,8 @@ class EndpointTests(unittest.TestCase):
         links = {str(i): Link(i) for i in range(len(initial))}
         def setter(value, fully):
             random.random()
-            state[0] = torch.full_like(initial, float(value))
+            endpoint = 1.5707961320877075 if mode=='selected_roundoff_open' else 1.
+            state[0] = torch.full_like(initial, endpoint if value else 0.)
             return True
         obj = SimpleNamespace(name='door', prim_path='/door', links=links,
             get_joint_positions=lambda: state[0].clone(),
@@ -94,9 +96,9 @@ class EndpointTests(unittest.TestCase):
                 torch.testing.assert_close(goal,torch.tensor([1.,0.]))
                 self.assertEqual(records[-1]['opening_policy'],'selected_link')
                 self.assertEqual(records[-1]['selected_joint_indices'],[0])
-            elif mode == 'selected_partly_open':
+            elif mode in ('selected_partly_open', 'selected_roundoff_open'):
                 goal=checked_open_goal(backend,obj,lambda:None)
-                torch.testing.assert_close(goal,initial)
+                self.assertTrue(torch.equal(goal,initial))
                 self.assertEqual(records[-1]['trials'][-1]['method'],'unchanged_open_joint_state')
             elif mode == 'alternate':
                 self.assertEqual(checked_open_goal(backend, obj, lambda: None).tolist(), [.875])
@@ -122,6 +124,11 @@ class EndpointTests(unittest.TestCase):
 
     def test_reopening_selected_fully_open_door_preserves_state_and_succeeds(self):
         self.exercise('selected_already_open')
+
+    def test_native_settled_open_angle_is_preserved_bit_for_bit(self):
+        # R754: native settling put the door one float32 ULP beyond its
+        # authored endpoint. Recomputing that unchanged angle caused rejection.
+        self.assertEqual(self.exercise('selected_roundoff_open'), [])
 
     def test_reopening_partly_open_door_with_wall_at_larger_angles_preserves_opening(self):
         self.assertEqual(self.exercise('selected_partly_open'), [1., .875])
