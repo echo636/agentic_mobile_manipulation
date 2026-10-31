@@ -181,15 +181,18 @@ class MaterialActionTests(unittest.TestCase):
 
         states = {name: type(name, (), {}) for name in ('Inside', 'OnTop', 'ContainedParticles')}
         import itertools
-        for relation, retained in itertools.product(('OnTop', 'Inside'), (False, True)):
-            with self.subTest(relation=relation, retained=retained):
+        for relation, shallow, retained in itertools.product(('OnTop', 'Inside'), (False, True), (False, True)):
+            with self.subTest(relation=relation, shallow=shallow, retained=retained):
                 receiver = types.SimpleNamespace(name='receiver', states=(
                     {states['ContainedParticles']: object()} if relation == 'Inside' else {}),
                     aabb=(np.zeros(3), np.ones(3)))
                 objects = [types.SimpleNamespace(name=str(i), states={states[relation]:
                     types.SimpleNamespace(set_value=Mock(side_effect=AssertionError('cuboid sampler')),
-                                          get_value=lambda target: retained)},
+                                          get_value=lambda target: retained and not shallow)},
                     set_position_orientation=Mock(), keep_still=Mock()) for i in range(2)]
+                if shallow:
+                    for obj in objects:
+                        obj.states[states['OnTop']] = types.SimpleNamespace(get_value=lambda target: retained)
                 backend = CheckedMaterialTransfer()
                 backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
                     object_registry=lambda key, name: next(obj for obj in objects if obj.name == name)))
@@ -228,7 +231,21 @@ class MaterialActionTests(unittest.TestCase):
                 else:
                     backend._surface_candidates.assert_not_called()
                 key = 'official_on_top' if relation == 'OnTop' else 'official_inside'
-                self.assertEqual(backend._placement_record.call_args.args[0][key], retained)
+                self.assertEqual(backend._placement_record.call_args.args[0][key],
+                                 retained and (relation == 'OnTop' or not shallow))
+                # The final receipt must agree with the transfer loop, including
+                # a thin chip resting on a tray outside its annotated volume.
+                backend._transfer_preconditions = lambda *args: (types.SimpleNamespace(name='source'), receiver)
+                backend._pour_objects = lambda *args: objects
+                backend._pour_rigid_objects = lambda *args: moved
+                backend._transfer_material_portion = lambda *args, **kwargs: {}
+                with self.modules, patch.multiple(sys.modules['omnigibson.object_states'], **states, create=True):
+                    if retained:
+                        result = backend._checked_transfer('pour', receiver, 6)
+                        self.assertEqual(result['rigid_transfer']['retained_objects'], len(objects))
+                    else:
+                        with self.assertRaises(SkillError):
+                            backend._checked_transfer('pour', receiver, 6)
 
     def test_surface_pour_moves_existing_portion_and_measures_contact_after_settling(self):
         import numpy as np

@@ -11,6 +11,20 @@ from .particle_payload import snapshot_particles, _indices
 from .particle_view import physical_particle_view
 
 
+def rigid_receiver_relation(obj, destination):
+    """A poured object may rest on a tray below its annotated fill volume.
+
+    Pour has no requested Inside relation. Native OnTop includes physical
+    contact; a real spill onto another surface does not qualify.
+    """
+    from omnigibson.object_states import ContainedParticles, Inside, OnTop
+    relations = (Inside, OnTop) if ContainedParticles in destination.states else (OnTop,)
+    for relation in relations:
+        if relation in obj.states and obj.states[relation].get_value(destination):
+            return relation.__name__
+    return None
+
+
 def free_volume_positions(scene, destination, system, limit, *, diagnostics=None):
     """Find a bounded portion with progressively finer collision-checked grids.
 
@@ -260,17 +274,18 @@ class CheckedMaterialTransfer:
             # native state transitions, contacts and video must all advance.
             for _ in range(min(max_steps, max(1, round(.5 / self.og.sim.get_sim_step_dt())))):
                 self._step(self.primitives._empty_action())
-            retained = (self.env.scene.object_registry('name', obj.name) is obj and
-                        bool(obj.states[relation].get_value(destination)))
+            retained_relation = (rigid_receiver_relation(obj, destination)
+                if self.env.scene.object_registry('name', obj.name) is obj else None)
             if relation is OnTop:
                 self._placement_record({'status': 'rigid_surface_pour_settled',
                     'object': obj.name, 'destination': destination.name,
-                    'candidate': candidates[0]['index'], 'official_on_top': retained})
+                    'candidate': candidates[0]['index'], 'official_on_top': retained_relation == 'OnTop'})
             else:
                 self._placement_record({'status': 'rigid_volume_pour_settled',
                     'object': obj.name, 'destination': destination.name,
-                    'official_inside': retained})
-            if not retained:
+                    'official_inside': retained_relation == 'Inside',
+                    'retained_relation': retained_relation})
+            if not retained_relation:
                 break
         if not moved:
             raise SkillError('sampling_error', 'The receiver could not accept a loose object', changed=True)
@@ -279,8 +294,6 @@ class CheckedMaterialTransfer:
         return moved
 
     def _checked_transfer(self, primitive, target, max_steps, point=None):
-        from omnigibson.object_states import ContainedParticles, Inside, OnTop
-
         source, destination = self._transfer_preconditions(primitive, target)
         objects = self._pour_objects(source) if primitive == 'pour' else []
         moved = self._pour_rigid_objects(source, destination, objects, max_steps, point) if objects else []
@@ -294,8 +307,7 @@ class CheckedMaterialTransfer:
             present = [obj for obj in moved
                        if self.env.scene.object_registry('name', obj.name) is obj]
             changed = len(present) != len(moved)
-            relation = Inside if ContainedParticles in destination.states else OnTop
-            retained = sum(bool(obj.states[relation].get_value(destination)) for obj in present)
+            retained = sum(rigid_receiver_relation(obj, destination) is not None for obj in present)
             rigid = {'moved_objects': len(moved), 'retained_objects': retained,
                      'identities_changed_during_settling': changed,
                      'source_remaining_objects': len(self._pour_objects(source))}
