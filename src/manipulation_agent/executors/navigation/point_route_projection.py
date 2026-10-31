@@ -55,6 +55,10 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
     directions=((1,0),(2,1),(1,1),(1,2),(0,1),(-1,2),(-1,1),(-2,1),
                 (-1,0),(-2,-1),(-1,-1),(-1,-2),(0,-1),(1,-2),(1,-1),(2,-1))
     headings=tuple(math.atan2(dr,dc) for dc,dr in directions)
+    if allow_lateral:
+        # A loaded holonomic base may need to leave a narrow pocket at its
+        # measured heading before it has room to turn to a compass heading.
+        headings=tuple(sorted({*(yaw % (2*math.pi) for yaw in headings), actual[2] % (2*math.pi)}))
     free=[];indices=[];node_cells=[];node_headings=[];count=0
     for k,yaw in enumerate(headings):
         check_cancelled()

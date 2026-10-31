@@ -1,7 +1,9 @@
 """A holonomic base can retain its heading through a narrow elbow."""
 import math
+import json
 import unittest
 from dataclasses import replace
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -13,6 +15,30 @@ from manipulation_agent.executors.navigation.point_route_projection import proje
 
 
 class HolonomicTests(unittest.TestCase):
+    def test_loaded_base_can_leave_at_recorded_continuous_heading(self):
+        # R639 action107: all five endpoints passed live visibility, but the
+        # loaded robot could not join the sixteen-heading graph. This crop
+        # retains the recorded body/payload layers and a 1.3m obstacle halo.
+        path = Path(__file__).parent / 'fixtures/local_stances/preschool_loaded_heading_r639.npz'
+        with np.load(path, allow_pickle=False) as data:
+            raw = data['free']; start = tuple(data['start']); target = tuple(data['target'])
+            grid = GridMap(raw.shape[1], raw.shape[0], float(data['resolution']),
+                           tuple(data['origin']), raw.tobytes())
+            layers = list(zip(data['raw_layers'], [row['footprint'] for row in
+                              json.loads(str(data['layer_footprints_json']))]))
+            collision = HeadingCollisionChecker(grid, layers, float(data['initial_layer_yaw']), data['support'])
+            plans = [NavigationPlan((start[:2], tuple(pose[:2])), tuple(pose[:2]), target[:2], pose[2],
+                        math.dist(start[:2], pose[:2]), math.dist(target[:2], pose[:2]), 5, 1, 0., 0)
+                     for pose in data['goals']]
+        found = project_forward_point(plans, start, collision, lambda: None,
+                                      exact_endpoints=True, allow_lateral=True)
+        self.assertIsNotNone(found)
+        chosen, poses, _ = found
+        self.assertEqual(poses[0], start)
+        self.assertEqual(poses[1][2], start[2])
+        self.assertLessEqual(math.dist(chosen.goal, target[:2]), 1.4)
+        self.assertTrue(all(collision.motion_free(a, b) for a, b in zip(poses, poses[1:])))
+
     def test_floor_projection_reuses_clear_guide_without_relaxing_object_approach(self):
         rr, cc = np.mgrid[:61, :61]
         x, y = cc*.05-1.5, rr*.05-1.5
