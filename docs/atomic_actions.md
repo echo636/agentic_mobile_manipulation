@@ -17,7 +17,7 @@ resolves that target, checks the action's prerequisites, changes the requested
 state and observes the native result. Task success comes from the independent
 official evaluator.
 
-The executor uses OmniGibson's assisted-grasp fixed joint while an object is held.
+The executor uses OmniGibson's assisted-grasp fixed joint while a rigid object is held.
 A symbolic transfer moves the selected object and its current payload once;
 subsequent gravity, contact, joint motion and released contents belong to PhysX.
 There is no per-step pose projection, fixed released container, resident-content
@@ -67,4 +67,4 @@ The supplied coverage page is an analysis input, not simulator authority. The pi
 
 `fold` selects cloth from the current RGB and requires an empty hand. Place the cloth on a supporting surface before folding. The executor constructs one finite-radius fold from the native rest mesh at the current footprint and support height, sets particle positions and zero velocities once, then runs eight seconds of native physics. It returns success only when the unchanged official `Folded` state is true afterward. Geometry topology, collisions and gravity remain enabled; there is no per-frame pose correction. This is an ideal state action, not a simulated two-hand folding trajectory.
 
-Real towel and napkin components passed the geometry prototype; robot approach, cloth grasp/transport, clothing assets and complete official tasks need separate native validation.
+Native napkin components have retained the official folded state, but towel folds remain unstable under free physics. The cloth output adapter now synchronizes native USD output after tensor pose setters; R1Pro link poses and geometry agree in the targeted probe. Cloth-to-articulation grasp attachment, transport, clothing assets and complete tasks remain under validation. Component results are not autonomous task successes.
