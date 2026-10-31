@@ -73,7 +73,7 @@ class CutStateComparisonTests(unittest.TestCase):
             play = render
 
             def dump_state(self, serialized):
-                return {'position': 1.}
+                return {0: {'registry': {'object_registry': {'half_log': {'position': 1.}}}}}
 
             def load_state(self, state, serialized):
                 context._timeline.time += 1 / 30
@@ -83,7 +83,9 @@ class CutStateComparisonTests(unittest.TestCase):
                                   torch=self.torch, _placement_record=records.append)
         gm = SimpleNamespace(ENABLE_OBJECT_STATES=True, ENABLE_TRANSITION_RULES=True,
                              unlocked=nullcontext)
-        with patch.dict('sys.modules', {'omnigibson.macros': SimpleNamespace(gm=gm)}):
+        with patch.dict('sys.modules', {
+                'omnigibson.macros': SimpleNamespace(gm=gm),
+                'omnigibson.prims.entity_prim': SimpleNamespace(EntityPrim=object)}):
             rebuild_cut_topology(backend)
         self.assertEqual(context._timeline.time, 156.46667482703924)
         self.assertEqual(context._current_time, 147.67500770185143)

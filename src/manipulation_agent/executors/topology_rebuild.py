@@ -3,6 +3,30 @@ import copy
 import math
 
 
+def _restore_cut_state(sim, snapshot):
+    """Load native state, then finish the kinematics of saved attachments.
+
+    AttachedTo's loader may recreate a joint. Its alignment moves the child
+    and clears both bodies' velocities, after their kinematics were loaded.
+    Finish those bodies once, after all relationships exist. This does not
+    align, strengthen or hold joints during subsequent physics.
+    """
+    from omnigibson.prims.entity_prim import EntityPrim
+
+    sim.load_state(snapshot, serialized=False)
+    for index, scene in enumerate(sim.scenes):
+        states = snapshot[index]['registry']['object_registry']
+        attached = set()
+        for name, state in states.items():
+            parent_uuid = state.get('non_kin', {}).get('AttachedTo', {}).get('attached_obj_uuid', -1)
+            if parent_uuid != -1:
+                attached.add(scene.object_registry('name', name))
+                attached.add(scene.object_registry('uuid', parent_uuid))
+        for obj in attached:
+            EntityPrim._load_state(obj, states[obj.name])
+            obj.clear_states_cache()
+
+
 def _state_mismatches(left, right, torch, path='state'):
     import numpy as np
 
@@ -92,7 +116,7 @@ def rebuild_cut_topology(backend):
                 gm.ENABLE_TRANSITION_RULES = False
             sim.stop()
             sim.play()
-            sim.load_state(copy.deepcopy(snapshot), serialized=False)
+            _restore_cut_state(sim, copy.deepcopy(snapshot))
             # Loading scene state can render while restoring native resources.
             # Restore all clocks after that work, including the Kit timeline.
             context._timeline.set_current_time(timeline_time)
