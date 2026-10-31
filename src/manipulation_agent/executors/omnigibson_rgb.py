@@ -623,7 +623,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         vertices={}
         for obj in objects:
             for link in obj.links.values():
-                points=link.visual_boundary_points_world
+                # Cloth's rendered surface follows its current particles.
+                points=(link.compute_particle_positions() if hasattr(link,'compute_particle_positions')
+                        else link.visual_boundary_points_world)
                 if points is not None:
                     vertices[link.prim_path]=(points.detach().cpu().numpy()-base)@inverse.T
         hulls,report=prepare_self_hulls(vertices)
