@@ -402,12 +402,14 @@ Rejected candidate poses never become committed actions or task evidence.
         if ranker is not None:
             score=ranker(assembly)
             ranking = {'scored': 0, 'clear': 0, 'deferred': 0,
-                       'strategy': 'clear_poses_before_overlap_fallback' if pose_score is not None and not payload_locked
+                       'strategy': 'clear_poses_before_overlap_fallback' if pose_score is not None
                                    else 'bounded_window'}
             def ranked_windows(source):
                 # Piece-box overlap is conservative: retain every proposal.
                 # Spend cheap queries across the finite geometry generator
                 # before exhausting physics on the first overlapping window.
+                # Loaded assemblies need the same spatial coverage as empty
+                # objects; preserving payload orientation does not change this.
                 deferred=[]
                 while window:=list(itertools.islice(source,128 if pose_score is not None and was_open is True else 64)):
                     check()
@@ -424,7 +426,7 @@ Rejected candidate poses never become committed actions or task evidence.
                                 priority+=(round(top_height(c)/.01),round(occupancy(c),6))
                         ranking['scored']+=1
                         ranking['clear']+=int(not overlap)
-                        if pose_score is not None and not payload_locked and overlap:
+                        if pose_score is not None and overlap:
                             deferred.append(c);ranking['deferred']+=1
                         else:ranked.append((priority,c))
                     yield from (c for _,c in sorted(ranked,key=lambda pair:pair[0]))
@@ -584,5 +586,6 @@ Rejected candidate poses never become committed actions or task evidence.
                                        'unique_xy_attempted':len(locations) if 'locations' in locals() else 0,
                                        'duplicate_poses_skipped':duplicates if 'duplicates' in locals() else 0,
                                        'generation_seconds':generation_seconds if 'generation_seconds' in locals() else None,
+                                       'overlap_ranking':ranking if 'ranking' in locals() else None,
                                         'seconds':time.monotonic()-start, 'held':held.name, 'target':target.name,
                                        'identity_changed':identity_changed})

@@ -278,6 +278,22 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertEqual(records[-1]['attempted'],1)
         self.assertGreater(float((held.position+held.offset)[2]),.3)
 
+    def test_loaded_assembly_reaches_clear_pose_beyond_first_overlap_window(self):
+        b,held,target,contents,state,records,modules=self.fixture()
+        # More than one ranking window of blocked shelf poses precedes the
+        # usable compartment. Spend the one physics trial on that clear pose.
+        b._inside_support_centers=lambda *a,**kw:[
+            (0.,0.,.1+i*.001) for i in range(80)]+[(.2,.2,.525)]
+        b._inside_overlap_ranker=lambda assembly:lambda center,extent:1
+        b._inside_pose_overlap_ranker=lambda held,assembly:lambda position,quat:(
+            int(float(b.torch.linalg.norm(b.torch.as_tensor(position)+held.offset-
+                                         b.torch.tensor([.2,.2,.525])))>.01))
+        with patch.dict('sys.modules',modules):
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+        self.assertEqual(records[-1]['attempted'],1)
+        self.assertGreater(records[-1]['overlap_ranking']['deferred'],64)
+        self.assertTrue(b.torch.allclose(contents[0][0].position,held.position+held.offset))
+
     def test_passive_lid_motion_does_not_reject_stationary_open_interior(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         target.n_joints=1
