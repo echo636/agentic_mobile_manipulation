@@ -40,9 +40,11 @@ def native_initial_surface_proposals():
 def surface_proposal_points(low, high, torch, reachability_context=None):
     """Cover the reachable part of a support, including narrow edge strips."""
     if reachability_context is None or reachability_context['has_prismatic_joint']:
+        # Contents can obscure every interior column of a movable vessel.
+        # Include its edge strips so exposed rims reach the native checks.
         return [torch.stack((low[0] + x * (high[0] - low[0]),
                              low[1] + y * (high[1] - low[1]), high[2]))
-                for x, y in itertools.product((.5, .2, .8), repeat=2)]
+                for x, y in itertools.product((.5, .2, .8, .05, .95), repeat=2)]
     trav = reachability_context['trav_map']
     reachable = reachability_context['reachability_map']
     corners = torch.stack([trav.world_to_map(p[:2]) for p in (low, high)])
@@ -83,6 +85,7 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
     accepted = False
     started = time.monotonic()
     attempted = 0
+    points, surfaces, candidates = [], [], []
     try:
         low, high = target.aabb
         # Cover the support itself. Bounds only generate ray origins; every
@@ -169,4 +172,6 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
             restore_particle_state(particles)
         backend._placement_record({'status': 'initial_surface_summary', 'held': held.name,
             'target': target.name, 'accepted': accepted, 'attempted': attempted,
+            'ray_columns': len(points), 'upward_surfaces': len(surfaces),
+            'pose_proposals': len(candidates),
             'seconds': time.monotonic() - started})
