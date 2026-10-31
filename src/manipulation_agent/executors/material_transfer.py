@@ -503,6 +503,10 @@ class CheckedMaterialTransfer:
                     centers = system.get_particles_position_orientation()[0][retained]
                     inside = int(destination.states[ContainedParticles].link.check_points_in_volume(centers).sum())
             if not transformed and inside == 0:
+                self._placement_record({'status': 'material_transfer_not_retained', 'primitive': primitive,
+                    'source': source.name, 'destination': destination.name, 'material': system.name,
+                    'moved_particles': item['count'], 'retained_particles': inside,
+                    'retained_relation': 'surface_contact' if surface else 'inside_volume'})
                 raise SkillError('postcondition_error', 'Transferred portion did not remain at the receiver', changed=True)
             materials.append({'material': system.name, 'moved_particles': item['count'],
                 'retained_particles': inside, 'source_remaining_particles': item['source_remaining'],
