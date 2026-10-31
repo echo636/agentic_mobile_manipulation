@@ -40,11 +40,9 @@ def native_initial_surface_proposals():
 def surface_proposal_points(low, high, torch, reachability_context=None):
     """Cover the reachable part of a support, including narrow edge strips."""
     if reachability_context is None or reachability_context['has_prismatic_joint']:
-        # Contents can obscure every interior column of a movable vessel.
-        # Include its edge strips so exposed rims reach the native checks.
         return [torch.stack((low[0] + x * (high[0] - low[0]),
                              low[1] + y * (high[1] - low[1]), high[2]))
-                for x, y in itertools.product((.5, .2, .8, .05, .95), repeat=2)]
+                for x, y in itertools.product((.5, .2, .8), repeat=2)]
     trav = reachability_context['trav_map']
     reachable = reachability_context['reachability_map']
     corners = torch.stack([trav.world_to_map(p[:2]) for p in (low, high)])
@@ -91,6 +89,13 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
         # Cover the support itself. Bounds only generate ray origins; every
         # proposal must hit an actual upward-facing collider of this target.
         points = surface_proposal_points(low, high, torch, reachability_context)
+        # A rectangular grid can miss every exposed rim of a curved vessel.
+        # Sample actual upward collision faces instead of enlarging that grid.
+        # Rays below still reject occluded faces and physical trials decide
+        # whether the object can rest there.
+        from .surface_geometry import upward_surface_points
+        points.extend(torch.as_tensor(p, dtype=low.dtype, device=low.device)
+                      for p in upward_surface_points(backend._collision_triangles(target)))
         # Offline construction selects a support object, not a clicked shelf.
         # Its AABB top is not the receiving surface of a concave vessel: the
         # runtime click-local ray would miss a basin deeper than eight cm.

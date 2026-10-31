@@ -20,6 +20,17 @@ class SelectedSurfaceGeometry(unittest.TestCase):
         import itertools
         return self.np.array(list(itertools.product(*zip(lo, hi))), dtype=float)
 
+    def test_initial_surface_rays_cover_thin_rim_and_exclude_vertical_faces(self):
+        from manipulation_agent.executors.surface_geometry import upward_surface_points
+        # Neither the interior nor 5%-inset AABB grid hits this narrow rim.
+        rim = self.np.array([[[.97, -.2, .1], [.99, -.2, .1], [.99, .2, .1]],
+                             [[-.99, -.2, .1], [-.97, -.2, .1], [-.97, .2, .1]]])
+        wall = self.np.array([[[1., -.2, 0.], [1., .2, 0.], [1., .2, .1]]])
+        points = upward_surface_points(self.np.concatenate([rim, wall]))
+        self.assertEqual(len(points), 2)
+        self.assertTrue(self.np.all(self.np.abs(points[:, 0]) > .97))
+        self.np.testing.assert_allclose(points[:, 2], .1)
+
     def test_pan_handle_does_not_move_actual_bottom_anchor(self):
         # The body rests on the stove; the raised long handle may overhang it.
         body = self.box_points([-.10, -.10, 0.], [.10, .10, .035])

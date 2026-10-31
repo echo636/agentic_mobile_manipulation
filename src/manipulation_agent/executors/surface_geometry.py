@@ -5,6 +5,24 @@ in world coordinates, including the object's current orientation and scale.
 """
 
 
+def upward_surface_points(triangles, maximum=32):
+    """Spread proposal rays over real upward faces, including narrow rims."""
+    import numpy as np
+    faces = np.asarray(triangles, dtype=float).reshape(-1, 3, 3)
+    normals = np.cross(faces[:, 1]-faces[:, 0], faces[:, 2]-faces[:, 0])
+    lengths = np.linalg.norm(normals, axis=1)
+    points = np.unique(faces[(lengths > 1e-10) & (normals[:, 2] > .9*lengths)].mean(axis=1), axis=0)
+    if len(points) <= maximum:
+        return points
+    selected = [int(np.argmax(points[:, 2]))]
+    distances = np.sum((points-points[selected[0]])**2, axis=1)
+    while len(selected) < maximum:
+        index = int(np.argmax(distances))
+        selected.append(index)
+        distances = np.minimum(distances, np.sum((points-points[index])**2, axis=1))
+    return points[selected]
+
+
 def single_support_height(triangles):
     """Identify a single horizontal receiving plane, never choose among shelves."""
     import numpy as np
