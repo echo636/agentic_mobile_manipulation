@@ -16,4 +16,6 @@ Read each relevant resource once; reread only if its instructions are no longer 
 
 After each action, inspect returned RGB and feedback. Confirm the intended object and effect; preserve useful progress in task notes. For heating, washing or drying, allow simulation time using `wait` with a null target. A successful toggle alone does not establish a finished process.
 
+Before cooking, plan the method and its required inputs, such as liquid for boiling; heating longer cannot replace a missing prerequisite. Check each ingredient's required state separately: one component changing appearance does not establish that the whole mixture is cooked.
+
 Before `finish`, reconcile the instruction's quantities, destinations, relations and final device states with the latest relevant evidence. Continue unresolved work when possible. Report achieved only when all required results are supported; otherwise state what remains. Receive `closed=true` before final text.
