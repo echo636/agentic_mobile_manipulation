@@ -9,7 +9,6 @@ def install_native_cloth_grasp():
     from omnigibson.utils.numpy_utils import vtarray_to_torch
     from omnigibson.utils import transform_utils as T
     import torch
-    from pxr import PhysxSchema, Sdf, Vt
 
     establish = Robot._establish_grasp
     create = Robot._create_assisted_grasp_joint
@@ -35,6 +34,8 @@ def install_native_cloth_grasp():
 
         @wraps(create)
         def create_grasp(robot, arm, constraint_params):
+            from pxr import PhysxSchema, Sdf, Vt
+
             params = constraint_params
             target = params['target_obj']
             if target.prim_type != PrimType.CLOTH:
