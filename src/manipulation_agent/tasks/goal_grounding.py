@@ -6,6 +6,7 @@ literals, ordering, and scope. Never cache truth across simulation changes.
 """
 from contextlib import contextmanager
 import itertools
+import math
 
 
 def frozen(value):
@@ -31,17 +32,102 @@ def ground_options(compiled_state, scope=None, object_map=None):
     return sorted(options, key=len)
 
 
+class FactoredGoalOptions:
+    """Independent alternatives, without materializing their Cartesian product.
+
+    Used only for catalog tasks without the challenge's enumerating TaskMetric.
+    Literal multiplicity is retained, including repeated literals across groups.
+    """
+
+    def __init__(self, groups):
+        self.groups = groups
+
+    def __len__(self):
+        return math.prod(map(len, self.groups))
+
+    def best_truth_option(self, evaluate_fn):
+        # For each total literal count retain the most satisfied literals. This
+        # maximizes the same fraction as enumerating every complete alternative,
+        # even when alternatives have different lengths.
+        best = {0: (0, [])}
+        with evaluate_once_per_literal(itertools.chain.from_iterable(self.groups)):
+            for group in self.groups:
+                local = {}
+                for option in group:
+                    truth = [bool(node.evaluate(evaluate_fn)) for node in option]
+                    candidate = (sum(truth), truth)
+                    if len(truth) not in local or candidate[0] > local[len(truth)][0]:
+                        local[len(truth)] = candidate
+                combined = {}
+                for length, (score, truth) in best.items():
+                    for extra, (added, suffix) in local.items():
+                        total = length + extra
+                        if total not in combined or score + added > combined[total][0]:
+                            combined[total] = (score + added, truth + suffix)
+                best = combined
+        return max(best.values(), key=lambda item: item[0] / len(item[1]) if item[1] else 0)[1]
+
+
+def factored_ground_options(compiled_state, scope=None, object_map=None):
+    """Factor only when every combination is consistent; otherwise retain BDDL filtering."""
+    from bddl.condition_evaluation import HEAD, Conjunction, Universal, compile_state
+
+    def populate(node):
+        for child in getattr(node, 'children', ()):
+            for item in child if isinstance(child, list) else [child]:
+                populate(item)
+        node.get_ground_options()
+
+    def factors(node):
+        if isinstance(node, (HEAD, Conjunction, Universal)):
+            for child in node.children:
+                yield from factors(child)
+        else:
+            if hasattr(node, 'get_ground_options'):
+                populate(node)
+            yield node.flattened_condition_options
+
+    groups = [group for condition in compiled_state for group in factors(condition)]
+    keys = {frozen(literal) for group in groups for option in group for literal in option}
+    if any(key[0] == 'not' and key[1] in keys for key in keys):
+        for condition in compiled_state:
+            if hasattr(condition, 'get_ground_options'):
+                populate(condition)
+        return ground_options(compiled_state, scope=scope, object_map=object_map)
+    cache = {}
+    compiled = []
+    for group in groups:
+        alternatives = []
+        for option in group:
+            nodes = []
+            for literal in option:
+                key = frozen(literal)
+                if key not in cache:
+                    cache[key] = compile_state([literal], scope=scope, object_map=object_map)[0]
+                nodes.append(cache[key])
+            alternatives.append(nodes)
+        compiled.append(alternatives)
+    return FactoredGoalOptions(compiled)
+
+
 @contextmanager
-def efficient_grounding():
+def efficient_grounding(*, factorized=False):
     """Patch only during this adapter's environment construction, then restore."""
     import bddl.activity as activity
     import bddl.condition_evaluation as conditions
     previous = activity.get_ground_state_options, conditions.get_ground_state_options
-    activity.get_ground_state_options = conditions.get_ground_state_options = ground_options
+    previous_goals = activity.get_goal_conditions
+    if factorized:
+        def goal_trees(conds, scope, generate_ground_options=True):
+            return previous_goals(conds, scope, generate_ground_options=False)
+        activity.get_goal_conditions = goal_trees
+    activity.get_ground_state_options = conditions.get_ground_state_options = (
+        factored_ground_options if factorized else ground_options)
     try:
         yield
     finally:
         activity.get_ground_state_options, conditions.get_ground_state_options = previous
+        activity.get_goal_conditions = previous_goals
 
 
 @contextmanager

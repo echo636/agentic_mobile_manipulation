@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from .omnigibson_rgb import RGBBackend
 from ..tasks.catalog_tasks import load_catalog_spec
 from ..runtime.deadline import DEADLINE_STEP_SENTINEL
-from ..tasks.goal_grounding import efficient_grounding, evaluate_once_per_literal
+from ..tasks.goal_grounding import FactoredGoalOptions, efficient_grounding, evaluate_once_per_literal
 from .omnigibson_backend import normalize_embedded_robot
 from ..records import write_json
 
@@ -102,7 +102,7 @@ class CatalogRGBBackend(RGBBackend):
         # Challenge-100 teleoperation disables several system cooking/mixing
         # rules. A full-catalog task uses the official simulator defaults; its
         # recipe transformations are necessary parts of the task semantics.
-        with self._startup_stage('reload_sampled_catalog_instance'), efficient_grounding(), self._native_startup_progress():
+        with self._startup_stage('reload_sampled_catalog_instance'), efficient_grounding(factorized=True), self._native_startup_progress():
             self.env = self.og.Environment(configs=config)
         with self._startup_stage('reset_sampled_catalog_instance'), self._native_startup_progress('initial_reset'):
             self.env.reset()
@@ -125,14 +125,23 @@ class CatalogRGBBackend(RGBBackend):
         write_json(self.output / 'catalog_instance_validation.json', result)
         if result['status'] != 'passed':
             raise ValueError('Reloaded catalog instance no longer satisfies its official initial conditions')
-        if any(option and all(option) for option in self.initial_goals):
+        if self.env.task.compiled_task.check_goal(self.env.task._evaluate_predicate)[0]:
             raise ValueError('Catalog instance is already complete before model execution')
+
+    def _goal_options(self):
+        options = self.env.task.ground_goal_state_options
+        if isinstance(options, FactoredGoalOptions):
+            return [options.best_truth_option(self.env.task._evaluate_predicate)]
+        return super()._goal_options()
 
     def evaluate(self):
         goals = self._goal_options()
-        return {'task_success': any(bool(option) and all(option) for option in goals),
+        success, _ = self.env.task.compiled_task.check_goal(self.env.task._evaluate_predicate)
+        return {'task_success': bool(success),
             'official_task_success': bool(self.env.task.success),
             'goal_options': goals, 'initial_goal_options': self.initial_goals,
+            'goal_options_representation': ('best_scoring_ground_alternative' if
+                isinstance(self.env.task.ground_goal_state_options, FactoredGoalOptions) else 'all_ground_alternatives'),
             'goal_satisfaction_fraction': max((sum(o) / len(o) for o in goals if o), default=0),
             'official_metrics': {},
             'metric_scope': 'Official compiled BDDL predicates and BehaviorTask.success; no challenge human-normalized metrics for this sampled instance',
