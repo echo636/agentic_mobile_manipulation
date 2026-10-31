@@ -11,6 +11,12 @@ from unittest.mock import patch
                      'Run with the pinned simulator Python; simulator itself is not started')
 class LiveGridTests(unittest.TestCase):
     def test_gap_between_robot_and_carried_body_is_not_a_solid_bridge(self):
+        self.payload_geometry_fixture()
+
+    def test_deformed_cloth_payload_uses_particle_geometry_and_keeps_collision_checks(self):
+        self.payload_geometry_fixture(cloth=True)
+
+    def payload_geometry_fixture(self, cloth=False):
         import cv2
         import numpy as np
         import torch
@@ -25,6 +31,10 @@ class LiveGridTests(unittest.TestCase):
             def get_position_orientation(self):return self.position,torch.tensor([0.,0.,0.,1.])
         robot=Body('robot',[-.2,-.2,.04],[.2,.2,1.2]);robot.position=torch.zeros(3)
         payload=Body('payload',[.95,-.05,.45],[1.05,.05,.55])
+        payload_points=payload.links['body'].collision_boundary_points_world
+        if cloth:
+            payload.links['body'].compute_particle_positions=lambda:payload_points
+            del payload.links['body'].collision_boundary_points_world
         obstacle=Body('obstacle',[.46,-.04,.45],[.54,.04,.55])
         queries=[]
         def overlap(half,center,rotation,callback,any_hit):
@@ -63,7 +73,7 @@ class LiveGridTests(unittest.TestCase):
             # specifically exercises the real-height bands and their cache.
             obstacle.aabb=(torch.tensor([.8,-.2,0.]),torch.tensor([1.2,.2,.9]))
             obstacle.position=torch.tensor([1.,0.,.45])
-            payload.links['body'].collision_boundary_points_world+=torch.tensor([0.,0.,.65])
+            payload_points+=torch.tensor([0.,0.,.65])
             payload.aabb=tuple(a+torch.tensor([0.,0.,.65]) for a in payload.aabb)
             payload.position+=torch.tensor([0.,0.,.65])
             grid,raised=build_navigation_grid(b,0)

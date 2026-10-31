@@ -239,7 +239,8 @@ Rejected candidate poses never become committed actions or task evidence.
         for obj in assembly:
             for link in getattr(obj,'links',{}).values():
                 if link.is_meta_link:continue
-                points=link.collision_boundary_points_world
+                points=(link.compute_particle_positions() if hasattr(link,'compute_particle_positions')
+                        else link.collision_boundary_points_world)
                 if points is None or not len(points):continue
                 local=(points-root_pos)@root_rotation
                 shape_parts.append(local)

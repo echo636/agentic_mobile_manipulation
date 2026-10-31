@@ -26,6 +26,7 @@ def clipped_body_projection(points, low, high):
     from scipy.spatial import ConvexHull, QhullError
     if points[:,2].max()<low or points[:,2].min()>high:return None
     clipped=list(points[(points[:,2]>=low)&(points[:,2]<=high),:2])
+    if len(clipped)==len(points):return np.asarray(clipped)
     try:
         hull=ConvexHull(points)
         edges={tuple(sorted((int(a),int(b)))) for face in hull.simplices
@@ -245,7 +246,9 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         object_hulls=0
         for link in obj.links.values():
             if link.is_meta_link:continue
-            points=link.collision_boundary_points_world
+            # Cloth supplies its deformed particle positions, not rigid meshes.
+            points=(link.compute_particle_positions() if hasattr(link,'compute_particle_positions')
+                    else link.collision_boundary_points_world)
             if points is not None:
                 vertices=points.cpu().numpy()
                 if obj in prospective_carry:vertices=vertices+np.array([0.,0.,.18])
