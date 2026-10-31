@@ -169,9 +169,14 @@ class OmniGibsonBackend:
         def fixed_key(name):
             return lambda *a, **kw: prefix + name
 
-        def object_key(operation):
-            return lambda obj, *a, **kw: (
-                f'{prefix}object_{obj.name}_{operation}' if isinstance(obj, USDObject) else None)
+        def object_key(operation, *, once=False):
+            seen = set()
+            def key(obj, *a, **kw):
+                if not isinstance(obj, USDObject) or (once and id(obj) in seen):
+                    return None
+                seen.add(id(obj))
+                return f'{prefix}object_{obj.name}_{operation}'
+            return key
 
         calls = [
             (scene_base, 'create_object_from_init_info',
@@ -179,8 +184,11 @@ class OmniGibsonBackend:
             (USDObject, 'prebuild', object_key('prebuild')),
             (BasePrim, 'load', object_key('load')),
             (BasePrim, 'initialize', object_key('initialize')),
-            (USDObject, 'dump_state', object_key('snapshot')),
-            (USDObject, '_load_state', object_key('restore')),
+            # Rejection sampling can restore the whole scene thousands of
+            # times. Keep the first detailed pass; subsequent scene-level
+            # completions below still report real progress and failures.
+            (USDObject, 'dump_state', object_key('snapshot', once=True)),
+            (USDObject, '_load_state', object_key('restore', once=True)),
         ]
         for owner, label, methods in [
             (scene_base.Scene, 'scene', ('load', 'prebuild', 'initialize', 'reset',

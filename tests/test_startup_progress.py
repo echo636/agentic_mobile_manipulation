@@ -271,13 +271,23 @@ class StartupProgressTests(unittest.TestCase):
                                  (3000., obj.dump_state)]:
                     with patch('manipulation_agent.batch.startup_progress.time.time', return_value=at):
                         self.assertIs(call(), token)
+                with patch('manipulation_agent.batch.startup_progress.time.time', return_value=3001.):
+                    self.assertIs(obj.dump_state(), token)
             with backend._native_startup_progress('instance_reset'):
                 with patch('manipulation_agent.batch.startup_progress.time.time', return_value=4000.):
                     self.assertIs(obj._load_state(), token)
+                with patch('manipulation_agent.batch.startup_progress.time.time', return_value=4001.):
+                    self.assertIs(obj._load_state(), token)
+                with patch('manipulation_agent.batch.startup_progress.time.time', return_value=5000.):
+                    self.assertIs(Scene()._load_state(), token)
             events = [json.loads(s) for s in (Path(tmp) / 'startup_stages.jsonl').read_text().splitlines()]
-            row.update(startup_progress_update(row, events, 4001.))
-            self.assertEqual(row['startup_deadline_unix'], 5200.)
-            self.assertEqual(startup_progress_update(row, events, 5199.), {})
+            self.assertEqual(sum(e['status'] == 'passed' and 'object_chair_snapshot' in e['stage']
+                                 for e in events), 1)
+            self.assertEqual(sum(e['status'] == 'passed' and 'object_chair_restore' in e['stage']
+                                 for e in events), 1)
+            row.update(startup_progress_update(row, events, 5001.))
+            self.assertEqual(row['startup_deadline_unix'], 6200.)
+            self.assertEqual(startup_progress_update(row, events, 6199.), {})
             self.assertNotIn('load', vars(Task))
             self.assertNotIn('dump_state', vars(Object))
             self.assertNotIn('episode_deadline_unix', row)
