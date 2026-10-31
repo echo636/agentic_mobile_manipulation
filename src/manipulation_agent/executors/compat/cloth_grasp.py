@@ -47,7 +47,7 @@ def install_native_cloth_grasp():
             parent = robot.gripper_links[arm][0]
             position, orientation = parent.get_position_orientation()
             contact = position + T.quat2mat(orientation) @ (params['parent_frame_pos'] * robot.scale)
-            root = f'{robot.prim_path}_cloth_grasp_{arm}'
+            root = f'{robot.scene.prim_path}/cloth_grasp_{robot.name}_{arm}'
             with og.sim.editing_usd():
                 scope = UsdGeom.Scope.Define(og.sim.stage, root)
                 body = UsdGeom.Xform.Define(og.sim.stage, root + '/anchor')
