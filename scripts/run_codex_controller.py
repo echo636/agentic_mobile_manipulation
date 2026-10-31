@@ -58,16 +58,26 @@ def provider_recovery_mode(events, *, resumes, forks, max_resumes, max_forks):
     if (forks < max_forks and 'OPENAI_PERMANENT_STICKY_ACCOUNT_UNAVAILABLE' in message
             and not any(value in message for value in ('401 Unauthorized', '403 Forbidden',
                                                        'refresh token was revoked'))):
-        pending = set()
+        pending = {}
         for event in events:
             item = event.get('item') or {}
             if item.get('type') != 'mcp_tool_call':
                 continue
             if event.get('type') == 'item.started':
-                pending.add(item.get('id'))
+                pending[item.get('id')] = item
             elif event.get('type') == 'item.completed':
-                pending.discard(item.get('id'))
-        return None if pending else 'fork'
+                pending.pop(item.get('id'), None)
+        if not pending:
+            return 'fork'
+        # A visual call may finish after the client loses its response. The
+        # bridge queues initialize behind it; old revisions cannot execute an
+        # act twice. Recover from current RGB, without replaying the lost call.
+        if len(pending) == 1:
+            item = next(iter(pending.values()))
+            revision = (item.get('arguments') or {}).get('revision')
+            if item.get('tool') in {'act', 'look'} and type(revision) is int and revision >= 0:
+                return 'fork'
+        return None
     if rate_limit_error(events) and (max_resumes == -1 or resumes < max_resumes):
         return 'resume'
     return None
@@ -272,6 +282,10 @@ def main(argv=None, *, allow_client=False):
                        'Use the prior conversation and current RGB tool feedback; continue choosing '
                        'actions yourself, then call finish. Do not restart the task or claim success '
                        'without visual evidence.')
+        if mode == 'fork':
+            resume_prompt += (' A previous tool response may have been lost. Do not replay any pending call. '
+                              'First call initialize to read the current RGB and your task notes; '
+                              'initialize does not reset or advance the scene. Then continue from that observation.')
         resume_project=(adapter.prepare_fork(project,thread_id,resume_prompt) if mode == 'fork'
                         else adapter.prepare_resume(project,thread_id,resume_prompt))
         resumed=adapter.run(resume_project,segment_dir,remaining,on_start)

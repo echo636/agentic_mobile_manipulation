@@ -34,6 +34,19 @@ class ProviderRecoveryTests(unittest.TestCase):
         self.assertEqual(choose(transient, resumes=0, forks=1, max_resumes=1, max_forks=1), 'resume')
         self.assertIsNone(choose(transient, resumes=1, forks=1, max_resumes=1, max_forks=1))
 
+    def test_lost_visual_response_can_fork_to_current_observation(self):
+        route = {'type':'turn.failed','error':{'message':'OPENAI_PERMANENT_STICKY_ACCOUNT_UNAVAILABLE'}}
+        limits = dict(resumes=0, forks=0, max_resumes=0, max_forks=1)
+        started = {'type':'item.started','item':{'type':'mcp_tool_call', 'id':'action',
+            'tool':'act', 'arguments':{'primitive':'cut', 'revision':73}}}
+        choose = controller.provider_recovery_mode
+        self.assertEqual(choose([started, route], **limits), 'fork')
+        other = {**started, 'item':{**started['item'], 'id':'other'}}
+        self.assertIsNone(choose([started, other, route], **limits))
+        for tool, args in [('finish', {}), ('task_notes', {}), ('act', {'revision':None})]:
+            event = {**started, 'item':{**started['item'], 'tool':tool, 'arguments':args}}
+            self.assertIsNone(choose([event, route], **limits))
+
     def test_actual_queue_full_and_bad_gateway_are_retryable(self):
         for message in ['unexpected status 503 Service Unavailable: API_KEY_CONCURRENCY_QUEUE_FULL',
                         'unexpected status 502 Bad Gateway', '429 Too Many Requests',
