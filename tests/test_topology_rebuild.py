@@ -51,6 +51,12 @@ class CutStateComparisonTests(unittest.TestCase):
         scene.objects = [obj]
         context = SimpleNamespace(_timeline=Timeline(), _current_time=147.67500770185143,
                                   _number_of_steps=17721, _physics_callback_functions={})
+        capture = {'enabled': True, 'pending_stop': False}
+        lazy = SimpleNamespace(
+            carb=SimpleNamespace(settings=SimpleNamespace(get_settings=lambda: SimpleNamespace(
+                get_as_bool=lambda key: capture['enabled']))),
+            omni=SimpleNamespace(replicator=SimpleNamespace(core=SimpleNamespace(
+                orchestrator=SimpleNamespace(set_capture_on_play=lambda value: capture.update(enabled=value))))))
 
         class Sim:
             _sim_context = context
@@ -67,10 +73,13 @@ class CutStateComparisonTests(unittest.TestCase):
             update_handles = render
 
             def stop(self):
+                capture['pending_stop'] = capture['enabled']
                 context._current_time = context._number_of_steps = 0
                 context._timeline.time = 0.
 
-            play = render
+            def play(self):
+                if capture['pending_stop']:
+                    raise AssertionError('Capture shutdown stopped the restarted physics timeline')
 
             def dump_state(self, serialized):
                 return {0: {'registry': {'object_registry': {'half_log': {'position': 1.}}}}}
@@ -84,6 +93,8 @@ class CutStateComparisonTests(unittest.TestCase):
         gm = SimpleNamespace(ENABLE_OBJECT_STATES=True, ENABLE_TRANSITION_RULES=True,
                              unlocked=nullcontext)
         with patch.dict('sys.modules', {
+                'omnigibson': SimpleNamespace(lazy=lazy),
+                'omnigibson.lazy': lazy,
                 'omnigibson.macros': SimpleNamespace(gm=gm),
                 'omnigibson.prims.entity_prim': SimpleNamespace(EntityPrim=object)}):
             rebuild_cut_topology(backend)
@@ -91,3 +102,4 @@ class CutStateComparisonTests(unittest.TestCase):
         self.assertEqual(context._current_time, 147.67500770185143)
         self.assertEqual(context._number_of_steps, 17721)
         self.assertEqual(records[-1]['status'], 'passed')
+        self.assertTrue(capture['enabled'])
