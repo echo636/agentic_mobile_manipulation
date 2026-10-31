@@ -1,0 +1,71 @@
+"""Ideal cloth folding: set one configuration, then leave motion to physics."""
+import math
+
+from ..contracts import SkillError
+
+
+def folded_configuration(points, current, contact_offset):
+    """Bend the native rest mesh in half without changing its topology.
+
+    The finite-radius crease retains arc length and separates the two layers.
+    Anchor the result at the cloth's current footprint and supporting height.
+    Inputs and the simulator's stored rest configuration are never modified.
+    """
+    import torch
+
+    lower, upper = points.amin(0), points.amax(0)
+    center = (lower + upper) * .5
+    axis = int(torch.argmax((upper - lower)[:2]))
+    radius = max(float(contact_offset) * 1.1, float(upper[2] - lower[2]) * .5 + .002)
+    half_band = math.pi * radius * .5
+    offset = points[:, axis] - center[axis] + half_band
+    height = points[:, 2] - center[2]
+    angle = (offset / radius).clamp(0., math.pi)
+    bend = (offset > 0) & (offset < math.pi * radius)
+    top = offset >= math.pi * radius
+    result = points.clone()
+    result[bend, axis] = center[axis] - half_band + (radius - height[bend]) * torch.sin(angle[bend])
+    result[bend, 2] = center[2] + radius - (radius - height[bend]) * torch.cos(angle[bend])
+    result[top, axis] = center[axis] - half_band - (offset[top] - math.pi * radius)
+    result[top, 2] = center[2] + 2 * radius - height[top]
+    result[:, :2] += ((current.amin(0)[:2] + current.amax(0)[:2]) -
+                     (result.amin(0)[:2] + result.amax(0)[:2])) * .5
+    result[:, 2] += current[:, 2].min() - result[:, 2].min() + .002
+    return result
+
+
+class CheckedClothActions:
+    def _fold_preconditions(self, target):
+        from omnigibson.object_states import Folded
+        from omnigibson.utils.constants import PrimType
+
+        if self._get_held() is not None:
+            raise SkillError('hand_occupied', 'Release the carried object before folding')
+        if target.prim_type != PrimType.CLOTH or Folded not in target.states:
+            raise SkillError('pre_condition_error', 'Select a cloth object to fold')
+        return target.states[Folded]
+
+    def _checked_fold(self, target, max_steps):
+        from omnigibson.utils import transform_utils as T
+        from omnigibson.utils.numpy_utils import vtarray_to_torch
+
+        folded = self._fold_preconditions(target)
+        if folded.get_value():
+            return {'primitive': 'fold', 'postcondition': 'already_folded'}
+        settling_steps = math.ceil(8. / self.og.sim.get_sim_step_dt())
+        if max_steps < settling_steps:
+            raise SkillError('action_timeout', 'Insufficient steps for folding and native settling')
+        cloth = target.root_link
+        current = cloth.compute_particle_positions()
+        default = vtarray_to_torch(cloth.get_attribute('points_default')).to(current)
+        position, orientation = cloth.get_position_orientation()
+        points = (T.quat2mat(orientation) @ (default * cloth.scale).T).T + position
+        result = folded_configuration(points, current, cloth.cloth_system.particle_contact_offset)
+        cloth.set_particle_positions(result)
+        cloth.particle_velocities = self.torch.zeros_like(result)
+        for _ in range(settling_steps):
+            self._step(self.primitives._empty_action())
+        if not folded.get_value():
+            raise SkillError('postcondition_error', 'Cloth did not remain folded after settling', changed=True)
+        return {'primitive': 'fold', 'implementation': 'single_cloth_configuration_then_native_physics',
+                'postcondition': 'Folded.get_value_after_settling', 'settling_steps': settling_steps}

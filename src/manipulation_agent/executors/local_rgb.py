@@ -13,7 +13,7 @@ from .visual_target import LockedTarget
 # surface is a valid approach reference even when it differs from the rendered
 # click point. Surface-specific placements and attachment points remain strict.
 OBJECT_REFERENCE_ACTIONS = frozenset({
-    'grasp', 'open', 'close', 'toggle_on', 'toggle_off', 'cut', 'soak',
+    'grasp', 'open', 'close', 'toggle_on', 'toggle_off', 'cut', 'soak', 'fold',
     'wipe', 'sweep', 'vacuum', 'spray', 'spread', 'pour', 'scoop',
     'place_inside', 'place_next_to', 'place_under',
 })

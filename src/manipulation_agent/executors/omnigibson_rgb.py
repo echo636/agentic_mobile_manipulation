@@ -15,13 +15,14 @@ from ..records import JsonlAppend, now
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
+from .cloth_actions import CheckedClothActions
 from .material_actions import CheckedMaterialActions
 from .material_transfer import CheckedMaterialTransfer
 from .demo_motion import DemoMotion
 from .local_rgb import LocalRGBManipulation
 from .local_manipulation import LocalLimits
 
-class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
+class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedMaterialActions, CheckedMaterialTransfer, ControlledCarry, CheckedPlacement, OmniGibsonBackend):
     mode="rgb_only"
 
     def _config(self, task, gpu, max_steps):
@@ -1232,6 +1233,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         if obj is None or not hasattr(obj,'states'):
             raise SkillError('invalid_visual_target','No manipulable object at selected pixel')
         held=self._get_held()
+        if primitive=='fold':self._fold_preconditions(obj)
         if primitive=='grasp' and obj.fixed_base: raise SkillError('fixed_object','Fixed object')
         if primitive=='grasp' and held is not None and held is not obj: raise SkillError('hand_occupied','Hand occupied')
         if primitive in {'attach','hang','place_inside','place_on_top','place_under','place_next_to','wipe','sweep','vacuum',
@@ -1346,6 +1348,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
             result=self._checked_transfer(primitive,obj,max_steps,point)
         elif primitive=='cut':
             result=self._checked_cut(obj,max_steps)
+        elif primitive=='fold':
+            result=self._checked_fold(obj,max_steps)
         elif primitive in {'open','close','toggle_on','toggle_off'}:
             result=self._state_action(primitive,obj,max_steps)
         elif primitive in {'place_on_top','place_inside','place_under','place_next_to'}:
