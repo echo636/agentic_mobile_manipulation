@@ -1258,7 +1258,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 raise SkillError('pre_condition_error','Selected object does not support this operation')
             if primitive in {'place_inside','place_on_top','place_under','place_next_to'}:
                 relation={'place_inside':Inside,'place_on_top':OnTop,'place_under':Under,'place_next_to':NextTo}[primitive]
-                if held is obj or relation not in held.states:
+                if held is obj:
+                    raise SkillError('same_placement_object','Placement reference is the carried object')
+                if relation not in held.states:
                     raise SkillError('unsupported_relation','Selected carry/destination does not support this relation')
                 if primitive=='place_inside' and not any(link.is_meta_link and link.meta_link_type in {'fillable','openfillable'} for link in obj.links.values()):
                     raise SkillError('unsupported_relation','Selected destination has no fillable volume')
