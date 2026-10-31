@@ -18,7 +18,7 @@ class EndpointTests(unittest.TestCase):
         initial = torch.tensor([1., 0.] if mode=='selected_already_open' else
                                [.75, 0.] if mode=='selected_partly_open' else
                                [0., 0.] if mode=='selected_blocked' else
-                               [.2, 0.] if mode in ('independent','selected') else [.2])
+                               [.2, 0.] if mode in ('independent','selected','partial_common') else [.2])
         state = [initial.clone()]
         initial_rng = random.getstate()
         open_type = object()
@@ -62,6 +62,11 @@ class EndpointTests(unittest.TestCase):
                 raise RuntimeError('native query failed')
             if mode == 'independent':
                 return {'clear': args[2] == {'/door/leaf1'}}
+            if mode == 'partial_common':
+                # Both lids clear only at a small angle, but the first lid
+                # can open fully while the obstructed second lid stays put.
+                return {'clear': float(state[0].max()) <= .375 or
+                                 args[2] == {'/door/leaf0'}}
             if mode.startswith('selected'):
                 self.assertNotIn('/door/leaf1',args[2])
                 return {'clear': mode == 'selected' or (mode=='selected_already_open' and bool(args[2]))}
@@ -80,6 +85,10 @@ class EndpointTests(unittest.TestCase):
                 torch.testing.assert_close(goal, torch.tensor([.2, 1.]))
                 self.assertEqual(records[-1]['opening_policy'], 'independent_leaf')
                 self.assertEqual(records[-1]['joint_index'], 1)
+            elif mode == 'partial_common':
+                goal=checked_open_goal(backend,obj,lambda:None)
+                torch.testing.assert_close(goal,torch.tensor([1.,0.]))
+                self.assertEqual(records[-1]['opening_policy'],'independent_leaf')
             elif mode in ('selected','selected_already_open'):
                 goal=checked_open_goal(backend,obj,lambda:None)
                 torch.testing.assert_close(goal,torch.tensor([1.,0.]))
@@ -107,6 +116,9 @@ class EndpointTests(unittest.TestCase):
 
     def test_clicked_glass_opens_its_door_without_moving_an_unrelated_drawer(self):
         self.exercise('selected')
+
+    def test_clear_full_leaf_precedes_small_common_opening(self):
+        self.exercise('partial_common')
 
     def test_reopening_selected_fully_open_door_preserves_state_and_succeeds(self):
         self.exercise('selected_already_open')

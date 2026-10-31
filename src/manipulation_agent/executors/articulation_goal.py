@@ -69,13 +69,12 @@ def checked_open_goal(backend, obj, check):
                     yield 'selected_link',selected[0] if len(selected)==1 else None,fraction,goal
                 # A blocked selected leaf is not permission to open another.
                 return
-            # Preserve the existing maximum-common-opening preference. If one
-            # independent leaf is blocked, try the other without moving it.
+            # Try clear independent leaves before shrinking the opening: a
+            # small common angle can let gravity close otherwise usable lids.
             for fraction in fractions:
                 yield 'common',None,fraction,closed+(opened-closed)*fraction
-            if len(active)>1:
-                for index in active:
-                    for fraction in fractions:
+                if len(active)>1:
+                    for index in active:
                         goal=initial.clone()
                         goal[index]=closed[index]+(opened[index]-closed[index])*fraction
                         # An opening attempt must not close a leaf that is
