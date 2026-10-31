@@ -9,8 +9,8 @@ def native_initial_surface_proposals():
     """Allow native centered proposals when a curved support rejects a cuboid.
 
     Used only during offline scene construction. Native falling and OnTop
-    evaluation still decide success; the centered fallback must also pass
-    the reachability check that native sample_kinematics omits on that path.
+    evaluation still decide success. Fixed supports also require the floor-map
+    reachability check; a movable vessel establishes access with its contents.
     """
     from omnigibson.object_states import on_top
     from omnigibson.utils.constants import GROUND_CATEGORIES
@@ -21,8 +21,10 @@ def native_initial_surface_proposals():
     def sample(predicate, objA, objB, **kwargs):
         if objB.category in GROUND_CATEGORIES:
             return original(predicate, objA, objB, **kwargs)
-        accepted = original(predicate, objA, objB, **dict(kwargs, use_last_ditch_effort=True))
-        if accepted and kwargs.get('use_trav_map', True):
+        use_trav_map = kwargs.get('use_trav_map', True) and objB.fixed_base
+        accepted = original(predicate, objA, objB, **dict(kwargs,
+            use_last_ditch_effort=True, use_trav_map=use_trav_map))
+        if accepted and use_trav_map:
             context = kwargs.get('reachability_context')
             if context is None:
                 context = get_reachability_sampling_context(objB, predicate)

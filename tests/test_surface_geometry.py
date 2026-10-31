@@ -132,6 +132,31 @@ class SelectedSurfaceGeometry(unittest.TestCase):
 
 
 class PlacementRejectionTransactions(unittest.TestCase):
+    def test_offline_native_portable_support_keeps_valid_on_top(self):
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.initial_surface import native_initial_surface_proposals
+        calls = []
+        def native(*args, **kwargs):
+            calls.append(kwargs)
+            return True
+        on_top = SimpleNamespace(sample_kinematics=native)
+        utils = SimpleNamespace(get_reachability_sampling_context=lambda *args: {},
+            is_pose_reachable_for_predicate=lambda *args: False)
+        child = SimpleNamespace(get_position_orientation=lambda: ([0., 0., 0.], None))
+        with patch.dict(sys.modules, {'omnigibson.object_states': SimpleNamespace(on_top=on_top),
+                'omnigibson.utils.constants': SimpleNamespace(GROUND_CATEGORIES={'floors'}),
+                'omnigibson.utils.object_state_utils': utils}):
+            with native_initial_surface_proposals():
+                self.assertTrue(on_top.sample_kinematics('onTop', child,
+                    SimpleNamespace(category='casserole', fixed_base=False), use_trav_map=True))
+                self.assertFalse(on_top.sample_kinematics('onTop', child,
+                    SimpleNamespace(category='table', fixed_base=True), use_trav_map=True))
+        self.assertFalse(calls[0]['use_trav_map'])
+        self.assertTrue(calls[1]['use_trav_map'])
+        self.assertIs(on_top.sample_kinematics, native)
+
     def test_side_click_projects_only_when_receiver_has_one_support_level(self):
         import sys
         import numpy as np
