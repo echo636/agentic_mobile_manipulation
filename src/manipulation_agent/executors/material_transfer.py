@@ -328,6 +328,8 @@ class CheckedMaterialTransfer:
             if not retained and not changed:
                 raise SkillError('postcondition_error', 'Poured objects did not remain at the receiver', changed=True)
             result.update(rigid_transfer=rigid, implementation='native_rigid_and_particle_transfer')
+            if rigid['source_remaining_objects']:
+                result['source_has_more_material'] = True
         return result
 
     def _transfer_preconditions(self, primitive, target):

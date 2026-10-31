@@ -91,7 +91,8 @@ class MaterialActionTests(unittest.TestCase):
             # Later free physics dislodges one rigid object back to the source.
             retained[1] = False
             remaining.append(objects[1])
-            return {'materials': [{'moved_particles': 3, 'retained_particles': 3}]}
+            return {'materials': [{'moved_particles': 3, 'retained_particles': 3}],
+                    'source_has_more_material': False}
 
         backend._transfer_material_portion = transfer_material
         with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
@@ -100,6 +101,7 @@ class MaterialActionTests(unittest.TestCase):
         self.assertEqual(result['rigid_transfer'], {
             'moved_objects': 2, 'retained_objects': 1, 'source_remaining_objects': 1,
             'identities_changed_during_settling': False})
+        self.assertTrue(result['source_has_more_material'])
 
     def test_pour_receipt_does_not_query_objects_replaced_by_native_transition(self):
         from unittest.mock import Mock
