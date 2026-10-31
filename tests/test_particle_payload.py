@@ -135,6 +135,34 @@ class ParticlePayloadTests(unittest.TestCase):
         with self.assertRaises(SkillError) as error: verify_particles(self.scene, payload)
         self.assertEqual(error.exception.code, 'postcondition_error')
 
+    def test_solid_grains_can_settle_below_volume_but_must_stay_on_owned_body(self):
+        self.surface_scene()
+        self.bag.states = {self.state_key: SimpleNamespace(link=self.link)}
+        payload = snapshot_particles(self.scene, [self.bag])
+        self.link.check_points_in_volume = lambda points: self.torch.zeros(len(points), dtype=self.torch.bool)
+        # Only the two board-supported grains are under test. Other material
+        # in the scene must not become an accepted anchor for them.
+        from dataclasses import replace
+        payload = [replace(payload[0], paths=payload[0].paths[:2],
+                           positions=payload[0].positions[:2], orientations=payload[0].orientations[:2])]
+        before = self.raw.clone()
+        verify_particles(self.scene, payload)
+        self.torch.testing.assert_close(self.raw, before)
+        # PBD granular systems also need to recapture these supported grains
+        # on the next grasp; they have no macro rigid-body particles_view.
+        self.system.particles_view = None
+        with patch('manipulation_agent.executors.particle_payload.physical_particle_view', return_value=self.view):
+            recaptured = snapshot_particles(self.scene, [self.bag], include_supported=True)
+            self.assertEqual(recaptured[0].paths, ('/particle/0', '/particle/1'))
+        self.system.particles_view = self.view
+        self.supports['/particle/1'] = '/table/base'
+        with self.assertRaises(SkillError):
+            verify_particles(self.scene, payload)
+        self.supports['/particle/1'] = '/particle/0'
+        self.system.is_fluid = True
+        with self.assertRaises(SkillError):
+            verify_particles(self.scene, payload)
+
     def test_surface_particles_remain_identifiable_after_reordering_or_deletion(self):
         self.surface_scene()
         payload = snapshot_particles(self.scene, [self.bag], include_supported=True)

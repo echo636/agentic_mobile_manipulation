@@ -74,8 +74,9 @@ def _supported_particles(systems, containers, owners):
     bounds = [obj.aabb for obj in containers]
     nodes = []
     for system in systems:
-        if getattr(system, 'particles_view', None) is None:
+        if getattr(system, 'is_fluid', False):
             continue  # Fluid support is containment, not rigid contact rays.
+        view = physical_particle_view(system)
         centers, _ = system.get_particles_position_orientation()
         radius = float(system.particle_contact_radius)
         if not math.isfinite(radius) or radius <= 0:
@@ -87,7 +88,7 @@ def _supported_particles(systems, containers, owners):
                      (centers[:, 2] >= lo[2] - radius))
         near &= torch.isfinite(centers).all(dim=1)
         for i in near.nonzero().flatten().tolist():
-            path = system.particles_view.prim_paths[i]
+            path = view.prim_paths[i]
             nodes.append((float(centers[i, 2]), path, system, i, centers[i]))
     heights = {path: z for z, path, _, _, _ in nodes}
     selected = []
@@ -273,14 +274,16 @@ def particles_in_volumes(scene, payload, volumes):
 
 def verify_particles(scene, payload):
     # Validate every captured identity before accepting any support chain.
-    # Contained particles remain subject to their original volume check.
+    # A solid grain can settle outside an annotated fill volume while still
+    # resting on its vessel. Verify physical ownership in that case too.
     verified = set()
     supported = {}
     for record in payload:
         indices = _indices(scene, record)
         centers, _ = record.system.get_particles_position_orientation()
-        verified.update(link.prim_path for link in getattr(record.container, 'links', {}).values()
-                        if not link.is_meta_link)
+        anchors = {link.prim_path for link in getattr(record.container, 'links', {}).values()
+                   if not link.is_meta_link}
+        verified.update(anchors)
         if record.relation == 'supported':
             import omnigibson.utils.transform_utils as T
             rotation = T.quat2mat(record.link.get_position_orientation()[1])
@@ -290,9 +293,14 @@ def verify_particles(scene, payload):
                 hit = _support_at(path, centers[index] + offset @ rotation.T, vector @ rotation.T)
                 supported[path] = (record.system, centers[index], parent if hit == parent else None)
         else:
-            if not bool(record.link.check_points_in_volume(centers[indices]).all()):
-                raise SkillError('postcondition_error', 'Contained particles left the carried container', changed=True)
-            verified.update(record.paths)
+            inside = record.link.check_points_in_volume(centers[indices])
+            for path, index, retained in zip(record.paths, indices, inside.tolist()):
+                if retained:
+                    verified.add(path)
+                elif anchors and not getattr(record.system, 'is_fluid', False):
+                    supported[path] = (record.system, centers[index], None)
+                else:
+                    raise SkillError('postcondition_error', 'Contained particles left the carried container', changed=True)
 
     # A grain can settle onto a different grain in the same carried assembly,
     # or lose one saved ray while retaining another real contact. Re-certify
