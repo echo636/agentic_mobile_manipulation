@@ -112,9 +112,11 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
             held.keep_still()
             held.wake()
             sim.step_physics()
-            if not backend._placement_contact_report(held)['admissible']:
+            contact = backend._placement_contact_report(held)
+            if not contact['admissible']:
                 backend._placement_record({'status': 'initial_surface_rejected', 'stage': 'initial_collision',
-                    'held': held.name, 'target': target.name, 'candidate': attempted})
+                    'held': held.name, 'target': target.name, 'candidate': attempted,
+                    'candidate_pose': [v.tolist() for v in candidate['pose']], 'contact_geometry': contact})
                 continue
             control_dt, physics_dt = sim.get_sim_step_dt(), sim.get_physics_dt()
             resting = RestingMotionWindow(control_dt)
