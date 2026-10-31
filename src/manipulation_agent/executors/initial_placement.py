@@ -151,14 +151,17 @@ def checked_initial_inside(env, output):
                             break
                 else:
                     from .initial_surface import sample_initial_surface
-                    accepted = sample_initial_surface(adapter, held, target)
+                    from omnigibson.utils.object_state_utils import get_reachability_sampling_context
+                    context = get_reachability_sampling_context(
+                        target, 'onTop', use_trav_map=kwargs.get('use_trav_map', False))
+                    accepted = sample_initial_surface(adapter, held, target, reachability_context=context)
             except SkillError as exc:
                 if exc.code != 'sampling_budget_exhausted':
                     raise
                 adapter._placement_record({'status': 'initial_geometric_work_limit',
                                            'held': held.name, 'target': target.name})
                 accepted = False
-            if accepted and kwargs.get('use_trav_map', False):
+            if accepted and relation is Inside and kwargs.get('use_trav_map', False):
                 from omnigibson.utils.object_state_utils import (
                     get_reachability_sampling_context, is_pose_reachable_for_predicate)
                 predicate = 'inside' if relation is Inside else 'onTop'

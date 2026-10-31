@@ -37,8 +37,38 @@ def native_initial_surface_proposals():
         on_top.sample_kinematics = original
 
 
-def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seconds=60.):
+def surface_proposal_points(low, high, torch, reachability_context=None):
+    """Cover the reachable part of a support, including narrow edge strips."""
+    if reachability_context is None or reachability_context['has_prismatic_joint']:
+        return [torch.stack((low[0] + x * (high[0] - low[0]),
+                             low[1] + y * (high[1] - low[1]), high[2]))
+                for x, y in itertools.product((.5, .2, .8), repeat=2)]
+    trav = reachability_context['trav_map']
+    reachable = reachability_context['reachability_map']
+    corners = torch.stack([trav.world_to_map(p[:2]) for p in (low, high)])
+    start = corners.min(dim=0).values.clamp(min=0)
+    end = torch.minimum(corners.max(dim=0).values + 1,
+                        corners.new_tensor(reachable.shape))
+    cells = (reachable[int(start[0]):int(end[0]), int(start[1]):int(end[1])] == 255).nonzero()
+    xy = trav.map_to_world(cells + start.to(cells)).to(low)
+    xy = xy[((xy >= low[:2]) & (xy <= high[:2])).all(dim=1)]
+    # A bounded farthest-point set covers the admissible area instead of
+    # spending physical trials on the same unreachable center each time.
+    distance = ((xy - (low[:2] + high[:2]) / 2)**2).sum(dim=1)
+    points = []
+    for _ in range(min(12, len(xy))):
+        index = int(distance.argmin() if not points else distance.argmax())
+        point = xy[index]
+        points.append(torch.cat((point, high[2:3])))
+        new_distance = ((xy - point)**2).sum(dim=1)
+        distance = new_distance if len(points) == 1 else torch.minimum(distance, new_distance)
+    return points
+
+
+def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seconds=60.,
+                           reachability_context=None):
     from omnigibson.object_states import OnTop
+    from omnigibson.utils.object_state_utils import is_pose_reachable_for_predicate
     from .particle_payload import snapshot_particle_state, restore_particle_state, particle_state_unchanged
     from .resting_motion import RestingMotionWindow
 
@@ -52,9 +82,7 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
         low, high = target.aabb
         # Cover the support itself. Bounds only generate ray origins; every
         # proposal must hit an actual upward-facing collider of this target.
-        points = [torch.stack((low[0] + x * (high[0] - low[0]),
-                               low[1] + y * (high[1] - low[1]), high[2]))
-                  for x, y in itertools.product((.5, .2, .8), repeat=2)]
+        points = surface_proposal_points(low, high, torch, reachability_context)
         candidates = []
         for angle in (None, 90., 180., 270.):
             for point in points:
@@ -66,6 +94,9 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
             candidates.sort(key=lambda c: ranker(c['pose'][0].tolist(), c['pose'][1]))
         seen = set()
         for candidate in candidates:
+            if not is_pose_reachable_for_predicate(
+                    candidate['pose'][0], target, 'onTop', reachability_context):
+                continue
             key = tuple(round(float(v), 5) for array in candidate['pose'] for v in array)
             if key in seen:
                 continue
@@ -100,10 +131,13 @@ def sample_initial_surface(backend, held, target, *, max_candidates=48, max_seco
             target.clear_states_cache()
             official = bool(held.states[OnTop].get_value(target))
             contact = backend._placement_contact_report(held, allow_sleeping=True)
-            accepted = official and resting.report()['stable'] and contact['admissible']
+            reachable = bool(is_pose_reachable_for_predicate(
+                held.get_position_orientation()[0], target, 'onTop', reachability_context))
+            accepted = official and resting.report()['stable'] and contact['admissible'] and reachable
             backend._placement_record({'status': 'initial_surface_accepted' if accepted else 'initial_surface_rejected',
                 'held': held.name, 'target': target.name, 'candidate': attempted,
-                'official_on_top': official, 'resting_motion': resting.report(), 'contact_geometry': contact,
+                'official_on_top': official, 'reachable': reachable,
+                'resting_motion': resting.report(), 'contact_geometry': contact,
                 'settled_pose': [v.tolist() for v in held.get_position_orientation()]})
             if accepted:
                 return True
