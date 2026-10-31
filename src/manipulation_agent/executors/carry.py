@@ -372,11 +372,20 @@ class ControlledCarry:
                 kind='AttachedTo'
             state={'Inside':Inside,'OnTop':OnTop,'AttachedTo':AttachedTo}[kind]
             if state not in child.states or not child.states[state].get_value(parent):
+                # A rigid item can settle below a shallow tray's annotated
+                # volume while remaining physically supported by that tray.
+                # Preserve the carrier, rather than its initial predicate.
+                if (kind=='Inside' and OnTop in child.states
+                        and child.states[OnTop].get_value(parent)):
+                    self._placement_record({'status':'payload_support_preserved',
+                        'child':child.name,'parent':parent.name,
+                        'original_relation':kind,'current_relation':'OnTop'})
+                    continue
                 # Releasing an assembly on a surface can transfer a supported
                 # child's weight to that same surface. Requiring the old
                 # OnTop edge would reject an otherwise stable placement.
-                # Containment remains mandatory; sliding/falling elsewhere or
-                # an unmeasured resting state never qualifies.
+                # An originally contained child must stay with its carrier;
+                # sliding/falling elsewhere never qualifies.
                 resting=(support_resting or {}).get(id(child),{})
                 if (kind=='OnTop' and support_target is not None
                         and resting.get('stable',False)

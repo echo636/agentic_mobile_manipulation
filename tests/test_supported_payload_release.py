@@ -1,4 +1,4 @@
-"""Safe release of a supported child must not relax containment or stability."""
+"""Payloads must remain aboard their carrier or on an allowed release surface."""
 import types
 import numpy as np
 import unittest
@@ -41,9 +41,19 @@ class SupportedPayloadRelease(unittest.TestCase):
         self.verify()
         self.assertEqual(self.records[0]['status'],'payload_support_transferred')
 
-    def test_contained_child_must_remain_inside_its_original_container(self):
+    def test_contained_child_cannot_transfer_to_the_placement_surface(self):
         with self.assertRaises(SkillError):self.verify('Inside')
         self.assertEqual(self.records[-1]['status'],'payload_relation_failed')
+
+    def test_contained_child_can_settle_on_its_original_tray(self):
+        self.child.states[self.states.OnTop].get_value = lambda other: other is self.parent
+        self.verify('Inside', target=False)
+        self.assertEqual(self.records[0]['status'], 'payload_support_preserved')
+
+    def test_contained_child_without_carrier_support_still_fails(self):
+        self.child.states[self.states.OnTop].get_value = lambda other: False
+        with self.assertRaises(SkillError):self.verify('Inside')
+        self.assertEqual(self.records[-1]['status'], 'payload_relation_failed')
 
     def test_falling_or_unsupported_child_still_rejects_placement(self):
         for stable,supported,touching in ((False,True,True),(True,False,True),(True,True,False)):
