@@ -33,9 +33,14 @@ def metric_initial_reachability(record):
     import numpy as np
     import torch
     from omnigibson.utils import object_state_utils as states
+    from omnigibson.object_states import inside, on_top, under
 
     original_context = states.get_reachability_sampling_context
     original_check = states.is_pose_reachable_for_predicate
+    # Native state setters import the factory directly, before this scope.
+    # Updating only object_state_utils leaves those callers on the old maps.
+    aliases = [(module, module.get_reachability_sampling_context)
+               for module in (inside, on_top, under)]
 
     def context(*args, **kwargs):
         result = original_context(*args, **kwargs)
@@ -74,8 +79,12 @@ def metric_initial_reachability(record):
 
     states.get_reachability_sampling_context = context
     states.is_pose_reachable_for_predicate = check
+    for module, _ in aliases:
+        module.get_reachability_sampling_context = context
     try:
         yield
     finally:
         states.get_reachability_sampling_context = original_context
         states.is_pose_reachable_for_predicate = original_check
+        for module, original in aliases:
+            module.get_reachability_sampling_context = original
