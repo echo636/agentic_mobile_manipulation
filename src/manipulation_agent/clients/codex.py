@@ -159,6 +159,8 @@ class CodexAdapter(ClientAdapter):
                   "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
         for key, value in server.items():
             command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
+        if pythonpath := os.environ.get('PYTHONPATH'):
+            command += ["-c", 'mcp_servers.manipulation.env.PYTHONPATH=' + json.dumps(pythonpath)]
         command += ["-"]
         return PreparedProject(command, None, config.prompt, native_sessions=native_sessions,
                                client_storage=storage, mcp_prefix=prefix)

@@ -691,7 +691,24 @@ class OmniGibsonBackend:
 
     def provenance(self) -> dict:
         gpu = os.environ.get("OMNIGIBSON_GPU_ID", "0")
-        query = subprocess.run(["nvidia-smi", "-i", gpu, "--query-gpu=uuid", "--format=csv,noheader"], capture_output=True, text=True)
+        # CUDA ordinals can be remapped. Report devices owning this process,
+        # without guessing a physical device from the logical index.
+        gpu_uuids = []
+        gpu_identity_error = None
+        try:
+            query = subprocess.run(["nvidia-smi", "--query-compute-apps=pid,gpu_uuid",
+                                    "--format=csv,noheader"], capture_output=True,
+                                   text=True, timeout=5)
+            if query.returncode == 0:
+                for line in query.stdout.splitlines():
+                    fields = [field.strip() for field in line.split(',')]
+                    if len(fields) == 2 and fields[0] == str(os.getpid()) and fields[1].startswith('GPU-'):
+                        gpu_uuids.append(fields[1])
+                gpu_uuids = sorted(set(gpu_uuids))
+            else:
+                gpu_identity_error = 'nvidia-smi query failed'
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            gpu_identity_error = type(exc).__name__
         packages = {p: metadata.version(p) for p in ("omnigibson", "torch", "isaacsim", "bddl", "mcp")}
         source = subprocess.run(["git", "-C", str(Path(self.og.__file__).parent), "rev-parse", "HEAD"], capture_output=True, text=True)
         versions = {}
@@ -704,7 +721,10 @@ class OmniGibsonBackend:
                 "inside_placement": self.inside_placement,
                 "heat_source_coverage": "all_authored_links_union_with_native_temperature_update",
                 "omnigibson_source_commit": source.stdout.strip(),
-                "gpu_uuid": query.stdout.strip(), "assets": versions, "input_hashes": self.input_hashes,
+                "gpu_uuid": gpu_uuids[0] if len(gpu_uuids) == 1 else None,
+                "gpu_uuids": gpu_uuids, "gpu_identity_source": "nvidia-smi process membership",
+                "gpu_identity_error": gpu_identity_error,
+                "assets": versions, "input_hashes": self.input_hashes,
                 "task_instance": self.task_metadata, "official_submission_eligible": False}
 
     def close(self) -> None:

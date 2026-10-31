@@ -74,6 +74,7 @@ def successful_finish_event(event):
 def parse_events(path: Path, client: str) -> ParsedEvents:
     rows = []; invalid = []; canonical = []; compat = []
     calls = {}; emitted = set(); completed = set(); turn = 0
+    codex_stream = 0; codex_stream_started = False
 
     def emit(kind, line, at, **values):
         event = {"at": at, "kind": kind, "client": client, "turn": turn or None,
@@ -133,13 +134,21 @@ def parse_events(path: Path, client: str) -> ParsedEvents:
         typ = data.get("type")
         if client == "codex":
             compat.append(data)
+            if typ == "thread.started":
+                # Each CLI invocation, including resume, can reuse item IDs.
+                if codex_stream_started or calls:
+                    codex_stream += 1
+                codex_stream_started = True
             if typ == "turn.started":
                 turn += 1
             item = data.get("item") or {}
             if typ == "item.completed" and item.get("type") == "agent_message":
                 message(item.get("text"), line_no, at)
             if item.get("type") == "mcp_tool_call" and typ in {"item.started", "item.completed"}:
-                call_id = tool_call(item.get("id"), item.get("tool"), item.get("arguments"), line_no, at, item.get("server"))
+                call_id = item.get("id")
+                if codex_stream and call_id is not None:
+                    call_id = f"codex-stream-{codex_stream}:{call_id}"
+                call_id = tool_call(call_id, item.get("tool"), item.get("arguments"), line_no, at, item.get("server"))
                 if typ == "item.completed":
                     tool_result(call_id, item.get("result"), line_no, at, item.get("error"))
             if typ == "thread.started":

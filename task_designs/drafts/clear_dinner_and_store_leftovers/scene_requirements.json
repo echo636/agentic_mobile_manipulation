@@ -1,0 +1,94 @@
+{
+  "version": "design_v1",
+  "status": "requirements_only_not_a_scene",
+  "candidate_scene_model": "house_single_floor",
+  "instance_id": null,
+  "asset_models": null,
+  "scene_sha256": null,
+  "rooms": [
+    "living_room",
+    "kitchen"
+  ],
+  "objects": {
+    "chicken.n.01": [
+      "chicken.n.01_1"
+    ],
+    "spinach.n.02": [
+      "spinach.n.02_1"
+    ],
+    "tupperware.n.01": [
+      "tupperware.n.01_1",
+      "tupperware.n.01_2"
+    ],
+    "plate.n.04": [
+      "plate.n.04_1"
+    ],
+    "mug.n.04": [
+      "mug.n.04_1",
+      "mug.n.04_2"
+    ],
+    "teaspoon.n.02": [
+      "teaspoon.n.02_1"
+    ],
+    "tray.n.01": [
+      "tray.n.01_1"
+    ],
+    "coffee_table.n.01": [
+      "coffee_table.n.01_1"
+    ],
+    "countertop.n.01": [
+      "countertop.n.01_1"
+    ],
+    "electric_refrigerator.n.01": [
+      "electric_refrigerator.n.01_1"
+    ],
+    "cabinet.n.01": [
+      "cabinet.n.01_1"
+    ],
+    "sink.n.01": [
+      "sink.n.01_1"
+    ],
+    "floor.n.01": [
+      "floor.n.01_1"
+    ],
+    "agent.n.01": [
+      "agent.n.01_1"
+    ]
+  },
+  "initial_relations": [
+    "(ontop chicken.n.01_1 plate.n.04_1)",
+    "(ontop spinach.n.02_1 plate.n.04_1)",
+    "(ontop teaspoon.n.02_1 plate.n.04_1)",
+    "(ontop plate.n.04_1 tray.n.01_1)",
+    "(ontop mug.n.04_1 tray.n.01_1)",
+    "(ontop mug.n.04_2 tray.n.01_1)",
+    "(ontop tray.n.01_1 coffee_table.n.01_1)",
+    "(ontop tupperware.n.01_1 countertop.n.01_1)",
+    "(ontop tupperware.n.01_2 countertop.n.01_1)",
+    "(inroom coffee_table.n.01_1 living_room)",
+    "(inroom countertop.n.01_1 kitchen)",
+    "(inroom electric_refrigerator.n.01_1 kitchen)",
+    "(inroom cabinet.n.01_1 kitchen)",
+    "(inroom sink.n.01_1 kitchen)",
+    "(inroom floor.n.01_1 living_room)",
+    "(ontop agent.n.01_1 floor.n.01_1)",
+    "(not (open electric_refrigerator.n.01_1))",
+    "(not (open cabinet.n.01_1))"
+  ],
+  "additional_initial_requirements": [
+    "两杯、两保鲜盒、水槽、目标柜内收纳区为空；不生成水、污渍或清洗系统",
+    "鸡肉与菠菜是可单独抓取且可容纳于保鲜盒的刚体",
+    "所有上层物品在托盘/盘子有效承托面内，避免相交、悬浮与遮住全部可选像素",
+    "托盘可整体进入目标柜，柜门关闭不挤出托盘；水槽能容纳四件餐具（一个盘子、两只杯子和一把茶匙）",
+    "盒体能带内容物通过真实门口并进入冰箱，关闭冰箱不破坏Inside",
+    "符合指令的其他厨房餐具柜或水槽须纳入合法评分绑定，或在场景验收中证明不存在"
+  ],
+  "development_split": {
+    "status": "not_built",
+    "purpose": "资产、布局、机制调试"
+  },
+  "held_out_split": {
+    "status": "not_built",
+    "requirement": "独立冻结的布局/对象位置组合；不能仅换seed"
+  }
+}

@@ -58,6 +58,12 @@ class ClientAdapterTests(unittest.TestCase):
             self.assertIsNone(prepared.cwd)
             self.assertTrue(prepared.stdin.endswith('Inspect and finish.'))
 
+    def test_codex_mcp_process_uses_selected_checkout_pythonpath(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'PYTHONPATH': '/chosen/checkout/src'}):
+            prepared = get_adapter('codex').prepare_project(self.config(Path(folder)), 'Policy', ['act'])
+        configs = [prepared.argv[i+1] for i, value in enumerate(prepared.argv[:-1]) if value == '-c']
+        self.assertIn('mcp_servers.manipulation.env.PYTHONPATH="/chosen/checkout/src"', configs)
+
     @unittest.skipUnless(shutil.which('bwrap'), 'bubblewrap is required for the mount regression')
     def test_codex_session_symlink_is_isolated_by_actual_mount(self):
         with tempfile.TemporaryDirectory() as folder:
