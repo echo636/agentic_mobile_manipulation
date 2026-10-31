@@ -56,13 +56,21 @@ class RGBBoundary(unittest.TestCase):
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('private geometry',json.dumps(result))
     def test_transfer_reports_partial_source_without_private_material_identity(self):
-        for remaining, expected in ((0,False),(12,True),(None,None)):
+        for remaining, expected, receiver in ((0,False,'container'),(12,True,'surface'),
+                                               (None,None,None),(0,False,'PRIVATE_OBJECT_NAME')):
             self.backend.execute_visual=lambda *a,**kw:{'materials':[{
                 'material':'PRIVATE_MATERIAL_SYSTEM','moved_particles':512,
-                'source_remaining_particles':remaining}], 'source_has_more_material':expected, 'private_pose':[1,2,3]}
+                'source_remaining_particles':remaining}], 'source_has_more_material':expected,
+                'receiver_kind':receiver, 'private_pose':[1,2,3]}
             result=self.act('pour')
             self.assertIs(result['effect']['transfer']['source_has_more_material'],expected)
             self.assertTrue(result['effect']['transfer']['held_object_retained'])
+            if receiver in {'container','surface'}:
+                self.assertEqual(result['effect']['transfer']['receiver_kind'],receiver)
+                self.assertIn('selected '+receiver,result['effect']['transfer']['message'])
+            else:
+                self.assertNotIn('receiver_kind',result['effect']['transfer'])
+            self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('PRIVATE_MATERIAL_SYSTEM',json.dumps(result))
             self.assertNotIn('moved_particles',json.dumps(result))
     def test_cut_reports_actual_transformation_without_private_identity(self):

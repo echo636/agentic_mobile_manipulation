@@ -304,11 +304,13 @@ class CheckedMaterialTransfer:
         return moved
 
     def _checked_transfer(self, primitive, target, max_steps, point=None):
+        from omnigibson.object_states import ContainedParticles
         source, destination = self._transfer_preconditions(primitive, target)
         objects = self._pour_objects(source) if primitive == 'pour' else []
         moved = self._pour_rigid_objects(source, destination, objects, max_steps, point) if objects else []
         result = self._transfer_material_portion(primitive, source, destination, max_steps,
                                                  empty_ok=bool(moved))
+        result['receiver_kind'] = 'container' if ContainedParticles in destination.states else 'surface'
         if moved:
             # Material transfer can advance physics again. Count rigid contents
             # after that settling, so the receipt describes the returned scene.

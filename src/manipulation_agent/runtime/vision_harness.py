@@ -262,6 +262,12 @@ class VisionHarness:
                     'source_has_more_material':remaining if isinstance(remaining,bool) else None,
                     'held_object_retained':True,
                     'message':'Contents were transferred. Check remaining contents and the receiver in the returned RGB.'}
+                receiver = details.get('receiver_kind')
+                if receiver in {'container', 'surface'}:
+                    effect['transfer']['receiver_kind'] = receiver
+                    effect['transfer']['message'] = (
+                        f'Contents were transferred to the selected {receiver}. '
+                        'Check remaining contents and the receiver in the returned RGB.')
                 if rigid:
                     effect['transfer'].update(rigid)
         local=details.get('local_manipulation')
