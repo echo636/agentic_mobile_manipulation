@@ -39,6 +39,21 @@ def set_particle_center(system, idx, position=None, orientation=None):
         transform, indices=torch.tensor([idx], device=transform.device))
 
 
+def load_particle_state(system, state):
+    import omnigibson as og
+    from omnigibson.systems.macro_particle_system import MacroParticleSystem
+
+    system._sync_particles(n_particles=state['n_particles'])
+    MacroParticleSystem._load_state(system, state)
+    # Native loading restores scale after pose. Rebuilding those collision
+    # shapes can invalidate the tensor view created by _sync_particles.
+    # Refresh native handles before writing the saved velocities; no physics
+    # step, state retry or change to the serialized particles is needed.
+    if system.n_particles:
+        og.sim.update_handles()
+    system.set_particles_velocities(state['lin_velocities'], state['ang_velocities'])
+
+
 def install_macro_particle_pose_repair():
     versions = {name: metadata.version(name) for name in ('omnigibson', 'isaacsim')}
     if (versions['omnigibson'], versions['isaacsim']) != ('3.9.2', '5.1.0.0'):
@@ -48,9 +63,11 @@ def install_macro_particle_pose_repair():
     cls = module.MacroPhysicalParticleSystem
     cls.set_particles_position_orientation = set_particle_centers
     cls.set_particle_position_orientation = set_particle_center
+    cls._load_state = load_particle_state
     return dict(status='installed', versions=versions,
         repair='macro_particle_sphere_center_to_mesh_origin',
-        scope='process_local_macro_particle_pose_setters',
+        scope='process_local_macro_particle_pose_setters_and_state_load',
+        state_load='native_handle_refresh_after_scale_restore_before_velocity_restore',
         upstream_path=module.__file__,
         upstream_sha256=hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest(),
         particle_geometry_counts_velocities_and_identities='unchanged')
