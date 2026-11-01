@@ -187,7 +187,8 @@ class MaterialActionTests(unittest.TestCase):
         low, high = torch.tensor([0., 0., .9]), torch.tensor([.2, .2, 1.03])
         volume = types.SimpleNamespace(visual_aabb=(low, high),
             check_points_in_volume=lambda points: ((points >= low) & (points <= high)).all(1))
-        receiver = types.SimpleNamespace(name='pot', states={contained: types.SimpleNamespace(link=volume)})
+        receiver = types.SimpleNamespace(name='pot', aabb=(low, torch.tensor([.2, .2, 1.12])),
+            states={contained: types.SimpleNamespace(link=volume)})
         origin = torch.tensor([2., 3., 1.])
         item = types.SimpleNamespace(name='small_rigid_item',
             get_position_orientation=lambda: (origin, torch.tensor([0., 0., 0., 1.])))
@@ -205,15 +206,15 @@ class MaterialActionTests(unittest.TestCase):
         self.assertLess(float(position[2]) + .01, float(high[2]))
 
         # An occupied cavity is not an occupied opening. A release above a
-        # protruding resident must remain collision-clear and preserve pose.
+        # protruding resident and higher physical rim must remain collision-clear.
         resident = types.SimpleNamespace(aabb=(low, torch.tensor([.2, .2, 1.08])),
             states={inside: types.SimpleNamespace(get_value=lambda target: target is receiver)})
         backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(objects=[resident]))
-        backend._inside_overlap_ranker = lambda assembly: lambda center, extent: center[2] - extent[2]/2 <= 1.08
+        backend._inside_overlap_ranker = lambda assembly: lambda center, extent: center[2] - extent[2]/2 <= 1.12
         with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
                                          ContainedParticles=contained, Inside=inside, create=True):
             position, orientation = backend._volume_pour_pose(item, receiver, [])
-            self.assertGreater(float(position[2]) - .01, 1.08)
+            self.assertGreater(float(position[2]) - .01, 1.12)
             self.assertTrue(torch.equal(orientation, item.get_position_orientation()[1]))
             backend._inside_overlap_ranker = lambda assembly: lambda center, extent: True
             self.assertIsNone(backend._volume_pour_pose(item, receiver, []))

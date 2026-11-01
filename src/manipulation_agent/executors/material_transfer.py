@@ -208,7 +208,9 @@ class CheckedMaterialTransfer:
                     'domain': domain, 'release_center': center.tolist(),
                     'release_policy': 'lowest_free_volume_layer'})
                 return center-offset, orientation
-        resident_top = max([float(high[2]), *[
+        # Fill annotations can end below the physical rim or handles. The
+        # upper search bound must permit clearing that geometry before falling.
+        resident_top = max([float(high[2]), float(destination.aabb[1][2]), *[
             float(other.aabb[1][2]) for other in self.env.scene.objects
             if all(other is not member for member in [destination, *assembly])
             and Inside in other.states and other.states[Inside].get_value(destination)]])
