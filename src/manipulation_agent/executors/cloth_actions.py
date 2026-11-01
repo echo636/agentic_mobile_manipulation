@@ -4,7 +4,7 @@ import math
 from ..contracts import SkillError
 
 
-def folded_configuration(points, current, contact_offset, *, support_height=None):
+def folded_configuration(points, current, contact_offset, *, support_height=None, heading=0.):
     """Bend the native rest mesh in half without changing its topology.
 
     The finite-radius crease retains arc length and separates the two layers.
@@ -13,6 +13,11 @@ def folded_configuration(points, current, contact_offset, *, support_height=None
     """
     import torch
 
+    # Fold along a material axis. World-axis folds become diagonal folds when
+    # a rectangular cloth is rotated on the table, leaving its long span intact.
+    cosine, sine = math.cos(heading), math.sin(heading)
+    rotation = points.new_tensor([[cosine, -sine, 0.], [sine, cosine, 0.], [0., 0., 1.]])
+    points = points @ rotation
     lower, upper = points.amin(0), points.amax(0)
     center = (lower + upper) * .5
     axis = int(torch.argmax((upper - lower)[:2]))
@@ -28,6 +33,7 @@ def folded_configuration(points, current, contact_offset, *, support_height=None
     result[bend, 2] = center[2] + radius - (radius - height[bend]) * torch.cos(angle[bend])
     result[top, axis] = center[axis] - half_band - (offset[top] - math.pi * radius)
     result[top, 2] = center[2] + 2 * radius - height[top]
+    result = result @ rotation.T
     result[:, :2] += ((current.amin(0)[:2] + current.amax(0)[:2]) -
                      (result.amin(0)[:2] + result.amax(0)[:2])) * .5
     height = current[:, 2].min() if support_height is None else support_height
@@ -108,15 +114,17 @@ class CheckedClothActions:
         current = cloth.compute_particle_positions()
         default = vtarray_to_torch(cloth.get_attribute('points_default')).to(current)
         position, orientation = cloth.get_position_orientation()
-        points = (T.quat2mat(orientation) @ (default * cloth.scale).T).T + position
+        rotation = T.quat2mat(orientation)
+        points = (rotation @ (default * cloth.scale).T).T + position
+        heading = math.atan2(float(rotation[1, 0]), float(rotation[0, 0]))
         # A dangling corner can lie below the table. Anchoring to that corner
         # would construct the whole folded cloth beneath its actual support.
         contacts = cloth.get_contacts()
         support_height = max(float(point[2]) for _, point in contacts) if contacts else None
         result = folded_configuration(points, current, cloth.cloth_system.particle_contact_offset,
-                                      support_height=support_height)
+                                      support_height=support_height, heading=heading)
         self._placement_record(dict(status='cloth_fold_configuration', target=target.name,
-            support_height=support_height, previous_min_z=float(current[:, 2].min()),
+            support_height=support_height, material_heading=heading, previous_min_z=float(current[:, 2].min()),
             configured_z=[float(result[:, 2].min()), float(result[:, 2].max())]))
         cloth.set_particle_positions(result)
         cloth.particle_velocities = self.torch.zeros_like(result)
