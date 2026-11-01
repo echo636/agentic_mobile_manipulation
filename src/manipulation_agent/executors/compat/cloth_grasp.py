@@ -49,10 +49,18 @@ def install_native_cloth_grasp():
             contact = position + T.quat2mat(orientation) @ (params['parent_frame_pos'] * robot.scale)
             root = f'{robot.scene.prim_path}/cloth_grasp_{robot.name}_{arm}'
             with og.sim.editing_usd():
-                scope = UsdGeom.Scope.Define(og.sim.stage, root)
+                UsdGeom.Scope.Define(og.sim.stage, root)
                 body = UsdGeom.Xform.Define(og.sim.stage, root + '/anchor')
-                body.AddTranslateOp().Set(tuple(contact.tolist()))
-                body.AddOrientOp().Set(Gf.Quatf(float(orientation[3]), Gf.Vec3f(*orientation[:3].tolist())))
+                # Reuse the same body across release/regrasp and state restore.
+                # Removing a body already used by PhysX tensor views invalidates
+                # the scene's views, including the robot articulation.
+                translation = body.GetPrim().GetAttribute('xformOp:translate')
+                rotation = body.GetPrim().GetAttribute('xformOp:orient')
+                if not translation:
+                    translation = body.AddTranslateOp().GetAttr()
+                    rotation = body.AddOrientOp().GetAttr()
+                translation.Set(tuple(contact.tolist()))
+                rotation.Set(Gf.Quatf(float(orientation[3]), Gf.Vec3f(*orientation[:3].tolist())))
                 UsdPhysics.RigidBodyAPI.Apply(body.GetPrim())
                 UsdPhysics.MassAPI.Apply(body.GetPrim()).CreateMassAttr(.001)
             create_joint(
@@ -71,9 +79,10 @@ def install_native_cloth_grasp():
                 attachment.CreatePoints0Attr(Vt.Vec3fArray([params['child_frame_pos'].tolist()]))
                 attachment.CreatePoints1Attr(Vt.Vec3fArray([[0., 0., 0.]]))
             og.sim.update_handles()
-            # Native release deletes this scope; native state restore recreates
-            # it from the existing grasp fields without extra serialized state.
-            robot._ag_obj_constraints[arm] = scope.GetPrim()
+            # Native release removes only the cloth attachment. The small
+            # collisionless anchor remains joined to the gripper and is reused;
+            # no per-frame pose control or new serialized grasp fields.
+            robot._ag_obj_constraints[arm] = attachment.GetPrim()
             robot._ag_obj_in_hand[arm] = target
             robot._ag_obj_constraint_params[arm] = params
 
@@ -81,4 +90,5 @@ def install_native_cloth_grasp():
         Robot._establish_grasp = establish_grasp
         Robot._create_assisted_grasp_joint = create_grasp
     return dict(status='configured', cloth_grasp='native_particle_attachment_and_gripper_joint',
+                anchor_lifecycle='reused_across_grasps; release_removes_attachment_only',
                 rigid_grasp='unchanged', state_format='native_grasp_fields', per_frame_pose_override=False)
