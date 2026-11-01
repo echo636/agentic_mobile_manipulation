@@ -370,7 +370,7 @@ class CheckedPlacement:
         return result
 
     def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=(), *, offsets=None,
-                            roll_degrees=None, spread_surface=False):
+                            roll_degrees=None, spread_surface=False, center_footprint=False):
         """Propose root poses at the selected collision surface, with the actual shape.
 
         Surface rays ignore the moving assembly at its OLD pose. Space at the
@@ -393,7 +393,8 @@ class CheckedPlacement:
             geometry = (geometry-origin) @ rotation.T + origin
             orientation = self.torch.as_tensor(quaternion, dtype=orientation.dtype,
                                                 device=orientation.device)
-        vertices, anchor = rotated_surface_geometry(geometry, origin, yaw_degrees, roll_degrees)
+        vertices, anchor = rotated_surface_geometry(geometry, origin, yaw_degrees, roll_degrees,
+                                                   center_footprint=center_footprint)
         if roll_degrees is not None:
             rotation = T.euler2quat(self.torch.tensor([math.radians(roll_degrees), 0., 0.],
                                                       device=orientation.device))
@@ -478,7 +479,8 @@ class CheckedPlacement:
                 projected = point.clone()
                 projected[2] = height
                 candidates = self._surface_candidates(held, target, projected,
-                    yaw_degrees, payload, offsets=offsets, roll_degrees=roll_degrees)
+                    yaw_degrees, payload, offsets=offsets, roll_degrees=roll_degrees,
+                    center_footprint=center_footprint)
                 for candidate in candidates:
                     candidate.update(verification_point=projected, surface_kind='single_support_plane')
         return candidates + rim_candidates

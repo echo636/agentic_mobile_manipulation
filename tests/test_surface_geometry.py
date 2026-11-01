@@ -49,6 +49,22 @@ class SelectedSurfaceGeometry(unittest.TestCase):
         self.np.testing.assert_allclose(anchor, [0., 0., -.04955], atol=1e-7)
         self.assertLess(float(extent[0]), .27)  # No fabricated 31.5 cm width.
 
+    def test_curled_cloth_centers_footprint_instead_of_its_low_edge(self):
+        # R909: a slightly warped 30 cm cloth had its low edge 13 cm from
+        # its center. Aligning that edge near a table rim put its center off it.
+        origin = self.np.array([2., 3., 1.])
+        local = self.np.array([[-.15, -.15, -.02], [.15, -.15, -.02],
+                              [-.15, .15, .02], [.15, .15, .02]])
+        relative, old_anchor = self.rotated_surface_geometry(local + origin, origin)
+        relative, anchor = self.rotated_surface_geometry(local + origin, origin,
+                                                        center_footprint=True)
+        support = self.np.array([0., .30, .75])
+        old_landing = relative + support - old_anchor
+        landing = relative + support - anchor
+        self.assertGreater(float(old_landing[:, 1].mean()), .40)  # Beyond table rim.
+        self.np.testing.assert_allclose(landing[:, :2].mean(axis=0), support[:2])
+        self.assertAlmostEqual(float(landing[:, 2].min()), support[2])
+
     def test_yaw_45_uses_rotated_shape_instead_of_yaw_independent_square(self):
         points = self.box_points([-.1495, -.0505, -.04955], [.1495, .0505, .04955])
         rotated, _ = self.rotated_surface_geometry(points, self.np.zeros(3), 45.)

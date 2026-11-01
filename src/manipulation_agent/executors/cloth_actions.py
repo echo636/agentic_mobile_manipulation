@@ -58,7 +58,7 @@ class CheckedClothActions:
         candidates = (self._next_to_candidates(held, target, point, payload, yaw_degrees)
                       if primitive == 'place_next_to' else
                       self._surface_candidates(held, target, point, yaw_degrees, payload,
-                                               roll_degrees=roll_degrees))
+                                               roll_degrees=roll_degrees, center_footprint=True))
         if not candidates:
             raise SkillError('placement_surface_unavailable', 'No receiving surface near the selected target')
         candidate = candidates[0]

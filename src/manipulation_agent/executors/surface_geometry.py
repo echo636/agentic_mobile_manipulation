@@ -93,11 +93,13 @@ def bottom_support_points(points, maximum=17):
     return np.asarray(probes)
 
 
-def rotated_surface_geometry(points_world, origin, yaw_degrees=None, roll_degrees=None):
+def rotated_surface_geometry(points_world, origin, yaw_degrees=None, roll_degrees=None, *,
+                             center_footprint=False):
     """Rotate about the root by world-X roll, then world-Z yaw.
 
     Returns root-relative rotated vertices and their bottom anchor. A null yaw
     preserves the held orientation; this never expands the shape to a square.
+    Cloth can center its full footprint instead of aligning a low, curled edge.
     """
     import numpy as np
     points = np.asarray(points_world, dtype=float)
@@ -121,7 +123,10 @@ def rotated_surface_geometry(points_world, origin, yaw_degrees=None, roll_degree
         cosine, sine = np.cos(angle), np.sin(angle)
         rotation = np.array([[cosine, -sine, 0.], [sine, cosine, 0.], [0., 0., 1.]])
         relative = relative @ rotation.T
-    return relative, bottom_anchor(relative)
+    anchor = bottom_anchor(relative)
+    if center_footprint:
+        anchor[:2] = (relative.min(axis=0)[:2] + relative.max(axis=0)[:2]) / 2
+    return relative, anchor
 
 
 def adjacent_support_points(relative, anchor, reference, selected):
