@@ -16,11 +16,6 @@ def thin_macro_sampler(original, record):
             low, high = obj.aabb
         radius = float(system.particle_radius)
         thin = high - low <= 2 * radius
-        if not bool(thin.any()):
-            return original(system, obj, link, use_visual_meshes=use_visual_meshes,
-                mesh_name_prefixes=mesh_name_prefixes, check_contact=check_contact,
-                sampling_distance=sampling_distance, max_samples=max_samples, **kwargs)
-
         # A macro particle is an authored rigid mesh, not its enclosing sphere.
         # A thin source occupies one layer of the native conversion grid; its
         # thickness need not contain that sphere. Retain native spacing on the
@@ -32,17 +27,30 @@ def thin_macro_sampler(original, record):
         positions = torch.stack(torch.meshgrid(*axes, indexing='ij'), dim=-1).reshape(-1, 3)
         positions = positions[link.check_points_in_volume(
             particle_positions_world=positions, use_visual_meshes=use_visual_meshes)]
+        centered = len(positions) == 0
+        if centered:
+            # A corner-anchored grid can miss a curved cut piece even when its
+            # AABB fits the particle diameter. Try an odd grid through its
+            # center, preserving spacing, bounds and the mesh-volume filter.
+            axes = [torch.arange(-((len(axis)-1)//2), (len(axis)-1)//2 + 1,
+                                 device=low.device) * spacing + (lo + hi) / 2
+                    for axis, lo, hi in zip(axes, low, high)]
+            positions = torch.stack(torch.meshgrid(*axes, indexing='ij'), dim=-1).reshape(-1, 3)
+            positions = positions[link.check_points_in_volume(
+                particle_positions_world=positions, use_visual_meshes=use_visual_meshes)]
         if check_contact:
             positions = positions[~system.check_in_contact(positions)]
         if max_samples is not None and len(positions) > max_samples:
             positions = positions[torch.randperm(len(positions))[:int(max_samples)]]
         if len(positions) == 0:
-            # The caller removes the source after this returns. Do not consume
-            # real material when the native conversion grid has no interior.
+            # Native macro generation with zero new particles slices existing
+            # velocities with [:-0], then writes an empty tensor to a live view.
+            # The caller also removes the source after this returns.
             raise SkillError('sampling_error', 'No interior particle samples for the selected material conversion')
         record({'source': obj.name, 'link': link.name, 'system': system.name,
                 'source_extent_m': (high-low).tolist(), 'particle_radius_m': radius,
                 'thin_axes': thin.tolist(), 'generated': len(positions),
+                'centered_grid_fallback': centered,
                 'authored_particle_geometry_unchanged': True})
         return system.generate_particles(positions=positions, **kwargs)
 
