@@ -197,12 +197,15 @@ class ControlledCarry:
         # Upstream symbolic OPEN samples a random opening and returns early
         # when already ajar. Use a checked usable opening; close fully.
         if open_goal is not None:
-            obj.set_joint_positions(open_goal);obj.keep_still()
+            obj.set_joint_positions(open_goal)
             obj.states[state].clear_cache();obj.state_updated()
             accepted=bool(obj.states[state].get_value())
         else:
             accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
         if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
+        # Position setters retain joint velocities. A closed door must not
+        # inherit the preceding swing; subsequent motion remains native physics.
+        if state is Open:obj.keep_still()
         self._relocate_container_payload(payload)
         transported_particles=moved_particles()
         # A door setter moves only its articulated support frames. Leave
