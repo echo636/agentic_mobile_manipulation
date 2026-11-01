@@ -23,6 +23,22 @@ def upward_surface_points(triangles, maximum=32):
     return points[selected]
 
 
+def opening_release_points(low, high, extent):
+    """Retain central drops and expose empty corners before stacking higher.
+
+    Thin trays may have no 3D inset but still have ample horizontal area.
+    These are only proposals; native opening and overlap queries still apply.
+    """
+    points = [(low[0]+x*(high[0]-low[0]), low[1]+y*(high[1]-low[1]))
+              for x, y in ((.5, .5), (.25, .5), (.75, .5), (.5, .25), (.5, .75))]
+    lo = [low[i]+extent[i]/2 for i in (0, 1)]
+    hi = [high[i]-extent[i]/2 for i in (0, 1)]
+    if all(a <= b for a, b in zip(lo, hi)):
+        points.extend((lo[0]+x*(hi[0]-lo[0]), lo[1]+y*(hi[1]-lo[1]))
+                      for x in (.5, .05, .95) for y in (.5, .05, .95))
+    return list(dict.fromkeys(points))
+
+
 def single_support_height(triangles):
     """Identify a single horizontal receiving plane, never choose among shelves."""
     import numpy as np

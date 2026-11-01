@@ -224,11 +224,12 @@ class CheckedMaterialTransfer:
             float(other.aabb[1][2]) for other in self.env.scene.objects
             if all(other is not member for member in [destination, *assembly])
             and Inside in other.states and other.states[Inside].get_value(destination)]])
+        from .surface_geometry import opening_release_points
+        opening_xy = opening_release_points(low.tolist(), high.tolist(), extent.tolist())
         for z in torch.linspace(float(high[2]), resident_top+float(extent[2])/2+.003, 20):
-            for fx, fy in ((.5, .5), (.25, .5), (.75, .5), (.5, .25), (.5, .75)):
+            for x, y in opening_xy:
                 self.deadline.check()
-                center = position.new_tensor([
-                    low[0]+fx*(high[0]-low[0]), low[1]+fy*(high[1]-low[1]), z])
+                center = position.new_tensor([x, y, z])
                 opening = center.clone(); opening[2] = high[2]-.001
                 if not bool(volume.check_points_in_volume(opening.unsqueeze(0))[0]):
                     continue
