@@ -5,10 +5,34 @@ from unittest.mock import patch
 
 import numpy as np
 
-from manipulation_agent.executors.placement_contacts import contact_report
+from manipulation_agent.executors.placement_contacts import contact_report, assembly_contact_pairs
 
 
 class PlacementContactPolicy(unittest.TestCase):
+    def test_cloth_contacts_do_not_enter_rigid_matrix_and_keep_external_supports(self):
+        from manipulation_agent.executors.placement import CheckedPlacement
+
+        cloth = SimpleNamespace(prim_path='/cloth', compute_particle_positions=lambda: None,
+            get_contacts=lambda: [('/table', [0., 0., .8]), ('/robot/hand', [0., 0., .8])])
+        held = SimpleNamespace(root_link=cloth, links={'cloth': cloth}, scene=SimpleNamespace(idx=0))
+        rigid = SimpleNamespace(links={'body': SimpleNamespace(prim_path='/plate')})
+        queries = []
+        def rigid_pairs(scene, *, query_set, **kw):
+            self.assertEqual(query_set, [rigid])
+            queries.append(query_set)
+            return {('/plate', '/table'), ('/plate', '/cloth')}
+        module = ModuleType('omnigibson.utils.usd_utils')
+        module.RigidContactAPI = SimpleNamespace(get_contact_pairs=rigid_pairs)
+        with patch.dict('sys.modules', {'omnigibson.utils.usd_utils': module}):
+            self.assertEqual(CheckedPlacement._placement_contacts(None, held), ['/robot/hand', '/table'])
+            report = contact_report(None, held)
+            self.assertEqual(report['contact_bodies'], ['/robot/hand', '/table'])
+            self.assertEqual(report['signed_separations_scope'], 'rigid_links_only')
+            self.assertIsNone(report['minimum_separation_m'])
+            self.assertFalse(queries)
+            self.assertIn(('/plate', '/table'), assembly_contact_pairs(held, [rigid]))
+            self.assertEqual(len(queries), 1)
+
     def report(self, separation, *, truncated=False, internal=False, sleeping=False,
                no_points=False, allow_sleeping=False, fresh_force=None):
         body = SimpleNamespace(scene=SimpleNamespace(idx=0),

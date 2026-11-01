@@ -7,6 +7,23 @@ import math
 MAX_PLACEMENT_PENETRATION_M = .005
 
 
+def assembly_contact_pairs(held, payload=()):
+    """Use native cloth particle contacts and rigid contacts for their own types."""
+    from omnigibson.utils.usd_utils import RigidContactAPI
+
+    rigid, pairs = [], set()
+    for obj in (held, *payload):
+        cloth = getattr(obj, 'root_link', None)
+        if hasattr(cloth, 'compute_particle_positions'):
+            pairs.update((str(cloth.prim_path), str(path)) for path, _ in cloth.get_contacts())
+        else:
+            rigid.append(obj)
+    if rigid:
+        pairs.update(RigidContactAPI.get_contact_pairs(held.scene.idx, query_set=rigid,
+                                                      with_set=None, current_only=True))
+    return pairs
+
+
 def contact_report(backend, held, payload=(), *, allow_sleeping=False):
     """Read signed separations for the assembly's current external contacts.
 
@@ -24,14 +41,21 @@ def contact_report(backend, held, payload=(), *, allow_sleeping=False):
     scene = held.scene.idx
     links = {str(link.prim_path): link for obj in assembly for link in obj.links.values()}
     paths = set(links)
-    pairs = RigidContactAPI.get_contact_pairs(scene, query_set=assembly,
-                                              with_set=None, current_only=True)
+    pairs = assembly_contact_pairs(held, payload)
     external = {(a, b) for a, b in pairs if b not in paths}
+    cloth_paths = {path for path, link in links.items() if hasattr(link, 'compute_particle_positions')}
     report = {'admissible': True, 'contact_bodies': sorted({b for _, b in external}),
               'contact_points': 0, 'minimum_separation_m': None,
               'sleeping_pairs_without_current_points': [],
               'cached_pairs_without_current_force': [],
               'max_penetration_m': 0., 'penetration_limit_m': MAX_PLACEMENT_PENETRATION_M}
+    if cloth_paths:
+        # Cloth has no rigid contact manifold or signed separations. Its native
+        # particle contacts still participate in the caller's support/robot
+        # checks; subsequent deformation and collision remain native physics.
+        report.update(cloth_contact_pairs=sorted((a, b) for a, b in external if a in cloth_paths),
+                      signed_separations_scope='rigid_links_only')
+        external = {(a, b) for a, b in external if a not in cloth_paths}
     if not external:
         return report
     try:

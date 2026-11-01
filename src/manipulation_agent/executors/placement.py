@@ -652,11 +652,10 @@ class CheckedPlacement:
                 'postcondition': check, 'failure_policy': 'retain_physical_result'}
 
     def _placement_contacts(self, held, payload=()):
-        from omnigibson.utils.usd_utils import RigidContactAPI
+        from .placement_contacts import assembly_contact_pairs
         assembly = (held, *payload)
         paths = {link.prim_path for obj in assembly for link in obj.links.values()}
-        pairs = RigidContactAPI.get_contact_pairs(held.scene.idx, query_set=assembly,
-                                                  with_set=None, current_only=True)
+        pairs = assembly_contact_pairs(held, payload)
         return sorted({other for _, other in pairs if other not in paths})
 
     def _placement_contact_report(self, held, payload=(), *, allow_sleeping=False):

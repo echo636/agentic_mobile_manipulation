@@ -9,14 +9,13 @@ def contacting_support(backend, child, objects):
     Ambiguous or absent physical support leaves the caller's volume fallback.
     """
     from omnigibson.utils.sampling_utils import raytest
-    from omnigibson.utils.usd_utils import RigidContactAPI
+    from .placement_contacts import assembly_contact_pairs
     from .surface_geometry import bottom_support_points
 
     candidates = {str(link.prim_path): (obj, link) for obj in objects if obj is not child
                   for link in obj.links.values() if not link.is_meta_link}
     own = {str(link.prim_path) for link in child.links.values()}
-    pairs = RigidContactAPI.get_contact_pairs(child.scene.idx, query_set=[child],
-                                              with_set=None, current_only=True)
+    pairs = assembly_contact_pairs(child)
     contacts = {str(b) if str(a) in own else str(a) for a, b in pairs
                 if str(a) in own or str(b) in own}
     if not contacts.intersection(candidates):
