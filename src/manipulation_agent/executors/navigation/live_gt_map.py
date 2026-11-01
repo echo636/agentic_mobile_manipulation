@@ -287,10 +287,12 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         if group:
             # Carry clearance uses the payload's actual Z extent. A plate
             # lifted above a counter must not inherit the counter's entire
-            # 0.8--1.25 m occupancy slab. Quantization is outward, not inward.
+            # 0.8--1.25 m occupancy slab. Keep the 2 mm clearance reserve;
+            # centimetre rounding can falsely merge a raised load with its
+            # lower support. Millimetre rounding still encloses the geometry.
             vertices=[p for g,p in bodies if g==group]
-            low=max(.03,math.floor((min(float(p[:,2].min()) for p in vertices)-floor_z-.002)*100)/100)
-            high=math.ceil((max(float(p[:,2].max()) for p in vertices)-floor_z+.002)*100)/100
+            low=max(.03,math.floor((min(float(p[:,2].min()) for p in vertices)-floor_z-.002)*1000)/1000)
+            high=math.ceil((max(float(p[:,2].max()) for p in vertices)-floor_z+.002)*1000)/1000
             body_edges=[low,*[round(low+.1*i,8) for i in range(1,math.ceil((high-low)/.1))],high]
         for lo,hi in zip(body_edges,body_edges[1:]):
             # Keep disjoint robot / payload bodies disjoint. A convex hull across

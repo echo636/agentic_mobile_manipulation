@@ -24,7 +24,7 @@ class LiveGridTests(unittest.TestCase):
         class Body:
             n_joints=0
             def __init__(self,name,lo,hi):
-                self.name=name;self.aabb=(torch.tensor(lo),torch.tensor(hi))
+                self.name=name;self.prim_path='/'+name;self.aabb=(torch.tensor(lo),torch.tensor(hi))
                 self.position=(self.aabb[0]+self.aabb[1])/2
                 points=torch.tensor([[x,y,z] for x in (lo[0],hi[0]) for y in (lo[1],hi[1]) for z in (lo[2],hi[2])])
                 self.links={'body':SimpleNamespace(is_meta_link=False,prim_path='/'+name,collision_boundary_points_world=points)}
@@ -36,6 +36,7 @@ class LiveGridTests(unittest.TestCase):
             payload.links['body'].compute_particle_positions=lambda:payload_points
             del payload.links['body'].collision_boundary_points_world
         obstacle=Body('obstacle',[.46,-.04,.45],[.54,.04,.55])
+        floor=Body('floor',[-2.,-2.,-.1],[2.,2.,0.]);floor.category='floor'
         queries=[]
         def overlap(half,center,rotation,callback,any_hit):
             queries.append((half,center))
@@ -45,14 +46,17 @@ class LiveGridTests(unittest.TestCase):
                     if callback(SimpleNamespace(rigid_body='/'+body.name)) is False:break
         modules={name:ModuleType(name) for name in ('omnigibson','omnigibson.lazy')}
         modules['omnigibson'].lazy=modules['omnigibson.lazy']
+        def floor_ray(origin,direction,distance,callback):
+            callback(SimpleNamespace(rigid_body='/floor',normal=(0.,0.,1.),
+                                     position=(*origin[:2],0.)))
         modules['omnigibson.lazy'].omni=SimpleNamespace(physx=SimpleNamespace(
-            get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap)))
+            get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap,raycast_all=floor_ray)))
         with tempfile.TemporaryDirectory() as temp,patch.dict(sys.modules,modules):
             layout=Path(temp)/'layout';layout.mkdir()
             cv2.imwrite(str(layout/'floor_trav_no_obj_0.png'),np.full((80,80),255,dtype='uint8'))
             trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((80,80))])
             b=SimpleNamespace(robot=robot,_get_held=lambda:None,_carry_contents=[],deadline=SimpleNamespace(check=lambda:None),
-                env=SimpleNamespace(scene=SimpleNamespace(scene_dir=temp,trav_map=trav,objects=[robot,payload,obstacle])))
+                env=SimpleNamespace(scene=SimpleNamespace(scene_dir=temp,trav_map=trav,objects=[robot,payload,obstacle,floor])))
             _,empty=build_navigation_grid(b,0)
             b._get_held=lambda:payload
             queries.clear()
@@ -81,6 +85,19 @@ class LiveGridTests(unittest.TestCase):
             self.assertGreater(min(layer['z_min'] for layer in raised['collision_layers'] if layer['body_group']==1),.9)
             obstacle.aabb=(obstacle.aabb[0],torch.tensor([1.2,.2,1.3]))
             obstacle.position=torch.tensor([1.,0.,.65])
+            grid,_=build_navigation_grid(b,0)
+            self.assertFalse(grid.navigable(grid.cell((0.,0.))))
+            # A real gap of several millimetres must survive payload-band
+            # quantization, including when cached occupancy is rebuilt.
+            obstacle.aabb=(obstacle.aabb[0],torch.tensor([1.2,.2,1.05055]))
+            obstacle.position=torch.tensor([1.,0.,.525275])
+            payload_points-=torch.tensor([0.,0.,.043])
+            payload.aabb=tuple(a-torch.tensor([0.,0.,.043]) for a in payload.aabb)
+            payload.position-=torch.tensor([0.,0.,.043])
+            grid,_=build_navigation_grid(b,0)
+            self.assertTrue(grid.navigable(grid.cell((0.,0.))))
+            obstacle.aabb=(obstacle.aabb[0],torch.tensor([1.2,.2,1.08]))
+            obstacle.position=torch.tensor([1.,0.,.54])
             grid,_=build_navigation_grid(b,0)
             self.assertFalse(grid.navigable(grid.cell((0.,0.))))
 
