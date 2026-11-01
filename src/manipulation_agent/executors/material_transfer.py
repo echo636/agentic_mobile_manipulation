@@ -137,6 +137,7 @@ def free_surface_positions(scene, destination, system, limit, *, diagnostics):
     from omnigibson.utils.sampling_utils import sample_cuboid_on_object_full_grid_topdown
 
     radius = float(system.particle_radius)
+    contact_radius = float(system.particle_contact_radius)
     low, high = destination.aabb
     # Bound search work independently of the requested portion. Reducing a
     # portion to one particle must not coarsen the grid and miss a small surface.
@@ -144,11 +145,14 @@ def free_surface_positions(scene, destination, system, limit, *, diagnostics):
                   math.sqrt(float((high[:2] - low[:2]).prod()) / 2048))
     samples = sample_cuboid_on_object_full_grid_topdown(
         destination, ray_spacing=spacing, cuboid_dimensions=torch.zeros(3),
-        aabb_offset=torch.tensor([-radius, -radius, radius]),
-        cuboid_bottom_padding=radius + .001, undo_cuboid_bottom_padding=False)
+        aabb_offset=torch.tensor([-radius, -radius, contact_radius]),
+        # Fluid rest radius is smaller than its rigid-contact radius. Release
+        # outside that contact envelope before allowing gravity to settle it.
+        cuboid_bottom_padding=contact_radius + .001, undo_cuboid_bottom_padding=False)
     positions = [sample[0] for sample in samples if sample[0] is not None]
     diagnostics.update(method='native_topdown_surface', candidates=len(positions),
-                       sampling_distance_m=spacing)
+                       sampling_distance_m=spacing, radius_m=radius,
+                       contact_radius_m=contact_radius)
     if not positions:
         return low.new_empty((0, 3))
     positions = torch.stack(positions)
