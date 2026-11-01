@@ -183,6 +183,7 @@ class MaterialActionTests(unittest.TestCase):
             self.skipTest('Requires geometry environment')
         from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
         contained = type('ContainedParticles', (), {})
+        inside = type('Inside', (), {})
         low, high = torch.tensor([0., 0., .9]), torch.tensor([.2, .2, 1.03])
         volume = types.SimpleNamespace(visual_aabb=(low, high),
             check_points_in_volume=lambda points: ((points >= low) & (points <= high)).all(1))
@@ -197,10 +198,25 @@ class MaterialActionTests(unittest.TestCase):
         # Reject the lowest layer, but permit a higher interior layer.
         backend._inside_overlap_ranker = lambda assembly: lambda center, extent: center[2] - extent[2]/2 < .93
         backend._placement_record = lambda row: None
-        with self.modules, patch.object(sys.modules['omnigibson.object_states'], 'ContainedParticles', contained, create=True):
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
+                                         ContainedParticles=contained, Inside=inside, create=True):
             position, _ = backend._volume_pour_pose(item, receiver, [])
         self.assertGreaterEqual(float(position[2]) - .01, .93)
         self.assertLess(float(position[2]) + .01, float(high[2]))
+
+        # An occupied cavity is not an occupied opening. A release above a
+        # protruding resident must remain collision-clear and preserve pose.
+        resident = types.SimpleNamespace(aabb=(low, torch.tensor([.2, .2, 1.08])),
+            states={inside: types.SimpleNamespace(get_value=lambda target: target is receiver)})
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(objects=[resident]))
+        backend._inside_overlap_ranker = lambda assembly: lambda center, extent: center[2] - extent[2]/2 <= 1.08
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
+                                         ContainedParticles=contained, Inside=inside, create=True):
+            position, orientation = backend._volume_pour_pose(item, receiver, [])
+            self.assertGreater(float(position[2]) - .01, 1.08)
+            self.assertTrue(torch.equal(orientation, item.get_position_orientation()[1]))
+            backend._inside_overlap_ranker = lambda assembly: lambda center, extent: True
+            self.assertIsNone(backend._volume_pour_pose(item, receiver, []))
 
     def test_rigid_pour_commits_once_and_keeps_failed_physical_result(self):
         import numpy as np

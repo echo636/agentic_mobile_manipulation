@@ -169,15 +169,16 @@ def free_surface_positions(scene, destination, system, limit, *, diagnostics):
 
 class CheckedMaterialTransfer:
     def _volume_pour_pose(self, obj, destination, contents):
-        """Find low free space in the cavity without moving the scene.
+        """Prefer low free space, then a clear release above the opening.
 
         Native Inside.set_value rejection sampling rewinds the entire scene,
         including particles, for each trial. Pouring only needs one release
         pose; gravity determines whether the receiver retains the object.
-        Starting at the rim adds an unnecessary fall that can drive small
-        rigid contents through a thin bottom during discrete physics steps.
+        Low releases avoid unnecessary falls through thin container bottoms.
+        Occupied cavities may require a release above existing contents;
+        the release center need not already satisfy final containment.
         """
-        from omnigibson.object_states import ContainedParticles
+        from omnigibson.object_states import ContainedParticles, Inside
         from .inside_sampling import volume_center_domains
         torch = self.torch
         volume = destination.states[ContainedParticles].link
@@ -205,6 +206,25 @@ class CheckedMaterialTransfer:
                     'object': obj.name, 'destination': destination.name,
                     'domain': domain, 'release_center': center.tolist(),
                     'release_policy': 'lowest_free_volume_layer'})
+                return center-offset, orientation
+        resident_top = max([float(high[2]), *[
+            float(other.aabb[1][2]) for other in self.env.scene.objects
+            if all(other is not member for member in [destination, *assembly])
+            and Inside in other.states and other.states[Inside].get_value(destination)]])
+        for z in torch.linspace(float(high[2]), resident_top+float(extent[2])/2+.003, 20):
+            for fx, fy in ((.5, .5), (.25, .5), (.75, .5), (.5, .25), (.5, .75)):
+                self.deadline.check()
+                center = position.new_tensor([
+                    low[0]+fx*(high[0]-low[0]), low[1]+fy*(high[1]-low[1]), z])
+                opening = center.clone(); opening[2] = high[2]-.001
+                if not bool(volume.check_points_in_volume(opening.unsqueeze(0))[0]):
+                    continue
+                if overlap(center.tolist(), extent.tolist()):
+                    continue
+                self._placement_record({'status': 'rigid_volume_pour_release',
+                    'object': obj.name, 'destination': destination.name,
+                    'domain': 'above_opening', 'release_center': center.tolist(),
+                    'release_policy': 'lowest_clear_layer_above_contents'})
                 return center-offset, orientation
         return None
 
