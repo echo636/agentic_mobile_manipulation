@@ -293,7 +293,8 @@ class CheckedMaterialTransfer:
                     low, high = destination.aabb
                     surface_point = (low + high) / 2
                     surface_point[2] = high[2]
-                candidates = self._surface_candidates(obj, destination, surface_point)
+                candidates = self._surface_candidates(obj, destination, surface_point,
+                                                      spread_surface=True)
                 if not candidates:
                     break
                 # Surface rays find support under a point, not free space for

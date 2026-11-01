@@ -253,7 +253,7 @@ class MaterialActionTests(unittest.TestCase):
                 selected_point = np.array([.8, .2, .3])
                 # A clear patch on a lower shelf; the box center is not a
                 # usable receiving surface (for example a countertop sink).
-                backend._surface_candidates = Mock(side_effect=lambda obj, target, point:
+                backend._surface_candidates = Mock(side_effect=lambda obj, target, point, **kwargs:
                     [dict(index=1, pose=(np.ones(3), np.ones(4))),
                      dict(index=2, pose=(np.zeros(3), np.ones(4)))]
                     if np.array_equal(point, selected_point) else [])

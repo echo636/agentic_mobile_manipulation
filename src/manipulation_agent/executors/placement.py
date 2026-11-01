@@ -370,7 +370,7 @@ class CheckedPlacement:
         return result
 
     def _surface_candidates(self, held, target, point, yaw_degrees=None, payload=(), *, offsets=None,
-                            roll_degrees=None):
+                            roll_degrees=None, spread_surface=False):
         """Propose root poses at the selected collision surface, with the actual shape.
 
         Surface rays ignore the moving assembly at its OLD pose. Space at the
@@ -407,6 +407,14 @@ class CheckedPlacement:
         if offsets is None:
             offsets = [(0., 0.)] + [(x, y) for radius in (.04, .08, .12)
                                    for x, y in ((radius, 0), (-radius, 0), (0, radius), (0, -radius))]
+        if spread_surface:
+            # A batch can fill the click's neighborhood while the rest of the
+            # same tray remains empty. Propose its other upward surface patches,
+            # retaining the selected height so a different shelf is not chosen.
+            from .surface_geometry import upward_surface_points
+            offsets = [*offsets, *[(float(p[0]-point[0]), float(p[1]-point[1]))
+                for p in upward_surface_points(self._collision_triangles(target))
+                if abs(float(p[2]-point[2])) <= .05]]
         candidates = []
         # Release immediately above the measured collision surface. A 2.5 cm
         # drop (the native rejection sampler's clearance) unnecessarily jolts
