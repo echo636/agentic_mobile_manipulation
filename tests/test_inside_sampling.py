@@ -140,6 +140,20 @@ class AssemblySamplingTests(unittest.TestCase):
         return backend,held,target,[(child,None)],state,records,{
             'omnigibson.object_states':states,'omnigibson.utils':utils,'omnigibson.utils.usd_utils':usd}
 
+    def test_loaded_placement_prefers_selected_shelf_after_diversification(self):
+        # Both shelves pass the same native checks. The click, rather than
+        # the broad volume's lowest support, selects which one to try first.
+        for selected, expected in ((.8, .825), (.2, .225)):
+            b,held,target,contents,_,records,modules=self.fixture(collide=False)
+            b._inside_support_centers=lambda *a,**kw:[(0.,0.,.225),(0.,0.,.825)]
+            b._inside_overlap_ranker=lambda assembly:lambda center,extent:0
+            b._inside_pose_overlap_ranker=lambda held,assembly:lambda position,quat:0
+            with patch.dict('sys.modules',modules):
+                self.assertTrue(sample_assembly_inside(b,held,target,contents,
+                    point=b.torch.tensor([0.,0.,selected])))
+            accepted=next(r for r in records if r['status']=='inside_candidate_accepted')
+            self.assertAlmostEqual(accepted['center'][2],expected)
+
     def test_nearby_resting_pose_corrects_tilt_without_flipping_payload(self):
         b,held,_,_,_,_,modules=self.fixture()
         held.orientations={'upright':{'rotation':[0.,0.,0.,1.],'prob':.8},

@@ -400,6 +400,12 @@ Rejected candidate poses never become committed actions or task evidence.
             tail=(c for layer in itertools.zip_longest(*chunks)
                   for chunk in layer if chunk is not None for c in chunk)
             candidates=itertools.chain(support_rounds,tail)
+        selected_height=float(point[2]) if payload_locked and point is not None else None
+        if selected_height is not None:
+            # Broad annotations can span several shelves behind separate doors.
+            # Position/orientation diversification must not put a lower shelf
+            # ahead of the selected upper region. Keep all fallback proposals.
+            candidates=sorted(candidates,key=lambda c:abs(c[1][2]-selected_height))
         ranker=getattr(backend,'_inside_overlap_ranker',None)
         pose_factory=getattr(backend,'_inside_pose_overlap_ranker',None)
         pose_score=pose_factory(held,assembly) if pose_factory is not None else None
@@ -422,6 +428,8 @@ Rejected candidate poses never become committed actions or task evidence.
                         check()
                         overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
                         priority=(overlap,)
+                        if selected_height is not None:
+                            priority+=(abs(c[1][2]-selected_height),)
                         if was_open is True and closure_geometry is not None:
                             # Loaded cookware needs door clearance too. Use
                             # the existing geometry score, without extra trials.
