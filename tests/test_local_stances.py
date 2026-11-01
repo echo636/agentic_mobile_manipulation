@@ -37,6 +37,7 @@ class GeometryMotor(LocalRGBManipulation):
         return self.collision.grid, self.collision, {'held_object_footprint_included': self.held}, [], 0
     def _local_record(self, **kw): self.records.append(kw)
     def _approach_visible(self, *args, **kw): return True
+    def _grasp_pose_proposer(self, *args): return lambda pose: pose
     def _refine_local_geometry(self, *args, **kw): return False
     def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route):
         self.route = prepared_route
@@ -45,6 +46,25 @@ class GeometryMotor(LocalRGBManipulation):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('numpy'), 'navigation geometry dependencies')
 class ArchivedStanceTests(unittest.TestCase):
+    def test_visible_reachable_stance_with_no_grasp_pose_is_skipped(self):
+        import numpy as np
+        raw = np.ones((41, 41), dtype='uint8')
+        grid = GridMap(41, 41, .1, (-2., -2.), raw.tobytes())
+        footprint = [[-.1, -.1], [.1, -.1], [.1, .1], [-.1, .1]]
+        start = (0., 0., 0.)
+        collision = HeadingCollisionChecker(grid, [(raw, footprint)], 0., raw)
+        motor = GeometryMotor(start, collision, False)
+        unusable, usable = (.2, 0., 0.), (.4, 0., 0.)
+        motor._grasp_pose_proposer = lambda *args: lambda pose: None if pose == unusable else pose
+        op = LocalOperation(motor, 'grasp', None, 600, {})
+        with patch('manipulation_agent.executors.local_stances.local_stance_proposals',
+                   return_value=iter([(unusable, 'fixture'), (usable, 'fixture')])):
+            motor._local_reposition('grasp', object(), (1., 0., .8), op)
+        end = motor.route.phases[-1]
+        self.assertEqual((*end.goal, end.final_yaw), usable)
+        rows = next(r['candidates'] for r in motor.records if r['phase'] == 'candidates')
+        self.assertEqual(rows[0]['reason'], 'grasp_pose_unavailable')
+
     def test_reach_disk_includes_free_cell_edge_outside_center_radius(self):
         import numpy as np
         # The only free cell center is 1.402m from the target, but its edge

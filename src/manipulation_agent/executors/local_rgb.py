@@ -105,6 +105,7 @@ class LocalRGBManipulation:
         # short departure (at most .7m). Routes retain the full-floor checker.
         local=(collision.local_window(point[:2],operation.limits.reach_m+.75)
                if hasattr(collision,'local_window') else collision)
+        grasp_pose = self._grasp_pose_proposer(obj, point) if primitive == 'grasp' else None
         budget=PlanningBudget(operation.check,seconds=operation.limits.planning_seconds)
         collision.check_cancelled=budget.check
         selected=None;attempts=[];exhausted=False;proposal_diagnostics={};eligible=[]
@@ -130,6 +131,8 @@ class LocalRGBManipulation:
                                                   selected_container=primitive in OBJECT_REFERENCE_ACTIONS,
                                                   tracked_target=True):
                         row.update(status='rejected',reason='target_not_visible',visibility=visibility);continue
+                    if grasp_pose is not None and grasp_pose(pose) is None:
+                        row.update(status='rejected',reason='grasp_pose_unavailable');continue
                     plan=NavigationPlan((actual[:2],pose[:2]),pose[:2],tuple(map(float,point[:2])),pose[2],
                         math.dist(actual[:2],pose[:2]),math.dist(pose[:2],point[:2]),len(attempts),1,0.,0,pose[2],'forward')
                     eligible.append((plan,row))
