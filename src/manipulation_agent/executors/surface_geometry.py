@@ -108,6 +108,27 @@ def rotated_surface_geometry(points_world, origin, yaw_degrees=None, roll_degree
     return relative, bottom_anchor(relative)
 
 
+def adjacent_support_points(relative, anchor, reference, selected):
+    """Propose four separated footprints, accounting for both objects' sizes.
+
+    Returned XY points locate the moving object's bottom anchor. Surface rays
+    and subsequent physics still determine whether each proposal is usable.
+    """
+    import numpy as np
+    low, high = relative.min(axis=0), relative.max(axis=0)
+    other = np.asarray(reference, dtype=float)
+    ref_low, ref_high = other.min(axis=0), other.max(axis=0)
+    gap = min(.01, float(np.mean(high-low+ref_high-ref_low)) / 24)
+    centered = (ref_low + ref_high - low - high) / 2
+    points = []
+    for axis in (0, 1):
+        for coordinate in (ref_low[axis] - high[axis] - gap,
+                           ref_high[axis] - low[axis] + gap):
+            root = centered.copy(); root[axis] = coordinate
+            points.append((root + anchor)[:2])
+    return sorted(points, key=lambda xy: float(np.sum((xy-np.asarray(selected)[:2])**2)))
+
+
 def native_resting_orientation(current, orientations):
     """Use the nearest authored resting tilt while preserving world heading.
 

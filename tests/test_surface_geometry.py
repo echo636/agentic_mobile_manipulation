@@ -71,6 +71,22 @@ class SelectedSurfaceGeometry(unittest.TestCase):
         new_root = destination-anchor
         self.np.testing.assert_allclose(new_root+anchor, destination, atol=1e-7)
 
+    def test_adjacent_footprints_do_not_overlap_for_wide_cloth_and_offset_root(self):
+        from manipulation_agent.executors.surface_geometry import adjacent_support_points
+        relative = self.box_points([.1, -.2, -.01], [.4, .1, .01])
+        reference = self.box_points([2., 3., .8], [2.3, 3.3, .82])
+        anchor = self.bottom_anchor(relative)
+        selected = self.np.array([2.15, 3.15, .82])
+        points = adjacent_support_points(relative, anchor, reference, selected)
+        self.assertEqual(len(points), 4)
+        for xy in points:
+            low = relative.min(0)[:2] + xy - anchor[:2]
+            high = relative.max(0)[:2] + xy - anchor[:2]
+            gap = self.np.maximum(low, reference.min(0)[:2]) - self.np.minimum(high, reference.max(0)[:2])
+            self.assertGreater(float(gap.max()), 0.)
+            self.assertLessEqual(float(gap.max()), .010001)
+            self.assertLess(float(gap.min()), 0.)
+
     def test_no_requested_yaw_preserves_held_world_orientation(self):
         # The vertices already reflect a held object tilted in world space.
         origin = self.np.array([2., 3., 4.])

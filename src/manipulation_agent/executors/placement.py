@@ -159,11 +159,12 @@ class CheckedPlacement:
     def _next_to_candidates(self, held, target, point, payload=(), yaw_degrees=None):
         """Find upward physical surfaces near the reference, without class filters."""
         import math
-        from .surface_geometry import bottom_anchor, rotated_surface_geometry
+        from .surface_geometry import adjacent_support_points, bottom_anchor, rotated_surface_geometry
         from omnigibson.utils import transform_utils as T
         from omnigibson.utils.sampling_utils import raytest
         pose = held.get_position_orientation()
-        _,anchor = rotated_surface_geometry(self._collision_vertices(held),pose[0].cpu().numpy(),yaw_degrees)
+        relative,anchor = rotated_surface_geometry(self._collision_vertices(held),pose[0].cpu().numpy(),yaw_degrees)
+        adjacent = adjacent_support_points(relative, anchor, self._collision_vertices(target), point.cpu().numpy())
         anchor = self.torch.as_tensor(anchor, dtype=point.dtype, device=point.device)
         orientation=pose[1].clone()
         if yaw_degrees is not None:
@@ -189,10 +190,17 @@ class CheckedPlacement:
         # A support can have several links; accept its full physical object.
         reference_objects = {id(by_link[path]) for path in reference_supports}
         candidates = []
-        for index, (radius, angle) in enumerate((r, a) for r in (.12, .22, .34, .48)
-                                               for a in (0, 45, 90, 135, 180, 225, 270, 315)):
+        proposals = [(self.torch.as_tensor(xy, dtype=point.dtype, device=point.device),
+                      'separated_footprints') for xy in adjacent]
+        for radius, angle in ((r, a) for r in (.12, .22, .34, .48)
+                              for a in (0, 45, 90, 135, 180, 225, 270, 315)):
             theta = math.radians(angle)
             xy = point[:2] + self.torch.tensor([radius*math.cos(theta), radius*math.sin(theta)], device=point.device)
+            proposals.append((xy, 'radial'))
+        for index, (xy, method) in enumerate(proposals):
+            delta = xy - point[:2]
+            radius = float(self.torch.linalg.vector_norm(delta))
+            angle = math.degrees(math.atan2(float(delta[1]), float(delta[0])))
             hit = downward(xy, float(point[2]))
             support = by_link.get(hit.get('rigidBody'))
             reason = ('no_support_surface' if not hit.get('hit') else
@@ -208,7 +216,7 @@ class CheckedPlacement:
             root[2] += clearance
             candidates.append({'index': index, 'pose': (root, orientation.clone()), 'support': support,
                 'support_position': hit['position'], 'radius_m': radius, 'angle_deg': angle,
-                'clearance_m': clearance})
+                'clearance_m': clearance, 'proposal_method': method})
         return candidates
 
     def _next_to_check(self, held, target, support, payload=(), *, support_point=None):
