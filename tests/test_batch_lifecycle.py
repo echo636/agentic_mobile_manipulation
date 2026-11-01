@@ -341,14 +341,42 @@ class LifecycleTests(unittest.TestCase):
     def test_orphan_adoption_requires_same_run_and_unit(self):
         with tempfile.TemporaryDirectory() as tmp:
             worker={'id':'a','gpu':0,'ssh':['ssh','host']}
-            old=WorkerLease(tmp,worker,host_budget_gib=28)
+            first=WorkerLease(tmp,{**worker,'gpu':1},host_budget_gib=56)
+            self.assertTrue(first.acquire())
+            old=WorkerLease(tmp,worker,host_budget_gib=56)
             self.assertTrue(old.acquire());old.record(unit='live.service',run_id='original',released=False)
+            original_slot=old.host.path
+            first.release(cleared=True)
             old.release()
-            current=WorkerLease(tmp,worker,host_budget_gib=28,owner_active=lambda owner:None)
+            current=WorkerLease(tmp,worker,host_budget_gib=56,owner_active=lambda owner:None)
             self.assertFalse(current.acquire())  # Unknown unit state is not free.
             self.assertFalse(current.acquire(adopting={'run_id':'original','simulator_unit':'other.service'}))
             self.assertTrue(current.acquire(adopting={'run_id':'original','simulator_unit':'live.service'}))
+            self.assertEqual(current.host.path,original_slot)
+            self.assertEqual(current.active_peers(),[])
             current.release()
+
+    def test_batch_adoption_recovers_runtime_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            b=self.runner(tmp)
+            b._worker_local.config=b.workers[0]
+            b.unit_state=Mock(return_value={'ActiveState':'active','MainPID':'123'})
+            for previous,started,expected in [('ready',False,'ready'),('starting',False,'starting'),
+                                              ('starting',True,'ready')]:
+                with self.subTest(previous=previous,started=started):
+                    old=WorkerLease(b._config['shared_lease_dir'],b.workers[0],host_budget_gib=28,
+                                    owner_active=lambda owner:False)
+                    self.assertTrue(old.acquire())
+                    old.record(unit='live.service',run_id='old',released=False,runtime_stage=previous)
+                    old.release()
+                    row={'run_id':'old','simulator_unit':'live.service'}
+                    if started:row['execution_started_at_unix']=time.time()
+                    lease=b.acquire_worker_lease(adopting=row)
+                    self.assertIsNotNone(lease)
+                    try:
+                        for slot in (lease.gpu,lease.host):
+                            self.assertEqual(json.loads(slot.metadata_path.read_text())['runtime_stage'],expected)
+                    finally:lease.release(cleared=True)
 
     def test_batch_skips_live_orphan_and_keeps_its_memory_policy(self):
         import base64

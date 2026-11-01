@@ -574,9 +574,18 @@ class Batch:
         # Do not reuse that slot until its unit is terminal, or explicitly adopt
         # exactly that existing attempt without starting another model.
         try:
+            recovered = {}
+            if adopting:
+                stage = next((owner.get('runtime_stage') for owner in lease.previous_owners
+                              if owner.get('run_id') == adopting['run_id']
+                              and owner.get('unit') == adopting.get('simulator_unit')
+                              and owner.get('runtime_stage')), 'starting')
+                recovered['runtime_stage'] = ('ready' if adopting.get('execution_started_at_unix')
+                                              or adopting.get('bridge_ready_at') else stage)
             lease.record(released=False,run_id=adopting['run_id'] if adopting else None,
                          unit=adopting.get('simulator_unit') if adopting else None,
-                         startup_memory_gib=self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)))
+                         startup_memory_gib=self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)),
+                         **recovered)
         except BaseException:
             lease.release()
             raise
