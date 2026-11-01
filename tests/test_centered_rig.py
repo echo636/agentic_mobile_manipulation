@@ -1,10 +1,30 @@
 import math
 import unittest
+from types import SimpleNamespace
 
-from manipulation_agent.observations.rig import camera_mount, centered_head_height, visible_rig_rays, DIRECTIONS
+from manipulation_agent.observations.rig import camera_mount, centered_head_height, robot_head_mount_height, visible_rig_rays, DIRECTIONS
 
 
 class CenteredRigTests(unittest.TestCase):
+    def test_reloaded_extended_arms_do_not_raise_fixed_head_camera(self):
+        import numpy as np
+        body = np.array([[.1, .1, 1.48], [-.1, -.1, 1.48], [0., 0., .9]])
+        robot = SimpleNamespace(
+            links={'head': SimpleNamespace(visual_boundary_points_world=body)},
+            arm_link_names={'left': ['arm']}, gripper_link_names={'left': ['palm']},
+            finger_link_names={'left': ['finger']}, eef_link_names={'left': 'eef'},
+            get_position_orientation=lambda: (np.zeros(3), np.array([0., 0., 0., 1.])))
+        for reach in (.1, 1.2):
+            for name in ('arm', 'palm', 'finger', 'eef'):
+                robot.links[name] = SimpleNamespace(
+                    visual_boundary_points_world=np.array([[reach, 0., 1.2]]))
+            height = robot_head_mount_height(robot, pitch_degrees=35, radius=.35)
+            self.assertAlmostEqual(height, 1.53)
+        # The old all-body measurement raises the camera into a low ceiling.
+        old = centered_head_height([*body, [1.2, 0., 1.2]], (0., 0., 0.),
+                                   pitch_degrees=35, radius=.35)
+        self.assertGreater(old, 2.4)
+
     def test_locked_high_target_keeps_sight_rays_after_leaving_rgb_frustum(self):
         args=((0.,0.),0.,0.,1.81,(1.0,0.,2.4))
         self.assertFalse(visible_rig_rays(*args,pitch_degrees=35))
