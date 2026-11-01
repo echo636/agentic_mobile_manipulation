@@ -102,39 +102,49 @@ def floor_support_window(raw, original_resolution, resolution, window):
 
 
 def repair_floor_support(raw, origin, resolution, floor_z, floor_links, query, check):
-    """Recover omitted floor cells from current structural floor collisions.
+    """Resolve floor support from current structural floor collisions.
 
     The asset's no-object traversal image can still seal an open doorway.
-    A black pixel is not proof of missing floor. Add a cell only when its
+    Neither image color proves physical support. Admit a cell only when its
     centre and corners hit upward-facing structural floor at this elevation.
     This supplies support only; ordinary height-layer queries still check all
     walls, doors and furniture before any robot pose or motion is admitted.
     """
     import numpy as np
-    support = raw.copy()
-    details = {'method': 'structural_floor_rays_for_missing_cells',
-               'added_cells': 0, 'ray_queries': 0}
+    support = np.zeros_like(raw)
+    details = {'method': 'structural_floor_rays_for_all_cells',
+               'added_cells': 0, 'removed_cells': 0, 'ray_queries': 0}
     if not floor_links:
-        return support, details
-    rows, cols = np.nonzero(raw == 0)
+        raise ValueError('Navigation requires loaded structural floor collision geometry')
     half = resolution/2
     offsets = ((0., 0.), (-half, -half), (-half, half),
                (half, -half), (half, half))
-    for index, (row, col) in enumerate(zip(rows, cols)):
+    for index, (row, col) in enumerate(np.ndindex(raw.shape)):
         if index % 256 == 0:
             check()
         x, y = origin[0]+col*resolution, origin[1]+row*resolution
         for dx, dy in offsets:
-            hit = query.raycast_closest((float(x+dx), float(y+dy), floor_z+.025),
-                                        (0., 0., -1.), .05)
+            supported = False
+
+            def hit_floor(hit):
+                nonlocal supported
+                if (str(hit.rigid_body) in floor_links and hit.normal[2] >= .98
+                        and abs(hit.position[2]-floor_z) <= .02):
+                    supported = True
+                    return False
+                return True
+
+            # Low furniture or robot geometry may precede the floor hit.
+            # They affect occupancy, not whether structural support exists.
+            query.raycast_all((float(x+dx), float(y+dy), floor_z+.025),
+                              (0., 0., -1.), .05, hit_floor)
             details['ray_queries'] += 1
-            if (not hit.get('hit') or hit.get('rigidBody') not in floor_links
-                    or hit['normal'][2] < .98
-                    or abs(hit['position'][2]-floor_z) > .02):
+            if not supported:
                 break
         else:
             support[row, col] = 1
-            details['added_cells'] += 1
+    details['added_cells'] = int(np.count_nonzero((raw == 0) & (support != 0)))
+    details['removed_cells'] = int(np.count_nonzero((raw != 0) & (support == 0)))
     return support, details
 
 

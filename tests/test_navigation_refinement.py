@@ -58,27 +58,32 @@ class LiveFloorSupportTests(unittest.TestCase):
         from types import SimpleNamespace
         raw = np.ones((7, 9), dtype='uint8')
         raw[3, :] = 0
-        def ray(origin, direction, distance):
+        def ray(origin, direction, distance, callback):
             # Structural floor ends at x=.6; the remaining black pixels are
             # a genuine void, even though their neighbours have floor.
             x, y, _ = origin
-            return ({'hit': True, 'rigidBody': 'floor', 'normal': (0.,0.,1.),
-                     'position': (x,y,0.)} if x < .6 else {'hit': False})
+            callback(SimpleNamespace(rigid_body='robot', normal=(0.,0.,1.), position=(x,y,.01)))
+            if x < .6:
+                callback(SimpleNamespace(rigid_body='floor', normal=(0.,0.,1.), position=(x,y,0.)))
         repaired, details = repair_floor_support(raw,(0.,0.),.1,0.,{'floor'},
-            SimpleNamespace(raycast_closest=ray),lambda:None)
+            SimpleNamespace(raycast_all=ray),lambda:None)
         self.assertTrue(repaired[3,3])
         self.assertFalse(repaired[3,7])
         self.assertFalse(raw[3,3])
         self.assertGreater(details['added_cells'],0)
+        # White traversal pixels must not retain support over a real void.
+        self.assertTrue(raw[2,7])
+        self.assertFalse(repaired[2,7])
+        self.assertGreater(details['removed_cells'],0)
 
     def test_rejects_a_cell_with_an_unsupported_corner(self):
         from types import SimpleNamespace
-        def ray(origin, direction, distance):
+        def ray(origin, direction, distance, callback):
             x,y,_=origin
-            if x > 0 and y > 0:return {'hit':False}
-            return {'hit':True,'rigidBody':'floor','normal':(0.,0.,1.),'position':(x,y,0.)}
+            if x > 0 and y > 0:return
+            callback(SimpleNamespace(rigid_body='floor',normal=(0.,0.,1.),position=(x,y,0.)))
         repaired,_=repair_floor_support(np.zeros((1,1),dtype='uint8'),(0.,0.),.1,0.,{'floor'},
-            SimpleNamespace(raycast_closest=ray),lambda:None)
+            SimpleNamespace(raycast_all=ray),lambda:None)
         self.assertFalse(repaired[0,0])
 
     def test_furniture_other_floors_and_vertical_faces_are_not_support(self):
@@ -86,8 +91,8 @@ class LiveFloorSupportTests(unittest.TestCase):
         for body,z,normal in [('chair',0.,(0.,0.,1.)),('floor',-.1,(0.,0.,1.)),
                               ('floor',0.,(1.,0.,0.))]:
             with self.subTest(body=body,z=z,normal=normal):
-                query=SimpleNamespace(raycast_closest=lambda *args:{'hit':True,
-                    'rigidBody':body,'position':(0.,0.,z),'normal':normal})
+                query=SimpleNamespace(raycast_all=lambda origin,direction,distance,callback:
+                    callback(SimpleNamespace(rigid_body=body,position=(0.,0.,z),normal=normal)))
                 repaired,_=repair_floor_support(np.zeros((1,1),dtype='uint8'),(0.,0.),.1,0.,
                     {'floor'},query,lambda:None)
                 self.assertFalse(repaired[0,0])
