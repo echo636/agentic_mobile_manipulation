@@ -340,19 +340,25 @@ class MaterialActionTests(unittest.TestCase):
                 patch('manipulation_agent.executors.material_transfer.free_surface_positions',
                       return_value=np.zeros((1, 3))) as surface_sample, \
                 patch('manipulation_agent.executors.material_transfer.move_particle_centers') as move:
-            result = backend._transfer_material_portion('pour', source, receiver, 6)
-            self.assertEqual([(x['material'], x['retained_relation']) for x in result['materials']],
-                             [('granules', 'surface_contact'), ('water', 'inside_volume')])
-            self.assertEqual(move.call_count, 2)
-            self.assertEqual(surface_sample.call_count, 1)
-            self.assertIs(surface_sample.call_args.args[2], solid)
+            for primitive in ('pour', 'scoop'):
+                with self.subTest(primitive=primitive):
+                    backend._get_held = lambda: source if primitive == 'pour' else receiver
+                    move.reset_mock()
+                    surface_sample.reset_mock()
+                    result = backend._transfer_material_portion(primitive, source, receiver, 6)
+                    self.assertEqual([(x['material'], x['retained_relation']) for x in result['materials']],
+                                     [('granules', 'surface_contact'), ('water', 'inside_volume')])
+                    self.assertEqual(move.call_count, 2)
+                    self.assertEqual(surface_sample.call_count, 1)
+                    self.assertIs(surface_sample.call_args.args[2], solid)
             # A fluid with no free receiving volume must never switch to a
             # surface or claim success by wetting the tray's exterior.
             capture.return_value = payload[1:]
             volume_sample.side_effect = lambda *args, **kw: np.zeros((0, 3))
             surface_sample.reset_mock()
-            with self.assertRaises(SkillError):
-                backend._transfer_material_portion('pour', source, receiver, 6)
+            for primitive in ('pour', 'scoop'):
+                with self.subTest(primitive=primitive), self.assertRaises(SkillError):
+                    backend._transfer_material_portion(primitive, source, receiver, 6)
             surface_sample.assert_not_called()
 
     def test_sweep_removes_only_compatible_selected_material(self):

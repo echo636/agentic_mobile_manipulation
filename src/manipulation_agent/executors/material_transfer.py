@@ -443,9 +443,10 @@ class CheckedMaterialTransfer:
                     self._placement_record({'status': 'material_geometry_sampling', 'primitive': primitive,
                         'source': source.name, 'destination': destination.name, 'material': name,
                         'accepted': len(positions), **geometry})
-                if (not len(positions) and not surface and available and primitive == 'pour'
+                if (not len(positions) and not surface and available
                         and not getattr(system, 'is_fluid', False)):
                     # Granules can rest above a shallow tray's fill annotation.
+                    # Scoop and pour differ only in which vessel is held.
                     # Keep their native size and use actual exposed support;
                     # free physics and contact determine what remains there.
                     surface, orientations, sampling = True, None, {}
