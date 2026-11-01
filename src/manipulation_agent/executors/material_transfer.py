@@ -188,6 +188,16 @@ class CheckedMaterialTransfer:
         assembly = [obj, *[child for child, _ in contents]]
         vertices = torch.cat([torch.as_tensor(self._collision_vertices(child),
             dtype=position.dtype, device=position.device) for child in assembly])
+        # A loose item's storage tilt can make it bridge the receiver's rim.
+        # Construct an authored resting pose without moving anything during
+        # search; the caller commits the selected pose once, then runs physics.
+        orientations = getattr(obj, 'orientations', None)
+        if orientations is not None:
+            from .surface_geometry import native_resting_orientation
+            quaternion, rotation = native_resting_orientation(
+                orientation.detach().cpu().numpy(), orientations)
+            vertices = (vertices-position) @ vertices.new_tensor(rotation).T + position
+            orientation = orientation.new_tensor(quaternion)
         bottom, top = vertices.amin(0), vertices.amax(0)
         extent, offset = top-bottom, (top+bottom)/2-position
         overlap = self._inside_overlap_ranker(assembly)
