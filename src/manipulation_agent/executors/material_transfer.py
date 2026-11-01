@@ -344,8 +344,11 @@ class CheckedMaterialTransfer:
             present = [obj for obj in moved
                        if self.env.scene.object_registry('name', obj.name) is obj]
             changed = len(present) != len(moved)
-            retained = sum(rigid_receiver_relation(obj, destination) is not None for obj in present)
+            relations = [rigid_receiver_relation(obj, destination) for obj in present]
+            retained = sum(relation is not None for relation in relations)
             rigid = {'moved_objects': len(moved), 'retained_objects': retained,
+                     'inside_objects': relations.count('Inside'),
+                     'on_top_objects': relations.count('OnTop'),
                      'identities_changed_during_settling': changed,
                      'source_remaining_objects': len(self._pour_objects(source))}
             self._placement_record({'status': 'rigid_contents_poured', 'source': source.name,

@@ -72,9 +72,11 @@ class MaterialActionTests(unittest.TestCase):
         inside = type('Inside', (), {})
         on_top = type('OnTop', (), {})
         volume = type('ContainedParticles', (), {})
-        retained = [True, True]
+        retained = [True, True, False]
         objects = [types.SimpleNamespace(name=str(i), states={inside: types.SimpleNamespace(
-            get_value=lambda destination, i=i: retained[i])}) for i in range(2)]
+            get_value=lambda destination, i=i: retained[i])}) for i in range(3)]
+        # A third piece rests on the receiver rim without entering its volume.
+        objects[2].states[on_top] = types.SimpleNamespace(get_value=lambda destination: True)
         source = types.SimpleNamespace(name='source')
         destination = types.SimpleNamespace(name='receiver', states={volume: object()})
         remaining = []
@@ -99,7 +101,8 @@ class MaterialActionTests(unittest.TestCase):
                 Inside=inside, OnTop=on_top, ContainedParticles=volume, create=True):
             result = backend._checked_transfer('pour', destination, 6)
         self.assertEqual(result['rigid_transfer'], {
-            'moved_objects': 2, 'retained_objects': 1, 'source_remaining_objects': 1,
+            'moved_objects': 3, 'retained_objects': 2, 'source_remaining_objects': 1,
+            'inside_objects': 1, 'on_top_objects': 1,
             'identities_changed_during_settling': False})
         self.assertTrue(result['source_has_more_material'])
 
@@ -135,6 +138,7 @@ class MaterialActionTests(unittest.TestCase):
         stale_contact.assert_not_called()
         self.assertEqual(result['rigid_transfer'], {
             'moved_objects': 1, 'retained_objects': 0, 'source_remaining_objects': 0,
+            'inside_objects': 0, 'on_top_objects': 0,
             'identities_changed_during_settling': True})
 
     def test_pour_accepts_surfaces_while_scoop_requires_a_vessel(self):
