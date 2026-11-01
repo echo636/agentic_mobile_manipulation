@@ -228,6 +228,28 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertTrue(b.torch.equal(held.position,original[0]))
         self.assertEqual(records[-1]['rejections'],{'initial_collision':1})
 
+    def test_above_opening_release_requires_actual_settled_containment(self):
+        for falls_inside in (True, False):
+            with self.subTest(falls_inside=falls_inside):
+                b,held,target,_,state,records,modules=self.fixture(collide=False)
+                b._inside_support_centers=lambda *a,**kw:[(0.,0.,1.15)]
+                inside=held.states[modules['omnigibson.object_states'].Inside]
+                inside._get_value=inside.get_value
+                b.og.sim.current_time_step_index=0
+                released=[]
+                def step():
+                    state['steps']+=1
+                    if state['steps']==1:
+                        released.append(float((held.position+held.offset)[2]))
+                    if falls_inside:
+                        held.position[2]=max(float(held.position[2])-.1,.8-float(held.offset[2]))
+                b.og.sim.step_physics=step
+                with patch.dict('sys.modules',modules):
+                    self.assertEqual(sample_assembly_inside(b,held,target,[],max_candidates=1),falls_inside)
+                self.assertGreater(released[0],float(target.links['volume'].visual_aabb[1][2]))
+                if not falls_inside:
+                    self.assertEqual(records[-1]['rejections'],{'official_inside_false':1})
+
     def test_loaded_container_prioritizes_door_clear_pose_with_one_trial(self):
         import numpy as np
         from manipulation_agent.executors.closure_clearance import closed_geometry_overlap

@@ -323,6 +323,10 @@ Rejected candidate poses never become committed actions or task evidence.
                             # reached physics because their centers were out.
                             points=torch.tensor(supported,dtype=root_pos.dtype,device=root_pos.device)
                             points[:,2]-=.025+.5*9.81*sim.get_physics_dt()**2
+                            if not payload_locked:
+                                # Admit release above the opening, preserving
+                                # its XY test and all post-settling checks.
+                                points[:,2].clamp_(max=float(hi[2])-.001)
                             valid=volume.check_points_in_volume(points).cpu().tolist()
                             supported=[center for center,keep in zip(supported,valid) if keep]
                         if supported:
@@ -472,6 +476,8 @@ Rejected candidate poses never become committed actions or task evidence.
             admission_center = center.clone()
             if domain.startswith('support_'):
                 admission_center[2] -= .025+.5*9.81*sim.get_physics_dt()**2
+                if not payload_locked:
+                    admission_center[2].clamp_(max=float(volume.visual_aabb[1][2])-.001)
             if not bool(volume.check_points_in_volume(admission_center.unsqueeze(0)).item()):
                 reject('outside_fillable_volume', candidate)
                 continue

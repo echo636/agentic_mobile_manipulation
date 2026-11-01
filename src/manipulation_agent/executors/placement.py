@@ -1254,6 +1254,7 @@ class CheckedPlacement:
                         if not link.is_meta_link}
         support_paths=target_paths|resident_paths
         clearance=.025+.5*9.81*self.og.sim.get_physics_dt()**2
+        allow_drop=not payload and not getattr(self,'_placement_particle_payload',(None,[]))[1]
         proposals=[];surfaces=[]
         # Preserve the model's spatial hint. Three coarse volume fractions can
         # land on a central divider and two side walls while missing both usable
@@ -1292,7 +1293,11 @@ class CheckedPlacement:
                                                  if point is not None else float(h['position'][2]))):
                 if hit.get('rigidBody') not in support_paths or float(hit['normal'][2])<.9:continue
                 z=float(hit['position'][2])+float(center_offset[2]-bottom[2])+clearance
-                if not float(low[2])<=z-clearance<=float(high[2]):continue
+                # An unladen item can start above existing contents and fall
+                # into the cavity. Its support must be inside; its center is
+                # checked against native Inside only after free settling.
+                admission_z=float(hit['position'][2]) if allow_drop else z-clearance
+                if not float(low[2])<=admission_z<=float(high[2]):continue
                 center=(x,y,z)
                 if any(sum((a-b)**2 for a,b in zip(center,old))<1e-8 for old in proposals):continue
                 proposals.append(center)
