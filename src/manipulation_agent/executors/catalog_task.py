@@ -83,8 +83,10 @@ class CatalogRGBBackend(RGBBackend):
     def _load_catalog_environment(self, config):
         from .compat.articulation_sleep import ArticulationSleepPolicy
         from .compat.macro_particle_size import MacroParticleSizePolicy
+        from .compat.recipe_particle_output import RecipeParticleOutputPolicy
         self._articulation_sleep_policy = ArticulationSleepPolicy(gpu_dynamics=self.use_gpu_dynamics)
         try:
+            self._recipe_particle_output_policy = RecipeParticleOutputPolicy()
             self._macro_particle_size_policy = MacroParticleSizePolicy()
             self._load_catalog_environment_with_sleep_policy(config)
             self._articulation_sleep_policy.validate_scene(self.env.scene)
@@ -92,11 +94,15 @@ class CatalogRGBBackend(RGBBackend):
             self._articulation_sleep_policy.close()
             if getattr(self, '_macro_particle_size_policy', None) is not None:
                 self._macro_particle_size_policy.close()
+            if getattr(self, '_recipe_particle_output_policy', None) is not None:
+                self._recipe_particle_output_policy.close()
             raise
         finally:
             write_json(self.output / 'articulation_sleep_policy.json', self._articulation_sleep_policy.describe())
             if getattr(self, '_macro_particle_size_policy', None) is not None:
                 write_json(self.output / 'macro_particle_size_policy.json', self._macro_particle_size_policy.describe())
+            if getattr(self, '_recipe_particle_output_policy', None) is not None:
+                write_json(self.output / 'recipe_particle_output_policy.json', self._recipe_particle_output_policy.describe())
 
     def _load_catalog_environment_with_sleep_policy(self, config):
         # Challenge-100 teleoperation disables several system cooking/mixing
@@ -156,19 +162,25 @@ class CatalogRGBBackend(RGBBackend):
                       transition_policy='official_simulator_defaults_without_challenge100_teleop_rule_suppression',
                       articulation_sleep_policy=self._articulation_sleep_policy.describe(),
                       macro_particle_size_policy=self._macro_particle_size_policy.describe())
+        result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
         return result
 
     def close(self):
         policy = getattr(self, '_articulation_sleep_policy', None)
         particle_policy = getattr(self, '_macro_particle_size_policy', None)
+        recipe_policy = getattr(self, '_recipe_particle_output_policy', None)
         try:
             if policy is not None:
                 write_json(self.output / 'articulation_sleep_policy.json', policy.describe())
             if particle_policy is not None:
                 write_json(self.output / 'macro_particle_size_policy.json', particle_policy.describe())
+            if recipe_policy is not None:
+                write_json(self.output / 'recipe_particle_output_policy.json', recipe_policy.describe())
             super().close()
         finally:
             if policy is not None:
                 policy.close()
             if particle_policy is not None:
                 particle_policy.close()
+            if recipe_policy is not None:
+                recipe_policy.close()
