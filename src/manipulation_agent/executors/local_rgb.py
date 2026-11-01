@@ -66,7 +66,8 @@ class LocalRGBManipulation:
             origin=grid.origin,resolution=grid.resolution,start=self._local_pose(),
             raw_layers=np.stack([layer[0] for layer in collision.layers]),
             support=self._navigation_support,initial_layer_yaw=collision.reference_yaw,
-            layer_footprints_json=json.dumps([{'footprint':layer[1].tolist()} for layer in collision.layers]))
+            layer_footprints_json=json.dumps(details['collision_layers']),
+            collision_group_objects_json=json.dumps(details['collision_group_objects']))
         details['grid_artifact']=str(path.relative_to(self.output))
         operation.record('geometry',grid_artifact=details['grid_artifact'],
                          grid_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),

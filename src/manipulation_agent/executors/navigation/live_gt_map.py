@@ -449,6 +449,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         'payload_height_bounds_m':payload_bounds,
         'height_edges_m':edges,
         'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist(),'body_group':group} for lo,hi,p,group in layers],
+        'collision_group_objects':[str(obj.prim_path) for obj in moving_objects],
         'disjoint_payload_footprints':True,
         'hypothetical_projected_links':list(projected),
         'occupancy_height_bands':len(bands),
