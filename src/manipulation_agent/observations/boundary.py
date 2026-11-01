@@ -82,4 +82,7 @@ def public_execution_error(exc: SkillError) -> dict:
     result = {"code":code,"message":ERROR_MESSAGES[code],"world_may_have_changed":exc.changed}
     if code in {'local_adjustment_blocked','local_adjustment_exhausted'} and exc.stage in LOCAL_STANCE_MESSAGES:
         result.update(stage=exc.stage,message=LOCAL_STANCE_MESSAGES[exc.stage])
+    if code == 'postcondition_error' and exc.stage == 'released_supported_not_adjacent':
+        result.update(stage=exc.stage, message='The object was released and remains on the receiving surface, '
+                      'but the requested next-to relation was not verified after settling. Inspect the returned RGB.')
     return result

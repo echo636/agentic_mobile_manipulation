@@ -73,6 +73,22 @@ class RGBBoundary(unittest.TestCase):
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('PRIVATE_MATERIAL_SYSTEM',json.dumps(result))
             self.assertNotIn('moved_particles',json.dumps(result))
+    def test_supported_placement_failure_keeps_the_release_result_without_private_state(self):
+        from manipulation_agent.contracts import SkillError
+        for stage in ('released_supported_not_adjacent', 'PRIVATE_STAGE'):
+            def fail(*args, **kwargs):
+                raise SkillError('postcondition_error', 'PRIVATE_OBJECT_NAME hidden geometry',
+                                 changed=True, stage=stage)
+            self.backend.execute_visual = fail
+            result = self.act('place_next_to')
+            self.assertFalse(result['ok'])
+            self.assertTrue(result['error']['world_may_have_changed'])
+            if stage == 'released_supported_not_adjacent':
+                self.assertIn('remains on the receiving surface', result['error']['message'])
+                self.assertEqual(result['error']['stage'], stage)
+            else:
+                self.assertNotIn('stage', result['error'])
+            self.assertNotIn('PRIVATE_', json.dumps(result))
     def test_cut_reports_actual_transformation_without_private_identity(self):
         for transition, count, expected in (
                 ('SlicingRule',2,{'result':'sliced','pieces_created':2}),

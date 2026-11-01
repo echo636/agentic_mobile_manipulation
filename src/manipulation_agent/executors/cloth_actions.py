@@ -81,8 +81,10 @@ class CheckedClothActions:
             self._placement_record(dict(status='cloth_settled', primitive=primitive,
                 held=held.name, target=target.name, support=support.name, checks=checks))
             if not all(checks.values()):
+                supported = checks['released'] and checks['on_top']
                 raise SkillError('postcondition_error',
-                    'Released cloth did not remain at the selected receiving surface', changed=True)
+                    'Cloth placement did not satisfy: ' + ', '.join(key for key, ok in checks.items() if not ok),
+                    changed=True, stage='released_supported_not_adjacent' if supported else None)
             self._verify_payload(dependencies)
         finally:
             self.frames_revision = -1
