@@ -31,7 +31,10 @@ def macro_surface_poses(scene, destination, system, limit, *, diagnostics):
     extent, box_center = high - low, (high + low) / 2
     surface_low, surface_high = destination.aabb
     rest = float(system.particle_particle_rest_distance)
-    spacing = max(rest, math.sqrt(float((surface_high[:2]-surface_low[:2]).prod()) / max(1, limit*4)))
+    # Search resolution is independent of particle separation. A coarse grid
+    # can put every ray at the outside edges of a small receiver, even when a
+    # particle fits in its center. Keep the surface grid bounded for large supports.
+    spacing = max(rest * .25, math.sqrt(float((surface_high[:2]-surface_low[:2]).prod()) / max(64, limit*4)))
     samples = sample_cuboid_on_object_full_grid_topdown(
         destination, ray_spacing=spacing, cuboid_dimensions=extent,
         cuboid_bottom_padding=.001, undo_cuboid_bottom_padding=False)
