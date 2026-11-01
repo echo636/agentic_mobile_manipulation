@@ -176,9 +176,10 @@ class ControlledCarry:
         from .particle_payload import particle_link_motion, particle_containment_observation
         moved_particles=particle_link_motion(particles)
         open_goal=None
+        opening_feedback={}
         if primitive=='open':
             from .articulation_goal import checked_open_goal
-            open_goal=checked_open_goal(self,obj,self.deadline.check)
+            open_goal=checked_open_goal(self,obj,self.deadline.check,feedback=opening_feedback)
         samples=[]
         def capture(phase):
             if state is Open:
@@ -234,6 +235,7 @@ class ControlledCarry:
         report('passed',payload=[child.name for child,_,_ in payload])
         return {'primitive':primitive,'implementation':'official_state_setter_with_link_payload',
                 'fully_open_or_closed':primitive=='close','opening_policy':'largest_checked_usable_endpoint' if primitive=='open' else None,
+                **opening_feedback,
                 'postcondition':'official_state_and_containment_after_settling',
                 'preserved_contained_objects':len(payload),'failure_policy':'retain_physical_result'}
 

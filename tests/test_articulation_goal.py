@@ -58,6 +58,9 @@ class EndpointTests(unittest.TestCase):
             glass=Link(0);glass.prim_path='/door/glass';links['glass']=glass
             backend._local_operation=SimpleNamespace(binding=SimpleNamespace(obj=obj,anchor=glass))
         attempted = []
+        feedback = {}
+        def choose():
+            return checked_open_goal(backend, obj, lambda: None, feedback=feedback)
         def query(*args):
             attempted.append(float(state[0][0]))
             if mode == 'query_error':
@@ -83,28 +86,31 @@ class EndpointTests(unittest.TestCase):
              patch('manipulation_agent.executors.particle_payload.restore_particle_state'), \
              patch('manipulation_agent.executors.articulation_clearance.moving_link_clearance', side_effect=query):
             if mode == 'independent':
-                goal = checked_open_goal(backend, obj, lambda: None)
+                goal = choose()
                 torch.testing.assert_close(goal, torch.tensor([.2, 1.]))
                 self.assertEqual(records[-1]['opening_policy'], 'independent_leaf')
                 self.assertEqual(records[-1]['joint_index'], 1)
             elif mode == 'partial_common':
-                goal=checked_open_goal(backend,obj,lambda:None)
+                goal=choose()
                 torch.testing.assert_close(goal,torch.tensor([1.,0.]))
                 self.assertEqual(records[-1]['opening_policy'],'independent_leaf')
             elif mode in ('selected','selected_already_open'):
-                goal=checked_open_goal(backend,obj,lambda:None)
+                goal=choose()
                 torch.testing.assert_close(goal,torch.tensor([1.,0.]))
                 self.assertEqual(records[-1]['opening_policy'],'selected_link')
                 self.assertEqual(records[-1]['selected_joint_indices'],[0])
             elif mode in ('selected_partly_open', 'selected_roundoff_open'):
-                goal=checked_open_goal(backend,obj,lambda:None)
+                goal=choose()
                 self.assertTrue(torch.equal(goal,initial))
                 self.assertEqual(records[-1]['trials'][-1]['method'],'unchanged_open_joint_state')
             elif mode == 'alternate':
-                self.assertEqual(checked_open_goal(backend, obj, lambda: None).tolist(), [.875])
+                self.assertEqual(choose().tolist(), [.875])
             else:
                 with self.assertRaises(RuntimeError if mode == 'query_error' else SkillError):
-                    checked_open_goal(backend, obj, lambda: None)
+                    choose()
+        if feedback:
+            self.assertEqual(feedback['opening_limited_by_clearance'],
+                             mode in ('alternate', 'selected_partly_open'))
         self.assertTrue(torch.equal(state[0], initial))
         self.assertEqual(random.getstate(), initial_rng)
         self.assertEqual(backend.frames_revision, -1)

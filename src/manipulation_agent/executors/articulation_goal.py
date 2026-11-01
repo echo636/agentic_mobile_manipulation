@@ -8,7 +8,7 @@ import random
 from ..contracts import SkillError
 
 
-def checked_open_goal(backend, obj, check):
+def checked_open_goal(backend, obj, check, *, feedback=None):
     from omnigibson.object_states import Open
     from .articulation_clearance import moving_link_clearance
     from .articulation_snapshot import preview_restore
@@ -108,6 +108,10 @@ def checked_open_goal(backend, obj, check):
                        moving_link_clearance(backend,links,candidate_moving,ignored,check))
             trials.append(dict(policy=policy,joint_index=index,fraction=fraction,official_open=True,**clearance))
             if clearance['clear']:
+                if feedback is not None:
+                    controlled = selected if selected else [index] if index is not None else active
+                    feedback['opening_limited_by_clearance'] = not backend.torch.allclose(
+                        goal[controlled], opened[controlled], atol=1e-5, rtol=0.)
                 backend._placement_record(dict(status='articulation_open_endpoint_selected',target=obj.name,
                     goal_joints=goal.cpu().tolist(),opening_policy=policy,joint_index=index,fraction=fraction,trials=trials,
                     selected_link=str(anchor.prim_path) if selected else None,selected_joint_indices=selected,

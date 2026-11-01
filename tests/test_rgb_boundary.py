@@ -39,6 +39,18 @@ class RGBBoundary(unittest.TestCase):
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
+    def test_partial_open_reports_access_limit_without_private_obstacles(self):
+        for limited in (True, False):
+            self.backend.execute_visual=lambda *a,**kw:{
+                'opening_limited_by_clearance':limited,
+                'overlapping_enclosures':['PRIVATE_OBJECT_NAME'], 'goal_joints':[1.047]}
+            result=self.act('open')
+            self.assertTrue(result['ok'])
+            self.assertEqual('opening' in result['effect'],limited)
+            if limited:
+                self.assertTrue(result['effect']['opening']['limited_by_obstacles'])
+            self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
+            self.assertNotIn('goal_joints',json.dumps(result))
     def test_action_failure_categories_survive_the_public_boundary(self):
         from manipulation_agent.contracts import SkillError
         for code, phrase in [('same_transfer_vessel','same object'),
