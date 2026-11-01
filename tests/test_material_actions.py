@@ -176,6 +176,32 @@ class MaterialActionTests(unittest.TestCase):
             selected = backend._pour_objects(source)
         self.assertEqual([obj.name for obj in selected], ['bottom_piece', 'top_piece', 'nested_vessel'])
 
+    def test_rigid_pour_uses_low_free_cavity_layer_instead_of_rim_height(self):
+        try:
+            import torch
+        except ImportError:
+            self.skipTest('Requires geometry environment')
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+        contained = type('ContainedParticles', (), {})
+        low, high = torch.tensor([0., 0., .9]), torch.tensor([.2, .2, 1.03])
+        volume = types.SimpleNamespace(visual_aabb=(low, high),
+            check_points_in_volume=lambda points: ((points >= low) & (points <= high)).all(1))
+        receiver = types.SimpleNamespace(name='pot', states={contained: types.SimpleNamespace(link=volume)})
+        origin = torch.tensor([2., 3., 1.])
+        item = types.SimpleNamespace(name='small_rigid_item',
+            get_position_orientation=lambda: (origin, torch.tensor([0., 0., 0., 1.])))
+        backend = CheckedMaterialTransfer(); backend.torch = torch
+        backend.deadline = types.SimpleNamespace(check=lambda: None)
+        backend._collision_vertices = lambda obj: torch.stack((origin - .01, origin + .01))
+        # The actual support intrudes above the volume's annotated lower edge.
+        # Reject the lowest layer, but permit a higher interior layer.
+        backend._inside_overlap_ranker = lambda assembly: lambda center, extent: center[2] - extent[2]/2 < .93
+        backend._placement_record = lambda row: None
+        with self.modules, patch.object(sys.modules['omnigibson.object_states'], 'ContainedParticles', contained, create=True):
+            position, _ = backend._volume_pour_pose(item, receiver, [])
+        self.assertGreaterEqual(float(position[2]) - .01, .93)
+        self.assertLess(float(position[2]) + .01, float(high[2]))
+
     def test_rigid_pour_commits_once_and_keeps_failed_physical_result(self):
         import numpy as np
         from unittest.mock import Mock

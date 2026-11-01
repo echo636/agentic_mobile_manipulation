@@ -169,11 +169,13 @@ def free_surface_positions(scene, destination, system, limit, *, diagnostics):
 
 class CheckedMaterialTransfer:
     def _volume_pour_pose(self, obj, destination, contents):
-        """Find free release space above the cavity without moving the scene.
+        """Find low free space in the cavity without moving the scene.
 
         Native Inside.set_value rejection sampling rewinds the entire scene,
         including particles, for each trial. Pouring only needs one release
         pose; gravity determines whether the receiver retains the object.
+        Starting at the rim adds an unnecessary fall that can drive small
+        rigid contents through a thin bottom during discrete physics steps.
         """
         from omnigibson.object_states import ContainedParticles
         from .inside_sampling import volume_center_domains
@@ -187,25 +189,22 @@ class CheckedMaterialTransfer:
         bottom, top = vertices.amin(0), vertices.amax(0)
         extent, offset = top-bottom, (top+bottom)/2-position
         overlap = self._inside_overlap_ranker(assembly)
-        # Inset XY proposals prefer an envelope over the opening. Full-volume
+        # Inset proposals prefer an envelope inside the cavity. Full-volume
         # proposals also admit long/thin shapes; containment is checked after
         # free settling, not inferred from conservative bounding boxes.
-        mid = float((low[2]+high[2])/2)
-        domains = volume_center_domains([*low[:2].tolist(), mid],
-            [*high[:2].tolist(), mid], [*extent[:2].tolist(), 0.])
-        clearance = .002 + .5 * 9.81 * self.og.sim.get_physics_dt()**2
+        domains = volume_center_domains(low.tolist(), high.tolist(), extent.tolist())
         for domain, centers in domains:
-            for center in centers:
+            for center in sorted(centers, key=lambda center: center[2]):
                 self.deadline.check()
                 center = position.new_tensor(center)
                 if not bool(volume.check_points_in_volume(center.unsqueeze(0))[0]):
                     continue
-                center[2] = high[2] + extent[2]/2 + clearance
                 if overlap(center.tolist(), extent.tolist()):
                     continue
                 self._placement_record({'status': 'rigid_volume_pour_release',
                     'object': obj.name, 'destination': destination.name,
-                    'domain': domain, 'release_center': center.tolist()})
+                    'domain': domain, 'release_center': center.tolist(),
+                    'release_policy': 'lowest_free_volume_layer'})
                 return center-offset, orientation
         return None
 
