@@ -138,9 +138,10 @@ def free_surface_positions(scene, destination, system, limit, *, diagnostics):
 
     radius = float(system.particle_radius)
     low, high = destination.aabb
-    # Keep large supports from producing an unbounded ray grid for one portion.
+    # Bound search work independently of the requested portion. Reducing a
+    # portion to one particle must not coarsen the grid and miss a small surface.
     spacing = max(float(system.particle_particle_rest_distance),
-                  math.sqrt(float((high[:2] - low[:2]).prod()) / max(1, limit * 4)))
+                  math.sqrt(float((high[:2] - low[:2]).prod()) / 2048))
     samples = sample_cuboid_on_object_full_grid_topdown(
         destination, ray_spacing=spacing, cuboid_dimensions=torch.zeros(3),
         aabb_offset=torch.tensor([-radius, -radius, radius]),
@@ -431,11 +432,17 @@ class CheckedMaterialTransfer:
                     'The material dispenser is switched off; enable it with toggle_on before dispensing')
             raise SkillError('material_source_empty', 'Selected source has no accessible loose material or ready dispenser')
         changes = []
+        # Large particles have fewer fitting positions. Reserve a share of
+        # the measured free surface for each remaining material instead of
+        # filling it with whichever material sorts first by name.
+        mixed_surface = surface_receiver and len(systems) > 1
+        ordered = sorted(systems.items(), key=lambda item:
+            (-float(item[1].particle_radius), item[0]) if mixed_surface else (0., item[0]))
         # No physics until all carry tracking reflects the actual transfer.
         # Once material can cook/mix during stepping, do not roll it back into
         # its earlier identity or silently create replacement ingredients.
         try:
-            for name, system in sorted(systems.items()):
+            for material_index, (name, system) in enumerate(ordered):
                 surface = surface_receiver
                 selected = [i for record in captured if record.system is system for i in _indices(scene, record)]
                 generating = system in emitted
@@ -445,8 +452,9 @@ class CheckedMaterialTransfer:
                     available = min(int(modifier._get_max_particles_limit_per_step(system)),
                                     int(modifier.physical_particle_modification_limit) - used)
                 sampling = {}
+                candidate_limit = 512 if mixed_surface else min(512, available)
                 sampler = free_surface_positions if surface else free_volume_positions
-                positions = sampler(scene, destination, system, min(512, available),
+                positions = sampler(scene, destination, system, candidate_limit,
                                     diagnostics=sampling) if available else []
                 self._placement_record({'status': 'material_volume_sampling', 'primitive': primitive,
                     'source': source.name, 'destination': destination.name, 'material': name,
@@ -458,7 +466,7 @@ class CheckedMaterialTransfer:
                     geometry = {}
                     sampler = macro_surface_poses if surface else macro_receiving_poses
                     positions, orientations = sampler(
-                        scene, destination, system, min(512, available), diagnostics=geometry)
+                        scene, destination, system, candidate_limit, diagnostics=geometry)
                     self._placement_record({'status': 'material_geometry_sampling', 'primitive': primitive,
                         'source': source.name, 'destination': destination.name, 'material': name,
                         'accepted': len(positions), **geometry})
@@ -476,6 +484,14 @@ class CheckedMaterialTransfer:
                         'accepted': len(positions), **sampling})
                 if not len(positions):
                     continue
+                if mixed_surface:
+                    portion = min(available, max(1, len(positions) // (len(ordered)-material_index)))
+                    self._placement_record({'status': 'material_surface_portion', 'material': name,
+                        'free_candidates': len(positions), 'portion': portion,
+                        'remaining_materials': len(ordered)-material_index})
+                    positions = positions[:portion]
+                    if orientations is not None:
+                        orientations = orientations[:portion]
                 before = int(system.n_particles)
                 old_view = physical_particle_view(system)
                 old_paths = set(old_view.prim_paths) if old_view is not None else set()
