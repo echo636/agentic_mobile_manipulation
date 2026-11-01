@@ -36,7 +36,6 @@ def install_native_cloth_grasp():
         @wraps(create)
         def create_grasp(robot, arm, constraint_params):
             from pxr import Gf, PhysxSchema, Sdf, UsdGeom, UsdPhysics, Vt
-            from omnigibson.utils.usd_utils import create_joint
 
             params = constraint_params
             target = params['target_obj']
@@ -65,15 +64,20 @@ def install_native_cloth_grasp():
                 rotation.Set(Gf.Quatf(float(orientation[3]), Gf.Vec3f(*orientation[:3].tolist())))
                 UsdPhysics.RigidBodyAPI.Apply(body.GetPrim())
                 UsdPhysics.MassAPI.Apply(body.GetPrim()).CreateMassAttr(.001)
-            create_joint(
-                prim_path=root + '/gripper_joint', joint_type='FixedJoint',
-                body0=parent.prim_path, body1=root + '/anchor', enabled=True,
-                exclude_from_articulation=True,
-                joint_frame_in_parent_frame_pos=params['parent_frame_pos'],
-                joint_frame_in_parent_frame_quat=params['parent_frame_orn'],
-                joint_frame_in_child_frame_pos=contact.new_zeros(3),
-                joint_frame_in_child_frame_quat=contact.new_tensor([0., 0., 0., 1.]))
-            with og.sim.editing_usd():
+                # Both local frames are explicit. The native create_joint
+                # helper renders and rebuilds ALL tensor views even when its
+                # joint already exists; neither is needed for this update.
+                joint = UsdPhysics.FixedJoint.Define(og.sim.stage, root + '/gripper_joint')
+                PhysxSchema.PhysxJointAPI.Apply(joint.GetPrim())
+                joint.CreateBody0Rel().SetTargets([Sdf.Path(parent.prim_path)])
+                joint.CreateBody1Rel().SetTargets([Sdf.Path(root + '/anchor')])
+                joint.CreateLocalPos0Attr(Gf.Vec3f(*params['parent_frame_pos'].tolist()))
+                quat = params['parent_frame_orn']
+                joint.CreateLocalRot0Attr(Gf.Quatf(float(quat[3]), Gf.Vec3f(*quat[:3].tolist())))
+                joint.CreateLocalPos1Attr(Gf.Vec3f(0.))
+                joint.CreateLocalRot1Attr(Gf.Quatf(1.))
+                joint.CreateJointEnabledAttr(True)
+                joint.CreateExcludeFromArticulationAttr(True)
                 attachment = PhysxSchema.PhysxPhysicsAttachment.Define(
                     og.sim.stage, root + '/attachment')
                 attachment.GetActor0Rel().SetTargets([Sdf.Path(target.root_link.prim_path)])
