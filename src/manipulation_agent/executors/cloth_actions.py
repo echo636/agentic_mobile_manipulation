@@ -4,7 +4,7 @@ import math
 from ..contracts import SkillError
 
 
-def folded_configuration(points, current, contact_offset):
+def folded_configuration(points, current, contact_offset, *, support_height=None):
     """Bend the native rest mesh in half without changing its topology.
 
     The finite-radius crease retains arc length and separates the two layers.
@@ -30,7 +30,8 @@ def folded_configuration(points, current, contact_offset):
     result[top, 2] = center[2] + 2 * radius - height[top]
     result[:, :2] += ((current.amin(0)[:2] + current.amax(0)[:2]) -
                      (result.amin(0)[:2] + result.amax(0)[:2])) * .5
-    result[:, 2] += current[:, 2].min() - result[:, 2].min() + .002
+    height = current[:, 2].min() if support_height is None else support_height
+    result[:, 2] += height - result[:, 2].min() + .002
     return result
 
 
@@ -108,7 +109,15 @@ class CheckedClothActions:
         default = vtarray_to_torch(cloth.get_attribute('points_default')).to(current)
         position, orientation = cloth.get_position_orientation()
         points = (T.quat2mat(orientation) @ (default * cloth.scale).T).T + position
-        result = folded_configuration(points, current, cloth.cloth_system.particle_contact_offset)
+        # A dangling corner can lie below the table. Anchoring to that corner
+        # would construct the whole folded cloth beneath its actual support.
+        contacts = cloth.get_contacts()
+        support_height = max(float(point[2]) for _, point in contacts) if contacts else None
+        result = folded_configuration(points, current, cloth.cloth_system.particle_contact_offset,
+                                      support_height=support_height)
+        self._placement_record(dict(status='cloth_fold_configuration', target=target.name,
+            support_height=support_height, previous_min_z=float(current[:, 2].min()),
+            configured_z=[float(result[:, 2].min()), float(result[:, 2].max())]))
         cloth.set_particle_positions(result)
         cloth.particle_velocities = self.torch.zeros_like(result)
         for _ in range(settling_steps):
