@@ -115,11 +115,15 @@ class ControlledCarry:
 
     def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
         """Snapshot transported material once; never pin it during settling."""
+        from omnigibson.utils.constants import PrimType
         held=self._get_held()
         contents=self._carry_contents
         self._placement_particle_payload=(held,snapshot_particles(
             self.env.scene,[held,*[child for child,_ in contents]],include_supported=True))
         try:
+            if held.prim_type == PrimType.CLOTH and primitive in {'place_on_top', 'place_next_to'}:
+                return self._place_cloth_surface(primitive, held, target, max_steps, point,
+                                                 yaw_degrees, roll_degrees=roll_degrees)
             if primitive=='place_inside':
                 return self._checked_place_inside(target,max_steps,point=point)
             if primitive=='place_under':

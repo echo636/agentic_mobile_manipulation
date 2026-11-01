@@ -35,6 +35,54 @@ def folded_configuration(points, current, contact_offset):
 
 
 class CheckedClothActions:
+    def _place_cloth_surface(self, primitive, held, target, max_steps, point, yaw_degrees=None,
+                             *, roll_degrees=None):
+        """Release cloth once; do not rewind its particles and native attachment.
+
+        Rigid placement's speculative scene restores reload particle positions
+        and recreate grasp constraints. Cloth instead follows the same single
+        state change / ordinary physics contract as folding and placing under.
+        """
+        from omnigibson.object_states import NextTo, OnTop
+
+        contents = list(self._carry_contents)
+        dependencies = list(self._carry_dependencies)
+        payload = [child for child, _ in contents]
+        candidates = (self._next_to_candidates(held, target, point, payload, yaw_degrees)
+                      if primitive == 'place_next_to' else
+                      self._surface_candidates(held, target, point, yaw_degrees, payload,
+                                               roll_degrees=roll_degrees))
+        if not candidates:
+            raise SkillError('placement_surface_unavailable', 'No receiving surface near the selected target')
+        candidate = candidates[0]
+        support = candidate.get('support', target)
+        self._placement_record(dict(status='cloth_release', primitive=primitive,
+            held=held.name, target=target.name, support=support.name,
+            position=candidate['pose'][0].tolist(), candidate=candidate['index']))
+        try:
+            self._carry_detach()
+            held.set_position_orientation(*candidate['pose'])
+            held.keep_still()
+            self._relocate_contents(held, contents)
+            self._placement_record(dict(status='cloth_pose_written', held=held.name))
+            for _ in range(min(50, max_steps)):
+                self._step(self.primitives._empty_action())
+            checks = dict(released=self._get_held() is None,
+                          on_top=bool(held.states[OnTop].get_value(support)))
+            if primitive == 'place_next_to':
+                checks['next_to'] = bool(held.states[NextTo].get_value(target))
+            self._placement_record(dict(status='cloth_settled', primitive=primitive,
+                held=held.name, target=target.name, support=support.name, checks=checks))
+            if not all(checks.values()):
+                raise SkillError('postcondition_error',
+                    'Released cloth did not remain at the selected receiving surface', changed=True)
+            self._verify_payload(dependencies)
+        finally:
+            self.frames_revision = -1
+        return dict(primitive=primitive, implementation='single_cloth_release_then_native_physics',
+                    postcondition='native_surface_relation_after_settling',
+                    failure_policy='retain_physical_result')
+
     def _fold_preconditions(self, target):
         from omnigibson.object_states import Folded
         from omnigibson.utils.constants import PrimType
