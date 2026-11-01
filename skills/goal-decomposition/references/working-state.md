@@ -50,3 +50,20 @@ Use `members` when item coverage matters. Labels are your own, not simulator IDs
 For repeated transfers, save each subtotal with the last feedback event it includes in `evidence`. Before changing areas or subtasks, reconcile completed processing and deliveries with `members`; replace stale counts, including any conflicting summary. On resuming, read `action_feedback_since_write` from the returned notes and reconcile those public receipts with the checkpoint before acting or replacing notes. If `omitted` is nonzero or item correspondence is unavailable, mark the affected count uncertain. Keep uninspected supply, work in progress and confirmed delivery distinct. Replace stale entries rather than appending a transcript.
 
 Before finish, use `change` to reconcile each criterion and `uncertainties` for remaining gaps. An evidence ID alone, a successful notes write or a `done` label does not verify a result. Preserve original requirements and valid progress when replacing the state.
+
+For repeated deliveries, optionally add `transport` for the current group of work. Each item refers to a transport leaf in `goals`; processing prerequisites belong in `depends_on`. Use visually identified labels, compatible task-relevant states and observed routes. Enter approximate costs in seconds, not invented precision; omit unknown routes or carriers. The reply's `transport_advice` compares ready deliveries with the same source, destination and compatibility, includes carrier collection/return and capacity, and does not consume an action. It is an estimate, not proof that a load will remain stable. Revise after changed conditions; clear this field when the trip is finished. A single-item group can correctly favor direct delivery.
+
+```json
+"transport": {
+  "robot_location": "kitchen",
+  "items": [
+    {"goal_id": "deliver-cup", "source": "kitchen", "destination": "table", "units": 1, "compatibility": "clean-tableware"},
+    {"goal_id": "deliver-plate", "source": "kitchen", "destination": "table", "units": 1, "compatibility": "clean-tableware"}
+  ],
+  "carriers": [{"label": "tray", "location": "kitchen", "capacity": 2, "compatible_groups": ["clean-tableware"], "return_required": false}],
+  "travel": [{"source": "kitchen", "destination": "table", "seconds": 20}, {"source": "table", "destination": "kitchen", "seconds": 20}],
+  "handling_seconds": {"direct_item": 10, "load_item": 10, "unload_item": 10, "carrier_trip": 20, "carrier_return": 10}
+}
+```
+
+These labels, capacities and costs illustrate the format only. Estimate them from the current episode. `units` and `capacity` share your space scale; do not equate large and small objects without reason. Every route is directional. `carrier_trip` covers grasping/placing the carrier and freeing the hand at both ends; `direct_item`, `load_item` and `unload_item` include their grasp/place calls. Add `recovery_seconds_per_trip` to a carrier when observed spills or failures materially affect its cost. Leave uncertain compatibility null so it is not grouped automatically. The planner compares alternatives within each ready group, not the best order of all task branches.

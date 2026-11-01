@@ -80,6 +80,25 @@ class TaskNotesTests(unittest.TestCase):
             self.assertEqual(h.agent_steps,0);self.assertEqual(h.backend.steps,0)
             self.assertEqual(json.loads((h.recorder.output/'task_notes.json').read_text())['version'],2)
 
+    def test_transport_advice_is_public_and_does_not_execute_or_block_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            h = self.harness(Path(tmp)/'episode')
+            content = json.dumps(dict(goals=[dict(id='g', status='pending', parent_id=None)],
+                transport=dict(robot_location='k', items=[dict(goal_id='g', source='k', destination='t')],
+                    carriers=[], travel=[dict(source='k', destination='t', seconds=20)],
+                    handling_seconds=dict(direct_item=2, load_item=2, unload_item=2, carrier_trip=4, carrier_return=2))))
+            result = self.write(h, content, 0, 'transport')
+            self.assertTrue(result['ok'])
+            recommendation = result['transport_advice']['groups'][0]['recommended']
+            self.assertEqual(recommendation['estimated_seconds'], 22)
+            read = h.call('task_notes', dict(operation='read', content=None, expected_version=None), 'read')
+            self.assertEqual(read['transport_advice'], result['transport_advice'])
+            malformed = self.write(h, '{"transport":{}}', 1, 'incomplete')
+            self.assertTrue(malformed['ok'])
+            self.assertEqual(malformed['transport_advice']['status'], 'needs_revision')
+            self.assertEqual(h.agent_steps, 0)
+            self.assertEqual(h.backend.steps, 0)
+
     def test_resume_retains_public_feedback_after_stale_authored_checkpoint(self):
         with tempfile.TemporaryDirectory() as tmp:
             h=self.harness(Path(tmp)/'episode')
