@@ -75,6 +75,21 @@ class TaskPlanningTests(unittest.TestCase):
         self.assertTrue(selection['matches_recommendation'])
         self.assertEqual(selection['extra_estimated_seconds'], 0)
 
+    def test_partial_plans_only_compare_costs_for_the_same_results(self):
+        doc = notes(goal('a', [method('a-fast', 1, requires={'hand': 'empty'},
+                                     effects={'hand': 'occupied'}),
+                              method('a-slow', 2, requires={'hand': 'empty'},
+                                     effects={'hand': 'occupied'})]),
+                    goal('b', [method('b', 10, requires={'hand': 'empty'},
+                                     effects={'hand': 'occupied'})]))
+        doc['planning']['state'] = {'hand': 'empty'}
+        doc['active'] = dict(method_id='b')
+        plan = task_advice(json.dumps(doc))
+        self.assertEqual(plan['status'], 'partial')
+        self.assertEqual(plan['comparison_goals'], ['a'])
+        self.assertEqual([p['first_method'] for p in plan['alternatives']], ['a-fast', 'a-slow'])
+        self.assertIsNone(plan['selection']['extra_estimated_seconds'])
+
     def test_hierarchy_cross_branch_prerequisites_and_parent_verification(self):
         doc = notes(goal('access', [method('open', 2)]),
                     goal('branch', depends=['access']),

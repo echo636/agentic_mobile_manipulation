@@ -176,7 +176,11 @@ def schedule_task(notes, beam_width=32):
     (done, _, _, _), (cost, steps) = finalists[0]
     complete = done == required
     comparisons, firsts = [], set()
-    for _, (total, path) in finalists:
+    for (covered, _, _, _), (total, path) in finalists:
+        # Equal node counts can cover different work in an incomplete DAG.
+        # Such paths are choices, but their cost difference is not a saving.
+        if covered != done:
+            continue
         if path and path[0]['method_id'] not in firsts:
             firsts.add(path[0]['method_id'])
             comparisons.append(dict(first_method=path[0]['method_id'], estimated_seconds=total,
@@ -190,7 +194,8 @@ def schedule_task(notes, beam_width=32):
         coverage=dict(scheduled=len(done), unfinished=len(required), unplanned=sorted(required-done),
                       missing_methods=missing),
         estimated_seconds=cost, steps=steps, next=steps[0] if steps else None,
-        alternatives=comparisons, expanded_states=expanded, pruned_states=pruned,
+        alternatives=comparisons, comparison_goals=sorted(done),
+        expanded_states=expanded, pruned_states=pruned,
         verification_goals=[key for key, g in goals.items() if key not in dependencies
                             and g['status'] not in ('done', 'retired')])
     if not complete:

@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from manipulation_agent.contracts import Budget
+from manipulation_agent.contracts import Budget, SkillError
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
 from manipulation_agent.records import Recorder
 from manipulation_agent.runtime.vision_harness import VisionHarness
@@ -306,6 +306,45 @@ class TaskNotesTests(unittest.TestCase):
             action_step = next(s for s in replay['steps'] if s['request_id'] == 'execute')
             self.assertEqual(action_step['goal_state']['active'], chosen['active'])
             self.assertEqual(replay['planning_metrics']['method_selections'], 1)
+
+    def test_processing_failure_recompares_methods_across_branches(self):
+        from test_task_planning import goal, method, notes
+        with tempfile.TemporaryDirectory() as tmp:
+            h = self.harness(Path(tmp)/'episode')
+            doc = notes(goal('a', [method('manual-a', 10),
+                                  method('powered-pair', 4, also=['b'], requires={'device': 'available'})]),
+                        goal('b', [method('manual-b', 10)]),
+                        goal('check', [method('inspect-result', 1)], depends=['a', 'b']))
+            doc['planning']['state'] = {'device': 'available'}
+            plan = self.write(h, json.dumps(doc), 0, 'plan')['planning']
+            self.assertEqual(plan['next']['method_id'], 'powered-pair')
+            self.assertEqual(plan['estimated_seconds'], 5)
+
+            def select(method_id, request_id):
+                return h.call('task_notes', dict(operation='select',
+                    expected_version=h.task_notes.state['version'],
+                    content=json.dumps(dict(method_id=method_id, steps=['Process observed items'],
+                                            next_check='Both results visible'))), request_id)
+
+            select('powered-pair', 'select-powered')
+            def unavailable(*args, **kwargs):
+                raise SkillError('pre_condition_error', 'The device could not be activated.')
+            h.backend.execute_visual = unavailable
+            result = h.call('act', dict(primitive='toggle_on', revision=h.revision,
+                target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5])), 'activate')
+            self.assertTrue(result['planning']['failed_since_checkpoint'])
+            self.assertIsNone(result['planning']['next'])
+            # A caller reconciles the public failure; the harness cannot infer semantic truth.
+            doc['planning']['state']['device'] = 'unavailable'
+            doc['active'] = None
+            plan = self.write(h, json.dumps(doc), 2, 'reconcile')['planning']
+            self.assertEqual(plan['estimated_seconds'], 21)
+            self.assertEqual({s['method_id'] for s in plan['steps'][:2]}, {'manual-a', 'manual-b'})
+            selected = select(plan['next']['method_id'], 'select-manual')
+            self.assertTrue(selected['planning']['selection']['matches_recommendation'])
+            self.assertEqual([g['status'] for g in doc['goals']], ['pending'] * 4)
+            replay = build_replay(h.recorder.output)
+            self.assertEqual(replay['planning_metrics']['method_selections'], 2)
 
 
 if __name__=='__main__':unittest.main()

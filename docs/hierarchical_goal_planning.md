@@ -1,4 +1,4 @@
-# Hierarchical goal planning and the matched ablation
+# Hierarchical goals and general DAG planning
 
 `goal-decomposition` teaches a revisable goal tree with variable depth and branching.
 The agent writes the root as a concrete terminal state in its own words. Requirements
@@ -21,12 +21,67 @@ store accepts free-form text and does not prescribe a hierarchy or assess its tr
 A model after context compaction can read the same notes again.
 
 The hierarchical skill specifies `goal-tree-v2` JSON in
-`skills/goal-decomposition/references/working-state.md`. The tool itself does not
-validate that tree: schema compliance and model claims are visible evidence, not
-an automated planner or evaluator. Compact snapshot replacement is deliberate for
-the current 100 tasks; richer goal-edit operations can be tested separately later.
+`skills/goal-decomposition/references/working-state.md`. The notes store accepts
+free text; recognized trees also drive the CPU planner in `agent/task_planning.py`.
+The planner uses the model's public beliefs, never simulator or evaluator state.
 
-For the matched ablation, `--goal-skill hierarchical` exposes the skill
+## One tree, costed methods, and the action loop
+
+Executable goals carry candidate `methods`. These can describe discovery,
+processing, assembly, device operation, arrangement, transport or verification.
+There is no fixed list of task types or task-specific plan template. A method
+predicts one or several results (`also`), names its prerequisites (`requires`),
+resource setup and effects, work locations and cost. Intermediate nodes without
+methods organize results; a method on an intermediate node checks its result
+after the children. Methods and dependency edges form the executable work DAG
+on the same goal tree, rather than a separate transport plan.
+
+The scheduler compares method choices and order across all modeled unfinished
+branches. It tracks predicted resource states and travel over observed work
+areas. Cost is local work + travel + setup changes + expected recovery, in
+estimated seconds. It reuses setup where feasible and can choose shared work
+over separate methods. Beam search is bounded to 32 states per coverage level;
+it does not prove a global minimum. Cost comparisons cover the same set of goal
+results, even when the graph is incomplete. Missing methods, routes and resource
+transitions remain visible; partial-plan cost is not whole-task cost.
+
+```mermaid
+flowchart LR
+    A[RGB and public action feedback] --> B[Model updates goals and beliefs]
+    B --> C[Write notes: compare methods and order]
+    C --> D[Select method and local steps]
+    D --> E[RGB agent chooses act or look]
+    E --> A
+```
+
+1. `task_notes(write)` stores reconciled state with `active:null` and returns
+   `planning`: coverage, candidate orders, costs and a recommended next method.
+2. `task_notes(select)` records the chosen method and local steps without
+   resending the tree. Selection is compared with that same graph version.
+3. `act/look` preserves the declared method and records public feedback and
+   server tool time. The previous recommendation is withheld after an action,
+   since the world may have changed. The agent can continue the local method.
+4. At completion, failure or changed assumptions, the model updates actual
+   beliefs and estimates through `write`; the remaining DAG is recomputed.
+
+Selection does not execute a script or constrain target pixels. The harness
+does not automatically mark goals done from expected effects or a successful
+primitive. Physical execution and the independent evaluator are unchanged.
+The old preparation/transport planner remains for historical callers and
+comparison arms; new generic notes need no duplicate `transport` graph.
+
+Present limits: the model must author enough alternatives and realistic costs.
+One-item graphs and room-wide labels that hide travel cannot establish general
+efficiency. Tool time includes simulation/rendering and excludes model requests;
+it is not simulated physical time. Passive-process overlap is not automatically
+timed: starting, independent work and completion checks must be represented and
+remaining waits revised from observations. Replay selection records show what
+the model declared, not independent proof that its actions implement the method.
+Efficiency requires autonomous outcome, action, travel and timing evidence.
+
+## Historical goal-skill ablation
+
+For the historical matched ablation, `--goal-skill hierarchical` exposes the skill
 and instructs the model to read it before acting. `--goal-skill none` omits its
 catalog entry, resources and instruction. Both arms use the same seven tools,
 other frozen skills, common prompt, working-note storage, task instructions,
