@@ -13,6 +13,8 @@ For several items sharing a route, compare individual trips with loading a tray,
 
 Stage items where they remain visible and reachable after the next door movement, outside its swing. Place loaded carriers where their openings and contents can be inspected; if a door hides a staged item, change its staging position before reopening the door.
 
+Handling can change a deformable item's shape. Plan its final folding or arrangement after its last necessary transfer when practical, and recheck that shape if it must be moved again.
+
 | Action | Select in current RGB |
 |---|---|
 | `place_inside` | Container body or open interior, clear of the held item and floor |
