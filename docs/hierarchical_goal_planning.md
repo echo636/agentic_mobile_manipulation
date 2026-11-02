@@ -36,6 +36,13 @@ methods organize results; a method on an intermediate node checks its result
 after the children. Methods and dependency edges form the executable work DAG
 on the same goal tree, rather than a separate transport plan.
 
+Method effects mean complete predicted results, not arbitrary progress toward a
+broad phase. Inspection of one storage location needs its own result node if
+other locations remain unknown. Each operation depends on the information and
+inputs it actually needs, so incomplete discovery elsewhere does not impose an
+artificial barrier across the task. The model authors these semantic boundaries;
+the scheduler cannot verify them from private simulator state.
+
 The scheduler compares method choices and order across all modeled unfinished
 branches. It tracks predicted resource states and travel over observed work
 areas. Cost is local work + travel + setup changes + expected recovery, in

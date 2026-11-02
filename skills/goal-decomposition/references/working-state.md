@@ -53,7 +53,7 @@ Before finish, use `change` to reconcile each criterion and `uncertainties` for 
 
 ## Costed methods on the same goal tree
 
-Add `methods` to executable goals, not a separate list of transport goals. One method is a short, checkable unit of work that may need several primitives. Its `id` is unique across the tree. Its owner goal and optional `also` goals are the predicted results, all of whose prerequisites must be ready before the shared method starts. Methods on an intermediate node perform its own final check after its children. Otherwise intermediate nodes are structural: they remain subject to your explicit evidence checks, not automatic completion.
+Add `methods` to executable goals, not a separate list of transport goals. A method may need several primitives, but must predict the complete result of its owner and optional `also` goals. Split off intermediate results if it only advances a broader goal. Its `id` is unique across the tree; all achieved goals' prerequisites must be ready before it starts. Methods on an intermediate node perform its own final check after its children. Otherwise intermediate nodes are structural: they still need your evidence checks, not automatic completion.
 
 ```json
 {
