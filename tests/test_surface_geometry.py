@@ -164,6 +164,48 @@ class SelectedSurfaceGeometry(unittest.TestCase):
 
 
 class PlacementRejectionTransactions(unittest.TestCase):
+    def test_shallow_rim_click_proposes_inward_placement_and_keeps_floor_clicks(self):
+        import sys
+        import numpy as np
+        import torch
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.placement import CheckedPlacement
+        backend = CheckedPlacement()
+        backend.torch = torch
+        backend.robot = SimpleNamespace(links={})
+        backend._placement_record = lambda row: None
+        low, high = torch.tensor([-1., -1., 0.]), torch.tensor([1., 1., .03])
+        volume = SimpleNamespace(is_meta_link=True, meta_link_type='openfillable',
+            prim_path='/tray/volume', visual_aabb=(low, high),
+            check_points_in_volume=lambda points: ((points >= low) & (points <= high)).all(dim=1))
+        target = SimpleNamespace(name='tray', links={'volume': volume,
+            'base': SimpleNamespace(prim_path='/tray/base', is_meta_link=False)})
+        held = SimpleNamespace(name='item', links={})
+        vertices = np.array([[x, y, 0.] for x in (-.05, .05) for y in (-.03, .03)])
+
+        def raytest(start, end, **kwargs):
+            x, y, z = map(float, start)
+            if max(abs(x), abs(y)) > 1.04 or float(end[2]) >= z:
+                return {'hit': False}
+            height = .03 if max(abs(x), abs(y)) >= 1. else 0.
+            if not float(end[2]) <= height <= z:
+                return {'hit': False}
+            return dict(hit=True, rigidBody='/tray/base', position=[x, y, height],
+                        normal=[0., 0., 1.], distance=z-height)
+
+        sampling = SimpleNamespace(raytest=raytest)
+        with patch.dict(sys.modules, {'omnigibson.utils.sampling_utils': sampling}):
+            for point, offsets, rim in (([1.01, 0., .03], [(-.04, 0.)], True),
+                                        ([.5, 0., 0.], [(0., 0.)], False)):
+                with self.subTest(rim=rim):
+                    candidates = backend._open_rim_candidates(held, target, torch.tensor(point),
+                        vertices, np.zeros(3), torch.tensor([0., 0., 0., 1.]),
+                        offsets, (), .002, start_index=0)
+                    self.assertTrue(candidates)
+                    self.assertEqual(candidates[0]['selected_rim_surface'], rim)
+                    self.assertLess(float(candidates[0]['pose'][0][0]), 1.)
+
     def test_offline_native_portable_support_keeps_valid_on_top(self):
         import sys
         from types import SimpleNamespace

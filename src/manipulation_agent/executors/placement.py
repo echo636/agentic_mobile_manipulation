@@ -496,8 +496,12 @@ class CheckedPlacement:
         proposals=[];seen=set()
         for volume in volumes:
             low,high=volume.visual_aabb
-            floor_selected = abs(float(point[2]-low[2])) <= .05
-            rim_selected = abs(float(point[2]-high[2])) <= .05
+            floor_distance = abs(float(point[2]-low[2]))
+            rim_distance = abs(float(point[2]-high[2]))
+            # Shallow vessels can put both levels within tolerance. Preserve
+            # inward rim proposals when the click is closer to the rim.
+            floor_selected = floor_distance <= .05 and floor_distance <= rim_distance
+            rim_selected = rim_distance <= .05
             if not (floor_selected or rim_selected):continue
             inside=point.clone();inside[2]=low[2]+min(.02,float(high[2]-low[2])/4)
             if floor_selected:
