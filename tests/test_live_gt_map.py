@@ -10,6 +10,36 @@ from unittest.mock import patch
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('torch'),
                      'Run with the pinned simulator Python; simulator itself is not started')
 class LiveGridTests(unittest.TestCase):
+    def test_low_terrain_keeps_tall_movable_and_unsupported_obstacles(self):
+        import numpy as np
+        from manipulation_agent.executors.navigation.live_gt_map import classify_low_terrain
+
+        for body, height, normal, missing_corner, expected in (
+                ('/fixed', .035, .92, False, 1),
+                ('/movable', .035, 1., False, 0),
+                ('/fixed', .08, 1., False, 0),
+                ('/fixed', .035, 0., False, 0),
+                ('/fixed', .035, 1., True, 0)):
+            with self.subTest(body=body, height=height, normal=normal,
+                              missing_corner=missing_corner):
+                def overlap(half, center, rotation, callback, any_hit):
+                    if center[2]-half[2] <= height:
+                        callback(SimpleNamespace(rigid_body=body))
+
+                def ray(origin, direction, distance, callback):
+                    if not (missing_corner and origin[0] > 0 and origin[1] > 0):
+                        callback(SimpleNamespace(rigid_body=body, normal=(0., 0., normal),
+                                                 position=(*origin[:2], height)))
+
+                raw = np.zeros((1, 1), dtype='uint8')
+                free, count = classify_low_terrain(
+                    SimpleNamespace(overlap_box=overlap, raycast_all=ray),
+                    raw, np.ones_like(raw), (0., 0.), .025, 0., .03, .35,
+                    {'/fixed'}, set(), lambda: None)
+                self.assertEqual(int(free[0, 0]), expected)
+                self.assertEqual(count, expected)
+                self.assertEqual(int(raw[0, 0]), 0)
+
     def test_gap_between_robot_and_carried_body_is_not_a_solid_bridge(self):
         self.payload_geometry_fixture()
 

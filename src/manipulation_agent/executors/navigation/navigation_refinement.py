@@ -139,30 +139,37 @@ def continued_navigation_sampling(grid, actual, goal, previous):
 
 
 def refine_navigation_detour(backend, floor, grid, map_details, actual,
-                             options, plan, route, collision, selection):
-    """Replace only with a faster certified route to an already admitted pose.
+                             options, plan, route, collision, selection, *, project_point=False):
+    """Refine a detour or a route that falls short of an admitted floor target.
 
     Refinement is optional: the old geometry and certified route survive any
     bounded planning failure. Endpoint identity, visibility, entry/exit and
     swept body/payload checks retain their normal semantics.
     """
-    direct = math.dist(actual[:2], plan.goal)
+    closest = min(options, key=lambda candidate: candidate.score)
+    tolerance = grid.resolution/math.sqrt(2)
+    projected = (project_point and route is not None and
+                 plan.score > closest.score+tolerance)
+    refinement_goal = closest.goal if projected else plan.goal
+    direct = math.dist(actual[:2], refinement_goal)
     coarse_distance = route.distance_m if route is not None else plan.geodesic_m
-    if coarse_distance <= max(3*direct, direct+4.) or grid.resolution <= .0125:
+    if (not projected and coarse_distance <= max(3*direct, direct+4.)) or grid.resolution <= .0125:
         return grid, map_details, plan, route, collision, selection, None
     from .live_gt_map import build_navigation_grid
     attributes = ('_navigation_layers', '_navigation_support', '_navigation_clearance',
                   '_navigation_layer_yaw')
     original = {key: getattr(backend, key) for key in attributes}
     accepted = False
-    record = {'reason': 'long_coarse_grid_detour' if route is not None else 'long_coarse_grid_guide',
+    record = {'reason': ('coarse_route_projected_before_admitted_target' if projected else
+                         'long_coarse_grid_detour' if route is not None else 'long_coarse_grid_guide'),
               'coarse_distance_m': coarse_distance,
+              'coarse_target_distance_m': plan.score,
               'direct_distance_m': direct, 'coarse_resolution_m': grid.resolution,
               'attempts': [], 'status': 'kept_coarse_route'}
     allow_lateral = bool(getattr(backend.robot, 'is_holonomic_base', False))
-    candidates = [p for p in options if p.score <= plan.score+1e-9]
+    candidates = [p for p in options if p.score <= (closest.score if projected else plan.score)+1e-9]
     try:
-        for sampling in detour_sampling(grid, actual, plan.goal):
+        for sampling in detour_sampling(grid, actual, refinement_goal):
             backend.deadline.check()
             row = dict(sampling, status='checking')
             record['attempts'].append(row)
@@ -211,7 +218,7 @@ def refine_navigation_detour(backend, floor, grid, map_details, actual,
                     check_cancelled=budget.check, planning_seconds=10., allow_lateral=allow_lateral)
                 row.update(distance_m=refined_route.distance_m,
                            motion_seconds=refined_route.estimated_motion_seconds)
-                if (refined_route.distance_m >= coarse_distance-.5 or
+                if not projected and (refined_route.distance_m >= coarse_distance-.5 or
                         (route is not None and
                          refined_route.estimated_motion_seconds >= route.estimated_motion_seconds)):
                     row.update(status='rejected', reason='no_motion_improvement')

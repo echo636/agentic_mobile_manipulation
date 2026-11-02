@@ -963,7 +963,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             with component(self,'navigation_detour_refinement'):
                 grid,map_details,plan,prepared_route,endpoint_collision,selection,detour=refine_navigation_detour(
                     self,floor,grid,map_details,(*initial_xy,travel_yaw),
-                    options,plan,None,endpoint_collision,{})
+                    options,plan,None,endpoint_collision,{},project_point=mode=='point')
             if prepared_route is None:
                 if detour is not None:details['guide_refinement']=detour
                 with component(self,'navigation_route_selection'):
@@ -975,7 +975,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                     with component(self,'navigation_detour_refinement'):
                         grid,map_details,plan,prepared_route,endpoint_collision,selection,detour=refine_navigation_detour(
                             self,floor,grid,map_details,(*initial_xy,travel_yaw),
-                            options,plan,prepared_route,endpoint_collision,selection)
+                            options,plan,prepared_route,endpoint_collision,selection,project_point=mode=='point')
             if detour is not None:
                 details['detour_refinement']=detour
                 if detour['status']=='refined_route_selected':

@@ -10,6 +10,58 @@ from manipulation_agent.executors.navigation.live_gt_map import floor_support_wi
 
 @unittest.skipUnless(importlib.util.find_spec('cv2'), 'navigation geometry dependency')
 class ApproachWindowTests(unittest.TestCase):
+    def test_projected_floor_route_rechecks_original_target_on_finer_geometry(self):
+        from dataclasses import replace
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.navigation.gt_navigation import NavigationPlan
+        from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
+        from manipulation_agent.executors.navigation.forward_navigation import route_from_poses
+        from manipulation_agent.executors.navigation.navigation_refinement import refine_navigation_detour
+        support = np.ones((80, 80), dtype='uint8')
+        raw = support.copy()
+        raw[:, 40] = 0
+        grid = GridMap(80, 80, .05, (-2., -2.), support.tobytes())
+        footprint = np.array([[-.1,-.1], [.1,-.1], [.1,.1], [-.1,.1]])
+        collision = HeadingCollisionChecker(grid, [(raw, footprint)], 0., support)
+        actual = (-1., 0., 0.)
+        short = NavigationPlan((actual[:2], (-.5, 0.)), (-.5, 0.), (1., 0.),
+                               0., .5, 1.5, 1, 1, 0., 0, 0.)
+        exact = replace(short, points=(actual[:2], (1.,0.)), goal=(1.,0.),
+                        geodesic_m=2., score=0.)
+        route = route_from_poses(short, [actual, (-.5,0.,0.)], collision)
+        with TemporaryDirectory() as output:
+            for opening in (False, True):
+                with self.subTest(opening=opening):
+                    backend = SimpleNamespace(output=Path(output), robot=SimpleNamespace(is_holonomic_base=True),
+                        deadline=SimpleNamespace(check=lambda:None), _navigation_layers=collision.layers,
+                        _navigation_support=support, _navigation_clearance=None, _navigation_layer_yaw=0.)
+                    def build(backend, floor, sampling):
+                        resolution = sampling['resolution']
+                        size = round(4/resolution)
+                        fine_support = np.ones((size,size), dtype='uint8')
+                        fine_raw = fine_support.copy()
+                        fine_raw[:,size//2] = 0
+                        if opening:
+                            fine_raw[round(1.6/resolution):round(2.4/resolution),size//2] = 1
+                        finer = GridMap(size,size,resolution,(-2.,-2.),fine_support.tobytes())
+                        backend._navigation_layers = [(fine_raw,footprint)]
+                        backend._navigation_support = fine_support
+                        return finer, {'query_seconds':0.}
+                    with patch('manipulation_agent.executors.navigation.live_gt_map.build_navigation_grid', side_effect=build):
+                        result = refine_navigation_detour(backend,0,grid,{},actual,
+                            [short,exact],short,route,collision,{},project_point=True)
+                    if opening:
+                        self.assertEqual(result[2].goal, exact.goal)
+                        self.assertGreater(result[3].distance_m, route.distance_m)
+                        self.assertEqual(result[6]['status'], 'refined_route_selected')
+                    else:
+                        self.assertIs(result[2], short)
+                        self.assertIs(result[3], route)
+                        self.assertIs(backend._navigation_layers, collision.layers)
+
     def test_refinement_keeps_detour_around_long_obstacle_and_body_halo(self):
         from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
         from manipulation_agent.executors.navigation.navigation_refinement import approach_refinement_window
