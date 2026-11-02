@@ -184,6 +184,7 @@ def schedule_task(notes, beam_width=32):
         if path and path[0]['method_id'] not in firsts:
             firsts.add(path[0]['method_id'])
             comparisons.append(dict(first_method=path[0]['method_id'], estimated_seconds=total,
+                                    first_method_costs_seconds=path[0]['costs_seconds'],
                                     method_order=[s['method_id'] for s in path]))
         if len(comparisons) == 3:
             break
@@ -222,6 +223,9 @@ def task_advice(content):
         comparison = next((row for row in result['alternatives'] if row['first_method'] == chosen), None)
         result['selection'] = dict(method_id=chosen, recommended_method_id=recommended,
             matches_recommendation=chosen == recommended if chosen and recommended else None,
+            estimated_method_seconds=sum(comparison['first_method_costs_seconds'].values())
+                                     if comparison else None,
+            estimated_method_costs_seconds=comparison['first_method_costs_seconds'] if comparison else None,
             compared_remaining_seconds=comparison['estimated_seconds'] if comparison else None,
             extra_estimated_seconds=(comparison['estimated_seconds'] - result['estimated_seconds'])
                                     if comparison else None,

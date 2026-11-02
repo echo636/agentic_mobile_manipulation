@@ -66,7 +66,11 @@ flowchart LR
 2. `task_notes(select)` records the chosen method and local steps without
    resending the tree. Selection is compared with that same graph version.
 3. `act/look` preserves the declared method and records public feedback and
-   server tool time. The previous recommendation is withheld after an action,
+   server tool time. The selection carries that method's estimated work, travel,
+   setup and recovery costs separately from the entire remaining-plan cost,
+   so its accumulated execution time can inform the next estimate. Partial or
+   failed execution is not a completed-method timing sample. The previous
+   recommendation is withheld after an action,
    since the world may have changed. The agent can continue the local method.
 4. At completion, failure or changed assumptions, the model updates actual
    beliefs and estimates through `write`; the remaining DAG is recomputed.

@@ -291,6 +291,8 @@ class TaskNotesTests(unittest.TestCase):
             self.assertGreaterEqual(elapsed, 0)
             self.assertEqual(action['planning']['execution']['tool_seconds'], elapsed)
             self.assertEqual(action['planning']['selection']['method_id'], 'switch-on')
+            self.assertEqual(action['planning']['selection']['estimated_method_seconds'], 2)
+            self.assertEqual(action['planning']['selection']['compared_remaining_seconds'], 3)
             self.assertEqual(h.call('act', action_args, 'execute'), action)
             self.assertEqual(h.task_notes.feedback_count, 1)
             blocked = h.call('task_notes', dict(args, expected_version=2), 'premature-choice')

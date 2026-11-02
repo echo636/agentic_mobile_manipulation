@@ -68,6 +68,9 @@ class TaskPlanningTests(unittest.TestCase):
         selection = task_advice(json.dumps(doc))['selection']
         self.assertEqual(selection['recommended_method_id'], 'powered')
         self.assertEqual(selection['compared_remaining_seconds'], 12)
+        self.assertEqual(selection['estimated_method_seconds'], 10)
+        self.assertEqual(selection['estimated_method_costs_seconds'],
+                         dict(work=10, travel=0, setup=0, recovery=0))
         self.assertEqual(selection['extra_estimated_seconds'], 7)
         doc['goals'][1]['status'] = 'done'
         doc['active'] = dict(method_id='check')
@@ -89,6 +92,7 @@ class TaskPlanningTests(unittest.TestCase):
         self.assertEqual(plan['comparison_goals'], ['a'])
         self.assertEqual([p['first_method'] for p in plan['alternatives']], ['a-fast', 'a-slow'])
         self.assertIsNone(plan['selection']['extra_estimated_seconds'])
+        self.assertIsNone(plan['selection']['estimated_method_seconds'])
 
     def test_hierarchy_cross_branch_prerequisites_and_parent_verification(self):
         doc = notes(goal('access', [method('open', 2)]),
