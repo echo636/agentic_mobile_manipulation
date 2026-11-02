@@ -872,11 +872,9 @@ class CheckedPlacement:
         resident_count=len(residents)
         contents=list(self._carry_contents)
         particle_payload=getattr(self,'_placement_particle_payload',(None,[]))[1]
-        # A single carrier still uses native Inside first. Its collision
-        # geometry may fit even when its full AABB exceeds a conservative
-        # annotated volume. Particle ownership and destination containment
-        # are verified after settling; geometric fallback includes them.
-        assembly_search=bool(contents)
+        # Native Inside moves only the selected body. Any payload, including
+        # loose particles without rigid children, must move with its carrier.
+        assembly_search=bool(contents or particle_payload)
         dependencies=list(getattr(self,'_carry_dependencies',[]))
         with placement_transaction(self.og.sim, self._placement_record):
             self._carry_detach()
