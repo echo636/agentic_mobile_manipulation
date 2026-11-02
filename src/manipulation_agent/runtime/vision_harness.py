@@ -202,6 +202,13 @@ class VisionHarness:
                 'remaining_seconds': round(remaining, 1),
                 'scope': 'execution_wall_time_excluding_initialization',
             }
+        if ('task_notes' in self.catalog and self.goal_skill == 'hierarchical'
+                and origin == 'controller' and name in {'initialize', 'task_notes', 'act', 'look'}):
+            pending = None
+            if name in {'act', 'look'}:
+                pending = {'primitive': arguments.get('primitive', name) if isinstance(arguments, dict) else name,
+                           **{key: result[key] for key in ('ok', 'effect', 'error') if key in result}}
+            result['planning'] = self.task_notes.planning(pending)
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result,'origin':origin})
         result['evidence_id']=event_id
         if name in {'act','look'} and 'task_notes' in self.catalog and origin=='controller':

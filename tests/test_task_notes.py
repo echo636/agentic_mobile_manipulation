@@ -216,5 +216,55 @@ class TaskNotesTests(unittest.TestCase):
             self.assertEqual(len(replay['task_note_versions']),1)
             self.assertTrue(all(s['goal_state'] is None for s in replay['steps']))
 
+    def test_general_plan_is_in_action_loop_and_reconciles_without_certifying_goals(self):
+        from test_task_planning import goal, method, notes
+        with tempfile.TemporaryDirectory() as tmp:
+            h = self.harness(Path(tmp)/'episode')
+            self.assertEqual(h.call('initialize', {}, 'init')['planning']['status'], 'needs_model')
+            doc = notes(goal('on', [method('switch-on', 2, effects={'device': 'on'})]),
+                        goal('check', [method('check-indicator', 1)], depends=['on']))
+            doc['active'] = dict(method_id='switch-on', serves=['on'], steps=['Toggle visible device'])
+            planned = self.write(h, json.dumps(doc), 0, 'plan')['planning']
+            self.assertEqual(planned['next']['method_id'], 'switch-on')
+            args = dict(primitive='toggle_on', revision=h.revision,
+                        target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5]))
+            action = h.call('act', args, 'action')
+            self.assertEqual(action['planning']['status'], 'reconcile')
+            self.assertIsNone(action['planning']['next'])
+            self.assertEqual(h.call('act', args, 'action'), action)
+            self.assertEqual(h.task_notes.feedback_count, 1)
+            self.assertEqual(json.loads(h.task_notes.read()['content']), doc)
+            resumed = h.call('initialize', {}, 'resume')['planning']
+            self.assertEqual(resumed['status'], 'reconcile')
+            doc['goals'][1]['status'] = 'done'
+            doc['planning']['state']['device'] = 'on'
+            doc['active'] = None
+            update = self.write(h, json.dumps(doc), 1, 'update')['planning']
+            self.assertEqual(update['next']['method_id'], 'check-indicator')
+            self.assertEqual(update['coverage']['unfinished'], 1)
+            # Public planning and pending feedback are preserved in raw replay evidence.
+            events = [json.loads(x) for x in (h.recorder.output/'events.jsonl').read_text().splitlines()]
+            row = next(e for e in events if e.get('kind') == 'tool_result' and e.get('request_id') == 'action')
+            self.assertEqual(row['result']['planning'], action['planning'])
+
+    def test_failed_action_invalidates_recommendation_and_ablation_has_no_planner(self):
+        from test_task_planning import goal, method, notes
+        for mode in ('hierarchical', 'none'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                h = self.harness(Path(tmp)/'episode', mode)
+                self.write(h, json.dumps(notes(goal('g', [method('inspect', 1)]))), 0, 'plan')
+                h.backend.execute_visual = lambda *a, **kw: dict(private_state='PRIVATE_GROUND_TRUTH')
+                args = dict(primitive='toggle_on', revision=999,
+                            target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5]))
+                result = h.call('act', args, 'failed')
+                self.assertFalse(result['ok'])
+                if mode == 'hierarchical':
+                    self.assertTrue(result['planning']['failed_since_checkpoint'])
+                    self.assertIsNone(result['planning']['next'])
+                    self.assertNotIn('PRIVATE_', json.dumps(result['planning']))
+                    self.assertEqual(h.task_notes.read()['version'], 1)
+                else:
+                    self.assertNotIn('planning', result)
+
 
 if __name__=='__main__':unittest.main()

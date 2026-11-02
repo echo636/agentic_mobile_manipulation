@@ -72,7 +72,10 @@ If one item or required arrangement remains uncertain, keep inspecting the avail
 Before first using material or cutting actions, read visual-manipulation/references/material-actions.md through read_skill; reread only if its instructions are no longer available in context.
 When execution_budget.scope is agent_steps, each new act/look attempt consumes one step, including failed attempts. Initialization, reading skills, task_notes and finish do not consume action steps. Use steps_remaining to prioritize the requested results; no episode wall-time limit applies in this mode. At zero steps inspect the last returned RGB, update notes if needed, and call finish; do not attempt further actions. Tool completion still does not establish whole-task success.
 """
-GOAL_SKILL_INSTRUCTION = '\nBefore the first act/look, also read goal-decomposition/SKILL.md and follow it for planning and maintaining your task notes.\n'
+GOAL_SKILL_INSTRUCTION = '''
+Before the first act/look, also read goal-decomposition/SKILL.md and follow it for planning and maintaining your task notes.
+The planning field in initialize/task_notes/act/look replies connects your goal DAG to the action loop. Add candidate methods directly to executable goals; include known work across branches. Read its coverage and cost comparison, then select the next method in active.method_id with its goal IDs in active.serves. Use current RGB for concrete actions. After a method completes, fails, or observations change its assumptions, reconcile public feedback and update notes so the remaining plan is recomputed. A reconcile reply suspends the old next recommendation; it does not certify completion or block continuing a supported local method. Do not claim unmodeled work was optimized.
+'''
 SKILLS_PROMPT = SKILLS_BASE_PROMPT + GOAL_SKILL_INSTRUCTION
 SYSTEM_PROMPT = SKILLS_PROMPT
 

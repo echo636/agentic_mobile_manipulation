@@ -33,7 +33,7 @@ Use the following fields. Only two goal records are shown for brevity; put **eve
     "depends_on": [], "status": "active",
     "check": "Evidence needed to establish this result", "evidence": []
   }],
-  "active": {"goal_id": "g1", "serves": ["g1"], "steps": ["Immediate next action"], "next_check": "Expected result"},
+  "active": {"goal_id": "g1", "method_id": "chosen-method", "serves": ["g1"], "steps": ["Immediate next action"], "next_check": "Expected result"},
   "members": [{"label": "local-a", "description": "Recognizable visual features", "location": "Last observed location", "state": "Current task-relevant state", "remaining": "Unfinished work", "count": 1, "evidence": []}],
   "assumptions": [],
   "uncertainties": [],
@@ -43,7 +43,7 @@ Use the following fields. Only two goal records are shown for brevity; put **eve
 
 IDs are unique; only the root has a null parent. Every other `parent_id` references an existing goal; parent links form one tree. Dependencies reference goal IDs and may cross branches. Keep both relations acyclic. Parentage alone does not require sibling execution order; children do not wait for their parent to be done.
 
-Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the focal leaf; `active.serves` lists all ready leaves advanced by the current batch or shared trip. Their ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list. In `steps`, name the batch's source, carrier, destination and next useful work at that destination; use `members` for its inventory. Keep this short, not a complete future action transcript.
+Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the focal work goal; `active.method_id` identifies the chosen method; `active.serves` lists all goals advanced by it. Their ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list. In `steps`, describe the immediate work and its next check; refer to `members` for any inventory. Keep this short, not a complete future action transcript.
 
 Use `members` when item coverage matters. Labels are your own, not simulator IDs. An entry represents one item or a distinguishable group in the same state; split a mixed-state entry into pending inputs and finished outputs, with their current locations and count units. Update state and remaining work from RGB and feedback. A spill reopens the affected goal; temporary placement does not complete storage.
 
@@ -51,22 +51,52 @@ For repeated transfers, save each subtotal with the last feedback event it inclu
 
 Before finish, use `change` to reconcile each criterion and `uncertainties` for remaining gaps. An evidence ID alone, a successful notes write or a `done` label does not verify a result. Preserve original requirements and valid progress when replacing the state.
 
-Before repeated deliveries, add `transport` for a small horizon of known work, including unfinished preparation. Each item references a delivery leaf in `goals`; link its preparation goals through `depends_on`. Put each unfinished prerequisite in `preparations` with its work location and estimated local processing/handling time. Model operations start and end with a free hand; include necessary staging and tool handling in the estimate. Exploration with unknown locations can stay outside this horizon. Preserve the task's end-state requirements: these dependencies describe the chosen method, not extra task requirements.
+## Costed methods on the same goal tree
 
-The reply's `transport_advice.plan.steps` orders preparation and delivery operations, including shared carrier batches. It compares finishing preparation before departure with delivering currently ready items, and tracks the carrier's location after each trip. Copy the chosen first operation to `active.steps` and its goals to `active.serves`; use current RGB for actual targets. A `needs_revision` plan identifies missing prerequisites/routes; correct the beliefs or inspect what is unknown. The estimate is advisory and never marks goals done. Clear `transport` when its work is finished.
+Add `methods` to executable goals, not a separate list of transport goals. One method is a short, checkable unit of work that may need several primitives. Its `id` is unique across the tree. Its owner goal and optional `also` goals are the predicted results, all of whose prerequisites must be ready before the shared method starts. Methods on an intermediate node perform its own final check after its children. Otherwise intermediate nodes are structural: they remain subject to your explicit evidence checks, not automatic completion.
 
 ```json
-"transport": {
-  "robot_location": "kitchen",
-  "items": [
-    {"goal_id": "deliver-cup", "source": "kitchen", "destination": "table", "units": 1, "compatibility": "clean-tableware"},
-    {"goal_id": "deliver-plate", "source": "kitchen", "destination": "table", "units": 1, "compatibility": "clean-tableware"}
-  ],
-  "preparations": [{"goal_id": "prepare-plate", "location": "kitchen", "seconds": 15}],
-  "carriers": [{"label": "tray", "location": "kitchen", "capacity": 2, "compatible_groups": ["clean-tableware"], "return_required": false}],
-  "travel": [{"source": "kitchen", "destination": "table", "seconds": 20}, {"source": "table", "destination": "kitchen", "seconds": 20}],
-  "handling_seconds": {"direct_item": 10, "load_item": 10, "unload_item": 10, "carrier_trip": 20, "carrier_return": 10}
+{
+  "planning": {
+    "location": "bench",
+    "state": {"tool": "none", "hand": "empty"},
+    "travel": [
+      {"source": "bench", "destination": "shelf", "seconds": 15},
+      {"source": "shelf", "destination": "bench", "seconds": 15}
+    ],
+    "switches": [
+      {"key": "tool", "from": "none", "to": "brush", "at": "bench", "seconds": 6},
+      {"key": "tool", "from": "brush", "to": "none", "at": "bench", "seconds": 6}
+    ]
+  }
 }
 ```
 
-In this example, add a pending `prepare-plate` goal and set `deliver-plate.depends_on` to `["prepare-plate"]`; the cup is already ready. Preparation IDs and delivery IDs are distinct. Do not list already completed preparations. These labels, capacities and costs are illustrative; estimate from the episode, and omit unknown routes/carriers. `units` and `capacity` use the same space scale. Routes are directional and include returns where needed. `carrier_trip` covers grasping/placing the carrier; item costs include grasp/place and freeing the hand. Add `recovery_seconds_per_trip` for observed carrier failures. Unknown compatibility stays null and is not grouped. The planner searches this supplied horizon with a bounded beam and heuristic capacity packing; it does not prove a globally optimal schedule. Include nearby pending preparation before comparing trips, rather than supplying only the single item you have just finished.
+For example, a goal's candidate methods could be:
+
+```json
+"methods": [
+  {"id": "clean-a", "route": ["bench"], "seconds": 12,
+   "setup": {"tool": "brush"}},
+  {"id": "clean-pair", "also": ["clean-b"], "route": ["bench"], "seconds": 19,
+   "setup": {"tool": "brush"}, "requires": {"hand": "empty"},
+   "effects": {"work_surface": "wet"}, "recovery_seconds": 2}
+]
+```
+
+These are format examples, not a task recipe. `clean-b` must be another executable goal in the tree; describe its independent method there if feasible. Use the same representation for inspecting related items together, processing compatible inputs, joining components or moving a loaded tray. Alternatives belong under a result goal; do not duplicate that result as a new requirement. Retire obsolete methods when their assumptions stop holding.
+
+Fields:
+- `route`: ordered observed areas visited by the method, including its work location and destination. A local operation has one entry. Travel from the current location and along the route is added using the supplied directed area graph. Missing edges are not free; connected known paths may be combined. This is a task-level travel estimate, not a replacement for the executor's physical navigation.
+- `seconds`: estimated local work and handling, including any internal actions not represented separately. Do not include travel or setup costs again. Use comparable estimates based on observations; record uncertainty. Counts alone cannot predict wall time.
+- `requires`: state that must already hold before the method, such as available capacity or an empty hand. Unknown state does not satisfy a requirement. Values are short strings chosen by you, not simulator IDs.
+- `setup`: reusable resource configurations needed at the first route location. An observed local change may use a matching `switches` entry; its cost is added and the resulting configuration is tracked across methods. Include physical retrieval/staging in that estimate. If a change involves nonlocal work or its own dependency, model it as a goal/method instead.
+- `effects`: predicted state after the method, including resource, device or container changes. These affect candidate plans only. Confirm actual effects from RGB/receipts in the next notes update.
+- `also`: other executable goals achieved together, without repeating completed work. Compatibility/capacity must be supported by your observations and included in the method's assumptions; the scheduler cannot discover them from hidden state.
+- `recovery_seconds`: optional expected additional work based on observed difficulties, default zero.
+
+The cost is work + travel + setup + expected recovery seconds. The scheduler searches method choices and order with a bounded beam, tracks predicted resource state, and reports up to three surviving different first choices. It does not prove a global minimum. It serializes robot work; passive process overlap is not timed automatically. Represent starting, other independent work and checking completion separately, and revise remaining wait estimates from actual observations.
+
+`planning.coverage` includes every unfinished executable goal, including those without methods. A partial result names unplanned goals and missing routes/resource transitions. Explore or refine those gaps; do not present the partial cost as whole-task cost. `verification_goals` lists structural parents still needing evidence reconciliation. Keep known future branches in the tree even when the active method serves only one.
+
+Choose a returned method with `active.method_id`, list all served goals in `active.serves`, and keep only its immediate steps in `active.steps`. On completion or changed evidence, update affected statuses, member counts, current location and resource state together. Every successful notes write recomputes the plan; reads/initialize preserve any pending receipt reconciliation. After act/look, the old next recommendation is withheld until reconciliation. A failure may have changed the scene: reopen affected results and ancestors from evidence, not merely by replaying the same method.

@@ -21,8 +21,4 @@ def task_notes(ctx, operation, content, expected_version):
     advice = transport_advice(notes['content'])
     if advice is not None:
         result['transport_advice'] = advice
-    elif ctx.harness.goal_skill == 'hierarchical' and operation == 'write' and notes['version'] == 1:
-        result['planning_next'] = ('Before repeated deliveries or leaving a work area, submit transport '
-            'with observed items, routes, carriers and unfinished preparations. Compare the returned '
-            'plan, then record your chosen next batch in active; explore unknown supplies first.')
     return result

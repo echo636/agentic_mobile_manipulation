@@ -240,7 +240,7 @@ def transport_advice(content):
         notes = json.loads(content)
     except (ValueError, TypeError):
         return None
-    if not isinstance(notes, dict) or 'transport' not in notes:
+    if not isinstance(notes, dict) or notes.get('transport') is None or 'planning' in notes:
         return None
     try:
         plan = notes['transport']
