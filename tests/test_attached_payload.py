@@ -38,6 +38,21 @@ class AttachedPayloadTests(unittest.TestCase):
   edges=ControlledCarry._grasp_dependencies(self.backend,self.top)
   self.assertEqual([(a.name,b.name,k) for a,b,k in edges],[('bracket','top','AttachedTo'),('leg','bracket','AttachedTo')])
 
+ def test_reciprocal_native_inside_keeps_outer_vessel_out_of_inner_payload(self):
+  small,outer,food=self.top,self.bracket,self.leg
+  for obj,volume in ((small,.002642),(outer,.012948)):
+   obj.aabb=(torch.tensor([-.2,-.2,0.]),torch.tensor([.2,.2,.3]))
+   obj.links={'cavity':NS(is_meta_link=True,meta_link_type='fillable',volume=volume)}
+   obj.states={Inside:NS(get_value=lambda p:p is small or p is outer)}
+  food.aabb=(torch.tensor([-.01,-.01,.1]),torch.tensor([.01,.01,.12]))
+  food.states={Inside:NS(get_value=lambda p:p is small)}
+  self.backend.env.scene.objects=[small,outer,food]
+  edges=ControlledCarry._grasp_dependencies(self.backend,small)
+  self.assertEqual([(a.name,b.name,k) for a,b,k in edges],[(food.name,small.name,'Inside')])
+  edges=ControlledCarry._grasp_dependencies(self.backend,outer)
+  self.assertEqual([(a.name,b.name,k) for a,b,k in edges],
+                   [(small.name,outer.name,'Inside'),(food.name,small.name,'Inside')])
+
  def test_surface_anchor_uses_feet_and_excludes_unattached_objects(self):
   class Adapter(CheckedPlacement):
    def _object_collision_vertices(self,obj):return obj.points

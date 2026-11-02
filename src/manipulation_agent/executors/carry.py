@@ -385,6 +385,9 @@ class ControlledCarry:
         from omnigibson.utils.constants import PrimType
         candidates=[child for child in self.env.scene.objects if child not in (obj,self.robot)
                     and hasattr(child,'states')]
+        def capacity(container):
+            return sum(float(link.volume) for link in container.links.values()
+                       if link.is_meta_link and link.meta_link_type in {'fillable','openfillable'})
         def relation(child,parent):
             # Native OnTop/Inside do not define cloth as a support/container.
             # Objects resting on fabric remain subject to ordinary contacts.
@@ -393,7 +396,13 @@ class ControlledCarry:
             if attached:return attached
             if getattr(child,'fixed_base',True):return None
             lo,hi=parent.aabb;clo,chi=child.aabb;center=(clo+chi)/2
-            if Inside in child.states and bool(((center>=lo-.02)&(center<=hi+.02)).all()) and child.states[Inside].get_value(parent):return 'Inside'
+            if Inside in child.states and bool(((center>=lo-.02)&(center<=hi+.02)).all()) and child.states[Inside].get_value(parent):
+                # Native Inside tests only the AABB center: nested containers
+                # can contain each other's centers. Keep the smaller cavity as
+                # payload, never carry its outer vessel through that ambiguity.
+                reciprocal=(child.prim_type != PrimType.CLOTH and Inside in parent.states
+                            and parent.states[Inside].get_value(child))
+                if not reciprocal or capacity(child)<capacity(parent):return 'Inside'
             overlap=bool(((chi[:2]>=lo[:2])&(clo[:2]<=hi[:2])).all())
             if overlap and float(clo[2])>=float(lo[2])-.02 and float(clo[2])<=float(hi[2])+.08:
                 if OnTop in child.states and Touching in child.states and child.states[OnTop].get_value(parent) and child.states[Touching].get_value(parent):return 'OnTop'
