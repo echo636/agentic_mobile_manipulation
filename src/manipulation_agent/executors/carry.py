@@ -403,7 +403,13 @@ class ControlledCarry:
 
     def _verify_payload(self, dependencies, *, support_target=None, support_resting=None):
         from omnigibson.object_states import Inside,OnTop,Touching,AttachedTo
-        verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
+        stage = 'released_supported_payload_unconfirmed' if support_target is not None else None
+        try:
+            verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
+        except SkillError as exc:
+            if stage and exc.code == 'postcondition_error':
+                exc.stage = stage
+            raise
         for child,parent,kind in dependencies:
             if kind=='AttachedToParent':
                 child,parent=parent,child
@@ -441,4 +447,4 @@ class ControlledCarry:
                     'child_orientation':child.get_position_orientation()[1].tolist(),
                     'parent_orientation':parent.get_position_orientation()[1].tolist(),
                     'child_linear_velocity':child.get_linear_velocity().tolist()})
-                raise SkillError('postcondition_error','Carried payload lost its original support, containment or attachment after placement',changed=True)
+                raise SkillError('postcondition_error','Carried payload lost its original support, containment or attachment after placement',changed=True,stage=stage)
