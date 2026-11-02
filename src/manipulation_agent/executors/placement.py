@@ -814,8 +814,13 @@ class CheckedPlacement:
                 'official_inside': inside, 'position': held.get_position_orientation()[0].tolist()})
             if not inside:
                 raise SkillError('postcondition_error', 'Object did not remain inside after release', changed=True)
-            self._verify_container_payload(target, residents)
-            self._verify_payload(dependencies)
+            try:
+                self._verify_container_payload(target, residents)
+                self._verify_payload(dependencies)
+            except SkillError as exc:
+                if exc.code == 'postcondition_error':
+                    exc.stage = 'released_inside_payload_unconfirmed'
+                raise
         finally:
             self.frames_revision = -1
             # This is the real outcome, including failure. Native transitions

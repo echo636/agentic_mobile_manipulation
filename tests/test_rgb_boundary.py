@@ -90,18 +90,21 @@ class RGBBoundary(unittest.TestCase):
             self.assertNotIn('moved_particles',json.dumps(result))
     def test_supported_placement_failure_keeps_the_release_result_without_private_state(self):
         from manipulation_agent.contracts import SkillError
-        for stage in ('released_supported_not_adjacent', 'released_supported_payload_unconfirmed', 'PRIVATE_STAGE'):
+        for stage in ('released_supported_not_adjacent', 'released_supported_payload_unconfirmed',
+                      'released_inside_payload_unconfirmed', 'PRIVATE_STAGE'):
             def fail(*args, **kwargs):
                 raise SkillError('postcondition_error', 'PRIVATE_OBJECT_NAME hidden geometry',
                                  changed=True, stage=stage)
             self.backend.execute_visual = fail
-            result = self.act('place_next_to')
+            result = self.act('place_inside' if stage == 'released_inside_payload_unconfirmed' else 'place_next_to')
             self.assertFalse(result['ok'])
             self.assertTrue(result['error']['world_may_have_changed'])
             if stage != 'PRIVATE_STAGE':
-                self.assertIn('remains on the receiving surface', result['error']['message'])
+                relation = ('inside the selected container' if stage == 'released_inside_payload_unconfirmed'
+                            else 'on the receiving surface')
+                self.assertIn('remains ' + relation, result['error']['message'])
                 self.assertEqual(result['error']['stage'], stage)
-                if stage == 'released_supported_payload_unconfirmed':
+                if stage.endswith('payload_unconfirmed'):
                     self.assertIn('Your hand is empty', result['error']['message'])
             else:
                 self.assertNotIn('stage', result['error'])

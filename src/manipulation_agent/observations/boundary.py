@@ -89,4 +89,8 @@ def public_execution_error(exc: SkillError) -> dict:
         result.update(stage=exc.stage, message='The object was released and remains on the receiving surface. '
                       'Your hand is empty. Retention of its carried contents could not be confirmed; '
                       'inspect the returned RGB for displaced contents before choosing the next action.')
+    if code == 'postcondition_error' and exc.stage == 'released_inside_payload_unconfirmed':
+        result.update(stage=exc.stage, message='The object was released and remains inside the selected container. '
+                      'Your hand is empty. Retention of the contents could not be confirmed; '
+                      'inspect the returned RGB for displaced contents before choosing the next action.')
     return result
