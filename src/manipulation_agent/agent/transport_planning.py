@@ -1,12 +1,12 @@
-"""Compare ready transport groups using caller-supplied, observed task beliefs.
+"""Plan preparation and transport using caller-supplied, observed task beliefs.
 
 This CPU-only planner never reads simulator state or executes actions. It compares
-direct delivery and carrier delivery for each ready source/destination group;
-it does not claim a globally optimal schedule across unfinished task branches.
+direct and carrier delivery, including preparing more items before departure.
+Bounded search is advisory, not a claim of a globally optimal physical plan.
 All costs are seconds, including travel estimates supplied by the caller.
 """
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import math
 
@@ -38,6 +38,13 @@ class HandlingCosts:
     unload_item: float
     carrier_trip: float
     carrier_return: float
+
+
+@dataclass(frozen=True)
+class Preparation:
+    goal_id: str
+    location: str
+    seconds: float
 
 
 def ready_goals(dependencies, completed):
@@ -136,6 +143,97 @@ def compare_transport_batches(dependencies, completed, transfers, carriers, *,
     return comparisons
 
 
+def schedule_transport(dependencies, completed, transfers, carriers, preparations, *,
+                       robot_location, travel_seconds, handling, beam_width=32):
+    """Compare complete plans for the supplied horizon, not just the next trip.
+
+    Each operation ends with a free hand. Preparations include local handling;
+    deliveries include loading/unloading. Carrier locations follow each trip.
+    Keep the cheapest states per completed-goal count, merging equivalent states.
+    Packing remains heuristic; unmodelled prerequisites are reported, never waived.
+    """
+    completed = frozenset(completed)
+    transfers = [t for t in transfers if t.goal_id not in completed]
+    preps = {p.goal_id: p for p in preparations if p.goal_id not in completed}
+    if len({p.goal_id for p in preparations}) != len(preparations):
+        raise ValueError('Each preparation goal must occur once')
+    if any(p.goal_id not in dependencies or not math.isfinite(p.seconds) or p.seconds < 0
+           for p in preparations):
+        raise ValueError('Preparations need known goals and finite nonnegative seconds')
+    if set(preps) & {t.goal_id for t in transfers}:
+        raise ValueError('Preparation and delivery must use distinct goal IDs')
+    if len({c.label for c in carriers}) != len(carriers):
+        raise ValueError('Carrier labels must be unique')
+    # Also validate the inputs when every delivery is initially waiting.
+    compare_transport_batches(dependencies, completed, transfers, carriers,
+        robot_location=robot_location, travel_seconds=travel_seconds, handling=handling)
+    required = {t.goal_id for t in transfers}
+    pending = list(required)
+    while pending:
+        for parent in dependencies[pending.pop()]:
+            if parent not in completed and parent not in required:
+                required.add(parent)
+                pending.append(parent)
+    missing = required - preps.keys() - {t.goal_id for t in transfers}
+    if missing:
+        return dict(status='needs_revision', missing_preparations=sorted(missing),
+                    reason='Describe unfinished prerequisites with location and seconds.')
+    preps = {key: value for key, value in preps.items() if key in required}
+    required = frozenset(required)
+    # A state includes carrier locations: a used tray is no longer at its origin.
+    buckets = [dict() for _ in range(len(required)+1)]
+    start = (frozenset(), robot_location, tuple(c.location for c in carriers))
+    buckets[0][start] = (0., [])
+    expanded = pruned = 0
+    for level, bucket in enumerate(buckets):
+        ranked = sorted(bucket.items(), key=lambda row: row[1][0])
+        pruned += max(0, len(ranked)-beam_width)
+        if level == len(required):
+            if ranked:
+                (_, location, _), (cost, steps) = ranked[0]
+                return dict(status='estimated', estimated_seconds=cost, steps=steps,
+                    final_location=location, expanded_states=expanded, pruned_states=pruned,
+                    search='beam_over_completed_goals', beam_width=beam_width,
+                    scope='supplied preparation/delivery horizon; heuristic, not global optimum')
+            break
+        for (done, location, positions), (cost, steps) in ranked[:beam_width]:
+            expanded += 1
+            ready = ready_goals(dependencies, completed | done)
+            options = []
+            for goal_id, prep in preps.items():
+                if goal_id not in ready:
+                    continue
+                travel = 0. if location == prep.location else travel_seconds.get((location, prep.location))
+                if travel is not None:
+                    options.append((dict(method='prepare', goals=[goal_id],
+                        route=[location, prep.location] if location != prep.location else [prep.location],
+                        travel_seconds=travel, handling_seconds=prep.seconds,
+                        estimated_seconds=travel+prep.seconds), prep.location, positions))
+            current_carriers = [replace(c, location=pos) for c, pos in zip(carriers, positions)]
+            groups = compare_transport_batches(dependencies, completed | done,
+                [t for t in transfers if t.goal_id not in done], current_carriers,
+                robot_location=location, travel_seconds=travel_seconds, handling=handling)
+            for group in groups:
+                for option in group['alternatives']:
+                    after = list(positions)
+                    if option['carrier'] is not None:
+                        index = next(i for i, c in enumerate(carriers) if c.label == option['carrier'])
+                        if not carriers[index].return_required:
+                            after[index] = group['destination']
+                    options.append((option, group['destination'], tuple(after)))
+            for option, destination, after in options:
+                reached = done | frozenset(option['goals'])
+                total = cost + option['estimated_seconds']
+                key = (reached, destination, after)
+                target = buckets[len(reached)]
+                if key not in target or total < target[key][0]:
+                    operation = dict(option, depends_on_goals=sorted({p
+                        for goal in option['goals'] for p in dependencies[goal]}))
+                    target[key] = (total, [*steps, operation])
+    return dict(status='needs_revision', reason='No complete plan within supplied routes and search beam.',
+                expanded_states=expanded, pruned_states=pruned)
+
+
 def transport_advice(content):
     """Optional note advice; incomplete beliefs never block notes or actions."""
     try:
@@ -162,11 +260,15 @@ def transport_advice(content):
                      if goals[item['goal_id']]['status'] in ('pending', 'active')]
         carriers = [Carrier(**{**item, 'compatible_groups': frozenset(item['compatible_groups'])})
                     for item in plan['carriers']]
-        comparisons = compare_transport_batches(dependencies, completed, transfers, carriers,
-            robot_location=plan['robot_location'], handling=HandlingCosts(**plan['handling_seconds']),
+        kwargs = dict(robot_location=plan['robot_location'],
+            handling=HandlingCosts(**plan['handling_seconds']),
             travel_seconds={(edge['source'], edge['destination']): edge['seconds'] for edge in plan['travel']})
-        return dict(status='estimated', source='model_authored_beliefs_and_costs',
-            scope='ready transport groups; not a global optimum or physical guarantee',
+        comparisons = compare_transport_batches(dependencies, completed, transfers, carriers, **kwargs)
+        schedule = schedule_transport(dependencies, completed, transfers, carriers,
+            [Preparation(**item) for item in plan.get('preparations', [])], **kwargs)
+        return dict(status=schedule['status'], source='model_authored_beliefs_and_costs',
+            scope='modelled preparation and transport; not a physical guarantee',
+            plan=schedule,
             groups=[dict(goals=row['goals'], recommended=row['recommended'],
                 estimated_saving_vs_direct=row['estimated_saving_vs_direct']) for row in comparisons])
     except (KeyError, TypeError, ValueError, AttributeError) as exc:

@@ -91,6 +91,8 @@ class TaskNotesTests(unittest.TestCase):
             self.assertTrue(result['ok'])
             recommendation = result['transport_advice']['groups'][0]['recommended']
             self.assertEqual(recommendation['estimated_seconds'], 22)
+            self.assertEqual(result['transport_advice']['plan']['steps'][0]['goals'], ['g'])
+            self.assertEqual(h.task_notes.read()['content'], content)
             read = h.call('task_notes', dict(operation='read', content=None, expected_version=None), 'read')
             self.assertEqual(read['transport_advice'], result['transport_advice'])
             malformed = self.write(h, '{"transport":{}}', 1, 'incomplete')
