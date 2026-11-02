@@ -112,6 +112,9 @@ class CatalogRGBBackend(RGBBackend):
             self.env = self.og.Environment(configs=config)
         with self._startup_stage('reset_sampled_catalog_instance'), self._native_startup_progress('initial_reset'):
             self.env.reset()
+        from .compat.particle_melting import install_particle_melting
+        self._particle_melting = install_particle_melting(self.env.scene)
+        write_json(self.output / 'particle_melting_policy.json', self._particle_melting)
         self.robot = self.env.robots[0]
         self.evaluator = SimpleNamespace(env=self.env, robot=self.robot, metrics=[])
         spec = self.catalog_spec
@@ -163,6 +166,7 @@ class CatalogRGBBackend(RGBBackend):
                       articulation_sleep_policy=self._articulation_sleep_policy.describe(),
                       macro_particle_size_policy=self._macro_particle_size_policy.describe())
         result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
+        result['particle_melting_policy'] = self._particle_melting
         return result
 
     def close(self):
