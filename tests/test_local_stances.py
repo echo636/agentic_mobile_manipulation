@@ -45,6 +45,29 @@ class GeometryMotor(LocalRGBManipulation):
 
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('numpy'), 'navigation geometry dependencies')
 class ArchivedStanceTests(unittest.TestCase):
+    def test_completed_no_route_is_distinct_from_stance_preparation_limit(self):
+        import numpy as np
+        raw = np.ones((41, 41), dtype='uint8')
+        grid = GridMap(41, 41, .1, (-2., -2.), raw.tobytes())
+        footprint = [[-.1, -.1], [.1, -.1], [.1, .1], [-.1, .1]]
+        start = (0., 0., 0.)
+        collision = HeadingCollisionChecker(grid, [(raw, footprint)], 0., raw)
+        motor = GeometryMotor(start, collision, False)
+        motor.robot.is_holonomic_base = True
+        op = LocalOperation(motor, 'grasp', None, 600, {})
+        proposals = [((.5, i * .01, 0.), 'fixture') for i in range(32)]
+        with patch('manipulation_agent.executors.local_stances.local_stance_proposals', return_value=iter(proposals)), \
+             patch('manipulation_agent.executors.navigation.forward_navigation.checked_holonomic_connection', return_value=None), \
+             patch('manipulation_agent.executors.navigation.point_route_projection.project_forward_point', return_value=None), \
+             self.assertRaises(SkillError) as caught:
+            motor._local_reposition('grasp', object(), (1., 0., .8), op)
+        self.assertEqual(caught.exception.stage, 'local_route')
+        self.assertEqual(caught.exception.code, 'local_adjustment_blocked')
+        summary = next(row for row in motor.records if row['phase'] == 'stance_search')
+        self.assertTrue(summary['candidate_pool_limited'])
+        self.assertEqual(summary['termination'], 'candidates_exhausted')
+        self.assertIsNone(motor.route)
+
     def test_visible_reachable_stance_with_no_grasp_pose_is_skipped(self):
         import numpy as np
         raw = np.ones((41, 41), dtype='uint8')

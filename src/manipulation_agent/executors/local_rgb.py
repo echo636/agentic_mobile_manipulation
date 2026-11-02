@@ -189,7 +189,10 @@ class LocalRGBManipulation:
                                   and abs(angle(p.final_yaw-end.final_yaw))<1e-6)
                     selected=(plan,route)
                 except NavigationError as exc:
-                    exhausted|=exc.code=='navigation_search_exhausted'
+                    # Preparing a bounded stance set may have used its own
+                    # sub-budget. A completed no-route result for that set is
+                    # not a route-search timeout (R1020's disconnected aisles).
+                    exhausted=exc.code=='navigation_search_exhausted'
                     for _,row in eligible:
                         row.update(status='rejected',reason=exc.code,detail=str(exc))
             if selected is not None:
