@@ -40,15 +40,18 @@ class RGBBoundary(unittest.TestCase):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
     def test_partial_open_reports_access_limit_without_private_obstacles(self):
-        for limited in (True, False):
+        for limited, partial in ((True, False), (False, True), (True, True), (False, False)):
             self.backend.execute_visual=lambda *a,**kw:{
                 'opening_limited_by_clearance':limited,
+                'other_panels_not_operated':partial,
                 'overlapping_enclosures':['PRIVATE_OBJECT_NAME'], 'goal_joints':[1.047]}
             result=self.act('open')
             self.assertTrue(result['ok'])
-            self.assertEqual('opening' in result['effect'],limited)
-            if limited:
-                self.assertTrue(result['effect']['opening']['limited_by_obstacles'])
+            self.assertEqual('opening' in result['effect'],limited or partial)
+            if limited or partial:
+                self.assertEqual(result['effect']['opening']['limited_by_obstacles'], limited)
+                self.assertEqual(result['effect']['opening']['other_panels_not_operated'], partial)
+                self.assertEqual('Other doors or drawers were not operated' in result['effect']['opening']['message'], partial)
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('goal_joints',json.dumps(result))
     def test_action_failure_categories_survive_the_public_boundary(self):

@@ -111,6 +111,7 @@ class EndpointTests(unittest.TestCase):
         if feedback:
             self.assertEqual(feedback['opening_limited_by_clearance'],
                              mode in ('alternate', 'selected_partly_open'))
+            self.assertEqual(feedback['other_panels_not_operated'], len(initial) > 1)
         self.assertTrue(torch.equal(state[0], initial))
         self.assertEqual(random.getstate(), initial_rng)
         self.assertEqual(backend.frames_revision, -1)
