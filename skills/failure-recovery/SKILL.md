@@ -12,7 +12,7 @@ Choose an alternative that addresses the cause:
 - Stale image/revision: use the newest observation and reselect.
 - Occupied hand or closed access: stage the held item safely, then open the required access.
 - Placement sampling failure: inspect clearance and the object's extent; try another point on the intended surface or another task-valid destination.
-- Blocked travel or `local_adjustment_blocked/exhausted`: reassess target, access and approach. If RGB shows a movable item obstructing the route or workspace, make clearing it a prerequisite: stage the held item, relocate the obstruction to a stable task-valid place, then retry the original goal. Preserve required final relations. Tiny navigation corrections do not clear an obstruction or fix an incompatible relation.
+- Blocked travel or `local_adjustment_blocked/exhausted`: reassess target, access and approach. If RGB shows a movable obstruction, make clearing it a prerequisite: stage the held item, relocate the obstruction safely, then retry. A relation required only at task completion may be temporarily broken; reopen its goal and restore it before finishing. Preserve constraints required throughout execution. Tiny navigation corrections do not clear an obstruction or fix an incompatible relation.
 - `navigation_invalid_start`: report the base-executor limitation; changing destinations cannot fix it. For `navigation_stalled`, try one materially different route or viewpoint before reassessing.
 
 Never repeat an unchanged failed action more than once. After two failed alternatives, reconsider the cause. Mark a blocked subgoal honestly and continue independent useful work. Finish blocked when no supported path remains; retain the original required result.
