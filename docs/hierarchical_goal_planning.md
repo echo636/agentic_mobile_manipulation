@@ -51,6 +51,10 @@ over separate methods. Beam search is bounded to 32 states per coverage level;
 it does not prove a global minimum. Cost comparisons cover the same set of goal
 results, even when the graph is incomplete. Missing methods, routes and resource
 transitions remain visible; partial-plan cost is not whole-task cost.
+`unplanned_results` includes the omitted result descriptions and prerequisites,
+so a coverage gap can be refined without mistaking discovery-only advice for an
+end-to-end plan. The skill starts from a whole-task outcome outline and adds
+methods for known future work, not just the immediately executable branch.
 
 ```mermaid
 flowchart LR
@@ -64,7 +68,10 @@ flowchart LR
 1. `task_notes(write)` stores reconciled state with `active:null` and returns
    `planning`: coverage, candidate orders, costs and a recommended next method.
 2. `task_notes(select)` records the chosen method and local steps without
-   resending the tree. Selection is compared with that same graph version.
+   resending the tree. Readiness and immediate cost are computed for that choice
+   even outside the three displayed alternatives. Remaining-plan comparisons
+   require a retained path covering the same results; missing comparisons stay
+   null, including when the beam pruned that first choice.
 3. `act/look` preserves the declared method and records public feedback and
    server tool time. The selection carries that method's estimated work, travel,
    setup and recovery costs separately from the entire remaining-plan cost,

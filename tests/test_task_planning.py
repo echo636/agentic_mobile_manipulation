@@ -92,7 +92,24 @@ class TaskPlanningTests(unittest.TestCase):
         self.assertEqual(plan['comparison_goals'], ['a'])
         self.assertEqual([p['first_method'] for p in plan['alternatives']], ['a-fast', 'a-slow'])
         self.assertIsNone(plan['selection']['extra_estimated_seconds'])
-        self.assertIsNone(plan['selection']['estimated_method_seconds'])
+        self.assertEqual(plan['selection']['estimated_method_seconds'], 10)
+        self.assertTrue(plan['selection']['ready_in_authored_state'])
+
+    def test_selected_method_keeps_cost_outside_displayed_and_pruned_alternatives(self):
+        doc = notes(goal('process', [method('process-' + str(i), i + 1) for i in range(5)]),
+                    goal('verify', [method('check', 2)], depends=['process']))
+        doc['active'] = dict(method_id='process-4')
+        plan = schedule_task(doc)
+        self.assertEqual(len(plan['alternatives']), 3)
+        self.assertEqual(plan['selection']['estimated_method_seconds'], 5)
+        self.assertEqual(plan['selection']['compared_remaining_seconds'], 7)
+        self.assertEqual(plan['selection']['extra_estimated_seconds'], 4)
+        pruned = schedule_task(doc, beam_width=1)
+        self.assertEqual(pruned['selection']['estimated_method_seconds'], 5)
+        self.assertIsNone(pruned['selection']['compared_remaining_seconds'])
+        self.assertIsNone(pruned['selection']['extra_estimated_seconds'])
+        doc['active'] = dict(method_id='check')
+        self.assertFalse(schedule_task(doc)['selection']['ready_in_authored_state'])
 
     def test_hierarchy_cross_branch_prerequisites_and_parent_verification(self):
         doc = notes(goal('access', [method('open', 2)]),
@@ -114,6 +131,8 @@ class TaskPlanningTests(unittest.TestCase):
         self.assertEqual(plan['coverage']['scheduled'], 1)
         self.assertEqual(plan['coverage']['unfinished'], 4)
         self.assertEqual(plan['coverage']['missing_methods'], ['unknown'])
+        unknown = next(row for row in plan['unplanned_results'] if row['id'] == 'unknown')
+        self.assertTrue(unknown['missing_method'])
         self.assertIn(['bench', 'shelf'], plan['gaps']['routes'])
         self.assertIn(['tool', None, 'knife', 'bench'], plan['gaps']['setup_transitions'])
         # A known multi-leg route can be combined without inventing an edge.

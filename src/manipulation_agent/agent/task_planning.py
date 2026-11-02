@@ -123,6 +123,8 @@ def schedule_task(notes, beam_width=32):
     buckets[0][(frozenset(), location, tuple(sorted(state.items())), None)] = (0., [])
     expanded = pruned = 0
     finalists = []
+    chosen = (notes.get('active') or {}).get('method_id')
+    chosen_step = None
     for level, bucket in enumerate(buckets):
         ranked = sorted(bucket.items(), key=lambda row: row[1][0])
         pruned += max(0, len(ranked) - beam_width)
@@ -168,6 +170,8 @@ def schedule_task(notes, beam_width=32):
                     total = sum(parts.values())
                     step = dict(method_id=method['id'], goals=method['goals'], route=route,
                                 setup_changes=changes, costs_seconds=parts, estimated_seconds=total)
+                    if not done and method['id'] == chosen:
+                        chosen_step = step
                     reached = done | achieved
                     index = (reached, route[-1], tuple(sorted(after.items())), first or method['id'])
                     target = buckets[len(reached)]
@@ -176,6 +180,7 @@ def schedule_task(notes, beam_width=32):
     (done, _, _, _), (cost, steps) = finalists[0]
     complete = done == required
     comparisons, firsts = [], set()
+    chosen_comparison = None
     for (covered, _, _, _), (total, path) in finalists:
         # Equal node counts can cover different work in an incomplete DAG.
         # Such paths are choices, but their cost difference is not a saving.
@@ -183,11 +188,13 @@ def schedule_task(notes, beam_width=32):
             continue
         if path and path[0]['method_id'] not in firsts:
             firsts.add(path[0]['method_id'])
-            comparisons.append(dict(first_method=path[0]['method_id'], estimated_seconds=total,
-                                    first_method_costs_seconds=path[0]['costs_seconds'],
-                                    method_order=[s['method_id'] for s in path]))
-        if len(comparisons) == 3:
-            break
+            comparison = dict(first_method=path[0]['method_id'], estimated_seconds=total,
+                              first_method_costs_seconds=path[0]['costs_seconds'],
+                              method_order=[s['method_id'] for s in path])
+            if len(comparisons) < 3:
+                comparisons.append(comparison)
+            if path[0]['method_id'] == chosen:
+                chosen_comparison = comparison
     missing = sorted(required - {g for m in methods for g in m['goals']})
     result = dict(status='estimated' if complete else 'partial' if steps else 'needs_revision',
         source='model_authored_beliefs_and_costs',
@@ -199,7 +206,21 @@ def schedule_task(notes, beam_width=32):
         expanded_states=expanded, pruned_states=pruned,
         verification_goals=[key for key, g in goals.items() if key not in dependencies
                             and g['status'] not in ('done', 'retired')])
+    recommended = (result['next'] or {}).get('method_id')
+    result['active'] = notes.get('active')
+    result['selection'] = dict(method_id=chosen, recommended_method_id=recommended,
+        matches_recommendation=chosen == recommended if chosen and recommended else None,
+        ready_in_authored_state=chosen_step is not None if chosen else None,
+        estimated_method_seconds=chosen_step['estimated_seconds'] if chosen_step else None,
+        estimated_method_costs_seconds=chosen_step['costs_seconds'] if chosen_step else None,
+        compared_remaining_seconds=chosen_comparison['estimated_seconds'] if chosen_comparison else None,
+        extra_estimated_seconds=(chosen_comparison['estimated_seconds'] - cost)
+                                if chosen_comparison else None,
+        source='model_declared_selection_not_verified_action_alignment')
     if not complete:
+        result['unplanned_results'] = [dict(id=key, goal=goals[key].get('goal', key),
+            prerequisites=sorted(dependencies[key]), missing_method=key in missing)
+            for key in sorted(required-done)]
         result['gaps'] = dict(routes=[list(x) for x in sorted(missing_routes)],
             required_states=[list(x) for x in sorted(missing_states)],
             setup_transitions=[list(x) for x in sorted(missing_switches, key=str)])
@@ -216,20 +237,6 @@ def task_advice(content):
         return dict(status='needs_model', reason='Add methods to executable goals and planning location/state. '
                     'Include known work across branches, not only the active item; unknown work stays explicit.')
     try:
-        result = schedule_task(notes)
-        result['active'] = notes.get('active')
-        chosen = (notes.get('active') or {}).get('method_id')
-        recommended = (result['next'] or {}).get('method_id')
-        comparison = next((row for row in result['alternatives'] if row['first_method'] == chosen), None)
-        result['selection'] = dict(method_id=chosen, recommended_method_id=recommended,
-            matches_recommendation=chosen == recommended if chosen and recommended else None,
-            estimated_method_seconds=sum(comparison['first_method_costs_seconds'].values())
-                                     if comparison else None,
-            estimated_method_costs_seconds=comparison['first_method_costs_seconds'] if comparison else None,
-            compared_remaining_seconds=comparison['estimated_seconds'] if comparison else None,
-            extra_estimated_seconds=(comparison['estimated_seconds'] - result['estimated_seconds'])
-                                    if comparison else None,
-            source='model_declared_selection_not_verified_action_alignment')
-        return result
+        return schedule_task(notes)
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         return dict(status='needs_revision', reason=str(exc))

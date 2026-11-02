@@ -97,7 +97,7 @@ Fields:
 
 The cost is work + travel + setup + expected recovery seconds. The scheduler searches method choices and order with a bounded beam, tracks predicted resource state, and reports up to three surviving different first choices. It does not prove a global minimum. It serializes robot work; passive process overlap is not timed automatically. Represent starting, other independent work and checking completion separately, and revise remaining wait estimates from actual observations.
 
-`planning.coverage` includes every unfinished executable goal, including those without methods. A partial result names unplanned goals and missing routes/resource transitions. Explore or refine those gaps; do not present the partial cost as whole-task cost. `verification_goals` lists structural parents still needing evidence reconciliation. Keep known future branches in the tree even when the active method serves only one.
+`planning.coverage` includes every unfinished executable goal, including those without methods. `unplanned_results` names the omitted results, their prerequisites and missing methods; `gaps` lists missing routes/resource transitions. Fill known work or explore the needed unknowns before claiming whole-task coverage. `verification_goals` lists structural parents still needing evidence reconciliation. Keep known future branches in the tree even when the active method serves only one.
 
 After reading a comparison, select without resending the tree:
 
@@ -105,6 +105,6 @@ After reading a comparison, select without resending the tree:
 {"operation":"select","expected_version":1,"content":"{\"method_id\":\"clean-pair\",\"steps\":[\"Pick up the visible brush\",\"Clean both identified surfaces\"],\"next_check\":\"Both surfaces visibly clean\"}"}
 ```
 
-Use the actual returned version and your own method/steps. Selection records `active` and returns a new version; it neither executes actions nor completes goals. `planning.selection` compares the declared choice with this same graph version, not an obsolete recommendation. Its alignment is a declaration, not proof that subsequent actions implement the method.
+Use the actual returned version and your own method/steps. Selection records `active` and returns a new version; it neither executes actions nor completes goals. `planning.selection` reports the chosen method's readiness and immediate cost from this graph version, even outside the three displayed alternatives. Remaining-plan cost differences are available only for retained plans covering the same results; a null comparison is not zero extra cost. Selection is a declaration, not proof that actions implement the method.
 
 After act/look, the old next recommendation is withheld and public feedback/tool time accumulates. Continue the current method if supported. Before selecting another, write reconciled statuses, member counts, current location and resource state together, with `active:null`; this recomputes the remaining plan. Update estimates from observed execution time, including failures, without treating model/network latency as robot work. A failure may change the scene: reopen affected results and ancestors from evidence, not by merely replaying the same method.

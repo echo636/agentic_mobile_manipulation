@@ -58,7 +58,10 @@ class TaskNotes:
                 scope='Server action and observation time; excludes model requests and notes'),
             latest_receipt={k: latest[k] for k in ('primitive', 'ok', 'effect', 'error') if k in latest},
             failed_since_checkpoint=failed,
-            next_decision=('Reconcile the failure and affected goals/resources from RGB and receipts; '
+            next_decision=('No method was selected at this checkpoint. Reconcile actual progress and '
+                           'known unfinished work, read the comparison, then select a method.'
+                           if not (advice.get('selection') or {}).get('method_id') else
+                          'Reconcile the failure and affected goals/resources from RGB and receipts; '
                            'update notes to compare revised methods.' if failed else
                            'Check the returned RGB/receipt against the current method. Continue its local steps '
                            'if supported; on completion, new information or a branch change, update notes '
