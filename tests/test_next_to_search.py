@@ -37,8 +37,9 @@ class NextToSingleRelease(unittest.TestCase):
         b._inside_pose_overlap_ranker = lambda *args, **kwargs: lambda p, q: 1-int(p[0])
         b._settle_surface_contacts = lambda *args: world.update(settles=world['settles']+1,
                                                                neighbor='moved_by_physics')
-        b._next_to_check = lambda *args, **kwargs: (valid, {})
-        b._verify_payload = lambda *args: None
+        b._next_to_check = lambda *args, **kwargs: (valid, {'checks': {
+            'released': not world['held'], 'supported': True, 'next_to': valid}})
+        b._verify_payload = lambda *args, **kwargs: None
         b._step = lambda action: world.update(commits=world['commits']+1)
         b.primitives = SimpleNamespace(_empty_action=lambda: None)
         return b, target, world
@@ -55,6 +56,7 @@ class NextToSingleRelease(unittest.TestCase):
         with self.assertRaises(SkillError) as error:
             b._checked_place_next_to(target, 100, b.torch.zeros(3))
         self.assertEqual(error.exception.code, 'postcondition_error')
+        self.assertEqual(error.exception.stage, 'released_supported_not_adjacent')
         self.assertEqual(world, dict(held=False, writes=1, settles=1, commits=1,
                                     candidate=1, neighbor='moved_by_physics'))
 

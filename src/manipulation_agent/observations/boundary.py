@@ -84,7 +84,8 @@ def public_execution_error(exc: SkillError) -> dict:
         result.update(stage=exc.stage,message=LOCAL_STANCE_MESSAGES[exc.stage])
     if code == 'postcondition_error' and exc.stage == 'released_supported_not_adjacent':
         result.update(stage=exc.stage, message='The object was released and remains on the receiving surface, '
-                      'but the requested next-to relation was not verified after settling. Inspect the returned RGB.')
+                      'but the requested next-to relation was not verified after settling. '
+                      'Your hand is empty. Inspect the returned RGB before choosing the next action.')
     if code == 'postcondition_error' and exc.stage == 'released_supported_payload_unconfirmed':
         result.update(stage=exc.stage, message='The object was released and remains on the receiving surface. '
                       'Your hand is empty. Retention of its carried contents could not be confirmed; '

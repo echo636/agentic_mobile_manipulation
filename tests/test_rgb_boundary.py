@@ -104,8 +104,7 @@ class RGBBoundary(unittest.TestCase):
                             else 'on the receiving surface')
                 self.assertIn('remains ' + relation, result['error']['message'])
                 self.assertEqual(result['error']['stage'], stage)
-                if stage.endswith('payload_unconfirmed'):
-                    self.assertIn('Your hand is empty', result['error']['message'])
+                self.assertIn('Your hand is empty', result['error']['message'])
             else:
                 self.assertNotIn('stage', result['error'])
             self.assertNotIn('PRIVATE_', json.dumps(result))

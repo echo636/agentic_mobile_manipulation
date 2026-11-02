@@ -248,8 +248,12 @@ class CheckedPlacement:
             self._placement_record({'status': 'next_to_commit', 'target': target.name,
                 'held': held.name, 'valid': valid, **details})
             if not valid:
-                raise SkillError('postcondition_error', 'NextTo did not remain after release', changed=True)
-            self._verify_payload(dependencies)
+                checks = details['checks']
+                stage = ('released_supported_not_adjacent' if checks['released'] and
+                         checks['supported'] and not checks['next_to'] else None)
+                raise SkillError('postcondition_error', 'NextTo did not remain after release',
+                                 changed=True, stage=stage)
+            self._verify_payload(dependencies, support_target=candidate['support'])
         finally:
             self.frames_revision = -1
             self._step(self.primitives._empty_action())
