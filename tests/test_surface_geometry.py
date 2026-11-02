@@ -265,79 +265,76 @@ class PlacementRejectionTransactions(unittest.TestCase):
         self.assertGreater(float(candidates[0]['pose'][0][2]), .318)
 
     def test_missing_collision_geometry_has_explicit_error_without_box_fallback(self):
-        from types import SimpleNamespace
+        from types import SimpleNamespace, ModuleType
+        from unittest.mock import patch
         from manipulation_agent.contracts import SkillError
         from manipulation_agent.executors.placement import CheckedPlacement
         backend = CheckedPlacement()
         backend.og = SimpleNamespace(sim=SimpleNamespace(sync_physx_to_fabric=lambda: None))
-        held = SimpleNamespace(links={'root': SimpleNamespace(collision_meshes={})})
+        held = SimpleNamespace(prim_type='rigid', links={'root': SimpleNamespace(collision_meshes={})})
         held.get_base_aligned_bbox = lambda: self.fail('Must not fall back to an inflated box')
-        with self.assertRaises(SkillError) as error:
+        constants = ModuleType('omnigibson.utils.constants')
+        constants.PrimType = SimpleNamespace(CLOTH='cloth')
+        with patch.dict('sys.modules', {'omnigibson.utils.constants': constants}), self.assertRaises(SkillError) as error:
             backend._collision_vertices(held)
         self.assertEqual(error.exception.code, 'unsupported_geometry')
 
-    def test_obstructed_candidates_restore_world_and_carry_without_advancing_metrics(self):
-        import copy
+    def test_surface_release_failure_keeps_physical_result_without_retry_or_rollback(self):
+        import torch
         import sys
         from types import ModuleType, SimpleNamespace
         from unittest.mock import patch
         from manipulation_agent.contracts import SkillError
-        from manipulation_agent.executors.carry import ControlledCarry
         from manipulation_agent.executors.placement import CheckedPlacement
-        class Harness(CheckedPlacement, ControlledCarry):
-            pass
-        backend = Harness()
-        world = {'position': [0., 0., 1.], 'neighbor': [3., 0., 0.]}
-        initial = copy.deepcopy(world)
-        records, loads, physics = [], [], []
-        held = SimpleNamespace(name='pan')
-        held.set_position_orientation = lambda p, q: world.update(position=list(p))
+        backend = CheckedPlacement()
+        world = {'position': torch.tensor([0., 0., 1.]), 'neighbor': 3.}
+        released, physics, env_steps, records = [], [], [], []
+        states = ModuleType('omnigibson.object_states')
+        states.OnTop = type('OnTop', (), {})
+        held = SimpleNamespace(name='pan', states={states.OnTop: SimpleNamespace(get_value=lambda _: False)})
+        held.get_position_orientation = lambda: (world['position'], torch.tensor([0., 0., 0., 1.]))
+        def set_pose(position, orientation):
+            released.append(position.tolist())
+            world['position'] = position.clone()
+        held.set_position_orientation = set_pose
         held.keep_still = held.wake = lambda: None
-        def load(state, **kwargs):
-            loads.append(copy.deepcopy(state))
-            world.clear(); world.update(copy.deepcopy(state))
-        backend.og = SimpleNamespace(sim=SimpleNamespace(
-            dump_state=lambda **kw: copy.deepcopy(world), load_state=load,
-            get_physics_dt=lambda: .01))
-        backend._get_held = lambda: held
-        backend._grasp_dependencies = lambda obj: []
+        backend.og = SimpleNamespace(sim=SimpleNamespace(get_sim_step_dt=lambda: .03))
+        backend._get_held = lambda: None
+        backend._carry_contents = []
         backend._carry_detach = lambda: None
         backend._placement_record = records.append
         backend._relocate_contents = lambda *args: None
         backend._surface_candidates = lambda *args, **kwargs: [
-            {'index': i, 'pose': ([float(i+5), 0., 1.], [0.,0.,0.,1.]), 'clearance_m': .025}
+            {'index': i, 'pose': (torch.tensor([float(i+5), 0., 1.]), torch.tensor([0., 0., 0., 1.]))}
             for i in range(2)]
-        def fallback(*args, **kwargs):
-            # Generate alternatives from the original scene, not a failed
-            # collision trial. A repeated pose must not be simulated twice.
-            self.assertEqual(world, initial)
-            return [
-                {'index': i, 'pose': ([x, 0., 1.], [0.,0.,0.,1.]), 'clearance_m': .025}
-                for i, x in enumerate((5., 7.))]
-        backend._surface_fallback_candidates = fallback
-        def step():
-            physics.append(copy.deepcopy(world))
-            world['neighbor'][0] += 1.  # Candidate collisions must not move other objects permanently.
-        backend._placement_physics_step = step
-        backend._placement_contacts = lambda *args: ['/obstacle/link']
-        backend._placement_contact_report = lambda *args, **kwargs: {'admissible': False, 'reason': 'deep_penetration'}
-        backend._step = lambda *args: self.fail('Rejected candidates must not advance task metrics')
-        states = ModuleType('omnigibson.object_states')
-        for name in ('OnTop', 'Touching', 'VerticalAdjacency'):
-            setattr(states, name, type(name, (), {}))
-        errors = ModuleType('omnigibson.action_primitives.action_primitive_set_base')
-        errors.ActionPrimitiveError = RuntimeError
-        with patch.dict(sys.modules, {'omnigibson.object_states': states,
-                'omnigibson.action_primitives.action_primitive_set_base': errors}):
+        backend._inside_pose_overlap_ranker = lambda *a, **kw: lambda p, q: float(p[0]) == 5.
+        backend._surface_fallback_candidates = lambda *a, **kw: self.fail('A clear geometric candidate already exists')
+        def settle(*args, **kwargs):
+            physics.append(True)
+            world['neighbor'] += 1.
+            world['position'][2] = 0.  # The one actual release falls off the support.
+        backend._settle_surface_contacts = settle
+        backend._placement_contacts = lambda *args: []
+        backend._selected_surface_support = lambda *a, **kw: (False, {'checks': {'selected_shelf_height': False}})
+        backend._step = lambda *_: env_steps.append(True)
+        backend.primitives = SimpleNamespace(_empty_action=lambda: None)
+        target = SimpleNamespace(name='table', links={})
+        with patch.dict(sys.modules, {'omnigibson.object_states': states}):
             with self.assertRaises(SkillError) as error:
-                backend._try_place_on_top(held, SimpleNamespace(name='table'), 50, [0.,0.,1.])
-        self.assertEqual(error.exception.code, 'sampling_error')
-        self.assertEqual(len(physics), 3)
-        self.assertEqual(world, initial)
-        self.assertEqual(len(loads), 4)  # Two new trials, fallback generation, discard the final failed trial.
-        self.assertEqual([r['stage'] for r in records if r['status'] == 'candidate_rejected'],
-                         ['raised_pose_collision'] * 3)
-        self.assertEqual(records[-1]['status'], 'rolled_back')
+                backend._try_place_on_top(held, target, 50, torch.tensor([0., 0., 1.]))
+            self.assertEqual(error.exception.code, 'postcondition_error')
+            self.assertTrue(error.exception.changed)
+            self.assertEqual(released, [[6., 0., 1.]])
+            self.assertEqual(world['position'].tolist(), [6., 0., 0.])
+            self.assertEqual(world['neighbor'], 4.)
+            self.assertEqual(len(physics), 1)
+            self.assertEqual(len(env_steps), 1)
+            # No geometric support is a pre-release error and must not drop the load.
+            backend._surface_candidates = backend._surface_fallback_candidates = lambda *a, **kw: []
+            with self.assertRaises(SkillError) as error:
+                backend._try_place_on_top(held, target, 50, torch.tensor([0., 0., 1.]))
+            self.assertEqual(error.exception.code, 'placement_surface_unavailable')
+            self.assertEqual(len(released), 1)
 
 
 if __name__ == '__main__':

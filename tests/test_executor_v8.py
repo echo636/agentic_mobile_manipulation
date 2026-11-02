@@ -124,7 +124,7 @@ class MotorContractRegression(unittest.TestCase):
             result=backend._checked_attach(parent,2)
         self.assertEqual(result['primitive'],'attach')
         self.assertEqual(calls[0],'released')
-        self.assertEqual(calls[1],{'bypass_alignment_checking':True,'check_physics_stability':True})
+        self.assertEqual(calls[1],{'bypass_alignment_checking':True,'check_physics_stability':False})
         self.assertEqual(backend.frames_revision,-1)
 
     def test_support_payload_closure_includes_nested_items_without_cycles(self):
@@ -136,7 +136,7 @@ class MotorContractRegression(unittest.TestCase):
 
     def test_selected_surface_failure_never_retries_without_the_point(self):
         b=CheckedPlacement();b._get_held=lambda:object();calls=[]
-        def fail(held,target,steps,point,yaw):
+        def fail(held,target,steps,point,yaw,**kwargs):
             calls.append(point);raise SkillError('sampling_error','no local pose')
         b._try_place_on_top=fail
         states=types.ModuleType('omnigibson.object_states');states.OnTop=object()
@@ -192,7 +192,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             self.assertFalse(valid)
 
 
-    def test_final_placement_checks_current_support_after_candidate_settling(self):
+    def test_final_placement_checks_selected_support_without_rejecting_residual_motion(self):
         import torch
         states=types.ModuleType('omnigibson.object_states')
         for name in ('OnTop','Touching','VerticalAdjacency'):setattr(states,name,type(name,(),{}))
@@ -203,7 +203,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             states.VerticalAdjacency:types.SimpleNamespace(get_value=lambda:types.SimpleNamespace(negative_neighbors=[target],positive_neighbors=[]))},
             set_position_orientation=lambda *a:None,keep_still=lambda:None,wake=lambda:None,get_position_orientation=lambda:(torch.zeros(3),torch.tensor([0.,0.,0.,1.])))
         target=types.SimpleNamespace(name='fridge',links={'root':types.SimpleNamespace(prim_path='/fridge')});b=CheckedPlacement();b.ideal_carry=True;b._carry_contents=[]
-        b._surface_candidates=lambda *a:[{'index':0,'pose':(torch.zeros(3),torch.tensor([0.,0.,0.,1.])),
+        b._surface_candidates=lambda *a,**kw:[{'index':0,'pose':(torch.zeros(3),torch.tensor([0.,0.,0.,1.])),
             'clearance_m':.025,'support_position':[0.,0.,0.]}]
         b.og=types.SimpleNamespace(sim=types.SimpleNamespace(dump_state=lambda **kw:{},get_physics_dt=lambda:1.,get_sim_step_dt=lambda:1.))
         b._placement_physics_step=lambda:None;b._placement_contacts=lambda *args:[]
@@ -212,17 +212,15 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b.primitives=types.SimpleNamespace(_empty_action=lambda:None)
         b._placement_record=lambda data:None;b._get_held=lambda:None
         b._verify_payload=lambda *a,**kw:None
-        b._surface_candidate_payload=lambda *a:None
+        b._inside_pose_overlap_ranker=lambda *a,**kw:None
         b._settle_surface_contacts=lambda *a,**kw:None
-        with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.action_primitives.action_primitive_set_base':errors}), \
-                patch('manipulation_agent.executors.placement.placement_transaction',lambda *a:nullcontext()):
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
             for correct_shelf in (False,True):
                 with self.subTest(correct_shelf=correct_shelf):
                     # R387: the accepted placement retained support and native
                     # OnTop, but a small residual rotation failed the rest window.
-                    checks=iter([(True,{}),(False,{'checks':{
-                        'selected_shelf_height':correct_shelf,'settled':False}})])
-                    b._selected_surface_support=lambda *a,**kw:next(checks)
+                    b._selected_surface_support=lambda *a,**kw:(False,{'checks':{
+                        'selected_shelf_height':correct_shelf,'settled':False}})
                     if correct_shelf:
                         self.assertEqual(b._try_place_on_top(held,target,1,torch.zeros(3)),
                                          'selected_surface_collision_support_after_free_settling')

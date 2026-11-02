@@ -487,11 +487,11 @@ class CheckedPlacement:
 
     def _surface_fallback_candidates(self, held, target, point, yaw_degrees=None, payload=(), *,
                                      roll_degrees=None):
-        """Cover nearby diagonal positions and yaw after ordinary trials fail.
+        """Cover nearby diagonal positions and yaw when the local geometry is crowded.
 
         The selected object, shelf and 20 cm verification neighborhood stay
         unchanged. Vessels retain their authored resting tilt; an explicit yaw
-        remains binding. Overlap scores order proposals without rejecting any.
+        remains binding. This helper only constructs geometry.
         """
         import math
         from omnigibson.utils import transform_utils as T
@@ -519,23 +519,10 @@ class CheckedPlacement:
                 seen.add(key)
                 candidate.update(index=len(proposals), proposal_yaw_degrees=angle)
                 proposals.append(candidate)
-        ranker = self._inside_pose_overlap_ranker(held, [held, *payload])
-
-        def rank(candidate):
-            position, orientation = candidate['pose']
-            score = ranker(position.tolist(), orientation) if ranker is not None else 0.
-            candidate['proposal_overlap_score'] = score
-            distance = sum(v * v for v in candidate['offset_xy_m'])
-            # Envelope overlap is only a coarse hint: a valid ledge placement
-            # can overlap a window's envelope. Explore nearby positions across
-            # orientations before spending physics on distant zero-score ones.
-            return round(distance, 6), score, abs(candidate['proposal_yaw_degrees'] or 0.)
-
-        proposals.sort(key=rank)
+        proposals.sort(key=lambda c: (round(sum(v*v for v in c['offset_xy_m']), 6),
+                                      abs(c['proposal_yaw_degrees'] or 0.)))
         self._placement_record({'status': 'surface_proposal_coverage', 'target': target.name, 'held': held.name,
-            'proposals': len(proposals), 'zero_overlap': sum(not c['proposal_overlap_score'] for c in proposals),
-            'angles_degrees': angles, 'ordering':'distance_then_envelope_overlap_then_yaw',
-            'unchanged_support_and_collision_acceptance': True})
+            'proposals': len(proposals), 'angles_degrees': angles, 'ordering': 'distance_then_yaw'})
         return proposals
 
     def _collision_triangles(self, obj):
@@ -643,19 +630,30 @@ class CheckedPlacement:
                 'method':'selected_open_cavity_and_actual_upward_rim_collision_faces'})
         return proposals
 
-    def _surface_pose(self, held, target, point, yaw_degrees=None, *, roll_degrees=None):
-        """Compatibility pose proposal; the caller must still check physical settling."""
-        from omnigibson.object_states import OnTop
+    def _select_surface_candidate(self, held, target, point, yaw_degrees, payload, *, roll_degrees=None):
+        """Choose geometry without moving, stepping, or snapshotting the scene."""
         if point is None:
-            if yaw_degrees is not None or roll_degrees is not None:
-                raise SkillError('sampling_error', 'A selected surface is required for oriented placement')
-            return self.primitives._sample_pose_with_object_and_predicate(OnTop, held, target)
-        payload = [obj for obj, _ in self._carry_contents]
+            raise SkillError('placement_surface_unavailable', 'Select a receiving surface for placement')
         candidates = self._surface_candidates(held, target, point, yaw_degrees, payload,
                                               roll_degrees=roll_degrees)
-        if not candidates:
-            raise SkillError('placement_surface_unavailable', 'No upward surface of the selected object near the selected point')
-        return candidates[0]['pose']
+        ranker = self._inside_pose_overlap_ranker(held, [held, *payload], support_objects=(target,))
+
+        def score(candidate):
+            position, orientation = candidate['pose']
+            value = ranker(position.tolist(), orientation) if ranker is not None else 0.
+            candidate['proposal_overlap_score'] = value
+            return value
+
+        # Prefer the clicked neighborhood; expand geometry only if it is
+        # occupied. Envelope overlap ranks proposals, never certifies failure.
+        candidate = min(candidates, key=score, default=None)
+        if candidate is None or candidate['proposal_overlap_score']:
+            alternatives = self._surface_fallback_candidates(
+                held, target, point, yaw_degrees, payload, roll_degrees=roll_degrees)
+            candidate = min([*candidates, *alternatives], key=score, default=None)
+        if candidate is None:
+            raise SkillError('placement_surface_unavailable', 'No upward receiving surface near the selected point')
+        return candidate
 
     def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None, *, roll_degrees=None):
         held = self._get_held()
@@ -666,7 +664,7 @@ class CheckedPlacement:
                                            roll_degrees=roll_degrees)
         finally:
             self.frames_revision = -1
-        return {'primitive': 'place_on_top', 'implementation': 'selected_surface_collision_geometry_and_settling',
+        return {'primitive': 'place_on_top', 'implementation': 'single_geometric_release_and_free_settling',
                 'postcondition': check, 'failure_policy': 'retain_physical_result'}
 
     def _placement_contacts(self, held, payload=()):
@@ -691,14 +689,14 @@ class CheckedPlacement:
         self.og.sim.step_physics()
 
     def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None, payload_resting=None):
-        """Finish free settling before committing native state transitions.
+        """Let the released assembly settle before reading native state transitions.
 
         Sampling can put a small object to sleep before its contact state has
         been read. PhysX then omits current contacts, while OG's kinematic
         cache can retain a false Touching/OnTop value at the unchanged pose.
         Wake the released assembly during the final five intervals; gravity
         and contacts still determine every pose and predicate. Keep the same
-        physics duration, but defer Environment.step until placement commits:
+        physics duration, but defer Environment.step until its support has been read:
         slicing can legitimately replace a released object on this surface.
         """
         objects = (held, target, *payload)
@@ -723,203 +721,56 @@ class CheckedPlacement:
             for state in obj.states.values():
                 state.clear_cache()
 
-    def _surface_candidate_payload(self, held, target, dependencies, resting):
-        """Reject a settled trial that spills its load before committing it.
-
-        Sample physics bypasses Environment.step; invalidate native predicate
-        caches before checking the same relations used at final verification.
-        """
-        for obj in {held,target,*(child for child,_,_ in dependencies),
-                    *(parent for _,parent,_ in dependencies)}:
-            for state in obj.states.values():
-                state.clear_cache()
-        self._verify_payload(dependencies, support_target=target,
-                             support_resting={key:window.report() for key,window in resting.items()})
-
     def _try_place_on_top(self, held, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
-        from omnigibson.object_states import OnTop, Touching, VerticalAdjacency
-        from omnigibson.action_primitives.action_primitive_set_base import ActionPrimitiveError
+        """One geometric placement and one physical outcome, without rollback."""
+        from omnigibson.object_states import OnTop
         from .resting_motion import RestingMotionWindow
         contents = list(self._carry_contents)
         payload = [obj for obj, _ in contents]
         dependencies = list(getattr(self, '_carry_dependencies', []))
-        verification_point=point
-        if point is None:
-            try:
-                pose = self._surface_pose(held, target, point, yaw_degrees, roll_degrees=roll_degrees)
-            except ActionPrimitiveError as exc:
-                raise SkillError('sampling_error', str(exc)) from exc
-            self._carry_detach()
-            held.set_position_orientation(*pose)
-            self._relocate_contents(held, contents)
-            held.keep_still()
-        else:
-            candidates = self._surface_candidates(held, target, point, yaw_degrees, payload,
-                                                  roll_degrees=roll_degrees)
-            with placement_transaction(self.og.sim, self._placement_record):
-                self._carry_detach()
-                trial_state = self.og.sim.dump_state(serialized=False)
-                accepted = None
-                def candidate_stream():
-                    yield from candidates
-                    # Restore the detached assembly's original pose before
-                    # generating alternatives. Failed trials may have tilted
-                    # it; those poses must not redefine a requested yaw.
-                    self.og.sim.load_state(trial_state, serialized=False)
-                    start_index = 1 + max((c['index'] for c in candidates), default=-1)
-                    for index, candidate in enumerate(self._surface_fallback_candidates(
-                            held, target, point, yaw_degrees, payload, roll_degrees=roll_degrees)):
-                        candidate['index'] = start_index + index
-                        yield candidate
-
-                # Check after the short drop plus a full measured resting
-                # window, instead of spending one second on every candidate.
-                # Supported moving poses still extend in quarter-second
-                # blocks below, up to the same four-second bound. The resting
-                # criterion and final ordinary-step verification are unchanged.
-                settle_steps = max(1, round(.5 / self.og.sim.get_physics_dt()))
-                tried_poses = set()
-                for number, candidate in enumerate(candidate_stream()):
-                    pose_key = tuple(round(float(v), 5) for vector in candidate['pose'] for v in vector)
-                    if pose_key in tried_poses:
-                        continue
-                    tried_poses.add(pose_key)
-                    if number:
-                        self.og.sim.load_state(trial_state, serialized=False)
-                    held.set_position_orientation(*candidate['pose'])
-                    self._relocate_contents(held, contents)
-                    held.keep_still()
-                    held.wake()
-                    self._placement_physics_step()
-                    contacts = self._placement_contacts(held, payload)
-                    if contacts:
-                        contact = self._placement_contact_report(held, payload)
-                        self._placement_record({'status': 'initial_contact_admitted' if contact['admissible'] else 'candidate_rejected',
-                            'stage': 'raised_pose_collision',
-                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'contact_geometry': contact, 'clearance_m': candidate['clearance_m']})
-                        if not contact['admissible']:
-                            continue
-                    resting = RestingMotionWindow(self.og.sim.get_physics_dt())
-                    resting.add(*held.get_position_orientation())
-                    candidate_payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_physics_dt())
-                                                 for child,_,kind in dependencies if kind=='OnTop'}
-                    def sample_motion():
-                        resting.add(*held.get_position_orientation())
-                        for child,_,_ in dependencies:
-                            if id(child) in candidate_payload_resting:
-                                candidate_payload_resting[id(child)].add(*child.get_position_orientation())
-                    for _ in range(settle_steps):
-                        self._placement_physics_step()
-                        sample_motion()
-                    contacts = self._placement_contacts(held, payload)
-                    touching = any(path in contacts for path in (link.prim_path for link in target.links.values()))
-                    candidate_point=candidate.get('verification_point',point)
-                    supported, support = self._selected_surface_support(
-                        held, target, candidate_point, touching, payload, require_contact=False, resting=resting.report())
-                    elapsed_steps = settle_steps
-                    extension_steps = max(1, round(.25 / self.og.sim.get_physics_dt()))
-                    max_settle_steps = max(settle_steps, round(4. / self.og.sim.get_physics_dt()))
-                    while (not supported and elapsed_steps < max_settle_steps
-                           and support['checks'].get('settled') is False
-                           and all(value for key, value in support['checks'].items() if key != 'settled')):
-                        # Continue only a valid supported pose. Rolling off,
-                        # changing shelves or losing the selected support ends
-                        # this trial immediately; tolerances stay unchanged.
-                        count = min(extension_steps, max_settle_steps-elapsed_steps)
-                        for _ in range(count):
-                            self._placement_physics_step()
-                            sample_motion()
-                        elapsed_steps += count
-                        contacts = self._placement_contacts(held, payload)
-                        touching = any(link.prim_path in contacts for link in target.links.values())
-                        supported, support = self._selected_surface_support(
-                            held, target, candidate_point, touching, payload, require_contact=False, resting=resting.report())
-                    if elapsed_steps > settle_steps:
-                        self._placement_record({'status': 'surface_settling_extended',
-                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'physics_seconds': elapsed_steps*self.og.sim.get_physics_dt(),
-                            'supported': supported, 'support': support})
-                    if not supported:
-                        self._placement_record({'status': 'candidate_rejected', 'stage': 'free_settling',
-                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'support': support, 'contact_bodies': contacts})
-                        continue
-                    try:
-                        self._surface_candidate_payload(held,target,dependencies,candidate_payload_resting)
-                    except SkillError as exc:
-                        if exc.code!='postcondition_error':
-                            raise
-                        self._placement_record({'status':'candidate_rejected','stage':'payload_relations',
-                            'candidate':candidate['index'],'target':target.name,'held':held.name,
-                            'reason':str(exc)})
-                        continue
-                    accepted = candidate
-                    verification_point=candidate_point
-                    self._placement_record({'status': 'sampled', 'method': 'selected_surface_collision_geometry',
-                        'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                        'selected_point': point.tolist(), 'requested_yaw_degrees': yaw_degrees,
-                        'proposal_yaw_degrees':candidate.get('proposal_yaw_degrees',yaw_degrees),
-                        'proposal_overlap_score':candidate.get('proposal_overlap_score'),
-                        'offset_xy_m':candidate.get('offset_xy_m'),
-                        'settled_orientation':held.get_position_orientation()[1].tolist(),
-                        'verification_point':verification_point.tolist(),
-                        'surface_kind':candidate.get('surface_kind','selected_surface'),
-                        'selected_cavity':candidate.get('selected_cavity'),
-                        'support_position': candidate['support_position'],
-                        'settled_position': held.get_position_orientation()[0].tolist(),
-                        'support': support, 'contact_bodies': contacts})
-                    break
-                if accepted is None:
-                    if not tried_poses:
-                        raise SkillError('placement_surface_unavailable',
-                            'No upward receiving surface near the selected point', changed=True)
-                    raise SkillError('sampling_error', 'No collision-free, stable pose on the selected surface', changed=True)
-        local = getattr(self, '_local_operation', None)
-        substeps = max(1, round(self.og.sim.get_sim_step_dt() / self.og.sim.get_physics_dt()))
-        # As with Inside, finish the already verified pose with fixed native
-        # steps even when candidate search consumed its wall-clock allowance.
-        commit = (local.verified_placement_commit(1,
-                    settling_physics_steps=min(50, max_steps) * substeps)
-                  if local is not None and point is not None else nullcontext())
-        with commit:
-            # Only the accepted physical result advances environment metrics,
-            # object-state transition rules and the recorded replay.
-            resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
-            resting.add(*held.get_position_orientation())
-            payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
-                               for child, _, kind in dependencies if kind == 'OnTop'}
-            for child, _, _ in dependencies:
-                if id(child) in payload_resting:
-                    payload_resting[id(child)].add(*child.get_position_orientation())
-            self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
-                                          payload_resting=payload_resting)
-            adjacency = held.states[VerticalAdjacency].get_value()
-            touching = any(path in self._placement_contacts(held,payload) for path in (link.prim_path for link in target.links.values()))
-            official_on_top = bool(held.states[OnTop].get_value(target))
+        candidate = self._select_surface_candidate(held, target, point, yaw_degrees, payload,
+                                                   roll_degrees=roll_degrees)
+        verification_point = candidate.get('verification_point', point)
+        self._placement_record({'status': 'surface_release', 'target': target.name, 'held': held.name,
+            'candidate': candidate['index'], 'position': candidate['pose'][0].tolist(),
+            'selected_point': point.tolist(), 'verification_point': verification_point.tolist(),
+            'requested_yaw_degrees': yaw_degrees,
+            'proposal_yaw_degrees': candidate.get('proposal_yaw_degrees', yaw_degrees),
+            'proposal_overlap_score': candidate.get('proposal_overlap_score'),
+            'surface_kind': candidate.get('surface_kind', 'selected_surface')})
+        self._carry_detach()
+        held.set_position_orientation(*candidate['pose'])
+        self._relocate_contents(held, contents)
+        held.keep_still()
+        held.wake()
+        resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
+        payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
+                           for child, _, kind in dependencies if kind == 'OnTop'}
+        self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
+                                      payload_resting=payload_resting)
+        try:
+            contacts = self._placement_contacts(held, payload)
+            touching = any(link.prim_path in contacts for link in target.links.values())
             supported, support = self._selected_surface_support(
                 held, target, verification_point, touching, payload, resting=resting.report())
-            # The candidate already passed free settling. Verify the current
-            # support after release; residual native motion is not a failed placement.
-            if point is not None:
-                supported = all(value for check, value in support['checks'].items() if check != 'settled')
+            # Residual motion is diagnostic; losing the requested support is
+            # a failed result. Never retry or rewind either outcome here.
+            supported = all(value for key, value in support['checks'].items() if key != 'settled')
             self._placement_record({'status': 'postcondition_check', 'target': target.name, 'held': held.name,
                 'position': held.get_position_orientation()[0].tolist(),
-                'touching': touching, 'official_on_top': official_on_top, 'selected_surface_support': support,
-                'supported': supported,
-                'verification_point':verification_point.tolist() if verification_point is not None else None,
-                'target_below': target in adjacency.negative_neighbors,
-                'target_above': target in adjacency.positive_neighbors,
-                'grasp_released': self._get_held() is None})
-            if not (supported if point is not None else official_on_top):
-                raise SkillError('postcondition_error', 'Object is not supported by the selected surface', changed=True)
+                'official_on_top': bool(held.states[OnTop].get_value(target)),
+                'selected_surface_support': support, 'supported': supported,
+                'verification_point': verification_point.tolist(), 'grasp_released': self._get_held() is None})
+            if not supported:
+                raise SkillError('postcondition_error', 'Object did not settle on the selected surface', changed=True)
             self._verify_payload(dependencies, support_target=target,
                                  support_resting={key: window.report() for key, window in payload_resting.items()})
-            # Placement is now verified and released. Advance native cooking,
-            # slicing and task evaluation without watching or restoring the old
-            # assembly: a legitimate transition may consume it in this very step.
+        finally:
+            # The release is real even when its result fails. Advance native
+            # transitions and evaluation on both paths, without rewinding.
+            # Slicing may replace the object here; do not access it afterward.
             self._step(self.primitives._empty_action())
-            return 'selected_surface_collision_support_after_free_settling' if point is not None else 'official_OnTop'
+        return 'selected_surface_collision_support_after_free_settling'
 
     def _selected_surface_support(self, held, target, point, touching, payload=(), *, require_contact=False, resting=None,
                                   require_neighborhood=True):
