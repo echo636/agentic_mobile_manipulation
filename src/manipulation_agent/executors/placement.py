@@ -298,10 +298,10 @@ class CheckedPlacement:
                             roll_degrees=None, spread_surface=False, center_footprint=False):
         """Propose root poses at the selected collision surface, with the actual shape.
 
-        Surface rays ignore the moving assembly at its OLD pose. Space at the
-        NEW pose is checked by PhysX after moving it there, not by a cuboid.
-        Fillable vessels use their authored resting tilt rather than preserving
-        a sideways pose inherited from the scene or an earlier collision.
+        Surface rays ignore the moving assembly at its old pose. Rigid objects
+        use their authored resting tilt so a small held tilt does not align a
+        low corner instead of the supporting base. Cloth retains its deformed
+        footprint. Candidate ranking is geometric; release and settling happen once.
         """
         import math
         from .surface_geometry import rotated_surface_geometry
@@ -311,7 +311,7 @@ class CheckedPlacement:
         origin = position.detach().cpu().numpy()
         geometry = self._collision_vertices(held)
         orientations = getattr(held, 'orientations', None)
-        if 'fillable' in getattr(held, 'abilities', {}) and orientations is not None:
+        if orientations is not None and not center_footprint:
             from .surface_geometry import native_resting_orientation
             quaternion, rotation = native_resting_orientation(
                 orientation.detach().cpu().numpy(), orientations)

@@ -164,6 +164,43 @@ class SelectedSurfaceGeometry(unittest.TestCase):
 
 
 class PlacementRejectionTransactions(unittest.TestCase):
+    def test_tilted_board_release_centers_its_authored_resting_base(self):
+        import sys
+        import numpy as np
+        import torch
+        from scipy.spatial.transform import Rotation
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.placement import CheckedPlacement
+        backend = CheckedPlacement()
+        backend.torch = torch
+        backend.og = SimpleNamespace(sim=SimpleNamespace(get_physics_dt=lambda: 1/120))
+        backend.robot = SimpleNamespace(links={})
+        tilt = Rotation.from_euler('xyz', [2., 2., 139.], degrees=True)
+        origin = torch.tensor([1., 2., 1.])
+        shape = np.array([[x, y, z] for x in (-.2, .2) for y in (-.14, .14)
+                          for z in (-.01, .01)])
+        held = SimpleNamespace(name='board', links={}, abilities={}, orientations=[],
+            get_position_orientation=lambda: (origin, torch.tensor(tilt.as_quat())))
+        target = SimpleNamespace(name='counter', links={
+            'base': SimpleNamespace(prim_path='/counter/base')})
+        backend._collision_vertices = lambda obj: tilt.apply(shape) + origin.numpy()
+        backend._placement_record = lambda row: None
+        backend._open_rim_candidates = lambda *args, **kwargs: []
+        point = torch.tensor([0., 0., .87])
+        def raytest(start, end, **kwargs):
+            return dict(hit=True, position=point.tolist(), normal=[0., 0., 1.],
+                        distance=float(start[2]-point[2]), rigidBody='/counter/base')
+        with patch.dict(sys.modules, {
+                'omnigibson.utils': SimpleNamespace(transform_utils=SimpleNamespace()),
+                'omnigibson.utils.sampling_utils': SimpleNamespace(raytest=raytest)}):
+            candidate = backend._surface_candidates(held, target, point, offsets=[(0., 0.)])[0]
+        position, quaternion = candidate['pose']
+        landed = Rotation.from_quat(quaternion.numpy()).apply(shape) + position.numpy()
+        np.testing.assert_allclose(landed[:, :2].mean(axis=0), point[:2].numpy(), atol=1e-6)
+        self.assertAlmostEqual(float(np.ptp(landed[:, 2])), .02, places=6)
+        self.assertGreater(float(landed[:, 2].min()), float(point[2]))
+
     def test_shallow_rim_click_proposes_inward_placement_and_keeps_floor_clicks(self):
         import sys
         import numpy as np
