@@ -111,6 +111,7 @@ class CheckedPlacement:
         """Find upward physical surfaces near the reference, without class filters."""
         import math
         from .surface_geometry import adjacent_support_points, bottom_anchor, rotated_surface_geometry
+        from omnigibson.object_states import Touching, VerticalAdjacency
         from omnigibson.utils import transform_utils as T
         from omnigibson.utils.sampling_utils import raytest
         pose = held.get_position_orientation()
@@ -132,14 +133,20 @@ class CheckedPlacement:
             start = self.torch.tensor([float(xy[0]), float(xy[1]), z + .6], device=point.device)
             end = start.clone(); end[2] = min(z - 1.5, -.5)
             return raytest(start, end, ignore_bodies=ignored)
-        reference_hits = [downward(point[:2], float(point[2]))]
-        reference_bottom = bottom_anchor(self._collision_vertices(target))
-        reference_hits.append(downward(reference_bottom[:2], float(reference_bottom[2])))
-        reference_supports = {hit.get('rigidBody') for hit in reference_hits
-                              if hit.get('hit') and float(hit['normal'][2]) >= .9
-                              and hit.get('rigidBody') in by_link}
-        # A support can have several links; accept its full physical object.
-        reference_objects = {id(by_link[path]) for path in reference_supports}
+        # A tray can overhang its table: rays through the clicked point and
+        # bottom center then hit the floor. Prefer its actual supporting contact.
+        # Negative adjacency also works on lower shelves with geometry above.
+        reference_objects = {id(obj) for obj in target.states[VerticalAdjacency].get_value().negative_neighbors
+                             if all(obj is not item for item in moving)
+                             and target.states[Touching].get_value(obj)}
+        if not reference_objects:
+            # Static fixtures need not produce native contact pairs.
+            reference_bottom = bottom_anchor(self._collision_vertices(target))
+            reference_hits = [downward(point[:2], float(point[2])),
+                              downward(reference_bottom[:2], float(reference_bottom[2]))]
+            reference_objects = {id(by_link[hit['rigidBody']]) for hit in reference_hits
+                                 if hit.get('hit') and float(hit['normal'][2]) >= .9
+                                 and hit.get('rigidBody') in by_link}
         candidates = []
         proposals = [(self.torch.as_tensor(xy, dtype=point.dtype, device=point.device),
                       'separated_footprints') for xy in adjacent]
