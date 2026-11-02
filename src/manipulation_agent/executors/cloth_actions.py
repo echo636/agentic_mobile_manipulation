@@ -41,6 +41,30 @@ def folded_configuration(points, current, contact_offset, *, support_height=None
     return result
 
 
+def separate_cloth_layers(configuration, neighbors, contact_offset):
+    """Release a folded sheet above intersecting cloth, never through its layers.
+
+    Only translate the selected configuration; native physics settles the stack.
+    Nearby particle columns keep an unrelated high corner from lifting the fold.
+    """
+    result = configuration.clone()
+    low, high = result.amin(0), result.amax(0)
+    for points, offset in sorted(neighbors, key=lambda row: float(row[0][:, 2].min())):
+        gap = float(contact_offset) + float(offset)
+        nearby = ((points[:, :2] >= low[:2] - gap) &
+                  (points[:, :2] <= high[:2] + gap)).all(dim=1)
+        if not bool(nearby.any()):
+            continue
+        bottom, top = points[nearby, 2].min(), points[nearby, 2].max()
+        if top + gap <= low[2] or bottom - gap >= high[2]:
+            continue
+        lift = top + gap - low[2]
+        result[:, 2] += lift
+        low[2] += lift
+        high[2] += lift
+    return result
+
+
 class CheckedClothActions:
     def _place_cloth_surface(self, primitive, held, target, max_steps, point, yaw_degrees=None,
                              *, roll_degrees=None):
@@ -105,6 +129,7 @@ class CheckedClothActions:
     def _checked_fold(self, target, max_steps):
         from omnigibson.utils import transform_utils as T
         from omnigibson.utils.numpy_utils import vtarray_to_torch
+        from omnigibson.utils.constants import PrimType
 
         folded = self._fold_preconditions(target)
         if folded.get_value():
@@ -125,8 +150,14 @@ class CheckedClothActions:
         support_height = max(float(point[2]) for _, point in contacts) if contacts else None
         result = folded_configuration(points, current, cloth.cloth_system.particle_contact_offset,
                                       support_height=support_height, heading=heading)
+        neighbors = [(obj.root_link.compute_particle_positions(), obj.root_link.cloth_system.particle_contact_offset)
+                     for obj in self.env.scene.object_registry('prim_type', PrimType.CLOTH, [])
+                     if obj is not target]
+        before_z = float(result[:, 2].min())
+        result = separate_cloth_layers(result, neighbors, cloth.cloth_system.particle_contact_offset)
         self._placement_record(dict(status='cloth_fold_configuration', target=target.name,
             support_height=support_height, material_heading=heading, previous_min_z=float(current[:, 2].min()),
+            cloth_layer_clearance_lift_m=float(result[:, 2].min()) - before_z,
             configured_z=[float(result[:, 2].min()), float(result[:, 2].max())]))
         cloth.set_particle_positions(result)
         cloth.particle_velocities = self.torch.zeros_like(result)
