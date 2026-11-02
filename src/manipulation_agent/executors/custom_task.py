@@ -91,6 +91,9 @@ class CustomTaskBackend(RGBBackend):
     def __init__(self, spec_path, output, *, build_instance=None, geometry_only=False, **kwargs):
         self.spec_path = Path(spec_path).resolve()
         self.custom_spec = json.loads(self.spec_path.read_text())
+        self.standalone_scene = self.custom_spec.get('standalone_scene')
+        if self.standalone_scene and build_instance is not None:
+            raise ValueError('Standalone import loads an existing frozen scene')
         # Complete furnished scenes require more search time than the small
         # atomic fixtures. The recorded loaded garden map has a valid route
         # that the 10-second budget misses under simulator CPU contention.
@@ -107,7 +110,8 @@ class CustomTaskBackend(RGBBackend):
         self._protected_initial_positions = {}
         self.build_instance = Path(build_instance) if build_instance else None
         self._custom_motion_positions = {}; self._custom_state_errors = []
-        base = self.custom_spec['base']
+        base = (dict(task=self.custom_spec['id'], instance=0, seed=self.custom_spec.get('seed', 0))
+                if self.standalone_scene else self.custom_spec['base'])
         super().__init__(base['task'], base['instance'], output, seed=base['seed'], **kwargs)
         if self.geometry_only:return
         # Camera initialization may advance physics. Begin scoring from the
@@ -205,7 +209,8 @@ class CustomTaskBackend(RGBBackend):
             instance_path = (self.spec_path.parent / frozen['path']).resolve()
             if hashlib.sha256(instance_path.read_bytes()).hexdigest() != frozen['sha256']:
                 raise ValueError('Custom initial scene hash mismatch')
-            self._restore_custom_scene(str(instance_path))
+            if not self.standalone_scene:
+                self._restore_custom_scene(str(instance_path))
         if self.geometry_only:return
         self.custom_objects = {o.name: o for o in self.env.scene.objects}
         for role, name in spec['roles'].items():
@@ -217,9 +222,9 @@ class CustomTaskBackend(RGBBackend):
         self._custom_motion_positions = self._motion_positions()
         self.input_hashes.update(custom_task_spec=hashlib.sha256(self.spec_path.read_bytes()).hexdigest(),
                                  custom_initial_scene=hashlib.sha256(instance_path.read_bytes()).hexdigest())
-        self.task_metadata = {'task': spec['id'], 'instance': spec['instance_id'], 'seed': spec['base']['seed'],
-                              'split': 'custom_long_horizon_pilot', 'scene': self.env.task.scene_name,
-                              'base_public_task': spec['base'], 'official_submission_eligible': False}
+        self.task_metadata = {'task': spec['id'], 'instance': spec['instance_id'], 'seed': self.seed,
+                              'split': 'custom_long_horizon_pilot', 'scene': self.env.scene.scene_model,
+                              'base_public_task': spec.get('base'), 'official_submission_eligible': False}
         write_json(self.output / 'custom_instance_validation.json', {
             'status':'passed', 'validation_level':'scene loaded and all private predicates evaluated; feasibility separate',
             'task':self.task_metadata, 'input_hashes':self.input_hashes,
@@ -232,6 +237,21 @@ class CustomTaskBackend(RGBBackend):
         live = {o.name:o for o in self.env.scene.objects}
         return {role:([v.tolist() for v in live[name].get_position_orientation()] if name in live else None)
                 for role,name in self.custom_spec['roles'].items()}
+
+    def _load_standalone_environment(self, config):
+        from .standalone_scene import load_environment
+        load_environment(self, config)
+
+    def _goal_options(self):
+        return [] if self.standalone_scene else super()._goal_options()
+
+    def close(self):
+        try:
+            super().close()
+        finally:
+            policy = getattr(self, '_standalone_sleep_policy', None)
+            if policy is not None:
+                policy.close()
 
     def _refresh_custom_contacts(self, stage):
         # Only task entities participate in custom contact predicates. Waking
@@ -539,6 +559,8 @@ class CustomTaskBackend(RGBBackend):
         result = {}
         for key, row in self.custom_spec['evaluation']['predicates'].items():
             obj = roles[row['object']]
+            if row['state'] == 'SystemExists':
+                result[key] = row['system'] in self.env.scene.active_systems; continue
             if row['state'] == 'Exists':
                 result[key] = obj is not None; continue
             if row['state'] == 'Replaced':

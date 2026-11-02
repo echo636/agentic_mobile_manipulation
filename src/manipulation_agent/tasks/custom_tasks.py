@@ -31,6 +31,11 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
             raise ValueError('Missing custom task field: ' + key)
     if spec.get('official_submission_eligible') is not False:
         raise ValueError('Custom tasks must explicitly exclude official submission')
+    if spec.get('standalone_scene'):
+        if spec.get('base') or not spec['standalone_scene'].get('scene_model'):
+            raise ValueError('Standalone custom scenes use their own scene model, not a base official task')
+        if not spec.get('robot_start') or not spec.get('frozen_instance'):
+            raise ValueError('Standalone custom scenes need a frozen scene and robot start pose')
     context = spec.get('public_context')
     if not isinstance(context, list) or not context or any(not isinstance(s, str) or not s.strip() for s in context):
         raise ValueError('Public task context must be nonempty text')

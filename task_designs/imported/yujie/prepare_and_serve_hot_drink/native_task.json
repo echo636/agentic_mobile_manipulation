@@ -1,0 +1,302 @@
+{
+  "schema_version": 1,
+  "id": "prepare_and_serve_hot_drink_native",
+  "instance_id": "yujie_instance301_native",
+  "seed": 0,
+  "official_submission_eligible": false,
+  "public_instruction": "Prepare a hot drink and snacks. Boil the water from the refrigerator. The cabinet contains a kettle, a cup, a napkin, a placemat, a plate, a teaspoon, a tray, sugar cookies, and honey. Arrange the drink, tableware, and snacks on the living-room coffee table.",
+  "public_context": [
+    "Use the water initially in the refrigerator. The completed drink includes boiled water in the cup and a kettle still filled with boiled water.",
+    "Place the mat and tray on the living-room coffee table. The cup, napkin, plate and teaspoon can rest on the table, mat or tray; the teaspoon can also rest on the napkin or plate. Serve the cookies on the table, plate or tray, and the honey jar on the table or tray."
+  ],
+  "standalone_scene": {
+    "scene_model": "house_single_floor"
+  },
+  "physics": {
+    "use_gpu_dynamics": true
+  },
+  "robot_start": {
+    "position": [
+      6.06195068359375,
+      -0.887542724609375,
+      0.0050048828125
+    ],
+    "orientation": [
+      0.0,
+      0.0,
+      -0.7934740781784058,
+      0.6086040735244752
+    ]
+  },
+  "roles": {
+    "table": "coffee_table_rlsebe_0",
+    "cabinet": "bottom_cabinet_no_top_gjeoer_0",
+    "fridge": "fridge_dszchb_0",
+    "stove": "burner_mjvqii_0",
+    "counter": "countertop_kelker_0",
+    "bottle": "water_bottle_277",
+    "kettle": "kettle_276",
+    "mug": "mug_275",
+    "napkin": "dinner_napkin_273",
+    "mat": "place_mat_272",
+    "plate": "plate_274",
+    "spoon": "teaspoon_271",
+    "tray": "tray_270",
+    "cookies": "sugar_cookie_269",
+    "honey": "honey_jar_268"
+  },
+  "initial_assertions": {
+    "kettle_in_cabinet": "kettle_in_cabinet",
+    "mug_in_cabinet": "mug_in_cabinet",
+    "napkin_in_cabinet": "napkin_in_cabinet",
+    "mat_in_cabinet": "mat_in_cabinet",
+    "plate_in_cabinet": "plate_in_cabinet",
+    "spoon_in_cabinet": "spoon_in_cabinet",
+    "tray_in_cabinet": "tray_in_cabinet",
+    "cookies_in_cabinet": "cookies_in_cabinet",
+    "honey_in_cabinet": "honey_in_cabinet",
+    "bottle_in_fridge": "bottle_in_fridge",
+    "bottle_filled_water": "bottle_filled_water",
+    "water_not_yet_boiled": {
+      "not": "boiled_water_exists"
+    }
+  },
+  "evaluation": {
+    "score_type": "custom_native_hot_drink_original_bddl_clauses_v1",
+    "predicates": {
+      "kettle_in_cabinet": {
+        "object": "kettle",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "mug_in_cabinet": {
+        "object": "mug",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "napkin_in_cabinet": {
+        "object": "napkin",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "mat_in_cabinet": {
+        "object": "mat",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "plate_in_cabinet": {
+        "object": "plate",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "spoon_in_cabinet": {
+        "object": "spoon",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "tray_in_cabinet": {
+        "object": "tray",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "cookies_in_cabinet": {
+        "object": "cookies",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "honey_in_cabinet": {
+        "object": "honey",
+        "state": "Inside",
+        "target": "cabinet"
+      },
+      "bottle_in_fridge": {
+        "object": "bottle",
+        "state": "Inside",
+        "target": "fridge"
+      },
+      "bottle_filled_water": {
+        "object": "bottle",
+        "state": "Filled",
+        "system": "water"
+      },
+      "boiled_water_exists": {
+        "object": "kettle",
+        "state": "SystemExists",
+        "system": "cooked__water"
+      },
+      "kettle_filled_hot_water": {
+        "object": "kettle",
+        "state": "Filled",
+        "system": "cooked__water"
+      },
+      "mug_contains_hot_water": {
+        "object": "mug",
+        "state": "Contains",
+        "system": "cooked__water"
+      },
+      "napkin_on_table": {
+        "object": "napkin",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "napkin_on_mat": {
+        "object": "napkin",
+        "state": "OnTop",
+        "target": "mat"
+      },
+      "napkin_on_tray": {
+        "object": "napkin",
+        "state": "OnTop",
+        "target": "tray"
+      },
+      "mat_on_table": {
+        "object": "mat",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "plate_on_table": {
+        "object": "plate",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "plate_on_mat": {
+        "object": "plate",
+        "state": "OnTop",
+        "target": "mat"
+      },
+      "plate_on_tray": {
+        "object": "plate",
+        "state": "OnTop",
+        "target": "tray"
+      },
+      "spoon_on_table": {
+        "object": "spoon",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "spoon_on_napkin": {
+        "object": "spoon",
+        "state": "OnTop",
+        "target": "napkin"
+      },
+      "spoon_on_mat": {
+        "object": "spoon",
+        "state": "OnTop",
+        "target": "mat"
+      },
+      "spoon_on_plate": {
+        "object": "spoon",
+        "state": "OnTop",
+        "target": "plate"
+      },
+      "spoon_on_tray": {
+        "object": "spoon",
+        "state": "OnTop",
+        "target": "tray"
+      },
+      "tray_on_table": {
+        "object": "tray",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "cookies_on_tray": {
+        "object": "cookies",
+        "state": "OnTop",
+        "target": "tray"
+      },
+      "cookies_on_plate": {
+        "object": "cookies",
+        "state": "OnTop",
+        "target": "plate"
+      },
+      "cookies_on_table": {
+        "object": "cookies",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "honey_on_tray": {
+        "object": "honey",
+        "state": "OnTop",
+        "target": "tray"
+      },
+      "honey_on_table": {
+        "object": "honey",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "mug_on_table": {
+        "object": "mug",
+        "state": "OnTop",
+        "target": "table"
+      },
+      "mug_on_mat": {
+        "object": "mug",
+        "state": "OnTop",
+        "target": "mat"
+      },
+      "mug_on_tray": {
+        "object": "mug",
+        "state": "OnTop",
+        "target": "tray"
+      }
+    },
+    "terminal": {
+      "boiled_water_exists": "boiled_water_exists",
+      "kettle_filled_hot_water": "kettle_filled_hot_water",
+      "mug_contains_hot_water": "mug_contains_hot_water",
+      "napkin_served": {
+        "any": [
+          "napkin_on_table",
+          "napkin_on_mat",
+          "napkin_on_tray"
+        ]
+      },
+      "mat_served": "mat_on_table",
+      "plate_served": {
+        "any": [
+          "plate_on_table",
+          "plate_on_mat",
+          "plate_on_tray"
+        ]
+      },
+      "spoon_served": {
+        "any": [
+          "spoon_on_table",
+          "spoon_on_napkin",
+          "spoon_on_mat",
+          "spoon_on_plate",
+          "spoon_on_tray"
+        ]
+      },
+      "tray_served": "tray_on_table",
+      "cookies_served": {
+        "any": [
+          "cookies_on_tray",
+          "cookies_on_plate",
+          "cookies_on_table"
+        ]
+      },
+      "honey_served": {
+        "any": [
+          "honey_on_tray",
+          "honey_on_table"
+        ]
+      },
+      "mug_served": {
+        "any": [
+          "mug_on_table",
+          "mug_on_mat",
+          "mug_on_tray"
+        ]
+      }
+    }
+  },
+  "provenance": {
+    "source_commit": "bbe9b5f230cae81c58bc945ccb15aaaf4c01a206",
+    "goal_definition": "problem0.bddl",
+    "historical_symbolic_success_not_inherited": true,
+    "instruction_variant": "original_english_plus_goal_only_native_clarification",
+    "initial_state": "pinned partial template plus authored instance301 object states",
+    "official_behavior1k_task": false
+  }
+}

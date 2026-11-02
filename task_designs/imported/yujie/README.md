@@ -26,6 +26,16 @@ python3 task_designs/imported/yujie/prepare_and_serve_hot_drink/restore_scene.py
 
 [任务注册条目](prepare_and_serve_hot_drink/available_tasks_entry.yaml)和[原生定义](prepare_and_serve_hot_drink/problem0.bddl)也已保留。原生定义与高层视觉定义不是同一评分协议，原生定义不继承高层实验成功。这里不执行原作者会原地写入共享 BEHAVIOR checkout 的安装器；高层状态机及静态建筑恢复钩子留待 PR 后续审查。
 
+2026-11-03 新增当前执行器的原生接入准备：[prepare_native.py](prepare_and_serve_hot_drink/prepare_native.py) 将已恢复模板与 instance301 的物体状态合成独立初态，[native_task.json](prepare_and_serve_hot_drink/native_task.json) 保留原生 BDDL 的全部 11 项终态布尔条件。机器人采用任务条目起点，忽略 instance 文件中的地下占位坐标。运行时使用独立场景和现有 RGB 原子动作，评分读取真实物体关系及水粒子状态；不载入符号烧水、复制水量或固定摆放逻辑。英文原指令附带仅描述终态的补充，明确原 BDDL 要求壶内仍有足量热水。
+
+```bash
+python3 task_designs/imported/yujie/prepare_and_serve_hot_drink/prepare_native.py \
+  --scene /absolute/restored/hot_drink_scene \
+  --output /absolute/empty/output/hot_drink_native
+```
+
+输出的 `task.json` 可供 `CustomTaskBackend` 加载；这是自定义原生评估，不计入十项官方任务。当前已核对初态文件合成、配置及目标条件等价性，实际加载、物理可完成性和自主成功尚待验证。
+
 ## 两袋杂货
 
 `carry_in_and_put_away_groceries`，以 `v2_design` 为收录版本：从汽车后备箱搬入两袋、六件食品。四件冷藏食品入冰箱，两包饼干入厨房吊柜，空袋放冰箱旁，后备箱、冰箱及两个吊柜关闭。两包饼干可任选合法柜子，也可分柜。

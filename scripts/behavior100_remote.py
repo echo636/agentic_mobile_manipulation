@@ -249,6 +249,28 @@ def assets(manifest, data_root):
             if hashlib.sha256(custom_path.read_bytes()).hexdigest() != task['custom_task_spec_sha256']:
                 raise ValueError('Frozen custom task specification changed')
             custom = json.loads(custom_path.read_text())
+            if custom.get('standalone_scene'):
+                from manipulation_agent.tasks.custom_tasks import load_spec
+                from manipulation_agent.batch.asset_preflight import inspect_model_assets, inspect_particle_system_assets
+                custom, validation = load_spec(custom_path, require_frozen=True)
+                frozen = Path(validation['scene_path'])
+                data = json.loads(frozen.read_text())
+                assets_root = data_root / 'data/omnigibson/behavior-1k-assets'
+                models = {(o['args']['category'], o['args']['model'])
+                          for o in data['objects_info']['init_info'].values() if o['class_name'] == 'DatasetObject'}
+                check = inspect_model_assets(models, assets_root)
+                systems = {r['system'] for r in custom['evaluation']['predicates'].values() if r.get('system')}
+                particles = [inspect_particle_system_assets(s, assets_root) for s in sorted(systems)]
+                matches = (custom['id'] == task['task'] and
+                           custom['standalone_scene']['scene_model'] == task['scene'] and
+                           custom['frozen_instance']['sha256'] == task['custom_instance_sha256'])
+                layout = assets_root / 'scenes' / task['scene'] / 'layout'
+                passed = matches and layout.is_dir() and check['status'] == 'passed' and all(
+                    not r['missing_assets'] for r in particles)
+                rows.append(dict(task=task['task'], status='passed' if passed else 'failed',
+                    runtime_assets=check, particle_assets=particles, instance_matches=matches,
+                    scope='standalone_custom_scene; no installed official task definition or official score'))
+                continue
             base = custom['base']
             name, instance = base['task'], base['instance']
         else:
