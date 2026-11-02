@@ -87,6 +87,7 @@ class UnderPlacementTests(unittest.TestCase):
         with self.assertRaises(SkillError) as caught:
             self.backend._checked_place_under(self.target, 50)
         self.assertEqual(caught.exception.code, 'postcondition_error')
+        self.assertEqual(caught.exception.stage, 'released_placement_unconfirmed')
         self.held.set_position_orientation.assert_called_once()
         self.under.set_value.assert_not_called()
         self.backend._verify_payload.assert_not_called()

@@ -101,7 +101,7 @@ class CheckedPlacement:
             'checks': checks, 'contact_geometry': contact})
         if not all(checks.values()):
             raise SkillError('postcondition_error', 'Released object did not remain supported under the selected target',
-                             changed=True)
+                             changed=True, stage='released_placement_unconfirmed')
         self._verify_payload(dependencies)
         self.frames_revision = -1
         return {'primitive': 'place_under', 'implementation': 'measured_support_then_free_settling',
@@ -250,7 +250,7 @@ class CheckedPlacement:
             if not valid:
                 checks = details['checks']
                 stage = ('released_supported_not_adjacent' if checks['released'] and
-                         checks['supported'] and not checks['next_to'] else None)
+                         checks['supported'] and not checks['next_to'] else 'released_placement_unconfirmed')
                 raise SkillError('postcondition_error', 'NextTo did not remain after release',
                                  changed=True, stage=stage)
             self._verify_payload(dependencies, support_target=candidate['support'])
@@ -702,7 +702,8 @@ class CheckedPlacement:
                 'selected_surface_support': support, 'supported': supported,
                 'verification_point': verification_point.tolist(), 'grasp_released': self._get_held() is None})
             if not supported:
-                raise SkillError('postcondition_error', 'Object did not settle on the selected surface', changed=True)
+                raise SkillError('postcondition_error', 'Object did not settle on the selected surface',
+                                 changed=True, stage='released_placement_unconfirmed')
             self._verify_payload(dependencies, support_target=target,
                                  support_resting={key: window.report() for key, window in payload_resting.items()})
         finally:
@@ -824,7 +825,8 @@ class CheckedPlacement:
             self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,
                 'official_inside': inside, 'position': held.get_position_orientation()[0].tolist()})
             if not inside:
-                raise SkillError('postcondition_error', 'Object did not remain inside after release', changed=True)
+                raise SkillError('postcondition_error', 'Object did not remain inside after release',
+                                 changed=True, stage='released_placement_unconfirmed')
             try:
                 self._verify_container_payload(target, residents)
                 self._verify_payload(dependencies)
