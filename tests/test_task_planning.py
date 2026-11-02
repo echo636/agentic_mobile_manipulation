@@ -73,9 +73,10 @@ class TaskPlanningTests(unittest.TestCase):
         doc = notes(goal('inspect-a', [method('inspect-a', 5), method('inspect-pair', 6, also=['inspect-b'])]),
                     goal('inspect-b', [method('inspect-b', 5)]),
                     goal('assemble', [method('assembly-by-hand', 18),
-                                      method('assembly-with-jig', 7, requires={'jig': 'ready'})],
+                                      method('assembly-with-jig', 7, requires={'jig': 'ready'},
+                                             depends_on=['jig'])],
                          depends=['inspect-a', 'inspect-b']),
-                    goal('jig', [method('prepare-jig', 3, effects={'jig': 'ready'})]),
+                    dict(goal('jig', [method('prepare-jig', 3, effects={'jig': 'ready'})]), optional=True),
                     goal('verify', [method('check-assembly', 2)], depends=['assemble']))
         original = copy.deepcopy(doc)
         plan = schedule_task(doc)
@@ -84,6 +85,32 @@ class TaskPlanningTests(unittest.TestCase):
                          {'inspect-pair', 'prepare-jig', 'assembly-with-jig', 'check-assembly'})
         self.assertGreaterEqual(len(plan['alternatives']), 2)
         self.assertEqual(doc, original)
+        # A different task scale makes manual assembly cheaper. Do not force
+        # the now-useless setup, or compare plans with different final results.
+        doc['goals'][3]['methods'][0]['seconds'] = 4
+        plan = schedule_task(doc)
+        self.assertEqual(plan['estimated_seconds'], 12)
+        self.assertEqual([s['method_id'] for s in plan['steps']],
+                         ['inspect-pair', 'assembly-by-hand', 'check-assembly'])
+        self.assertEqual(plan['optional_work']['scheduled'], [])
+        self.assertNotIn('jig', plan['comparison_goals'])
+
+    def test_optional_subtree_is_only_required_by_the_method_that_uses_it(self):
+        doc = notes(dict(goal('fixture'), optional=True),
+                    goal('configured', [method('configure', 2)], parent='fixture'),
+                    goal('assembled', [method('manual', 9),
+                        method('using-fixture', 3, depends_on=['fixture'])]))
+        doc['goals'][0]['methods'] = [method('check-final', 1)]
+        plan = schedule_task(doc)
+        self.assertEqual(plan['estimated_seconds'], 6)
+        self.assertEqual([s['method_id'] for s in plan['steps']],
+                         ['configure', 'using-fixture', 'check-final'])
+        self.assertEqual(plan['coverage']['scheduled'], 2)
+        doc['goals'][1]['status'] = 'blocked'
+        plan = schedule_task(doc)
+        self.assertEqual(plan['status'], 'estimated')
+        self.assertEqual([s['method_id'] for s in plan['steps']], ['manual', 'check-final'])
+        self.assertEqual(plan['estimated_seconds'], 10)
 
     def test_shared_transport_is_a_method_and_direct_can_be_cheaper(self):
         doc = notes(goal('a', [dict(method('direct-a', 2), route=['bench', 'table']),

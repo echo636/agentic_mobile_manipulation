@@ -1,6 +1,6 @@
 # Task notes format
 
-Write the complete replacement JSON string with `task_notes(operation="write", content=..., expected_version=...)`. Start at version 0; each reply supplies the next version. After missing context or a version conflict, read with `operation="read", content=null, expected_version=null`. Maximum content length: 12000 characters. Keep completed branches concise: retain their IDs, relationships, result and evidence, but remove obsolete action plans and repeated prose. Keep each item subtotal in one member entry and refer to it from goals instead of duplicating the ledger.
+Create the tree with `task_notes(operation="write", content=..., expected_version=0)`. Each reply supplies the next version. Use `update` for later changes; `write` replaces everything. After missing context or a version conflict, read with `operation="read", content=null, expected_version=null`. Maximum stored content: 12000 characters. Keep completed branches concise: retain IDs, relationships, result and evidence; remove obsolete plans and repeated prose. Keep each item subtotal in one member entry rather than duplicating the ledger.
 
 Tree shape follows the task. This example has a root, two intermediate layers on one branch, and leaves at different depths. The current action plan is stored separately in `active` (labels illustrate structure, not task content):
 
@@ -47,6 +47,14 @@ Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id`
 
 Use `members` when item coverage matters. Labels are your own, not simulator IDs. An entry represents one item or a distinguishable group in the same state; split a mixed-state entry into pending inputs and finished outputs, with their current locations and count units. Update state and remaining work from RGB and feedback. A spill reopens the affected goal; temporary placement does not complete storage.
 
+For reconciliation, `update` takes a JSON object containing only changes. Goal entries merge by `id`; new IDs add nodes, so include their full definition. `planning` merges its top-level fields; its `state`, `processes` and lists replace whole values. Other supplied top-level fields replace their previous values. Omitted goals persist; retire an obsolete node explicitly. Omitted `active` becomes null. For example:
+
+```json
+{"goals":[{"id":"g1","status":"done","evidence":["event-00020"]}],"planning":{"location":"bench","state":{"hand":"empty"}},"change":"Observed the result; continue with remaining branches"}
+```
+
+Use this as `content` with `operation="update"` and the current `expected_version`. The reply recomputes the remaining plan. No field is inferred from hidden state.
+
 For repeated transfers, save each subtotal with the last feedback event it includes in `evidence`. Before changing areas or subtasks, reconcile completed processing and deliveries with `members`; replace stale counts, including any conflicting summary. On resuming, read `action_feedback_since_write` from the returned notes and reconcile those public receipts with the checkpoint before acting or replacing notes. If `omitted` is nonzero or item correspondence is unavailable, mark the affected count uncertain. Keep uninspected supply, work in progress and confirmed delivery distinct. Replace stale entries rather than appending a transcript.
 
 Before finish, use `change` to reconcile each criterion and `uncertainties` for remaining gaps. An evidence ID alone, a successful notes write or a `done` label does not verify a result. Preserve original requirements and valid progress when replacing the state.
@@ -86,6 +94,8 @@ For example, a goal's candidate methods could be:
 
 These are format examples, not a task recipe. `clean-b` must be another executable goal in the tree; describe its independent method there if feasible. Use the same representation for inspecting related items together, processing compatible inputs, joining components or moving a loaded tray. Alternatives belong under a result goal; do not duplicate that result as a new requirement. Retire obsolete methods when their assumptions stop holding.
 
+An auxiliary goal or subtree used only by some methods has `optional:true`. A method's `depends_on` names the results it specifically needs; goal-level dependencies apply to every method. For example, assembly may offer a manual method or a fixture method with `"depends_on":["fixture-ready"]`; mark `fixture-ready` optional and give it its own preparation methods. The scheduler charges that preparation only when selected. Optional work does not count toward required-result coverage. Never mark a requested outcome optional, and keep final device/storage conditions as required results.
+
 Fields:
 - `route`: ordered observed work areas visited by the method, including its work location and destination. Distinguish stations with meaningful travel between them, even in one room; labeling every method with the room name hides that travel. A local operation has one entry. Travel uses the supplied directed area graph; missing edges are not free. This estimates task-level travel, not physical navigation paths.
 - `seconds`: estimated local work and handling, including any internal actions not represented separately. Do not include travel or setup costs again. Use comparable estimates based on observations; record uncertainty. Counts alone cannot predict wall time.
@@ -116,4 +126,4 @@ After reading a comparison, select without resending the tree:
 
 Use the actual returned version and your own method/steps. Selection records `active` and returns a new version; it neither executes actions nor completes goals. `planning.selection` reports the chosen method's readiness and immediate cost from this graph version, even outside the three displayed alternatives. Remaining-plan cost differences are available only for retained plans covering the same results; a null comparison is not zero extra cost. Selection is a declaration, not proof that actions implement the method.
 
-After act/look, the old next recommendation is withheld and public feedback, tool time and capture-time deltas accumulate. Continue the current method if supported. Before selecting another, write reconciled statuses, member counts, location, resources and remaining process times together, with `active:null`; this recomputes the remaining plan. Update estimates from observed execution, including failures. A failure may change the scene: reopen affected results and ancestors from evidence, not by merely replaying the same method.
+After act/look, the old next recommendation is withheld and public feedback, tool time and capture-time deltas accumulate. Continue the current method if supported. Before selecting another, update reconciled statuses, member counts, location, resources and remaining process times together; this clears `active` and recomputes the plan. Update estimates from observed execution, including failures. Reopen affected results and ancestors from evidence, not by merely replaying a failed method.

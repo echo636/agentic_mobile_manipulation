@@ -36,6 +36,15 @@ methods organize results; a method on an intermediate node checks its result
 after the children. Methods and dependency edges form the executable work DAG
 on the same goal tree, rather than a separate transport plan.
 
+Goal dependencies apply to every method; a method's `depends_on` adds only the
+prerequisites of that choice. Auxiliary results/subtrees marked `optional:true`
+are available to the search without becoming extra task requirements. Thus a
+manual assembly method competes with preparing and using a fixture; choosing
+manual work does not force fixture preparation. The search compares required
+outcome coverage across plans of different lengths and includes all selected
+auxiliary work in their costs. Requested outcomes and final-state constraints
+remain required. This applies equally to tools, access, processing and delivery.
+
 Method effects mean complete predicted results, not arbitrary progress toward a
 broad phase. Inspection of one storage location needs its own result node if
 other locations remain unknown. Each operation depends on the information and
@@ -79,8 +88,14 @@ flowchart LR
    failed execution is not a completed-method timing sample. The previous
    recommendation is withheld after an action,
    since the world may have changed. The agent can continue the local method.
-4. At completion, failure or changed assumptions, the model updates actual
-   beliefs and estimates through `write`; the remaining DAG is recomputed.
+4. At completion, failure or changed assumptions, `task_notes(update)` merges
+   changed goal fields by ID and changed planning fields, clears the old active
+   method, and recomputes the remaining DAG. Unmentioned branches persist. New
+   IDs add nodes; nested state/process maps and other supplied top-level fields
+   replace their old values. Full `write` remains available for restructuring.
+   Both operations use the same version check and public receipt checkpoint.
+   Replay reconstructs updates with the same merge function, preserving the
+   complete tree before and after each action without echoing it to the model.
 
 Selection does not execute a script or constrain target pixels. The harness
 does not automatically mark goals done from expected effects or a successful

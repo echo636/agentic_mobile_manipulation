@@ -58,15 +58,19 @@ def compile_goals(rows):
             return set()
         if key in work:
             return {key}
-        return set().union(*(expand(child) for child in children[key]))
+        return set().union(*(expand(child) for child in children[key]
+                             if not goals[child].get('optional', False)))
 
     pending = {key for key in work if goals[key]['status'] not in ('done', 'retired')}
+    optional = {key for key in goals
+                if any(goals[a].get('optional', False) for a in chains[key])}
     dependencies = {}
     for key in pending:
         deps = set().union(*(expand(dep) for ancestor in chains[key]
                             for dep in goals[ancestor].get('depends_on', [])))
         # An internal verification method runs after its contributing children.
-        deps.update(set().union(*(expand(child) for child in children[key])))
+        deps.update(set().union(*(expand(child) for child in children[key]
+                                 if not goals[child].get('optional', False))))
         dependencies[key] = deps
     ready_goals(dependencies, set())  # Reject cycles and retired/missing prerequisites.
     methods = []
@@ -87,6 +91,7 @@ def compile_goals(rows):
             if not isinstance(awaits, list) or any(not isinstance(p, str) or not p for p in awaits):
                 raise ValueError('awaits names processes to check after their estimated delay')
             methods.append(dict(id=method['id'], goals=sorted(achieves), route=route,
+                depends_on=set().union(*(expand(dep) for dep in method.get('depends_on', []))),
                 seconds=seconds(method['seconds']), recovery_seconds=seconds(method.get('recovery_seconds', 0)),
                 requires=bindings(method.get('requires', {})), setup=bindings(method.get('setup', {})),
                 effects=bindings(method.get('effects', {})),
@@ -94,7 +99,7 @@ def compile_goals(rows):
                 starts=process_times(method.get('starts', {})), awaits=awaits))
     if len({m['id'] for m in methods}) != len(methods):
         raise ValueError('Method IDs must be unique across the tree')
-    return goals, dependencies, methods
+    return goals, dependencies, methods, optional
 
 
 def schedule_task(notes, beam_width=32):
@@ -104,7 +109,7 @@ def schedule_task(notes, beam_width=32):
     states merge, retaining distinct first choices for useful comparisons.
     Unknown routes, resource states and methods remain explicit gaps.
     """
-    goals, dependencies, methods = compile_goals(notes['goals'])
+    goals, dependencies, methods, optional = compile_goals(notes['goals'])
     context = notes['planning']
     location = context['location']
     state = bindings(context.get('state', {}))
@@ -134,28 +139,36 @@ def schedule_task(notes, beam_width=32):
         switches[key] = seconds(switch['seconds'])
     missing_routes, missing_states, missing_switches = set(), set(), set()
     missing_processes, missing_wait_costs = set(), set()
-    required = frozenset(dependencies)
-    buckets = [dict() for _ in range(len(required) + 1)]
+    required = frozenset(set(dependencies) - optional)
+    buckets = [dict() for _ in range(len(dependencies) + 1)]
     buckets[0][(frozenset(), location, tuple(sorted(state.items())),
                 tuple(sorted(processes.items())), None)] = (0., [])
     expanded = pruned = 0
-    finalists = []
+    finalists, best_coverage = [], -1
     chosen = (notes.get('active') or {}).get('method_id')
     chosen_step = None
-    for level, bucket in enumerate(buckets):
+    for bucket in buckets:
         ranked = sorted(bucket.items(), key=lambda row: row[1][0])
         pruned += max(0, len(ranked) - beam_width)
-        if ranked:
-            finalists = ranked[:beam_width]  # Best reachable coverage if incomplete.
-        if level == len(required):
-            break
+        # Optional support work is charged, not counted as a required outcome.
+        # Compare completed plans across depths: a shorter method may need no setup.
+        for candidate in ranked[:beam_width]:
+            coverage = len(candidate[0][0] & required)
+            if coverage > best_coverage:
+                finalists, best_coverage = [], coverage
+            if coverage == best_coverage:
+                finalists.append(candidate)
+        finalists = sorted(finalists, key=lambda row: row[1][0])[:beam_width]
         for (done, at, values, clocks, first), (cost, steps) in ranked[:beam_width]:
+            if required <= done:
+                continue
             expanded += 1
             current = dict(values)
             remaining = dict(clocks)
             for method in methods:
                 achieved = frozenset(method['goals'])
-                if achieved & done or any(not dependencies[g] <= done for g in achieved):
+                if (achieved & done or not method['depends_on'] <= done
+                        or any(not dependencies[g] <= done for g in achieved)):
                     continue
                 unknown = set(method['awaits']) - remaining.keys()
                 if unknown:
@@ -214,13 +227,13 @@ def schedule_task(notes, beam_width=32):
                     if index not in target or cost + total < target[index][0]:
                         target[index] = (cost + total, [*steps, step])
     (done, _, _, _, _), (cost, steps) = finalists[0]
-    complete = done == required
+    complete = required <= done
     comparisons, firsts = [], set()
     chosen_comparison = None
     for (covered, _, _, _, _), (total, path) in finalists:
         # Equal node counts can cover different work in an incomplete DAG.
         # Such paths are choices, but their cost difference is not a saving.
-        if covered != done:
+        if covered & required != done & required:
             continue
         if path and path[0]['method_id'] not in firsts:
             firsts.add(path[0]['method_id'])
@@ -235,12 +248,14 @@ def schedule_task(notes, beam_width=32):
     result = dict(status='estimated' if complete else 'partial' if steps else 'needs_revision',
         source='model_authored_beliefs_and_costs',
         scope='Modeled work only; beam search estimates, not a physical or optimality guarantee',
-        coverage=dict(scheduled=len(done), unfinished=len(required), unplanned=sorted(required-done),
+        coverage=dict(scheduled=len(done & required), unfinished=len(required), unplanned=sorted(required-done),
                       missing_methods=missing),
+        optional_work=dict(available=sorted(set(dependencies) - required),
+                           scheduled=sorted(done - required)),
         estimated_seconds=cost, steps=steps, next=steps[0] if steps else None,
-        alternatives=comparisons, comparison_goals=sorted(done),
+        alternatives=comparisons, comparison_goals=sorted(done & required),
         expanded_states=expanded, pruned_states=pruned,
-        verification_goals=[key for key, g in goals.items() if key not in dependencies
+        verification_goals=[key for key, g in goals.items() if key not in dependencies and key not in optional
                             and g['status'] not in ('done', 'retired')])
     recommended = (result['next'] or {}).get('method_id')
     result['active'] = notes.get('active')

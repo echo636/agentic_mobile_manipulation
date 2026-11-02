@@ -303,15 +303,30 @@ class TaskNotesTests(unittest.TestCase):
             self.assertEqual(h.task_notes.state['version'], 2)
             # Model reconciliation, not successful primitive execution, advances the DAG.
             self.assertEqual(json.loads(h.task_notes.state['content'])['goals'], doc['goals'])
-            doc['goals'][1]['status'] = 'done'
-            updated = self.write(h, json.dumps(doc), 2, 'reconcile')
+            patch = dict(goals=[dict(id='on', status='done', evidence=[action['evidence_id']])],
+                         planning=dict(state={'device': 'on'}))
+            updated = h.call('task_notes', dict(operation='update', content=json.dumps(patch),
+                                               expected_version=2), 'reconcile')
             self.assertEqual(updated['planning']['next']['method_id'], 'check')
+            reconciled = json.loads(h.task_notes.state['content'])
+            self.assertEqual(reconciled['goals'][2], doc['goals'][2])
+            self.assertEqual(reconciled['goals'][1]['methods'], doc['goals'][1]['methods'])
+            self.assertIsNone(reconciled['active'])
+            self.assertEqual(reconciled['planning']['location'], 'bench')
+            self.assertEqual(h.call('task_notes', dict(operation='update', content=json.dumps(patch),
+                expected_version=2), 'stale-update')['error']['code'], 'notes_version_conflict')
             self.assertEqual(h.task_notes.feedback_seconds, 0)
             self.assertEqual(h.task_notes.feedback_simulation_seconds, 0)
             replay = build_replay(h.recorder.output)
             action_step = next(s for s in replay['steps'] if s['request_id'] == 'execute')
             self.assertEqual(action_step['goal_state']['active'], chosen['active'])
             self.assertEqual(replay['planning_metrics']['method_selections'], 1)
+            update_step = next(s for s in replay['steps'] if s['request_id'] == 'reconcile')
+            self.assertEqual(update_step['goal_state'], reconciled)
+            from manipulation_agent.reporting.goal_replay import goal_replacement_review
+            events = [json.loads(line) for line in (h.recorder.output/'events.jsonl').read_text().splitlines()]
+            review = goal_replacement_review(events)
+            self.assertIn('on', review[-1]['newly_done'])
 
     def test_observed_process_progress_replans_without_claiming_completion(self):
         from test_task_planning import goal, method, notes
@@ -367,9 +382,9 @@ class TaskNotesTests(unittest.TestCase):
             self.assertTrue(result['planning']['failed_since_checkpoint'])
             self.assertIsNone(result['planning']['next'])
             # A caller reconciles the public failure; the harness cannot infer semantic truth.
-            doc['planning']['state']['device'] = 'unavailable'
-            doc['active'] = None
-            plan = self.write(h, json.dumps(doc), 2, 'reconcile')['planning']
+            plan = h.call('task_notes', dict(operation='update', expected_version=2,
+                content=json.dumps(dict(planning=dict(state={'device': 'unavailable'})))),
+                'reconcile')['planning']
             self.assertEqual(plan['estimated_seconds'], 21)
             self.assertEqual({s['method_id'] for s in plan['steps'][:2]}, {'manual-a', 'manual-b'})
             selected = select(plan['next']['method_id'], 'select-manual')

@@ -7,6 +7,21 @@ from ..records import now, write_json
 from .task_planning import task_advice
 
 
+def merge_goal_update(content, update):
+    """Apply model-authored changes; also used to reconstruct exact replay notes."""
+    notes, patch = json.loads(content), json.loads(update)
+    if not isinstance(notes, dict) or notes.get('format') != 'goal-tree-v2' or not isinstance(patch, dict):
+        raise ValueError('update requires existing goal-tree-v2 notes and a JSON object')
+    goals = {g['id']: g for g in notes['goals']}
+    for change in patch.get('goals', []):
+        key = change['id']
+        goals[key] = {**goals.get(key, {}), **change}
+    merged = {**notes, **patch, 'goals': list(goals.values()), 'active': patch.get('active')}
+    if 'planning' in patch:
+        merged['planning'] = {**notes.get('planning', {}), **patch['planning']}
+    return json.dumps(merged, separators=(',', ':'))
+
+
 class TaskNotes:
     def __init__(self, output):
         self.output = output
@@ -58,6 +73,7 @@ class TaskNotes:
             if self.feedback_simulation_seconds is not None and pending_sim is not None else None)
         return dict(status='reconcile', notes_version=self.state['version'],
             checkpoint_status=advice['status'], active=advice.get('active'),
+            checkpoint_coverage=advice.get('coverage'),
             selection=advice.get('selection'),
             next=None, actions_since_checkpoint=count,
             execution=dict(tool_seconds=round(self.feedback_seconds +
@@ -70,16 +86,27 @@ class TaskNotes:
                            'known unfinished work, read the comparison, then select a method.'
                            if not (advice.get('selection') or {}).get('method_id') else
                           'Reconcile the failure and affected goals/resources from RGB and receipts; '
-                           'update notes to compare revised methods.' if failed else
+                           'update changed nodes and beliefs to compare revised methods.' if failed else
                            'Check the returned RGB/receipt against the current method. Continue its local steps '
                            'if supported; on completion, new information or a branch change, update notes '
-                           'to recompute the remaining DAG. Tool success alone does not complete a goal.'))
+                           'to recompute the remaining DAG. Use operation=update to keep unchanged branches. '
+                           'Tool success alone does not complete a goal.'))
+
+    def update(self, content, expected_version, **metadata):
+        """Reconcile changed results and beliefs without resending other branches."""
+        try:
+            merged = merge_goal_update(self.state['content'], content)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            raise SkillError('invalid_notes_update',
+                'Update existing goal-tree-v2 notes with changed goals by id and changed planning fields; '
+                'other top-level fields replace their previous value.') from None
+        return self.write(merged, expected_version, **metadata)
 
     def select(self, content, expected_version, **metadata):
         """Record the choice after seeing a comparison, without rewriting the graph."""
         if self.feedback_count:
             raise SkillError('notes_need_reconciliation',
-                'Update completed/failed work and current beliefs with write before selecting the next method.')
+                'Reconcile completed/failed work and current beliefs with update or write before selecting the next method.')
         try:
             choice = json.loads(content)
             notes = json.loads(self.state['content'])

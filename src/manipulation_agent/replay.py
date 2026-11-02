@@ -124,13 +124,16 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         if result and result.get('ok'):
             if name == 'update_plan': plan = copy.deepcopy(args['subgoals'])
             if name == 'remember': notes[args['key']] = {'text': args['text'], 'revision': args['revision']}
-            if name == 'task_notes' and args.get('operation') in {'write', 'select'}:
+            if name == 'task_notes' and args.get('operation') in {'write', 'update', 'select'}:
                 task_notes=copy.deepcopy(result['notes'])
                 # New write receipts acknowledge metadata; the accepted text is
                 # already archived in the model's tool call. Preserve old receipts.
                 if 'content' not in task_notes:
                     if args['operation'] == 'write':
                         task_notes['content'] = args['content']
+                    elif args['operation'] == 'update':
+                        from .agent.task_notes import merge_goal_update
+                        task_notes['content'] = merge_goal_update(notes_before['content'], args['content'])
                     else:
                         content = json.loads(notes_before['content'])
                         content['active'] = result['selected']

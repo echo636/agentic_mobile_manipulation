@@ -5,8 +5,8 @@ from ..contracts import object_schema, SkillError
 from ..agent.transport_planning import transport_advice
 
 
-@register('task_notes', 'Read or replace your episode-local working notes. Content is your own text, not environment truth. Reads include recent public action receipts. Write reconciles beliefs and starts a new receipt checkpoint. After a planning comparison, select records only the chosen method: content is JSON with method_id, steps, next_check. Use the current expected_version for write/select; replies return the new version without echoing content. Select cannot replace reconciliation of pending action feedback. No physics or action step is consumed.', object_schema({
-    'operation': {'type': 'string', 'enum': ['read', 'write', 'select']},
+@register('task_notes', 'Store your own working beliefs, not environment truth. read returns notes and recent public receipts. write replaces all text. update reconciles goal-tree-v2 JSON: merge changed goal fields by id (new IDs add nodes), merge planning fields, replace other supplied top-level fields; omitted branches persist and active defaults to null. Nested planning state/processes and lists replace whole values. write/update start a new receipt checkpoint. After comparison, select records JSON method_id, steps, next_check; it cannot reconcile pending feedback. Use the current expected_version for changes; replies return metadata without echoing content. No physics or action step is consumed.', object_schema({
+    'operation': {'type': 'string', 'enum': ['read', 'write', 'update', 'select']},
     'content': {'type': ['string', 'null'], 'maxLength': 12000},
     'expected_version': {'type': ['integer', 'null'], 'minimum': 0},
 }))
@@ -17,7 +17,7 @@ def task_notes(ctx, operation, content, expected_version):
         notes = ctx.harness.task_notes.read()
         result = {'notes': notes}
     else:
-        update = ctx.harness.task_notes.select if operation == 'select' else ctx.harness.task_notes.write
+        update = getattr(ctx.harness.task_notes, operation)
         notes = update(content, expected_version, request_id=ctx.request_id,
             revision=ctx.revision, agent_step=ctx.harness.agent_steps)
         result = {'notes': {key: value for key, value in notes.items() if key != 'content'}}
