@@ -493,6 +493,13 @@ class CheckedMaterialTransfer:
                     from .material_geometry import macro_surface_poses
                     positions, orientations = macro_surface_poses(
                         scene, destination, system, candidate_limit, diagnostics=sampling)
+                    if not len(positions):
+                        # A curved receiver can support a grain while rejecting
+                        # the flat base of its enclosing box. Release above an
+                        # exposed surface; native settling decides retention.
+                        sampling, orientations = {}, None
+                        positions = free_surface_positions(
+                            scene, destination, system, candidate_limit, diagnostics=sampling)
                 else:
                     sampler = free_surface_positions if surface else free_volume_positions
                     positions = sampler(scene, destination, system, candidate_limit,
