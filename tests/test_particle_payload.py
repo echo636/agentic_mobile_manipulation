@@ -178,6 +178,27 @@ class ParticlePayloadTests(unittest.TestCase):
             verify_particles(self.scene, payload)
         self.torch.testing.assert_close(self.raw, before)
 
+    def test_supported_fluid_can_settle_inside_its_original_container(self):
+        self.surface_scene()
+        self.system.is_fluid = True
+        self.bag.states = {self.state_key: SimpleNamespace(link=self.link)}
+        volume_check = self.link.check_points_in_volume
+        self.link.check_points_in_volume = lambda points: self.torch.zeros(len(points), dtype=self.torch.bool)
+        payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
+        self.assertEqual(particle_count(payload, 'supported'), 2)
+        # R970: the jar is set upright and supported sauce settles inside.
+        # Individual grains need no remaining ray contact with the jar wall.
+        self.link.check_points_in_volume = volume_check
+        self.supports.update({'/particle/0': None, '/particle/1': None})
+        before = self.raw.clone()
+        verify_particles(self.scene, payload)
+        self.torch.testing.assert_close(self.raw, before)
+        # A grain that actually leaves the container still fails.
+        self.raw[1, 0] = 1.
+        with self.assertRaises(SkillError) as error:
+            verify_particles(self.scene, payload)
+        self.assertEqual(error.exception.code, 'postcondition_error')
+
     def test_current_support_cannot_escape_through_foreign_or_uncaptured_particles(self):
         self.surface_scene()
         payload = snapshot_particles(self.scene, [self.bag], include_supported=True)

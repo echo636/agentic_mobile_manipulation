@@ -265,9 +265,18 @@ def verify_particles(scene, payload):
                    if not link.is_meta_link}
         verified.update(anchors)
         if record.relation == 'supported':
+            from omnigibson.object_states import ContainedParticles
             import omnigibson.utils.transform_utils as T
+            volume = record.container.states.get(ContainedParticles)
+            contained = (volume.link.check_points_in_volume(centers[indices]).tolist()
+                         if volume is not None else [False] * len(indices))
             rotation = T.quat2mat(record.link.get_position_orientation()[1])
-            for path, index, (parent, offset, vector) in zip(record.paths, indices, record.supports):
+            for path, index, (parent, offset, vector), inside in zip(record.paths, indices, record.supports, contained):
+                # Supported material can settle into its own vessel on release.
+                # Current containment does not require the previous contact.
+                if inside:
+                    verified.add(path)
+                    continue
                 # Keep rotated saved probes: a world-aligned resampling can
                 # miss an existing corner contact after an arbitrary yaw.
                 hit = _support_at(path, centers[index] + offset @ rotation.T, vector @ rotation.T)
