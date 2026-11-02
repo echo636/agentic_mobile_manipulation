@@ -11,6 +11,8 @@ description: Prepare access, grasp the intended item, and place or attach it to 
 
 For several items sharing a route, compare individual trips with loading a tray, board or container at the source. Grasping that carrier transports its supported contents together. Use `pour` to unload loose objects into a common vessel or onto a work surface while keeping the carrier in hand. Loose material can also be poured onto a receiving surface; distinct final placements still need distribution. Batch only when the saved travel outweighs loading, unloading and carrier handling, and keep the load stable and identifiable.
 
+Keep the carrier itself in the inventory. Using an item to carry others does not change its identity or remove its own required final location and state.
+
 Stage items where they remain visible and reachable after the next door movement, outside its swing. Place loaded carriers where their openings and contents can be inspected; if a door hides a staged item, change its staging position before reopening the door.
 
 Handling can change a deformable item's shape. Plan its final folding or arrangement after its last necessary transfer when practical, and recheck that shape if it must be moved again.

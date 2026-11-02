@@ -11,3 +11,5 @@ For `navigate_to`, a visible floor pixel requests that floor location, with boun
 Break travel into visible stages. Record useful return landmarks, inspected places and unchecked openings in your notes. Stop navigating when the intended manipulation target becomes selectable. If a route fails, inspect the new views and choose a materially different approach.
 
 When expected items remain unaccounted for, revisit their last known source and places affected by handling before widening the search. A container's rim or upper interior does not reveal its bottom: change viewpoint or stage it on a stable support to expose the interior. Keep occluded contents uncertain; a partial view does not erase the last observed inventory. Then inspect other plausible storage and record unchecked areas. Opening storage requires an empty hand: stage and later retrieve held tools. Repeated views of the same area do not establish complete coverage.
+
+Track search coverage by compartment. An opening command may operate only the selected panel; other doors, drawers and occluded shelves remain uninspected even when the cabinet is open.
