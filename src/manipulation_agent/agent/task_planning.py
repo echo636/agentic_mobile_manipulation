@@ -147,6 +147,7 @@ def schedule_task(notes, beam_width=32):
     finalists, best_coverage = [], -1
     chosen = (notes.get('active') or {}).get('method_id')
     chosen_step = None
+    selected_method = None
     for bucket in buckets:
         ranked = sorted(bucket.items(), key=lambda row: row[1][0])
         pruned += max(0, len(ranked) - beam_width)
@@ -220,6 +221,17 @@ def schedule_task(notes, beam_width=32):
                             remaining_simulation_seconds=after_clocks)
                     if not done and method['id'] == chosen:
                         chosen_step = step
+                        # Carry the same modeled conditions/results into the RGB
+                        # action loop; an ID and price alone lose the plan's meaning.
+                        selected_method = dict(method_id=chosen, route=route,
+                            results=[dict(id=g, goal=goals[g].get('goal', g),
+                                          check=goals[g].get('check')) for g in method['goals']],
+                            requires=method['requires'], setup_changes=changes,
+                            predicted_effects=method['effects'],
+                            scope='Plan at selection checkpoint; confirm from RGB and public receipts')
+                        if method['starts'] or method['awaits']:
+                            selected_method['processes'] = dict(starts=method['starts'],
+                                awaits=method['awaits'], wait_simulation_seconds=wait)
                     reached = done | achieved
                     index = (reached, route[-1], tuple(sorted(after.items())),
                              tuple(sorted(after_clocks.items())), first or method['id'])
@@ -259,6 +271,7 @@ def schedule_task(notes, beam_width=32):
                             and g['status'] not in ('done', 'retired')])
     recommended = (result['next'] or {}).get('method_id')
     result['active'] = notes.get('active')
+    result['selected_method'] = selected_method
     result['selection'] = dict(method_id=chosen, recommended_method_id=recommended,
         matches_recommendation=chosen == recommended if chosen and recommended else None,
         ready_in_authored_state=chosen_step is not None if chosen else None,

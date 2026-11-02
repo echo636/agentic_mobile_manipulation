@@ -82,7 +82,10 @@ flowchart LR
    require a retained path covering the same results; missing comparisons stay
    null, including when the beam pruned that first choice.
 3. `act/look` preserves the declared method and records public feedback and
-   server tool time. The selection carries that method's estimated work, travel,
+   server tool time. `selected_method` retains the selected route, resource
+   preconditions/setup, predicted effects, process starts/waits and each served
+   result's check. The same context is returned on resume; it remains a checkpoint
+   prediction, never a claim that setup or effects occurred. The selection carries that method's estimated work, travel,
    setup and recovery costs separately from the entire remaining-plan cost,
    so its accumulated execution time can inform the next estimate. Partial or
    failed execution is not a completed-method timing sample. The previous

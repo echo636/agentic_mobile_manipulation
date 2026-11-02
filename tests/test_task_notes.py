@@ -335,6 +335,7 @@ class TaskNotesTests(unittest.TestCase):
             doc = notes(goal('work', [method('work', 2, simulation_seconds=1/30)]),
                         goal('processed', [method('check', 1, awaits=['device'])]),
                         processes={'device': 1/30}, wait_cost_per_sim_second=300)
+            doc['goals'][2].update(goal='Processed result ready', check='Visible finished material')
             self.assertEqual(self.write(h, json.dumps(doc), 0, 'plan')['planning']['next']['method_id'], 'work')
             h.call('task_notes', dict(operation='select', expected_version=1,
                 content=json.dumps(dict(method_id='work', steps=['Operate visible switch'],
@@ -353,19 +354,31 @@ class TaskNotesTests(unittest.TestCase):
             self.assertEqual(update['next']['method_id'], 'check')
             self.assertEqual(update['estimated_seconds'], 1)
             self.assertEqual(json.loads(h.task_notes.state['content'])['goals'][2]['status'], 'pending')
+            selected = h.call('task_notes', dict(operation='select', expected_version=3,
+                content=json.dumps(dict(method_id='check', steps=['Inspect the processed material'],
+                                        next_check='Visible finished material'))), 'choose-check')
+            context = selected['planning']['selected_method']
+            self.assertEqual(context['processes'], dict(starts={}, awaits=['device'], wait_simulation_seconds=0))
+            self.assertEqual(context['results'], [dict(id='processed', goal='Processed result ready',
+                                                      check='Visible finished material')])
 
     def test_processing_failure_recompares_methods_across_branches(self):
         from test_task_planning import goal, method, notes
         with tempfile.TemporaryDirectory() as tmp:
             h = self.harness(Path(tmp)/'episode')
             doc = notes(goal('a', [method('manual-a', 10),
-                                  method('powered-pair', 4, also=['b'], requires={'device': 'available'})]),
+                                  method('powered-pair', 4, also=['b'], requires={'device': 'available'},
+                                         setup={'tool': 'fixture'}, effects={'material': 'processed'})]),
                         goal('b', [method('manual-b', 10)]),
                         goal('check', [method('inspect-result', 1)], depends=['a', 'b']))
-            doc['planning']['state'] = {'device': 'available'}
+            doc['goals'][1].update(goal='First component processed', check='First component surface ready')
+            doc['goals'][2].update(goal='Second component processed', check='Second component surface ready')
+            doc['planning']['state'] = {'device': 'available', 'tool': 'none'}
+            doc['planning']['switches'] = [dict(key='tool', **{'from': 'none', 'to': 'fixture'},
+                                               at='bench', seconds=2)]
             plan = self.write(h, json.dumps(doc), 0, 'plan')['planning']
             self.assertEqual(plan['next']['method_id'], 'powered-pair')
-            self.assertEqual(plan['estimated_seconds'], 5)
+            self.assertEqual(plan['estimated_seconds'], 7)
 
             def select(method_id, request_id):
                 return h.call('task_notes', dict(operation='select',
@@ -373,7 +386,14 @@ class TaskNotesTests(unittest.TestCase):
                     content=json.dumps(dict(method_id=method_id, steps=['Process observed items'],
                                             next_check='Both results visible'))), request_id)
 
-            select('powered-pair', 'select-powered')
+            selected = select('powered-pair', 'select-powered')
+            context = selected['planning']['selected_method']
+            self.assertEqual(context['route'], ['bench'])
+            self.assertEqual(context['requires'], {'device': 'available'})
+            self.assertEqual(context['setup_changes'], [dict(key='tool', before='none', after='fixture')])
+            self.assertEqual(context['predicted_effects'], {'material': 'processed'})
+            self.assertEqual([r['id'] for r in context['results']], ['a', 'b'])
+            self.assertEqual(context['results'][1]['check'], 'Second component surface ready')
             def unavailable(*args, **kwargs):
                 raise SkillError('pre_condition_error', 'The device could not be activated.')
             h.backend.execute_visual = unavailable
@@ -381,14 +401,19 @@ class TaskNotesTests(unittest.TestCase):
                 target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5])), 'activate')
             self.assertTrue(result['planning']['failed_since_checkpoint'])
             self.assertIsNone(result['planning']['next'])
+            self.assertEqual(result['planning']['selected_method'], context)
+            self.assertEqual(h.call('initialize', {}, 'resume')['planning']['selected_method'], context)
             # A caller reconciles the public failure; the harness cannot infer semantic truth.
             plan = h.call('task_notes', dict(operation='update', expected_version=2,
                 content=json.dumps(dict(planning=dict(state={'device': 'unavailable'})))),
                 'reconcile')['planning']
+            self.assertIsNone(plan['selected_method'])
             self.assertEqual(plan['estimated_seconds'], 21)
             self.assertEqual({s['method_id'] for s in plan['steps'][:2]}, {'manual-a', 'manual-b'})
             selected = select(plan['next']['method_id'], 'select-manual')
             self.assertTrue(selected['planning']['selection']['matches_recommendation'])
+            self.assertEqual(selected['planning']['selected_method']['requires'], {})
+            self.assertEqual(selected['planning']['selected_method']['method_id'], plan['next']['method_id'])
             self.assertEqual([g['status'] for g in doc['goals']], ['pending'] * 4)
             replay = build_replay(h.recorder.output)
             self.assertEqual(replay['planning_metrics']['method_selections'], 2)

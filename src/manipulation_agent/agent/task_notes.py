@@ -75,6 +75,7 @@ class TaskNotes:
             checkpoint_status=advice['status'], active=advice.get('active'),
             checkpoint_coverage=advice.get('coverage'),
             selection=advice.get('selection'),
+            selected_method=advice.get('selected_method'),
             next=None, actions_since_checkpoint=count,
             execution=dict(tool_seconds=round(self.feedback_seconds +
                 (pending or {}).get('tool_seconds', 0.), 3),
@@ -87,8 +88,8 @@ class TaskNotes:
                            if not (advice.get('selection') or {}).get('method_id') else
                           'Reconcile the failure and affected goals/resources from RGB and receipts; '
                            'update changed nodes and beliefs to compare revised methods.' if failed else
-                           'Check the returned RGB/receipt against the current method. Continue its local steps '
-                           'if supported; on completion, new information or a branch change, update notes '
+                           'Check RGB/receipts against selected_method conditions and result checks. '
+                           'Continue supported local steps; on completion, new information or a branch change, update notes '
                            'to recompute the remaining DAG. Use operation=update to keep unchanged branches. '
                            'Tool success alone does not complete a goal.'))
 
