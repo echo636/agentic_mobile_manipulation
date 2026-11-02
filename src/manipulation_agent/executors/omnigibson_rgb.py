@@ -1408,6 +1408,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'stance_domain':'selected_target_reach_disk',
             'holonomic_local_approach':bool(getattr(self.robot,'is_holonomic_base',False)),
             'local_search':'one_capability_matched_route_search_on_current_map',
+            'local_map':'native_2_5cm_before_search_with_detour_window_and_250k_cell_cap',
             'failure_map_refinement':False,
             'start_radius_limit_m':None,'path_distance_limit_m':None,
             'stance_failure_feedback':'allowlisted_local_search_stage',

@@ -7,6 +7,22 @@ from .heading_collision import HeadingCollisionChecker
 from .forward_navigation import local_exit_certificate, select_forward_route
 
 
+def approach_sampling(collision, actual, point, reach_m, check_cancelled):
+    """Choose the local map once, before stance or route search.
+
+    The coarse guide preserves detours; native queries supply the fine geometry.
+    Target 2.5 cm cells, with the existing 250,000-cell limit for large windows.
+    """
+    window = approach_refinement_window(collision, actual, point, reach_m, check_cancelled)
+    width, height = (window[i+2]-window[i] for i in (0, 1))
+    # (width / resolution + 2) * (height / resolution + 2) bounds
+    # floor_support_window's aligned cell count, including both outer edges.
+    span = width + height
+    fitting = (span + math.sqrt(span*span + 249996*width*height)) / 249996
+    return {'resolution': max(min(.025, collision.grid.resolution), fitting*(1+1e-9)),
+            'window': window}
+
+
 def approach_refinement_window(collision, actual, point, reach_m, check_cancelled):
     """Keep the full-floor detour and its collision halo in a finer query.
 

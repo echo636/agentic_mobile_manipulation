@@ -64,7 +64,7 @@ class ApproachWindowTests(unittest.TestCase):
 
     def test_refinement_keeps_detour_around_long_obstacle_and_body_halo(self):
         from manipulation_agent.executors.navigation.heading_collision import HeadingCollisionChecker
-        from manipulation_agent.executors.navigation.navigation_refinement import approach_refinement_window
+        from manipulation_agent.executors.navigation.navigation_refinement import approach_sampling
         support = np.ones((100, 100), dtype='uint8')
         raw = support.copy()
         raw[:75, 47:54] = 0
@@ -72,7 +72,9 @@ class ApproachWindowTests(unittest.TestCase):
         footprint = np.array([[-.2,-.2], [.2,-.2], [.2,.2], [-.2,.2]])
         check = lambda: None
         collision = HeadingCollisionChecker(grid, [(raw, footprint)], 0., support, check_cancelled=check)
-        window = approach_refinement_window(collision, (-1.,0.,0.), (1.,0.), 1.4, check)
+        sampling = approach_sampling(collision, (-1.,0.,0.), (1.,0.), 1.4, check)
+        window = sampling['window']
+        self.assertEqual(sampling['resolution'], .025)
         # The old y<=2.1 crop removes the only route, even after resampling.
         # Query space must cover the detour's body, not just its base centre.
         self.assertGreater(window[3], 4.)
