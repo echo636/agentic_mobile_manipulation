@@ -61,6 +61,20 @@ class TaskPlanningTests(unittest.TestCase):
             edge['seconds'] = 1
         self.assertEqual(schedule_task(doc)['estimated_seconds'], 7)
 
+    def test_selection_compares_the_current_graph_not_a_previous_next_step(self):
+        doc = notes(goal('process', [method('manual', 10), method('powered', 3)]),
+                    goal('verify', [method('check', 2)], depends=['process']))
+        doc['active'] = dict(method_id='manual')
+        selection = task_advice(json.dumps(doc))['selection']
+        self.assertEqual(selection['recommended_method_id'], 'powered')
+        self.assertEqual(selection['compared_remaining_seconds'], 12)
+        self.assertEqual(selection['extra_estimated_seconds'], 7)
+        doc['goals'][1]['status'] = 'done'
+        doc['active'] = dict(method_id='check')
+        selection = task_advice(json.dumps(doc))['selection']
+        self.assertTrue(selection['matches_recommendation'])
+        self.assertEqual(selection['extra_estimated_seconds'], 0)
+
     def test_hierarchy_cross_branch_prerequisites_and_parent_verification(self):
         doc = notes(goal('access', [method('open', 2)]),
                     goal('branch', depends=['access']),

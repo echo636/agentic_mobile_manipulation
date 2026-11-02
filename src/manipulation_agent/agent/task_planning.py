@@ -212,6 +212,15 @@ def task_advice(content):
     try:
         result = schedule_task(notes)
         result['active'] = notes.get('active')
+        chosen = (notes.get('active') or {}).get('method_id')
+        recommended = (result['next'] or {}).get('method_id')
+        comparison = next((row for row in result['alternatives'] if row['first_method'] == chosen), None)
+        result['selection'] = dict(method_id=chosen, recommended_method_id=recommended,
+            matches_recommendation=chosen == recommended if chosen and recommended else None,
+            compared_remaining_seconds=comparison['estimated_seconds'] if comparison else None,
+            extra_estimated_seconds=(comparison['estimated_seconds'] - result['estimated_seconds'])
+                                    if comparison else None,
+            source='model_declared_selection_not_verified_action_alignment')
         return result
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         return dict(status='needs_revision', reason=str(exc))

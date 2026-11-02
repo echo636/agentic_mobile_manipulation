@@ -74,7 +74,7 @@ When execution_budget.scope is agent_steps, each new act/look attempt consumes o
 """
 GOAL_SKILL_INSTRUCTION = '''
 Before the first act/look, also read goal-decomposition/SKILL.md and follow it for planning and maintaining your task notes.
-The planning field in initialize/task_notes/act/look replies connects your goal DAG to the action loop. Add candidate methods directly to executable goals; include known work across branches. Read its coverage and cost comparison, then select the next method in active.method_id with its goal IDs in active.serves. Use current RGB for concrete actions. After a method completes, fails, or observations change its assumptions, reconcile public feedback and update notes so the remaining plan is recomputed. A reconcile reply suspends the old next recommendation; it does not certify completion or block continuing a supported local method. Do not claim unmodeled work was optimized.
+The planning field connects your goal DAG to the action loop. Write methods for known unfinished work across branches, covering processing, device use, arrangement and checks as applicable, not only the active item or transport. Read the returned coverage and cost comparison, then task_notes(operation=select) records your chosen method_id, steps and next_check without resending the tree. Act using current RGB. Continue a supported local method; when it completes, fails or its assumptions change, write reconciled beliefs with active:null, read the new comparison and select again. Replies retain declared method selection and measured tool time. They do not certify goal completion. Partial coverage is not a whole-task optimization.
 '''
 SKILLS_PROMPT = SKILLS_BASE_PROMPT + GOAL_SKILL_INSTRUCTION
 SYSTEM_PROMPT = SKILLS_PROMPT

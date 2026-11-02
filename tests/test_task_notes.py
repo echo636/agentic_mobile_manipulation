@@ -266,5 +266,46 @@ class TaskNotesTests(unittest.TestCase):
                 else:
                     self.assertNotIn('planning', result)
 
+    def test_compare_select_execute_reconcile_preserves_graph_and_measures_work(self):
+        from test_task_planning import goal, method, notes
+        with tempfile.TemporaryDirectory() as tmp:
+            h = self.harness(Path(tmp)/'episode')
+            doc = notes(goal('on', [method('switch-on', 2)]),
+                        goal('verify', [method('check', 1)], depends=['on']))
+            doc['active'] = None
+            plan = self.write(h, json.dumps(doc), 0, 'plan')['planning']
+            args = dict(operation='select', expected_version=1,
+                content=json.dumps(dict(method_id=plan['next']['method_id'],
+                    steps=['Toggle the visible switch'], next_check='Indicator on')))
+            selection = h.call('task_notes', args, 'choose')
+            self.assertTrue(selection['planning']['selection']['matches_recommendation'])
+            self.assertEqual(h.call('task_notes', args, 'choose'), selection)
+            self.assertEqual(h.task_notes.state['version'], 2)
+            chosen = json.loads(h.task_notes.state['content'])
+            self.assertEqual(chosen['goals'], doc['goals'])
+            self.assertEqual(chosen['active']['serves'], ['on'])
+            action_args = dict(primitive='toggle_on', revision=h.revision,
+                target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5]))
+            action = h.call('act', action_args, 'execute')
+            elapsed = action['runtime']['tool_seconds']
+            self.assertGreaterEqual(elapsed, 0)
+            self.assertEqual(action['planning']['execution']['tool_seconds'], elapsed)
+            self.assertEqual(action['planning']['selection']['method_id'], 'switch-on')
+            self.assertEqual(h.call('act', action_args, 'execute'), action)
+            self.assertEqual(h.task_notes.feedback_count, 1)
+            blocked = h.call('task_notes', dict(args, expected_version=2), 'premature-choice')
+            self.assertEqual(blocked['error']['code'], 'notes_need_reconciliation')
+            self.assertEqual(h.task_notes.state['version'], 2)
+            # Model reconciliation, not successful primitive execution, advances the DAG.
+            self.assertEqual(json.loads(h.task_notes.state['content'])['goals'], doc['goals'])
+            doc['goals'][1]['status'] = 'done'
+            updated = self.write(h, json.dumps(doc), 2, 'reconcile')
+            self.assertEqual(updated['planning']['next']['method_id'], 'check')
+            self.assertEqual(h.task_notes.feedback_seconds, 0)
+            replay = build_replay(h.recorder.output)
+            action_step = next(s for s in replay['steps'] if s['request_id'] == 'execute')
+            self.assertEqual(action_step['goal_state']['active'], chosen['active'])
+            self.assertEqual(replay['planning_metrics']['method_selections'], 1)
+
 
 if __name__=='__main__':unittest.main()

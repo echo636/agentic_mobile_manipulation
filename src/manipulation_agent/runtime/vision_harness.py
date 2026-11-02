@@ -145,6 +145,7 @@ class VisionHarness:
             if old!=fingerprint: return {'ok':False,'error':{'code':'request_id_conflict','message':'Use a new request ID'}}
             return copy.deepcopy(result)
         self.calls+=1
+        call_started = time.monotonic()
         self.sync_execution_clock()
         self.recorder.event('tool_call',{'name':name,'arguments':arguments,'request_id':request_id,'origin':origin})
         self._call_origin=origin
@@ -202,11 +203,14 @@ class VisionHarness:
                 'remaining_seconds': round(remaining, 1),
                 'scope': 'execution_wall_time_excluding_initialization',
             }
+        if name in {'act', 'look'}:
+            result['runtime'] = {'tool_seconds': round(time.monotonic() - call_started, 3)}
         if ('task_notes' in self.catalog and self.goal_skill == 'hierarchical'
                 and origin == 'controller' and name in {'initialize', 'task_notes', 'act', 'look'}):
             pending = None
             if name in {'act', 'look'}:
                 pending = {'primitive': arguments.get('primitive', name) if isinstance(arguments, dict) else name,
+                           'tool_seconds': result['runtime']['tool_seconds'],
                            **{key: result[key] for key in ('ok', 'effect', 'error') if key in result}}
             result['planning'] = self.task_notes.planning(pending)
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result,'origin':origin})

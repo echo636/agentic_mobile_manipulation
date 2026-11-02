@@ -124,12 +124,17 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         if result and result.get('ok'):
             if name == 'update_plan': plan = copy.deepcopy(args['subgoals'])
             if name == 'remember': notes[args['key']] = {'text': args['text'], 'revision': args['revision']}
-            if name == 'task_notes' and args.get('operation') == 'write':
+            if name == 'task_notes' and args.get('operation') in {'write', 'select'}:
                 task_notes=copy.deepcopy(result['notes'])
                 # New write receipts acknowledge metadata; the accepted text is
                 # already archived in the model's tool call. Preserve old receipts.
                 if 'content' not in task_notes:
-                    task_notes['content'] = args['content']
+                    if args['operation'] == 'write':
+                        task_notes['content'] = args['content']
+                    else:
+                        content = json.loads(notes_before['content'])
+                        content['active'] = result['selected']
+                        task_notes['content'] = json.dumps(content, separators=(',', ':'))
                 note_versions.append({**task_notes,'tool_step':len(steps)+1,'result_event_id':event['id']})
         seconds = (datetime.fromisoformat(event['at']) - datetime.fromisoformat(call['at'])).total_seconds() if event else None
         steps.append({'index': len(steps) + 1, 'event_id': call['id'], 'result_event_id': event['id'] if event else None,

@@ -43,7 +43,7 @@ Use the following fields. Only two goal records are shown for brevity; put **eve
 
 IDs are unique; only the root has a null parent. Every other `parent_id` references an existing goal; parent links form one tree. Dependencies reference goal IDs and may cross branches. Keep both relations acyclic. Parentage alone does not require sibling execution order; children do not wait for their parent to be done.
 
-Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the focal work goal; `active.method_id` identifies the chosen method; `active.serves` lists all goals advanced by it. Their ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list. In `steps`, describe the immediate work and its next check; refer to `members` for any inventory. Keep this short, not a complete future action transcript.
+Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the focal work goal; `active.method_id` identifies the chosen method; `active.serves` lists all goals advanced by it. Their ancestors can also have status `active`. Set `active` to null while obtaining a new comparison or when no work is ready. In `steps`, describe the immediate work and its next check; refer to `members` for inventory.
 
 Use `members` when item coverage matters. Labels are your own, not simulator IDs. An entry represents one item or a distinguishable group in the same state; split a mixed-state entry into pending inputs and finished outputs, with their current locations and count units. Update state and remaining work from RGB and feedback. A spill reopens the affected goal; temporary placement does not complete storage.
 
@@ -87,7 +87,7 @@ For example, a goal's candidate methods could be:
 These are format examples, not a task recipe. `clean-b` must be another executable goal in the tree; describe its independent method there if feasible. Use the same representation for inspecting related items together, processing compatible inputs, joining components or moving a loaded tray. Alternatives belong under a result goal; do not duplicate that result as a new requirement. Retire obsolete methods when their assumptions stop holding.
 
 Fields:
-- `route`: ordered observed areas visited by the method, including its work location and destination. A local operation has one entry. Travel from the current location and along the route is added using the supplied directed area graph. Missing edges are not free; connected known paths may be combined. This is a task-level travel estimate, not a replacement for the executor's physical navigation.
+- `route`: ordered observed work areas visited by the method, including its work location and destination. Distinguish stations with meaningful travel between them, even in one room; labeling every method with the room name hides that travel. A local operation has one entry. Travel uses the supplied directed area graph; missing edges are not free. This estimates task-level travel, not physical navigation paths.
 - `seconds`: estimated local work and handling, including any internal actions not represented separately. Do not include travel or setup costs again. Use comparable estimates based on observations; record uncertainty. Counts alone cannot predict wall time.
 - `requires`: state that must already hold before the method, such as available capacity or an empty hand. Unknown state does not satisfy a requirement. Values are short strings chosen by you, not simulator IDs.
 - `setup`: reusable resource configurations needed at the first route location. An observed local change may use a matching `switches` entry; its cost is added and the resulting configuration is tracked across methods. Include physical retrieval/staging in that estimate. If a change involves nonlocal work or its own dependency, model it as a goal/method instead.
@@ -99,4 +99,12 @@ The cost is work + travel + setup + expected recovery seconds. The scheduler sea
 
 `planning.coverage` includes every unfinished executable goal, including those without methods. A partial result names unplanned goals and missing routes/resource transitions. Explore or refine those gaps; do not present the partial cost as whole-task cost. `verification_goals` lists structural parents still needing evidence reconciliation. Keep known future branches in the tree even when the active method serves only one.
 
-Choose a returned method with `active.method_id`, list all served goals in `active.serves`, and keep only its immediate steps in `active.steps`. On completion or changed evidence, update affected statuses, member counts, current location and resource state together. Every successful notes write recomputes the plan; reads/initialize preserve any pending receipt reconciliation. After act/look, the old next recommendation is withheld until reconciliation. A failure may have changed the scene: reopen affected results and ancestors from evidence, not merely by replaying the same method.
+After reading a comparison, select without resending the tree:
+
+```json
+{"operation":"select","expected_version":1,"content":"{\"method_id\":\"clean-pair\",\"steps\":[\"Pick up the visible brush\",\"Clean both identified surfaces\"],\"next_check\":\"Both surfaces visibly clean\"}"}
+```
+
+Use the actual returned version and your own method/steps. Selection records `active` and returns a new version; it neither executes actions nor completes goals. `planning.selection` compares the declared choice with this same graph version, not an obsolete recommendation. Its alignment is a declaration, not proof that subsequent actions implement the method.
+
+After act/look, the old next recommendation is withheld and public feedback/tool time accumulates. Continue the current method if supported. Before selecting another, write reconciled statuses, member counts, current location and resource state together, with `active:null`; this recomputes the remaining plan. Update estimates from observed execution time, including failures, without treating model/network latency as robot work. A failure may change the scene: reopen affected results and ancestors from evidence, not by merely replaying the same method.
