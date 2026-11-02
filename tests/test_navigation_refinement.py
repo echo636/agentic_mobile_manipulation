@@ -74,7 +74,10 @@ class ApproachWindowTests(unittest.TestCase):
         collision = HeadingCollisionChecker(grid, [(raw, footprint)], 0., support, check_cancelled=check)
         sampling = approach_sampling(collision, (-1.,0.,0.), (1.,0.), 1.4, check)
         window = sampling['window']
-        self.assertEqual(sampling['resolution'], .025)
+        self.assertGreaterEqual(sampling['resolution'], .0125)
+        self.assertLess(sampling['resolution'], .025)
+        sampled, _ = floor_support_window(support, .1, sampling['resolution'], window)
+        self.assertLessEqual(sampled.size, 250000)
         # The old y<=2.1 crop removes the only route, even after resampling.
         # Query space must cover the detour's body, not just its base centre.
         self.assertGreater(window[3], 4.)
