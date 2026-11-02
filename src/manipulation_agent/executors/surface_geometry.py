@@ -35,7 +35,7 @@ def opening_release_points(low, high, extent):
     hi = [high[i]-extent[i]/2 for i in (0, 1)]
     if all(a <= b for a, b in zip(lo, hi)):
         points.extend((lo[0]+x*(hi[0]-lo[0]), lo[1]+y*(hi[1]-lo[1]))
-                      for x in (.5, .05, .95) for y in (.5, .05, .95))
+                      for x in (.5, .25, .75, .05, .95) for y in (.5, .25, .75, .05, .95))
     return list(dict.fromkeys(points))
 
 

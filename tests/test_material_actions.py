@@ -190,6 +190,7 @@ class MaterialActionTests(unittest.TestCase):
         inside = type('Inside', (), {})
         low, high = torch.tensor([0., 0., .9]), torch.tensor([.2, .2, 1.03])
         volume = types.SimpleNamespace(visual_aabb=(low, high),
+            get_position_orientation=lambda: ((low+high)/2, torch.tensor([0., 0., 0., 1.])),
             check_points_in_volume=lambda points: ((points >= low) & (points <= high)).all(1))
         receiver = types.SimpleNamespace(name='pot', aabb=(low, torch.tensor([.2, .2, 1.12])),
             states={contained: types.SimpleNamespace(link=volume)})
@@ -216,12 +217,55 @@ class MaterialActionTests(unittest.TestCase):
         backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(objects=[resident]))
         backend._inside_overlap_ranker = lambda assembly: lambda center, extent: center[2] - extent[2]/2 <= 1.12
         with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
-                                         ContainedParticles=contained, Inside=inside, create=True):
+                ContainedParticles=contained, Inside=inside, create=True), patch.object(
+                sys.modules['omnigibson.utils'], 'transform_utils',
+                types.SimpleNamespace(quat2mat=lambda quat: torch.eye(3)), create=True):
             position, orientation = backend._volume_pour_pose(item, receiver, [])
             self.assertGreater(float(position[2]) - .01, 1.12)
             self.assertTrue(torch.equal(orientation, item.get_position_orientation()[1]))
             backend._inside_overlap_ranker = lambda assembly: lambda center, extent: True
             self.assertIsNone(backend._volume_pour_pose(item, receiver, []))
+
+    def test_rigid_pour_can_use_center_of_tilted_shallow_tray(self):
+        import itertools
+        import torch
+        from scipy.spatial.transform import Rotation
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        contained, inside = (type(name, (), {}) for name in ('ContainedParticles', 'Inside'))
+        rotation = torch.tensor(Rotation.from_euler('y', 5, degrees=True).as_matrix(), dtype=torch.float32)
+        origin, half = torch.tensor([0., 0., 1.]), torch.tensor([.1, .2, .002])
+        corners = torch.tensor(list(itertools.product((-1., 1.), repeat=3))) * half
+        world = corners @ rotation.T + origin
+        low, high = world.amin(0), world.amax(0)
+        volume = types.SimpleNamespace(visual_aabb=(low, high),
+            get_position_orientation=lambda: (origin, torch.tensor(
+                Rotation.from_matrix(rotation.numpy()).as_quat(), dtype=torch.float32)),
+            check_points_in_volume=lambda points: (((points-origin) @ rotation).abs() <= half).all(1))
+        # The world ceiling excludes even the center of this native-shaped tray.
+        self.assertFalse(bool(volume.check_points_in_volume(
+            torch.tensor([[0., 0., float(high[2])-.001]]))[0]))
+        receiver = types.SimpleNamespace(name='tray', aabb=(low, high),
+            states={contained: types.SimpleNamespace(link=volume)})
+        position = torch.tensor([2., 3., 1.])
+        item = types.SimpleNamespace(name='item', get_position_orientation=lambda:
+            (position, torch.tensor([0., 0., 0., 1.])))
+        backend = CheckedMaterialTransfer(); backend.torch = torch
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(objects=[]))
+        backend.deadline = types.SimpleNamespace(check=lambda: None)
+        backend._collision_vertices = lambda obj: torch.stack((position-.01, position+.01))
+        backend._placement_record = lambda row: None
+        # Existing contents leave a central release corridor above the rim.
+        backend._inside_overlap_ranker = lambda assembly: lambda center, extent: (
+            abs(center[0])+abs(center[1]) > 1e-6 or center[2] < float(high[2])+.005)
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
+                ContainedParticles=contained, Inside=inside, create=True), patch.object(
+                sys.modules['omnigibson.utils'], 'transform_utils',
+                types.SimpleNamespace(quat2mat=lambda quat: rotation), create=True):
+            pose = backend._volume_pour_pose(item, receiver, [])
+        self.assertIsNotNone(pose)
+        torch.testing.assert_close(pose[0][:2], torch.zeros(2), atol=1e-6, rtol=0)
+        self.assertGreater(float(pose[0][2]), float(high[2]))
 
     def test_rigid_pour_commits_once_and_keeps_failed_physical_result(self):
         import numpy as np

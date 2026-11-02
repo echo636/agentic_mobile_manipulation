@@ -229,12 +229,22 @@ class CheckedMaterialTransfer:
             if all(other is not member for member in [destination, *assembly])
             and Inside in other.states and other.states[Inside].get_value(destination)]])
         from .surface_geometry import opening_release_points
+        from omnigibson.utils import transform_utils as T
         opening_xy = opening_release_points(low.tolist(), high.tolist(), extent.tolist())
+        # A horizontal slice at the world AABB ceiling intersects only one
+        # edge of a tilted shallow tray. Test its central local plane instead;
+        # the native volume predicate still determines the receiving footprint.
+        volume_center = (low + high) / 2
+        volume_up = T.quat2mat(volume.get_position_orientation()[1])[:, 2]
         for z in torch.linspace(float(high[2]), resident_top+float(extent[2])/2+.003, 20):
             for x, y in opening_xy:
                 self.deadline.check()
                 center = position.new_tensor([x, y, z])
-                opening = center.clone(); opening[2] = high[2]-.001
+                if abs(float(volume_up[2])) < 1e-6:
+                    continue
+                opening = center.clone()
+                opening[2] = volume_center[2] - torch.dot(
+                    volume_up[:2], opening[:2]-volume_center[:2]) / volume_up[2]
                 if not bool(volume.check_points_in_volume(opening.unsqueeze(0))[0]):
                     continue
                 if overlap(center.tolist(), extent.tolist()):
