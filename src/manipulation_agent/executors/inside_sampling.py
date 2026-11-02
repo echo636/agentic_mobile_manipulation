@@ -110,6 +110,97 @@ are proposals only, with unchanged collision and settling acceptance checks.
     return result
 
 
+def select_inside_release(backend, held, target, contents, *, point=None, residents=()):
+    """Choose one pose from current geometry without moving or simulating bodies."""
+    from omnigibson.utils import transform_utils as T
+    from .particle_payload import particle_bounds
+    from .surface_geometry import bottom_anchor
+
+    torch = backend.torch
+    root, original_quat = held.get_position_orientation()
+    rotation = T.quat2mat(original_quat)
+    assembly = [held, *[obj for obj, _ in contents]]
+    particles = getattr(backend, '_placement_particle_payload', (None, []))[1]
+    held_shape = torch.as_tensor(backend._collision_vertices(held), dtype=root.dtype, device=root.device)
+    parts = [held_shape, *[torch.as_tensor(backend._collision_vertices(obj), dtype=root.dtype,
+                                        device=root.device) for obj in assembly[1:]]]
+    # Include the carried material envelope in pose construction. Reading its
+    # bounds once avoids hypothetical particle relocation for every orientation.
+    for low, high in particle_bounds(backend.env.scene, particles):
+        parts.append(torch.stack([torch.stack([low[i] if bit[i] == 0 else high[i] for i in range(3)])
+                                  for bit in itertools.product((0, 1), repeat=3)]))
+    shape = (torch.cat(parts) - root) @ rotation
+    held_shape = (held_shape - root) @ rotation
+    volumes = [link for link in target.links.values() if link.is_meta_link and
+               link.meta_link_type in {'fillable', 'openfillable'}]
+    loaded = bool(contents or particles)
+    orientations = assembly_orientations(held, original_quat, torch, T,
+        reference_quat=target.get_position_orientation()[1], allow_reorientation=not loaded)
+    proposals = []; seen = set(); ray_cache = {}
+    clearance = .025 + .5 * 9.81 * backend.og.sim.get_physics_dt() ** 2
+
+    def check():
+        backend.deadline.check()
+        local = getattr(backend, '_local_operation', None)
+        if local is not None: local.check()
+
+    for label, quat, _ in orientations:
+        check()
+        rotated = shape @ T.quat2mat(quat).T
+        low, high = rotated.amin(0), rotated.amax(0)
+        offset, extent = (low + high) / 2, high - low
+        bottom = bottom_anchor((held_shape @ T.quat2mat(quat).T).cpu().numpy())
+        for volume in volumes:
+            vlo, vhi = volume.visual_aabb
+            vp, vq = volume.get_position_orientation(); vr = T.quat2mat(vq)
+            boundary = volume.visual_boundary_points_world
+            cavity = (boundary - vp) @ vr
+            local_shape = rotated @ vr
+            sl, sh = local_shape.amin(0), local_shape.amax(0)
+            domains = volume_center_domains(cavity.amin(0).tolist(), cavity.amax(0).tolist(), (sh - sl).tolist())
+            for domain, centers in domains:
+                local_centers = root.new_tensor(centers)
+                world = (local_centers - (sl + sh) / 2) @ vr.T + vp + offset
+                support = backend._inside_support_centers(held, target, volume, world.tolist(),
+                    offset, assembly[1:], check, point=point, residents=residents,
+                    query_cache=ray_cache, bottom_offset=bottom)
+                for kind, candidates in (('support_' + domain, support), (domain, world.tolist())):
+                    for center in candidates:
+                        center = root.new_tensor(center)
+                        admission = center.clone()
+                        if kind.startswith('support_'): admission[2] -= clearance
+                        if not bool(volume.check_points_in_volume(admission[None]).item()): continue
+                        position = center - offset
+                        key = tuple(round(float(v), 5) for v in (*position, *quat))
+                        if key in seen: continue
+                        seen.add(key)
+                        protrusion = envelope_protrusion(center.tolist(), extent.tolist(), vlo.tolist(),
+                            vhi.tolist(), clearance if kind.startswith('support_') else 0.)
+                        distance = float(torch.linalg.vector_norm(center - point)) if point is not None else float(center[2])
+                        priority = (round(protrusion, 5), not kind.startswith('support_'), distance)
+                        proposals.append((priority, position, quat, center, extent, volume, kind, label))
+    pose_score = backend._inside_pose_overlap_ranker(held, assembly)
+    envelope_score = backend._inside_overlap_ranker(assembly)
+    selected = None; best = None; scored = 0
+    # Bounds order candidates; they do not veto a pose in a hollow receiver.
+    # One physical release, below the caller, determines the actual outcome.
+    for candidate in sorted(proposals, key=lambda row: row[0]):
+        check()
+        priority, position, quat, center, extent, *_ = candidate
+        overlap = (pose_score(position, quat) if pose_score is not None else 0)
+        if particles: overlap += envelope_score(center.tolist(), extent.tolist())
+        scored += 1
+        rank = (overlap, *priority)
+        if best is None or rank < best: best, selected = rank, candidate
+        if overlap == 0: break
+    if selected is None:
+        raise SkillError('sampling_error', 'No receiving pose in the selected container')
+    _, position, quat, _, _, volume, kind, label = selected
+    return dict(pose=(position, quat), volume=volume.prim_path, domain=kind,
+                orientation_source=label, candidates=len(proposals), scored=scored,
+                proposal_overlap_score=best[0])
+
+
 def closure_preference_available(backend):
     """Keep a verified Inside result instead of spending its commit allowance.
 

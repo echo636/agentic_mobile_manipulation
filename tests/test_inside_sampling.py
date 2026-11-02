@@ -6,34 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from manipulation_agent.executors.inside_sampling import assembly_orientations, inset_centers, sample_assembly_inside, envelope_protrusion
-from manipulation_agent.executors.placement import inside_sample_with_fallback
 from manipulation_agent.contracts import SkillError
-
-
-class SamplerBudgetRecoveryTests(unittest.TestCase):
-    def test_native_exhaustion_restores_before_fallback(self):
-        calls=[]
-        def native():
-            calls.append('native')
-            raise SkillError('native_sampling_budget_exhausted','fixture budget')
-        result=inside_sample_with_fallback(native,lambda:calls.append('fallback') or True,
-                                          lambda:calls.append('restore'),lambda record:None)
-        self.assertEqual(result,(True,True))
-        self.assertEqual(calls,['native','restore','fallback'])
-
-    def test_external_deadline_never_starts_fallback(self):
-        calls=[]
-        def native():raise SkillError('execution_timeout','episode deadline')
-        with self.assertRaises(SkillError):
-            inside_sample_with_fallback(native,lambda:calls.append('fallback'),lambda:calls.append('restore'),lambda r:None)
-        self.assertEqual(calls,[])
-
-    def test_scene_change_during_native_search_prevents_fallback(self):
-        calls=[]
-        def restore():raise SkillError('target_changed','scene identity changed')
-        with self.assertRaises(SkillError):
-            inside_sample_with_fallback(lambda:False,lambda:calls.append('fallback'),restore,lambda r:None)
-        self.assertEqual(calls,[])
 
 
 class InsetCentersTests(unittest.TestCase):

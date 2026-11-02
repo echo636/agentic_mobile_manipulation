@@ -1,29 +1,10 @@
 """State placement with geometric proposals and native free settling."""
 import json
 import time
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 
 from ..contracts import SkillError
 from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
-
-
-def inside_sample_with_fallback(native, fallback, restore, record):
-    """A bounded native search must leave work available for geometric search."""
-    try:
-        sampled = native()
-    except SkillError as exc:
-        if exc.code != 'native_sampling_budget_exhausted':
-            raise
-        sampled = False
-        record({'status': 'native_sampling_exhausted', 'error': str(exc)})
-    else:
-        if not sampled:
-            record({'status':'native_sampling_failed', 'termination':'returned_false',
-                    'fallback':'assembly_volume_search'})
-    if sampled:
-        return True, False
-    restore()
-    return fallback(), True
 
 
 def scene_object_identities(sim):
@@ -856,173 +837,46 @@ class CheckedPlacement:
             'ignored_payload_names': [obj.name for obj in payload]}
 
     def _checked_place_inside(self, target, max_steps, point=None):
+        """Release once into the selected volume and report the physical result."""
         from omnigibson.object_states import Inside
+        from .inside_sampling import select_inside_release
         held = self._get_held()
         if held is None:
-            raise SkillError('empty_hand','No object is held')
-        fillable = [link for link in target.links.values() if link.is_meta_link and
-                    link.meta_link_type in {'fillable','openfillable'}]
-        if not fillable or Inside not in held.states:
-            raise SkillError('unsupported_relation','Target has no supported fillable volume')
-        start=time.monotonic();before=self.sampling_physics_steps
-        # Regrasping an item already inside the destination does not turn the
-        # currently carried assembly into an existing resident to pin in place.
-        moving_ids={id(held),*(id(child) for child,_ in getattr(self,'_carry_contents',[]))}
-        residents=[record for record in self._container_payload(target) if id(record[0]) not in moving_ids]
-        resident_count=len(residents)
-        contents=list(self._carry_contents)
-        particle_payload=getattr(self,'_placement_particle_payload',(None,[]))[1]
-        # Native Inside moves only the selected body. Any payload, including
-        # loose particles without rigid children, must move with its carrier.
-        assembly_search=bool(contents or particle_payload)
-        dependencies=list(getattr(self,'_carry_dependencies',[]))
-        with placement_transaction(self.og.sim, self._placement_record):
-            self._carry_detach()
-            # Count native sampler work without altering body motion.
-            original_step=self.og.sim.step_physics
-            native_sampling=False
-            native_start=start;native_before=before
-            def bounded_step(*args,**kwargs):
-                deadline=getattr(self,'deadline',None)
-                if deadline is not None:deadline.check(changed=True)
-                if native_sampling and (self.sampling_physics_steps-native_before>=1200 or time.monotonic()-native_start>30):
-                    raise SkillError('native_sampling_budget_exhausted',
-                                     'Native Inside search exhausted its reserved budget',changed=True)
-                # Managed benchmark episodes have one execution deadline;
-                # the legacy sampler caps apply only to standalone calls.
-                if not getattr(deadline,'managed',False) and (
-                        self.sampling_physics_steps-before>=min(6000,max_steps*4) or time.monotonic()-start>180):
-                    raise SkillError('sampling_budget_exhausted','Volume sampler exceeded physics/time limit',changed=True)
-                self.sampling_physics_steps+=1
-                result=original_step(*args,**kwargs)
-                self.og.sim.sync_physx_to_fabric()
-                return result
-            self.og.sim.step_physics=bounded_step
-            from omnigibson.utils.usd_utils import RigidContactAPI
-            original_contact=RigidContactAPI.is_in_contact
-            def assembly_contact(scene_idx,query_set,with_set,ignore_set,current_only):
-                if contents and len(query_set)==1 and next(iter(query_set)) is held and with_set is None:
-                    assembly=[held,*[obj for obj,_ in contents]]
-                    return original_contact(scene_idx,assembly,None,[*(ignore_set or []),*assembly],current_only)
-                return original_contact(scene_idx,query_set,with_set,ignore_set,current_only)
-            if contents:RigidContactAPI.is_in_contact=assembly_contact
-            geometric_fallback=False
-            open_native_state=None
-            try:
-                if assembly_search:
-                    from .inside_sampling import sample_assembly_inside
-                    sampled=sample_assembly_inside(self,held,target,contents,point=point,residents=residents)
-                else:
-                    from .inside_sampling import sample_assembly_inside
-                    particles=snapshot_particle_state(self.og.sim)
-                    checkpoint=self.og.sim.dump_state(serialized=False)
-                    identities=scene_object_identities(self.og.sim)
-                    def native():
-                        nonlocal native_sampling,native_start,native_before,open_native_state
-                        native_start=time.monotonic();native_before=self.sampling_physics_steps
-                        native_sampling=True
-                        try:
-                            sampled=held.states[Inside].set_value(target,True)
-                            if sampled and not self._inside_resting_check(held,target,contents,residents=residents):
-                                return False
-                            if sampled:
-                                from .closure_clearance import check_closure_clearance
-                                closure=check_closure_clearance(self,target,[held,*[obj for obj,_ in contents]])
-                                if not closure['clear']:
-                                    open_native_state=(self.og.sim.dump_state(serialized=False),
-                                                       snapshot_particle_state(self.og.sim))
-                                    self._placement_record({'status':'native_closed_articulation_collision',
-                                        'held':held.name,'target':target.name,'closure':closure})
-                                    return False
-                            return sampled
-                        finally:native_sampling=False
-                    def restore():
-                        if scene_object_identities(self.og.sim)!=identities or not particle_state_unchanged(particles):
-                            raise SkillError('target_changed','Scene identities changed during Inside sampling',changed=True)
-                        self.og.sim.load_state(checkpoint,serialized=False)
-                        restore_particle_state(particles)
-                    def geometric():
-                        try:
-                            fallback = (None if open_native_state is None else
-                                {'state':open_native_state[0], 'particles':open_native_state[1],
-                                 'candidate':{'candidate':0, 'origin':'native_sampler'}})
-                            return sample_assembly_inside(self,held,target,contents,point=point,residents=residents,
-                                                          open_fallback=fallback)
-                        except SkillError as exc:
-                            if exc.code!='sampling_budget_exhausted' or open_native_state is None:
-                                raise
-                            # A valid native Inside pose must not be lost just
-                            # because the optional closure preference ran out
-                            # of work. The caller restores that saved pose.
-                            self.deadline.check(changed=True)
-                            return False
-                    if residents:
-                        # Occupied containers need proposals on/around their
-                        # existing contents. Do not first spend 30 seconds on a
-                        # native search that ignores those support surfaces.
-                        try:sampled=geometric()
-                        except SkillError as exc:
-                            if exc.code!='sampling_budget_exhausted':raise
-                            sampled=False
-                            self._placement_record({'status':'geometric_sampling_exhausted','error':str(exc)})
-                        geometric_fallback=bool(sampled)
-                        if not sampled:
-                            restore()
-                            try:sampled=native()
-                            except SkillError as exc:
-                                if exc.code!='native_sampling_budget_exhausted':raise
-                                sampled=False
-                                self._placement_record({'status':'native_sampling_exhausted','error':str(exc),
-                                                        'preceded_by':'assembly_volume_search'})
-                    else:
-                        sampled,geometric_fallback=inside_sample_with_fallback(
-                            native,geometric,restore,self._placement_record)
-                if not sampled and open_native_state is not None:
-                    if scene_object_identities(self.og.sim)!=identities or not particle_state_unchanged(particles):
-                        raise SkillError('target_changed','Scene identities changed before native fallback',changed=True)
-                    self.og.sim.load_state(open_native_state[0],serialized=False)
-                    restore_particle_state(open_native_state[1])
-                    sampled=True
-                    geometric_fallback=False
-                    self._placement_record({'status':'native_open_only_fallback',
-                        'held':held.name,'target':target.name,
-                        'note':'Inside is valid; closing may require rearranging contents'})
-            finally:
-                if contents:RigidContactAPI.is_in_contact=original_contact
-                self.og.sim.step_physics=original_step
-                self.frames_revision=-1
-            if not sampled:
-                raise SkillError('sampling_error',('Assembly volume search could not find a valid placement'
-                                 if assembly_search else 'Official volume sampler could not find a valid placement'),changed=True)
+            raise SkillError('empty_hand', 'No object is held')
+        if Inside not in held.states or not any(link.is_meta_link and
+                link.meta_link_type in {'fillable', 'openfillable'} for link in target.links.values()):
+            raise SkillError('unsupported_relation', 'Target has no supported fillable volume')
+        contents = list(self._carry_contents)
+        dependencies = list(self._carry_dependencies)
+        moving_ids = {id(held), *[id(child) for child, _ in contents]}
+        residents = [row for row in self._container_payload(target) if id(row[0]) not in moving_ids]
+        candidate = select_inside_release(self, held, target, contents, point=point, residents=residents)
+        before = self.sampling_physics_steps
+        self._placement_record({'status': 'inside_release', 'held': held.name, 'target': target.name,
+            **{k: v for k, v in candidate.items() if k != 'pose'},
+            'position': candidate['pose'][0].tolist(), 'orientation': candidate['pose'][1].tolist()})
+        self._carry_detach()
+        held.set_position_orientation(*candidate['pose'])
+        self._relocate_contents(held, contents)
+        held.keep_still(); held.wake()
+        self._settle_surface_contacts(held, target, [obj for obj, _ in contents], max_steps)
         try:
-            # Verify the accepted candidate under unmodified native physics.
-            settling_steps=min(50,max_steps)
-            local=getattr(self,'_local_operation',None)
-            # Every accepted sampler pose has already passed free-release
-            # resting checks. Optional closure search must not use up the
-            # mandatory environment-step verification of that valid pose.
-            commit=(local.verified_placement_commit(settling_steps) if local is not None
-                    else nullcontext())
-            with commit:
-                for _ in range(settling_steps):
-                    self._step(self.primitives._empty_action())
+            inside = bool(held.states[Inside].get_value(target))
+            self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,
+                'official_inside': inside, 'position': held.get_position_orientation()[0].tolist()})
+            if not inside:
+                raise SkillError('postcondition_error', 'Object did not remain inside after release', changed=True)
+            self._verify_container_payload(target, residents)
+            self._verify_payload(dependencies)
         finally:
-            self.og.sim.step_physics=original_step
-        if not held.states[Inside].get_value(target):
-            raise SkillError('postcondition_error','Object did not remain inside after settling; try another placement',changed=True)
-        self._verify_container_payload(target,residents)
-        self._verify_payload(dependencies)
-        if any(Inside not in obj.states or not obj.states[Inside].get_value(target) for obj,_ in contents):
-            raise SkillError('postcondition_error','Carried contents do not fit inside the selected container',changed=True)
-        return {'primitive':'place_inside','implementation':('assembly_volume_with_official_Inside'
-                if assembly_search else 'inside_geometry_first' if residents and geometric_fallback
-                else 'Inside_with_geometric_fallback' if geometric_fallback
-                else 'official_Inside_with_rigid_payload_sampling'),
-                'postcondition':'Inside.get_value_after_settling','failure_policy':'retain_physical_result',
-                'target_root_anchored':False,'existing_containment_verified':resident_count,
-                'new_object_settling':'free_physics',
-                'sampling_order':'geometry' if assembly_search else 'geometry_then_native' if residents else 'native_then_geometry',
-                'sampling_physics_steps':self.sampling_physics_steps-before}
+            self.frames_revision = -1
+            # This is the real outcome, including failure. Native transitions
+            # and evaluation advance once; no world state is restored.
+            self._step(self.primitives._empty_action())
+        return {'primitive': 'place_inside', 'implementation': 'single_geometric_release_and_free_settling',
+                'postcondition': 'Inside_and_retained_payload_after_free_settling',
+                'failure_policy': 'retain_physical_result',
+                'sampling_physics_steps': self.sampling_physics_steps - before}
 
     def _inside_resting_check(self,held,target,contents,*,residents=()):
         """Observe native free settling without restoring any body pose."""

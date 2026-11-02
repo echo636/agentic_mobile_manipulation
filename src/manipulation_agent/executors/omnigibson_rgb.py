@@ -1425,13 +1425,13 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'physics_substeps':'native_unchanged', 'task_and_state_updates':'native_unchanged',
             'exception_policy':'restore_previous_implicit_render_setting'}
         result['placement'] = {'on_top':'single_geometric_release_and_free_settling',
-            'inside':'official_volume','verification':'selected_surface_support_and_physical_settlement; official_Inside_and_payload_relations',
+            'inside':'single_geometric_release_and_free_settling','verification':'selected_surface_support_and_physical_settlement; official_Inside_and_payload_relations',
             'surface_target':'RGB selected point and shelf retained; local candidate search',
             'surface_geometry':'object collision mesh; no diagonal-square yaw envelope',
             'base_anchor':None,'released_body_pinning':False,
             'failure_policy':'retain_committed_physical_result',
-            'candidate_sampling':{'on_top':'read_only_geometry_no_physics_trials_or_rollback',
-                                  'inside_and_next_to':'hypothetical_poses_may_restore_before_commit'},
+            'candidate_sampling':{'on_top_and_inside':'read_only_geometry_no_physics_trials_or_rollback',
+                                  'next_to':'hypothetical_poses_may_restore_before_commit'},
             'goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
         result['base_execution'] = 'checked_route_then_single_endpoint_transfer_and_native_settling'
