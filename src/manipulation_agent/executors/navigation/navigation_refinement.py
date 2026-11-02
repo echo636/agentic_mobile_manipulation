@@ -15,10 +15,10 @@ def approach_sampling(collision, actual, point, reach_m, check_cancelled):
     """
     window = approach_refinement_window(collision, actual, point, reach_m, check_cancelled)
     width, height = (window[i+2]-window[i] for i in (0, 1))
-    # (width / resolution + 2) * (height / resolution + 2) bounds
-    # floor_support_window's aligned cell count, including both outer edges.
+    # ceil(end/r) - floor(start/r) + 1 is strictly below span/r + 3.
+    # Include both fractional alignment margins and the inclusive last cell.
     span = width + height
-    fitting = (span + math.sqrt(span*span + 249996*width*height)) / 249996
+    fitting = (3*span + math.sqrt(9*span*span + 4*249991*width*height)) / (2*249991)
     return {'resolution': max(min(.0125, collision.grid.resolution), fitting*(1+1e-9)),
             'window': window}
 

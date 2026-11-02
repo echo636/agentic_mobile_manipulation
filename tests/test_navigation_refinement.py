@@ -88,6 +88,23 @@ class ApproachWindowTests(unittest.TestCase):
 
 
 class FloorWindowTests(unittest.TestCase):
+    def test_approach_resolution_includes_fractional_alignment_at_cell_limit(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from manipulation_agent.executors.navigation.navigation_refinement import approach_sampling
+        raw = np.ones((1000, 1000), dtype='uint8')
+        collision = SimpleNamespace(grid=SimpleNamespace(resolution=.05))
+        # R999/R1000 failed before search: the continuous area fit omitted
+        # one fractional alignment cell on each axis of rectangular windows.
+        for width, height, offset in [(13, 9, 0), (40, 24, 0), (11, 13, .02)]:
+            window = [offset, offset, width+offset, height+offset]
+            with patch('manipulation_agent.executors.navigation.navigation_refinement.approach_refinement_window', return_value=window):
+                sampling = approach_sampling(collision, (0, 0, 0), (1, 1), 1.4, lambda: None)
+            sampled, origin = floor_support_window(raw, .05, sampling['resolution'], window)
+            self.assertLessEqual(sampled.size, 250000)
+            self.assertTrue(np.all(origin <= window[:2]))
+            self.assertTrue(np.all(origin + (np.array(sampled.shape[::-1])-1)*sampling['resolution'] >= window[2:]))
+
     def test_refinement_preserves_world_alignment_and_unsupported_floor(self):
         raw = np.ones((12, 18), dtype='uint8')
         raw[:, 7:9] = 0
