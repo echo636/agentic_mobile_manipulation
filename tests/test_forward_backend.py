@@ -141,7 +141,6 @@ class ForwardBackendTests(unittest.TestCase):
             return (self.grid,HeadingCollisionChecker(self.grid,b._navigation_layers,0.,b._navigation_support),
                     {'held_object_footprint_included':False},(),0)
         b._local_geometry=geometry
-        b._refine_local_geometry=lambda *args,**kwargs:False
         for reason,expected in [('navigation_search_exhausted','local_adjustment_exhausted'),
                                 ('navigation_unreachable','local_adjustment_exhausted')]:
             op=LocalOperation(b,'open',None,600,{})
@@ -153,7 +152,7 @@ class ForwardBackendTests(unittest.TestCase):
                     b._local_reposition('open',object(),self.torch.tensor([1.55,0.,.8]),op)
             self.assertEqual(caught.exception.code,expected)
             self.assertEqual(self.restores,0)
-        self.assertTrue(any(r.get('route_search')=='shared_target_stances' for r in records))
+        self.assertTrue(any(r.get('route_search')=='forward_target_stances' for r in records))
 
     def test_local_operation_drives_then_executes_once_without_macro_navigation(self):
         from manipulation_agent.executors.local_manipulation import LocalLimits,LocalOperation
@@ -170,7 +169,6 @@ class ForwardBackendTests(unittest.TestCase):
                                              check_cancelled=op.check)
             return self.grid,checker,{'held_object_footprint_included':False},(),0
         b._local_geometry=geometry
-        b._refine_local_geometry=lambda *args,**kwargs:False
         b._approach_visible=lambda *a,**kw:True
         b._local_reobserve=lambda lock:captures.append(lock)
         b._navigate=lambda *a,**kw:self.fail('Micropositioning called macro navigation')

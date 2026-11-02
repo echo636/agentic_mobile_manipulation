@@ -91,15 +91,13 @@ class LocalRGBManipulation:
         from collections import Counter
         from .navigation.gt_navigation import NavigationPlan, NavigationError, PlanningBudget, SearchBudgetExhausted
         from .navigation.forward_navigation import (plan_forward_route,
-                                         checked_connection, route_from_poses, angle)
+            checked_connection, checked_holonomic_connection, route_from_poses, angle)
         from .local_stances import local_stance_proposals
         geometry=getattr(operation,'geometry',None) or self._local_geometry(operation)
         operation.geometry=geometry
         grid,collision,details,hulls,_=geometry
         actual=self._local_pose()
         if not collision.motion_free(actual,actual):
-            if self._refine_local_geometry(operation,point,grid,reason='coarse_start_collision'):
-                return self._local_reposition(primitive,obj,point,operation)
             self._local_clearance_recovery(operation,geometry)
             return
         # Endpoint checks only need the target neighbourhood plus the full
@@ -107,6 +105,8 @@ class LocalRGBManipulation:
         local=(collision.local_window(point[:2],operation.limits.reach_m+.75)
                if hasattr(collision,'local_window') else collision)
         grasp_pose = self._grasp_pose_proposer(obj, point) if primitive == 'grasp' else None
+        lateral=bool(getattr(self.robot,'is_holonomic_base',False))
+        connect=checked_holonomic_connection if lateral else checked_connection
         budget=PlanningBudget(operation.check,seconds=operation.limits.planning_seconds)
         collision.check_cancelled=budget.check
         selected=None;attempts=[];exhausted=False;proposal_diagnostics={};eligible=[]
@@ -139,12 +139,13 @@ class LocalRGBManipulation:
                     eligible.append((plan,row))
                     row['status']='route_candidate'
                     if prefer_return:
-                        row['checked_return_poses']=checked_connection(
+                        row['checked_return_poses']=connect(
                             pose,actual[:2],actual[2],collision,preparation.check)
-                    poses=checked_connection(actual,pose[:2],pose[2],collision,preparation.check)
+                    poses=connect(actual,pose[:2],pose[2],collision,preparation.check)
                     if poses is not None and (not prefer_return or row['checked_return_poses'] is not None):
                         selected=(plan,route_from_poses(plan,poses,collision,
-                            method='certified_target_approach',check_cancelled=preparation.check))
+                            method='certified_target_approach',allow_lateral=lateral,
+                            check_cancelled=preparation.check))
                         break
                     if len(eligible)>=32:
                         proposal_diagnostics['candidate_pool_limited']=True
@@ -160,21 +161,18 @@ class LocalRGBManipulation:
                 plans=[entry[0] for entry in preferred]
                 proposal_diagnostics['checked_return_candidates']=len(returning)
                 try:
-                    # Reuse the compiled shared roadmap as a fast proposal;
-                    # continuous search remains the fallback for admitted stances.
-                    from .navigation.point_route_projection import project_forward_point
-                    roadmap_budget=PlanningBudget(budget.check,seconds=3.)
-                    collision.check_cancelled=roadmap_budget.check
-                    try:
-                        roadmap=project_forward_point(plans,actual,collision,roadmap_budget.check,
-                                                      exact_endpoints=True)
-                    except (ImportError,SearchBudgetExhausted):roadmap=None
-                    finally:collision.check_cancelled=budget.check
-                    if roadmap is not None:
+                    # Select one planner for the actual base capability. A
+                    # holonomic robot need not exhaust forward-only search first.
+                    if lateral:
+                        from .navigation.point_route_projection import project_forward_point
+                        roadmap=project_forward_point(plans,actual,collision,budget.check,
+                                                      exact_endpoints=True,allow_lateral=True)
+                        if roadmap is None:
+                            raise NavigationError('No route to admitted stances in the current holonomic roadmap')
                         plan,poses,roadmap_details=roadmap
                         proposal_diagnostics['roadmap']=roadmap_details
-                        route=route_from_poses(plan,poses,collision,method='shared_roadmap_to_admitted_stances',
-                                               check_cancelled=budget.check)
+                        route=route_from_poses(plan,poses,collision,allow_lateral=True,
+                            method='holonomic_target_approach',check_cancelled=budget.check)
                     else:
                         route=plan_forward_route(plans[0],actual,collision,check_cancelled=budget.check,
                                                  max_expansions=20000,alternatives=plans[1:])
@@ -186,27 +184,6 @@ class LocalRGBManipulation:
                     exhausted|=exc.code=='navigation_search_exhausted'
                     for _,row in eligible:
                         row.update(status='rejected',reason=exc.code,detail=str(exc))
-            # R1Pro is holonomic: a narrow aisle may require a sideways drive
-            # while its long axis stays fixed. Preserve all endpoint proofs and
-            # use the same footprint sweeps; differential bases never enter here.
-            if selected is None and eligible and getattr(self.robot,'is_holonomic_base',False):
-                from .navigation.point_route_projection import project_forward_point
-                lateral_budget=PlanningBudget(operation.check,seconds=min(40.,12.*.05/grid.resolution))
-                collision.check_cancelled=lateral_budget.check
-                try:
-                    found=project_forward_point([entry[0] for entry in eligible],actual,collision,
-                        lateral_budget.check,exact_endpoints=True,allow_lateral=True)
-                    if found is not None:
-                        plan,poses,route_details=found
-                        route=route_from_poses(plan,poses,collision,allow_lateral=True,
-                            method='checked_holonomic_target_approach',check_cancelled=lateral_budget.check)
-                        selected=(plan,route)
-                        proposal_diagnostics['holonomic_roadmap']=route_details
-                except (ImportError,SearchBudgetExhausted):
-                    exhausted=True
-                    proposal_diagnostics['holonomic_planning_exhausted']=True
-                finally:
-                    collision.check_cancelled=operation.check
             if selected is not None:
                 for plan,row in eligible:
                     if plan is selected[0]:
@@ -218,22 +195,20 @@ class LocalRGBManipulation:
             operation.record('planning_limit',candidate_attempts=len(attempts))
         finally:
             collision.check_cancelled=operation.check
-            proposal_diagnostics.update(route_search='shared_target_stances',route_candidates=len(eligible))
+            proposal_diagnostics.update(route_search='holonomic_target_stances' if lateral else 'forward_target_stances',
+                                        route_candidates=len(eligible),planning_seconds=operation.limits.planning_seconds)
             operation.record('candidates',candidates=attempts,held_footprint=details['held_object_footprint_included'])
             operation.record('stance_search',**proposal_diagnostics,
                 candidate_sources=dict(Counter(row['source'] for row in attempts)),
                 candidate_outcomes=dict(Counter(row.get('reason',row['status']) for row in attempts)),
                 termination='selected' if selected else 'budget' if exhausted else 'candidates_exhausted')
         if selected is None:
-            if self._refine_local_geometry(operation,point,grid,
-                    reason='coarse_planning_budget' if exhausted else 'coarse_candidates_exhausted'):
-                return self._local_reposition(primitive,obj,point,operation)
             if exhausted:
                 if not eligible:
                     raise SkillError('local_adjustment_exhausted',
                         'Stance preparation exhausted its budget before admitting a route endpoint',
                         stage='local_candidate_preparation_budget')
-                raise SkillError('local_adjustment_exhausted','Local route search incomplete within planning budget',
+                raise SkillError('local_adjustment_exhausted','Local search found no route within its candidate and time limits',
                                  stage='local_planning_budget')
             reasons={row.get('reason') for row in attempts}
             stage='local_stance_collision'
@@ -243,18 +218,8 @@ class LocalRGBManipulation:
             raise SkillError('local_adjustment_blocked','No checked reachable visible stance within target operation reach',
                              stage=stage)
         plan,route=selected
-        from .navigation.navigation_refinement import refine_navigation_detour
-        grid,details,plan,route,collision,_,detour=refine_navigation_detour(
-            self,geometry[4],grid,details,actual,[plan],plan,route,collision,{})
-        if detour is not None:
-            # Refinement has its own attempt list; LocalOperation owns the
-            # top-level primitive-attempt counter in every diagnostic record.
-            operation.record('detour_refinement',refinement=detour)
-            if detour['status']=='refined_route_selected':
-                chosen=detour['attempts'][-1]
-                operation.navigation_sampling={key:chosen[key] for key in ('resolution','window')}
         operation.record('move',route=asdict(route))
-        # Refinement can certify the existing pose; no motion needs settling.
+        # An already valid pose needs no motion or settling.
         if route.distance_m == 0 and route.turn_radians == 0:
             return
         result=self._execute_gt_plan(grid,plan,operation.step_limit-(self.steps-operation.start_steps),prepared_route=route)
@@ -262,50 +227,6 @@ class LocalRGBManipulation:
         # State and geometry must be measured again after physics, even if a
         # route was certified before executing it.
         operation.geometry=None
-
-    def _refine_local_geometry(self,operation,point,grid,*,reason):
-        """Refine target geometry within the full-window cell budget.
-
-        Coarse cells include full occupied columns and an outward footprint
-        reserve. A physically open passage can disappear in that raster. Requery
-        a bounded local map; never remove obstacles or shrink robot geometry.
-        """
-        if grid.resolution<=.0125:return False
-        desired=max(.0125,grid.resolution/2)
-        actual=self._local_pose()
-        if not hasattr(operation,'refinement_window'):
-            from .navigation.navigation_refinement import approach_refinement_window
-            operation.refinement_window=approach_refinement_window(
-                operation.geometry[1],actual,point,operation.limits.reach_m,operation.check)
-        window=operation.refinement_window
-        def cells(resolution):
-            return math.prod(math.ceil((window[i+2]-window[i])/resolution)+2 for i in (0,1))
-        resolution=desired
-        if cells(resolution)>250000:
-            # A requested halving can exceed the budget while a slightly
-            # coarser refinement still resolves the passage. Keep both the
-            # full approach window and the cell cap; choose its finest fit.
-            if cells(grid.resolution)>250000:
-                resolution=None
-            else:
-                low,high=desired,grid.resolution
-                for _ in range(40):
-                    mid=(low+high)/2
-                    if cells(mid)>250000:low=mid
-                    else:high=mid
-                resolution=high if high<grid.resolution-1e-6 else None
-            if resolution is None:
-                operation.record('map_refinement_skipped',reason='window_budget_saturated',
-                                 current_resolution_m=grid.resolution,world_window=window)
-                return False
-        operation.check()
-        operation.navigation_sampling={'resolution':resolution,'window':window}
-        operation.geometry=None
-        operation.record('map_refinement',reason=reason,coarse_resolution_m=grid.resolution,
-                         resolution_m=resolution,requested_resolution_m=desired,
-                         cells=cells(resolution),world_window=window,
-                         unchanged_checks=['collision_geometry','target_identity','reach'])
-        return True
 
     def _local_clearance_recovery(self,operation,geometry):
         from dataclasses import replace

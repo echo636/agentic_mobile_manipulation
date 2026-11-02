@@ -38,7 +38,6 @@ class GeometryMotor(LocalRGBManipulation):
     def _local_record(self, **kw): self.records.append(kw)
     def _approach_visible(self, *args, **kw): return True
     def _grasp_pose_proposer(self, *args): return lambda pose: pose
-    def _refine_local_geometry(self, *args, **kw): return False
     def _execute_gt_plan(self, grid, plan, max_steps, *, prepared_route):
         self.route = prepared_route
         return {'actual_path_distance_m': prepared_route.distance_m}
@@ -184,6 +183,7 @@ class ArchivedStanceTests(unittest.TestCase):
         start=(0.,0.,0.);target=(6.,0.,.8)
         collision=HeadingCollisionChecker(grid,[(raw,footprint)],0.,raw)
         motor=GeometryMotor(start,collision,False)
+        motor.robot.is_holonomic_base=True
         op=LocalOperation(motor,'grasp',None,600,{})
         motor._local_reposition('grasp',object(),target,op)
         self.assertGreater(motor.route.distance_m,4.)
