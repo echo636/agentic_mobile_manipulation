@@ -14,6 +14,7 @@ class TaskNotes:
         self.feedback = deque(maxlen=64)
         self.feedback_count = 0
         self.feedback_seconds = 0.
+        self.feedback_simulation_seconds = 0.
         self._planning_version = None
         self._planning_advice = None
 
@@ -31,6 +32,9 @@ class TaskNotes:
             **{key: result[key] for key in ('ok', 'evidence_id', 'effect', 'error', 'runtime') if key in result}}))
         self.feedback_count += 1
         self.feedback_seconds += result.get('runtime', {}).get('tool_seconds', 0.)
+        elapsed = result.get('runtime', {}).get('observed_simulation_seconds')
+        self.feedback_simulation_seconds = (self.feedback_simulation_seconds + elapsed
+            if elapsed is not None and self.feedback_simulation_seconds is not None else None)
 
     def planning(self, pending=None):
         """Expose advice in the normal loop without reissuing a stale next step.
@@ -49,13 +53,17 @@ class TaskNotes:
             return advice
         latest = pending if pending is not None else self.feedback[-1]
         failed = latest.get('ok') is False or any(entry.get('ok') is False for entry in self.feedback)
+        pending_sim = pending.get('observed_simulation_seconds') if pending is not None else 0.
+        simulation_seconds = (self.feedback_simulation_seconds + pending_sim
+            if self.feedback_simulation_seconds is not None and pending_sim is not None else None)
         return dict(status='reconcile', notes_version=self.state['version'],
             checkpoint_status=advice['status'], active=advice.get('active'),
             selection=advice.get('selection'),
             next=None, actions_since_checkpoint=count,
             execution=dict(tool_seconds=round(self.feedback_seconds +
                 (pending or {}).get('tool_seconds', 0.), 3),
-                scope='Server action and observation time; excludes model requests and notes'),
+                observed_simulation_seconds=simulation_seconds,
+                scope='Tool wall time excludes model requests; simulation delta comes from public capture timestamps'),
             latest_receipt={k: latest[k] for k in ('primitive', 'ok', 'effect', 'error') if k in latest},
             failed_since_checkpoint=failed,
             next_decision=('No method was selected at this checkpoint. Reconcile actual progress and '
@@ -99,4 +107,5 @@ class TaskNotes:
         self.feedback.clear()
         self.feedback_count = 0
         self.feedback_seconds = 0.
+        self.feedback_simulation_seconds = 0.
         return self.read()

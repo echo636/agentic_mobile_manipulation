@@ -45,7 +45,7 @@ the scheduler cannot verify them from private simulator state.
 
 The scheduler compares method choices and order across all modeled unfinished
 branches. It tracks predicted resource states and travel over observed work
-areas. Cost is local work + travel + setup changes + expected recovery, in
+areas. Cost is local work + travel + setup changes + expected recovery + wait, in
 estimated seconds. It reuses setup where feasible and can choose shared work
 over separate methods. Beam search is bounded to 32 states per coverage level;
 it does not prove a global minimum. Cost comparisons cover the same set of goal
@@ -91,9 +91,18 @@ comparison arms; new generic notes need no duplicate `transport` graph.
 Present limits: the model must author enough alternatives and realistic costs.
 One-item graphs and room-wide labels that hide travel cannot establish general
 efficiency. Tool time includes simulation/rendering and excludes model requests;
-it is not simulated physical time. Passive-process overlap is not automatically
-timed: starting, independent work and completion checks must be represented and
-remaining waits revised from observations. Replay selection records show what
+it is not simulated physical time. Optional process clocks model unattended work:
+methods `starts` predict new processes, `simulation_seconds` advances all running
+processes during independent work, and `awaits` accounts for the remaining delay
+before a result check. Notes retain estimated remaining simulation seconds in
+`planning.processes`; `wait_cost_per_sim_second` converts waits to tool cost.
+Unknown processes or missing wait rates remain explicit gaps. Predictions wait
+before the checking method's travel/work and start processes at method end.
+Only public capture timestamps provide actual elapsed simulation time in action
+feedback. On reconciliation the model updates remaining durations and checks
+results; elapsed time never automatically changes a goal's status. Process
+conditions and duration estimates remain model responsibilities.
+Replay selection records show what
 the model declared, not independent proof that its actions implement the method.
 Efficiency requires autonomous outcome, action, travel and timing evidence.
 

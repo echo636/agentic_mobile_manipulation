@@ -20,6 +20,41 @@ def notes(*goals, **context):
 
 
 class TaskPlanningTests(unittest.TestCase):
+    def test_background_processing_overlaps_independent_work_and_keeps_result_check(self):
+        doc = notes(goal('start', [method('start-device', 2, starts={'process': 60})]),
+                    goal('clean', [method('clean', 8, simulation_seconds=45)]),
+                    goal('assemble', [method('assemble', 4, simulation_seconds=20)], depends=['clean']),
+                    goal('processed', [method('check-process', 2, awaits=['process'])], depends=['start']))
+        doc['planning']['wait_cost_per_sim_second'] = .5
+        doc['goals'][0]['methods'] = [method('verify-all', 1)]
+        original = copy.deepcopy(doc)
+        plan = schedule_task(doc)
+        self.assertEqual([s['method_id'] for s in plan['steps']],
+                         ['start-device', 'clean', 'assemble', 'check-process', 'verify-all'])
+        self.assertEqual(plan['estimated_seconds'], 17)
+        self.assertEqual(plan['steps'][3]['costs_seconds']['wait'], 0)
+        self.assertGreater(next(p['estimated_seconds'] for p in plan['alternatives']
+                                if p['first_method'] == 'clean'), 17)
+        self.assertEqual(doc, original)  # Predicted time never marks real results done.
+
+    def test_process_clocks_do_not_advance_with_tool_wall_time_or_unknown_progress(self):
+        doc = notes(goal('work', [method('work', 1000)]),
+                    goal('check', [method('check', 2, awaits=['device', 'drying'])], depends=['work']),
+                    processes={'device': 20, 'drying': 30}, wait_cost_per_sim_second=2)
+        plan = schedule_task(doc)
+        self.assertEqual(plan['estimated_seconds'], 1062)
+        self.assertEqual(plan['steps'][1]['process_timing']['wait_simulation_seconds'], 30)
+        doc['goals'][1]['methods'][0]['simulation_seconds'] = 25
+        plan = schedule_task(doc)
+        self.assertEqual(plan['estimated_seconds'], 1012)
+        self.assertEqual(plan['steps'][1]['process_timing']['wait_simulation_seconds'], 5)
+        del doc['planning']['wait_cost_per_sim_second']
+        plan = schedule_task(doc)
+        self.assertEqual(plan['status'], 'partial')
+        self.assertEqual(plan['gaps']['wait_cost_methods'], ['check'])
+        del doc['planning']['processes']['drying']
+        self.assertIn(['check', 'drying'], schedule_task(doc)['gaps']['processes'])
+
     def test_general_processing_order_reuses_tool_setup_across_branches(self):
         doc = notes(goal('a', [method('cut-a', 3, setup={'tool': 'knife'})]),
                     goal('b', [method('cut-b', 3, setup={'tool': 'knife'})]),

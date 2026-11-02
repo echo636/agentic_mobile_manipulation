@@ -22,6 +22,12 @@ def bindings(value):
     return value
 
 
+def process_times(value):
+    if not isinstance(value, dict) or any(not isinstance(k, str) or not k for k in value):
+        raise ValueError('Processes use names and remaining simulation seconds')
+    return {k: seconds(v) for k, v in value.items()}
+
+
 def compile_goals(rows):
     """Inherit branch prerequisites; expand structural parents to their work.
 
@@ -77,10 +83,15 @@ def compile_goals(rows):
             route = method['route']
             if not isinstance(route, list) or not route or any(not isinstance(p, str) or not p for p in route):
                 raise ValueError('Every method needs a nonempty route of observed area labels')
+            awaits = method.get('awaits', [])
+            if not isinstance(awaits, list) or any(not isinstance(p, str) or not p for p in awaits):
+                raise ValueError('awaits names processes to check after their estimated delay')
             methods.append(dict(id=method['id'], goals=sorted(achieves), route=route,
                 seconds=seconds(method['seconds']), recovery_seconds=seconds(method.get('recovery_seconds', 0)),
                 requires=bindings(method.get('requires', {})), setup=bindings(method.get('setup', {})),
-                effects=bindings(method.get('effects', {}))))
+                effects=bindings(method.get('effects', {})),
+                simulation_seconds=seconds(method.get('simulation_seconds', 0)),
+                starts=process_times(method.get('starts', {})), awaits=awaits))
     if len({m['id'] for m in methods}) != len(methods):
         raise ValueError('Method IDs must be unique across the tree')
     return goals, dependencies, methods
@@ -97,6 +108,10 @@ def schedule_task(notes, beam_width=32):
     context = notes['planning']
     location = context['location']
     state = bindings(context.get('state', {}))
+    processes = process_times(context.get('processes', {}))
+    wait_rate = context.get('wait_cost_per_sim_second')
+    if wait_rate is not None:
+        wait_rate = seconds(wait_rate)
     # Shortest paths use only supplied directed edges, never unknown zero costs.
     paths = {}
     places = {location, *(p for m in methods for p in m['route'])}
@@ -118,9 +133,11 @@ def schedule_task(notes, beam_width=32):
         key = switch['key'], switch['from'], switch['to'], switch['at']
         switches[key] = seconds(switch['seconds'])
     missing_routes, missing_states, missing_switches = set(), set(), set()
+    missing_processes, missing_wait_costs = set(), set()
     required = frozenset(dependencies)
     buckets = [dict() for _ in range(len(required) + 1)]
-    buckets[0][(frozenset(), location, tuple(sorted(state.items())), None)] = (0., [])
+    buckets[0][(frozenset(), location, tuple(sorted(state.items())),
+                tuple(sorted(processes.items())), None)] = (0., [])
     expanded = pruned = 0
     finalists = []
     chosen = (notes.get('active') or {}).get('method_id')
@@ -132,12 +149,21 @@ def schedule_task(notes, beam_width=32):
             finalists = ranked[:beam_width]  # Best reachable coverage if incomplete.
         if level == len(required):
             break
-        for (done, at, values, first), (cost, steps) in ranked[:beam_width]:
+        for (done, at, values, clocks, first), (cost, steps) in ranked[:beam_width]:
             expanded += 1
             current = dict(values)
+            remaining = dict(clocks)
             for method in methods:
                 achieved = frozenset(method['goals'])
                 if achieved & done or any(not dependencies[g] <= done for g in achieved):
+                    continue
+                unknown = set(method['awaits']) - remaining.keys()
+                if unknown:
+                    missing_processes.update((method['id'], p) for p in unknown)
+                    continue
+                wait = max((remaining[p] for p in method['awaits']), default=0.)
+                if wait and wait_rate is None:
+                    missing_wait_costs.add(method['id'])
                     continue
                 unmet = {k for k, v in method['requires'].items() if current.get(k) != v}
                 if unmet:
@@ -167,21 +193,31 @@ def schedule_task(notes, beam_width=32):
                         route.extend(paths[edge][1][1:])
                     parts = dict(work=method['seconds'], travel=travel_cost,
                                  setup=setup_cost, recovery=method['recovery_seconds'])
+                    if method['awaits']:
+                        parts['wait'] = wait * (wait_rate or 0.)
                     total = sum(parts.values())
                     step = dict(method_id=method['id'], goals=method['goals'], route=route,
                                 setup_changes=changes, costs_seconds=parts, estimated_seconds=total)
+                    elapsed = wait + method['simulation_seconds']
+                    after_clocks = {p: max(0., t - elapsed) for p, t in clocks}
+                    after_clocks.update(method['starts'])  # Start at this method's end.
+                    if clocks or method['starts'] or method['awaits']:
+                        step['process_timing'] = dict(wait_simulation_seconds=wait,
+                            work_simulation_seconds=method['simulation_seconds'],
+                            remaining_simulation_seconds=after_clocks)
                     if not done and method['id'] == chosen:
                         chosen_step = step
                     reached = done | achieved
-                    index = (reached, route[-1], tuple(sorted(after.items())), first or method['id'])
+                    index = (reached, route[-1], tuple(sorted(after.items())),
+                             tuple(sorted(after_clocks.items())), first or method['id'])
                     target = buckets[len(reached)]
                     if index not in target or cost + total < target[index][0]:
                         target[index] = (cost + total, [*steps, step])
-    (done, _, _, _), (cost, steps) = finalists[0]
+    (done, _, _, _, _), (cost, steps) = finalists[0]
     complete = done == required
     comparisons, firsts = [], set()
     chosen_comparison = None
-    for (covered, _, _, _), (total, path) in finalists:
+    for (covered, _, _, _, _), (total, path) in finalists:
         # Equal node counts can cover different work in an incomplete DAG.
         # Such paths are choices, but their cost difference is not a saving.
         if covered != done:
@@ -223,7 +259,9 @@ def schedule_task(notes, beam_width=32):
             for key in sorted(required-done)]
         result['gaps'] = dict(routes=[list(x) for x in sorted(missing_routes)],
             required_states=[list(x) for x in sorted(missing_states)],
-            setup_transitions=[list(x) for x in sorted(missing_switches, key=str)])
+            setup_transitions=[list(x) for x in sorted(missing_switches, key=str)],
+            processes=[list(x) for x in sorted(missing_processes)],
+            wait_cost_methods=sorted(missing_wait_costs))
     return result
 
 

@@ -290,6 +290,9 @@ class TaskNotesTests(unittest.TestCase):
             elapsed = action['runtime']['tool_seconds']
             self.assertGreaterEqual(elapsed, 0)
             self.assertEqual(action['planning']['execution']['tool_seconds'], elapsed)
+            sim_elapsed = action['runtime']['observed_simulation_seconds']
+            self.assertAlmostEqual(sim_elapsed, 1/30)
+            self.assertEqual(action['planning']['execution']['observed_simulation_seconds'], sim_elapsed)
             self.assertEqual(action['planning']['selection']['method_id'], 'switch-on')
             self.assertEqual(action['planning']['selection']['estimated_method_seconds'], 2)
             self.assertEqual(action['planning']['selection']['compared_remaining_seconds'], 3)
@@ -304,10 +307,37 @@ class TaskNotesTests(unittest.TestCase):
             updated = self.write(h, json.dumps(doc), 2, 'reconcile')
             self.assertEqual(updated['planning']['next']['method_id'], 'check')
             self.assertEqual(h.task_notes.feedback_seconds, 0)
+            self.assertEqual(h.task_notes.feedback_simulation_seconds, 0)
             replay = build_replay(h.recorder.output)
             action_step = next(s for s in replay['steps'] if s['request_id'] == 'execute')
             self.assertEqual(action_step['goal_state']['active'], chosen['active'])
             self.assertEqual(replay['planning_metrics']['method_selections'], 1)
+
+    def test_observed_process_progress_replans_without_claiming_completion(self):
+        from test_task_planning import goal, method, notes
+        with tempfile.TemporaryDirectory() as tmp:
+            h = self.harness(Path(tmp)/'episode')
+            doc = notes(goal('work', [method('work', 2, simulation_seconds=1/30)]),
+                        goal('processed', [method('check', 1, awaits=['device'])]),
+                        processes={'device': 1/30}, wait_cost_per_sim_second=300)
+            self.assertEqual(self.write(h, json.dumps(doc), 0, 'plan')['planning']['next']['method_id'], 'work')
+            h.call('task_notes', dict(operation='select', expected_version=1,
+                content=json.dumps(dict(method_id='work', steps=['Operate visible switch'],
+                                        next_check='Switch changed'))), 'choose')
+            action = h.call('act', dict(primitive='toggle_on', revision=h.revision,
+                target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5])), 'execute')
+            progress = action['planning']['execution']['observed_simulation_seconds']
+            read = h.call('task_notes', dict(operation='read', content=None, expected_version=None), 'read')
+            self.assertEqual(read['planning']['execution']['observed_simulation_seconds'], progress)
+            self.assertEqual(json.loads(h.task_notes.state['content'])['goals'][2]['status'], 'pending')
+            # The model reconciles actual elapsed simulation time, then checks the result.
+            doc['goals'][1]['status'] = 'done'
+            doc['planning']['processes']['device'] = max(0, 1/30 - progress)
+            doc['active'] = None
+            update = self.write(h, json.dumps(doc), 2, 'update')['planning']
+            self.assertEqual(update['next']['method_id'], 'check')
+            self.assertEqual(update['estimated_seconds'], 1)
+            self.assertEqual(json.loads(h.task_notes.state['content'])['goals'][2]['status'], 'pending')
 
     def test_processing_failure_recompares_methods_across_branches(self):
         from test_task_planning import goal, method, notes
