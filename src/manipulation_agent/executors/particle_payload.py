@@ -74,8 +74,6 @@ def _supported_particles(systems, containers, owners):
     bounds = [obj.aabb for obj in containers]
     nodes = []
     for system in systems:
-        if getattr(system, 'is_fluid', False):
-            continue  # Fluid support is containment, not rigid contact rays.
         view = physical_particle_view(system)
         centers, _ = system.get_particles_position_orientation()
         radius = float(system.particle_contact_radius)

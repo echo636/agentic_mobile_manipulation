@@ -1,6 +1,8 @@
 """Protect fluid identity across removal, append and failed-action rollback."""
 import unittest
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 
 import torch
 
@@ -40,9 +42,21 @@ class Instancer:
         for name in ('particle_positions', 'particle_orientations', 'particle_velocities'):
             setattr(self, name, state[name].clone())
 
+    def set_attribute(self, *, attr, val):
+        assert attr == 'orientations'
+        self.particle_orientations = torch.as_tensor(val).clone()
+
 
 class ParticleViewTests(unittest.TestCase):
     def setUp(self):
+        og = ModuleType('omnigibson')
+        lazy = ModuleType('omnigibson.lazy')
+        lazy.pxr = SimpleNamespace(Vt=SimpleNamespace(
+            QuathArray=SimpleNamespace(FromNumpy=lambda array: array)))
+        og.lazy = lazy
+        modules = patch.dict(sys.modules, {'omnigibson': og, 'omnigibson.lazy': lazy})
+        modules.start()
+        self.addCleanup(modules.stop)
         self.inst = Instancer()
         class System:
             @property
@@ -88,6 +102,14 @@ class ParticleViewTests(unittest.TestCase):
         state.pop('_controlled_particle_ids')
         self.inst._load_state(state)
         self.assertFalse(before.intersection(self.view.prim_paths))
+
+    def test_pose_write_keeps_xyzw_order_and_unselected_particle_pose(self):
+        self.inst.particle_orientations = torch.tensor([[.1, .2, .3, .9], [.4, .3, .2, .8]])
+        before = self.view.get_transforms().clone()
+        selected = torch.tensor([[2., 3., 4., .2, -.3, .4, .7]])
+        self.view.set_transforms(selected, torch.tensor([1]))
+        torch.testing.assert_close(self.view.get_transforms()[0], before[0])
+        torch.testing.assert_close(self.view.get_transforms()[1], selected[0])
 
     def test_empty_macro_system_does_not_expose_destroyed_backend(self):
         class ExpiredView:
