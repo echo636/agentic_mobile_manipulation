@@ -1,10 +1,8 @@
 """State placement with geometric proposals and native free settling."""
 import json
 import time
-from contextlib import contextmanager
 
 from ..contracts import SkillError
-from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
 
 
 def scene_object_identities(sim):
@@ -12,34 +10,6 @@ def scene_object_identities(sim):
     scenes = getattr(sim, 'scenes', None)
     return None if scenes is None else tuple(
         (id(scene), frozenset(id(obj) for obj in scene.objects)) for scene in scenes)
-
-
-@contextmanager
-def placement_transaction(sim, record):
-    """Discard failed hypothetical trials; never wrap committed environment steps."""
-    particles = snapshot_particle_state(sim)
-    state = sim.dump_state(serialized=False)
-    objects = scene_object_identities(sim)
-    try:
-        yield
-    except Exception as exc:
-        if (isinstance(exc, SkillError) and exc.code == 'target_changed') or not particle_state_unchanged(particles):
-            # A particle system may have changed without replacing a scene
-            # object. Loading the old snapshot would recreate consumed matter.
-            record({'status': 'rollback_skipped', 'reason': 'target_identity_changed',
-                    'error_type': type(exc).__name__})
-            raise SkillError('target_changed', 'Particle or object identities changed during placement', changed=True) from exc
-        if objects is not None and scene_object_identities(sim) != objects:
-            record({'status': 'rollback_skipped', 'reason': 'scene_objects_replaced',
-                    'error_type': type(exc).__name__})
-            raise SkillError('target_changed', 'Scene objects changed during placement; inspect updated RGB',
-                             changed=True) from exc
-        sim.load_state(state, serialized=False)
-        restore_particle_state(particles)
-        record({'status': 'rolled_back', 'error_type': type(exc).__name__, 'error': str(exc)})
-        raise
-    else:
-        record({'status': 'committed'})
 
 
 class CheckedPlacement:
@@ -232,68 +202,41 @@ class CheckedPlacement:
             'position': held.get_position_orientation()[0].tolist()}
 
     def _checked_place_next_to(self, target, max_steps, point, yaw_degrees=None):
-        """Try complete release/settle/verify cycles; preserve preceding placements."""
+        """Choose by geometry, release once, and retain the physical result."""
         from omnigibson.object_states import NextTo
         held = self._get_held()
         if held is None:
             raise SkillError('empty_hand', 'No object is held')
         if held is target or NextTo not in held.states:
             raise SkillError('unsupported_relation', 'Carried object cannot be placed next to this target')
+        contents = list(self._carry_contents)
+        payload = [obj for obj, _ in contents]
+        dependencies = list(getattr(self, '_carry_dependencies', []))
+        candidates = self._next_to_candidates(held, target, point, payload, yaw_degrees)
+        if not candidates:
+            raise SkillError('placement_surface_unavailable', 'No support surface near the selected reference')
+        supports = {id(row['support']): row['support'] for row in candidates}
+        ranker = self._inside_pose_overlap_ranker(held, [held, *payload], support_objects=supports.values())
+        candidate = candidates[0]
+        best = float('inf')
+        for row in candidates:
+            score = ranker(*row['pose']) if ranker is not None else 0
+            if score < best:
+                candidate, best = row, score
+            if score == 0:
+                break
+        support_point = self.torch.as_tensor(candidate['support_position'], dtype=point.dtype, device=point.device)
+        self._placement_record({'status': 'next_to_release', 'target': target.name, 'held': held.name,
+            'candidate': candidate['index'], 'support': candidate['support'].name,
+            'proposal_overlap_score': best, 'position': candidate['pose'][0].tolist(),
+            'requested_yaw_degrees': yaw_degrees})
+        self._carry_detach()
         try:
-            contents = list(self._carry_contents)
-            payload = [obj for obj, _ in contents]
-            dependencies = list(getattr(self, '_carry_dependencies', []))
-            candidates = self._next_to_candidates(held, target, point, payload, yaw_degrees)
-            with placement_transaction(self.og.sim, self._placement_record):
-                self._carry_detach()
-                trial_state = self.og.sim.dump_state(serialized=False)
-                accepted = None
-                settle_steps = max(1, int(1.0 / self.og.sim.get_physics_dt()))
-                for number, candidate in enumerate(candidates):
-                    if number:
-                        self.og.sim.load_state(trial_state, serialized=False)
-                    held.set_position_orientation(*candidate['pose'])
-                    self._relocate_contents(held, contents)
-                    for obj in (held, *payload):
-                        obj.keep_still(); obj.wake()
-                    self._placement_physics_step()
-                    contacts = self._placement_contacts(held, payload)
-                    if contacts:
-                        contact = self._placement_contact_report(held, payload)
-                        self._placement_record({'status': 'initial_contact_admitted' if contact['admissible'] else 'candidate_rejected',
-                            'primitive': 'place_next_to', 'stage': 'raised_pose_collision',
-                            'candidate': candidate['index'], 'target': target.name, 'held': held.name,
-                            'contact_geometry': contact})
-                        if not contact['admissible']:
-                            continue
-                    # Gravity and contacts determine the final pose. No pose
-                    # reset, velocity reset, or payload projection during settling.
-                    for _ in range(settle_steps):
-                        self._placement_physics_step()
-                    support_point = self.torch.as_tensor(candidate['support_position'],
-                                                        dtype=point.dtype, device=point.device)
-                    valid, details = self._next_to_check(held, target, candidate['support'], payload,
-                                                         support_point=support_point)
-                    if valid:
-                        try:
-                            self._verify_payload(dependencies)
-                        except SkillError as exc:
-                            if exc.code != 'postcondition_error':
-                                raise
-                            valid = False; details['payload_error'] = str(exc)
-                    self._placement_record({'status': 'next_to_verified' if valid else 'candidate_rejected',
-                        'primitive': 'place_next_to', 'stage': 'free_settling', 'candidate': candidate['index'],
-                        'target': target.name, 'held': held.name, 'support': candidate['support'].name,
-                        'radius_m': candidate['radius_m'], 'angle_deg': candidate['angle_deg'], **details})
-                    if valid:
-                        accepted = candidate
-                        break
-                if accepted is None:
-                    raise SkillError('sampling_error', 'No stable supported pose satisfied NextTo near the selected reference', changed=True)
-            # The selected pose is committed once. A subsequent physical
-            # failure is reported as observed, with no scene rewind or retry.
-            self._step(self.primitives._empty_action())
-            valid, details = self._next_to_check(held, target, accepted['support'], payload,
+            held.set_position_orientation(*candidate['pose'])
+            self._relocate_contents(held, contents)
+            held.keep_still(); held.wake()
+            self._settle_surface_contacts(held, candidate['support'], payload, max_steps)
+            valid, details = self._next_to_check(held, target, candidate['support'], payload,
                                                  support_point=support_point)
             self._placement_record({'status': 'next_to_commit', 'target': target.name,
                 'held': held.name, 'valid': valid, **details})
@@ -302,7 +245,8 @@ class CheckedPlacement:
             self._verify_payload(dependencies)
         finally:
             self.frames_revision = -1
-        return {'primitive': 'place_next_to', 'implementation': 'generic_surface_search_and_free_settling',
+            self._step(self.primitives._empty_action())
+        return {'primitive': 'place_next_to', 'implementation': 'single_geometric_release_and_free_settling',
                 'requested_yaw_degrees': yaw_degrees,
                 'postcondition': 'official_NextTo_and_selected_surface_support_after_free_settling',
                 'failure_policy': 'retain_physical_result'}

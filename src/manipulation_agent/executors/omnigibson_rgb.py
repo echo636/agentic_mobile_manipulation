@@ -1430,8 +1430,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'surface_geometry':'object collision mesh; no diagonal-square yaw envelope',
             'base_anchor':None,'released_body_pinning':False,
             'failure_policy':'retain_committed_physical_result',
-            'candidate_sampling':{'on_top_and_inside':'read_only_geometry_no_physics_trials_or_rollback',
-                                  'next_to':'hypothetical_poses_may_restore_before_commit'},
+            'candidate_sampling':{'on_top_inside_and_next_to':'read_only_geometry_no_physics_trials_or_rollback'},
             'goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
         result['base_execution'] = 'checked_route_then_single_endpoint_transfer_and_native_settling'
