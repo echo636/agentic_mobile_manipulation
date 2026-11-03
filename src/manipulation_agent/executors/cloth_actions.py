@@ -5,11 +5,11 @@ from ..contracts import SkillError
 
 
 def folded_configuration(points, current, contact_offset, *, support_height=None, heading=0.):
-    """Bend the native rest mesh in half without changing its topology.
+    """Bend a particle configuration in half without changing its topology.
 
     The finite-radius crease retains arc length and separates the two layers.
     Anchor the result at the cloth's current footprint and supporting height.
-    Inputs and the simulator's stored rest configuration are never modified.
+    Input particle arrays are never modified.
     """
     import torch
 
@@ -127,9 +127,8 @@ class CheckedClothActions:
         return target.states[Folded]
 
     def _checked_fold(self, target, max_steps):
-        from omnigibson.utils import transform_utils as T
-        from omnigibson.utils.numpy_utils import vtarray_to_torch
         from omnigibson.utils.constants import PrimType
+        from trimesh.bounds import oriented_bounds_2D
 
         folded = self._fold_preconditions(target)
         if folded.get_value():
@@ -139,16 +138,15 @@ class CheckedClothActions:
             raise SkillError('action_timeout', 'Insufficient steps for folding and native settling')
         cloth = target.root_link
         current = cloth.compute_particle_positions()
-        default = vtarray_to_torch(cloth.get_attribute('points_default')).to(current)
-        position, orientation = cloth.get_position_orientation()
-        rotation = T.quat2mat(orientation)
-        points = (rotation @ (default * cloth.scale).T).T + position
-        heading = math.atan2(float(rotation[1, 0]), float(rotation[0, 0]))
+        # Deform the actual sheet along its current edges. Rest points and the
+        # object's transform need not match a cloth that has settled or slid.
+        frame, _ = oriented_bounds_2D(current[:, :2].cpu().numpy())
+        heading = math.atan2(float(frame[0, 1]), float(frame[0, 0]))
         # A dangling corner can lie below the table. Anchoring to that corner
         # would construct the whole folded cloth beneath its actual support.
         contacts = cloth.get_contacts()
         support_height = max(float(point[2]) for _, point in contacts) if contacts else None
-        result = folded_configuration(points, current, cloth.cloth_system.particle_contact_offset,
+        result = folded_configuration(current, current, cloth.cloth_system.particle_contact_offset,
                                       support_height=support_height, heading=heading)
         neighbors = [(obj.root_link.compute_particle_positions(), obj.root_link.cloth_system.particle_contact_offset)
                      for obj in self.env.scene.object_registry('prim_type', PrimType.CLOTH, [])
@@ -156,6 +154,7 @@ class CheckedClothActions:
         before_z = float(result[:, 2].min())
         result = separate_cloth_layers(result, neighbors, cloth.cloth_system.particle_contact_offset)
         self._placement_record(dict(status='cloth_fold_configuration', target=target.name,
+            configuration_input='current_particles', heading_source='current_footprint_edges',
             support_height=support_height, material_heading=heading, previous_min_z=float(current[:, 2].min()),
             cloth_layer_clearance_lift_m=float(result[:, 2].min()) - before_z,
             configured_z=[float(result[:, 2].min()), float(result[:, 2].max())]))
