@@ -38,6 +38,7 @@ class ActionSearchTests(unittest.TestCase):
             self.assertEqual(advice['comparison']['missing_producers'],
                              [dict(goal_id='a', condition={'a': 'cooked'})])
             self.assertIn('b', advice['coverage']['unplanned'])
+            self.assertIn(['finish-b', 'tool', 'held'], advice['comparison']['gaps']['required_states'])
             self.assertEqual(json.loads(notes.read()['content']), doc)
 
     def test_equal_cost_branches_reach_a_complete_plan_within_search_budget(self):
@@ -74,6 +75,7 @@ class ActionSearchTests(unittest.TestCase):
         self.assertEqual(order.count('stage-tool'), 1)
         self.assertEqual(variants[0]['estimated_seconds'], 6)
         self.assertTrue(search['optimal_in_declared_model'])
+        self.assertFalse(any(search['gaps'].values()))
         graph = variants[0]['operations']
         cuts = [n for n in graph if n['operator_id'].startswith('process-')]
         self.assertEqual(cuts[0]['depends_on'], cuts[1]['depends_on'])

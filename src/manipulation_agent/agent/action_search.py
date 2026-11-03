@@ -110,6 +110,7 @@ def search_actions(notes, max_states=2048):
     lower, guide = relaxed_cost(dict(initial[1]), methods, target)
     heapq.heappush(frontier, (guide, guide, next(serial), 0., lower, initial, []))
     finished, partial, expanded, incumbent = {}, (0, 0., [], initial), 0, math.inf
+    applicable, rejected = set(), {}
     while frontier and expanded < max_states:
         _, _, _, total, bound, key, path = heapq.heappop(frontier)
         if total != best_cost.get(key) or total + bound > incumbent:
@@ -126,9 +127,18 @@ def search_actions(notes, max_states=2048):
             continue
         expanded += 1
         for method in methods:
+            costs.gaps = {name: set() for name in costs.gaps}
             transition = costs.apply(method, at, state, clocks)
             if transition is None:
+                if method['id'] not in applicable:
+                    reasons = rejected.setdefault(method['id'], {name: set() for name in costs.gaps})
+                    for name, entries in costs.gaps.items():
+                        reasons[name].update(entries)
                 continue
+            # A precondition rejected in one branch is not a model gap when
+            # another explored state makes the same operator applicable.
+            applicable.add(method['id'])
+            rejected.pop(method['id'], None)
             step, after, after_clocks = transition
             successor = step['route'][-1], tuple(sorted(after.items())), tuple(sorted(after_clocks.items()))
             new_cost = total + step['estimated_seconds']
@@ -153,14 +163,16 @@ def search_actions(notes, max_states=2048):
         graph = causal_graph(path, operators, {g: conditions[g] for g in covered}, plan_id)
         variants.append(dict(id=plan_id, operations=graph, path=path, estimated_seconds=total,
                              covered=covered, complete=set(required) <= covered))
+    gaps = {name: set().union(*(reasons[name] for reasons in rejected.values())) for name in costs.gaps}
     return variants, dict(algorithm='bounded best-first state search with h-max cost bounds',
         expanded_states=expanded, search_truncated=truncated,
         optimal_in_declared_model=bool(finished) and not truncated and len(conditions) == len(required),
         missing_goal_conditions=sorted(set(required) - conditions.keys()),
         missing_producers=missing_producers,
         modeled_goal_ids=sorted(required),
+        gap_scope='Operators never applicable in explored states; unused alternatives may be unnecessary',
         gaps={k: [list(x) if isinstance(x, tuple) else x for x in sorted(v, key=str)]
-              for k, v in costs.gaps.items()})
+              for k, v in gaps.items()})
 
 
 def action_advice(notes):
