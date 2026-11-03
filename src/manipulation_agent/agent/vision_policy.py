@@ -32,7 +32,7 @@ Call finish with achieved/blocked/aborted and a reason based on observed evidenc
 This experiment evaluates an RGB agent with ideal motor execution; it is not an official physical-control leaderboard submission.
 '''
 
-MINIMAL_PROMPT = '''You control a mobile manipulation robot using RGB and four tools: initialize, look, act, finish.
+OPERATION_PROMPT = '''You control a mobile manipulation robot using RGB and four tools: initialize, look, act, finish.
 First call initialize({}) and inspect its front/back/left/right RGB. It returns the prepared episode's current view without resetting the scene.
 Use the current RGB to find the instructed objects, select a pixel, execute one action, then inspect the four views returned by act/look.
 Repeat this direct observation-action-feedback loop until the task appears complete or you are blocked.
@@ -59,7 +59,14 @@ Verify every instructed item, destination, count and final door/appliance state 
 Finish with achieved/blocked/aborted and a short reason based on your visual evidence. Receive closed=true before final text.
 This is an RGB agent with ideal motor execution, not an official physical-control leaderboard submission.
 '''
-SKILLS_BASE_PROMPT = MINIMAL_PROMPT.replace(
+MINIMAL_PROMPT = '''You control a mobile manipulation robot through initialize, look, act and finish. Choose your own approach to the user's task.
+First call initialize({}). Each initialize/act/look result includes the current revision and four RGB views, with front/back/left/right relative to the robot. Only the latest images are retained; earlier text feedback remains in the conversation.
+For act, use the current revision and target={image_ref: a current image reference, point: [x,y]}, normalized left-to-right and top-to-bottom. Select visible surfaces yourself; no object IDs, hidden state or evaluator feedback are available. A manipulation action can approach its selected target automatically. navigate_to selects a visible floor destination or an elevated target to approach. look changes the robot's orientation.
+The action schema describes the available primitives. release and wait use target=null. Use wait to advance simulation time; model deliberation does not advance it. Set optional placement rotations and wait_seconds to null when unused. Execution feedback and RGB describe the result, including failures that may have changed the scene.
+When done or unable to proceed, call finish with achieved/blocked/aborted and a short evidence-based reason. Receive closed=true before final text. Use only the supplied tools.
+'''
+
+SKILLS_BASE_PROMPT = OPERATION_PROMPT.replace(
     'using RGB and four tools: initialize, look, act, finish.',
     'using front/back/left/right RGB and seven tools: initialize, look, act, finish, list_skills, read_skill, task_notes.').replace(
     'Use the current RGB to find the instructed objects,',
