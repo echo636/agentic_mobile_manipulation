@@ -51,6 +51,16 @@ class ActionSearchTests(unittest.TestCase):
         self.assertTrue(search['search_truncated'])
         self.assertFalse(search['optimal_in_declared_model'])
 
+        doc['goals'].append(dict(id='unknown', parent_id='root', status='pending',
+                                 condition={'unlocated': 'ready'}))
+        variants, search = search_actions(doc, max_states=64)
+        self.assertEqual(variants[0]['covered'], set(keys))
+        self.assertEqual(variants[0]['estimated_seconds'], 18)
+        self.assertFalse(variants[0]['complete'])
+        self.assertFalse(search['optimal_in_declared_model'])
+        self.assertEqual(search['missing_producers'],
+                         [dict(goal_id='unknown', condition={'unlocated': 'ready'})])
+
     def test_composes_shared_tool_work_and_materializes_selection(self):
         operators = [op('take-tool', {'hand': 'empty'}, {'hand': 'tool'}),
             op('stage-tool', {'hand': 'tool'}, {'hand': 'empty'}),

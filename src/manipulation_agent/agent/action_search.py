@@ -58,7 +58,10 @@ def relaxed_cost(state, methods, target):
                     costs[item] = new
                     changed = True
     needed = [costs.get(item, (math.inf, math.inf)) for item in target.items()]
-    return max((c[0] for c in needed), default=0.), sum(c[1] for c in needed)
+    # Missing producers keep the complete-plan bound infinite, but must not
+    # erase cost guidance for the reachable part of an incomplete task model.
+    guide = sum(c[1] for c in needed if math.isfinite(c[1]))
+    return max((c[0] for c in needed), default=0.), guide
 
 
 def causal_graph(path, operators, conditions, plan_id):
