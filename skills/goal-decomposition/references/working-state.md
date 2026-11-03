@@ -1,6 +1,6 @@
 # Working state and automatically composed operation DAG
 
-Store one `goal-tree-v2` document through `task_notes`. `goals` describes results, `planning.state` records observed beliefs, and `execution.operators` describes available work. The program generates `execution.operations` on selection. All labels come from your RGB understanding, never simulator IDs.
+Store one `goal-tree-v2` document through `task_notes`. `goals` describes results, `planning.state` records observed beliefs, and `execution.operators` describes available work. The program generates `execution.operations` and selects its first operation on write/update. All labels come from your RGB understanding, never simulator IDs.
 
 Write before the first act/look with `operation="write", expected_version=0`. Read after missing context. Use `update` with the current version to reconcile changed fields. Each input can contain up to 12000 characters; merged notes and generated DAGs can be larger. Keep working notes concise; do not append a transcript.
 
@@ -61,7 +61,7 @@ For independent processing, put `starts:{"process":60}` on its start and `awaits
 
 The program searches operator combinations under state, resource, location and process conditions. It returns `operation_graph`, ordered `steps`, `coverage`, `unplanned_results`, `alternatives` and `comparison`. `comparison.missing_producers` lists goal conditions that are neither currently true in your notes nor produced by any declared operator; it identifies missing modeled work, not physical impossibility. Read these and resource/route gaps before treating a plan as complete. Search is bounded; `comparison.search_truncated` and `optimal_in_declared_model` describe the search within your declared model, not actual physical optimality.
 
-Select with `operation="select"` and JSON content containing the returned `plan_id`, the next returned `operation_id`, your short RGB-grounded `steps` and `next_check`. Copy returned IDs; generated operation IDs differ from reusable operator IDs. Selection stores the generated graph without performing a robot action. Edges preserve producing conditions and conflicting resource changes; independent work may branch. The ordered steps specify the chosen single-robot schedule.
+Write/update stores the generated graph and selects its first operation, using its authored description and check. Inspect `selected_operation` and execute its supported local work; no separate `select` call is needed. To override the suggestion, use `operation="select"` with a returned `plan_id`, `operation_id`, short RGB-grounded `steps` and `next_check`. Generated operation IDs differ from reusable operator IDs. Selection does not perform a robot action. Edges preserve producing conditions and conflicting resource changes; independent work may branch. The ordered steps specify the chosen single-robot schedule.
 
 Action replies retain the selected operation and measured tool/simulation time. After its local work finishes, fails or reveals new information, update actual state and result evidence. For example:
 
@@ -69,7 +69,7 @@ Action replies retain the selected operation and measured tool/simulation time. 
 {"planning":{"location":"shelf","state":{"hand":"tool","tool":"held","a":"raw","b":"raw"}},"change":"Tool grasp confirmed"}
 ```
 
-`update` merges goals and operators by ID. `execution.remove_operators` removes obsolete capabilities. Supplied `planning.state`, `processes` and lists replace their previous values; omitted fields persist. Omitted `active` clears the selected interval. Do not mark an operator done: update observed state so remaining work is searched afresh. The generated graph is replaced on selection and preserved exactly in the replay.
+`update` merges goals and operators by ID. `execution.remove_operators` removes obsolete capabilities. Supplied `planning.state`, `processes` and lists replace their previous values; omitted fields persist. Omitted `active` ends the previous interval and lets the program select from the reconciled state. Do not mark an operator done: update observed state so remaining work is searched afresh. The generated graph and selection are preserved exactly in the replay.
 
 `previous_execution` retains predicted costs and measured time for the last selected interval. A partial attempt or recovery is not a completed-operation cost sample. Keep travel separate from local work when revising estimates.
 

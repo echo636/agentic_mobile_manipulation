@@ -135,7 +135,9 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                         from .agent.task_notes import merge_goal_update
                         task_notes['content'] = merge_goal_update(notes_before['content'], args['content'])
                     else:
-                        content = json.loads(notes_before['content'])
+                        task_notes['content'] = notes_before['content']
+                    if 'selected' in result:
+                        content = json.loads(task_notes['content'])
                         content['active'] = result['selected']
                         if 'selected_execution' in result:
                             content['execution'] = result['selected_execution']

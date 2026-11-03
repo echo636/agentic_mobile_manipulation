@@ -21,7 +21,7 @@ def task_notes(ctx, operation, content, expected_version):
         notes = update(content, expected_version, request_id=ctx.request_id,
             revision=ctx.revision, agent_step=ctx.harness.agent_steps)
         result = {'notes': {key: value for key, value in notes.items() if key != 'content'}}
-        if operation == 'select':
+        if operation == 'select' or notes.get('automatic_selection'):
             content = json.loads(notes['content'])
             result['selected'] = content['active']
             if content.get('execution', {}).get('last_changes'):

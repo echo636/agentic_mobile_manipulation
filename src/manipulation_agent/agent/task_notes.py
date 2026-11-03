@@ -40,8 +40,9 @@ def merge_goal_update(content, update):
 
 
 class TaskNotes:
-    def __init__(self, output):
+    def __init__(self, output, *, auto_select=False):
         self.output = output
+        self.auto_select = auto_select
         self.state = {'version': 0, 'content': ''}
         self.feedback = deque(maxlen=64)
         self.feedback_count = 0
@@ -160,9 +161,28 @@ class TaskNotes:
             raise SkillError('invalid_notes', 'Write nonempty text.')
         if type(expected_version) is not int or expected_version != self.state['version']:
             raise SkillError('notes_version_conflict', 'Read task_notes and edit the current version before writing.')
+        automatic_selection = False
+        if self.auto_select:
+            advice = task_advice(content)
+            step = advice.get('next')
+            if (advice.get('source') == 'program_search_over_model_grounded_operators'
+                    and not (advice.get('active') or {}).get('operation_id')):
+                notes = json.loads(content)
+                notes['execution']['operations'] = advice['operation_graph']
+                notes['execution']['last_changes'] = advice['graph_changes']
+                notes['active'] = None
+                if step:
+                    operator = next(op for op in notes['execution']['operators'] if op['id'] == step['operator_id'])
+                    notes['active'] = dict(operation_id=step['operation_id'], serves=step['goals'],
+                        steps=[operator['description']], next_check=operator.get('check'),
+                        selection_source='program_lowest_estimated_cost')
+                content = json.dumps(notes, separators=(',', ':'))
+                automatic_selection = True
         state = {'version': self.state['version'] + 1, 'content': content, 'at': now(),
                  'request_id': request_id, 'observation_revision': revision, 'agent_step': agent_step,
                  'source': 'model_authored_notes_not_evaluator_truth'}
+        if automatic_selection:
+            state['automatic_selection'] = True
         previous = self.state.get('previous_execution')
         if self.feedback_count:
             advice = self.planning()

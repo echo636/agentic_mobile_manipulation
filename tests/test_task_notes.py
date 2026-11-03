@@ -50,6 +50,47 @@ class TaskNotesTests(unittest.TestCase):
     def write(self,h,text,version,rid):
         return h.call('task_notes',{'operation':'write','content':text,'expected_version':version},rid)
 
+    def test_automatic_operator_selection_reconciles_and_replays_without_control_leak(self):
+        from test_action_search import document, op
+        doc = document({'a': 'raw', 'b': 'raw'}, {'done': {'b': 'ready'}}, [
+            op('prepare-a', {'a': 'raw'}, {'a': 'ready'}),
+            op('finish-b', {'a': 'ready', 'b': 'raw'}, {'b': 'ready'})])
+        with tempfile.TemporaryDirectory() as tmp:
+            h = self.harness(Path(tmp)/'dag')
+            control = self.harness(Path(tmp)/'control', 'none')
+            h.call('initialize', {}, 'initialize')
+            plain = self.write(control, json.dumps(doc), 0, 'control-plan')
+            self.assertNotIn('selected', plain)
+            self.assertNotIn('planning', plain)
+            self.assertEqual(json.loads(control.task_notes.read()['content']), doc)
+            first = self.write(h, json.dumps(doc), 0, 'plan')
+            self.assertEqual(first['selected']['operation_id'], first['planning']['next']['operation_id'])
+            self.assertEqual(first['planning']['next']['operator_id'], 'prepare-a')
+            self.assertEqual(h.backend.steps, 0)
+            self.assertEqual(json.loads(h.task_notes.read()['content'])['planning']['state'], doc['planning']['state'])
+            h.call('act', dict(primitive='toggle_on', revision=0,
+                target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5])), 'action')
+            second = h.call('task_notes', dict(operation='update', expected_version=1,
+                content=json.dumps({'planning': {'state': {'a': 'ready', 'b': 'raw'}}})), 'update')
+            self.assertEqual(second['planning']['next']['operator_id'], 'finish-b')
+            self.assertEqual(second['notes']['previous_execution']['action_attempts'], 1)
+            override = h.call('task_notes', dict(operation='select', expected_version=2,
+                content=json.dumps(dict(plan_id=second['planning']['plan_id'],
+                    operation_id=second['selected']['operation_id'], steps=['Inspect chosen object'],
+                    next_check='Result visible'))), 'override')
+            self.assertEqual(override['selected']['steps'], ['Inspect chosen object'])
+            final = h.call('task_notes', dict(operation='update', expected_version=3,
+                content=json.dumps({'planning': {'state': {'a': 'ready', 'b': 'ready'}}})), 'complete-model')
+            self.assertIsNone(final['selected'])
+            self.assertEqual(final['selected_execution']['operations'], [])
+            self.assertFalse(h.closed)
+            self.assertEqual(json.loads(h.task_notes.read()['content'])['goals'], doc['goals'])
+            replay = build_replay(h.recorder.output)
+            self.assertEqual(replay['task_note_versions'][-1]['content'], h.task_notes.read()['content'])
+            writes = {s['request_id']: s for s in replay['steps'] if s['tool'] == 'task_notes'}
+            self.assertEqual(json.loads(writes['plan']['task_notes']['content'])['active'], first['selected'])
+            self.assertEqual(json.loads(writes['update']['task_notes']['content'])['active'], second['selected'])
+
     def test_generated_dag_and_updates_can_exceed_single_input_limit(self):
         from test_action_search import document, op
         keys = [str(i) for i in range(24)]

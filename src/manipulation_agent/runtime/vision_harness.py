@@ -23,7 +23,7 @@ class VisionHarness:
         if require_task_notes and profile not in {'skills','workflow'}:
             raise ValueError('Task notes require skills or workflow profile')
         self.goal_skill=goal_skill;self.require_task_notes=require_task_notes
-        self.task_notes=TaskNotes(recorder.output)
+        self.task_notes=TaskNotes(recorder.output, auto_select=goal_skill == 'hierarchical')
         if agent_step_limit is not None and (type(agent_step_limit) is not int or agent_step_limit<=0):
             raise ValueError('agent_step_limit must be a positive integer')
         if agent_step_limit is not None and budget.wall_seconds is not None:
