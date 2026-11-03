@@ -1,6 +1,34 @@
 """Resolve articulated contents to the physical support that moves them."""
 
 
+def closed_container(obj, objects, *, exclude=()):
+    """Find a closed parent whose geometry actually covers the target.
+
+    Inside alone also includes exposed sink contents in an overlapping cabinet
+    volume. A single downward ray distinguishes that open top from a lid or
+    shelf. This is a read-only enclosure check, not an extraction planner.
+    """
+    from omnigibson.object_states import Inside, Open
+
+    if Inside not in obj.states:
+        return None
+    for parent in objects:
+        if (parent is obj or any(parent is item for item in exclude)
+                or Open not in getattr(parent, 'states', {})
+                or parent.states[Open].get_value() or not obj.states[Inside].get_value(parent)):
+            continue
+        from omnigibson.utils.sampling_utils import raytest
+        low, high = obj.aabb
+        center = (low + high) / 2
+        above = center.clone()
+        above[2] = max(float(high[2]), float(parent.aabb[1][2])) + .01
+        bodies = {str(link.prim_path) for link in parent.links.values() if not link.is_meta_link}
+        if any(hit['rigidBody'] in bodies
+               for hit in raytest(above, center, only_closest=False)):
+            return parent
+    return None
+
+
 def contacting_support(backend, child, objects):
     """Return one unambiguous upward support, using contacts and lower rays.
 

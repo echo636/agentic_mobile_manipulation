@@ -734,10 +734,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         from omnigibson.object_states import Open,Inside
         if primitive=='place_inside' and Open in obj.states and not obj.states[Open].get_value():
             raise SkillError('container_closed','Placement into closed container rejected')
-        if primitive=='grasp' and Inside in obj.states:
-            for parent in self.env.scene.objects:
-                if parent is not obj and hasattr(parent,'states') and Open in parent.states and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent):
-                    raise SkillError('container_closed','Grasp through closed container rejected')
+        if primitive=='grasp':
+            from .container_support import closed_container
+            if closed_container(obj,self.env.scene.objects) is not None:
+                raise SkillError('container_closed','Grasp through closed container rejected')
         if getattr(self,'local_manipulation',False):
             from omnigibson.object_states import ToggledOn,AttachedTo,OnTop,Under,NextTo
             state={'open':Open,'close':Open,'toggle_on':ToggledOn,'toggle_off':ToggledOn}.get(primitive)

@@ -393,7 +393,8 @@ class CheckedMaterialTransfer:
         return result
 
     def _transfer_preconditions(self, primitive, target):
-        from omnigibson.object_states import ContainedParticles, Inside, Open
+        from omnigibson.object_states import ContainedParticles, Open
+        from .container_support import closed_container
         held = self._get_held()
         if held is None:
             raise SkillError('empty_hand', 'Carry a material source or receiving vessel first')
@@ -406,11 +407,8 @@ class CheckedMaterialTransfer:
         for obj in (source, destination):
             if Open in obj.states and not obj.states[Open].get_value():
                 raise SkillError('container_closed', 'Open the material source and receiving vessel before transfer')
-            if Inside in obj.states:
-                for parent in self.env.scene.objects:
-                    if (parent not in (source, destination) and Open in getattr(parent, 'states', {})
-                            and not parent.states[Open].get_value() and obj.states[Inside].get_value(parent)):
-                        raise SkillError('container_closed', 'Selected material vessel is inside a closed container')
+            if closed_container(obj, self.env.scene.objects, exclude=(source, destination)) is not None:
+                raise SkillError('container_closed', 'Selected material vessel is inside a closed container')
         return source, destination
 
     def _ready_dispenser(self, source, *, tilt):
