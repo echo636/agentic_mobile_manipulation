@@ -4,6 +4,7 @@ Operators describe available local actions, not complete alternative plans.
 Search can omit or repeat them. No simulator state or action execution occurs.
 """
 import copy
+from functools import cache
 import hashlib
 import heapq
 import itertools
@@ -96,9 +97,14 @@ def causal_graph(path, operators, conditions, plan_id):
     return nodes
 
 
-def search_actions(notes, max_states=2048):
+def search_actions(notes, max_states=16384):
     operators, methods, required, conditions, target = compile_actions(notes)
     context = notes['planning']; costs = WorkCosts(context, methods)
+    @cache
+    def estimate(values):
+        # This relaxed bound depends on facts, not location or process clocks.
+        return relaxed_cost(dict(values), methods, target)
+
     initial = (context['location'], tuple(sorted(bindings(context.get('state', {})).items())),
                tuple(sorted(process_times(context.get('processes', {})).items())))
     supplied = set(initial[1]) | {item for method in methods
@@ -107,7 +113,7 @@ def search_actions(notes, max_states=2048):
                                                     if (k, v) not in supplied})
                          for goal, condition in conditions.items() if not set(condition.items()) <= supplied]
     serial = itertools.count(); frontier = []; best_cost = {initial: 0.}
-    lower, guide = relaxed_cost(dict(initial[1]), methods, target)
+    lower, guide = estimate(initial[1])
     heapq.heappush(frontier, (guide, guide, next(serial), 0., lower, initial, []))
     finished, partial, expanded, incumbent = {}, (0, 0., [], initial), 0, math.inf
     applicable, rejected = set(), {}
@@ -144,7 +150,7 @@ def search_actions(notes, max_states=2048):
             new_cost = total + step['estimated_seconds']
             if new_cost >= best_cost.get(successor, math.inf):
                 continue
-            bound, guide = relaxed_cost(after, methods, target)
+            bound, guide = estimate(successor[1])
             if new_cost + bound > incumbent:
                 continue
             best_cost[successor] = new_cost
