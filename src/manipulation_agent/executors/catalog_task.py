@@ -12,7 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from .omnigibson_rgb import RGBBackend
-from ..tasks.catalog_tasks import load_catalog_spec
+from ..tasks.catalog_tasks import complete_scene_context, load_catalog_spec
 from ..runtime.deadline import DEADLINE_STEP_SENTINEL
 from ..tasks.goal_grounding import FactoredGoalOptions, efficient_grounding, evaluate_once_per_literal
 from .omnigibson_backend import normalize_embedded_robot
@@ -29,12 +29,26 @@ class CatalogRGBBackend(RGBBackend):
 
     def _catalog_config(self, gpu, max_steps):
         import bddl
+        from omnigibson.utils.asset_utils import get_scene_path
         spec = self.catalog_spec
         definition = Path(bddl.__file__).parent / 'activity_definitions' / spec['task'] / 'problem0.bddl'
         if hashlib.sha256(definition.read_bytes()).hexdigest() != spec['bddl_sha256']:
             raise ValueError('Runtime BDDL differs from the sampled task definition')
         frozen = (self.spec_path.parent / spec['frozen_instance']['path']).resolve()
         data = json.loads(frozen.read_text())
+        # Room-filtered sampling omits entire floor objects as well as furniture.
+        # Removing filters on reload cannot recover objects absent from the file.
+        # Keep the sampled task state and fill the missing surroundings from the
+        # official full scene that also supplies the native traversability map.
+        template_path = Path(get_scene_path(spec['scene'])) / 'json' / (spec['scene'] + '_best.json')
+        template_bytes = template_path.read_bytes()
+        restored = complete_scene_context(data, json.loads(template_bytes))
+        write_json(self.output / 'scene_context.json', {
+            'policy': 'official_full_scene_with_sampled_task_state',
+            'template_path': str(template_path),
+            'template_sha256': hashlib.sha256(template_bytes).hexdigest(),
+            'restored_objects': restored,
+            'sampled_objects_and_task_state_preserved': True})
         migrations = normalize_embedded_robot(data, reset_controller_state=True)
         config = copy.deepcopy(spec['environment_config'])
         embedded = [o for o in data['objects_info']['init_info'].values() if o['class_name'] == 'Robot']
@@ -53,9 +67,8 @@ class CatalogRGBBackend(RGBBackend):
         config['scene'].update(scene_file=str(scene_file), scene_model=spec['scene'],
             include_robots=True, trav_map_resolution=0.05, default_erosion_radius=0.57,
             waypoint_resolution=0.1)
-        # The frozen file already contains exactly the sampled scene. Reusing
-        # the sampler's room/category filters drops embedded robots and sampled
-        # movable objects whose serialized init args have no room annotation.
+        # Reusing sampler filters would drop the restored surroundings, embedded
+        # robot and sampled movable objects without room annotations.
         # Match InteractiveTraversableScene's own saved-scene reload policy.
         filters = {key: config['scene'].get(key) for key in (
             'load_room_types', 'load_room_instances', 'load_object_categories',
@@ -77,7 +90,9 @@ class CatalogRGBBackend(RGBBackend):
         write_json(self.output / 'scene_compatibility.json', {'changes': migrations,
             'original_template_unmodified': True, 'scope': 'sampled_full_catalog_instance',
             'sampling_filters_removed_for_frozen_reload': filters,
-            'frozen_object_count': len(data['objects_info']['init_info'])})
+            'frozen_object_count': len(data['objects_info']['init_info']) - len(restored),
+            'configured_object_count': len(data['objects_info']['init_info']),
+            'restored_context_count': len(restored)})
         return config
 
     def _load_catalog_environment(self, config):

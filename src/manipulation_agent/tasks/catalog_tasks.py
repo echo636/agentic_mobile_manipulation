@@ -1,7 +1,21 @@
 """Integrity checks for separately sampled full-catalog BEHAVIOR instances."""
+import copy
 import hashlib
 import json
 from pathlib import Path
+
+
+def complete_scene_context(frozen, template):
+    """Restore omitted surroundings without replacing sampled objects or task state."""
+    objects = frozen['objects_info']['init_info']
+    states = frozen['state']['registry']['object_registry']
+    template_objects = template['objects_info']['init_info']
+    template_states = template['state']['registry']['object_registry']
+    added = sorted(set(template_objects) - set(objects))
+    for name in added:
+        objects[name] = copy.deepcopy(template_objects[name])
+        states[name] = copy.deepcopy(template_states[name])
+    return added
 
 
 def load_catalog_spec(path):
