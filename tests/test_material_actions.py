@@ -459,6 +459,13 @@ class MaterialActionTests(unittest.TestCase):
                     self.assertEqual(move.call_count, 2)
                     self.assertEqual(surface_sample.call_count, 1)
                     self.assertIs(surface_sample.call_args.args[2], solid)
+                    self.assertFalse(result['some_material_not_transferred'])
+            # A mixed scoop may move the solids while leaving every fluid
+            # particle behind. A remaining-source flag alone hides that loss.
+            volume_sample.side_effect = lambda *args, **kw: np.zeros((0, 3))
+            partial = backend._transfer_material_portion('scoop', source, receiver, 6)
+            self.assertEqual([x['material'] for x in partial['materials']], ['granules'])
+            self.assertTrue(partial['some_material_not_transferred'])
             # A fluid with no free receiving volume must never switch to a
             # surface or claim success by wetting the tray's exterior.
             capture.return_value = payload[1:]

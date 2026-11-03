@@ -577,6 +577,7 @@ class CheckedMaterialTransfer:
         if not changes:
             if empty_ok:
                 return {'primitive': primitive, 'materials': [], 'source_has_more_material': True,
+                        'some_material_not_transferred': True,
                         'held_vessel_retained': True, 'postcondition': 'rigid_transfer_only; material_not_transferred'}
             raise SkillError('sampling_error', 'No collision-free receiving space for a material portion')
         self._placement_record({'status': 'material_transferred', 'primitive': primitive,
@@ -618,5 +619,6 @@ class CheckedMaterialTransfer:
         source_has_more = True if finite_left > 0 else None if emitted else False
         return {'primitive': primitive, 'implementation': 'checked_physical_material_portion',
                 'source_has_more_material': source_has_more,
+                'some_material_not_transferred': len(changes) < len(systems),
                 'materials': materials, 'postcondition': 'actual_transfer_then_physical_settling',
                 'held_vessel_retained': True}
