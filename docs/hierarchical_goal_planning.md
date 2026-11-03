@@ -112,6 +112,12 @@ The old preparation/transport planner remains for historical callers and
 comparison arms; new generic notes need no duplicate `transport` graph.
 
 Present limits: the model must author enough alternatives and realistic costs.
+The bounded search reserves a cheapest representative of each distinct first
+choice and predicted location/resource/process configuration before filling the
+remaining beam by accumulated cost. This keeps cheap partial permutations from
+crowding out all plans that invest in setup for later savings. It still prunes
+when there are more configurations than the beam can hold; it is not a proof of
+global optimality.
 One-item graphs and room-wide labels that hide travel cannot establish general
 efficiency. Tool time includes simulation/rendering and excludes model requests;
 it is not simulated physical time. Optional process clocks model unattended work:

@@ -20,6 +20,26 @@ def notes(*goals, **context):
 
 
 class TaskPlanningTests(unittest.TestCase):
+    def test_upfront_resource_investment_survives_cheap_prefixes_after_shared_inspection(self):
+        items = [goal(str(i), [method('manual-' + str(i), 20),
+                    method('fixture-' + str(i), 1, depends_on=['fixture'],
+                           requires={'fixture': 'ready'})], depends=['inspect']) for i in range(7)]
+        doc = notes(goal('inspect', [method('inspect', 1)]),
+                    dict(goal('fixture', [method('prepare-fixture', 100,
+                        effects={'fixture': 'ready'})], depends=['inspect']), optional=True), *items)
+        doc['goals'][0]['methods'] = [method('verify-all', 2)]
+        plan = schedule_task(doc)
+        self.assertEqual(plan['estimated_seconds'], 110)
+        self.assertEqual([s['method_id'] for s in plan['steps'][:2]], ['inspect', 'prepare-fixture'])
+        self.assertEqual(plan['steps'][-1]['method_id'], 'verify-all')
+        self.assertGreater(plan['pruned_states'], 0)  # Same bounded search, not exhaustive enumeration.
+        # The investment must still lose when too little work remains.
+        for item in doc['goals'][3:8]:
+            item['status'] = 'done'
+        plan = schedule_task(doc)
+        self.assertEqual(plan['estimated_seconds'], 43)
+        self.assertEqual(plan['optional_work']['scheduled'], [])
+
     def test_background_processing_overlaps_independent_work_and_keeps_result_check(self):
         doc = notes(goal('start', [method('start-device', 2, starts={'process': 60})]),
                     goal('clean', [method('clean', 8, simulation_seconds=45)]),

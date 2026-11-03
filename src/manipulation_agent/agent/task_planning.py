@@ -151,17 +151,26 @@ def schedule_task(notes, beam_width=32):
     selected_method = None
     for bucket in buckets:
         ranked = sorted(bucket.items(), key=lambda row: row[1][0])
-        pruned += max(0, len(ranked) - beam_width)
+        # Cheap prefixes must not crowd out every invested resource configuration
+        # or first choice. Keep their cheapest representative before filling the
+        # remaining beam by cost; the search budget stays unchanged.
+        representatives = {}
+        for key, value in ranked:
+            representatives.setdefault(key[1:], (key, value))
+        retained = list(representatives.values())[:beam_width]
+        retained_keys = {key for key, _ in retained}
+        retained += [row for row in ranked if row[0] not in retained_keys][:beam_width-len(retained)]
+        pruned += len(ranked) - len(retained)
         # Optional support work is charged, not counted as a required outcome.
         # Compare completed plans across depths: a shorter method may need no setup.
-        for candidate in ranked[:beam_width]:
+        for candidate in retained:
             coverage = len(candidate[0][0] & required)
             if coverage > best_coverage:
                 finalists, best_coverage = [], coverage
             if coverage == best_coverage:
                 finalists.append(candidate)
         finalists = sorted(finalists, key=lambda row: row[1][0])[:beam_width]
-        for (done, at, values, clocks, first), (cost, steps) in ranked[:beam_width]:
+        for (done, at, values, clocks, first), (cost, steps) in retained:
             if required <= done:
                 continue
             expanded += 1
