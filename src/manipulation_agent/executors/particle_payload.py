@@ -60,7 +60,7 @@ def _particle_supports(system, path, center):
     return tuple(supports.values())
 
 
-def _supported_particles(systems, containers, owners):
+def _supported_particles(systems, containers, owners, trace=None):
     """Resolve support from bottom to top, including piles of different materials.
 
     A node can follow only a selected rigid link or an already owned lower
@@ -72,6 +72,10 @@ def _supported_particles(systems, containers, owners):
     if not links:
         return []
     bounds = [obj.aabb for obj in containers]
+    if trace is not None:
+        trace['carriers'] = {obj.name: [lo.tolist(), hi.tolist()]
+                             for obj, (lo, hi) in zip(containers, bounds)}
+        trace['candidates'] = []
     nodes = []
     for system in systems:
         view = physical_particle_view(system)
@@ -93,7 +97,12 @@ def _supported_particles(systems, containers, owners):
     for z, path, system, index, center in sorted(nodes, key=lambda node: (node[0], node[1])):
         if path in owners:
             continue
-        for support in _particle_supports(system, path, center):
+        supports = _particle_supports(system, path, center)
+        if trace is not None:
+            trace['candidates'].append(dict(path=path, material=system.name,
+                center=center.tolist(), radius=float(system.particle_contact_radius),
+                supporting_bodies=[support[0] for support in supports]))
+        for support in supports:
             parent = support[0]
             owner = links.get(parent)
             if owner is None and heights.get(parent, math.inf) < z:
@@ -117,7 +126,7 @@ def _payload(container, link, system, indices, relation='contained', supports=()
         relation, tuple((parent, offset @ rotation, vector @ rotation) for parent, offset, vector in supports))
 
 
-def snapshot_particles(scene, containers, *, include_supported=False):
+def snapshot_particles(scene, containers, *, include_supported=False, trace=None):
     systems = [system for system in getattr(scene, 'active_systems', {}).values()
                if system.n_particles and physical_particle_view(system) is not None]
     if not systems:
@@ -143,13 +152,17 @@ def snapshot_particles(scene, containers, *, include_supported=False):
             payload.append(_payload(container, link, system, indices))
     if include_supported:
         groups = {}
-        for (container, link), system, index, support in _supported_particles(systems, containers, owners):
+        for (container, link), system, index, support in _supported_particles(systems, containers, owners, trace):
             key = (id(container), id(link), id(system))
             group = groups.setdefault(key, (container, link, system, [], []))
             group[3].append(index)
             group[4].append(support)
         for container, link, system, indices, supports in groups.values():
             payload.append(_payload(container, link, system, indices, 'supported', supports))
+    if trace is not None:
+        trace['ownership'] = [dict(carrier=record.container.name,
+            material=record.system.name, relation=record.relation, count=len(record.paths))
+            for record in payload]
     return payload
 
 

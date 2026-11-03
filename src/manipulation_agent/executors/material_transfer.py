@@ -445,7 +445,9 @@ class CheckedMaterialTransfer:
         # Nested bowls/bags own their contents; pouring an outer tray must not
         # extract material through those intervening objects.
         descendants = [child for child, _, _ in self._grasp_dependencies(source)]
-        captured = snapshot_particles(scene, [source, *descendants], include_supported=True)
+        support_trace = {}
+        captured = snapshot_particles(scene, [source, *descendants], include_supported=True,
+                                      trace=support_trace)
         captured = [record for record in captured if record.container is source]
         modifier, emitted = (None, [])
         if not captured:
@@ -454,6 +456,11 @@ class CheckedMaterialTransfer:
         systems = {record.system.name: record.system for record in captured}
         systems.update((system.name, system) for system in emitted)
         if not systems:
+            # Record the existing ownership calculation only when it finds no
+            # transferable material. No extra probes or recovery actions.
+            self._placement_record({'status': 'material_source_unresolved',
+                'primitive': primitive, 'source': source.name,
+                'destination': destination.name, **support_trace})
             if empty_ok:
                 return {'primitive': primitive, 'materials': [], 'source_has_more_material': False,
                         'held_vessel_retained': True, 'postcondition': 'actual_transfer_then_physical_settling'}
