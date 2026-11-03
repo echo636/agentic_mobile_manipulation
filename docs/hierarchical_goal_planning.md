@@ -60,6 +60,9 @@ over separate methods. Beam search is bounded to 32 states per coverage level;
 it does not prove a global minimum. Cost comparisons cover the same set of goal
 results, even when the graph is incomplete. Missing methods, routes and resource
 transitions remain visible; partial-plan cost is not whole-task cost.
+The three displayed alternatives prioritize different method sets, then different
+first steps. Plans sharing an initial inspection or setup can still show their
+different later approaches; reorderings must not hide all such alternatives.
 `unplanned_results` includes the omitted result descriptions and prerequisites,
 so a coverage gap can be refined without mistaking discovery-only advice for an
 end-to-end plan. The skill starts from a whole-task outcome outline and adds

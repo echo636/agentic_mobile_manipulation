@@ -251,7 +251,7 @@ def schedule_task(notes, beam_width=32):
                         target[index] = (cost + total, [*steps, step])
     (done, _, _, _, _), (cost, steps) = finalists[0]
     complete = required <= done
-    comparisons, firsts, comparable_paths = [], set(), []
+    comparisons, firsts, method_sets, comparable_paths = [], set(), {}, []
     chosen_comparison = None
     for (covered, _, _, _, _), (total, path) in finalists:
         # Equal node counts can cover different work in an incomplete DAG.
@@ -259,15 +259,21 @@ def schedule_task(notes, beam_width=32):
         if covered & required != done & required:
             continue
         comparable_paths.append((total, path))
-        if path and path[0]['method_id'] not in firsts:
-            firsts.add(path[0]['method_id'])
+        if path:
             comparison = dict(first_method=path[0]['method_id'], estimated_seconds=total,
                               first_method_costs_seconds=path[0]['costs_seconds'],
                               method_order=[s['method_id'] for s in path])
-            if len(comparisons) < 3:
+            method_sets.setdefault(tuple(sorted(comparison['method_order'])), comparison)
+            if path[0]['method_id'] not in firsts:
+                firsts.add(path[0]['method_id'])
                 comparisons.append(comparison)
-            if path[0]['method_id'] == chosen:
+            if path[0]['method_id'] == chosen and chosen_comparison is None:
                 chosen_comparison = comparison
+    # Show different approaches before filling the three slots with reorderings
+    # of one method set. Alternatives can share their first discovery/setup step.
+    representatives = list(method_sets.values())[:3]
+    comparisons = representatives + [p for p in comparisons if p not in representatives][:3-len(representatives)]
+    comparisons.sort(key=lambda p: p['estimated_seconds'])
     missing = sorted(required - {g for m in methods for g in m['goals']})
     result = dict(status='estimated' if complete else 'partial' if steps else 'needs_revision',
         source='model_authored_beliefs_and_costs',

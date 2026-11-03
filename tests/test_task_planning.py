@@ -20,6 +20,19 @@ def notes(*goals, **context):
 
 
 class TaskPlanningTests(unittest.TestCase):
+    def test_alternatives_show_different_methods_after_a_shared_first_step(self):
+        doc = notes(goal('inspect', [method('inspect', 1)]),
+                    goal('a', [method('a', 1), method('shared', 4, also=['b', 'c'],
+                         effects={'fixture': 'configured'})], depends=['inspect']),
+                    goal('b', [method('b', 1)], depends=['inspect']),
+                    goal('c', [method('c', 1)], depends=['inspect']))
+        plan = schedule_task(doc)
+        self.assertEqual(plan['estimated_seconds'], 4)
+        self.assertEqual({tuple(sorted(p['method_order'])) for p in plan['alternatives']},
+                         {('a', 'b', 'c', 'inspect'), ('inspect', 'shared')})
+        self.assertEqual({p['first_method'] for p in plan['alternatives']}, {'inspect'})
+        self.assertEqual([p['estimated_seconds'] for p in plan['alternatives']], [4, 5])
+
     def test_upfront_resource_investment_survives_cheap_prefixes_after_shared_inspection(self):
         items = [goal(str(i), [method('manual-' + str(i), 20),
                     method('fixture-' + str(i), 1, depends_on=['fixture'],
