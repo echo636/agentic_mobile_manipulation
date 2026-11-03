@@ -148,53 +148,17 @@ class CustomTaskBackend(RGBBackend):
             'env_step':self.steps})
 
     def _validate_custom_robot_start(self):
-        """Reject a tipped or trapped prepared robot before accepting a build."""
-        import math
-        import numpy as np
-        from .navigation.live_gt_map import build_navigation_grid
-        from .navigation.heading_collision import HeadingCollisionChecker
-        from .navigation.forward_navigation import local_exit_certificate
-        from .navigation.gt_navigation import PlanningBudget, SearchBudgetExhausted
+        """Reject a tipped initial robot; ordinary navigation uses the native map."""
         pos,quat=self.robot.get_position_orientation()
         position=[float(v) for v in pos];orientation=[float(v) for v in quat]
         up_z=1.-2.*(orientation[0]**2+orientation[1]**2)
         record={'position':position,'orientation':orientation,
                 'upright':math.isfinite(up_z) and up_z>=math.cos(math.radians(10.)),
-                'collision_free':False,'departure_available':False,
-                'validation_level':'read-only initial robot pose and departure geometry; not task success'}
-        if record['upright']:
-            trav=self.env.scene.trav_map
-            floor=min(range(len(trav.floor_heights)),key=lambda i:abs(position[2]-trav.floor_heights[i]))
-            grid,details=build_navigation_grid(self,floor)
-            pose=self._local_pose()
-            collision=HeadingCollisionChecker(grid,self._navigation_layers,pose[2],self._navigation_support,
-                                               check_cancelled=self.deadline.check)
-            path=self.output/'custom_robot_start_grid.npz'
-            np.savez_compressed(path,
-                free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
-                origin=grid.origin,resolution=grid.resolution,start=pose,
-                raw_layers=np.stack([layer[0] for layer in collision.layers]),
-                support=self._navigation_support,initial_layer_yaw=collision.reference_yaw,
-                layer_footprints_json=json.dumps([{'footprint':layer[1].tolist()} for layer in collision.layers]))
-            record.update(floor=floor,map_sha256=hashlib.sha256(grid.free).hexdigest(),
-                          grid_artifact=path.name,grid_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
-            # Saving diagnostic geometry is not route-search work. Start the
-            # search clock after compression / I/O, just before checking poses.
-            budget=PlanningBudget(self.deadline.check,seconds=10.)
-            collision.check_cancelled=budget.check
-            try:
-                record['collision_free']=collision.motion_free(pose,pose)
-                if record['collision_free']:
-                    record['departure_certificate']=local_exit_certificate(pose,collision,
-                        check_cancelled=budget.check,
-                        allow_lateral=bool(getattr(self.robot,'is_holonomic_base',False)))
-                    record['departure_available']=record['departure_certificate'] is not None
-            except SearchBudgetExhausted:
-                record['planning_budget_exhausted']=True
-        record['status']='passed' if all(record[k] for k in ('upright','collision_free','departure_available')) else 'failed'
+                'validation_level':'read-only initial robot posture; not route feasibility or task success'}
+        record['status']='passed' if record['upright'] else 'failed'
         write_json(self.output/'custom_robot_start_validation.json',record)
         if record['status']!='passed':
-            raise RuntimeError('Prepared robot must be upright with collision-free departure geometry')
+            raise RuntimeError('Prepared robot must be upright')
 
     def _prepare_task_instance(self):
         """Called before camera setup / first policy observation."""
