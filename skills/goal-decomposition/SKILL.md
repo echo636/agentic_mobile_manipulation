@@ -10,11 +10,11 @@ Keep a result tree and an operation plan in one task note. Read [references/work
 |---|---|
 | Root | Describe the requested final state in your own words. |
 | Intermediate layers | Group contributing results; repeat layers where useful. |
-| Leaves | Independently verifiable results with quantity, destination, state and evidence requirements. |
+| Leaves | Required final results with quantity, destination, state and evidence requirements. |
 
 Depth and child counts follow the task. Preserve explicit requirements; separate assumptions. Goal status is your belief, not evaluator truth.
 
-Describe current observations in `planning.state` and each result's terminal `condition`. Describe available local work in `execution.operators`, including where it occurs, its preconditions, effects and cost. Keep operators for known unfinished work across all branches through their terminal results, not only the next phase. The program selects, combines, omits or repeats these operators and generates the operation DAG; you need not author complete alternative plans.
+Describe current observations in `planning.state` and each result's terminal `condition`. Temporary access, staging and preparation states belong in operator preconditions/effects, not competing final goals. Describe available local work in `execution.operators`, including where it occurs, its preconditions, effects and cost. Keep operators for known unfinished work across all branches through their terminal results, not only the next phase. The program selects, combines, omits or repeats these operators and generates the operation DAG; you need not author complete alternative plans.
 
 An operator is concrete work with one location and resource use. Split work when location, resources or ordering can differ. Include supported capabilities that offer meaningful choices, not just the actions of one preselected sequence. Resource acquisition, staging, access and cleanup have effects and cost; completing retrieval once does not permanently keep a tool in hand. Describe effects that can disturb earlier results too. Distinguish workstations within a room and account for movement separately from local work.
 

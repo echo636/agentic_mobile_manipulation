@@ -7,21 +7,23 @@ Write before the first act/look with `operation="write", expected_version=0`. Re
 ```json
 {
   "format":"goal-tree-v2","root_id":"root",
-  "requirements":[{"id":"r1","condition":"Both items processed","basis":"explicit"}],
+  "requirements":[{"id":"r1","condition":"Both items processed and arranged","basis":"explicit"}],
   "goals":[
-    {"id":"root","parent_id":null,"goal":"Both requested items processed","status":"active","covers":["r1"],"check":"Both results inspected","evidence":[]},
-    {"id":"a","parent_id":"root","goal":"Item A processed","status":"pending","condition":{"a":"processed"},"check":"A has required form","evidence":[]},
-    {"id":"b","parent_id":"root","goal":"Item B processed","status":"pending","condition":{"b":"processed"},"check":"B has required form","evidence":[]}
+    {"id":"root","parent_id":null,"goal":"Both requested items processed and arranged","status":"active","covers":["r1"],"check":"Both final results inspected","evidence":[]},
+    {"id":"a","parent_id":"root","goal":"Item A processed and arranged","status":"pending","condition":{"a":"finished"},"check":"A has required form and placement","evidence":[]},
+    {"id":"b","parent_id":"root","goal":"Item B processed and arranged","status":"pending","condition":{"b":"finished"},"check":"B has required form and placement","evidence":[]}
   ],
   "planning":{
-    "location":"bench","state":{"hand":"empty","tool":"shelf","a":"raw","b":"raw"},
-    "travel":[{"source":"bench","destination":"shelf","seconds":8},{"source":"shelf","destination":"bench","seconds":8}]
+    "location":"bench","state":{"hand":"empty","tool":"bench","a":"raw","b":"raw"}
   },
   "execution":{
     "operators":[
-      {"id":"get-tool","description":"Retrieve the visible tool","action":"grasp","at":"shelf","seconds":3,"requires":{"hand":"empty","tool":"shelf"},"effects":{"hand":"tool","tool":"held"},"check":"Correct tool held"},
+      {"id":"get-tool","description":"Pick up the visible tool","action":"grasp","at":"bench","seconds":3,"requires":{"hand":"empty","tool":"bench"},"effects":{"hand":"tool","tool":"held"},"check":"Correct tool held"},
       {"id":"process-a","description":"Process A on its support","at":"bench","seconds":8,"requires":{"hand":"tool","a":"raw"},"effects":{"a":"processed"},"check":"A has required form"},
-      {"id":"process-b","description":"Process B on its support","at":"bench","seconds":8,"requires":{"hand":"tool","b":"raw"},"effects":{"b":"processed"},"check":"B has required form"}
+      {"id":"process-b","description":"Process B on its support","at":"bench","seconds":8,"requires":{"hand":"tool","b":"raw"},"effects":{"b":"processed"},"check":"B has required form"},
+      {"id":"put-tool","description":"Set the tool down on the bench","at":"bench","seconds":3,"requires":{"hand":"tool"},"effects":{"hand":"empty","tool":"bench"},"check":"Tool supported, hand empty"},
+      {"id":"arrange-a","description":"Arrange processed A at its final bench position","at":"bench","seconds":3,"requires":{"hand":"empty","a":"processed"},"effects":{"a":"finished"},"check":"A has required form and placement"},
+      {"id":"arrange-b","description":"Arrange processed B at its final bench position","at":"bench","seconds":3,"requires":{"hand":"empty","b":"processed"},"effects":{"b":"finished"},"check":"B has required form and placement"}
     ],
     "operations":[]
   },
@@ -29,13 +31,13 @@ Write before the first act/look with `operation="write", expected_version=0`. Re
 }
 ```
 
-This illustrates the schema, not a task recipe. Include the actual task's resource, access, support and processing conditions. A short operator must not hide decisions about resources, workstations or order.
+This illustrates a complete declared workflow, not a task recipe: intermediate `processed` states enable final arrangement. The program can compare doing each item end to end against sharing the tool across both. Include the actual task's resource, access, support and processing conditions. A short operator must not hide decisions about resources, workstations or order.
 
 ## Results and observed beliefs
 
 Each goal has `id`, `parent_id`, `goal`, `status`, `check` and `evidence`. Only the root has a null parent. Intermediate layers may repeat. `covers` references requirement IDs. Statuses are `pending`, `active`, `done`, `blocked`, `retired`.
 
-Give required leaves a nonempty `condition` dictionary using the same state keys as operator effects. Values are strings. Multiple entries must all hold at the end. Preserve completed result conditions so later work cannot silently undo them. Intermediate groups need no condition unless they have an additional independent terminal requirement. Conditions on required results must be mutually consistent.
+Give required leaves a nonempty `condition` dictionary using the same state keys as operator effects. Values are strings. All required conditions must hold together at the end. Temporary preparation and tool occupancy belong in operator states, not extra final requirements. Preserve completed result conditions so later work cannot silently undo them. Intermediate groups need no condition unless they have an additional independent terminal requirement.
 
 `planning.state` holds the states currently supported by RGB and public receipts. Missing is unknown, not false or freely achievable. Use distinguishable states for whole, half-cut, diced, transferred and cooked items where relevant. Moving an object changes its recorded location too. A discovery result can record a location inspected or identity resolved; keep unfinished physical results separate.
 
@@ -66,7 +68,7 @@ Write/update stores the generated graph and selects its first operation, using i
 Action replies retain the selected operation and measured tool/simulation time. After its local work finishes, fails or reveals new information, update actual state and result evidence. For example:
 
 ```json
-{"planning":{"location":"shelf","state":{"hand":"tool","tool":"held","a":"raw","b":"raw"}},"change":"Tool grasp confirmed"}
+{"planning":{"location":"bench","state":{"hand":"tool","tool":"held","a":"raw","b":"raw"}},"change":"Tool grasp confirmed"}
 ```
 
 `update` merges goals and operators by ID. `execution.remove_operators` removes obsolete capabilities. Supplied `planning.state`, `processes` and lists replace their previous values; omitted fields persist. Omitted `active` ends the previous interval and lets the program select from the reconciled state. Do not mark an operator done: update observed state so remaining work is searched afresh. The generated graph and selection are preserved exactly in the replay.
