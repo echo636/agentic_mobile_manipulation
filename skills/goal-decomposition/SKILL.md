@@ -26,6 +26,6 @@ Write/update, read the generated graph, coverage, missing conditions, costs and 
 
 For unattended processes, separate starting from checking. Model process duration and independent work's simulation progress so the program can compare productive work against waiting. Model/network waiting does not advance simulation. An elapsed estimate permits a check, not a claim that cooking or another process succeeded.
 
-Track recognizable items/groups with location, state, remaining work, count and evidence. Counts alone cannot distinguish unprocessed from processed items. After mixing or spilling, restore correspondence before irreversible work. Keep unexplored locations and uncertain identities visible.
+Track recognizable items/groups with source, location, state, remaining work, count and evidence. A transfer receipt confirms movement, not the identities of all requested contents; keep unverified members unresolved. Counts alone cannot distinguish unprocessed from processed items. After mixing or spilling, restore correspondence before irreversible work. Keep unexplored locations and uncertain identities visible.
 
 Verify results bottom up, including results disturbed by later handling. Before finish, reconcile every requested result and member with RGB and public receipts. Neither a complete predicted DAG nor successful tool calls establish official task success.
