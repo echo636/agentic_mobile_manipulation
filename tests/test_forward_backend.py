@@ -29,6 +29,8 @@ class ForwardBackendTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.b=b=RGBBackend.__new__(RGBBackend)
         b.output=Path(self.temp.name);b.steps=0;b.torch=torch;b._base_target=None
+        b.env=SimpleNamespace(scene=SimpleNamespace(trav_map=SimpleNamespace(floor_heights=[0.,3.])))
+        b._base_floor_clearance=.01
         self.position=torch.tensor([0.,0.,.01]);self.quat=torch.tensor([0.,0.,0.,1.])
         self.joints=torch.zeros(5)
         b.robot=SimpleNamespace(get_position_orientation=lambda:(self.position.clone(),self.quat.clone()),
@@ -73,6 +75,13 @@ class ForwardBackendTests(unittest.TestCase):
         self.b.deadline.check=cancel
         with self.assertRaises(SkillError):self.b._execute_base_path([(0.,0.),(1.,0.)],0.,100)
         self.assertEqual(self.restores,0)
+
+    def test_navigation_does_not_preserve_collision_lift_on_another_floor(self):
+        self.position[2]=3.435
+        self.b._execute_base_path([(0.,0.),(0.,.5)],0.,100)
+        self.assertAlmostEqual(float(self.position[2]),3.01,places=5)
+        self.assertEqual(self.restores,1)
+        self.assertEqual(self.b.steps,1)
 
     def test_look_changes_yaw_without_planning_translation(self):
         before=self.position.clone()

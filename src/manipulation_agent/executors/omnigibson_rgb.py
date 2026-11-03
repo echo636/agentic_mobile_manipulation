@@ -109,6 +109,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self._sensor_intrinsics={}
         self.rig = {}
         super().__init__(*args,**kwargs)
+        base_z = float(self.robot.get_position_orientation()[0][2])
+        floor_z = min(self.env.scene.trav_map.floor_heights, key=lambda z: abs(z-base_z))
+        self._base_floor_clearance = base_z-floor_z
         self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
                                  if self.demo_motion else None)
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
@@ -646,6 +649,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self.deadline.check()
         position,orientation=self.robot.get_position_orientation()
         goal=position.clone();goal[:2]=position.new_tensor(points[-1])
+        # A prior contact can lift or tip the base. Transport to the floor,
+        # rather than carrying that transient elevation to the next endpoint.
+        floor_z=min(self.env.scene.trav_map.floor_heights,key=lambda z:abs(z-float(position[2])))
+        goal[2]=floor_z+self._base_floor_clearance
         quat=T.euler2quat(orientation.new_tensor([0.,0.,end_yaw]))
         local=getattr(self,'_local_operation',None)
         if local is not None:local.admit_pose((*points[-1],end_yaw))
