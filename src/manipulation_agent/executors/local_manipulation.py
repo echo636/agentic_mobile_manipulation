@@ -15,7 +15,6 @@ class LocalLimits:
     max_env_steps: int = 600  # Atomic manipulation allowance, separate from episode policy.
     max_sampling_steps: int = 1200
     wall_seconds: float = 300.0
-    max_target_drift_m: float = .25
 
     def __post_init__(self):
         if any(not math.isfinite(v) or v <= 0 for v in asdict(self).values()):
@@ -66,8 +65,10 @@ class LocalOperation:
         try:
             self.check()
             obj,point=self.backend._resolve_local_target(self.binding)
-            self.backend._manipulation_preconditions(self.primitive,obj)
             if not self.backend._local_ready(self.primitive,obj,point,self):
+                # Reject an impossible operation before moving. The leaf
+                # checks current hand/object state after the physical step.
+                self.backend._manipulation_preconditions(self.primitive,obj)
                 self.record('align')
                 self.backend._local_reposition(self.primitive,obj,point,self)
                 self.repositions=1

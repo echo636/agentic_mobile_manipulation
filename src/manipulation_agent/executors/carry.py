@@ -57,10 +57,6 @@ class ControlledCarry:
         held = self._get_held()
         if held is obj:
             return {'primitive': 'grasp', 'postcondition': 'selected_object_already_held'}
-        if held is not None:
-            raise SkillError('hand_occupied', 'An object is already grasped')
-        if obj.fixed_base:
-            raise SkillError('fixed_object', 'The selected object has a fixed base')
         arm = self.primitives.arm
         original = obj.get_position_orientation()
         dependencies = self._grasp_dependencies(obj)
@@ -73,7 +69,7 @@ class ControlledCarry:
         self._relocate_contents(obj, contents)
         relocate_particles(self.env.scene, particles)
         self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
-        for _ in range(min(6, max_steps)):
+        if max_steps > 0:
             self._step(self.primitives._empty_action())
         if self._get_held() is not obj:
             raise SkillError('postcondition_error', 'Native grasp did not hold the selected object', changed=True)

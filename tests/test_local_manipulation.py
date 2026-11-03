@@ -107,19 +107,20 @@ class TargetLockTests(unittest.TestCase):
         obj=SimpleNamespace(prim_path='/obj',links={'door':link})
         binding=LockedTarget.bind(obj,(1.1,2.,3.),{'visual_mesh':'/obj/door/visuals/mesh'})
         pose[:]=[(1.,2.,3.),(0.,0.,math.sin(math.pi/4),math.cos(math.pi/4))]
-        selected,point=binding.resolve([obj],.25)
+        selected,point=binding.resolve([obj])
         self.assertIs(selected,obj);self.assertAlmostEqual(point[0],1.);self.assertAlmostEqual(point[1],2.1)
         lookalike=SimpleNamespace(prim_path='/obj',links={'door':link})
-        with self.assertRaises(SkillError):binding.resolve([lookalike],.25)
-    def test_large_target_motion_and_replaced_link_abort(self):
+        with self.assertRaises(SkillError):binding.resolve([lookalike])
+    def test_target_motion_tracks_same_link_and_replacement_aborts(self):
         pose=[(0.,0.,0.),(0.,0.,0.,1.)]
         link=SimpleNamespace(prim_path='/obj/link',get_position_orientation=lambda:tuple(pose))
         obj=SimpleNamespace(prim_path='/obj',links={'link':link})
         binding=LockedTarget.bind(obj,(0.,0.,0.),{'visual_mesh':'/obj/link/visuals/mesh'})
         pose[0]=(1.,0.,0.)
-        with self.assertRaises(SkillError):binding.resolve([obj],.25)
+        selected,point=binding.resolve([obj])
+        self.assertIs(selected,obj);self.assertEqual(point,(1.,0.,0.))
         obj.links={}
-        with self.assertRaises(SkillError):binding.resolve([obj],2.)
+        with self.assertRaises(SkillError):binding.resolve([obj])
 
 
 if __name__=='__main__':unittest.main()

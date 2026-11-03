@@ -29,7 +29,7 @@ class LocalRGBManipulation:
             logging.getLogger(__name__).warning('Local manipulation trace disabled at %s: %s', self.output, exc)
 
     def _resolve_local_target(self,binding):
-        obj,point=binding.resolve(self.env.scene.objects,self.local_limits.max_target_drift_m)
+        obj,point=binding.resolve(self.env.scene.objects)
         base=self.robot.get_position_orientation()[0]
         return obj,self.torch.tensor(point,dtype=base.dtype,device=base.device)
 

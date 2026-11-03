@@ -705,7 +705,6 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
-        self._manipulation_preconditions(primitive,obj)
         if getattr(self,'local_manipulation',False):
             return self._execute_local_manipulation(primitive,obj,point,grounding,max_steps,kwargs)
         return self._execute_bound_manipulation(primitive,obj,point,grounding,max_steps,**kwargs)
@@ -764,13 +763,14 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         """Execute the same selected object/surface, without recursive act/grounding."""
         self._manipulation_preconditions(primitive,obj)
         held=self._get_held()
-        # This leaf executor never moves the base. The outer local controller
-        # owns positioning; this final gate still protects the physical effect.
-        base=self.robot.get_position_orientation()[0]
-        if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
-            raise SkillError('out_of_reach',
-                             'Selected surface is beyond manipulation reach; call navigate_to, '
-                             'then reselect the target in the returned RGB before retrying')
+        # The local controller already handles reach. Legacy explicit mode
+        # needs the same operation range here, without implicit movement.
+        if not getattr(self,'local_manipulation',False):
+            base=self.robot.get_position_orientation()[0]
+            if float(self.torch.linalg.norm(base[:2]-point[:2]))>1.4:
+                raise SkillError('out_of_reach',
+                                 'Selected surface is beyond manipulation reach; call navigate_to, '
+                                 'then reselect the target in the returned RGB before retrying')
         if primitive=='grasp' and held is None and getattr(self,'demo_motion',False):
             self._demo_arm=None
         # A carried slicer may trigger the official rule during an arm
