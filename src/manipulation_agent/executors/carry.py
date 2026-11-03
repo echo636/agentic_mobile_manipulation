@@ -193,7 +193,7 @@ class ControlledCarry:
             report('failed',reason='state_reopened_or_reclosed_after_step',
                    payload=[child.name for child,_,_ in payload])
             raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
-        self._verify_container_payload(obj,payload)
+        self._verify_container_payload(obj,payload,stage='articulation_contents_unconfirmed')
         if particles:
             self._placement_record({'status':'articulation_particle_settle',
                 'target':obj.name,'primitive':primitive,
@@ -286,7 +286,7 @@ class ControlledCarry:
         for child,link,relative in payload:
             child.set_position_orientation(*T.pose_transform(*link.get_position_orientation(),*relative));child.keep_still()
 
-    def _verify_container_payload(self,container,payload):
+    def _verify_container_payload(self,container,payload,*,stage=None):
         from omnigibson.object_states import Inside
         escaped=[record for record in payload if not record[0].states[Inside].get_value(container)]
         if escaped:
@@ -305,7 +305,8 @@ class ControlledCarry:
                         'linear_velocity':child.get_linear_velocity().tolist()})
                 self._carry_record(event='container_payload_violation',container=container.name,
                                    escaped_contents=details)
-            raise SkillError('postcondition_error','Operation displaced existing contents from the container',changed=True)
+            raise SkillError('postcondition_error','Operation displaced existing contents from the container',
+                             changed=True,stage=stage)
 
     @property
     def _carry_dependencies(self):
