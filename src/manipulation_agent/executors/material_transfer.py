@@ -379,11 +379,17 @@ class CheckedMaterialTransfer:
                      'source_remaining_objects': len(self._pour_objects(source))}
             self._placement_record({'status': 'rigid_contents_poured', 'source': source.name,
                 'destination': destination.name, 'objects': [obj.name for obj in moved], **rigid})
-            if not retained and not changed:
-                raise SkillError('postcondition_error', 'Poured objects did not remain at the receiver', changed=True)
             result.update(rigid_transfer=rigid, implementation='native_rigid_and_particle_transfer')
             if rigid['source_remaining_objects']:
                 result['source_has_more_material'] = True
+        # One spilled component must not discard the other transfer outcomes.
+        # Native transformations remain unconfirmed rather than presumed lost.
+        rigid = result.get('rigid_transfer', {})
+        retained = (rigid.get('retained_objects', 0) or rigid.get('identities_changed_during_settling') or
+                    any(item['retained_particles'] or item.get('identities_changed_during_settling')
+                        for item in result.get('materials', [])))
+        if not retained:
+            raise SkillError('postcondition_error', 'Transferred contents did not remain at the receiver', changed=True)
         return result
 
     def _transfer_preconditions(self, primitive, target):
@@ -602,7 +608,6 @@ class CheckedMaterialTransfer:
                     'source': source.name, 'destination': destination.name, 'material': system.name,
                     'moved_particles': item['count'], 'retained_particles': inside,
                     'retained_relation': 'surface_contact' if surface else 'inside_volume'})
-                raise SkillError('postcondition_error', 'Transferred portion did not remain at the receiver', changed=True)
             materials.append({'material': system.name, 'moved_particles': item['count'],
                 'retained_particles': inside, 'source_remaining_particles': item['source_remaining'],
                 'retained_relation': 'surface_contact' if surface else 'inside_volume',

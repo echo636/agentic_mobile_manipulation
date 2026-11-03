@@ -88,6 +88,14 @@ class RGBBoundary(unittest.TestCase):
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('PRIVATE_MATERIAL_SYSTEM',json.dumps(result))
             self.assertNotIn('moved_particles',json.dumps(result))
+        self.backend.execute_visual=lambda *a,**kw:{'materials':[
+            {'material':'PRIVATE_FOOD_A','moved_particles':16,'retained_particles':16},
+            {'material':'PRIVATE_FOOD_B','moved_particles':1,'retained_particles':0}]}
+        partial=self.act('scoop')
+        self.assertTrue(partial['ok'])
+        self.assertTrue(partial['effect']['transfer']['some_material_not_retained'])
+        self.assertIn('partial',partial['effect']['transfer']['message'])
+        self.assertNotIn('PRIVATE_FOOD',json.dumps(partial))
     def test_supported_placement_failure_keeps_the_release_result_without_private_state(self):
         from manipulation_agent.contracts import SkillError
         for stage in ('released_supported_not_adjacent', 'released_supported_payload_unconfirmed',

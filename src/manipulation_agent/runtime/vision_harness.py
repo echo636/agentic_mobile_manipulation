@@ -289,6 +289,13 @@ class VisionHarness:
                         'Check remaining contents and the receiver in the returned RGB.')
                 if rigid:
                     effect['transfer'].update(rigid)
+                if any(not item.get('identities_changed_during_settling') and
+                       item.get('retained_particles', item['moved_particles']) < item['moved_particles']
+                       for item in materials):
+                    effect['transfer']['some_material_not_retained'] = True
+                    effect['transfer']['message'] = (
+                        'Transfer was partial: some material did not remain at the receiver. '
+                        'Inspect the receiver, source and surrounding surfaces in the returned RGB.')
         local=details.get('local_manipulation')
         if local:
             effect['local_adjustment']={'repositions':int(local['repositions']),

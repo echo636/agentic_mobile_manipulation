@@ -100,6 +100,12 @@ class MaterialActionTests(unittest.TestCase):
         with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
                 Inside=inside, OnTop=on_top, ContainedParticles=volume, create=True):
             result = backend._checked_transfer('pour', destination, 6)
+            # Retained material still counts when all rigid pieces spill.
+            retained[:] = [False, False, False]
+            objects[2].states[on_top].get_value = lambda target: False
+            partial = backend._checked_transfer('pour', destination, 6)
+            self.assertEqual(partial['rigid_transfer']['retained_objects'], 0)
+            self.assertEqual(partial['materials'][0]['retained_particles'], 3)
         self.assertEqual(result['rigid_transfer'], {
             'moved_objects': 3, 'retained_objects': 2, 'source_remaining_objects': 1,
             'inside_objects': 1, 'on_top_objects': 1,
@@ -382,6 +388,17 @@ class MaterialActionTests(unittest.TestCase):
                       return_value=np.ones((2, 3))), \
                 patch('manipulation_agent.executors.material_transfer.move_particle_centers') as move:
             result = backend._transfer_material_portion('pour', source, destination, 6)
+            contacts.clear()
+            backend._step = lambda action: None
+            spilled = backend._transfer_material_portion('pour', source, destination, 6)
+            self.assertEqual(spilled['materials'][0]['retained_particles'], 0)
+            # Only the combined action decides total failure, after all
+            # components have been measured. There is no retry or rollback.
+            backend._transfer_preconditions = lambda *args: (source, destination)
+            backend._pour_objects = lambda obj: []
+            with self.assertRaises(SkillError) as failure:
+                backend._checked_transfer('pour', destination, 6)
+            self.assertEqual(failure.exception.code, 'postcondition_error')
         self.assertEqual(move.call_args.args[1], [0, 1])
         system.generate_particles.assert_not_called()
         self.assertEqual(view.prim_paths, ['a', 'b', 'c'])
