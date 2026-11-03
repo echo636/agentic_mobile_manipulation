@@ -260,17 +260,10 @@ class VisionHarness:
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
-        if primitive=='open':
-            limited = details.get('opening_limited_by_clearance') is True
-            partial = details.get('other_panels_not_operated') is True
-            if limited or partial:
-                messages = []
-                if limited:
-                    messages.append('The operated door or lid opened only partway because wider openings were obstructed.')
-                if partial:
-                    messages.append('The opening command applied only to part of this object. Other doors or drawers were not operated.')
-                effect['opening']={'limited_by_obstacles':limited, 'other_panels_not_operated':partial,
-                    'message':' '.join([*messages, 'Inspect access in the returned RGB.'])}
+        if primitive=='open' and details.get('other_panels_not_operated') is True:
+            effect['opening']={'other_panels_not_operated':True,
+                'message':'The opening command applied only to part of this object. '
+                          'Other doors or drawers were not operated. Inspect access in the returned RGB.'}
         if primitive=='cut':
             # Report this action's transformation, without object/material IDs
             # or task-goal state. Particle counts are not physical piece counts.

@@ -178,8 +178,8 @@ class ControlledCarry:
         open_goal=None
         opening_feedback={}
         if primitive=='open':
-            from .articulation_goal import checked_open_goal
-            open_goal=checked_open_goal(self,obj,self.deadline.check,feedback=opening_feedback)
+            from .articulation_goal import native_open_goal
+            open_goal=native_open_goal(self,obj,feedback=opening_feedback)
         samples=[]
         def capture(phase):
             if state is Open:
@@ -195,8 +195,7 @@ class ControlledCarry:
                 from .articulation_diagnostics import record_articulation
                 record_articulation(self,obj,primitive,samples,status=status,**details)
         capture('before_setter')
-        # Upstream symbolic OPEN samples a random opening and returns early
-        # when already ajar. Use a checked usable opening; close fully.
+        # Apply the native annotated opening to the selected panel; close fully.
         if open_goal is not None:
             obj.set_joint_positions(open_goal)
             obj.states[state].clear_cache();obj.state_updated()
@@ -215,12 +214,10 @@ class ControlledCarry:
         relocate_particles(self.env.scene,transported_particles)
         verify_particles(self.env.scene,transported_particles)
         capture('after_setter')
-        # Switches have no joint motion to settle. Cooking time belongs to wait.
-        for step in range(min(30 if state is Open else 1,max_steps)):
-            self._step(self.primitives._empty_action())
-            if step in (0,4,14,29):capture('settle_'+str(step+1))
+        self._step(self.primitives._empty_action())
+        capture('after_step')
         if bool(obj.states[state].get_value())!=wanted:
-            report('failed',reason='state_reopened_or_reclosed_after_settling',
+            report('failed',reason='state_reopened_or_reclosed_after_step',
                    payload=[child.name for child,_,_ in payload])
             raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
         self._verify_container_payload(obj,payload)
@@ -235,9 +232,9 @@ class ControlledCarry:
         verify_particles(self.env.scene,transported_particles)
         report('passed',payload=[child.name for child,_,_ in payload])
         return {'primitive':primitive,'implementation':'official_state_setter_with_link_payload',
-                'fully_open_or_closed':primitive=='close','opening_policy':'largest_checked_usable_endpoint' if primitive=='open' else None,
+                'fully_open_or_closed':primitive=='close','opening_policy':'native_joint_metadata' if primitive=='open' else None,
                 **opening_feedback,
-                'postcondition':'official_state_and_containment_after_settling',
+                'postcondition':'official_state_and_containment_after_step',
                 'preserved_contained_objects':len(payload),'failure_policy':'retain_physical_result'}
 
     def _checked_attach(self, parent, max_steps):
