@@ -19,6 +19,16 @@ def merge_goal_update(content, update):
     merged = {**notes, **patch, 'goals': list(goals.values()), 'active': patch.get('active')}
     if 'planning' in patch:
         merged['planning'] = {**notes.get('planning', {}), **patch['planning']}
+    if 'execution' in patch:
+        graph = {**notes.get('execution', {}), **patch['execution']}
+        operations = {op['id']: op for op in notes.get('execution', {}).get('operations', [])}
+        for change in patch['execution'].get('operations', []):
+            key = change['id']
+            operations[key] = {**operations.get(key, {}), **change}
+        for key in graph.pop('remove_operations', []):
+            operations.pop(key, None)
+        graph['operations'] = list(operations.values())
+        merged['execution'] = graph
     return json.dumps(merged, separators=(',', ':'))
 
 
@@ -82,6 +92,7 @@ class TaskNotes:
             checkpoint_comparison=advice.get('comparison'),
             selection=advice.get('selection'),
             selected_method=advice.get('selected_method'),
+            selected_operation=advice.get('selected_operation'),
             previous_execution=advice.get('previous_execution'),
             next=None, actions_since_checkpoint=count,
             execution=dict(tool_seconds=round(self.feedback_seconds +
@@ -91,12 +102,13 @@ class TaskNotes:
                 scope='Tool wall time excludes model requests; simulation delta comes from public capture timestamps'),
             latest_receipt={k: latest[k] for k in ('primitive', 'ok', 'effect', 'error') if k in latest},
             failed_since_checkpoint=failed,
-            next_decision=('No method was selected at this checkpoint. Reconcile actual progress and '
-                           'known unfinished work, read the comparison, then select a method.'
-                           if not (advice.get('selection') or {}).get('method_id') else
+            next_decision=('No operation or method was selected at this checkpoint. Reconcile actual progress and '
+                           'known unfinished work, read the comparison, then select the next work.'
+                           if not any((advice.get('selection') or {}).get(k)
+                                      for k in ('method_id', 'operation_id')) else
                           'Reconcile the failure and affected goals/resources from RGB and receipts; '
-                           'update changed nodes and beliefs to compare revised methods.' if failed else
-                           'Check RGB/receipts against selected_method conditions and result checks. '
+                           'update changed nodes and beliefs to compare revised plans.' if failed else
+                           'Check RGB/receipts against the selected operation or method and its result checks. '
                            'Continue supported local steps; on completion, new information or a branch change, update notes '
                            'to recompute the remaining DAG. Use operation=update to keep unchanged branches. '
                            'Tool success alone does not complete a goal.'))
@@ -119,15 +131,20 @@ class TaskNotes:
         try:
             choice = json.loads(content)
             notes = json.loads(self.state['content'])
-            method_id = choice['method_id']
-            owner, method = next((g, m) for g in notes['goals'] for m in g.get('methods', [])
-                                 if m['id'] == method_id)
-            notes['active'] = dict(goal_id=owner['id'], method_id=method_id,
-                serves=[owner['id'], *method.get('also', [])],
-                steps=choice['steps'], next_check=choice['next_check'])
+            if 'execution' in notes:
+                from .operation_planning import select_operation
+                notes = select_operation(notes, choice)
+            else:
+                method_id = choice['method_id']
+                owner, method = next((g, m) for g in notes['goals'] for m in g.get('methods', [])
+                                     if m['id'] == method_id)
+                notes['active'] = dict(goal_id=owner['id'], method_id=method_id,
+                    serves=[owner['id'], *method.get('also', [])],
+                    steps=choice['steps'], next_check=choice['next_check'])
         except (ValueError, TypeError, KeyError, AttributeError, StopIteration):
             raise SkillError('invalid_selection',
-                'Select an existing method with JSON method_id, steps and next_check.') from None
+                'Select with plan_id, operation_id, steps and next_check for an operation DAG; '
+                'legacy goal methods use method_id, steps and next_check.') from None
         return self.write(json.dumps(notes, separators=(',', ':')), expected_version, **metadata)
 
     def write(self, content, expected_version, *, request_id, revision, agent_step):
@@ -141,13 +158,15 @@ class TaskNotes:
         previous = self.state.get('previous_execution')
         if self.feedback_count:
             advice = self.planning()
-            method = advice.get('selected_method')
+            operation_mode = advice.get('selected_operation') is not None
+            method = advice.get('selected_operation') or advice.get('selected_method')
             if method:
+                kind = 'operation' if operation_mode else 'method'
                 previous = dict(notes_version=self.state['version'],
-                    method_id=method['method_id'], description=method['description'],
+                    **{kind + '_id': method[kind + '_id']}, description=method['description'],
                     intended_results=[g['id'] for g in method['results']], route=method['route'],
-                    estimated_method_seconds=advice['selection']['estimated_method_seconds'],
-                    estimated_method_costs_seconds=advice['selection']['estimated_method_costs_seconds'],
+                    **{'estimated_' + kind + '_seconds': advice['selection']['estimated_' + kind + '_seconds'],
+                       'estimated_' + kind + '_costs_seconds': advice['selection']['estimated_' + kind + '_costs_seconds']},
                     observed=advice['execution'], action_attempts=self.feedback_count,
                     scope='Actions since the selected checkpoint, possibly partial or recovery. '
                           'Use reconciled result evidence before treating this as a completed method cost; '

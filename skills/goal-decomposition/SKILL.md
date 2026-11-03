@@ -1,44 +1,31 @@
 ---
 name: goal-decomposition
-description: Decompose task outcomes, compare costed methods across a work DAG, and reconcile progress from RGB evidence.
+description: Preserve task outcomes in a goal tree and optimize explicit operation DAGs for efficient RGB execution.
 ---
-# Plan from the end state down to executable goals
+# Plan outcomes, optimize operations, verify results
 
-Plan top down and verify bottom up. Use these roles to organize the hierarchy:
+Keep two linked representations in one task note. The **goal tree** records what must be true; the **operation DAG** records the work that can make it true. Read [references/working-state.md](references/working-state.md) before the initial write.
 
-| Role | Purpose |
+| Goal-tree layer | Meaning |
 |---|---|
-| Root: task end state | State what must be true when the whole task is complete, in your own words. Check coverage against the instruction. |
-| Intermediate goal layers | Describe the contributing results needed to achieve each parent. Group related subresults under a meaningful parent and preserve their dependencies and constraints. Repeat this decomposition at finer levels where needed. |
-| Leaf goals | State directly pursuable results, each with a feasible local plan and an observable completion check. A leaf may require several tool calls. |
-| Current action plan | Choose a short sequence serving one or several ready leaves; put it in `active.steps` with the next check, outside the goal tree. Select concrete targets from current RGB. |
+| Root | Describe the requested final state in your own words. |
+| Intermediate layers | Group contributing results; repeat these layers where useful. |
+| Leaves | Independently verifiable results, with quantity, destination, state and evidence requirements. |
 
-These are roles, not a fixed number of levels. Intermediate layers can repeat, and leaves can occur at different depths. Choose depth and child counts from the task; do not add levels just to fill a template. Keep intermediate parents when refining their children.
+Depth and child counts follow the task. Preserve requirements and meaningful intermediate parents. Goal status is your belief, not evaluator truth. A completed operation does not automatically complete a goal.
 
-Read [references/working-state.md](references/working-state.md) and write the initial tree before the first act/look. Notes record your beliefs, not simulator truth.
+Build the operation DAG across known unfinished branches: discovery/access, tool preparation, processing, assembly, device use, delivery, arrangement and final checks. A node is a concrete local operation with a location, prerequisites, resource conditions, predicted effects and cost. Split work whose locations, resource use or ordering can differ; do not hide a whole branch behind “prepare everything” or “deliver all supplies”. Link producing operations to goal IDs with `achieves`. Keep unknown results explicit and add discovery work; refine the graph as observations resolve them.
 
-Give requirements stable IDs, preserving quantities, destinations, relations, final device states and process or ordering constraints. Separate explicit requirements from assumptions; infer ordinary outcomes for vague wording without inventing a recipe or unrelated cleanup.
+Edges express necessary prerequisites, not a preferred chronology. Do not force independent branches into global search/processing/delivery phases. Reuse one node for shared preparation. When separate branches describe the same one-time preparation, give those equivalent nodes a common `share` label so the optimizer can consider merging them. Never share labels across different items, repeated consumption, or checks at different times.
 
-Trace every required final result backward to its prerequisites, including branches not yet executable. Separate independently verifiable results with different destinations, processing states or resource needs; keep aggregate outcomes as parents. The scheduler cannot reorder work hidden inside one broad method. Preserve those separate results when batching: a shared method connects them with `also`. Each method must achieve its entire owner result, and children must jointly cover their parent. Keep unknown results with explicit discovery prerequisites.
+Propose feasible alternative subgraphs where execution could differ: shared versus separate preparation, workstation or tool choices, compatible processing batches, staged versus direct assembly, carrier versus individual delivery. Expand each alternative into its actual operations, including loading, unloading, setup and cleanup required by that approach. Preserve the same results and dependencies. Support capacity, compatibility, access and processing feasibility from observations and available tools; a cheaper estimate cannot justify an unsupported action. Transport batches and processing batches need not match.
 
-Use `parent_id` for decomposition and `depends_on` for necessary prerequisites, including across branches. Avoid global phases such as finding everything before processing anything: each operation depends on its own required inputs and information; combination depends on the contributing results. Keep dependencies acyclic. Select ready work whose own and ancestors' prerequisites are satisfied; a blocked branch need not stop independent work.
+The program compares graph replacements, shared work and operation order, charging local work, movement and process waiting. Distinguish workstations even within one room. Use estimates consistent with observed tool time; keep movement separate from local work. The aim is low total execution cost, not fewest nodes. Physical/navigation uncertainty remains possible.
 
-Separate confirmed prerequisites from search hypotheses. An access failure blocks that attempted method; it does not establish where unseen inputs are or rule out other sources. Keep plausible uninspected areas as discovery work and revise the affected method before blocking the required result.
+Write/update, read coverage, missing work, graph changes, costs and alternatives, then select a `plan_id` and `operation_id`. Selection saves that operation graph and identifies the local work to execute using current RGB. Replies retain the selected operation and measured tool/simulation time. Complete its supported local steps; when it finishes, fails or new information changes the plan, update affected operations, goals and resource beliefs together, then compare again. Do not mark predicted effects as observed facts.
 
-Add `methods` directly to executable goals and a `planning` context using working-state.md. Cover discovery/access, processing, assembly, device use, waiting, delivery and final checks as needed, including known future work. In `route` and `planning.travel`, distinguish observed workstations or destinations that require travel, even within one room; using one room label makes that travel cost zero. Unknown locations or capabilities remain explicit gaps.
+For unattended processing, separate starting from checking its result. Describe process duration and independent work's simulation progress so the optimizer can compare productive work against waiting. Model/network waiting does not advance simulation. An elapsed estimate permits a check, not a completion claim.
 
-Compare ways to achieve the same result: workstation/tool choices, shared processing or inspection, staged/direct assembly, process overlap and delivery. Put prerequisites common to every method on the goal; put method-specific prerequisites on that method. Mark auxiliary results needed only by some methods `optional:true`; requested outcomes remain required. This lets the scheduler compare a direct method against one with extra setup, including the setup's full cost. Shared methods name all results they achieve. Respect compatibility, capacity and distinguishable item states; include handling, setup, travel and recovery costs. Do not invent alternatives or capabilities.
+Track identifiable items or spatially distinct groups with their current location, state, remaining work and evidence. Counts alone cannot distinguish unprocessed items from processed ones. If handling mixes or spills them, reopen affected results and restore correspondence before an irreversible operation. Items already found do not establish the total; retain unexplored locations and uncertain identities.
 
-Write the DAG and read `planning` coverage, `unplanned_results`, order, costs and `comparison`. A single method set compares ordering only; equal costs show no estimated advantage. Represent observed differences in workstations, setup, shared work and process overlap, with a short `description` of each candidate's approach. Do not invent alternatives or spend extra actions just to populate the graph. Fill known missing work; discover and refine unknowns as needed. Use `task_notes(operation="select")` to record the chosen method and short RGB-grounded steps. Correct physically unsupported recommendations. Partial coverage is not whole-task optimization.
-
-Execute the selected local method with act/look. Replies retain `selected_method`: its approach, work locations, resource conditions/setup, predicted effects, process timing and checks for every served result. Ground these in current RGB when choosing actions; a planned setup change still needs physical execution. Tool time and observed simulation progress accumulate separately. Continue supported steps without rewriting notes after every primitive. At completion, failure or changed assumptions, use `task_notes(operation="update")` for changed goals and beliefs; unchanged branches persist and `active` clears. Read the new comparison and select again. Refine methods as unknown inputs become visible rather than retaining a task-wide discovery phase. Expected effects and tool success never mark goals done.
-
-For unattended processing, separate starting the process from checking its result. Use the process timing fields in working-state.md to compare waiting against doing independent work. Estimate simulation progress from capture timestamps and action receipts; model/network waiting does not advance processing. Reconcile remaining process times after execution. Reaching an estimated time only makes a check worthwhile; it does not establish completion.
-
-Finish a storage visit with door closure before leaving or doing unrelated work unless explicitly required open. Include stable staging to free a hand. Choose transport and processing batch sizes separately; a shared trip need not imply processing an indistinguishable pile. Revise methods if actual handling mixes or spills items.
-
-For groups, link pending work to identifiable members or spatially distinct groups sharing the same task-relevant state. Track appearance, last location, current state and remaining work; action counts alone cannot identify what remains. If movement, mixing or a view change breaks that correspondence, mark it uncertain and regain it through a clearer view or separating items before an irreversible operation. Items found so far do not establish the total; retain uninspected locations and uncertain identities or destination roles.
-
-Verify bottom up: completed children do not by themselves prove a parent's own check. Supported continuity and action feedback may establish occluded contents. Reopen affected results and ancestors when later handling could have disturbed them. Keep stable IDs and evidence IDs when revising goals; temporary staging is not completed storage.
-
-Before finish, reconcile the root, every requirement and member with evidence. Preserve valid progress and report remaining gaps rather than claiming completion.
+Verify results bottom up and revisit results disturbed by later handling. Before finish, reconcile every requirement and member with RGB and public receipts. Preserve valid progress and report unresolved work rather than treating successful tool calls or a complete predicted graph as task success.

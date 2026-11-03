@@ -327,6 +327,9 @@ def task_advice(content):
         return dict(status='needs_model', reason='Add methods to executable goals and planning location/state. '
                     'Include known work across branches, not only the active item; unknown work stays explicit.')
     try:
+        if isinstance(notes.get('execution'), dict):
+            from .operation_planning import operation_advice
+            return operation_advice(notes)
         return schedule_task(notes)
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         return dict(status='needs_revision', reason=str(exc))

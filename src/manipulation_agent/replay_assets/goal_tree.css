@@ -24,4 +24,5 @@ html[data-mas-theme="dark"] .goal-notes{--goal-bg:#182535;--goal-soft:#203044;--
 .goal-raw{margin-top:8px}.goal-raw pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto;font:11px/1.6 ui-monospace,monospace;background:var(--goal-soft);padding:10px;border-radius:5px}
 .goal-plain{font-size:13px;line-height:1.65;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.goal-warning{color:var(--goal-blocked);font-size:12px}.goal-notes:focus-visible{outline:2px solid var(--goal-active)}
 #video-task-notes{max-height:none;overflow:visible}
+.operation-plan{margin-top:12px}.operation-viewport{max-width:100%;max-height:480px;overflow:auto;border:1px solid var(--goal-border);border-radius:6px}.operation-viewport svg{display:block}.operation-viewport [role=button]{cursor:pointer}.operation-detail{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:220px;overflow:auto}
 @media(max-width:700px){.goal-inline-tree .goal-children{margin-left:9px;padding-left:13px}.goal-child:before{left:-17px;width:14px}.goal-child-title{flex-basis:125px}.goal-inline-tree .goal-child{padding:8px}.goal-notes .goal-caption{line-height:1.6}}

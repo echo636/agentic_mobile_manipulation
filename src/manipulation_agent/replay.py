@@ -137,6 +137,8 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                     else:
                         content = json.loads(notes_before['content'])
                         content['active'] = result['selected']
+                        if 'selected_execution' in result:
+                            content['execution'] = result['selected_execution']
                         task_notes['content'] = json.dumps(content, separators=(',', ':'))
                 note_versions.append({**task_notes,'tool_step':len(steps)+1,'result_event_id':event['id']})
         seconds = (datetime.fromisoformat(event['at']) - datetime.fromisoformat(call['at'])).total_seconds() if event else None

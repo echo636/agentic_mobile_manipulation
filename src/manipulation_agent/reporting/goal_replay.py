@@ -37,7 +37,10 @@ def planning_metrics(steps):
              s['arguments'].get('name') == 'goal-decomposition']
     trees = [s for s in writes if s.get('goal_state') is not None]
     first = actions[0]['index'] if actions else None
-    return {'notes_writes': len(writes), 'method_selections': len(selections), 'goal_tree_versions': len(trees),
+    operation_selections = sum(bool(s.get('goal_state', {}).get('active', {}).get('operation_id'))
+                               for s in selections)
+    return {'notes_writes': len(writes), 'method_selections': len(selections)-operation_selections,
+            'operation_selections': operation_selections, 'goal_tree_versions': len(trees),
             'notes_before_first_action': any(s['index'] < first for s in writes) if first else None,
             'goal_tree_before_first_action': any(s['index'] < first for s in trees) if first else None,
             'goal_skill_read_before_first_action': any(s['index'] < first for s in reads) if first else None,
