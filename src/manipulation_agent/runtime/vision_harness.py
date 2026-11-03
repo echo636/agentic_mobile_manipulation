@@ -217,6 +217,12 @@ class VisionHarness:
                            **result['runtime'],
                            **{key: result[key] for key in ('ok', 'effect', 'error') if key in result}}
             result['planning'] = self.task_notes.planning(pending)
+            if pending is not None:
+                # Checkpoint comparisons and the previous interval were already
+                # returned with notes. Keep them available on read/resume, not
+                # duplicated after every action within the selected operation.
+                result['planning'].pop('checkpoint_comparison', None)
+                result['planning'].pop('previous_execution', None)
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result,'origin':origin})
         result['evidence_id']=event_id
         if name in {'act','look'} and 'task_notes' in self.catalog and origin=='controller':

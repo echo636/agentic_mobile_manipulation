@@ -477,7 +477,11 @@ class TaskNotesTests(unittest.TestCase):
             self.assertTrue(result['planning']['failed_since_checkpoint'])
             self.assertIsNone(result['planning']['next'])
             self.assertEqual(result['planning']['selected_method'], context)
-            self.assertEqual(result['planning']['checkpoint_comparison'], plan['comparison'])
+            self.assertNotIn('checkpoint_comparison', result['planning'])
+            self.assertNotIn('previous_execution', result['planning'])
+            restored = h.call('task_notes', dict(operation='read', content=None,
+                expected_version=None), 'read-after-failure')['planning']
+            self.assertEqual(restored['checkpoint_comparison'], plan['comparison'])
             self.assertEqual(h.call('initialize', {}, 'resume')['planning']['selected_method'], context)
             # A caller reconciles the public failure; the harness cannot infer semantic truth.
             plan = h.call('task_notes', dict(operation='update', expected_version=2,
