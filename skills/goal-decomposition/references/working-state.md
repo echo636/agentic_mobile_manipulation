@@ -84,9 +84,9 @@ For example, a goal's candidate methods could be:
 
 ```json
 "methods": [
-  {"id": "clean-a", "route": ["bench"], "seconds": 12,
+  {"id": "clean-a", "description": "Brush the first surface independently", "route": ["bench"], "seconds": 12,
    "setup": {"tool": "brush"}},
-  {"id": "clean-pair", "also": ["clean-b"], "route": ["bench"], "seconds": 19,
+  {"id": "clean-pair", "description": "Brush both accessible surfaces in one setup", "also": ["clean-b"], "route": ["bench"], "seconds": 19,
    "setup": {"tool": "brush"}, "requires": {"hand": "empty"},
    "effects": {"work_surface": "wet"}, "recovery_seconds": 2}
 ]
@@ -97,6 +97,7 @@ These are format examples, not a task recipe. `clean-b` must be another executab
 An auxiliary goal or subtree used only by some methods has `optional:true`. A method's `depends_on` names the results it specifically needs; goal-level dependencies apply to every method. For example, assembly may offer a manual method or a fixture method with `"depends_on":["fixture-ready"]`; mark `fixture-ready` optional and give it its own preparation methods. The scheduler charges that preparation only when selected. Optional work does not count toward required-result coverage. Never mark a requested outcome optional, and keep final device/storage conditions as required results.
 
 Fields:
+- `description`: a short description of this method's approach, distinguishing alternatives for the same result. It accompanies the proposed steps and selected method during execution; choose concrete pixels from current RGB.
 - `route`: ordered observed work areas visited by the method, including its work location and destination. Distinguish stations with meaningful travel between them, even in one room; labeling every method with the room name hides that travel. A local operation has one entry. Travel uses the supplied directed area graph; missing edges are not free. This estimates task-level travel, not physical navigation paths.
 - `seconds`: estimated local work and handling, including any internal actions not represented separately. Do not include travel or setup costs again. Use comparable estimates based on observations; record uncertainty. Counts alone cannot predict wall time.
 - `requires`: state that must already hold before the method, such as available capacity or an empty hand. Unknown state does not satisfy a requirement. Values are short strings chosen by you, not simulator IDs.
@@ -106,6 +107,8 @@ Fields:
 - `recovery_seconds`: optional expected additional work based on observed difficulties, default zero.
 
 The cost is work + travel + setup + expected recovery + remaining wait cost, in estimated tool seconds. The scheduler searches method choices and order with a bounded beam, tracks predicted resource state, and reports up to three surviving different first choices. It does not prove a global minimum.
+
+`planning.comparison` reports retained plans for the same results, distinct method sets and their estimated cost range. One method set means only its ordering was compared; equal endpoints mean no estimated advantage among these retained plans. These are search-scope facts, not proof that real execution costs are equal or that no better plan exists. Refine meaningful observed cost differences, without inventing alternatives or unnecessary discovery. Action feedback retains this as `checkpoint_comparison`.
 
 For processes that can run during other work, use these optional fields:
 - `planning.processes`: process name to estimated remaining **simulation** seconds at this notes checkpoint, for already started processes.
@@ -126,6 +129,6 @@ After reading a comparison, select without resending the tree:
 
 Use the actual returned version and your own method/steps. Selection records `active` and returns a new version; it neither executes actions nor completes goals. `planning.selection` reports the chosen method's readiness and immediate cost from this graph version, even outside the three displayed alternatives. Remaining-plan cost differences are available only for retained plans covering the same results; a null comparison is not zero extra cost. Selection is a declaration, not proof that actions implement the method.
 
-`planning.selected_method` carries that choice's route, required resource states, setup changes, predicted effects and each served goal's result/check into action feedback. Process starts/waits appear when used. These describe the selection checkpoint, not updated world truth. Execute needed setup and check all served results against current RGB/receipts; reconcile actual effects and progress before choosing again.
+`planning.selected_method` carries that choice's description, route, required resource states, setup changes, predicted effects and each served goal's result/check into action feedback. Process starts/waits appear when used. These describe the selection checkpoint, not updated world truth. Execute needed setup and check all served results against current RGB/receipts; reconcile actual effects and progress before choosing again.
 
 After act/look, the old next recommendation is withheld and public feedback, tool time and capture-time deltas accumulate. Continue the current method if supported. Before selecting another, update reconciled statuses, member counts, location, resources and remaining process times together; this clears `active` and recomputes the plan. Update estimates from observed execution, including failures. Reopen affected results and ancestors from evidence, not by merely replaying a failed method.

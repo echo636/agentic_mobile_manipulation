@@ -124,6 +124,13 @@ Replay selection records show what
 the model declared, not independent proof that its actions implement the method.
 Efficiency requires autonomous outcome, action, travel and timing evidence.
 
+The comparison receipt distinguishes retained orders from distinct method sets
+and reports their cost range for the same results. This exposes graphs that only
+reorder fixed-cost work without a modeled saving. These counts cover retained
+beam paths, not every feasible plan. Candidate method descriptions accompany
+proposed steps and survive selection, action feedback and resume alongside
+their conditions and result checks.
+
 ## Historical goal-skill ablation
 
 For the historical matched ablation, `--goal-skill hierarchical` exposes the skill

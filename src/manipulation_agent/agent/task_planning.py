@@ -90,7 +90,8 @@ def compile_goals(rows):
             awaits = method.get('awaits', [])
             if not isinstance(awaits, list) or any(not isinstance(p, str) or not p for p in awaits):
                 raise ValueError('awaits names processes to check after their estimated delay')
-            methods.append(dict(id=method['id'], goals=sorted(achieves), route=route,
+            methods.append(dict(id=method['id'], description=method.get('description', method['id']),
+                goals=sorted(achieves), route=route,
                 depends_on=set().union(*(expand(dep) for dep in method.get('depends_on', []))),
                 seconds=seconds(method['seconds']), recovery_seconds=seconds(method.get('recovery_seconds', 0)),
                 requires=bindings(method.get('requires', {})), setup=bindings(method.get('setup', {})),
@@ -210,7 +211,8 @@ def schedule_task(notes, beam_width=32):
                     if method['awaits']:
                         parts['wait'] = wait * (wait_rate or 0.)
                     total = sum(parts.values())
-                    step = dict(method_id=method['id'], goals=method['goals'], route=route,
+                    step = dict(method_id=method['id'], description=method['description'],
+                                goals=method['goals'], route=route,
                                 setup_changes=changes, costs_seconds=parts, estimated_seconds=total)
                     elapsed = wait + method['simulation_seconds']
                     after_clocks = {p: max(0., t - elapsed) for p, t in clocks}
@@ -223,7 +225,7 @@ def schedule_task(notes, beam_width=32):
                         chosen_step = step
                         # Carry the same modeled conditions/results into the RGB
                         # action loop; an ID and price alone lose the plan's meaning.
-                        selected_method = dict(method_id=chosen, route=route,
+                        selected_method = dict(method_id=chosen, description=method['description'], route=route,
                             results=[dict(id=g, goal=goals[g].get('goal', g),
                                           check=goals[g].get('check')) for g in method['goals']],
                             requires=method['requires'], setup_changes=changes,
@@ -240,13 +242,14 @@ def schedule_task(notes, beam_width=32):
                         target[index] = (cost + total, [*steps, step])
     (done, _, _, _, _), (cost, steps) = finalists[0]
     complete = required <= done
-    comparisons, firsts = [], set()
+    comparisons, firsts, comparable_paths = [], set(), []
     chosen_comparison = None
     for (covered, _, _, _, _), (total, path) in finalists:
         # Equal node counts can cover different work in an incomplete DAG.
         # Such paths are choices, but their cost difference is not a saving.
         if covered & required != done & required:
             continue
+        comparable_paths.append((total, path))
         if path and path[0]['method_id'] not in firsts:
             firsts.add(path[0]['method_id'])
             comparison = dict(first_method=path[0]['method_id'], estimated_seconds=total,
@@ -266,6 +269,12 @@ def schedule_task(notes, beam_width=32):
                            scheduled=sorted(done - required)),
         estimated_seconds=cost, steps=steps, next=steps[0] if steps else None,
         alternatives=comparisons, comparison_goals=sorted(done & required),
+        comparison=dict(retained_plans=len(comparable_paths),
+            distinct_method_sets=len({tuple(sorted(s['method_id'] for s in path))
+                                      for _, path in comparable_paths}),
+            estimated_cost_range_seconds=[min(total for total, _ in comparable_paths),
+                                          max(total for total, _ in comparable_paths)],
+            scope='Same modeled results, retained beam paths only; equal estimates show no cost advantage'),
         expanded_states=expanded, pruned_states=pruned,
         verification_goals=[key for key, g in goals.items() if key not in dependencies and key not in optional
                             and g['status'] not in ('done', 'retired')])

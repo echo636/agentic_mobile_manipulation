@@ -84,6 +84,8 @@ class TaskPlanningTests(unittest.TestCase):
         self.assertEqual({s['method_id'] for s in plan['steps']},
                          {'inspect-pair', 'prepare-jig', 'assembly-with-jig', 'check-assembly'})
         self.assertGreaterEqual(len(plan['alternatives']), 2)
+        self.assertGreater(plan['comparison']['distinct_method_sets'], 1)
+        self.assertEqual(plan['comparison']['estimated_cost_range_seconds'][0], 18)
         self.assertEqual(doc, original)
         # A different task scale makes manual assembly cheaper. Do not force
         # the now-useless setup, or compare plans with different final results.
@@ -156,6 +158,8 @@ class TaskPlanningTests(unittest.TestCase):
         self.assertIsNone(plan['selection']['extra_estimated_seconds'])
         self.assertEqual(plan['selection']['estimated_method_seconds'], 10)
         self.assertTrue(plan['selection']['ready_in_authored_state'])
+        self.assertEqual(plan['comparison']['estimated_cost_range_seconds'], [1, 2])
+        self.assertEqual(plan['comparison']['distinct_method_sets'], 2)
 
     def test_selected_method_keeps_cost_outside_displayed_and_pruned_alternatives(self):
         doc = notes(goal('process', [method('process-' + str(i), i + 1) for i in range(5)]),

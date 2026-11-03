@@ -74,6 +74,7 @@ class TaskNotes:
         return dict(status='reconcile', notes_version=self.state['version'],
             checkpoint_status=advice['status'], active=advice.get('active'),
             checkpoint_coverage=advice.get('coverage'),
+            checkpoint_comparison=advice.get('comparison'),
             selection=advice.get('selection'),
             selected_method=advice.get('selected_method'),
             next=None, actions_since_checkpoint=count,

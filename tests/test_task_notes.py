@@ -368,7 +368,8 @@ class TaskNotesTests(unittest.TestCase):
             h = self.harness(Path(tmp)/'episode')
             doc = notes(goal('a', [method('manual-a', 10),
                                   method('powered-pair', 4, also=['b'], requires={'device': 'available'},
-                                         setup={'tool': 'fixture'}, effects={'material': 'processed'})]),
+                                         setup={'tool': 'fixture'}, effects={'material': 'processed'},
+                                         description='Process both components with the configured fixture')]),
                         goal('b', [method('manual-b', 10)]),
                         goal('check', [method('inspect-result', 1)], depends=['a', 'b']))
             doc['goals'][1].update(goal='First component processed', check='First component surface ready')
@@ -379,6 +380,8 @@ class TaskNotesTests(unittest.TestCase):
             plan = self.write(h, json.dumps(doc), 0, 'plan')['planning']
             self.assertEqual(plan['next']['method_id'], 'powered-pair')
             self.assertEqual(plan['estimated_seconds'], 7)
+            self.assertEqual(plan['comparison']['distinct_method_sets'], 2)
+            self.assertEqual(plan['comparison']['estimated_cost_range_seconds'], [7, 21])
 
             def select(method_id, request_id):
                 return h.call('task_notes', dict(operation='select',
@@ -388,6 +391,7 @@ class TaskNotesTests(unittest.TestCase):
 
             selected = select('powered-pair', 'select-powered')
             context = selected['planning']['selected_method']
+            self.assertEqual(context['description'], plan['next']['description'])
             self.assertEqual(context['route'], ['bench'])
             self.assertEqual(context['requires'], {'device': 'available'})
             self.assertEqual(context['setup_changes'], [dict(key='tool', before='none', after='fixture')])
@@ -396,12 +400,14 @@ class TaskNotesTests(unittest.TestCase):
             self.assertEqual(context['results'][1]['check'], 'Second component surface ready')
             def unavailable(*args, **kwargs):
                 raise SkillError('pre_condition_error', 'The device could not be activated.')
+            execute_visual = h.backend.execute_visual
             h.backend.execute_visual = unavailable
             result = h.call('act', dict(primitive='toggle_on', revision=h.revision,
                 target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5])), 'activate')
             self.assertTrue(result['planning']['failed_since_checkpoint'])
             self.assertIsNone(result['planning']['next'])
             self.assertEqual(result['planning']['selected_method'], context)
+            self.assertEqual(result['planning']['checkpoint_comparison'], plan['comparison'])
             self.assertEqual(h.call('initialize', {}, 'resume')['planning']['selected_method'], context)
             # A caller reconciles the public failure; the harness cannot infer semantic truth.
             plan = h.call('task_notes', dict(operation='update', expected_version=2,
@@ -409,14 +415,43 @@ class TaskNotesTests(unittest.TestCase):
                 'reconcile')['planning']
             self.assertIsNone(plan['selected_method'])
             self.assertEqual(plan['estimated_seconds'], 21)
+            self.assertEqual(plan['comparison']['distinct_method_sets'], 1)
+            self.assertEqual(plan['comparison']['estimated_cost_range_seconds'], [21, 21])
             self.assertEqual({s['method_id'] for s in plan['steps'][:2]}, {'manual-a', 'manual-b'})
             selected = select(plan['next']['method_id'], 'select-manual')
             self.assertTrue(selected['planning']['selection']['matches_recommendation'])
             self.assertEqual(selected['planning']['selected_method']['requires'], {})
             self.assertEqual(selected['planning']['selected_method']['method_id'], plan['next']['method_id'])
             self.assertEqual([g['status'] for g in doc['goals']], ['pending'] * 4)
+            # Complete the same MCP loop through both branches and final inspection.
+            # This is a scripted CPU contract fixture, not physical task evidence.
+            h.backend.execute_visual = execute_visual
+            for index in range(3):
+                if index:
+                    selected = select(plan['next']['method_id'], 'choose-' + str(index))
+                served = selected['planning']['selected_method']['results']
+                action = h.call('act', dict(primitive='cut', revision=h.revision,
+                    target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5])),
+                    'fixture-action-' + str(index)) if index < 2 else h.call('look',
+                    dict(yaw_degrees=0, revision=h.revision), 'fixture-inspect')
+                self.assertTrue(action['ok'])
+                self.assertIsNone(action['planning']['next'])
+                plan = h.call('task_notes', dict(operation='update',
+                    expected_version=h.task_notes.state['version'], content=json.dumps(dict(goals=[
+                        dict(id=g['id'], status='done', evidence=[action['evidence_id']]) for g in served]))),
+                    'fixture-reconcile-' + str(index))['planning']
+                self.assertEqual(plan['coverage']['unfinished'], 2-index)
+            self.assertIsNone(plan['next'])
+            self.assertEqual(plan['verification_goals'], ['root'])
+            plan = h.call('task_notes', dict(operation='update',
+                expected_version=h.task_notes.state['version'], content=json.dumps(dict(goals=[
+                    dict(id='root', status='done', evidence=[action['evidence_id']])]))),
+                'fixture-root-check')['planning']
+            self.assertEqual(plan['verification_goals'], [])
+            h.call('finish', dict(outcome='achieved', reason='CPU fixture claim only'), 'finish')
+            self.assertFalse(h.recorder.run['task_success'])  # Notes cannot change evaluation.
             replay = build_replay(h.recorder.output)
-            self.assertEqual(replay['planning_metrics']['method_selections'], 2)
+            self.assertEqual(replay['planning_metrics']['method_selections'], 4)
 
 
 if __name__=='__main__':unittest.main()
