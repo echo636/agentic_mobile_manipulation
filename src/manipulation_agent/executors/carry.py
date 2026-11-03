@@ -215,7 +215,8 @@ class ControlledCarry:
         relocate_particles(self.env.scene,transported_particles)
         verify_particles(self.env.scene,transported_particles)
         capture('after_setter')
-        for step in range(min(30,max_steps)):
+        # Switches have no joint motion to settle. Cooking time belongs to wait.
+        for step in range(min(30 if state is Open else 1,max_steps)):
             self._step(self.primitives._empty_action())
             if step in (0,4,14,29):capture('settle_'+str(step+1))
         if bool(obj.states[state].get_value())!=wanted:
