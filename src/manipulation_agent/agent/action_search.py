@@ -100,10 +100,10 @@ def search_actions(notes, max_states=2048):
                tuple(sorted(process_times(context.get('processes', {})).items())))
     serial = itertools.count(); frontier = []; best_cost = {initial: 0.}
     lower, guide = relaxed_cost(dict(initial[1]), methods, target)
-    heapq.heappush(frontier, (guide, next(serial), 0., lower, initial, []))
+    heapq.heappush(frontier, (guide, guide, next(serial), 0., lower, initial, []))
     finished, partial, expanded, incumbent = {}, (0, 0., [], initial), 0, math.inf
     while frontier and expanded < max_states:
-        _, _, total, bound, key, path = heapq.heappop(frontier)
+        _, _, _, total, bound, key, path = heapq.heappop(frontier)
         if total != best_cost.get(key) or total + bound > incumbent:
             continue
         at, values, clocks = key; state = dict(values)
@@ -130,7 +130,9 @@ def search_actions(notes, max_states=2048):
             if new_cost + bound > incumbent:
                 continue
             best_cost[successor] = new_cost
-            heapq.heappush(frontier, (new_cost + guide, next(serial), new_cost, bound,
+            # Equal-cost independent branches have many equivalent prefixes.
+            # Prefer progress toward a complete plan before exploring siblings.
+            heapq.heappush(frontier, (new_cost + guide, guide, next(serial), new_cost, bound,
                                       successor, [*path, step]))
     truncated = bool(frontier) and expanded >= max_states
     candidates = sorted(finished.values(), key=lambda item: item[0])[:3]

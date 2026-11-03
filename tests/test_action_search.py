@@ -23,6 +23,17 @@ def document(state, conditions, operators, **planning):
 
 
 class ActionSearchTests(unittest.TestCase):
+    def test_equal_cost_branches_reach_a_complete_plan_within_search_budget(self):
+        keys = [str(i) for i in range(18)]
+        doc = document({k: 'raw' for k in keys}, {k: {k: 'ready'} for k in keys},
+                       [op('prepare-'+k, {k: 'raw'}, {k: 'ready'}) for k in keys])
+        variants, search = search_actions(doc, max_states=64)
+        self.assertTrue(variants[0]['complete'])
+        self.assertEqual(variants[0]['estimated_seconds'], 18)
+        self.assertEqual(len(variants[0]['path']), 18)
+        self.assertTrue(search['search_truncated'])
+        self.assertFalse(search['optimal_in_declared_model'])
+
     def test_composes_shared_tool_work_and_materializes_selection(self):
         operators = [op('take-tool', {'hand': 'empty'}, {'hand': 'tool'}),
             op('stage-tool', {'hand': 'tool'}, {'hand': 'empty'}),
