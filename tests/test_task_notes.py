@@ -140,11 +140,14 @@ class TaskNotesTests(unittest.TestCase):
         notes=TaskNotes(Path('/unused'))
         for i in range(70):
             notes.record_action('act',{'primitive':'cut','target':None},
-                                {'ok':True,'evidence_id':str(i),'effect':{'primitive':'cut'}},i)
+                                {'ok':i != 0,'evidence_id':str(i),'effect':{'primitive':'cut'}},i)
         window=notes.read()['action_feedback_since_write']
         self.assertEqual(window['omitted']+len(window['entries']),70)
         self.assertGreater(window['omitted'],0)
         self.assertEqual(window['entries'][-1]['evidence_id'],'69')
+        # Truncating detailed receipts must not erase a failure in this interval.
+        self.assertTrue(notes.planning()['failed_since_checkpoint'])
+        self.assertEqual(notes.planning()['execution']['failed_actions'], 1)
 
     def test_both_arms_require_an_authored_plan_before_first_action(self):
         for mode in ('hierarchical','none'):
@@ -414,12 +417,22 @@ class TaskNotesTests(unittest.TestCase):
                 content=json.dumps(dict(planning=dict(state={'device': 'unavailable'})))),
                 'reconcile')['planning']
             self.assertIsNone(plan['selected_method'])
+            measured = plan['previous_execution']
+            self.assertEqual(measured['method_id'], 'powered-pair')
+            self.assertEqual(measured['intended_results'], ['a', 'b'])
+            self.assertEqual(measured['estimated_method_seconds'], 6)
+            self.assertEqual(measured['observed'], result['planning']['execution'])
+            self.assertEqual(measured['observed']['failed_actions'], 1)
+            self.assertEqual(measured['action_attempts'], 1)
+            self.assertEqual(h.call('initialize', {}, 'resume-after-update')['planning']['previous_execution'], measured)
+            self.assertEqual(json.loads((h.recorder.output/'task_notes.json').read_text())['previous_execution'], measured)
             self.assertEqual(plan['estimated_seconds'], 21)
             self.assertEqual(plan['comparison']['distinct_method_sets'], 1)
             self.assertEqual(plan['comparison']['estimated_cost_range_seconds'], [21, 21])
             self.assertEqual({s['method_id'] for s in plan['steps'][:2]}, {'manual-a', 'manual-b'})
             selected = select(plan['next']['method_id'], 'select-manual')
             self.assertTrue(selected['planning']['selection']['matches_recommendation'])
+            self.assertEqual(selected['planning']['previous_execution'], measured)
             self.assertEqual(selected['planning']['selected_method']['requires'], {})
             self.assertEqual(selected['planning']['selected_method']['method_id'], plan['next']['method_id'])
             self.assertEqual([g['status'] for g in doc['goals']], ['pending'] * 4)
@@ -441,6 +454,10 @@ class TaskNotesTests(unittest.TestCase):
                         dict(id=g['id'], status='done', evidence=[action['evidence_id']]) for g in served]))),
                     'fixture-reconcile-' + str(index))['planning']
                 self.assertEqual(plan['coverage']['unfinished'], 2-index)
+                measured = plan['previous_execution']
+                self.assertEqual(measured['method_id'], selected['planning']['selection']['method_id'])
+                self.assertEqual(measured['observed']['failed_actions'], 0)
+                self.assertEqual(measured['observed']['tool_seconds'], action['runtime']['tool_seconds'])
             self.assertIsNone(plan['next'])
             self.assertEqual(plan['verification_goals'], ['root'])
             plan = h.call('task_notes', dict(operation='update',

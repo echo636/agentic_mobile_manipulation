@@ -89,6 +89,11 @@ flowchart LR
    setup and recovery costs separately from the entire remaining-plan cost,
    so its accumulated execution time can inform the next estimate. Partial or
    failed execution is not a completed-method timing sample. The previous
+   selected interval survives reconciliation as `planning.previous_execution`,
+   with its prediction, measured tool/simulation time and failed-action count.
+   The model uses reconciled results to revise comparable methods' estimates;
+   partial execution never automatically overwrites a method's full cost. Only
+   this latest interval is retained, including on resume. The next
    recommendation is withheld after an action,
    since the world may have changed. The agent can continue the local method.
 4. At completion, failure or changed assumptions, `task_notes(update)` merges

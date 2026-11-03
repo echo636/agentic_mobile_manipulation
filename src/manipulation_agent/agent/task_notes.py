@@ -28,6 +28,7 @@ class TaskNotes:
         self.state = {'version': 0, 'content': ''}
         self.feedback = deque(maxlen=64)
         self.feedback_count = 0
+        self.feedback_failures = 0
         self.feedback_seconds = 0.
         self.feedback_simulation_seconds = 0.
         self._planning_version = None
@@ -46,6 +47,7 @@ class TaskNotes:
             'target': arguments.get('target'), 'agent_step': agent_step,
             **{key: result[key] for key in ('ok', 'evidence_id', 'effect', 'error', 'runtime') if key in result}}))
         self.feedback_count += 1
+        self.feedback_failures += result.get('ok') is False
         self.feedback_seconds += result.get('runtime', {}).get('tool_seconds', 0.)
         elapsed = result.get('runtime', {}).get('observed_simulation_seconds')
         self.feedback_simulation_seconds = (self.feedback_simulation_seconds + elapsed
@@ -63,11 +65,14 @@ class TaskNotes:
             self._planning_version = self.state['version']
         advice = copy.deepcopy(self._planning_advice)
         advice['notes_version'] = self.state['version']
+        if self.state.get('previous_execution'):
+            advice['previous_execution'] = copy.deepcopy(self.state['previous_execution'])
         count = self.feedback_count + (pending is not None)
         if not count:
             return advice
         latest = pending if pending is not None else self.feedback[-1]
-        failed = latest.get('ok') is False or any(entry.get('ok') is False for entry in self.feedback)
+        failures = self.feedback_failures + (pending is not None and pending.get('ok') is False)
+        failed = failures > 0
         pending_sim = pending.get('observed_simulation_seconds') if pending is not None else 0.
         simulation_seconds = (self.feedback_simulation_seconds + pending_sim
             if self.feedback_simulation_seconds is not None and pending_sim is not None else None)
@@ -77,9 +82,11 @@ class TaskNotes:
             checkpoint_comparison=advice.get('comparison'),
             selection=advice.get('selection'),
             selected_method=advice.get('selected_method'),
+            previous_execution=advice.get('previous_execution'),
             next=None, actions_since_checkpoint=count,
             execution=dict(tool_seconds=round(self.feedback_seconds +
                 (pending or {}).get('tool_seconds', 0.), 3),
+                failed_actions=failures,
                 observed_simulation_seconds=simulation_seconds,
                 scope='Tool wall time excludes model requests; simulation delta comes from public capture timestamps'),
             latest_receipt={k: latest[k] for k in ('primitive', 'ok', 'effect', 'error') if k in latest},
@@ -131,10 +138,27 @@ class TaskNotes:
         state = {'version': self.state['version'] + 1, 'content': content, 'at': now(),
                  'request_id': request_id, 'observation_revision': revision, 'agent_step': agent_step,
                  'source': 'model_authored_notes_not_evaluator_truth'}
+        previous = self.state.get('previous_execution')
+        if self.feedback_count:
+            advice = self.planning()
+            method = advice.get('selected_method')
+            if method:
+                previous = dict(notes_version=self.state['version'],
+                    method_id=method['method_id'], description=method['description'],
+                    intended_results=[g['id'] for g in method['results']], route=method['route'],
+                    estimated_method_seconds=advice['selection']['estimated_method_seconds'],
+                    estimated_method_costs_seconds=advice['selection']['estimated_method_costs_seconds'],
+                    observed=advice['execution'], action_attempts=self.feedback_count,
+                    scope='Actions since the selected checkpoint, possibly partial or recovery. '
+                          'Use reconciled result evidence before treating this as a completed method cost; '
+                          'do not charge total time again as both local work and travel/setup.')
+        if previous:
+            state['previous_execution'] = previous
         write_json(self.output / 'task_notes.json', state)
         self.state = state
         self.feedback.clear()
         self.feedback_count = 0
+        self.feedback_failures = 0
         self.feedback_seconds = 0.
         self.feedback_simulation_seconds = 0.
         return self.read()
