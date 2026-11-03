@@ -90,7 +90,7 @@ def worker_configs(config):
         lanes = [{'id':f'gpu{gpu}', 'gpu':gpu} for gpu in config['gpus']]
     if not lanes:
         raise ValueError('At least one worker is required')
-    allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env',
+    allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env', 'mcp_python',
                'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
                'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib', 'admission_delay_seconds',
                'simulator_appdata_path', 'simulator_tmpdir', 'startup_memory_gib',
@@ -1178,7 +1178,7 @@ class Batch:
             if lease:lease.record(runtime_stage='ready')
             self.release_startup_gate()
             self.worker_state('controller_starting',run_id=runid,startup_deadline_unix=row['startup_deadline_unix'])
-            remote=shlex.join(['env','PYTHONPATH='+str(self.remote_source/'src'),self.c['sim_python'],
+            remote=shlex.join(['env','PYTHONPATH='+str(self.remote_source/'src'),self.c.get('mcp_python',self.c['sim_python']),
                 '-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
             cmd=[sys.executable,str(self.source/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
                  '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
@@ -1480,7 +1480,7 @@ class Batch:
             self.update(row,heartbeat_at=now(),simulator_pid=spec['simulator_pid']);time.sleep(4)
         self.update(row,stage='controller_starting' if row.get('execution_clock_path') else 'policy_running',
                     bridge_ready_at=now(),simulator_pid=spec['simulator_pid'])
-        remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
+        remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c.get('mcp_python',self.c['sim_python']),'-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
         cmd=[sys.executable,str(runtime/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
              '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
