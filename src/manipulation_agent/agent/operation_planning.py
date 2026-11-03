@@ -152,8 +152,8 @@ def operation_advice(notes):
                 depends_on=op.get('depends_on', []), methods=[method]))
         plan = schedule_task(dict(goals=work, planning=notes['planning'],
                                   active=dict(method_id=selected_id)))
-        covered = modeled & required
-        candidates.append(dict(variant=variant, plan=plan, covered=covered,
+        covered = {g for s in plan['steps'] for g in nodes[s['method_id']].get('achieves', [])} & required
+        candidates.append(dict(variant=variant, plan=plan, covered=covered, modeled=modeled,
                                complete=plan['status'] == 'estimated'))
     candidates.sort(key=lambda c: (-c['complete'], -len(c['covered']), c['plan']['estimated_seconds']))
     best = candidates[0]
@@ -198,10 +198,12 @@ def operation_advice(notes):
         scope='Cost of explicit operation graphs; preserves declared results, not proof of physical equivalence',
         active=notes.get('active'), selected_operation=chosen, selection=selection,
         plan_id=variant['id'], graph_changes=variant['changes'],
-        coverage=dict(scheduled=len(best['covered']) if best['complete'] else 0, unfinished=len(required),
+        coverage=dict(scheduled=len(best['covered']), unfinished=len(required),
                       unplanned=sorted(required - best['covered']),
+                      missing_operations=sorted(required - best['modeled']),
                       operations_scheduled=len(plan['steps']),
-                      operations_remaining=plan['coverage']['unfinished']),
+                      operations_remaining=plan['coverage']['unfinished'],
+                      operations_unplanned=plan['coverage']['unplanned']),
         operation_graph=[dict(id=k, description=v['description'], action=v.get('action'), at=v['at'],
             depends_on=v.get('depends_on', []), achieves=v.get('achieves', []),
             status=v.get('status', 'pending')) for k, v in nodes.items()],

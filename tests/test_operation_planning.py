@@ -125,6 +125,20 @@ class OperationPlanningTests(unittest.TestCase):
             self.assertEqual(notes.planning()['previous_execution']['operation_id'], op)
             self.assertNotEqual(notes.planning()['next']['operation_id'], op)
 
+    def test_resource_gap_exposes_unscheduled_results_even_with_declared_producers(self):
+        doc = delivery()
+        doc['execution'] = dict(operations=[
+            operation('prepare-a', requires={'hand': 'knife'}, achieves=['a']),
+            operation('prepare-b', requires={'hand': 'empty'}, achieves=['b'])])
+        advice = operation_advice(doc)
+        self.assertEqual(advice['status'], 'partial')
+        self.assertEqual(advice['coverage']['scheduled'], 1)
+        self.assertEqual(advice['coverage']['unplanned'], ['a'])
+        self.assertEqual(advice['coverage']['missing_operations'], [])
+        self.assertEqual(advice['coverage']['operations_unplanned'], ['prepare-a'])
+        self.assertEqual(advice['gaps']['required_states'], [['prepare-a', 'hand', 'knife']])
+        self.assertEqual(advice['unplanned_results'], [{'id': 'a', 'goal': 'a'}])
+
     def test_harness_and_replay_keep_the_selected_replacement_graph(self):
         from manipulation_agent.contracts import Budget
         from manipulation_agent.observations.mock_rgb import MockRGBBackend
