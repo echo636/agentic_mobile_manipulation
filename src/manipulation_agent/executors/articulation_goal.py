@@ -35,4 +35,20 @@ def native_open_goal(backend, obj, *, feedback=None):
         selected_link=str(anchor.prim_path) if selected else None,
         selected_joint_indices=[index for joint, _ in controlled for index in joint.dof_indices],
         preview_performed=False))
-    return goal
+    return goal, controlled
+
+
+def opened_joints(obj, controlled):
+    """Use native Open thresholds for the panels this action actually moved."""
+    from omnigibson.object_states import Open
+    from omnigibson.object_states.open_state import _compute_joint_threshold, _is_in_range
+
+    both_sides, _, _ = obj.states[Open].relevant_joints_info
+    sides = (1, -1) if both_sides else (1,)
+    for joint, direction in controlled:
+        position = joint.get_state()[0]
+        for side in sides:
+            threshold, opened, _ = _compute_joint_threshold(joint, direction * side)
+            if not _is_in_range(position, threshold, opened):
+                return False
+    return True

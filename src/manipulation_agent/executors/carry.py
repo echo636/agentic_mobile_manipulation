@@ -151,8 +151,8 @@ class ControlledCarry:
         open_goal=None
         opening_feedback={}
         if primitive=='open':
-            from .articulation_goal import native_open_goal
-            open_goal=native_open_goal(self,obj,feedback=opening_feedback)
+            from .articulation_goal import native_open_goal, opened_joints
+            open_goal,controlled_joints=native_open_goal(self,obj,feedback=opening_feedback)
         samples=[]
         def capture(phase):
             if state is Open:
@@ -172,7 +172,7 @@ class ControlledCarry:
         if open_goal is not None:
             obj.set_joint_positions(open_goal)
             obj.states[state].clear_cache();obj.state_updated()
-            accepted=bool(obj.states[state].get_value())
+            accepted=True
         else:
             accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
         if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
@@ -189,7 +189,8 @@ class ControlledCarry:
         capture('after_setter')
         self._step(self.primitives._empty_action())
         capture('after_step')
-        if bool(obj.states[state].get_value())!=wanted:
+        actual=opened_joints(obj,controlled_joints) if primitive=='open' else bool(obj.states[state].get_value())
+        if actual!=wanted:
             report('failed',reason='state_reopened_or_reclosed_after_step',
                    payload=[child.name for child,_,_ in payload])
             raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
