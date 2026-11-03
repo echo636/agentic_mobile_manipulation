@@ -31,7 +31,8 @@ class RecipeParticleOutputPolicy:
                 if bool((extent >= 2 * system.particle_radius).all()):
                     return original(obj=obj, link=link, **kwargs)
                 before = system.n_particles
-                # Preserve native recipe inputs, output material and amount.
+                # Keep the native material and max_samples budget. As with
+                # volume sampling, the surface may yield fewer particles.
                 # A shallow receiver cannot contain an inscribed fluid sphere;
                 # release onto its physical surface and let native physics act.
                 placed = system.generate_particles_on_object(obj,

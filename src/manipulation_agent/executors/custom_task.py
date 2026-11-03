@@ -210,12 +210,17 @@ class CustomTaskBackend(RGBBackend):
         return [] if self.standalone_scene else super()._goal_options()
 
     def close(self):
+        recipe_policy = getattr(self, '_recipe_particle_output_policy', None)
         try:
+            if recipe_policy is not None:
+                write_json(self.output / 'recipe_particle_output_policy.json', recipe_policy.describe())
             super().close()
         finally:
             policy = getattr(self, '_standalone_sleep_policy', None)
             if policy is not None:
                 policy.close()
+            if recipe_policy is not None:
+                recipe_policy.close()
 
     def _refresh_custom_contacts(self, stage):
         # Only task entities participate in custom contact predicates. Waking
@@ -636,4 +641,6 @@ class CustomTaskBackend(RGBBackend):
         result.update(task_instance=self.task_metadata,custom_task=True,
                       evaluator=self.custom_spec['evaluation'].get(
                           'score_type', 'custom_joint_terminal_and_public_history_v1'))
+        if getattr(self, '_recipe_particle_output_policy', None) is not None:
+            result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
         return result

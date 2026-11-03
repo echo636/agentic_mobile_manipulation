@@ -60,9 +60,11 @@ def scene_config(backend):
 
 def load_environment(backend, config):
     from .compat.articulation_sleep import ArticulationSleepPolicy
+    from .compat.recipe_particle_output import RecipeParticleOutputPolicy
 
     policy = ArticulationSleepPolicy(gpu_dynamics=backend.use_gpu_dynamics)
     backend._standalone_sleep_policy = policy
+    recipe_policy = backend._recipe_particle_output_policy = RecipeParticleOutputPolicy()
     try:
         with backend._startup_stage('load_standalone_custom_scene'), backend._native_startup_progress():
             backend.env = backend.og.Environment(configs=config)
@@ -73,6 +75,8 @@ def load_environment(backend, config):
         policy.validate_scene(backend.env.scene)
     except BaseException:
         policy.close()
+        recipe_policy.close()
         raise
     finally:
         write_json(backend.output / 'articulation_sleep_policy.json', policy.describe())
+        write_json(backend.output / 'recipe_particle_output_policy.json', recipe_policy.describe())
