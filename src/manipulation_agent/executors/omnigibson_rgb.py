@@ -742,7 +742,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             from omnigibson.object_states import ToggledOn,AttachedTo,OnTop,Under,NextTo
             state={'open':Open,'close':Open,'toggle_on':ToggledOn,'toggle_off':ToggledOn}.get(primitive)
             if state is not None and state not in obj.states:
-                raise SkillError('pre_condition_error','Selected object does not support this operation')
+                raise SkillError('pre_condition_error','Selected object does not support this operation',
+                                 stage='unsupported_object_action')
             if primitive in {'place_inside','place_on_top','place_under','place_next_to'}:
                 relation={'place_inside':Inside,'place_on_top':OnTop,'place_under':Under,'place_next_to':NextTo}[primitive]
                 if held is obj:

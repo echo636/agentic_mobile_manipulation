@@ -82,6 +82,10 @@ LOCAL_STANCE_MESSAGES = {
 def public_execution_error(exc: SkillError) -> dict:
     code = exc.code if exc.code in ERROR_MESSAGES else "execution_error"
     result = {"code":code,"message":ERROR_MESSAGES[code],"world_may_have_changed":exc.changed}
+    if code == 'pre_condition_error' and exc.stage == 'unsupported_object_action':
+        result.update(stage=exc.stage, message='The selected object does not support the requested '
+                      'open/close or switch action. This is not a blocked mechanism; '
+                      'select the intended object or panel in RGB.')
     if code in {'local_adjustment_blocked','local_adjustment_exhausted'} and exc.stage in LOCAL_STANCE_MESSAGES:
         result.update(stage=exc.stage,message=LOCAL_STANCE_MESSAGES[exc.stage])
     if code == 'postcondition_error' and exc.stage == 'released_placement_unconfirmed':

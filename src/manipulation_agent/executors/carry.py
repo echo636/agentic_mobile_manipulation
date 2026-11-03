@@ -141,7 +141,9 @@ class ControlledCarry:
         from omnigibson.object_states import Open,ToggledOn
         state=Open if primitive in {'open','close'} else ToggledOn
         wanted=primitive in {'open','toggle_on'}
-        if state not in obj.states:raise SkillError('pre_condition_error','Selected object does not support this operation')
+        if state not in obj.states:
+            raise SkillError('pre_condition_error','Selected object does not support this operation',
+                             stage='unsupported_object_action')
         # Open.set_value teleports articulated joints. Drawer contents must move
         # with their supporting volume, not be left at the previous world pose.
         payload=self._container_payload(obj) if state is Open else []

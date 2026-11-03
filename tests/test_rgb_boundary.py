@@ -104,6 +104,17 @@ class RGBBoundary(unittest.TestCase):
         self.assertNotIn('some_material_not_retained',partial)
         self.assertIn('could not be transferred',partial['message'])
         self.assertNotIn('PRIVATE_FOOD',json.dumps(partial))
+    def test_unsupported_object_action_is_distinct_from_other_preconditions(self):
+        from manipulation_agent.contracts import SkillError
+        for stage in ('unsupported_object_action', None, 'PRIVATE_STAGE'):
+            def fail(*args, **kwargs):
+                raise SkillError('pre_condition_error', 'PRIVATE_OBJECT_NAME has no Open state', stage=stage)
+            self.backend.execute_visual = fail
+            result = self.act('open')
+            self.assertEqual(result['error']['code'], 'pre_condition_error')
+            self.assertEqual('does not support' in result['error']['message'], stage == 'unsupported_object_action')
+            self.assertFalse(result['error']['world_may_have_changed'])
+            self.assertNotIn('PRIVATE_', json.dumps(result))
     def test_supported_placement_failure_keeps_the_release_result_without_private_state(self):
         from manipulation_agent.contracts import SkillError
         for stage in ('released_supported_not_adjacent', 'released_supported_payload_unconfirmed',
