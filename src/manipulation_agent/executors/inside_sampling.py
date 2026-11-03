@@ -168,7 +168,11 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                     for center in candidates:
                         center = root.new_tensor(center)
                         admission = center.clone()
-                        if kind.startswith('support_'): admission[2] -= clearance
+                        if kind.startswith('support_'):
+                            admission[2] -= clearance
+                            # An unladen object may start above the opening and
+                            # fall onto the internal support already found.
+                            if not loaded: admission[2].clamp_(max=float(vhi[2])-.001)
                         if not bool(volume.check_points_in_volume(admission[None]).item()): continue
                         position = center - offset
                         key = tuple(round(float(v), 5) for v in (*position, *quat))

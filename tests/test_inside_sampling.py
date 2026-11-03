@@ -1,5 +1,6 @@
 """Assembly placement geometry, collision recovery and transaction behavior."""
 import importlib.util
+import itertools
 import math
 from types import ModuleType, SimpleNamespace
 import unittest
@@ -112,6 +113,29 @@ class AssemblySamplingTests(unittest.TestCase):
         usd=ModuleType('omnigibson.utils.usd_utils');usd.RigidContactAPI=SimpleNamespace(is_in_contact=contact)
         return backend,held,target,[(child,None)],state,records,{
             'omnigibson.object_states':states,'omnigibson.utils':utils,'omnigibson.utils.usd_utils':usd}
+
+    def test_single_release_keeps_unladen_drop_above_opening_without_simulating(self):
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        for loaded in (False, True):
+            with self.subTest(loaded=loaded):
+                b, held, target, contents, state, _, modules = self.fixture()
+                torch = b.torch
+                corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+                volume = target.links['volume']
+                volume.visual_boundary_points_world = corners(volume.visual_aabb)
+                b.env = SimpleNamespace(scene=SimpleNamespace())
+                b._collision_vertices = lambda obj: corners(obj.aabb)
+                b._inside_support_centers = lambda *args, **kwargs: [(0., 0., 1.125)]
+                b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: int(float((position + held.offset)[2]) < 1.)
+                b._inside_overlap_ranker = lambda *args: lambda *args: 0
+                before = held.get_position_orientation()
+                with patch.dict('sys.modules', modules), patch(
+                    'manipulation_agent.executors.inside_sampling.assembly_orientations',
+                    return_value=[('carried_pose', held.quat, 0.)]):
+                    candidate = select_inside_release(b, held, target, contents if loaded else [])
+                self.assertEqual(float((candidate['pose'][0] + held.offset)[2]) > 1., not loaded)
+                self.assertEqual(state, {'steps': 0, 'loads': 0})
+                self.assertTrue(all(torch.equal(a, z) for a, z in zip(before, held.get_position_orientation())))
 
     def test_loaded_placement_prefers_selected_shelf_after_diversification(self):
         # Both shelves pass the same native checks. The click, rather than
