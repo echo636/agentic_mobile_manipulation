@@ -59,7 +59,7 @@ For independent processing, put `starts:{"process":60}` on its start and `awaits
 
 ## Comparison, selection and reconciliation
 
-The program searches operator combinations under state, resource, location and process conditions. It returns `operation_graph`, ordered `steps`, `coverage`, `unplanned_results`, `alternatives` and `comparison`. Read missing conditions and resource/route gaps before treating a plan as complete. Search is bounded; `comparison.search_truncated` and `optimal_in_declared_model` describe the search within your declared model, not actual physical optimality.
+The program searches operator combinations under state, resource, location and process conditions. It returns `operation_graph`, ordered `steps`, `coverage`, `unplanned_results`, `alternatives` and `comparison`. `comparison.missing_producers` lists goal conditions that are neither currently true in your notes nor produced by any declared operator; it identifies missing modeled work, not physical impossibility. Read these and resource/route gaps before treating a plan as complete. Search is bounded; `comparison.search_truncated` and `optimal_in_declared_model` describe the search within your declared model, not actual physical optimality.
 
 Select with `operation="select"` and JSON content containing the returned `plan_id`, the next returned `operation_id`, your short RGB-grounded `steps` and `next_check`. Copy returned IDs; generated operation IDs differ from reusable operator IDs. Selection stores the generated graph without performing a robot action. Edges preserve producing conditions and conflicting resource changes; independent work may branch. The ordered steps specify the chosen single-robot schedule.
 

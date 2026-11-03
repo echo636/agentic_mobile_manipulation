@@ -23,6 +23,23 @@ def document(state, conditions, operators, **planning):
 
 
 class ActionSearchTests(unittest.TestCase):
+    def test_feedback_names_unmodeled_results_without_inventing_work(self):
+        doc = document({'a': 'raw', 'hand': 'empty', 'ready': 'yes'},
+            {'a': {'a': 'cooked'}, 'b': {'b': 'ready'}, 'done': {'ready': 'yes'},
+             'device': {'heat': 'on'}}, [
+                op('prepare-a', {'a': 'raw'}, {'a': 'diced'}),
+                op('finish-b', {'tool': 'held'}, {'b': 'ready'}),
+                op('heat', {'hand': 'empty'}, {}, setup={'heat': 'on'})])
+        with tempfile.TemporaryDirectory() as tmp:
+            notes = TaskNotes(Path(tmp))
+            notes.write(json.dumps(doc), 0, request_id='x', revision=0, agent_step=0)
+            advice = notes.planning()
+            self.assertEqual(advice['status'], 'partial')
+            self.assertEqual(advice['comparison']['missing_producers'],
+                             [dict(goal_id='a', condition={'a': 'cooked'})])
+            self.assertIn('b', advice['coverage']['unplanned'])
+            self.assertEqual(json.loads(notes.read()['content']), doc)
+
     def test_equal_cost_branches_reach_a_complete_plan_within_search_budget(self):
         keys = [str(i) for i in range(18)]
         doc = document({k: 'raw' for k in keys}, {k: {k: 'ready'} for k in keys},

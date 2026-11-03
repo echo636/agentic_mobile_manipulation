@@ -98,6 +98,11 @@ def search_actions(notes, max_states=2048):
     context = notes['planning']; costs = WorkCosts(context, methods)
     initial = (context['location'], tuple(sorted(bindings(context.get('state', {})).items())),
                tuple(sorted(process_times(context.get('processes', {})).items())))
+    supplied = set(initial[1]) | {item for method in methods
+                                for item in {**method['setup'], **method['effects']}.items()}
+    missing_producers = [dict(goal_id=goal, condition={k: v for k, v in condition.items()
+                                                    if (k, v) not in supplied})
+                         for goal, condition in conditions.items() if not set(condition.items()) <= supplied]
     serial = itertools.count(); frontier = []; best_cost = {initial: 0.}
     lower, guide = relaxed_cost(dict(initial[1]), methods, target)
     heapq.heappush(frontier, (guide, guide, next(serial), 0., lower, initial, []))
@@ -149,6 +154,7 @@ def search_actions(notes, max_states=2048):
         expanded_states=expanded, search_truncated=truncated,
         optimal_in_declared_model=bool(finished) and not truncated and len(conditions) == len(required),
         missing_goal_conditions=sorted(set(required) - conditions.keys()),
+        missing_producers=missing_producers,
         modeled_goal_ids=sorted(required),
         gaps={k: [list(x) if isinstance(x, tuple) else x for x in sorted(v, key=str)]
               for k, v in costs.gaps.items()})
