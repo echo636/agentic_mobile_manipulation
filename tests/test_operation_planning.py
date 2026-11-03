@@ -55,6 +55,12 @@ class OperationPlanningTests(unittest.TestCase):
         cheap_travel = operation_advice(delivery(1))
         self.assertEqual(cheap_travel['plan_id'], 'base')
         self.assertEqual(cheap_travel['estimated_seconds'], 7)
+        started = delivery(1)
+        started['execution']['operations'][0]['status'] = 'done'
+        started['planning']['state']['hand'] = 'a'
+        remaining = operation_advice(started)
+        self.assertEqual(remaining['next']['operation_id'], 'drop-a')
+        self.assertEqual(remaining['comparison']['graphs_considered'], 1)
 
     def test_shared_preparation_preserves_both_consumers_and_result_coverage(self):
         doc = delivery()

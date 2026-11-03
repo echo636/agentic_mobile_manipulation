@@ -86,6 +86,9 @@ def graph_candidates(notes, limit=32):
         for variant in list(variants):
             if not set(rewrite['replaces']) <= variant['nodes'].keys():
                 continue  # Overlapping alternatives cannot both be applied.
+            if any(variant['nodes'][key].get('status', 'pending') != 'pending'
+                   for key in rewrite['replaces']):
+                continue  # Progress makes earlier alternatives inapplicable.
             changed = replace_subgraph(variant['nodes'], rewrite)
             if len(variants) >= limit:
                 truncated = True
