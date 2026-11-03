@@ -54,6 +54,44 @@ The scheduler tracks hand/tool/object states you supplied. It does not infer cap
 
 ## Alternative execution subgraphs
 
+### Automatic composition from available operations
+
+The opt-in `execution.operators` form lets the program compose a plan without
+requiring you to propose complete replacement graphs. Each operator describes
+one available local operation using `id`, `description`, `at`, `seconds`,
+`requires`, `effects` and `check`; `action` and process timing fields are optional.
+Operators have no occurrence dependencies or completion status. Their state
+preconditions determine when they can be used, including repeated use when
+necessary. Record all relevant effects, including results that an action undoes.
+
+Give each required final-result leaf a `condition` dictionary using the same
+named state keys as `planning.state` and operator effects. These are predicted
+final-state conditions, not statements that the results have been observed.
+Keep conditions for completed results too, so later work must preserve them.
+An absent condition is reported as incomplete task coverage.
+
+The program searches available state transitions, charging work, travel,
+recovery and process waiting. It can choose, omit, combine or repeat operators;
+then it generates operation occurrences and causal/resource dependencies in
+`execution.operations`. No `rewrites` or `share` labels are required in this
+mode. Selection uses the returned plan ID and operation ID as usual. Search is
+bounded; `comparison` reports whether the bound was reached and whether the
+lowest cost was established within the declared model. Physical feasibility
+and actual task success still require RGB execution evidence.
+
+Only declare operations justified by observations and available tools. If an
+operation moves an object, include its location change; later retrieval must
+use the new location. Tool/access/support conditions must describe a plausible
+physical operation. A symbolic state assignment cannot create a missing tool
+capability or make inaccessible cutting feasible.
+
+Updates merge operators by ID; `execution.remove_operators` removes obsolete
+capabilities. After observing an effect, update actual `planning.state`; do not
+mark a reusable operator done. The generated DAG is replaced on selection, and
+the exact selected graph is retained in the replay.
+
+### Explicit replacements
+
 `execution.rewrites` describes meaningful replacements of pending work:
 
 ```json

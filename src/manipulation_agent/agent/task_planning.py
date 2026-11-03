@@ -103,6 +103,96 @@ def compile_goals(rows):
     return goals, dependencies, methods, optional
 
 
+class WorkCosts:
+    """Shared work, travel, resource and simulation-clock transition model."""
+    def __init__(self, context, methods):
+        self.wait_rate = context.get('wait_cost_per_sim_second')
+        if self.wait_rate is not None:
+            self.wait_rate = seconds(self.wait_rate)
+        # Shortest paths use only supplied directed edges, never unknown zero costs.
+        paths = {}
+        places = {context['location'], *(p for m in methods for p in m['route'])}
+        for edge in context.get('travel', []):
+            a, b, cost = edge['source'], edge['destination'], seconds(edge['seconds'])
+            places.update((a, b))
+            if (a, b) not in paths or cost < paths[a, b][0]:
+                paths[a, b] = cost, [a, b]
+        paths.update({(p, p): (0., [p]) for p in places})
+        for via in sorted(places):
+            for a in sorted(places):
+                for b in sorted(places):
+                    if (a, via) in paths and (via, b) in paths:
+                        cost = paths[a, via][0] + paths[via, b][0]
+                        if (a, b) not in paths or cost < paths[a, b][0]:
+                            paths[a, b] = cost, paths[a, via][1] + paths[via, b][1][1:]
+        switches = {}
+        for switch in context.get('switches', []):
+            key = switch['key'], switch['from'], switch['to'], switch['at']
+            switches[key] = seconds(switch['seconds'])
+        self.paths, self.switches = paths, switches
+        self.gaps = {key: set() for key in ('routes', 'required_states', 'setup_transitions',
+                                          'processes', 'wait_cost_methods')}
+
+    def apply(self, method, at, current, clocks):
+        remaining = dict(clocks)
+        paths, switches, wait_rate = self.paths, self.switches, self.wait_rate
+        missing_routes = self.gaps['routes']
+        missing_states = self.gaps['required_states']
+        missing_switches = self.gaps['setup_transitions']
+        missing_processes = self.gaps['processes']
+        missing_wait_costs = self.gaps['wait_cost_methods']
+        unknown = set(method['awaits']) - remaining.keys()
+        if unknown:
+            missing_processes.update((method['id'], p) for p in unknown)
+            return None
+        wait = max((remaining[p] for p in method['awaits']), default=0.)
+        if wait and wait_rate is None:
+            missing_wait_costs.add(method['id'])
+            return None
+        unmet = {k for k, v in method['requires'].items() if current.get(k) != v}
+        if unmet:
+            missing_states.update((method['id'], k, method['requires'][k]) for k in unmet)
+            return None
+        waypoints = [at, *method['route']]
+        edges = list(zip(waypoints, waypoints[1:]))
+        absent = [edge for edge in edges if edge not in paths]
+        if absent:
+            missing_routes.update(absent)
+            return None
+        setup_cost, changes = 0., []
+        for key, value in method['setup'].items():
+            if current.get(key) == value:
+                continue
+            switch = key, current.get(key), value, method['route'][0]
+            if switch not in switches:
+                missing_switches.add(switch)
+                return None
+            setup_cost += switches[switch]
+            changes.append(dict(key=key, before=current.get(key), after=value))
+        else:
+            after = {**current, **method['setup'], **method['effects']}
+            travel_cost = sum(paths[edge][0] for edge in edges)
+            route = [at]
+            for edge in edges:
+                route.extend(paths[edge][1][1:])
+            parts = dict(work=method['seconds'], travel=travel_cost,
+                         setup=setup_cost, recovery=method['recovery_seconds'])
+            if method['awaits']:
+                parts['wait'] = wait * (wait_rate or 0.)
+            total = sum(parts.values())
+            step = dict(method_id=method['id'], description=method['description'],
+                        goals=method['goals'], route=route,
+                        setup_changes=changes, costs_seconds=parts, estimated_seconds=total)
+            elapsed = wait + method['simulation_seconds']
+            after_clocks = {p: max(0., t - elapsed) for p, t in clocks}
+            after_clocks.update(method['starts'])  # Start at this method's end.
+            if clocks or method['starts'] or method['awaits']:
+                step['process_timing'] = dict(wait_simulation_seconds=wait,
+                    work_simulation_seconds=method['simulation_seconds'],
+                    remaining_simulation_seconds=after_clocks)
+            return step, after, after_clocks
+
+
 def schedule_task(notes, beam_width=32):
     """Compare methods and order across all unfinished modeled branches.
 
@@ -115,31 +205,7 @@ def schedule_task(notes, beam_width=32):
     location = context['location']
     state = bindings(context.get('state', {}))
     processes = process_times(context.get('processes', {}))
-    wait_rate = context.get('wait_cost_per_sim_second')
-    if wait_rate is not None:
-        wait_rate = seconds(wait_rate)
-    # Shortest paths use only supplied directed edges, never unknown zero costs.
-    paths = {}
-    places = {location, *(p for m in methods for p in m['route'])}
-    for edge in context.get('travel', []):
-        a, b, cost = edge['source'], edge['destination'], seconds(edge['seconds'])
-        places.update((a, b))
-        if (a, b) not in paths or cost < paths[a, b][0]:
-            paths[a, b] = cost, [a, b]
-    paths.update({(p, p): (0., [p]) for p in places})
-    for via in sorted(places):
-        for a in sorted(places):
-            for b in sorted(places):
-                if (a, via) in paths and (via, b) in paths:
-                    cost = paths[a, via][0] + paths[via, b][0]
-                    if (a, b) not in paths or cost < paths[a, b][0]:
-                        paths[a, b] = cost, paths[a, via][1] + paths[via, b][1][1:]
-    switches = {}
-    for switch in context.get('switches', []):
-        key = switch['key'], switch['from'], switch['to'], switch['at']
-        switches[key] = seconds(switch['seconds'])
-    missing_routes, missing_states, missing_switches = set(), set(), set()
-    missing_processes, missing_wait_costs = set(), set()
+    costs = WorkCosts(context, methods)
     required = frozenset(set(dependencies) - optional)
     buckets = [dict() for _ in range(len(dependencies) + 1)]
     buckets[0][(frozenset(), location, tuple(sorted(state.items())),
@@ -175,80 +241,35 @@ def schedule_task(notes, beam_width=32):
                 continue
             expanded += 1
             current = dict(values)
-            remaining = dict(clocks)
             for method in methods:
                 achieved = frozenset(method['goals'])
                 if (achieved & done or not method['depends_on'] <= done
                         or any(not dependencies[g] <= done for g in achieved)):
                     continue
-                unknown = set(method['awaits']) - remaining.keys()
-                if unknown:
-                    missing_processes.update((method['id'], p) for p in unknown)
+                transition = costs.apply(method, at, current, clocks)
+                if transition is None:
                     continue
-                wait = max((remaining[p] for p in method['awaits']), default=0.)
-                if wait and wait_rate is None:
-                    missing_wait_costs.add(method['id'])
-                    continue
-                unmet = {k for k, v in method['requires'].items() if current.get(k) != v}
-                if unmet:
-                    missing_states.update((method['id'], k, method['requires'][k]) for k in unmet)
-                    continue
-                waypoints = [at, *method['route']]
-                edges = list(zip(waypoints, waypoints[1:]))
-                absent = [edge for edge in edges if edge not in paths]
-                if absent:
-                    missing_routes.update(absent)
-                    continue
-                setup_cost, changes = 0., []
-                for key, value in method['setup'].items():
-                    if current.get(key) == value:
-                        continue
-                    switch = key, current.get(key), value, method['route'][0]
-                    if switch not in switches:
-                        missing_switches.add(switch)
-                        break
-                    setup_cost += switches[switch]
-                    changes.append(dict(key=key, before=current.get(key), after=value))
-                else:
-                    after = {**current, **method['setup'], **method['effects']}
-                    travel_cost = sum(paths[edge][0] for edge in edges)
-                    route = [at]
-                    for edge in edges:
-                        route.extend(paths[edge][1][1:])
-                    parts = dict(work=method['seconds'], travel=travel_cost,
-                                 setup=setup_cost, recovery=method['recovery_seconds'])
-                    if method['awaits']:
-                        parts['wait'] = wait * (wait_rate or 0.)
-                    total = sum(parts.values())
-                    step = dict(method_id=method['id'], description=method['description'],
-                                goals=method['goals'], route=route,
-                                setup_changes=changes, costs_seconds=parts, estimated_seconds=total)
-                    elapsed = wait + method['simulation_seconds']
-                    after_clocks = {p: max(0., t - elapsed) for p, t in clocks}
-                    after_clocks.update(method['starts'])  # Start at this method's end.
-                    if clocks or method['starts'] or method['awaits']:
-                        step['process_timing'] = dict(wait_simulation_seconds=wait,
-                            work_simulation_seconds=method['simulation_seconds'],
-                            remaining_simulation_seconds=after_clocks)
-                    if not done and method['id'] == chosen:
-                        chosen_step = step
-                        # Carry the same modeled conditions/results into the RGB
-                        # action loop; an ID and price alone lose the plan's meaning.
-                        selected_method = dict(method_id=chosen, description=method['description'], route=route,
-                            results=[dict(id=g, goal=goals[g].get('goal', g),
-                                          check=goals[g].get('check')) for g in method['goals']],
-                            requires=method['requires'], setup_changes=changes,
-                            predicted_effects=method['effects'],
-                            scope='Plan at selection checkpoint; confirm from RGB and public receipts')
-                        if method['starts'] or method['awaits']:
-                            selected_method['processes'] = dict(starts=method['starts'],
-                                awaits=method['awaits'], wait_simulation_seconds=wait)
-                    reached = done | achieved
-                    index = (reached, route[-1], tuple(sorted(after.items())),
-                             tuple(sorted(after_clocks.items())), first or method['id'])
-                    target = buckets[len(reached)]
-                    if index not in target or cost + total < target[index][0]:
-                        target[index] = (cost + total, [*steps, step])
+                step, after, after_clocks = transition
+                total, route, changes = step['estimated_seconds'], step['route'], step['setup_changes']
+                if not done and method['id'] == chosen:
+                    chosen_step = step
+                    # Carry the same modeled conditions/results into the RGB
+                    # action loop; an ID and price alone lose the plan's meaning.
+                    selected_method = dict(method_id=chosen, description=method['description'], route=route,
+                        results=[dict(id=g, goal=goals[g].get('goal', g),
+                                      check=goals[g].get('check')) for g in method['goals']],
+                        requires=method['requires'], setup_changes=changes,
+                        predicted_effects=method['effects'],
+                        scope='Plan at selection checkpoint; confirm from RGB and public receipts')
+                    if method['starts'] or method['awaits']:
+                        selected_method['processes'] = dict(starts=method['starts'],
+                            awaits=method['awaits'], wait_simulation_seconds=step['process_timing']['wait_simulation_seconds'])
+                reached = done | achieved
+                index = (reached, route[-1], tuple(sorted(after.items())),
+                         tuple(sorted(after_clocks.items())), first or method['id'])
+                target = buckets[len(reached)]
+                if index not in target or cost + total < target[index][0]:
+                    target[index] = (cost + total, [*steps, step])
     (done, _, _, _, _), (cost, steps) = finalists[0]
     complete = required <= done
     comparisons, firsts, method_sets, comparable_paths = [], set(), {}, []
@@ -309,11 +330,8 @@ def schedule_task(notes, beam_width=32):
         result['unplanned_results'] = [dict(id=key, goal=goals[key].get('goal', key),
             prerequisites=sorted(dependencies[key]), missing_method=key in missing)
             for key in sorted(required-done)]
-        result['gaps'] = dict(routes=[list(x) for x in sorted(missing_routes)],
-            required_states=[list(x) for x in sorted(missing_states)],
-            setup_transitions=[list(x) for x in sorted(missing_switches, key=str)],
-            processes=[list(x) for x in sorted(missing_processes)],
-            wait_cost_methods=sorted(missing_wait_costs))
+        result['gaps'] = {k: [list(x) if isinstance(x, tuple) else x for x in sorted(v, key=str)]
+                          for k, v in costs.gaps.items()}
     return result
 
 

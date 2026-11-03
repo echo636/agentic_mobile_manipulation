@@ -112,6 +112,9 @@ def graph_candidates(notes, limit=32):
 
 def select_operation(notes, choice):
     """Materialize the chosen graph before recording its next RGB operation."""
+    if 'operators' in notes['execution']:
+        from .action_search import select_action_graph
+        return select_action_graph(notes, choice)
     variants, _ = graph_candidates(notes)
     selected = next(v for v in variants if v['id'] == choice['plan_id'])
     operation = selected['nodes'][choice['operation_id']]
@@ -129,6 +132,9 @@ def select_operation(notes, choice):
 
 
 def operation_advice(notes):
+    if 'operators' in notes['execution']:
+        from .action_search import action_advice
+        return action_advice(notes)
     # Reuse the resource/location/process-clock scheduler; synthetic work IDs
     # are operation IDs, never the task's goal IDs.
     from .task_planning import compile_goals, schedule_task

@@ -28,6 +28,13 @@ def merge_goal_update(content, update):
         for key in graph.pop('remove_operations', []):
             operations.pop(key, None)
         graph['operations'] = list(operations.values())
+        if 'operators' in patch['execution'] or 'remove_operators' in patch['execution']:
+            operators = {op['id']: op for op in notes.get('execution', {}).get('operators', [])}
+            for change in patch['execution'].get('operators', []):
+                operators[change['id']] = {**operators.get(change['id'], {}), **change}
+            for key in graph.pop('remove_operators', []):
+                operators.pop(key, None)
+            graph['operators'] = list(operators.values())
         merged['execution'] = graph
     return json.dumps(merged, separators=(',', ':'))
 
