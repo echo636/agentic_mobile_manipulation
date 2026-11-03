@@ -57,12 +57,17 @@ def envelope_protrusion(center, extent, low, high, settling_drop=0.):
 
 
 def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None, *, allow_reorientation=False):
-    """Resting proposals preserve payloads; unladen items may turn onto a side.
+    """Preserve vessel openings and payloads; other unladen items may turn.
 
 For payloads, compare local gravity and reject flips or large tilts. Unladen
 objects may try asset poses, principal faces or intermediate tilts when metadata is absent; these
 are proposals only, with unchanged collision and settling acceptance checks.
 """
+    # An empty vessel still needs its carried opening direction. Treating it
+    # as a solid item let the fit ranking invert an upright pot into a sink.
+    if any(link.is_meta_link and link.meta_link_type in {'fillable', 'openfillable'}
+           for link in getattr(held, 'links', {}).values()):
+        allow_reorientation = False
     current = transforms.quat2mat(root_quat)
     current_yaw = math.atan2(float(current[1,0]), float(current[0,0]))
     metadata = getattr(held, 'orientations', None)

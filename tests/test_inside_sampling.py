@@ -197,6 +197,16 @@ class AssemblySamplingTests(unittest.TestCase):
         for _,quat,_ in candidates:
             self.assertTrue(b.torch.allclose(transforms.quat2mat(quat)[2],transforms.quat2mat(carried)[2],atol=1e-6))
 
+    def test_empty_vessel_is_not_inverted_by_unladen_pose_search(self):
+        b,held,_,_,_,_,modules=self.fixture()
+        transforms=modules['omnigibson.utils'].transform_utils
+        held.links={'volume':SimpleNamespace(is_meta_link=True,meta_link_type='fillable')}
+        held.orientations={'inverted':{'rotation':[1.,0.,0.,0.],'prob':1.}}
+        carried=b.torch.tensor([0.,0.,0.,1.])
+        candidates=assembly_orientations(held,carried,b.torch,transforms,allow_reorientation=True)
+        self.assertTrue(candidates)
+        self.assertTrue(all(float(transforms.quat2mat(quat)[2,2])>.99 for _,quat,_ in candidates))
+
     def test_occupied_center_searches_alternative_and_preserves_payload(self):
         b,held,target,contents,state,records,modules=self.fixture()
         with patch.dict('sys.modules',modules):
