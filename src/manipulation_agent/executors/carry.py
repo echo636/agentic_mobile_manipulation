@@ -68,10 +68,7 @@ class ControlledCarry:
                     for child, _, _ in dependencies]
         particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
                                        include_supported=True)
-        proposal = self._grasp_pose_proposer(obj, point, dependencies)()
-        if proposal is None:
-            raise SkillError('out_of_reach', 'No unobstructed grasp pose at this stance')
-        position, orientation, contact = proposal
+        position, orientation, contact = self._grasp_pose(obj, point, dependencies)
         obj.set_position_orientation(position=position, orientation=orientation)
         self._relocate_contents(obj, contents)
         relocate_particles(self.env.scene, particles)
@@ -88,24 +85,15 @@ class ControlledCarry:
                 'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
                 'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
 
-    def _grasp_pose_proposer(self, obj, point, dependencies=None):
-        """Share grasp geometry with stance selection, without moving any body.
-
-        Base motion preserves the arm posture. Predict its fingertip frame at
-        each proposed stance and apply the same acceptance test as the grasp.
-        Rebuild this snapshot after motion; actual execution checks it again.
-        """
+    def _grasp_pose(self, obj, point, dependencies):
+        """Rank fingertip poses; approximate boxes cannot reject a grasp."""
         from omnigibson.utils import transform_utils as T
         from .placement_overlap import assembly_overlap_ranker
-        dependencies = self._grasp_dependencies(obj) if dependencies is None else dependencies
         original = obj.get_position_orientation()
         arm = self.primitives.arm
         direction = T.quat2mat(self.robot.get_eef_orientation(arm))[:, 2]
         contact = (self.robot.get_eef_position(arm) + direction *
                    max(self.robot.eef_to_fingertip_lengths[arm].values()))
-        base_position, base_orientation = self.robot.get_position_orientation()
-        base_rotation = T.quat2mat(base_orientation)
-        base_yaw = math.atan2(float(base_rotation[1, 0]), float(base_rotation[0, 0]))
         # Grasp the selected object on its support plane facing the fingers.
         # An arbitrary visible point can leave the rest of the object behind
         # the fingertip plane, intersecting the fingers and palm.
@@ -115,32 +103,21 @@ class ControlledCarry:
         # Preserve the original yaw when it fits. A long tool can otherwise
         # reach through a wall when transferred to the fingertips. Compare
         # upright yaw alternatives without moving any body during the search.
-        alternatives = []
+        proposals = []
         for yaw in (0., math.pi / 2, -math.pi / 2, math.pi):
             turn = T.euler2quat(original[1].new_tensor([0., 0., yaw]))
             rotation = T.quat2mat(turn)
             rotated = (vertices - original[0]) @ rotation.T + original[0]
             selected = rotation @ (point - original[0]) + original[0]
             orientation = T.quat_multiply(turn, original[1])
-            alternatives.append((rotated, selected, orientation))
-
-        def propose(stance=None):
-            fingertip, forward = contact, direction
-            if stance is not None:
-                turn = T.quat2mat(T.euler2quat(point.new_tensor([0., 0., stance[2] - base_yaw])))
-                offset = point.new_tensor([stance[0] - float(base_position[0]),
-                                           stance[1] - float(base_position[1]), 0.])
-                fingertip = base_position + offset + turn @ (contact - base_position)
-                forward = turn @ direction
-            for rotated, selected, orientation in alternatives:
-                depths = rotated @ forward
-                surface = rotated[depths <= depths.min() + 1e-5]
-                grasp_point = surface[self.torch.linalg.vector_norm(surface - selected, dim=1).argmin()]
-                position = original[0] + fingertip - grasp_point
-                if overlap is None or overlap(position, orientation) == 0:
-                    return position, orientation, fingertip
-            return None
-        return propose
+            depths = rotated @ direction
+            surface = rotated[depths <= depths.min() + 1e-5]
+            grasp_point = surface[self.torch.linalg.vector_norm(surface - selected, dim=1).argmin()]
+            position = original[0] + contact - grasp_point
+            proposals.append((position, orientation, contact))
+        # The enclosure may overlap where the actual collider does not. Use
+        # it only to prefer a pose; native grasp and physics own the result.
+        return min(proposals, key=lambda pose: overlap(*pose[:2]) if overlap is not None else 0)
 
     def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
         """Snapshot transported material once; never pin it during settling."""
