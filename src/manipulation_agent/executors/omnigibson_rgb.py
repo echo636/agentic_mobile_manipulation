@@ -763,8 +763,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 self._surface_action_preconditions(primitive,obj)
             if primitive=='soak':self._soak_preconditions(obj)
             if primitive in {'pour','scoop'}:self._transfer_preconditions(primitive,obj)
-            if primitive=='cut' and ('slicer' not in held._abilities or not {'sliceable','diceable'}.intersection(obj._abilities)):
-                raise SkillError('pre_condition_error','Selected tool or target cannot support cutting')
+            if primitive=='cut':
+                if 'slicer' not in held._abilities:
+                    raise SkillError('cutting_tool_required','Held object does not support cutting')
+                if not {'sliceable','diceable'}.intersection(obj._abilities):
+                    raise SkillError('cut_target_unsupported','Selected target does not support cutting')
 
     def _execute_bound_manipulation(self,primitive,obj,point,grounding,max_steps,**kwargs):
         """Execute the same selected object/surface, without recursive act/grounding."""

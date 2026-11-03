@@ -58,6 +58,8 @@ class RGBBoundary(unittest.TestCase):
                              ('invalid_transfer_destination','receiving object'),
                              ('material_dispenser_off','switched off'),
                              ('material_source_empty','No transferable contents'),
+                             ('cutting_tool_required','held object cannot cut'),
+                             ('cut_target_unsupported','target cannot be sliced or diced'),
                              ('placement_surface_unavailable','visible top surface')]:
             def fail(*args, **kwargs):
                 raise SkillError(code, 'PRIVATE_OBJECT_NAME / private geometry and diagnostics')

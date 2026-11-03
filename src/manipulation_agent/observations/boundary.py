@@ -44,6 +44,8 @@ ERROR_MESSAGES = {
     "fixed_object":"The selected object cannot be moved by this executor.",
     "particle_target":"The selected point is on loose particles, which cannot be grasped directly. Select a visible container or a suitable tool instead.",
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
+    "cutting_tool_required":"The held object cannot cut. Grasp a suitable cutting tool before cutting.",
+    "cut_target_unsupported":"The selected target cannot be sliced or diced. Use the returned RGB to select the intended unprocessed workpiece.",
     "no_removable_material":"The held tool found no material it can remove from the selected surface. The surface may already be clean, or the tool conditions may not match. Inspect RGB before repeating the operation.",
     "sampling_error":"The executor could not find a valid placement; inspect the new RGB before recovery.",
     "placement_surface_unavailable":"No upward receiving surface was found near the selected point. Select a clear, visible top surface in the returned RGB.",
