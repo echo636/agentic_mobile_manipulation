@@ -151,8 +151,8 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
         port_free = sock.connect_ex(('127.0.0.1', port)) != 0
     if min_free_gpu_mib and min_free_gpu_mib<12288:
         raise ValueError('Shared GPU mode requires at least 12 GiB free before each episode')
-    if not 12<=memory_budget_gib<=28:
-        raise ValueError('Simulator working-memory budget must be between 12 and 28 GiB')
+    if not 12<=memory_budget_gib<float('inf'):
+        raise ValueError('Simulator working-memory budget must be finite and at least 12 GiB')
     if not 0<=reserved_host_memory_gib<=1024:
         raise ValueError('Invalid shared host memory reservation')
     imports = source_import_readiness(data_root) if not light else None

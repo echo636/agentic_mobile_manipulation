@@ -214,7 +214,7 @@ class WorkerLease:
                           gpu=worker['gpu'], gpu_uuid=worker.get('expected_gpu_uuid'),
                           hard_limit_gib=worker.get('memory_budget_gib', 28),
                           memory_admission_mode='observed_peak' if adaptive_slot_count is not None else 'full_reservation')
-        if worker.get('memory_budget_gib', 28) > slot_memory_gib:
+        if adaptive_slot_count is None and worker.get('memory_budget_gib', 28) > slot_memory_gib:
             raise ValueError('Worker memory exceeds shared host slot size')
         self.slot_count = math.floor(host_budget_gib / slot_memory_gib)
         if adaptive_slot_count is not None:

@@ -32,7 +32,7 @@ def admission_decision(account_current, account_stats, account_limit, peers, *,
         raise ValueError('Invalid memory admission profile')
     if not math.isfinite(account_margin_gib) or not 1 <= account_margin_gib <= 4:
         raise ValueError('Invalid account memory margin')
-    if (not 12 <= candidate_gib <= 28
+    if (not 12 <= candidate_gib < float('inf')
             or (host_budget_gib is None and profile != 'throughput')
             or (host_budget_gib is not None and (not math.isfinite(host_budget_gib) or host_budget_gib <= 0))):
         raise ValueError('Invalid adaptive memory budget')
