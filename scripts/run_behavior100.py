@@ -108,7 +108,7 @@ def worker_configs(config):
         if (host,gpu) in devices or (host,port) in ports: raise ValueError('Worker GPU or port collision')
         env=merged.get('simulator_env',{})
         budget=merged.get('memory_budget_gib',28)
-        if type(budget) is not int or not 12<=budget<=28: raise ValueError('Invalid memory budget')
+        if type(budget) is not int or budget<12: raise ValueError('Invalid memory budget')
         if merged.get('simulator_memory_max',str(budget)+'G')!=str(budget)+'G':
             raise ValueError('Resource admission and hard simulator memory limit must agree')
         if not 12<=merged.get('startup_memory_gib',budget)<=budget:
@@ -144,7 +144,7 @@ def worker_configs(config):
     for worker in result:
         limit=config.get('host_worker_memory_budget_gib',{}).get(worker['ssh'][-1],slot_size)
         if limit is None and profile!='throughput':raise ValueError('Dynamic host budget requires throughput admission')
-        if worker.get('memory_budget_gib',28)>slot_size or (limit is not None and limit<slot_size):
+        if (not adaptive and worker.get('memory_budget_gib',28)>slot_size) or (limit is not None and limit<slot_size):
             raise ValueError('Worker memory exceeds shared host slot capacity')
     return result
 
