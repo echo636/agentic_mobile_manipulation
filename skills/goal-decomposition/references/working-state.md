@@ -2,7 +2,7 @@
 
 Store one `goal-tree-v2` document through `task_notes`. `goals` describes results, `planning.state` records observed beliefs, and `execution.operators` describes available work. The program generates `execution.operations` on selection. All labels come from your RGB understanding, never simulator IDs.
 
-Write before the first act/look with `operation="write", expected_version=0`. Read after missing context. Use `update` with the current version to reconcile changed fields. Keep the 12000-character working note concise; do not append a transcript.
+Write before the first act/look with `operation="write", expected_version=0`. Read after missing context. Use `update` with the current version to reconcile changed fields. Each input can contain up to 12000 characters; merged notes and generated DAGs can be larger. Keep working notes concise; do not append a transcript.
 
 ```json
 {

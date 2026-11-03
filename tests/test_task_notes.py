@@ -50,6 +50,32 @@ class TaskNotesTests(unittest.TestCase):
     def write(self,h,text,version,rid):
         return h.call('task_notes',{'operation':'write','content':text,'expected_version':version},rid)
 
+    def test_generated_dag_and_updates_can_exceed_single_input_limit(self):
+        from test_action_search import document, op
+        keys = [str(i) for i in range(24)]
+        operators = [op('prepare-' + k, {k: 'raw'}, {k: 'ready'}) for k in keys]
+        for operator in operators:
+            operator['description'] = ('Prepare the selected item on the visible work surface; '
+                                       'inspect its state before moving on to other work.')
+        doc = document({k: 'raw' for k in keys}, {k: {k: 'ready'} for k in keys}, operators)
+        with tempfile.TemporaryDirectory() as tmp:
+            h = self.harness(Path(tmp)/'episode')
+            result = self.write(h, json.dumps(doc), 0, 'plan')
+            self.assertTrue(result['ok'])
+            advice = result['planning']
+            selected = h.call('task_notes', dict(operation='select', expected_version=1,
+                content=json.dumps(dict(plan_id=advice['plan_id'],
+                    operation_id=advice['next']['operation_id'], steps=['Prepare visible item'],
+                    next_check='Item ready'))), 'select')
+            self.assertTrue(selected['ok'])
+            self.assertGreater(len(h.task_notes.read()['content']), 12000)
+            updated = h.call('task_notes', dict(operation='update', expected_version=2,
+                content=json.dumps({'uncertainties': ['Inspect the next item']})), 'update')
+            self.assertTrue(updated['ok'])
+            self.assertEqual(len(json.loads(h.task_notes.read()['content'])['goals']), 25)
+            self.assertFalse(self.write(h, 'x' * 12001, 3, 'oversized-input')['ok'])
+            self.assertEqual(h.agent_steps, 0)
+
     def test_control_and_treatment_share_tools_prompt_and_other_skills(self):
         with tempfile.TemporaryDirectory() as tmp:
             a=self.harness(Path(tmp)/'a');b=self.harness(Path(tmp)/'b','none')
