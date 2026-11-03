@@ -123,7 +123,7 @@ def recorded_navigation(backend, recorder, fixture):
             backend.mark_video_tool('diagnostic_navigation', {'primitive': 'navigate_to', 'case': case['index']}, marker)
             with (backend.output / 'navigation_plans.jsonl').open('a') as stream:
                 stream.write(json.dumps({**record, 'at': now(), 'source': 'archived_private_regression'}) + '\n')
-            item['result'] = backend._execute_gt_plan(grid, plan, 700)
+            item['result'] = backend._execute_base_path(plan.points, plan.final_yaw, 700)
             actual_pos, actual_quat = backend.robot.get_position_orientation()
             item['actual_final_world_pose'] = [actual_pos.cpu().tolist(), actual_quat.cpu().tolist()]
             item['checks'].update(reached=item['result']['nav_status'] == 'reached',

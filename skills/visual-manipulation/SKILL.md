@@ -4,7 +4,7 @@ description: Choose manipulation skills and verify progress from RGB and action 
 ---
 # Manipulation workflow
 
-Initialize, inspect the four returned views, then choose the next action. Read `initialize.control` for the active protocol. In `target_locked_approach_v2`, directly request the operation when its target is clearly selectable; the executor handles approach and stance. Use macro navigation for exploration, another task area, or an approach change justified by feedback. Check the other current views before moving to recover a cropped target.
+Initialize, inspect the four returned views, then choose the next action. Read `initialize.control` for the active protocol. In `target_locked_single_approach_v3`, directly request the operation when its target is clearly selectable; the executor can approach once using the static walkability map. Use macro navigation for exploration, another task area, or an approach change justified by feedback. Check the other current views before moving to recover a cropped target.
 
 Read each relevant resource once; reread only if its instructions are no longer available in context:
 

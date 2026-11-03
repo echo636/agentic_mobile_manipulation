@@ -24,7 +24,7 @@ ERROR_MESSAGES = {
     'articulation_endpoint_unresolved':'The executor could not find a checked, stable open position for the selected object\'s door or lid.',
     'look_rotation_blocked':'The requested turn has no checked clearance for the robot and carried item. Use the current four views; choose a different general approach if needed instead of repeating this turn.',
     'needs_macro_navigation':'The selected target is outside local adjustment range. Use navigate_to for a closer general approach, then select the target in the returned RGB.',
-    'local_adjustment_blocked':'The executor could not find a safe, visible, reachable operation stance around this selected target. Inspect the returned RGB and choose a different general approach or report blocked; do not repeat the same operation or make tiny navigation corrections.',
+    'local_adjustment_blocked':'The selected target could not be operated on after the approach. Inspect the returned RGB and choose a different general approach or report blocked; do not repeat the same operation or make tiny navigation corrections.',
     'local_adjustment_exhausted':'The executor reached its approach planning or operation work budget. Inspect the current RGB before choosing a different general approach; do not blindly repeat the same action.',
     "stale_image_ref":"Select a point in the latest returned image.",
     "no_surface_at_point":"The selected pixel could not be grounded to a surface. Inspect RGB and choose another point.",

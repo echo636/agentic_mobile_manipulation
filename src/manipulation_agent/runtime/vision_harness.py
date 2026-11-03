@@ -101,7 +101,7 @@ class VisionHarness:
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
         if hasattr(self.backend,'local_manipulation'):
             result['control']={'manipulation_protocol':
-                'target_locked_approach_v2' if self.backend.local_manipulation else 'explicit_navigation_v1',
+                'target_locked_single_approach_v3' if self.backend.local_manipulation else 'explicit_navigation_v1',
                 'local_base_adjustment':bool(self.backend.local_manipulation)}
         if 'task_notes' in self.catalog: result['notes']=self.task_notes.read()
         return result
@@ -300,16 +300,13 @@ class VisionHarness:
         if local:
             effect['local_adjustment']={'repositions':int(local['repositions']),
                 'primitive_attempts':int(local['primitive_attempts']),
-                'departure':local['departure'],
                 'operation_committed':True,
-                'recovery_required':local['departure']!='checked',
-                'message':('Operation completed. Local departure is not certified after bounded recovery; inspect RGB and select a different navigation approach. Do not repeat the completed operation.'
-                           if local['departure']!='checked' else
-                           'Operation completed on the same selected target after bounded local preparation.')}
+                'message':'Operation completed on the selected target. Inspect the returned RGB.'}
         if primitive=='navigate_to':
             # Only an action outcome crosses the RGB boundary, never private
             # coordinates, target distances, object identities or map geometry.
             messages={
+                'endpoint_applied':'Navigation applied. Inspect the returned RGB for the actual position and surroundings.',
                 'reached':'Reached the selected point. Inspect the updated RGB.',
                 'approached':'Moved to a feasible approach toward the selected point. This does not verify manipulation reach; inspect the updated RGB.',
                 'already_at_closest_approach':'Already at the closest approach found by this navigation search. Repeating the same click will not move closer; inspect the updated RGB for an alternative.',
