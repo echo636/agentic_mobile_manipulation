@@ -43,6 +43,7 @@ class ClientConfig:
     reasoning_effort: str | None = None
     model_provider_profile: str | None = None
     model_provider_gateway: str | None = None
+    mcp_env_vars: tuple[str, ...] = ()
 
     def __post_init__(self):
         if self.client not in {"codex", "opencode", "kimi"}:

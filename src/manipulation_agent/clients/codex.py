@@ -162,6 +162,8 @@ class CodexAdapter(ClientAdapter):
             server = {"command": config.mcp_command, "args": config.mcp_args, "enabled_tools": tool_names,
                       "startup_timeout_sec": 60, "required": True,
                       "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
+            if config.mcp_env_vars:
+                server['env_vars'] = list(config.mcp_env_vars)
             for key, value in server.items():
                 command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
         command += ["-"]

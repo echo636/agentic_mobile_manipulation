@@ -14,6 +14,7 @@ import signal
 import sys
 import itertools
 import re
+import tomllib
 from dataclasses import asdict
 
 from manipulation_agent.clients import ClientConfig, get_adapter
@@ -173,7 +174,12 @@ def main(argv=None, *, allow_client=False):
     instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill)
     catalog = tool_specs(args.agent_profile)
     planner_config = None
+    mcp_env_vars = ()
     if args.planner_model:
+        provider_path = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))) / 'config.toml'
+        provider = tomllib.loads(provider_path.read_text())['model_providers'][args.model_provider_profile]
+        # Codex filters MCP subprocess environments. Forward names, never write credential values.
+        mcp_env_vars = ('PYTHONPATH', 'CODEX_HOME', 'MAS_CLIENT_STATE_ROOT', 'no_proxy', 'NO_PROXY', provider['env_key'])
         planner_config = dict(model=args.planner_model, effort=args.planner_reasoning_effort,
             instruction=args.instruction, provider=args.model_provider_profile, gateway=args.model_provider_gateway,
             upstream_command=args.mcp_command, upstream_args=json.loads(args.mcp_args_json),
@@ -187,7 +193,8 @@ def main(argv=None, *, allow_client=False):
     config = ClientConfig(client, args.model, args.instruction, args.mcp_command,
                           json.loads(args.mcp_args_json), args.output, args.timeout,
                           args.agent_profile, args.isolate_client_storage,
-                          args.reasoning_effort, args.model_provider_profile, args.model_provider_gateway)
+                          args.reasoning_effort, args.model_provider_profile, args.model_provider_gateway,
+                          mcp_env_vars=mcp_env_vars)
     capability = adapter.probe()
     if capability.status != 'available':
         write_json(args.output / 'controller.json', {
