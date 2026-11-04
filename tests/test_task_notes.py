@@ -70,32 +70,45 @@ class TaskNotesTests(unittest.TestCase):
             self.assertNotIn('planning', plain)
             self.assertEqual(json.loads(control.task_notes.read()['content']), doc)
             first = self.write(h, json.dumps(doc), 0, 'plan')
-            self.assertEqual(first['selected']['operation_id'], first['planning']['next']['operation_id'])
+            self.assertEqual(first['planning']['active']['operation_id'], first['planning']['next']['operation_id'])
             self.assertEqual(first['planning']['next']['operator_id'], 'prepare-a')
+            self.assertNotIn('selected_execution', first)
+            self.assertNotIn('operation_graph', first['planning'])
             self.assertEqual(h.backend.steps, 0)
             self.assertEqual(json.loads(h.task_notes.read()['content'])['planning']['state'], doc['planning']['state'])
-            h.call('act', dict(primitive='toggle_on', revision=0,
-                target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5])), 'action')
+            args = dict(primitive='toggle_on', revision=0,
+                target=dict(image_ref=h.snapshot['images'][0]['image_ref'], point=[.5, .5]))
+            action = h.call('act', args, 'action')
+            self.assertEqual(action['planning']['active'], first['planning']['active'])
+            self.assertNotIn('selected_operation', action['planning'])
+            self.assertEqual(h.call('act', args, 'action'), action)
             second = h.call('task_notes', dict(operation='update', expected_version=1,
                 content=json.dumps({'planning': {'state': {'a': 'ready', 'b': 'raw'}}})), 'update')
             self.assertEqual(second['planning']['next']['operator_id'], 'finish-b')
             self.assertEqual(second['notes']['previous_execution']['action_attempts'], 1)
             override = h.call('task_notes', dict(operation='select', expected_version=2,
                 content=json.dumps(dict(plan_id=second['planning']['plan_id'],
-                    operation_id=second['selected']['operation_id'], steps=['Inspect chosen object'],
+                    operation_id=second['planning']['active']['operation_id'], steps=['Inspect chosen object'],
                     next_check='Result visible'))), 'override')
-            self.assertEqual(override['selected']['steps'], ['Inspect chosen object'])
+            self.assertEqual(override['planning']['active']['steps'], ['Inspect chosen object'])
             final = h.call('task_notes', dict(operation='update', expected_version=3,
                 content=json.dumps({'planning': {'state': {'a': 'ready', 'b': 'ready'}}})), 'complete-model')
-            self.assertIsNone(final['selected'])
-            self.assertEqual(final['selected_execution']['operations'], [])
+            self.assertIsNone(final['planning']['active'])
+            restored = h.call('task_notes', dict(operation='read', content=None,
+                expected_version=None), 'restore')
+            self.assertEqual(json.loads(restored['notes']['content'])['execution']['operations'], [])
             self.assertFalse(h.closed)
             self.assertEqual(json.loads(h.task_notes.read()['content'])['goals'], doc['goals'])
             replay = build_replay(h.recorder.output)
             self.assertEqual(replay['task_note_versions'][-1]['content'], h.task_notes.read()['content'])
             writes = {s['request_id']: s for s in replay['steps'] if s['tool'] == 'task_notes'}
-            self.assertEqual(json.loads(writes['plan']['task_notes']['content'])['active'], first['selected'])
-            self.assertEqual(json.loads(writes['update']['task_notes']['content'])['active'], second['selected'])
+            self.assertEqual(json.loads(writes['plan']['task_notes']['content'])['active'], first['planning']['active'])
+            self.assertEqual(json.loads(writes['update']['task_notes']['content'])['active'], second['planning']['active'])
+            archived = writes['plan']['result']
+            self.assertEqual(len(archived['selected_execution']['operations']), 2)
+            self.assertEqual(first['planning']['coverage'], archived['planning']['coverage'])
+            self.assertEqual(first['planning']['comparison']['missing_producers'],
+                             archived['planning']['comparison']['missing_producers'])
 
     def test_generated_dag_and_updates_can_exceed_single_input_limit(self):
         from test_action_search import document, op

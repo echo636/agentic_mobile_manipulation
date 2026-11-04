@@ -14,7 +14,7 @@ from ..tools import REGISTRY, tool_specs
 from .tool_context import ToolContext
 from ..observations.surround import SurroundJobs
 from .closure import EpisodeClosure
-from ..agent.task_notes import TaskNotes
+from ..agent.task_notes import TaskNotes, model_planning_reply
 
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
@@ -228,6 +228,10 @@ class VisionHarness:
         if name in {'act','look'} and 'task_notes' in self.catalog and origin=='controller':
             self.task_notes.record_action(name,arguments,result,self.agent_steps)
         self.evidence[event_id]={'name':'act' if name in {'act','look'} else name,'ok':result['ok'],'revision':self.revision}
+        # Archive the complete authored/generated graph above, but do not echo
+        # it in every model response. read/initialize still restore full notes.
+        if origin == 'controller':
+            result = model_planning_reply(result)
         self.cache[request_id]=(fingerprint,copy.deepcopy(result))
         if name=='finish' and result.get('closed'):
             self.closure.advance('result_ready')

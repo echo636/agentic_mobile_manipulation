@@ -7,6 +7,31 @@ from ..records import now, write_json
 from .task_planning import task_advice
 
 
+def model_planning_reply(result):
+    """Send the current decision; retain full search evidence in the recorder."""
+    advice = result.get('planning', {})
+    if advice.get('source') != 'program_search_over_model_grounded_operators':
+        return result
+    reply = {k: v for k, v in result.items() if k not in ('selected', 'selected_execution')}
+    if advice['status'] == 'reconcile':
+        keys = ('status', 'source', 'notes_version', 'active', 'next',
+                'actions_since_checkpoint', 'execution', 'failed_since_checkpoint')
+        reply['planning'] = {k: advice[k] for k in keys if k in advice}
+    else:
+        omitted = {'operation_graph', 'graph_changes', 'selected_operation',
+                   'previous_execution', 'representation', 'scope', 'alternatives'}
+        reply['planning'] = {k: v for k, v in advice.items() if k not in omitted}
+        if 'steps' in advice:
+            reply['planning']['steps'] = [
+                {k: step[k] for k in ('operation_id', 'operator_id', 'description',
+                                      'route', 'estimated_seconds') if k in step}
+                for step in advice['steps']]
+        if 'comparison' in advice:
+            reply['planning']['comparison'] = {k: v for k, v in advice['comparison'].items()
+                if k not in ('algorithm', 'expanded_states', 'modeled_goal_ids', 'gap_scope')}
+    return reply
+
+
 def merge_goal_update(content, update):
     """Apply model-authored changes; also used to reconstruct exact replay notes."""
     notes, patch = json.loads(content), json.loads(update)
@@ -94,7 +119,7 @@ class TaskNotes:
         pending_sim = pending.get('observed_simulation_seconds') if pending is not None else 0.
         simulation_seconds = (self.feedback_simulation_seconds + pending_sim
             if self.feedback_simulation_seconds is not None and pending_sim is not None else None)
-        return dict(status='reconcile', notes_version=self.state['version'],
+        return dict(status='reconcile', source=advice.get('source'), notes_version=self.state['version'],
             checkpoint_status=advice['status'], active=advice.get('active'),
             checkpoint_coverage=advice.get('coverage'),
             checkpoint_comparison=advice.get('comparison'),
