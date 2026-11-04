@@ -149,7 +149,7 @@ class OperationPlanningTests(unittest.TestCase):
             path = Path(tmp) / 'episode'
             recorder = Recorder(path, {'backend': 'mock', 'instruction': 'Integration fixture only'})
             harness = VisionHarness(MockRGBBackend(path), recorder,
-                Budget(wall_seconds=None), require_task_notes=True)
+                Budget(wall_seconds=None))
             result = harness.call('task_notes', dict(operation='write',
                 content=json.dumps(delivery()), expected_version=0), 'plan')
             plan = result['planning']

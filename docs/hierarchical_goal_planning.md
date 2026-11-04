@@ -147,15 +147,20 @@ their conditions and result checks.
 
 ## Historical goal-skill ablation
 
+The initial-note action gate was removed on November 4. Current runs can act and
+look without notes; the common prompt offers notes as optional working memory.
+Planning-skill guidance remains specific to the planning arm. The protocol below
+describes the historical experiment, not a current action requirement.
+
 For the historical matched ablation, `--goal-skill hierarchical` exposes the skill
 and instructs the model to read it before acting. `--goal-skill none` omits its
 catalog entry, resources and instruction. Both arms use the same seven tools,
 other frozen skills, common prompt, working-note storage, task instructions,
 instances, seeds, source commit, model, execution budget and independent evaluator.
-The shared visual skill no longer references a missing goal skill. Both arms must
-write an initial intended approach (`--require-task-notes`); the control chooses its
-own format and decomposition. An early act/look without notes is rejected and
-counts as an attempted step in both arms. There are no scripted targets or plans.
+The shared visual skill no longer referenced a missing goal skill. Both arms had
+to write an initial intended approach (`--require-task-notes`); the control chose
+its own format and decomposition. An early act/look without notes was rejected
+and counted as an attempted step in both arms. There were no scripted targets or plans.
 
 The historical paired experiment has 100 attempts per arm with gpt-6.1-sol low, 50 act/look attempts including
 failures, no episode wall deadline and no policy retries. Startup and closure

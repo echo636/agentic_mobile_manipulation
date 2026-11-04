@@ -376,7 +376,6 @@ def main():
         args+=['--custom-task',row['custom_task_spec']]
     if row.get('catalog_task_spec'):
         args+=['--catalog-task',row['catalog_task_spec']]
-    if manifest.get('require_task_notes'): args.append('--require-task-notes')
     if a.executor_source is not None:
         # exec starts a new interpreter. Keep its imports on the selected
         # executor even when this launch helper came from a newer scheduler.

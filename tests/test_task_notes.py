@@ -46,7 +46,7 @@ class TaskNotesTests(unittest.TestCase):
     def harness(self,path,mode='hierarchical'):
         r=Recorder(path,{'backend':'mock','observation_mode':'rgb_only','instruction':'fixture'})
         return VisionHarness(MockRGBBackend(path),r,Budget(wall_seconds=None),agent_step_limit=50,
-                             goal_skill=mode,require_task_notes=True)
+                             goal_skill=mode)
 
     def write(self,h,text,version,rid):
         return h.call('task_notes',{'operation':'write','content':text,'expected_version':version},rid)
@@ -248,16 +248,15 @@ class TaskNotesTests(unittest.TestCase):
         self.assertTrue(notes.planning()['failed_since_checkpoint'])
         self.assertEqual(notes.planning()['execution']['failed_actions'], 1)
 
-    def test_both_arms_require_an_authored_plan_before_first_action(self):
+    def test_both_arms_can_act_and_look_without_notes(self):
         for mode in ('hierarchical','none'):
             with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
                 h=self.harness(Path(tmp)/'episode',mode);obs=h.initialize()['observation']
                 args={'primitive':'toggle_on','revision':0,'target':{'image_ref':obs['images'][0]['image_ref'],'point':[.5,.5]}}
-                self.assertEqual(h.call('act',args,'premature')['error']['code'],'task_notes_required')
-                self.assertEqual(h.backend.steps,0)
-                self.assertEqual(h.agent_steps,1) # Failed attempts count equally in both arms.
-                self.write(h,'Inspect indicator, toggle device, check returned images.',0,'plan')
                 self.assertTrue(h.call('act',args,'action')['ok'])
+                self.assertTrue(h.call('look',{'yaw_degrees':15,'revision':h.revision},'look')['ok'])
+                self.assertEqual(h.task_notes.read()['content'],'')
+                self.assertEqual(h.backend.steps,2)
                 self.assertEqual(h.agent_steps,2)
 
     def test_replay_has_initial_plan_current_tree_and_changes_without_future_leak(self):
