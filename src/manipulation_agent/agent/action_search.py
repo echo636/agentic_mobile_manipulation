@@ -183,6 +183,7 @@ def search_actions(notes, max_states=16384):
                              covered=covered, complete=set(required) <= covered))
     gaps = {name: set().union(*(reasons[name] for reasons in rejected.values())) for name in costs.gaps}
     return variants, dict(algorithm='bounded best-first state search with h-max cost bounds',
+        cost_assumptions=costs.cost_assumptions,
         expanded_states=expanded, search_truncated=truncated,
         optimal_in_declared_model=bool(finished) and not truncated and len(conditions) == len(required),
         missing_goal_conditions=sorted(set(required) - conditions.keys()),

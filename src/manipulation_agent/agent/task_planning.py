@@ -106,9 +106,12 @@ def compile_goals(rows):
 class WorkCosts:
     """Shared work, travel, resource and simulation-clock transition model."""
     def __init__(self, context, methods):
-        self.wait_rate = context.get('wait_cost_per_sim_second')
-        if self.wait_rate is not None:
-            self.wait_rate = seconds(self.wait_rate)
+        # An omitted price is not a missing physical precondition. Use an
+        # explicit nominal estimate until the model prices observed waiting.
+        declared_rate = context.get('wait_cost_per_sim_second')
+        self.wait_rate = seconds(1. if declared_rate is None else declared_rate)
+        self.cost_assumptions = ({'wait_cost_per_sim_second': self.wait_rate}
+            if declared_rate is None and any(m['awaits'] for m in methods) else {})
         # Shortest paths use only supplied directed edges, never unknown zero costs.
         paths = {}
         places = {context['location'], *(p for m in methods for p in m['route'])}
@@ -130,8 +133,7 @@ class WorkCosts:
             key = switch['key'], switch['from'], switch['to'], switch['at']
             switches[key] = seconds(switch['seconds'])
         self.paths, self.switches = paths, switches
-        self.gaps = {key: set() for key in ('routes', 'required_states', 'setup_transitions',
-                                          'processes', 'wait_cost_methods')}
+        self.gaps = {key: set() for key in ('routes', 'required_states', 'setup_transitions', 'processes')}
 
     def apply(self, method, at, current, clocks):
         remaining = dict(clocks)
@@ -140,15 +142,11 @@ class WorkCosts:
         missing_states = self.gaps['required_states']
         missing_switches = self.gaps['setup_transitions']
         missing_processes = self.gaps['processes']
-        missing_wait_costs = self.gaps['wait_cost_methods']
         unknown = set(method['awaits']) - remaining.keys()
         if unknown:
             missing_processes.update((method['id'], p) for p in unknown)
             return None
         wait = max((remaining[p] for p in method['awaits']), default=0.)
-        if wait and wait_rate is None:
-            missing_wait_costs.add(method['id'])
-            return None
         unmet = {k for k, v in method['requires'].items() if current.get(k) != v}
         if unmet:
             missing_states.update((method['id'], k, method['requires'][k]) for k in unmet)
@@ -178,7 +176,7 @@ class WorkCosts:
             parts = dict(work=method['seconds'], travel=travel_cost,
                          setup=setup_cost, recovery=method['recovery_seconds'])
             if method['awaits']:
-                parts['wait'] = wait * (wait_rate or 0.)
+                parts['wait'] = wait * wait_rate
             total = sum(parts.values())
             step = dict(method_id=method['id'], description=method['description'],
                         goals=method['goals'], route=route,
@@ -304,6 +302,7 @@ def schedule_task(notes, beam_width=32):
         optional_work=dict(available=sorted(set(dependencies) - required),
                            scheduled=sorted(done - required)),
         estimated_seconds=cost, steps=steps, next=steps[0] if steps else None,
+        cost_assumptions=costs.cost_assumptions,
         alternatives=comparisons, comparison_goals=sorted(done & required),
         comparison=dict(retained_plans=len(comparable_paths),
             distinct_method_sets=len({tuple(sorted(s['method_id'] for s in path))

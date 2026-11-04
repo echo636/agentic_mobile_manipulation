@@ -83,8 +83,9 @@ class TaskPlanningTests(unittest.TestCase):
         self.assertEqual(plan['steps'][1]['process_timing']['wait_simulation_seconds'], 5)
         del doc['planning']['wait_cost_per_sim_second']
         plan = schedule_task(doc)
-        self.assertEqual(plan['status'], 'partial')
-        self.assertEqual(plan['gaps']['wait_cost_methods'], ['check'])
+        self.assertEqual(plan['status'], 'estimated')
+        self.assertEqual(plan['estimated_seconds'], 1007)
+        self.assertEqual(plan['cost_assumptions'], {'wait_cost_per_sim_second': 1.})
         del doc['planning']['processes']['drying']
         self.assertIn(['check', 'drying'], schedule_task(doc)['gaps']['processes'])
 

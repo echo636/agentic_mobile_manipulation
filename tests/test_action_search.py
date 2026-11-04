@@ -168,6 +168,14 @@ class ActionSearchTests(unittest.TestCase):
         variants, _ = search_actions(doc)
         self.assertEqual([s['method_id'] for s in variants[0]['path']], ['heat', 'prepare-a', 'check-b'])
         self.assertEqual(variants[0]['estimated_seconds'], 3)
+        # Missing a cost estimate must not make an otherwise usable process
+        # impossible; real missing process state is checked separately.
+        del doc['planning']['wait_cost_per_sim_second']
+        doc['execution']['operators'][1]['simulation_seconds'] = 0
+        variants, search = search_actions(doc)
+        self.assertTrue(variants[0]['complete'])
+        self.assertEqual(variants[0]['estimated_seconds'], 23)
+        self.assertEqual(search['cost_assumptions'], {'wait_cost_per_sim_second': 1.})
 
 
 if __name__ == '__main__':
