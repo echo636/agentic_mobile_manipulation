@@ -86,6 +86,7 @@ class MaterialActionTests(unittest.TestCase):
         backend._transfer_preconditions = lambda *args: (source, destination)
         backend._pour_objects = lambda source: remaining or objects
         backend._pour_rigid_objects = lambda *args: objects
+        backend._grasp_dependencies = lambda target: []
         backend._placement_record = lambda record: None
 
         def transfer_material(*args, **kwargs):
@@ -108,7 +109,7 @@ class MaterialActionTests(unittest.TestCase):
             self.assertEqual(partial['materials'][0]['retained_particles'], 3)
         self.assertEqual(result['rigid_transfer'], {
             'moved_objects': 3, 'retained_objects': 2, 'source_remaining_objects': 1,
-            'inside_objects': 1, 'on_top_objects': 1,
+            'inside_objects': 1, 'on_top_objects': 1, 'indirectly_supported_objects': 0,
             'identities_changed_during_settling': False})
         self.assertTrue(result['source_has_more_material'])
 
@@ -144,7 +145,7 @@ class MaterialActionTests(unittest.TestCase):
         stale_contact.assert_not_called()
         self.assertEqual(result['rigid_transfer'], {
             'moved_objects': 1, 'retained_objects': 0, 'source_remaining_objects': 0,
-            'inside_objects': 0, 'on_top_objects': 0,
+            'inside_objects': 0, 'on_top_objects': 0, 'indirectly_supported_objects': 0,
             'identities_changed_during_settling': True})
 
     def test_pour_accepts_surfaces_while_scoop_requires_a_vessel(self):
@@ -186,171 +187,33 @@ class MaterialActionTests(unittest.TestCase):
             selected = backend._pour_objects(source)
         self.assertEqual([obj.name for obj in selected], ['bottom_piece', 'top_piece', 'nested_vessel'])
 
-    def test_rigid_pour_uses_low_free_cavity_layer_instead_of_rim_height(self):
-        try:
-            import torch
-        except ImportError:
-            self.skipTest('Requires geometry environment')
+    def test_pour_retains_pile_through_native_support_chain(self):
         from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
-        contained = type('ContainedParticles', (), {})
-        inside = type('Inside', (), {})
-        low, high = torch.tensor([0., 0., .9]), torch.tensor([.2, .2, 1.03])
-        volume = types.SimpleNamespace(visual_aabb=(low, high),
-            get_position_orientation=lambda: ((low+high)/2, torch.tensor([0., 0., 0., 1.])),
-            check_points_in_volume=lambda points: ((points >= low) & (points <= high)).all(1))
-        receiver = types.SimpleNamespace(name='pot', aabb=(low, torch.tensor([.2, .2, 1.12])),
-            states={contained: types.SimpleNamespace(link=volume)})
-        origin = torch.tensor([2., 3., 1.])
-        item = types.SimpleNamespace(name='small_rigid_item',
-            get_position_orientation=lambda: (origin, torch.tensor([0., 0., 0., 1.])))
-        backend = CheckedMaterialTransfer(); backend.torch = torch
-        backend.deadline = types.SimpleNamespace(check=lambda: None)
-        backend._collision_vertices = lambda obj: torch.stack((origin - .01, origin + .01))
-        # The actual support intrudes above the volume's annotated lower edge.
-        # Reject the lowest layer, but permit a higher interior layer.
-        backend._inside_overlap_ranker = lambda assembly: lambda center, extent: center[2] - extent[2]/2 < .93
+        inside, on_top, volume = (type(name, (), {}) for name in ('Inside', 'OnTop', 'ContainedParticles'))
+        source = types.SimpleNamespace(name='source')
+        receiver = types.SimpleNamespace(name='board', states={})
+        bottom = types.SimpleNamespace(name='bottom', states={on_top: types.SimpleNamespace(
+            get_value=lambda target: target is receiver)})
+        stacked = types.SimpleNamespace(name='stacked', states={on_top: types.SimpleNamespace(
+            get_value=lambda target: target is bottom)})
+        spilled = types.SimpleNamespace(name='spilled', states={on_top: types.SimpleNamespace(
+            get_value=lambda target: False)})
+        objects = [bottom, stacked, spilled]
+        backend = CheckedMaterialTransfer()
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
+            object_registry=lambda key, name: next(obj for obj in objects if obj.name == name)))
+        backend._transfer_preconditions = lambda *args: (source, receiver)
+        backend._pour_rigid_objects = lambda *args: objects
         backend._placement_record = lambda row: None
+        backend._transfer_material_portion = lambda *args, **kwargs: {'materials': []}
+        backend._pour_objects = lambda target: objects if target is source else []
+        backend._grasp_dependencies = lambda target: [(bottom, receiver, 'OnTop'), (stacked, bottom, 'OnTop')]
         with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
-                                         ContainedParticles=contained, Inside=inside, create=True):
-            position, _ = backend._volume_pour_pose(item, receiver, [])
-        self.assertGreaterEqual(float(position[2]) - .01, .93)
-        self.assertLess(float(position[2]) + .01, float(high[2]))
-
-        # An occupied cavity is not an occupied opening. A release above a
-        # protruding resident and higher physical rim must remain collision-clear.
-        resident = types.SimpleNamespace(aabb=(low, torch.tensor([.2, .2, 1.08])),
-            states={inside: types.SimpleNamespace(get_value=lambda target: target is receiver)})
-        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(objects=[resident]))
-        backend._inside_overlap_ranker = lambda assembly: lambda center, extent: center[2] - extent[2]/2 <= 1.12
-        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
-                ContainedParticles=contained, Inside=inside, create=True), patch.object(
-                sys.modules['omnigibson.utils'], 'transform_utils',
-                types.SimpleNamespace(quat2mat=lambda quat: torch.eye(3)), create=True):
-            position, orientation = backend._volume_pour_pose(item, receiver, [])
-            self.assertGreater(float(position[2]) - .01, 1.12)
-            self.assertTrue(torch.equal(orientation, item.get_position_orientation()[1]))
-            backend._inside_overlap_ranker = lambda assembly: lambda center, extent: True
-            self.assertIsNone(backend._volume_pour_pose(item, receiver, []))
-
-    def test_rigid_pour_can_use_center_of_tilted_shallow_tray(self):
-        import itertools
-        import torch
-        from scipy.spatial.transform import Rotation
-        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
-
-        contained, inside = (type(name, (), {}) for name in ('ContainedParticles', 'Inside'))
-        rotation = torch.tensor(Rotation.from_euler('y', 5, degrees=True).as_matrix(), dtype=torch.float32)
-        origin, half = torch.tensor([0., 0., 1.]), torch.tensor([.1, .2, .002])
-        corners = torch.tensor(list(itertools.product((-1., 1.), repeat=3))) * half
-        world = corners @ rotation.T + origin
-        low, high = world.amin(0), world.amax(0)
-        volume = types.SimpleNamespace(visual_aabb=(low, high),
-            get_position_orientation=lambda: (origin, torch.tensor(
-                Rotation.from_matrix(rotation.numpy()).as_quat(), dtype=torch.float32)),
-            check_points_in_volume=lambda points: (((points-origin) @ rotation).abs() <= half).all(1))
-        # The world ceiling excludes even the center of this native-shaped tray.
-        self.assertFalse(bool(volume.check_points_in_volume(
-            torch.tensor([[0., 0., float(high[2])-.001]]))[0]))
-        receiver = types.SimpleNamespace(name='tray', aabb=(low, high),
-            states={contained: types.SimpleNamespace(link=volume)})
-        position = torch.tensor([2., 3., 1.])
-        item = types.SimpleNamespace(name='item', get_position_orientation=lambda:
-            (position, torch.tensor([0., 0., 0., 1.])))
-        backend = CheckedMaterialTransfer(); backend.torch = torch
-        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(objects=[]))
-        backend.deadline = types.SimpleNamespace(check=lambda: None)
-        backend._collision_vertices = lambda obj: torch.stack((position-.01, position+.01))
-        backend._placement_record = lambda row: None
-        # Existing contents leave a central release corridor above the rim.
-        backend._inside_overlap_ranker = lambda assembly: lambda center, extent: (
-            abs(center[0])+abs(center[1]) > 1e-6 or center[2] < float(high[2])+.005)
-        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
-                ContainedParticles=contained, Inside=inside, create=True), patch.object(
-                sys.modules['omnigibson.utils'], 'transform_utils',
-                types.SimpleNamespace(quat2mat=lambda quat: rotation), create=True):
-            pose = backend._volume_pour_pose(item, receiver, [])
-        self.assertIsNotNone(pose)
-        torch.testing.assert_close(pose[0][:2], torch.zeros(2), atol=1e-6, rtol=0)
-        self.assertGreater(float(pose[0][2]), float(high[2]))
-
-    def test_rigid_pour_commits_once_and_keeps_failed_physical_result(self):
-        import numpy as np
-        from unittest.mock import Mock
-        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
-
-        states = {name: type(name, (), {}) for name in ('Inside', 'OnTop', 'ContainedParticles')}
-        import itertools
-        for relation, shallow, retained in itertools.product(('OnTop', 'Inside'), (False, True), (False, True)):
-            with self.subTest(relation=relation, shallow=shallow, retained=retained):
-                receiver = types.SimpleNamespace(name='receiver', states=(
-                    {states['ContainedParticles']: object()} if relation == 'Inside' else {}),
-                    aabb=(np.zeros(3), np.ones(3)))
-                objects = [types.SimpleNamespace(name=str(i), states={states[relation]:
-                    types.SimpleNamespace(set_value=Mock(side_effect=AssertionError('cuboid sampler')),
-                                          get_value=lambda target: retained and not shallow)},
-                    set_position_orientation=Mock(), keep_still=Mock()) for i in range(2)]
-                if shallow:
-                    for obj in objects:
-                        obj.states[states['OnTop']] = types.SimpleNamespace(get_value=lambda target: retained)
-                backend = CheckedMaterialTransfer()
-                backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
-                    object_registry=lambda key, name: next(obj for obj in objects if obj.name == name)))
-                backend.og = types.SimpleNamespace(sim=types.SimpleNamespace(
-                    get_physics_dt=lambda: 1/120, get_sim_step_dt=lambda: 1/30,
-                    load_state=Mock(side_effect=AssertionError('scene rewind'))))
-                backend.deadline = types.SimpleNamespace(check=lambda **kw: None)
-                backend._grasp_dependencies = lambda obj: []
-                selected_point = np.array([.8, .2, .3])
-                # A clear patch on a lower shelf; the box center is not a
-                # usable receiving surface (for example a countertop sink).
-                backend._surface_candidates = Mock(side_effect=lambda obj, target, point, **kwargs:
-                    [dict(index=1, pose=(np.ones(3), np.ones(4))),
-                     dict(index=2, pose=(np.zeros(3), np.ones(4)))]
-                    if np.array_equal(point, selected_point) else [])
-                backend._inside_pose_overlap_ranker = lambda *args, **kwargs: (
-                    lambda position, quaternion: int(np.any(position)))
-                backend._volume_pour_pose = lambda obj, *args: (
-                    None if shallow and obj is objects[1] else (np.zeros(3), np.ones(4)))
-                backend._relocate_contents = Mock()
-                backend._placement_physics_step = Mock()
-                backend._placement_record = Mock()
-                backend.primitives = types.SimpleNamespace(_empty_action=lambda: [])
-                backend._step = Mock()
-                with self.modules, patch.multiple(sys.modules['omnigibson.object_states'], **states, create=True), \
-                        patch.object(sys.modules['omnigibson.utils'], 'transform_utils', object(), create=True), \
-                        patch('manipulation_agent.executors.material_transfer.snapshot_particles', return_value=[]), \
-                        patch('manipulation_agent.executors.particle_payload.relocate_particles'):
-                    moved = backend._pour_rigid_objects(object(), receiver, objects, 6, selected_point)
-                self.assertEqual(moved, objects if retained else objects[:1])
-                for obj in moved:
-                    obj.set_position_orientation.assert_called_once()
-                    np.testing.assert_array_equal(obj.set_position_orientation.call_args.args[0], np.zeros(3))
-                if not retained:
-                    objects[1].set_position_orientation.assert_not_called()
-                backend._placement_physics_step.assert_not_called()
-                backend._step.assert_called()
-                np.testing.assert_array_equal(selected_point, [.8, .2, .3])
-                if relation == 'OnTop':
-                    self.assertEqual(backend._surface_candidates.call_count, len(moved))
-                else:
-                    self.assertEqual(backend._surface_candidates.call_count, int(shallow and retained))
-                last_is_surface = relation == 'OnTop' or (shallow and retained)
-                key = 'official_on_top' if last_is_surface else 'official_inside'
-                self.assertEqual(backend._placement_record.call_args.args[0][key],
-                                 retained and (last_is_surface or not shallow))
-                # The final receipt must agree with the transfer loop, including
-                # a thin chip resting on a tray outside its annotated volume.
-                backend._transfer_preconditions = lambda *args: (types.SimpleNamespace(name='source'), receiver)
-                backend._pour_objects = lambda *args: objects
-                backend._pour_rigid_objects = lambda *args: moved
-                backend._transfer_material_portion = lambda *args, **kwargs: {}
-                with self.modules, patch.multiple(sys.modules['omnigibson.object_states'], **states, create=True):
-                    if retained:
-                        result = backend._checked_transfer('pour', receiver, 6)
-                        self.assertEqual(result['rigid_transfer']['retained_objects'], len(objects))
-                    else:
-                        with self.assertRaises(SkillError):
-                            backend._checked_transfer('pour', receiver, 6)
+                Inside=inside, OnTop=on_top, ContainedParticles=volume, create=True):
+            result = backend._checked_transfer('pour', receiver, 6)
+        self.assertEqual(result['rigid_transfer']['retained_objects'], 2)
+        self.assertEqual(result['rigid_transfer']['on_top_objects'], 1)
+        self.assertEqual(result['rigid_transfer']['indirectly_supported_objects'], 1)
 
     def test_surface_pour_moves_existing_portion_and_measures_contact_after_settling(self):
         import numpy as np
