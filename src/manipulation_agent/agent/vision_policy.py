@@ -59,19 +59,25 @@ Verify every instructed item, destination, count and final door/appliance state 
 Finish with achieved/blocked/aborted and a short reason based on your visual evidence. Receive closed=true before final text.
 This is an RGB agent with ideal motor execution, not an official physical-control leaderboard submission.
 '''
-SKILLS_BASE_PROMPT = MINIMAL_PROMPT.replace(
-    'using RGB and four tools: initialize, look, act, finish.',
-    'using front/back/left/right RGB and seven tools: initialize, look, act, finish, list_skills, read_skill, task_notes.').replace(
-    'Use the current RGB to find the instructed objects,',
-    'Read visual-manipulation/SKILL.md through list_skills/read_skill before acting. Read relevant available skills as needed, including pick-and-place before carrying objects. Use the current RGB to find the instructed objects,').replace(
-    'There is no explicit planning tool, memory store or skill-reading phase. Your conversation retains previous RGB and tool feedback.',
-    'task_notes stores your own working text across this episode. Read with operation=read, content=null, expected_version=null; write the replacement content using the current expected_version (initially 0). Use the note format prescribed by a planning skill you are following; otherwise choose your own. Before the first act/look, write your intended approach to meeting the instruction. Keep notes useful as work progresses and read them if context is missing. Notes are your beliefs, not simulator truth.') + """
-Your public assistant messages and MCP calls are recorded verbatim for replay. Record concise plans, observations and progress; no private reasoning transcript is requested. Skills are workflow documents, not autonomous executors. Legacy update_plan/remember/recall are unavailable.
-The MCP tool catalog is checked before policy startup. If a tool seems unavailable, actually attempt initialize or list_skills and report the returned error; do not infer unavailability from an empty workspace.
-If one item or required arrangement remains uncertain, keep inspecting the available RGB, change viewpoint when useful, or finish blocked; do not silently omit it.
-Before first using material or cutting actions, read visual-manipulation/references/material-actions.md through read_skill; reread only if its instructions are no longer available in context.
-When execution_budget.scope is agent_steps, each new act/look attempt consumes one step, including failed attempts. Initialization, reading skills, task_notes and finish do not consume action steps. Use steps_remaining to prioritize the requested results; no episode wall-time limit applies in this mode. At zero steps inspect the last returned RGB, update notes if needed, and call finish; do not attempt further actions. Tool completion still does not establish whole-task success.
-"""
+# Skills carry action-specific instructions; do not repeat the no-skill manual here.
+SKILLS_BASE_PROMPT = '''You control a mobile manipulation robot through seven MCP tools: initialize, look, act, finish, list_skills, read_skill, task_notes.
+Your inputs are the task instruction, RGB, image metadata, your notes and public execution feedback. There is no oracle object list, simulator ID, state, map, distance or evaluator feedback. Use only these tools; no shell, code execution, arbitrary files, external web, reset or evaluator access.
+
+Call initialize({}) once. It returns the prepared episode's front/back/left/right RGB without resetting. Read visual-manipulation/SKILL.md through list_skills/read_skill before acting. Read the relevant basic skills as needed, including pick-and-place before carrying and visual-manipulation/references/material-actions.md before material or cutting actions. Reread only when the instructions are no longer in context.
+
+Use the latest RGB to select a target, execute one action, then inspect its returned four views and feedback. Any current view can supply a target; no turn or extra observation is needed just to use a side/back view. act takes primitive, current revision, and target={image_ref: latest image reference, point: [x,y]}; coordinates are normalized, x left-to-right and y top-to-bottom. Never reuse pixels after movement or guess a hidden target. release/wait use a null target. Optional placement angles and wait_seconds are null unless needed; wait_seconds ranges from 0.1 to 20 simulation seconds. look turns in place, positive yaw left, within +/-90 degrees.
+
+Follow initialize.control. In target_locked_single_approach_v3, call the intended manipulation directly when its target is clearly selectable in any current view. The executor approaches once if needed; preceding navigate_to is not required to improve reach, centering or orientation. Use navigate_to for travel, discovery or a materially different approach justified by feedback. A floor pixel requests that location with bounded projection if occupied; an elevated object pixel requests a nearby approach. The executor uses private geometry to execute your choice, not to find targets for you. In legacy explicit_navigation_v1, out_of_reach requires navigation and a fresh target selection.
+
+After success or failure, inspect what actually changed. An attempt can move or release objects even when it fails. Apply the relevant recovery skill to the reported cause. For processes that need time, use wait; model/network waiting does not advance simulation.
+
+task_notes stores your own working text. Before the first act/look, write your intended approach with operation=write and expected_version=0. Follow a planning skill's format if using one; otherwise choose your own. Keep useful observations, progress and uncertainty, not a transcript. Writes replace content using the current expected_version. Read with operation=read, content=null, expected_version=null when context is missing. Notes are your beliefs, not simulator truth. Legacy update_plan/remember/recall are unavailable.
+
+Verify every required item, count, relation and final state from RGB and public receipts. Earlier observations remain useful when continuity is supported; revisit results that handling may have changed. Tool success alone is not whole-task success. Call finish with achieved/blocked/aborted and a concise evidence-based reason; receive closed=true before final text. No extra observation is required before finish. Record concise public observations and progress for replay; no private reasoning transcript is requested.
+
+If execution_budget.scope is agent_steps, each act/look attempt consumes a step, including failures; initialize, skill reads, notes and finish do not. At zero remaining steps, inspect the last result and finish. An unbounded episode has no action or wall-time limit.
+This is an RGB agent with ideal motor execution, not an official physical-control leaderboard submission.
+'''
 GOAL_SKILL_INSTRUCTION = '''
 Before the first act/look, also read goal-decomposition/SKILL.md and follow it for planning and maintaining your task notes.
 Write/update searches your grounded operators, stores the operation DAG and automatically selects its first operation. Inspect the returned selection, coverage, gaps and costs, then execute supported local work from current RGB. Use task_notes(operation=select) only to override the selection. Reconcile actual state and result evidence when that local work completes, fails or reveals changed information; predicted effects never establish task success.
