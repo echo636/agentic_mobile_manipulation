@@ -385,15 +385,10 @@ class ControlledCarry:
         return support_closure(obj,candidates,relation)
 
 
-    def _verify_payload(self, dependencies, *, support_target=None, support_resting=None):
-        from omnigibson.object_states import Inside,OnTop,Touching,AttachedTo
-        stage = 'released_supported_payload_unconfirmed' if support_target is not None else None
-        try:
-            verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
-        except SkillError as exc:
-            if stage and exc.code == 'postcondition_error':
-                exc.stage = stage
-            raise
+    def _verify_payload(self, dependencies):
+        """Attachment assembly check; ordinary placement does not require this."""
+        from omnigibson.object_states import Inside,OnTop,AttachedTo
+        verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
         for child,parent,kind in dependencies:
             if kind=='AttachedToParent':
                 child,parent=parent,child
@@ -409,21 +404,6 @@ class ControlledCarry:
                         'child':child.name,'parent':parent.name,
                         'original_relation':kind,'current_relation':'OnTop'})
                     continue
-                # Releasing an assembly on a surface can transfer a supported
-                # child's weight to that same surface. Requiring the old
-                # OnTop edge would reject an otherwise stable placement.
-                # An originally contained child must stay with its carrier;
-                # sliding/falling elsewhere never qualifies.
-                resting=(support_resting or {}).get(id(child),{})
-                if (kind=='OnTop' and support_target is not None
-                        and resting.get('stable',False)
-                        and OnTop in child.states and Touching in child.states
-                        and child.states[OnTop].get_value(support_target)
-                        and child.states[Touching].get_value(support_target)):
-                    self._placement_record({'status':'payload_support_transferred',
-                        'child':child.name,'original_parent':parent.name,
-                        'support':support_target.name,'resting_motion':resting})
-                    continue
                 self._placement_record({'status':'payload_relation_failed',
                     'child':child.name,'parent':parent.name,'relation':kind,
                     'child_position':child.get_position_orientation()[0].tolist(),
@@ -431,4 +411,4 @@ class ControlledCarry:
                     'child_orientation':child.get_position_orientation()[1].tolist(),
                     'parent_orientation':parent.get_position_orientation()[1].tolist(),
                     'child_linear_velocity':child.get_linear_velocity().tolist()})
-                raise SkillError('postcondition_error','Carried payload lost its original support, containment or attachment after placement',changed=True,stage=stage)
+                raise SkillError('postcondition_error','Attachment payload lost its original support, containment or attachment',changed=True)

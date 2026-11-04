@@ -211,7 +211,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
         b.primitives=types.SimpleNamespace(_empty_action=lambda:None)
         b._placement_record=lambda data:None;b._get_held=lambda:None
-        b._verify_payload=lambda *a,**kw:None
+        b._verify_payload=lambda *a,**kw:self.fail('Placement must not require every payload relation to persist')
         b._inside_pose_overlap_ranker=lambda *a,**kw:None
         b._settle_surface_contacts=lambda *a,**kw:None
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):

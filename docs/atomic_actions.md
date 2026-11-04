@@ -1,11 +1,10 @@
 # Atomic actions with native physics
 
-Candidate sampling and committed execution have separate lifetimes. Rejected
-hypothetical placement trials restore their snapshot, including the native grasp;
-otherwise failed search would leave an unexecuted collision in the scene. Once a
-pose is selected and environment stepping begins, physical outcomes are retained,
-including failed postconditions. `place_next_to` commits only once and does not
-rewind an executed release to try another candidate.
+Ordinary placement constructs a release pose from geometry, releases once, and
+retains the physical outcome. It reports the placed object's resulting relation;
+it does not require every carried object or particle to retain its previous
+containment or support. Returned RGB shows the contents after release, and the
+unchanged official task evaluator determines whether final requirements hold.
 
 Placement collision geometry reads explicitly synchronize PhysX to Fabric.
 Without rendering, a live body pose and a stale mesh transform can disagree and
@@ -21,9 +20,7 @@ The executor uses OmniGibson's assisted-grasp fixed joint while a rigid object i
 A symbolic transfer moves the selected object and its current payload once;
 subsequent gravity, contact, joint motion and released contents belong to PhysX.
 There is no per-step pose projection, fixed released container, resident-content
-pinning, or rollback of a committed physical outcome. Candidate sampling can
-restore hypothetical trials before choosing a pose; this is separate from
-maintaining an action result.
+pinning, or rollback of a committed physical outcome.
 
 Navigation certifies a geometric route and commits its endpoint once, followed
 by native settling. It does not simulate continuous driving or charge the
@@ -44,12 +41,14 @@ continuous recording is optional in iteration batches.
 
 The material transfer actions also include `pour` and `scoop`. `pour` takes a
 held vessel, board or ready dispenser and a selected receiver. It
-attempts loose rigid contents with native `Inside` placement into vessels or
-`OnTop` placement onto work surfaces. Material uses volume sampling or native
+releases loose rigid contents above the receiver using one common translation,
+preserving their relative arrangement and orientation. It does not arrange
+individual objects into slots or simulate the source vessel tipping.
+Material uses volume sampling or native
 top-down surface sampling; existing particle identities are moved once and
 settle freely. Surface receipts count contacts after settling. The source stays
 in hand. `scoop` transfers material from
-the selected source into the held vessel. Both preserve existing contents;
+the selected source into the held vessel. Both transfer existing identities;
 dispensers supply only their authored material. Receiving capacity can leave
 contents behind. Rigid transfer feedback distinguishes moved, retained and
 remaining objects. Settling, including any spill, remains physical. Adding this

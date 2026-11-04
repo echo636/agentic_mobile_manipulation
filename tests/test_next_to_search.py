@@ -39,7 +39,7 @@ class NextToSingleRelease(unittest.TestCase):
                                                                neighbor='moved_by_physics')
         b._next_to_check = lambda *args, **kwargs: (valid, {'checks': {
             'released': not world['held'], 'supported': True, 'next_to': valid}})
-        b._verify_payload = lambda *args, **kwargs: None
+        b._verify_payload = lambda *args, **kwargs: self.fail('Placement must not require unchanged contents')
         b._step = lambda action: world.update(commits=world['commits']+1)
         b.primitives = SimpleNamespace(_empty_action=lambda: None)
         return b, target, world

@@ -78,7 +78,6 @@ class CheckedPlacement:
             raise SkillError('unsupported_relation', 'Carried object cannot be placed under this target')
         contents = list(self._carry_contents)
         payload = [obj for obj, _ in contents]
-        dependencies = list(getattr(self, '_carry_dependencies', []))
         candidates = self._under_candidates(held, target, payload)
         if not candidates:
             raise SkillError('sampling_error', 'No support surface found under the selected target')
@@ -102,7 +101,6 @@ class CheckedPlacement:
         if not all(checks.values()):
             raise SkillError('postcondition_error', 'Released object did not remain supported under the selected target',
                              changed=True, stage='released_placement_unconfirmed')
-        self._verify_payload(dependencies)
         self.frames_revision = -1
         return {'primitive': 'place_under', 'implementation': 'measured_support_then_free_settling',
                 'postcondition': 'Under.get_value_after_settling', 'failure_policy': 'retain_physical_result'}
@@ -218,7 +216,6 @@ class CheckedPlacement:
             raise SkillError('unsupported_relation', 'Carried object cannot be placed next to this target')
         contents = list(self._carry_contents)
         payload = [obj for obj, _ in contents]
-        dependencies = list(getattr(self, '_carry_dependencies', []))
         candidates = self._next_to_candidates(held, target, point, payload, yaw_degrees)
         if not candidates:
             raise SkillError('placement_surface_unavailable', 'No support surface near the selected reference')
@@ -253,7 +250,6 @@ class CheckedPlacement:
                          checks['supported'] and not checks['next_to'] else 'released_placement_unconfirmed')
                 raise SkillError('postcondition_error', 'NextTo did not remain after release',
                                  changed=True, stage=stage)
-            self._verify_payload(dependencies, support_target=candidate['support'])
         finally:
             self.frames_revision = -1
             self._step(self.primitives._empty_action())
@@ -628,7 +624,7 @@ class CheckedPlacement:
         self.sampling_physics_steps += 1
         self.og.sim.step_physics()
 
-    def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None, payload_resting=None):
+    def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None):
         """Let the released assembly settle before reading native state transitions.
 
         Sampling can put a small object to sleep before its contact state has
@@ -654,9 +650,6 @@ class CheckedPlacement:
             self.og.sim.sync_physx_to_fabric()
             if resting is not None:
                 resting.add(*held.get_position_orientation())
-            for child in payload:
-                window=(payload_resting or {}).get(id(child))
-                if window is not None:window.add(*child.get_position_orientation())
         for obj in objects:
             for state in obj.states.values():
                 state.clear_cache()
@@ -667,7 +660,6 @@ class CheckedPlacement:
         from .resting_motion import RestingMotionWindow
         contents = list(self._carry_contents)
         payload = [obj for obj, _ in contents]
-        dependencies = list(getattr(self, '_carry_dependencies', []))
         candidate = self._select_surface_candidate(held, target, point, yaw_degrees, payload,
                                                    roll_degrees=roll_degrees)
         verification_point = candidate.get('verification_point', point)
@@ -684,10 +676,7 @@ class CheckedPlacement:
         held.keep_still()
         held.wake()
         resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
-        payload_resting = {id(child): RestingMotionWindow(self.og.sim.get_sim_step_dt())
-                           for child, _, kind in dependencies if kind == 'OnTop'}
-        self._settle_surface_contacts(held, target, payload, max_steps, resting=resting,
-                                      payload_resting=payload_resting)
+        self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
         try:
             contacts = self._placement_contacts(held, payload)
             touching = any(link.prim_path in contacts for link in target.links.values())
@@ -704,8 +693,6 @@ class CheckedPlacement:
             if not supported:
                 raise SkillError('postcondition_error', 'Object did not settle on the selected surface',
                                  changed=True, stage='released_placement_unconfirmed')
-            self._verify_payload(dependencies, support_target=target,
-                                 support_resting={key: window.report() for key, window in payload_resting.items()})
         finally:
             # The release is real even when its result fails. Advance native
             # transitions and evaluation on both paths, without rewinding.
@@ -807,7 +794,6 @@ class CheckedPlacement:
                 link.meta_link_type in {'fillable', 'openfillable'} for link in target.links.values()):
             raise SkillError('unsupported_relation', 'Target has no supported fillable volume')
         contents = list(self._carry_contents)
-        dependencies = list(self._carry_dependencies)
         moving_ids = {id(held), *[id(child) for child, _ in contents]}
         residents = [row for row in self._container_payload(target) if id(row[0]) not in moving_ids]
         candidate = select_inside_release(self, held, target, contents, point=point, residents=residents)
@@ -827,20 +813,13 @@ class CheckedPlacement:
             if not inside:
                 raise SkillError('postcondition_error', 'Object did not remain inside after release',
                                  changed=True, stage='released_placement_unconfirmed')
-            try:
-                self._verify_container_payload(target, residents)
-                self._verify_payload(dependencies)
-            except SkillError as exc:
-                if exc.code == 'postcondition_error':
-                    exc.stage = 'released_inside_payload_unconfirmed'
-                raise
         finally:
             self.frames_revision = -1
             # This is the real outcome, including failure. Native transitions
             # and evaluation advance once; no world state is restored.
             self._step(self.primitives._empty_action())
         return {'primitive': 'place_inside', 'implementation': 'single_geometric_release_and_free_settling',
-                'postcondition': 'Inside_and_retained_payload_after_free_settling',
+                'postcondition': 'Inside_after_free_settling',
                 'failure_policy': 'retain_physical_result',
                 'sampling_physics_steps': self.sampling_physics_steps - before}
 

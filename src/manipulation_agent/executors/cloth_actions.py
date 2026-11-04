@@ -77,7 +77,6 @@ class CheckedClothActions:
         from omnigibson.object_states import NextTo, OnTop
 
         contents = list(self._carry_contents)
-        dependencies = list(self._carry_dependencies)
         payload = [child for child, _ in contents]
         candidates = (self._next_to_candidates(held, target, point, payload, yaw_degrees)
                       if primitive == 'place_next_to' else
@@ -109,7 +108,6 @@ class CheckedClothActions:
                 raise SkillError('postcondition_error',
                     'Cloth placement did not satisfy: ' + ', '.join(key for key, ok in checks.items() if not ok),
                     changed=True, stage='released_supported_not_adjacent' if supported else None)
-            self._verify_payload(dependencies)
         finally:
             self.frames_revision = -1
         return dict(primitive=primitive, implementation='single_cloth_release_then_native_physics',
