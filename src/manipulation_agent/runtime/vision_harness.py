@@ -19,6 +19,7 @@ from ..agent.task_notes import TaskNotes, model_planning_reply
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
                  goal_skill='hierarchical', unbounded_episode=False):
+        if profile == 'basic-skills': goal_skill = 'none'
         if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
         self.goal_skill=goal_skill
         self.task_notes=TaskNotes(recorder.output, auto_select=goal_skill == 'hierarchical')
@@ -51,7 +52,7 @@ class VisionHarness:
         self.skills = None
         if profile == 'workflow':
             self.plan,self.memory=[],{}
-        if profile in {'skills','workflow'}:
+        if profile in {'basic-skills','skills','workflow'}:
             self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition'} if goal_skill=='none' else ())
         recorder.run['config']['agent_profile'] = profile
         recorder.run['config'].update(goal_skill=goal_skill)

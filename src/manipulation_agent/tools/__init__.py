@@ -5,7 +5,8 @@ from . import observation, action, planning, memory, skills, session, surround, 
 from copy import deepcopy
 
 MINIMAL_TOOLS = frozenset({'initialize', 'look', 'act', 'finish'})
-SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill', 'task_notes'}
+BASIC_SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill'}
+SKILL_TOOLS = BASIC_SKILL_TOOLS | {'task_notes'}
 
 # Execution hints, not additional permission gates or changed input contracts.
 _METADATA = {
@@ -29,9 +30,9 @@ for _name, _metadata in _METADATA.items():
         REGISTRY[_name] = replace(REGISTRY[_name], metadata=_metadata)
 
 def tool_specs(profile='skills'):
-    if profile not in {'minimal', 'skills', 'workflow'}:
+    if profile not in {'minimal', 'basic-skills', 'skills', 'workflow'}:
         raise ValueError('Unknown agent profile')
-    allowed = MINIMAL_TOOLS if profile == 'minimal' else SKILL_TOOLS
+    allowed = {'minimal': MINIMAL_TOOLS, 'basic-skills': BASIC_SKILL_TOOLS}.get(profile, SKILL_TOOLS)
     result = []
     for t in REGISTRY.values():
         if profile != 'workflow' and t.name not in allowed: continue

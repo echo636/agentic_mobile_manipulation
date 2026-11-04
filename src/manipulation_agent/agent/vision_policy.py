@@ -41,6 +41,11 @@ Inspect the returned RGB and feedback after each action, including failures, sin
 Verify the requested final state from your observations and feedback. Call finish with achieved, blocked or aborted and a concise reason. Receive closed=true before final text.
 '''
 # Skills carry action-specific instructions; do not repeat the no-skill manual here.
+BASIC_SKILLS_PROMPT = MINIMAL_PROMPT.replace(
+    'four MCP tools: initialize, look, act, finish.',
+    'six MCP tools: initialize, look, act, finish, list_skills, read_skill.') + '''
+After initialize, call list_skills and read visual-manipulation/SKILL.md before acting. Read relevant visual-exploration, pick-and-place and failure-recovery resources as needed, including visual-manipulation/references/material-actions.md before cutting or material actions. Reread only when the instructions are no longer in context. Keep useful observations as concise public text; notes mentioned by these references do not require a separate tool. This profile has no notebook or programmatic planning tools.
+'''
 SKILLS_BASE_PROMPT = '''You control a mobile manipulation robot through seven MCP tools: initialize, look, act, finish, list_skills, read_skill, task_notes.
 Your inputs are the task instruction, RGB, image metadata, your notes and public execution feedback. There is no oracle object list, simulator ID, state, map, distance or evaluator feedback. Use only these tools; no shell, code execution, arbitrary files, external web, reset or evaluator access.
 
@@ -68,7 +73,8 @@ SYSTEM_PROMPT = SKILLS_PROMPT
 
 def system_prompt(profile='skills', *, goal_skill='hierarchical'):
     if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
-    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
+    return {'minimal':MINIMAL_PROMPT,'basic-skills':BASIC_SKILLS_PROMPT,
+            'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
             'workflow':WORKFLOW_PROMPT}[profile]
 
 class RGBResponsesPolicy(ResponsesPolicy):
