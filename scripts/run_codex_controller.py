@@ -21,6 +21,7 @@ from manipulation_agent.clients.events import write_derived_events
 
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.agent.vision_policy import system_prompt
+from manipulation_agent.agent.planning_subagent import ACTOR_INSTRUCTION, PLANNER_TOOL
 from manipulation_agent.records import now, write_json, source_version
 from manipulation_agent.reporting.model_trace import export_summaries
 from manipulation_agent.transport.mcp_preflight import check_server
@@ -135,6 +136,9 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh','max','ultra'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
     p.add_argument('--model-provider-gateway', help='Optional loopback request queue for this provider')
+    p.add_argument('--planner-model', help='Optional independent visual planning model; basic-skills profile only')
+    p.add_argument('--planner-reasoning-effort', default='xhigh', choices=['low','medium','high','xhigh','max','ultra'])
+    p.add_argument('--planner-python', default=sys.executable, help='Controller-side interpreter with the MCP extra')
     p.add_argument('--rate-limit-resumes', '--provider-error-resumes', type=int, default=None,
                    help='Same-session transient provider recovery count; -1 is unbounded (default for unbounded Codex episodes)')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
@@ -160,9 +164,26 @@ def main(argv=None, *, allow_client=False):
         p.error('Rate-limit resume is supported only for Codex')
     if args.permanent_route_forks < 0 or (args.permanent_route_forks and client != 'codex'):
         p.error('Permanent route forks require Codex and a nonnegative count')
+    if args.planner_model and (args.agent_profile != 'basic-skills' or not args.model_provider_profile
+                              or not args.model_provider_gateway):
+        p.error('The planning subagent requires basic-skills and an explicit provider/gateway')
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill)
+    catalog = tool_specs(args.agent_profile)
+    planner_config = None
+    if args.planner_model:
+        planner_config = dict(model=args.planner_model, effort=args.planner_reasoning_effort,
+            instruction=args.instruction, provider=args.model_provider_profile, gateway=args.model_provider_gateway,
+            upstream_command=args.mcp_command, upstream_args=json.loads(args.mcp_args_json),
+            output=str((args.output / 'planner').resolve()))
+        planner_path = (args.output / 'planner_config.json').resolve()
+        write_json(planner_path, planner_config)
+        args.mcp_command = args.planner_python
+        args.mcp_args_json = json.dumps(['-m', 'manipulation_agent.planner_server', '--config', str(planner_path)])
+        instructions += ACTOR_INSTRUCTION
+        catalog = [*catalog, PLANNER_TOOL]
     config = ClientConfig(client, args.model, args.instruction, args.mcp_command,
                           json.loads(args.mcp_args_json), args.output, args.timeout,
                           args.agent_profile, args.isolate_client_storage,
@@ -178,8 +199,7 @@ def main(argv=None, *, allow_client=False):
         print(json.dumps(asdict(capability)))
         return 3
     try:
-        project = adapter.prepare_project(config, system_prompt(args.agent_profile,goal_skill=args.goal_skill),
-                                          [t['name'] for t in tool_specs(args.agent_profile)])
+        project = adapter.prepare_project(config, instructions, [t['name'] for t in catalog])
     except (ValueError, RuntimeError) as exc:
         write_json(args.output / 'controller.json', {
             'started_at': now(), 'finished_at': now(), 'status': 'unsupported',
@@ -198,6 +218,8 @@ def main(argv=None, *, allow_client=False):
                 "host": os.uname().nodename, "controller": client + "_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": capability.version, "client_capability": asdict(capability)}
+    if planner_config is not None:
+        metadata['planning_subagent'] = planner_config
     if project.client_storage is not None:
         metadata['client_storage'] = project.client_storage
     metadata['provider_recovery'] = dict(max_resumes=args.rate_limit_resumes,
@@ -219,7 +241,7 @@ def main(argv=None, *, allow_client=False):
             # access to /dev/null. A host-only handshake misses mount failures.
             prefix=project.mcp_prefix
             mcp_command=prefix[0];mcp_args=prefix[1:]+['--',args.mcp_command,*mcp_args]
-        metadata['mcp_preflight']=preflight_server(mcp_command,mcp_args,tool_specs(args.agent_profile),
+        metadata['mcp_preflight']=preflight_server(mcp_command,mcp_args,catalog,
                                                   args.output,deadline)
         metadata['mcp_preflight']['inside_client_storage_namespace']=native_sessions is not None
     except Exception as exc:

@@ -158,11 +158,12 @@ class CodexAdapter(ClientAdapter):
         for feature in ("shell_tool", "unified_exec", "plugins", "apps", "hooks", "view_image", "multi_agent",
                         "browser_use", "computer_use", "image_generation"):
             command += ["--disable", feature]
-        server = {"command": config.mcp_command, "args": config.mcp_args, "enabled_tools": tool_names,
-                  "startup_timeout_sec": 60, "required": True,
-                  "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
-        for key, value in server.items():
-            command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
+        if tool_names:
+            server = {"command": config.mcp_command, "args": config.mcp_args, "enabled_tools": tool_names,
+                      "startup_timeout_sec": 60, "required": True,
+                      "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
+            for key, value in server.items():
+                command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
         command += ["-"]
         return PreparedProject(command, None, config.prompt, native_sessions=native_sessions,
                                client_storage=storage, mcp_prefix=prefix)

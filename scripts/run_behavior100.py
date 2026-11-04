@@ -1192,6 +1192,10 @@ class Batch:
                 cmd += ['--model-provider-profile',self.c['model_provider_profile']]
             if self.c.get('model_provider_gateway'):
                 cmd += ['--model-provider-gateway',self.c['model_provider_gateway']]
+            if self.manifest.get('planner_model'):
+                cmd += ['--planner-model', self.manifest['planner_model'],
+                        '--planner-reasoning-effort', self.manifest['planner_reasoning_effort'],
+                        '--planner-python', self.c.get('planner_python', sys.executable)]
             if self.c.get('isolate_client_storage'):cmd.append('--isolate-client-storage')
             if self.c.get('provider_transient_resumes'):
                 cmd += ['--rate-limit-resumes',str(self.c['provider_transient_resumes']),
@@ -1495,6 +1499,10 @@ class Batch:
                     '--resume-backoff-seconds',str(self.c.get('provider_resume_backoff_seconds',90))]
         if self.c.get('model_provider_gateway'):
             cmd += ['--model-provider-gateway',self.c['model_provider_gateway']]
+        if self.manifest.get('planner_model'):
+            cmd += ['--planner-model', self.manifest['planner_model'],
+                    '--planner-reasoning-effort', self.manifest['planner_reasoning_effort'],
+                    '--planner-python', self.c.get('planner_python', sys.executable)]
         if row.get('execution_clock_path'):
             cmd+=['--execution-clock-command-json',json.dumps(self.execution_clock_command(
                 row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime,row=row))]
