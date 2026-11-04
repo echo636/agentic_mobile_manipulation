@@ -1,4 +1,4 @@
-"""Use native surface generation for recipe fluids in subdiameter trays."""
+"""Avoid empty recipe scans and use native surface output for shallow trays."""
 from functools import wraps
 
 from ...contracts import SkillError
@@ -6,11 +6,21 @@ from ...contracts import SkillError
 
 class RecipeParticleOutputPolicy:
     def __init__(self):
-        from omnigibson.transition_rules import RecipeRule
+        from omnigibson.transition_rules import RecipeRule, TransitionResults
         from omnigibson.systems.micro_particle_system import MicroPhysicalParticleSystem
         self.conversions = []
         self.rule_class = RecipeRule
         self.original = RecipeRule._execute_recipe
+        self.original_transition = RecipeRule.transition
+
+        @wraps(self.original_transition)
+        def transition(rule, object_candidates):
+            # Native RecipeRule otherwise computes every movable object's AABB
+            # and container relations even when it cannot produce any output.
+            # Keep garbage fallback and the native condition/counter updates.
+            if not rule._active_recipes and not rule.use_garbage_fallback_recipe:
+                return TransitionResults(add=[], remove=[])
+            return self.original_transition(rule, object_candidates)
 
         @wraps(self.original)
         def execute(rule, container, recipe, container_info):
@@ -55,11 +65,14 @@ class RecipeParticleOutputPolicy:
                     system.generate_particles_from_link = prior
 
         RecipeRule._execute_recipe = execute
+        RecipeRule.transition = transition
 
     def describe(self):
         return dict(policy='native_surface_output_for_subdiameter_recipe_volume',
+            empty_recipe_scans_skipped=True,
             recipes_changed=False, particle_sizes_changed=False,
             task_predicates_changed=False, conversions=list(self.conversions))
 
     def close(self):
         self.rule_class._execute_recipe = self.original
+        self.rule_class.transition = self.original_transition
