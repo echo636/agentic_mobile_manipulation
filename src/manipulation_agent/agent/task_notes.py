@@ -184,7 +184,7 @@ class TaskNotes:
         if automatic_selection:
             state['automatic_selection'] = True
         previous = self.state.get('previous_execution')
-        if self.feedback_count:
+        if self.feedback_count and self.auto_select:
             advice = self.planning()
             operation_mode = advice.get('selected_operation') is not None
             method = advice.get('selected_operation') or advice.get('selected_method')

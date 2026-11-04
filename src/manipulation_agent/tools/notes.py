@@ -11,6 +11,9 @@ from ..agent.transport_planning import transport_advice
     'expected_version': {'type': ['integer', 'null'], 'minimum': 0},
 }))
 def task_notes(ctx, operation, content, expected_version):
+    if operation == 'select' and ctx.harness.goal_skill == 'none':
+        raise SkillError('planning_disabled',
+            'Program planning is disabled in this episode. Record your own choice with write or update.')
     if operation == 'read':
         if content is not None or expected_version is not None:
             raise SkillError('invalid_arguments', 'For read, use content=null and expected_version=null.')
@@ -28,7 +31,7 @@ def task_notes(ctx, operation, content, expected_version):
                 # Preserve the exact materialized graph in the event stream;
                 # replay must not rerun a possibly newer graph optimizer.
                 result['selected_execution'] = content['execution']
-    advice = transport_advice(notes['content'])
+    advice = transport_advice(notes['content']) if ctx.harness.goal_skill == 'hierarchical' else None
     if advice is not None:
         result['transport_advice'] = advice
     return result

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from manipulation_agent.contracts import Budget, SkillError
 from manipulation_agent.observations.mock_rgb import MockRGBBackend
@@ -59,7 +60,12 @@ class TaskNotesTests(unittest.TestCase):
             h = self.harness(Path(tmp)/'dag')
             control = self.harness(Path(tmp)/'control', 'none')
             h.call('initialize', {}, 'initialize')
-            plain = self.write(control, json.dumps(doc), 0, 'control-plan')
+            with patch('manipulation_agent.agent.task_notes.task_advice') as control_advice:
+                plain = self.write(control, json.dumps(doc), 0, 'control-plan')
+                control.call('act', dict(primitive='toggle_on', revision=0,
+                    target=dict(image_ref=control.snapshot['images'][0]['image_ref'], point=[.5, .5])), 'control-action')
+                self.write(control, json.dumps(doc), 1, 'control-reconcile')
+                control_advice.assert_not_called()
             self.assertNotIn('selected', plain)
             self.assertNotIn('planning', plain)
             self.assertEqual(json.loads(control.task_notes.read()['content']), doc)
@@ -167,6 +173,19 @@ class TaskNotesTests(unittest.TestCase):
             self.assertEqual(malformed['transport_advice']['status'], 'needs_revision')
             self.assertEqual(h.agent_steps, 0)
             self.assertEqual(h.backend.steps, 0)
+
+            control = self.harness(Path(tmp)/'control', 'none')
+            with patch('manipulation_agent.tools.notes.transport_advice') as advice:
+                plain = self.write(control, content, 0, 'control-transport')
+                read = control.call('task_notes', dict(operation='read', content=None,
+                    expected_version=None), 'control-read')
+                selection = control.call('task_notes', dict(operation='select', content='{}',
+                    expected_version=1), 'control-select')
+                advice.assert_not_called()
+            self.assertNotIn('transport_advice', plain)
+            self.assertNotIn('transport_advice', read)
+            self.assertEqual(selection['error']['code'], 'planning_disabled')
+            self.assertEqual(control.task_notes.read()['content'], content)
 
     def test_resume_retains_public_feedback_after_stale_authored_checkpoint(self):
         with tempfile.TemporaryDirectory() as tmp:
