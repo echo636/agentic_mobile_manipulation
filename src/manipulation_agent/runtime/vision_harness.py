@@ -20,7 +20,8 @@ class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
                  goal_skill='hierarchical', unbounded_episode=False):
         if profile == 'basic-skills': goal_skill = 'none'
-        if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
+        if profile == 'goal-tree': goal_skill = 'tree'
+        if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
         self.goal_skill=goal_skill
         self.task_notes=TaskNotes(recorder.output, auto_select=goal_skill == 'hierarchical')
         if agent_step_limit is not None and (type(agent_step_limit) is not int or agent_step_limit<=0):
@@ -52,8 +53,9 @@ class VisionHarness:
         self.skills = None
         if profile == 'workflow':
             self.plan,self.memory=[],{}
-        if profile in {'basic-skills','skills','workflow'}:
-            self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition'} if goal_skill=='none' else ())
+        if profile in {'basic-skills','goal-tree','skills','workflow'}:
+            planning_skill = {'hierarchical': 'goal-decomposition', 'tree': 'goal-tree'}.get(goal_skill)
+            self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition','goal-tree'} - {planning_skill})
         recorder.run['config']['agent_profile'] = profile
         recorder.run['config'].update(goal_skill=goal_skill)
         recorder.run['episode_deadline_unix']=self.deadline.unix

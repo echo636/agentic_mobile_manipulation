@@ -11,7 +11,7 @@ from ..agent.transport_planning import transport_advice
     'expected_version': {'type': ['integer', 'null'], 'minimum': 0},
 }))
 def task_notes(ctx, operation, content, expected_version):
-    if operation == 'select' and ctx.harness.goal_skill == 'none':
+    if operation == 'select' and ctx.harness.goal_skill != 'hierarchical':
         raise SkillError('planning_disabled',
             'Program planning is disabled in this episode. Record your own choice with write or update.')
     if operation == 'read':

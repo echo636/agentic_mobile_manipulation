@@ -83,11 +83,11 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         if 'goal_skill' in run.get('config',{}):
             checks['same_goal_skill_mode'] = run['config']['goal_skill'] == controller.get('goal_skill')
         profile = run.get('config', {}).get('agent_profile', 'workflow')
-        if profile in {'workflow','skills','basic-skills'}:
+        if profile in {'workflow','skills','basic-skills','goal-tree'}:
             manifest = run_dir / 'skill_manifest.json'
             checks['frozen_skill_manifest'] = manifest.exists() and bool(run.get('skill_bundle_sha256')) and (
                 json.loads(manifest.read_text()).get('bundle_sha256') == run.get('skill_bundle_sha256'))
-            if profile in {'skills','basic-skills'}:
+            if profile in {'skills','basic-skills','goal-tree'}:
                 checks['skills_profile_on_both_sides'] = controller.get('agent_profile') == profile
                 checks['no_plan_memory_tools_called'] = all(c['name'] in catalog for c in calls)
                 checks['recorded_summary_fields_valid_if_present'] = all(

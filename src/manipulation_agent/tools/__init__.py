@@ -30,14 +30,22 @@ for _name, _metadata in _METADATA.items():
         REGISTRY[_name] = replace(REGISTRY[_name], metadata=_metadata)
 
 def tool_specs(profile='skills'):
-    if profile not in {'minimal', 'basic-skills', 'skills', 'workflow'}:
+    if profile not in {'minimal', 'basic-skills', 'goal-tree', 'skills', 'workflow'}:
         raise ValueError('Unknown agent profile')
     allowed = {'minimal': MINIMAL_TOOLS, 'basic-skills': BASIC_SKILL_TOOLS}.get(profile, SKILL_TOOLS)
     result = []
     for t in REGISTRY.values():
         if profile != 'workflow' and t.name not in allowed: continue
         schema = deepcopy(t.schema)
-        result.append({'name':t.name,'description':t.description,'inputSchema':schema,
+        description = t.description
+        if profile == 'goal-tree' and t.name == 'task_notes':
+            schema['properties']['operation']['enum'] = ['read', 'write', 'update']
+            description = ('Store the model-authored goal tree and progress. read returns notes and recent public action receipts; '
+                'write replaces the JSON text; update merges goals by id and replaces other supplied fields. '
+                'Omitted goals persist; supply active when updating the current local plan. '
+                'Use the current expected_version for writes/updates, initially 0. For read, content and expected_version are null. '
+                'Notes do not execute actions, choose goals, search plans or verify task success.')
+        result.append({'name':t.name,'description':description,'inputSchema':schema,
                        'annotations':t.metadata.annotations(),
                        '_meta':{'mas':{'profile':profile,**t.metadata.as_dict()}}})
     return result

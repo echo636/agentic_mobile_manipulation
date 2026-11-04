@@ -130,8 +130,8 @@ def main(argv=None, *, allow_client=False):
                         help='Private argv JSON: atomically arm remote execution clock after MCP handshake')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
-    p.add_argument('--agent-profile', choices=['minimal','basic-skills','skills','workflow'], default='skills')
-    p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
+    p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','workflow'], default='skills')
+    p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh','max','ultra'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
     p.add_argument('--model-provider-gateway', help='Optional loopback request queue for this provider')
