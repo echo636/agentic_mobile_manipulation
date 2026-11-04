@@ -23,6 +23,23 @@ def document(state, conditions, operators, **planning):
 
 
 class ActionSearchTests(unittest.TestCase):
+    def test_partial_plan_keeps_reachable_work_independent_of_goal_grouping(self):
+        for conditions in ({'group': {'a': 'ready', 'b': 'ready'}},
+                           {'a': {'a': 'ready'}, 'b': {'b': 'ready'}}):
+            with self.subTest(conditions=conditions):
+                doc = document({'a': 'raw', 'hand': 'empty'}, conditions, [
+                    op('take-tool', {'hand': 'empty'}, {'hand': 'tool'}),
+                    op('prepare-a', {'hand': 'tool', 'a': 'raw'}, {'a': 'ready'}),
+                    op('costly-a', {'a': 'raw'}, {'a': 'ready'}, seconds=5)])
+                variants, search = search_actions(doc)
+                best = variants[0]
+                self.assertEqual([s['method_id'] for s in best['path']], ['take-tool', 'prepare-a'])
+                self.assertEqual(best['estimated_seconds'], 2)
+                self.assertEqual(best['covered_conditions'], 1)
+                self.assertEqual(search['terminal_conditions'], 2)
+                self.assertFalse(best['complete'])
+                self.assertFalse(search['optimal_in_declared_model'])
+
     def test_feedback_names_unmodeled_results_without_inventing_work(self):
         doc = document({'a': 'raw', 'hand': 'empty', 'ready': 'yes'},
             {'a': {'a': 'cooked'}, 'b': {'b': 'ready'}, 'done': {'ready': 'yes'},

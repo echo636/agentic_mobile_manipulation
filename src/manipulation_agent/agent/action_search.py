@@ -123,8 +123,12 @@ def search_actions(notes, max_states=16384):
             continue
         at, values, clocks = key; state = dict(values)
         covered = {g for g, cond in conditions.items() if all(state.get(k) == v for k, v in cond.items())}
-        if (len(covered), -total) > (partial[0], -partial[1]):
-            partial = len(covered), total, path, key
+        # A grouped result can contain both reachable and unknown conditions.
+        # Count distinct terminal facts so grouping cannot erase useful work
+        # or give duplicate parent/child conditions extra reward.
+        covered_facts = sum(state.get(k) == v for k, v in target.items())
+        if (covered_facts, -total) > (partial[0], -partial[1]):
+            partial = covered_facts, total, path, key
         if all(state.get(k) == v for k, v in target.items()):
             signature = tuple(sorted(s['method_id'] for s in path))
             if signature not in finished or total < finished[signature][0]:
@@ -168,6 +172,7 @@ def search_actions(notes, max_states=16384):
         covered = {g for g, cond in conditions.items() if all(dict(key[1]).get(k) == v for k, v in cond.items())}
         graph = causal_graph(path, operators, {g: conditions[g] for g in covered}, plan_id)
         variants.append(dict(id=plan_id, operations=graph, path=path, estimated_seconds=total,
+                             covered_conditions=sum(dict(key[1]).get(k) == v for k, v in target.items()),
                              covered=covered, complete=set(required) <= covered))
     gaps = {name: set().union(*(reasons[name] for reasons in rejected.values())) for name in costs.gaps}
     return variants, dict(algorithm='bounded best-first state search with h-max cost bounds',
@@ -176,6 +181,8 @@ def search_actions(notes, max_states=16384):
         missing_goal_conditions=sorted(set(required) - conditions.keys()),
         missing_producers=missing_producers,
         modeled_goal_ids=sorted(required),
+        terminal_conditions=len(target),
+        partial_objective='maximize satisfied terminal conditions, then minimize cost',
         gap_scope='Operators never applicable in explored states; unused alternatives may be unnecessary',
         gaps={k: [list(x) if isinstance(x, tuple) else x for x in sorted(v, key=str)]
               for k, v in gaps.items()})
@@ -216,6 +223,7 @@ def action_advice(notes):
         plan_id=best['id'], operation_graph=best['operations'], graph_changes=[dict(kind='automatic_state_search')],
         steps=steps, next=steps[0] if steps else None, estimated_seconds=best['estimated_seconds'],
         coverage=dict(scheduled=len(best['covered']), unfinished=len(search['modeled_goal_ids']),
+                      conditions_scheduled=best['covered_conditions'], conditions_total=search['terminal_conditions'],
                       unplanned=missing, operations_scheduled=len(steps)),
         unplanned_results=[dict(id=g, goal=next(n.get('goal', g) for n in notes['goals'] if n['id'] == g)) for g in missing],
         alternatives=[dict(plan_id=v['id'], estimated_seconds=v['estimated_seconds'],
