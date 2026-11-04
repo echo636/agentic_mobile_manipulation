@@ -89,6 +89,19 @@ class ReplayEvidenceTests(unittest.TestCase):
         self.assertEqual(step['plan'],[])
         self.assertFalse(step['decisions'][0]['accepted'])
 
+    def test_controller_only_planner_keeps_robot_steps_aligned(self):
+        planner = {'type': 'item.completed', 'item': {
+            'id': 'planner', 'type': 'mcp_tool_call', 'server': 'manipulation',
+            'tool': 'plan_task', 'arguments': {'progress': 'Current observation'},
+            'result': {'content': [{'type': 'text', 'text': '{"next":["cook"]}'}]}}}
+        models = [self.models[0], planner, self.models[1]]
+        (self.root/'model_events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in models))
+        data = build_replay(self.root)
+        self.assertEqual([s['model_tool'] for s in data['steps']], ['observe', 'act'])
+        self.assertEqual(data['steps'][1]['model_arguments'], self.events[4]['arguments'])
+        calls = [e['tool'] for e in data['model_transcript'] if e['kind'] == 'tool_call']
+        self.assertEqual(calls, ['observe', 'plan_task', 'act'])
+
     def test_script_injection_is_escaped_and_hidden_reasoning_not_loaded(self):
         render_replay(self.root)
         page=(self.root/'replay.html').read_text()

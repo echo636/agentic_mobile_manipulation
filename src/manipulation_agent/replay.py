@@ -62,6 +62,10 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 pending.append({'id':item.get('id'),'text':item.get('text',''),
                                 'source_event_index':event_index,'source':'LLM public assistant message, verbatim'})
             elif item.get('type') == 'mcp_tool_call':
+                # The independent planner has no simulator event. Keep its
+                # call in the transcript without shifting robot-step alignment.
+                if item.get('server') == 'manipulation' and item.get('tool') == 'plan_task':
+                    continue
                 model_index += 1
                 model_messages[model_index] = pending
                 model_payloads[model_index] = {
