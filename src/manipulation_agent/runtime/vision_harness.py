@@ -101,9 +101,10 @@ class VisionHarness:
         """Deliver the ready episode snapshot without reset, physics or rendering."""
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
         if hasattr(self.backend,'local_manipulation'):
-            result['control']={'manipulation_protocol':
-                'target_locked_single_approach_v3' if self.backend.local_manipulation else 'explicit_navigation_v1',
-                'local_base_adjustment':bool(self.backend.local_manipulation)}
+            result['control']={'manipulation':
+                'Select the visible target directly; the robot can approach it before manipulating it.'
+                if self.backend.local_manipulation else
+                'Move within reach with navigate_to before manipulating a target.'}
         if 'task_notes' in self.catalog: result['notes']=self.task_notes.read()
         return result
 

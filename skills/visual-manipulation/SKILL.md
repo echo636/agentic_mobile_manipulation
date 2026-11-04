@@ -4,7 +4,7 @@ description: Choose manipulation skills and verify progress from RGB and action 
 ---
 # Manipulation workflow
 
-Initialize, inspect the four returned views, then choose the next action. Read `initialize.control` for the active protocol. In `target_locked_single_approach_v3`, directly request the operation when its target is clearly selectable; the executor can approach once using the static walkability map. Use macro navigation for exploration, another task area, or an approach change justified by feedback. Check the other current views before moving to recover a cropped target.
+Initialize and inspect the four returned views. When the intended object is visible, request the operation directly; the robot can approach it if needed. Use navigation for exploration, travel or a different approach after failure. Check the other current views before moving to find an object cropped out of one view.
 
 Read each relevant resource once; reread only if its instructions are no longer available in context:
 
@@ -14,7 +14,7 @@ Read each relevant resource once; reread only if its instructions are no longer 
 - `failure-recovery`: diagnosing a rejected or partially executed action.
 - [references/evidence.md](references/evidence.md): deciding whether uncertain results support completion.
 
-After each action, inspect returned RGB and feedback. Confirm the intended object and effect; preserve useful progress in task notes. For heating, washing or drying, allow simulation time using `wait` with a null target. A successful toggle alone does not establish a finished process.
+After each action, inspect returned RGB and feedback. Confirm the intended object and effect, and track completed and remaining work. Use `wait` with a null target to let heating, washing or drying progress; switching a device on does not finish its process.
 
 Before cooking, plan the method and its required inputs, such as liquid for boiling; heating longer cannot replace a missing prerequisite. Check each ingredient's required state separately: one component changing appearance does not establish that the whole mixture is cooked.
 

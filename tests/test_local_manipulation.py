@@ -90,7 +90,7 @@ class CoordinationTests(unittest.TestCase):
                 return {**result,'private_grounding':{'object_id':'do_not_publish'}}
             b.execute_visual=execute
             h=VisionHarness(b,recorder,Budget(wall_seconds=None),profile='minimal',agent_step_limit=50)
-            self.assertEqual(h.initialize()['control']['manipulation_protocol'],'target_locked_single_approach_v3')
+            self.assertIn('approach',h.initialize()['control']['manipulation'])
             args={'primitive':'grasp','revision':0,'target':{
                 'image_ref':h.snapshot['images'][0]['image_ref'],'point':[.5,.5]}}
             result=h.call('act',args,'one-brain-action')

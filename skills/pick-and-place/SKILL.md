@@ -5,7 +5,7 @@ description: Prepare access, grasp the intended item, and place or attach it to 
 # Carry and place
 
 1. Identify the item and destination. Open a visibly closed destination before grasping; open bins need no opening action. The default hand carries one item or supported assembly.
-2. Grasp an exposed patch of the item's body, avoiding its support or carried contents. Check all current views if it is cropped. With target-locked approach, a selectable item can be grasped directly.
+2. Grasp an exposed patch of the item's body, avoiding its support or carried contents. Check all current views if it is cropped. A visible item can be selected for grasping directly.
 3. Confirm the carried item and its contents from RGB and feedback. If the wrong support or object moved, put it down safely before reselecting. Check that supported contents remain with the carrier.
 4. Select the intended destination using the relation below. Inspect the returned result, then update completed and pending items.
 
@@ -23,7 +23,8 @@ Handling can change a deformable item's shape. Plan its final folding or arrange
 | `place_on_top` | The intended free support surface and shelf level |
 | `place_under` | The fixture the item must be under |
 | `place_next_to` | The reference object's body, rather than nearby ground |
-| `attach` / `hang` | The compatible parent, mount, nail or hook for the held child |
+| `attach` | A compatible mount for the held item |
+| `hang` | A compatible nail, hook or hanger for the held item |
 
 For two items that must be beside each other, use the first item as the second's `place_next_to` reference. Their both being near other furniture is insufficient. If the reference is unreachable, navigate toward visible nearby floor and reselect its body.
 

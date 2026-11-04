@@ -16,5 +16,3 @@ Choose an alternative that addresses the cause:
 - `navigation_invalid_start`: report the base-executor limitation; changing destinations cannot fix it. For `navigation_stalled`, try one materially different route or viewpoint before reassessing.
 
 Never repeat an unchanged failed action more than once. After two failed alternatives, reconsider the cause. Mark a blocked subgoal honestly and continue independent useful work. Finish blocked when no supported path remains; retain the original required result.
-
-In legacy `explicit_navigation_v1`, `out_of_reach` requires navigation and a fresh selection. Follow the protocol reported by initialize.
