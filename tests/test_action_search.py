@@ -53,10 +53,28 @@ class ActionSearchTests(unittest.TestCase):
             advice = notes.planning()
             self.assertEqual(advice['status'], 'partial')
             self.assertEqual(advice['comparison']['missing_producers'],
-                             [dict(goal_id='a', condition={'a': 'cooked'})])
+                             [dict(goal_id='a', condition={'a': 'cooked'}),
+                              dict(operator_id='finish-b', condition={'tool': 'held'})])
             self.assertIn('b', advice['coverage']['unplanned'])
             self.assertIn(['finish-b', 'tool', 'held'], advice['comparison']['gaps']['required_states'])
             self.assertEqual(json.loads(notes.read()['content']), doc)
+
+    def test_missing_intermediate_producer_is_named_without_blocking_alternatives(self):
+        doc = document({'vegetable': 'raw'}, {'meal': {'meal': 'ready'}}, [
+            op('prepare', {'vegetable': 'raw'}, {'vegetable': 'diced'}),
+            op('cook', {'vegetable': 'diced', 'grain': 'in_pot'}, {'meal': 'ready'})])
+        variants, search = search_actions(doc)
+        self.assertFalse(variants[0]['complete'])
+        self.assertEqual(search['missing_producers'],
+                         [dict(operator_id='cook', condition={'grain': 'in_pot'})])
+        doc['execution']['operators'].append(
+            op('alternate-meal', {'vegetable': 'diced'}, {'meal': 'ready'}))
+        variants, search = search_actions(doc)
+        self.assertTrue(variants[0]['complete'])
+        self.assertEqual([step['method_id'] for step in variants[0]['path']],
+                         ['prepare', 'alternate-meal'])
+        self.assertEqual(search['missing_producers'],
+                         [dict(operator_id='cook', condition={'grain': 'in_pot'})])
 
     def test_equal_cost_branches_reach_a_complete_plan_within_search_budget(self):
         keys = [str(i) for i in range(18)]

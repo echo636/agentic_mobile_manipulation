@@ -112,6 +112,13 @@ def search_actions(notes, max_states=16384):
     missing_producers = [dict(goal_id=goal, condition={k: v for k, v in condition.items()
                                                     if (k, v) not in supplied})
                          for goal, condition in conditions.items() if not set(condition.items()) <= supplied]
+    # A final effect can be declared while its producer is impossible to use:
+    # e.g. cooking requires rice in the pot but no operator supplies that state.
+    # Name those absent prerequisites, rather than only listing the final effect
+    # or every state that was temporarily false in some search branch.
+    missing_producers.extend(dict(operator_id=method['id'], condition={
+        k: v for k, v in method['requires'].items() if (k, v) not in supplied})
+        for method in methods if not set(method['requires'].items()) <= supplied)
     serial = itertools.count(); frontier = []; best_cost = {initial: 0.}
     lower, guide = estimate(initial[1])
     heapq.heappush(frontier, (guide, guide, next(serial), 0., lower, initial, []))
