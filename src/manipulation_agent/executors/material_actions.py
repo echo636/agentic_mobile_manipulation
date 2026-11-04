@@ -211,12 +211,8 @@ class CheckedMaterialActions:
                 missing = assets['missing_model_usds']
                 invalid = bool(assets['metadata_errors'])
             else:
-                from omnigibson.object_states import Cooked
-                from omnigibson.utils.bddl_utils import get_system_name_by_synset
-                cooked = Cooked in target.states and target.states[Cooked].get_value()
-                derivative = target._abilities['diceable'][
-                    ('cooked' if cooked else 'uncooked') + '_diceable_derivative_synset']
-                system_name = get_system_name_by_synset(derivative)
+                from .compat.material_conditions import dicing_system_name
+                system_name = dicing_system_name(target)
                 assets = inspect_particle_system_assets(system_name, asset_root)
                 missing = assets['missing_assets']
                 invalid = False
@@ -226,17 +222,7 @@ class CheckedMaterialActions:
         if missing or invalid:
             raise SkillError('cut_asset_unavailable',
                 'A required cutting output asset is unavailable; the object has not been changed.')
-        if ability == 'diceable':
-            from omnigibson.transition_rules import TransitionResults
-            # Native DicingRule guesses the system from the object category.
-            # Categories and derivative names can differ (garlic_clove/clove).
-            # Use the declared derivative with the same native generation and
-            # removal operations, without modifying the simulator's rule.
-            scene.get_system(system_name).generate_particles_from_link(
-                target, target.root_link, check_contact=False, use_visual_meshes=False)
-            output = TransitionResults(add=[], remove=[target])
-        else:
-            output = rule.transition({ability: [target]})
+        output = rule.transition({ability: [target]})
         if target not in output.remove or not (output.add or ability == 'diceable'):
             raise SkillError('execution_error', 'Cutting transition produced no valid result')
         scene.transition_rule_api.execute_transition(added_obj_attrs=output.add,

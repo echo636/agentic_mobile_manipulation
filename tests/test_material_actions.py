@@ -480,11 +480,15 @@ class MaterialActionTests(unittest.TestCase):
             self.assertEqual(name, 'cooked__diced__clove')
             return self.system
         self.scene.get_system = system_by_name
-        self.scene.transition_rule_api = types.SimpleNamespace(active_rules=[DicingRule()],
+        rule = DicingRule()
+        rule.scene = self.scene
+        self.scene.transition_rule_api = types.SimpleNamespace(active_rules=[rule],
             execute_transition=lambda **kw: self.scene.objects.remove(self.target))
         system = self.asset_root/'systems/cooked__diced__clove'
         with self.modules, patch.dict(sys.modules, {'omnigibson.transition_rules': transitions,
                                                    'omnigibson.utils.bddl_utils': bddl_utils}):
+            from manipulation_agent.executors.compat.material_conditions import install_dicing_derivative_names
+            install_dicing_derivative_names()
             with self.assertRaises(SkillError) as missing_system:
                 self.backend._checked_cut(self.target, 6)
             self.assertFalse(missing_system.exception.changed)
@@ -500,6 +504,11 @@ class MaterialActionTests(unittest.TestCase):
             self.assertIn(self.target, self.scene.objects)
             (system/'part/usd/part.encrypted.usd').write_bytes(b'fixture')
             result = self.backend._checked_cut(self.target, 6)
+            # Background contacts enter the rule without an explicit cut.
+            self.generated = False
+            output = rule.transition({'diceable': [self.target]})
+            self.assertEqual(output.remove, [self.target])
+            self.assertEqual(output.add, [])
         self.assertTrue(self.generated)
         self.assertEqual(result['transition'], 'DicingRule')
         self.assertNotIn(self.target, self.scene.objects)
