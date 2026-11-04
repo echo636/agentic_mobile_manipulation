@@ -74,7 +74,7 @@ When execution_budget.scope is agent_steps, each new act/look attempt consumes o
 """
 GOAL_SKILL_INSTRUCTION = '''
 Before the first act/look, also read goal-decomposition/SKILL.md and follow it for planning and maintaining your task notes.
-Keep required results in the goal tree with terminal state conditions. Describe observed beliefs in planning.state and available local work in execution.operators with location, preconditions, effects and costs. The program searches operator combinations and generates the operation DAG; you need not propose complete alternative graphs. Include grounded preparation, access, processing, assembly, handling, device work and checks across known branches. Keep discovery and unknown work explicit; do not invent capabilities or physically implausible operations to complete the graph. Read coverage, gaps, search limits and costs, then task_notes(operation=select) records the returned plan_id, operation_id, local steps and next_check. Execute the selected local work from current RGB. At completion, failure or changed information, update actual states, result evidence and capabilities, then compare again. Predicted effects and successful receipts do not prove goal completion.
+Write/update searches your grounded operators, stores the operation DAG and automatically selects its first operation. Inspect the returned selection, coverage, gaps and costs, then execute supported local work from current RGB. Use task_notes(operation=select) only to override the selection. Reconcile actual state and result evidence when that local work completes, fails or reveals changed information; predicted effects never establish task success.
 '''
 SKILLS_PROMPT = SKILLS_BASE_PROMPT + GOAL_SKILL_INSTRUCTION
 SYSTEM_PROMPT = SKILLS_PROMPT
