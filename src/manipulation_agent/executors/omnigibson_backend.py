@@ -259,6 +259,8 @@ class OmniGibsonBackend:
             from .compat.macro_particle_pose import install_macro_particle_pose_repair
             write_json(output/'macro_particle_pose_compatibility.json',
                        install_macro_particle_pose_repair())
+            from .compat.macro_particle_batching import install_macro_particle_batching
+            write_json(output/'macro_particle_batching.json', install_macro_particle_batching())
             from .compat.inside_fabric import install_inside_sampling_fabric_sync
             write_json(output/'inside_sampling_fabric_sync.json',
                        install_inside_sampling_fabric_sync())
