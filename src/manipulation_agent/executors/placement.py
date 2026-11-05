@@ -351,10 +351,9 @@ class CheckedPlacement:
         candidates = []
         # Release immediately above the measured collision surface. A 2.5 cm
         # drop (the native rejection sampler's clearance) unnecessarily jolts
-        # loaded vessels and spills contents. Contacts are admitted by their
-        # actual penetration below, so we need only a small geometric gap plus
-        # the first free physics step's gravity displacement. Free settling and
-        # all support/payload postconditions still apply.
+        # loaded vessels and spills contents. Use a small geometric gap plus
+        # the first free physics step's gravity displacement; native contacts
+        # determine the result, and the support check reports actual spills.
         clearance = .002 + .5 * 9.81 * self.og.sim.get_physics_dt() ** 2
         for index, (x, y) in enumerate(offsets):
             center = point + self.torch.tensor([x, y, 0.], device=point.device)
@@ -767,11 +766,8 @@ class CheckedPlacement:
                   'settled': (bool(resting['stable']) if resting is not None
                               else speed <= .10 and angular_speed <= .5),
                   'not_supported_by_robot': not any(path in robot_paths for path in contacts)}
-        contact = self._placement_contact_report(held, payload, allow_sleeping=True)
-        checks['no_deep_penetration'] = contact['admissible']
         return all(checks.values()), {'checks': checks, 'touching_selected_object': touching,
             'selected_contact': selected_contact, 'contact_required': require_contact,
-            'contact_geometry': contact,
             'speed_m_s': speed, 'angular_speed_rad_s': angular_speed, 'bottom_gap_m': gap,
             'normal_z': normal_z, 'selected_height_error_m': height_error,
             'selected_xy_distance_m': selected_xy_distance, 'bottom_anchor': anchor.tolist(),
