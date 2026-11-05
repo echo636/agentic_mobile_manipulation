@@ -249,6 +249,8 @@ class OmniGibsonBackend:
             from .compat.particle_emission import install_particle_emission_clearance
             write_json(output/'particle_emission_compatibility.json',
                        install_particle_emission_clearance(output))
+            from .compat.particle_contacts import install_particle_contact_identity
+            write_json(output/'particle_contact_identity.json', install_particle_contact_identity())
             from .compat.material_conditions import install_default_saturation_names, install_dicing_derivative_names
             write_json(output/'default_saturation_names.json', install_default_saturation_names())
             write_json(output/'dicing_derivative_names.json', install_dicing_derivative_names())
