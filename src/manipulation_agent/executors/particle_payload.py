@@ -194,9 +194,11 @@ def relocate_particles(scene, payload):
         # Use raw rigid-body frames. OG 3.9.2's macro pose getter returns
         # bounding-sphere centers; its setter has asymmetric offset handling.
         # Mixing those conventions silently displaces non-centered particles.
-        all_indices = torch.arange(len(transforms), device=transforms.device)
-        view.set_transforms(transforms, indices=all_indices)
-        view.set_velocities(velocities, indices=all_indices)
+        # PhysX requires full-size buffers; the indices limit which bodies
+        # receive the update. Do not reset unrelated material bodies.
+        selected_indices = torch.as_tensor(indices, dtype=torch.long, device=transforms.device)
+        view.set_transforms(transforms, indices=selected_indices)
+        view.set_velocities(velocities, indices=selected_indices)
     # Match native rigid-body setters: publish the new poses before the next
     # simulation update can reapply the previous Fabric transforms.
     import omnigibson as og

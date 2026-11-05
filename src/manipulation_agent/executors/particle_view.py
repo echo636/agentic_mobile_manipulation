@@ -69,7 +69,8 @@ class MicroParticleView:
     def set_transforms(self, transforms, indices):
         import omnigibson.lazy as lazy
         current = self.get_transforms()
-        current[indices] = transforms
+        # Match the PhysX view ABI: full-size data, selected destination rows.
+        current[indices] = transforms[indices]
         self.instancer.particle_positions = current[:, :3]
         # QuathArray.FromNumpy consumes XYZW. OG's micro setter first rotates
         # that order, corrupting even unchanged particles on every pose write.
@@ -78,7 +79,7 @@ class MicroParticleView:
 
     def set_velocities(self, velocities, indices):
         current = self.get_velocities().clone()
-        current[indices] = velocities
+        current[indices] = velocities[indices]
         self.instancer.particle_velocities = current
 
 

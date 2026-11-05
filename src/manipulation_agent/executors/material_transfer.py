@@ -126,9 +126,9 @@ def move_particle_centers(system, indices, positions, orientations=None):
         transforms[indices, 3:] = orientations
     velocities = view.get_velocities().clone()
     velocities[indices] = 0
-    all_indices = torch.arange(len(transforms), device=transforms.device)
-    view.set_transforms(transforms, indices=all_indices)
-    view.set_velocities(velocities, indices=all_indices)
+    selected_indices = torch.as_tensor(indices, dtype=torch.long, device=transforms.device)
+    view.set_transforms(transforms, indices=selected_indices)
+    view.set_velocities(velocities, indices=selected_indices)
 
 
 def free_surface_positions(scene, destination, system, limit, *, diagnostics):
