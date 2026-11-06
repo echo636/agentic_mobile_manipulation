@@ -3,6 +3,7 @@ import json
 import time
 
 from ..contracts import SkillError
+from .profiling import component
 
 
 def scene_object_identities(sim):
@@ -614,14 +615,15 @@ class CheckedPlacement:
         return contact_report(self, held, payload, allow_sleeping=allow_sleeping)
 
     def _placement_physics_step(self):
-        """A hypothetical candidate must not update task metrics or record video."""
+        """Account for native substeps outside the ordinary environment step."""
         deadline = getattr(self, 'deadline', None)
         if deadline is not None:
             deadline.check(changed=True)
         local=getattr(self,'_local_operation',None)
         if local is not None:local.check()
         self.sampling_physics_steps += 1
-        self.og.sim.step_physics()
+        with component(self, 'placement_physics'):
+            self.og.sim.step_physics()
 
     def _settle_surface_contacts(self, held, target, payload, max_steps, *, resting=None):
         """Let the released assembly settle before reading native state transitions.
