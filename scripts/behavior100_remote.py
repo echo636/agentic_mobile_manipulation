@@ -13,6 +13,8 @@ import sys
 from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
+MIN_RUNTIME_FREE_BYTES = 16 * 1024**3
+
 
 def command(args):
     p = subprocess.run(args, capture_output=True, text=True, timeout=30)
@@ -101,9 +103,9 @@ def runtime_storage_readiness(paths):
             free = shutil.disk_usage(resolved).free
             writable = resolved.is_dir() and os.access(resolved, os.W_OK | os.X_OK)
             checks.append({'path': value, 'resolved_path': str(resolved),
-                           'free_bytes': free, 'minimum_free_bytes': 16 * 1024**3,
+                           'free_bytes': free, 'minimum_free_bytes': MIN_RUNTIME_FREE_BYTES,
                            'writable': writable,
-                           'status': 'passed' if writable and free > 16 * 1024**3 else 'blocked'})
+                           'status': 'passed' if writable and free > MIN_RUNTIME_FREE_BYTES else 'blocked'})
         except OSError as exc:
             checks.append({'path': value, 'status': 'blocked', 'error': str(exc)})
     return {'status': 'passed' if all(c['status'] == 'passed' for c in checks) else 'blocked',
@@ -199,7 +201,9 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
             quota_devices = [device.strip() for device in quota_devices if device.strip()]
     quota_free=quota_headroom(queries['quota']['stdout'],devices=quota_devices)
     if quota_free is not None:
-        checks['quota_headroom_2GiB']=quota_free>2*1024**3
+        # Disk capacity and the account quota constrain the same runtime files.
+        # A cold scene's texture cache alone can exceed the former 2 GiB margin.
+        checks['quota_headroom_16GiB']=quota_free>MIN_RUNTIME_FREE_BYTES
     return {'at': datetime.now(timezone.utc).isoformat(), 'host': socket.gethostname(),
             'interpreter': sys.executable, 'pid': os.getpid(), 'gpu_index': gpu,
             'gpu_uuid': selected[1].strip(), 'cgroup': cg, 'checks': checks, 'source_imports': imports,

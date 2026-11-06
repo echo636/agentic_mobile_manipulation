@@ -214,7 +214,8 @@ def startup_resource_rejection(record, controller, preflight):
     failed={key for key,value in preflight.get('checks',{}).items() if value is False}
     dynamic={'gpu_capacity','cgroup_reclaimable_headroom','bridge_port_free',
              'host_memory_including_peer_reservations','adaptive_account_memory',
-             'host_working_memory_headroom','data_disk_free_40GiB','runtime_storage_headroom_16GiB'}
+             'host_working_memory_headroom','data_disk_free_40GiB','runtime_storage_headroom_16GiB',
+             'quota_headroom_16GiB'}
     return sorted(failed) if failed and failed<=dynamic else None
 
 
