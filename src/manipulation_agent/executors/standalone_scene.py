@@ -59,6 +59,7 @@ def scene_config(backend):
 
 
 def load_environment(backend, config):
+    from .compat.broadphase import native_mbp_broadphase
     from .compat.articulation_sleep import ArticulationSleepPolicy
     from .compat.recipe_particle_output import RecipeParticleOutputPolicy
 
@@ -66,8 +67,9 @@ def load_environment(backend, config):
     backend._standalone_sleep_policy = policy
     recipe_policy = backend._recipe_particle_output_policy = RecipeParticleOutputPolicy()
     try:
-        with backend._startup_stage('load_standalone_custom_scene'), backend._native_startup_progress():
+        with backend._startup_stage('load_standalone_custom_scene'), backend._native_startup_progress(), native_mbp_broadphase(backend.og) as broadphase:
             backend.env = backend.og.Environment(configs=config)
+        write_json(backend.output / 'collision_broadphase.json', broadphase)
         with backend._startup_stage('reset_standalone_custom_scene'), backend._native_startup_progress('initial_reset'):
             backend.env.reset()
         backend.robot = backend.env.robots[0]

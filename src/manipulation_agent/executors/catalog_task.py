@@ -120,11 +120,14 @@ class CatalogRGBBackend(RGBBackend):
                 write_json(self.output / 'recipe_particle_output_policy.json', self._recipe_particle_output_policy.describe())
 
     def _load_catalog_environment_with_sleep_policy(self, config):
+        from .compat.broadphase import native_mbp_broadphase
         # Challenge-100 teleoperation disables several system cooking/mixing
         # rules. A full-catalog task uses the official simulator defaults; its
         # recipe transformations are necessary parts of the task semantics.
-        with self._startup_stage('reload_sampled_catalog_instance'), efficient_grounding(factorized=True), self._native_startup_progress():
+        with self._startup_stage('reload_sampled_catalog_instance'), efficient_grounding(factorized=True), self._native_startup_progress(), native_mbp_broadphase(self.og) as broadphase:
             self.env = self.og.Environment(configs=config)
+        self._broadphase = broadphase
+        write_json(self.output / 'collision_broadphase.json', broadphase)
         with self._startup_stage('reset_sampled_catalog_instance'), self._native_startup_progress('initial_reset'):
             self.env.reset()
         from .compat.particle_melting import install_particle_melting
@@ -182,6 +185,7 @@ class CatalogRGBBackend(RGBBackend):
                       macro_particle_size_policy=self._macro_particle_size_policy.describe())
         result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
         result['particle_melting_policy'] = self._particle_melting
+        result['collision_broadphase'] = self._broadphase
         return result
 
     def close(self):
