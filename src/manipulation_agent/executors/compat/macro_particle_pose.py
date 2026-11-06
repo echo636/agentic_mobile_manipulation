@@ -34,9 +34,11 @@ def set_particle_center(system, idx, position=None, orientation=None):
         position = current_position if position is None else position
         orientation = current_orientation if orientation is None else orientation
     origin = position - T.quat2mat(orientation) @ system._particle_offset
-    transform = torch.cat((origin, orientation)).reshape(1, -1)
+    # RigidBodyView indexes a full-view buffer even for a single selected body.
+    transforms = system.particles_view.get_transforms().clone()
+    transforms[idx] = torch.cat((origin, orientation))
     system.particles_view.set_transforms(
-        transform, indices=torch.tensor([idx], device=transform.device))
+        transforms, indices=torch.tensor([idx], device=transforms.device))
 
 
 def load_particle_state(system, state):
