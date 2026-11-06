@@ -560,6 +560,44 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         yaw=math.atan2(forward[1],forward[0])+math.radians(degrees)
         return self._execute_base_path([pos[:2].cpu().tolist()],yaw,max_steps)
 
+    def _navigation_map(self, floor):
+        """Add current articulated links to a private copy of the native map."""
+        import copy
+        import cv2
+        import numpy as np
+        trav = copy.copy(self.env.scene.trav_map)
+        trav.floor_map = list(trav.floor_map)
+        layer = trav.floor_map[floor]
+        occupied = layer.cpu().numpy().copy()
+        robot_low, robot_high = self.robot.aabb
+        held = self._get_held()
+        # The precomputed image contains the authored furniture layout, but
+        # cannot represent a cabinet door's current pose. Rasterize those
+        # colliders before native erosion and A*, without moving any body.
+        for obj in self.env.scene.objects:
+            if obj is self.robot or obj is held or not obj.n_joints:
+                continue
+            for name, link in obj.links.items():
+                if name == obj.root_link_name or link.is_meta_link or getattr(link, 'visual_only', False):
+                    continue
+                low, high = link.aabb
+                if float(high[2]) <= float(robot_low[2]) + .02 or float(low[2]) >= float(robot_high[2]):
+                    continue
+                apis = getattr(link, '_collision_apis', ())
+                if apis and not any(api.GetCollisionEnabledAttr().Get() for api in apis):
+                    continue
+                for mesh in link.collision_meshes.values():
+                    points = mesh.points
+                    if not len(points):
+                        continue
+                    matrix = mesh.scaled_transform
+                    world = points @ matrix[:3, :3].T + matrix[:3, 3]
+                    cells = trav.world_to_map(world[:, :2].cpu()).cpu().numpy()
+                    hull = cv2.convexHull(np.ascontiguousarray(cells[:, ::-1], dtype=np.int32))
+                    cv2.fillConvexPoly(occupied, hull, 0)
+        trav.floor_map[floor] = self.torch.as_tensor(occupied, dtype=layer.dtype, device=layer.device)
+        return trav
+
     def _navigate(self, target, max_steps, *, for_manipulation=False):
         """Select one walkable destination and call OmniGibson's native pathfinder."""
         import cv2
@@ -568,6 +606,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         position=self.robot.get_position_orientation()[0]
         point=target.get_position_orientation()[0]
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
+        trav=self._navigation_map(floor)
         start=position[:2].cpu();hint=point[:2].cpu()
         floor_click=not for_manipulation and float(point[2])-trav.floor_heights[floor]<=.15
         # A selected object can occupy a non-walkable cell. Project that target
@@ -605,6 +644,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'endpoint':endpoint.tolist(),'strategy':'omnigibson_native_shortest_path',
                 'floor':floor,'mode':'point' if floor_click else 'approach',
                 'resolution_m':float(trav.map_resolution),'precomputed_walkability':True,
+                'articulated_obstacles':'current_link_collision_footprints',
                 'map_sha256':hashlib.sha256(occupancy.tobytes()).hexdigest(),
                 'dynamic_collision_check':False}
         try:
@@ -890,7 +930,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         result['manipulation_navigation'] = {'implicit_navigation':getattr(self,'local_manipulation',False),
             'protocol':'target_locked_single_approach_v3' if getattr(self,'local_manipulation',False) else 'explicit_navigation_v1',
             'local_limits':__import__('dataclasses').asdict(self.local_limits) if getattr(self,'local_manipulation',False) else None,
-            'map':'native_static_traversability','resolution_m':float(self.env.scene.trav_map.map_resolution),
+            'map':'native_traversability_with_current_articulations','resolution_m':float(self.env.scene.trav_map.map_resolution),
             'local_search':'native_shortest_path_to_target_reach','max_approaches':1,
             'dynamic_collision_check':False,'departure_check':False,'settling_verification':False,
             'target_lock':'private_selected_link_relative_surface',
@@ -914,9 +954,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'candidate_sampling':{'on_top_inside_and_next_to':'read_only_geometry_no_physics_trials_or_rollback'},
             'goal_access':False}
         result['goal_evaluation_optimization'] = 'interned_literals_in_one_grounding_call; predicate_cache_within_one_read_only_scoring_pass; official_formula_unchanged'
-        result['base_execution'] = 'static_grid_route_then_single_endpoint_transfer_and_one_native_step'
+        result['base_execution'] = 'native_map_route_then_single_endpoint_transfer_and_one_native_step'
         result['navigation'] = {'strategy':'omnigibson_native_shortest_path',
-            'map':'OmniGibson precomputed scene traversability',
+            'map':'OmniGibson scene traversability with current articulated-link footprints',
+            'articulated_obstacles':'current_link_collision_footprints',
             'map_resolution_m':float(self.env.scene.trav_map.map_resolution),
             'erosion':'native robot reset-pose AABB; no carried-item expansion',
             'search':'OmniGibson TraversableMap.get_shortest_path',
