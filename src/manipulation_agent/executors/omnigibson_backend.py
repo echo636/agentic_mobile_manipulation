@@ -243,6 +243,8 @@ class OmniGibsonBackend:
             import omnigibson as og
             from .usd_diagnostics import install_usd_caller_metadata
             write_json(output/'usd_caller_diagnostics.json',install_usd_caller_metadata())
+            from .compat.native_astar import install_sparse_native_astar
+            write_json(output/'native_astar_compatibility.json', install_sparse_native_astar())
             from .compat.particle_quaternions import install_particle_quaternion_serialization
             write_json(output/'particle_quaternion_serialization.json',
                        install_particle_quaternion_serialization())
