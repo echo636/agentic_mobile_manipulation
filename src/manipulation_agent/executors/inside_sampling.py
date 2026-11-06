@@ -141,6 +141,14 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
     loaded = bool(contents or particles)
     orientations = assembly_orientations(held, original_quat, torch, T,
         reference_quat=target.get_position_orientation()[1], allow_reorientation=not loaded)
+    # No body moves during proposal construction. Read receiver geometry once.
+    volume_geometry = []
+    for volume in volumes:
+        vlo, vhi = volume.visual_aabb
+        vp, vq = volume.get_position_orientation()
+        vr = T.quat2mat(vq)
+        cavity = (volume.visual_boundary_points_world - vp) @ vr
+        volume_geometry.append((volume, vlo, vhi, vp, vr, cavity.amin(0).tolist(), cavity.amax(0).tolist()))
     proposals = []; seen = set(); ray_cache = {}
     clearance = .025 + .5 * 9.81 * backend.og.sim.get_physics_dt() ** 2
 
@@ -155,14 +163,10 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
         low, high = rotated.amin(0), rotated.amax(0)
         offset, extent = (low + high) / 2, high - low
         bottom = bottom_anchor((held_shape @ T.quat2mat(quat).T).cpu().numpy())
-        for volume in volumes:
-            vlo, vhi = volume.visual_aabb
-            vp, vq = volume.get_position_orientation(); vr = T.quat2mat(vq)
-            boundary = volume.visual_boundary_points_world
-            cavity = (boundary - vp) @ vr
+        for volume, vlo, vhi, vp, vr, cavity_low, cavity_high in volume_geometry:
             local_shape = rotated @ vr
             sl, sh = local_shape.amin(0), local_shape.amax(0)
-            domains = volume_center_domains(cavity.amin(0).tolist(), cavity.amax(0).tolist(), (sh - sl).tolist())
+            domains = volume_center_domains(cavity_low, cavity_high, (sh - sl).tolist())
             for domain, centers in domains:
                 local_centers = root.new_tensor(centers)
                 world = (local_centers - (sl + sh) / 2) @ vr.T + vp + offset
@@ -170,15 +174,18 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                     offset, assembly[1:], check, point=point, residents=residents,
                     query_cache=ray_cache, bottom_offset=bottom)
                 for kind, candidates in (('support_' + domain, support), (domain, world.tolist())):
-                    for center in candidates:
-                        center = root.new_tensor(center)
-                        admission = center.clone()
-                        if kind.startswith('support_'):
-                            admission[2] -= clearance
-                            # An unladen object may start above the opening and
-                            # fall onto the internal support already found.
-                            if not loaded: admission[2].clamp_(max=float(vhi[2])-.001)
-                        if not bool(volume.check_points_in_volume(admission[None]).item()): continue
+                    if not candidates:
+                        continue
+                    centers = root.new_tensor(candidates)
+                    admission = centers.clone()
+                    if kind.startswith('support_'):
+                        admission[:, 2] -= clearance
+                        # An unladen object may start above the opening and
+                        # fall onto the internal support already found.
+                        if not loaded: admission[:, 2].clamp_(max=float(vhi[2])-.001)
+                    # The native query accepts a batch. Preserve candidate order
+                    # without repeating its mesh transforms for each point.
+                    for center in centers[volume.check_points_in_volume(admission)]:
                         position = center - offset
                         key = tuple(round(float(v), 5) for v in (*position, *quat))
                         if key in seen: continue
