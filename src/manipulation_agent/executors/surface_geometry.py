@@ -153,15 +153,17 @@ def adjacent_support_points(relative, anchor, reference, selected):
 def native_resting_orientation(current, orientations):
     """Use the nearest authored resting tilt while preserving world heading.
 
-    DatasetObject.sample_orientation uses identity for an empty orientation
-    table. Reuse those native poses without its random yaw. This constructs a
-    proposal only; collision, support and payload still need free settling.
+    Missing annotations do not define an upright pose. Keep the current tilt
+    in that case: resetting a loaded tray to identity can invert its contents.
+    Authored poses are aligned without the native sampler's random yaw.
     """
     import numpy as np
     from scipy.spatial.transform import Rotation
     current = Rotation.from_quat(current)
-    poses = [entry['rotation'] for entry in orientations.values()
-             if entry['prob'] > 0] if orientations else [[0., 0., 0., 1.]]
+    poses = [entry['rotation'] for entry in (orientations or {}).values()
+             if entry['prob'] > 0]
+    if not poses:
+        return current.as_quat(), np.eye(3)
     candidates = []
     for pose in poses:
         stable = Rotation.from_quat(pose)

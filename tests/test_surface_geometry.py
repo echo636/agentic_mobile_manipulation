@@ -123,14 +123,14 @@ class SelectedSurfaceGeometry(unittest.TestCase):
         landed = rotated + self.np.array([1., 2., .6]) - anchor
         self.assertAlmostEqual(float(landed[:, 2].min()), .6)
 
-    def test_native_bowl_resting_pose_corrects_recorded_sideways_tilt(self):
+    def test_authored_resting_pose_corrects_sideways_tilt(self):
         from scipy.spatial.transform import Rotation
         from manipulation_agent.executors.surface_geometry import native_resting_orientation
-        # R502's frozen bowl starts on its side. Merely rotating about world Z
-        # preserves that tilt and lets peas roll out after placement.
+        # An explicitly authored upright pose can correct a sideways tilt.
         current = self.np.array([.7035646439, -.0719344616, -.4848582447, .5145237446])
         original = Rotation.from_quat(current)
-        quaternion, delta = native_resting_orientation(current, [])
+        annotations = {'upright': {'rotation': [0., 0., 0., 1.], 'prob': 1.}}
+        quaternion, delta = native_resting_orientation(current, annotations)
         result = Rotation.from_quat(quaternion)
         self.np.testing.assert_allclose(result.apply([0., 0., 1.]), [0., 0., 1.], atol=1e-7)
         self.np.testing.assert_allclose(delta @ original.as_matrix(), result.as_matrix(), atol=1e-7)
@@ -145,6 +145,20 @@ class SelectedSurfaceGeometry(unittest.TestCase):
         # Already upright native poses remain unchanged.
         same, _ = native_resting_orientation(quaternion, [])
         self.assertAlmostEqual(abs(float(self.np.dot(same, quaternion))), 1.)
+
+    def test_unannotated_loaded_tray_preserves_its_support_side(self):
+        from scipy.spatial.transform import Rotation
+        from manipulation_agent.executors.surface_geometry import native_resting_orientation
+        # Native carry reproduction: this model's supporting side faces local
+        # -Z. Identity would turn the cup underneath the tray during release.
+        current = self.np.array([.2750862241, .9613850117, -.0078428742, .0022020815])
+        payload = self.np.array([.0010135174, .0000240803, -.0437791348])
+        quaternion, delta = native_resting_orientation(current, {})
+        before = Rotation.from_quat(current).apply(payload)
+        after = Rotation.from_quat(quaternion).apply(payload)
+        self.assertGreater(after[2], .04)
+        self.np.testing.assert_allclose(after, before, atol=1e-8)
+        self.np.testing.assert_allclose(delta, self.np.eye(3), atol=1e-8)
 
     def test_curved_log_can_rest_on_narrow_bottom_contact(self):
         # The support strip is narrow; empty corners of its box need not hit.
@@ -180,7 +194,8 @@ class PlacementRejectionTransactions(unittest.TestCase):
         origin = torch.tensor([1., 2., 1.])
         shape = np.array([[x, y, z] for x in (-.2, .2) for y in (-.14, .14)
                           for z in (-.01, .01)])
-        held = SimpleNamespace(name='board', links={}, abilities={}, orientations=[],
+        held = SimpleNamespace(name='board', links={}, abilities={},
+            orientations={'flat': {'rotation': [0., 0., 0., 1.], 'prob': 1.}},
             get_position_orientation=lambda: (origin, torch.tensor(tilt.as_quat())))
         target = SimpleNamespace(name='counter', links={
             'base': SimpleNamespace(prim_path='/counter/base')})
