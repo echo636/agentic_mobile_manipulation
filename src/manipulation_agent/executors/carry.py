@@ -108,9 +108,15 @@ class ControlledCarry:
             orientation = T.quat_multiply(turn, original[1])
             depths = rotated @ direction
             surface = rotated[depths <= depths.min() + 1e-5]
-            grasp_point = surface[self.torch.linalg.vector_norm(surface - selected, dim=1).argmin()]
-            position = original[0] + contact - grasp_point
-            proposals.append((position, orientation, contact))
+            selected_contact = surface[self.torch.linalg.vector_norm(surface - selected, dim=1).argmin()]
+            # Yaw alone cannot lift a tall object's bottom out of a countertop.
+            # Compare contact heights on the same finger-facing plane, without
+            # moving the object or stepping physics to try each proposal.
+            for anchor in (selected_contact, rotated[rotated[:, 2].argmin()],
+                           rotated[rotated[:, 2].argmax()]):
+                grasp_point = anchor + direction * (depths.min() - self.torch.dot(anchor, direction))
+                position = original[0] + contact - grasp_point
+                proposals.append((position, orientation, contact))
         # The enclosure may overlap where the actual collider does not. Use
         # it only to prefer a pose; native grasp and physics own the result.
         return min(proposals, key=lambda pose: overlap(*pose[:2]) if overlap is not None else 0)
