@@ -339,6 +339,15 @@ wire_api = "responses"
         self.assertEqual(result.returncode,7)
         self.assertFalse(result.timed_out)
 
+    def test_long_prompt_reaches_a_client_that_starts_reading_late(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder)
+            code = 'import sys,time; time.sleep(.25); print(len(sys.stdin.read()))'
+            result = run_process(PreparedProject([sys.executable, '-S', '-c', code],
+                None, 'x' * 200000), output, 3)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual((output / 'model_events.jsonl').read_text().strip(), '200000')
+
     def test_successful_finish_receipt_reaps_lingering_client_without_task_timeout(self):
         event={'type':'item.completed','item':{'type':'mcp_tool_call','server':'manipulation',
             'tool':'finish','result':{'content':[{'type':'text','text':'{"ok":true,"closed":true}'}]}}}
