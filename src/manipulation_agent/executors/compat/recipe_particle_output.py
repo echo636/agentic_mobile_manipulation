@@ -4,14 +4,32 @@ from functools import wraps
 from ...contracts import SkillError
 
 
+def particle_global_info(rule):
+    """Particle cooking has no rigid-object inputs or outputs."""
+    return {}
+
+
+def particle_container_info(rule, object_candidates, container, global_info):
+    import torch
+    # CookingPhysicalParticleRule forbids input objects and ignores unrelated
+    # objects. Its native validator reads this field but never indexes it;
+    # particle containment and conversion use ContainedParticles separately.
+    return {'in_volume': torch.empty(0, dtype=torch.bool)}
+
+
 class RecipeParticleOutputPolicy:
     def __init__(self):
-        from omnigibson.transition_rules import RecipeRule, TransitionResults
+        from omnigibson.transition_rules import CookingPhysicalParticleRule, RecipeRule, TransitionResults
         from omnigibson.systems.micro_particle_system import MicroPhysicalParticleSystem
         self.conversions = []
         self.rule_class = RecipeRule
         self.original = RecipeRule._execute_recipe
         self.original_transition = RecipeRule.transition
+        self.particle_rule = CookingPhysicalParticleRule
+        self.original_particle_global = CookingPhysicalParticleRule._compute_global_rule_info
+        self.original_particle_container = CookingPhysicalParticleRule._compute_container_info
+        CookingPhysicalParticleRule._compute_global_rule_info = particle_global_info
+        CookingPhysicalParticleRule._compute_container_info = particle_container_info
 
         @wraps(self.original_transition)
         def transition(rule, object_candidates):
@@ -70,9 +88,12 @@ class RecipeParticleOutputPolicy:
     def describe(self):
         return dict(policy='native_surface_output_for_subdiameter_recipe_volume',
             empty_recipe_scans_skipped=True,
+            particle_cooking_rigid_object_scans_skipped=True,
             recipes_changed=False, particle_sizes_changed=False,
             task_predicates_changed=False, conversions=list(self.conversions))
 
     def close(self):
         self.rule_class._execute_recipe = self.original
         self.rule_class.transition = self.original_transition
+        self.particle_rule._compute_global_rule_info = self.original_particle_global
+        self.particle_rule._compute_container_info = self.original_particle_container
