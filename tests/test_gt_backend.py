@@ -74,7 +74,7 @@ class GTBackendTests(unittest.TestCase):
             path=torch.stack([start,torch.tensor([-.5,.8]),torch.tensor([.5,.8]),end])
             return path,torch.linalg.norm(path[1:]-path[:-1],dim=1).sum()
         trav.get_shortest_path=Mock(side_effect=native_path)
-        b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav))
+        b.env = SimpleNamespace(scene=SimpleNamespace(trav_map=trav, objects=[]))
         b._ground = Mock(return_value=(None, torch.tensor([1., 0., 0.]),
                                        {'object': 'PRIVATE_OBJECT', 'world_point': [1., 0., 0.]}))
         b.rig = {v: SimpleNamespace(name='camera_'+v,

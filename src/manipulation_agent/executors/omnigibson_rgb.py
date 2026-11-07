@@ -564,6 +564,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         """Select one walkable destination and call OmniGibson's native pathfinder."""
         import cv2
         import numpy as np
+        from .compat.native_astar import sync_open_door_map
+        opened_doors = sync_open_door_map(self)
         trav=self.env.scene.trav_map
         position=self.robot.get_position_orientation()[0]
         point=target.get_position_orientation()[0]
@@ -606,6 +608,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'floor':floor,'mode':'point' if floor_click else 'approach',
                 'resolution_m':float(trav.map_resolution),'precomputed_walkability':True,
                 'map_sha256':hashlib.sha256(occupancy.tobytes()).hexdigest(),
+                'native_map_open_doors':opened_doors,
                 'dynamic_collision_check':False}
         try:
             self.deadline.check()
