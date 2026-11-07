@@ -325,10 +325,12 @@ class VisionHarness:
                 'endpoint_applied':'Navigation applied. Inspect the returned RGB for the actual position and surroundings.',
                 'reached':'Reached the selected point. Inspect the updated RGB.',
                 'approached':'Moved to a feasible approach toward the selected point. This does not verify manipulation reach; inspect the updated RGB.',
+                'incomplete':'The move did not reach the selected destination. Inspect the returned RGB before choosing the next action.',
                 'already_at_closest_approach':'Already at the closest approach found by this navigation search. Repeating the same click will not move closer; inspect the updated RGB for an alternative.',
             }
             status=details.get('nav_status')
             if status in messages:effect.update(navigation_status=status,message=messages[status])
+            if status=='incomplete':effect['status']='incomplete'
             handoff=details.get('manipulation_handoff')
             handoffs={
                 'travel_only':'Ground-point travel completed. Select the intended object in the updated RGB for local manipulation.',

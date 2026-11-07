@@ -155,11 +155,12 @@ class RGBBoundary(unittest.TestCase):
             for private in ('PRIVATE_OBJECT_NAME','PRIVATE_MATERIAL_SYSTEM','goal_satisfied','transition'):
                 self.assertNotIn(private,json.dumps(result))
     def test_navigation_partial_approach_is_public_but_geometry_stays_private(self):
-        for status in ('reached','approached','already_at_closest_approach'):
+        for status in ('reached','approached','already_at_closest_approach','incomplete'):
             self.backend.execute_visual=lambda *a,**kw:{'nav_status':status,'private_pose':[1,2,3],
                 'target_projection_distance_m':2.5,'private_object':'hidden'}
             result=self.act('navigate_to')
             self.assertEqual(result['effect']['navigation_status'],status)
+            if status=='incomplete':self.assertEqual(result['effect']['status'],'incomplete')
             self.assertNotIn('private_pose',json.dumps(result))
             self.assertNotIn('target_projection_distance_m',json.dumps(result))
             self.assertNotIn('hidden',json.dumps(result))

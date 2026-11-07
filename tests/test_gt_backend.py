@@ -123,6 +123,25 @@ class GTBackendTests(unittest.TestCase):
         b._execute_base_path.assert_not_called()
         self.assertEqual(b.steps,0)
 
+    def test_disconnected_floor_click_is_not_replaced_by_a_nearby_point(self):
+        from manipulation_agent.executors.compat.native_astar import astar
+        b=self.backend(blocked=True)
+        trav=b.env.scene.trav_map
+        def route(floor,start,end,**kwargs):
+            path=astar(trav.floor_map[floor],tuple(trav.world_to_map(start).tolist()),
+                       tuple(trav.world_to_map(end).tolist()))
+            return (None,None) if path is None else (trav.map_to_world(path),1.)
+        trav.get_shortest_path.side_effect=route
+        target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([2.,0.,0.]),None))
+        with self.assertRaises(SkillError):b._navigate(target,700)
+        b._execute_base_path.assert_not_called()
+
+    def test_applied_endpoint_without_arrival_reports_incomplete(self):
+        b=self.backend()
+        b._execute_base_path=Mock(return_value={'actual_path_distance_m':0.,'nav_status':'endpoint_applied'})
+        target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([2.,0.,0.]),None))
+        self.assertEqual(b._navigate(target,700)['nav_status'],'incomplete')
+
     def test_default_gt_action_keeps_initialize_four_rgb_and_private_boundary(self):
         recorder = Recorder(self.output, {'backend': 'cpu_gt_fixture', 'observation_mode': 'rgb_only'})
         b = self.backend()

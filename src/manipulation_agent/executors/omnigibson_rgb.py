@@ -570,8 +570,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         floor=min(range(len(trav.floor_heights)),key=lambda i:abs(float(position[2])-trav.floor_heights[i]))
         start=position[:2].cpu();hint=point[:2].cpu()
         floor_click=not for_manipulation and float(point[2])-trav.floor_heights[floor]<=.15
-        # A selected object can occupy a non-walkable cell. Project that target
-        # into the start-connected region; native get_shortest_path owns routing.
+        # Objects need a nearby standing position; a floor click is the actual
+        # destination and must not be projected back into the start's region.
         occupancy=trav._erode_trav_map(trav.floor_map[floor].clone(),robot=self.robot).cpu().numpy()
         source=tuple(trav.world_to_map(start).tolist())
         if not (0<=source[0]<occupancy.shape[0] and 0<=source[1]<occupancy.shape[1]):
@@ -585,21 +585,21 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         cells=np.column_stack(np.where((labels==labels[source]) & (occupancy!=0)))
         if not len(cells):
             raise SkillError('navigation_invalid_start','No native traversable neighbor at the start')
-        # world_to_map truncates: map_to_world(integer) lies on a cell edge.
-        # Use its center so small physical drift does not cross that edge.
-        points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
-        distances=self.torch.linalg.norm(points-hint,dim=1)
-        if for_manipulation:
+        if floor_click:
+            endpoint=hint
+        else:
+            # Use cell centers for object approaches. Both explicit navigation
+            # and local manipulation must stay near the selected object.
+            points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
+            distances=self.torch.linalg.norm(points-hint,dim=1)
             within=distances<=self.local_limits.reach_m
             points=points[within];distances=distances[within]
             if not len(points):
                 raise SkillError('navigation_unreachable','No native walkable destination within target reach')
-        scores=distances if floor_click else abs(distances-1.25)
-        # One cell of distance tolerance avoids selecting a far side merely
-        # because its rounding happens to be closer to the preferred standoff.
-        near=scores<=scores.min()+trav.map_resolution
-        points=points[near]
-        endpoint=points[self.torch.argmin(self.torch.linalg.norm(points-start,dim=1))]
+            scores=abs(distances-1.25)
+            near=scores<=scores.min()+trav.map_resolution
+            points=points[near]
+            endpoint=points[self.torch.argmin(self.torch.linalg.norm(points-start,dim=1))]
         record={'at':now(),'parent_request_id':getattr(self,'_active_request_id',None),
                 'audience':'executor_private','start':start.tolist(),'target':point.cpu().tolist(),
                 'endpoint':endpoint.tolist(),'strategy':'omnigibson_native_shortest_path',
@@ -613,11 +613,17 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             if path is None:
                 raise SkillError('navigation_unreachable','Native pathfinder found no route to the destination')
             route=[start.tolist(),*path.cpu().tolist(),endpoint.tolist()]
-            yaw=math.atan2(float(hint[1]-endpoint[1]),float(hint[0]-endpoint[0]))
+            heading=hint-(start if floor_click else endpoint)
+            yaw=math.atan2(float(heading[1]),float(heading[0]))
             record.update(status='planned',path=route,path_distance_m=float(length))
             result=self._execute_base_path(route,yaw,max_steps)
             self.navigation_distance+=result['actual_path_distance_m']
+            actual=self.robot.get_position_orientation()[0][:2].cpu()
+            target_distance=float(self.torch.linalg.norm(actual-hint))
+            tolerance=trav.map_resolution if floor_click else self.local_limits.reach_m
+            nav_status=('reached' if floor_click else 'approached') if target_distance<=tolerance else 'incomplete'
             return {**result,'strategy':record['strategy'],'path_distance_m':float(length),
+                    'nav_status':nav_status,
                     'dynamic_collision_check':False,'precomputed_walkability':True}
         except SkillError as exc:
             record.update(status='failed',error_code=exc.code,error=str(exc))
