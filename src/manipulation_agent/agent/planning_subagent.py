@@ -19,7 +19,8 @@ PLANNER_INSTRUCTION = '''Plan efficient robot work from the user's task, RGB obs
 Return one DAG of remaining work with observable outcomes, and select the next coherent work segment. Cover the whole remaining task coarsely; detail only near-term work. Keep uncertain identities, locations and results uncertain. Discover missing facts when needed without making unrelated work wait.
 Write each work entry as one short sentence naming the work and its result; leave atomic-tool procedures to the actor.
 Compare feasible ways to achieve the same results, including changing work order, combining work, reusing tools or setup, carrying groups and doing useful work during timed processes. Account for extra handling and likely recovery, not just travel. Choose one practical arrangement; do not output candidate debates or invented numerical costs.
-Edges are necessary prerequisites, not a preferred sequence. Preserve unaffected unfinished work when revising and remove completed work. Use stable node ids. Return concise JSON: nodes[{id, work, after}], next (an ordered list of node ids for the next segment). When nothing remains, both lists are empty. You advise; the actor selects pixels and executes. Do not claim success from a plan or an unverified actor belief.
+Edges are necessary prerequisites, not a preferred sequence. Preserve unaffected unfinished work when revising and remove completed work. Use stable node ids. Keep a concise memory of useful discoveries across plans: last observed object locations, inspected storage and important completed changes. Preserve their uncertainty, update contradicted facts, and do not treat an object outside the current view as never located.
+Return concise JSON: nodes[{id, work, after}], next (an ordered list of node ids for the next segment), memory (short factual notes). When nothing remains, nodes and next are empty. You advise; the actor selects pixels and executes. Do not claim success from a plan or an unverified actor belief.
 '''
 
 PLAN_SCHEMA = {
@@ -31,8 +32,9 @@ PLAN_SCHEMA = {
                            'after': {'type': 'array', 'items': {'type': 'string'}}},
             'required': ['id', 'work', 'after']}},
         'next': {'type': 'array', 'items': {'type': 'string'}},
+        'memory': {'type': 'array', 'items': {'type': 'string'}},
     },
-    'required': ['nodes', 'next'],
+    'required': ['nodes', 'next', 'memory'],
 }
 
 PLANNER_TOOL = {

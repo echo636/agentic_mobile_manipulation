@@ -20,7 +20,7 @@ from manipulation_agent.tools import tool_specs
 
 PLAN = {'nodes': [{'id': 'a', 'work': 'All cups are on the tray', 'after': []},
                   {'id': 'b', 'work': 'Tray and cups are on the table', 'after': ['a']}],
-        'next': ['a']}
+        'next': ['a'], 'memory': ['Tray last observed on the kitchen counter.']}
 
 
 def response(plan):
@@ -75,6 +75,13 @@ class PlannerContracts(unittest.IsolatedAsyncioTestCase):
             saved = PlanningSubagent(instruction='Serve cups.', model='test', effort='high',
                 request=request, output=directory, capabilities='grasp, place')
             self.assertEqual(saved.plan, PLAN)
+            for revision in range(2, 12):
+                saved.observe('act', {'primitive': 'navigate_to'}, rgb_result(revision))
+            saved.consult('Ready to gather the cups.')
+            later = json.loads(payloads[-1]['input'][0]['content'][0]['text'])
+            self.assertEqual(later['earlier_feedback_omitted'], 2)
+            self.assertEqual(later['previous_plan']['memory'], PLAN['memory'])
+            saved.events.close()
 
     async def test_failed_planning_preserves_previous_plan_and_allows_actions(self):
         with tempfile.TemporaryDirectory() as directory:
