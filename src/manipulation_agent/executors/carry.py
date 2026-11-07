@@ -46,6 +46,12 @@ class ControlledCarry:
         arm = self.primitives.arm
         indices = self.robot.arm_control_idx[arm]
         ready = self.robot.untucked_default_joint_pos[indices]
+        if self.robot.model == 'r1pro':
+            # Keep the hand upright and in front of the torso. The native
+            # untucked arm extends sideways beyond the navigation footprint;
+            # the reset arm instead holds containers against the base.
+            ready = ready.new_tensor([math.pi / 3, 0., 0., -2 * math.pi / 3,
+                                      0., -math.pi / 6, 0.])
         self.robot.set_joint_positions(ready, indices=indices)
         self.primitives._arm_targets['arm_' + arm] = ready.clone()
         self.og.sim.sync_physx_to_fabric()
@@ -95,7 +101,10 @@ class ControlledCarry:
         # the fingertip plane, intersecting the fingers and palm.
         vertices = self.torch.as_tensor(self._collision_vertices(obj),
                                        dtype=point.dtype, device=point.device)
-        overlap = assembly_overlap_ranker(self, obj, [obj, *[child for child, _, _ in dependencies]])
+        hand_names = {self.robot.eef_link_names[arm], *self.robot.finger_link_names[arm],
+                      *self.robot.gripper_link_names[arm]}
+        overlap = assembly_overlap_ranker(self, obj, [obj, *[child for child, _, _ in dependencies]],
+            ignored_robot_links=[self.robot.links[name] for name in hand_names])
         # Preserve the original yaw when it fits. A long tool can otherwise
         # reach through a wall when transferred to the fingertips. Compare
         # upright yaw alternatives without moving any body during the search.
