@@ -575,7 +575,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         occupancy=trav._erode_trav_map(trav.floor_map[floor].clone(),robot=self.robot).cpu().numpy()
         source=tuple(trav.world_to_map(start).tolist())
         if not (0<=source[0]<occupancy.shape[0] and 0<=source[1]<occupancy.shape[1]):
-            raise SkillError('navigation_unreachable','Start is outside the native map')
+            raise SkillError('navigation_invalid_start','Start is outside the native map')
         # Native A* seeds the actual start even in a blocked cell, then admits
         # traversable eight-connected neighbors. Match that graph for selection
         # without changing the native map or making the start a destination.
@@ -584,7 +584,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         _,labels=cv2.connectedComponents(connected,connectivity=8)
         cells=np.column_stack(np.where((labels==labels[source]) & (occupancy!=0)))
         if not len(cells):
-            raise SkillError('navigation_unreachable','No native traversable neighbor at the start')
+            raise SkillError('navigation_invalid_start','No native traversable neighbor at the start')
         # world_to_map truncates: map_to_world(integer) lies on a cell edge.
         # Use its center so small physical drift does not cross that edge.
         points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
