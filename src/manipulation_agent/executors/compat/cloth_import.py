@@ -87,6 +87,7 @@ def install_nested_cloth_import(output):
     import omnigibson as og
     import omnigibson.lazy as lazy
     from omnigibson.prims import entity_prim as module
+    from omnigibson.prims.cloth_prim import ClothPrim
     from omnigibson.utils.constants import PrimType
     from omnigibson.utils import usd_utils
 
@@ -100,6 +101,17 @@ def install_nested_cloth_import(output):
 
     original = module.EntityPrim._post_load
     if not getattr(original, '_mas_nested_cloth_import', False):
+        # Native particle group defaults to zero when unauthored (BEHAVIOR-1K
+        # PR #2383). Preserve authored groups and the native property setter.
+        native_group = ClothPrim.particle_group
+
+        @wraps(native_group.fget)
+        def particle_group(cloth):
+            group = native_group.fget(cloth)
+            return 0 if group is None else group
+
+        ClothPrim.particle_group = native_group.getter(particle_group)
+
         @wraps(original)
         def post_load(entity):
             if entity._prim_type == PrimType.CLOTH:
@@ -125,6 +137,7 @@ def install_nested_cloth_import(output):
         module.EntityPrim._post_load = post_load
     return dict(status='configured', scope='nested_visual_cloth_import',
                 optional_normals='derive missing normals from native mesh geometry',
+                cloth_particle_group='native default 0 when unauthored; BEHAVIOR-1K PR 2383',
                 cloth_scene_output='native_usd; Fabric scene graph retained',
                 upstream_path=module.__file__,
                 upstream_sha256=hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest(),
