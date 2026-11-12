@@ -10,6 +10,57 @@ spec.loader.exec_module(build_review)
 
 
 class ReviewMetadataTests(unittest.TestCase):
+    def test_custom_terminal_success_is_not_hidden_by_null_official_score(self):
+        score, label, success = build_review.review_score({'task_success': True, 'evaluation': {
+            'protocol': 'rgb_agent_custom_native_bddl_additional_terminal_conditions_v1',
+            'official_task_success': None, 'task_success': True, 'goal_satisfaction_fraction': 1.0,
+            'bddl_task_success': True, 'additional_terminal_conditions': {'hand_empty': True}}})
+        self.assertIs(success, True)
+        self.assertEqual(score, 1.0)
+        self.assertIn('显式终态', label)
+        self.assertIn('非官方', label)
+
+    def test_satisfied_bddl_does_not_override_failed_terminal_condition(self):
+        score, _, success = build_review.review_score({'task_success': False, 'evaluation': {
+            'protocol': 'rgb_agent_custom_native_bddl_additional_terminal_conditions_v1',
+            'official_task_success': None, 'task_success': False, 'goal_satisfaction_fraction': 1.0,
+            'bddl_task_success': True, 'additional_terminal_conditions': {'hand_empty': False}}})
+        self.assertEqual(score, 1.0)
+        self.assertIs(success, False)
+
+    def test_original_native_custom_protocol_retains_its_score(self):
+        score, label, success = build_review.review_score({'task_success': True, 'evaluation': {
+            'protocol': 'rgb_agent_custom_native_bddl_sampled_instance',
+            'official_task_success': None, 'task_success': True, 'goal_satisfaction_fraction': 1.0}})
+        self.assertEqual((score, success), (1.0, True))
+        self.assertIn('非官方', label)
+
+    def test_official_evaluation_keeps_zero_score_and_explicit_failure(self):
+        score, label, success = build_review.review_score({'task_success': True, 'evaluation': {
+            'official_task_success': False, 'official_metrics': {'q_score': {'final': 0}}}})
+        self.assertEqual(score, 0)
+        self.assertIs(success, False)
+        self.assertEqual(label, '本地官方指标 Q')
+
+    def test_lineage_failure_remains_failed_with_all_bddl_goals_satisfied(self):
+        score, label, success = build_review.review_score({'task_success': False, 'evaluation': {
+            'protocol': 'rgb_agent_custom_native_bddl_lineage_returns_v1',
+            'task_success': False, 'official_task_success': None,
+            'goal_satisfaction_fraction': 1.0,
+            'relational_terminal_conditions': {'half_a:correct_order_inside': False}}})
+        self.assertEqual(score, 1.0)
+        self.assertFalse(success)
+        self.assertIn('材料来源', label)
+
+    def test_scripted_reference_uses_nested_native_score_and_full_success(self):
+        score, label, success = build_review.review_score({'task_success': False, 'evaluation': {
+            'full_task_success': False, 'native_evaluation': {
+                'protocol': 'rgb_agent_custom_native_bddl_lineage_returns_v1',
+                'task_success': True, 'goal_satisfaction_fraction': 1.0}}})
+        self.assertEqual(score, 1.0)
+        self.assertFalse(success)
+        self.assertIn('材料来源', label)
+
     def test_scripted_trial_never_inherits_a_model_label(self):
         metadata = build_review.review_metadata(
             {'model': 'stale-model'},

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import re
+import subprocess
 import tomllib
 from dataclasses import replace
 from uuid import UUID
@@ -13,6 +14,44 @@ from urllib.parse import urlsplit
 from .base import ClientAdapter
 from .types import PreparedProject
 from ..runtime.deadline import tool_wait_seconds
+
+# codex_context="minimal": remove Codex-owned prompt blocks and native tools, verified
+# against the request body of codex-cli 0.166.0. The org-managed SessionStart hook in
+# /etc/codex/requirements.toml is policy and remains, as do the three MCP resource tools.
+MINIMAL_CONTEXT_ARGS = [
+    "-c", "include_permissions_instructions=false", "-c", "include_environment_context=false",
+    "-c", "include_collaboration_mode_instructions=false", "-c", "skills.include_instructions=false",
+    "-c", "tools.experimental_request_user_input.enabled=false",
+    "--disable", "sleep_tool", "--disable", "code_mode_host", "--disable", "goals"]
+# Catalog metadata that adds the Codex base prompt, code-mode exec, multi-agent tools,
+# apply_patch, tool_search deferral and a duplicated responses-lite prompt.
+MINIMAL_CATALOG_OVERRIDES = {"apply_patch_tool_type": None, "use_responses_lite": False,
+                             "supports_search_tool": False, "experimental_supported_tools": []}
+MINIMAL_CATALOG_REMOVED = ("tool_mode", "multi_agent_version", "multi_agent_reasoning_effort", "model_messages")
+UNLISTED_MODEL_TEMPLATE = "gpt-6-luna"
+
+
+def bundled_model_catalog():
+    output = subprocess.run(["codex", "debug", "models", "--bundled"], capture_output=True, text=True,
+                            check=True, timeout=60).stdout
+    return json.loads(output)
+
+
+def minimal_model_catalog(catalog, model, instructions):
+    """Keep each model's limits; make the experiment policy the only base instructions."""
+    models = catalog["models"]
+    for entry in models:
+        for key in MINIMAL_CATALOG_REMOVED:
+            entry.pop(key, None)
+        entry.update(MINIMAL_CATALOG_OVERRIDES, base_instructions=instructions)
+    source = "bundled"
+    if not any(entry["slug"] == model for entry in models):
+        template = next((entry for entry in models if entry["slug"] == UNLISTED_MODEL_TEMPLATE), None)
+        if template is None:
+            raise ValueError("Bundled Codex catalog lacks the template for unlisted models")
+        models.append({**template, "slug": model, "display_name": model})
+        source = "cloned_from:" + UNLISTED_MODEL_TEMPLATE
+    return catalog, source
 
 
 class CodexAdapter(ClientAdapter):
@@ -69,8 +108,21 @@ class CodexAdapter(ClientAdapter):
                    "--sandbox", "read-only", "--model", config.model, "--cd", str(workspace.resolve()),
                    "-c", 'approval_policy="never"', "-c", 'web_search="disabled"',
                    "-c", "project_doc_max_bytes=0", "-c", 'model_reasoning_summary="auto"',
-                   "-c", "mcp_optional_startup_grace_ms=0",
-                   "-c", "developer_instructions=" + json.dumps(instructions)]
+                   "-c", "mcp_optional_startup_grace_ms=0"]
+        if config.codex_context == "minimal":
+            catalog, model_entry = minimal_model_catalog(bundled_model_catalog(), config.model, instructions)
+            catalog_path = (config.output / "codex_model_catalog.json").resolve()
+            catalog_path.write_text(json.dumps(catalog, ensure_ascii=False))
+            (config.output / "codex_context.json").write_text(json.dumps({
+                "mode": "minimal", "model_catalog": str(catalog_path), "model_entry": model_entry,
+                "removed_catalog_fields": list(MINIMAL_CATALOG_REMOVED),
+                "catalog_overrides": MINIMAL_CATALOG_OVERRIDES, "codex_args": MINIMAL_CONTEXT_ARGS,
+                "retained": ["org-managed SessionStart hook instructions (/etc/codex)",
+                             "list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"],
+            }, indent=2) + "\n")
+            command += [*MINIMAL_CONTEXT_ARGS, "-c", "model_catalog_json=" + json.dumps(str(catalog_path))]
+        else:
+            command += ["-c", "developer_instructions=" + json.dumps(instructions)]
         if config.reasoning_effort is not None:
             command += ['-c', 'model_reasoning_effort=' + json.dumps(config.reasoning_effort)]
         if config.model_provider_profile is not None:
@@ -157,6 +209,10 @@ class CodexAdapter(ClientAdapter):
         server = {"command": config.mcp_command, "args": config.mcp_args, "enabled_tools": tool_names,
                   "startup_timeout_sec": 60, "required": True,
                   "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
+        if config.mcp_tool_exposure == "direct":
+            # Code-mode-only model metadata otherwise hides MCP tools behind a model-written exec
+            # script, which can stringify image blocks into truncated text.
+            server["omit_tools_from"] = ["code_mode"]
         for key, value in server.items():
             command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
         if pythonpath := os.environ.get('PYTHONPATH'):

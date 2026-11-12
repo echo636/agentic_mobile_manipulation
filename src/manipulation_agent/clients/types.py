@@ -43,6 +43,8 @@ class ClientConfig:
     reasoning_effort: str | None = None
     model_provider_profile: str | None = None
     model_provider_gateway: str | None = None
+    mcp_tool_exposure: str = "client_default"
+    codex_context: str = "client_default"
 
     def __post_init__(self):
         if self.client not in {"codex", "opencode", "kimi"}:
@@ -59,6 +61,14 @@ class ClientConfig:
             raise ValueError('Model provider and reasoning effort overrides are supported only for Codex')
         if self.model_provider_gateway is not None and (self.client != 'codex' or not self.model_provider_profile):
             raise ValueError('A provider gateway requires an explicit Codex provider profile')
+        if self.mcp_tool_exposure not in {'client_default', 'direct'}:
+            raise ValueError('Unsupported MCP tool exposure')
+        if self.mcp_tool_exposure != 'client_default' and self.client != 'codex':
+            raise ValueError('Direct MCP tool exposure is supported only for Codex')
+        if self.codex_context not in {'client_default', 'minimal'}:
+            raise ValueError('Unsupported Codex context')
+        if self.codex_context != 'client_default' and self.client != 'codex':
+            raise ValueError('Minimal Codex context is supported only for Codex')
 
     @property
     def prompt(self) -> str:

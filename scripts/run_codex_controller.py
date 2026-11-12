@@ -20,6 +20,7 @@ from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.events import write_derived_events
 
 from manipulation_agent.tools import tool_specs
+from manipulation_agent.tools.intent import PROTOCOL as INTENT_PROTOCOL, LEGACY_PROTOCOL
 from manipulation_agent.agent.vision_policy import system_prompt
 from manipulation_agent.records import now, write_json, source_version
 from manipulation_agent.reporting.model_trace import export_summaries
@@ -120,11 +121,17 @@ def main(argv=None, *, allow_client=False):
                         help='Private argv JSON: atomically arm remote execution clock after MCP handshake')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
-    p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
+    p.add_argument('--agent-profile', choices=['minimal','skills','skills_inline','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
+    p.add_argument('--require-tool-intent',action='store_true',
+                   help='Match the simulator public_tool_intent_v1 tool schemas and prompt')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh','max','ultra'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
     p.add_argument('--model-provider-gateway', help='Optional loopback request queue for this provider')
+    p.add_argument('--mcp-tool-exposure', choices=['client_default', 'direct'], default='client_default',
+                   help='Codex only: direct exposes MCP tools as model functions instead of code-mode exec')
+    p.add_argument('--codex-context', choices=['client_default', 'minimal'], default='client_default',
+                   help='Codex only: minimal removes Codex base prompt, skills, environment and native tools')
     p.add_argument('--rate-limit-resumes', '--provider-error-resumes', type=int, default=None,
                    help='Same-session transient provider recovery count; -1 is unbounded (default for unbounded Codex episodes)')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
@@ -156,7 +163,8 @@ def main(argv=None, *, allow_client=False):
     config = ClientConfig(client, args.model, args.instruction, args.mcp_command,
                           json.loads(args.mcp_args_json), args.output, args.timeout,
                           args.agent_profile, args.isolate_client_storage,
-                          args.reasoning_effort, args.model_provider_profile, args.model_provider_gateway)
+                          args.reasoning_effort, args.model_provider_profile, args.model_provider_gateway,
+                          args.mcp_tool_exposure, args.codex_context)
     capability = adapter.probe()
     if capability.status != 'available':
         write_json(args.output / 'controller.json', {
@@ -168,8 +176,9 @@ def main(argv=None, *, allow_client=False):
         print(json.dumps(asdict(capability)))
         return 3
     try:
-        project = adapter.prepare_project(config, system_prompt(args.agent_profile,goal_skill=args.goal_skill),
-                                          [t['name'] for t in tool_specs(args.agent_profile)])
+        project = adapter.prepare_project(config, system_prompt(args.agent_profile,goal_skill=args.goal_skill,
+                require_tool_intent=args.require_tool_intent),
+                                          [t['name'] for t in tool_specs(args.agent_profile,require_intent=args.require_tool_intent)])
     except (ValueError, RuntimeError) as exc:
         write_json(args.output / 'controller.json', {
             'started_at': now(), 'finished_at': now(), 'status': 'unsupported',
@@ -185,6 +194,9 @@ def main(argv=None, *, allow_client=False):
                 "model_reasoning_effort": args.reasoning_effort, "observation_mode": "rgb_only",
                 "episode_deadline_unix":deadline.unix,"requested_timeout_seconds":args.timeout,
                 "agent_profile": args.agent_profile, "goal_skill": args.goal_skill,
+                "require_tool_intent": args.require_tool_intent, "mcp_tool_exposure": args.mcp_tool_exposure,
+                "codex_context": args.codex_context,
+                "tool_intent_protocol": INTENT_PROTOCOL if args.require_tool_intent else LEGACY_PROTOCOL,
                 "host": os.uname().nodename, "controller": client + "_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": capability.version, "client_capability": asdict(capability)}
@@ -209,7 +221,7 @@ def main(argv=None, *, allow_client=False):
             # access to /dev/null. A host-only handshake misses mount failures.
             prefix=project.mcp_prefix
             mcp_command=prefix[0];mcp_args=prefix[1:]+['--',args.mcp_command,*mcp_args]
-        metadata['mcp_preflight']=preflight_server(mcp_command,mcp_args,tool_specs(args.agent_profile),
+        metadata['mcp_preflight']=preflight_server(mcp_command,mcp_args,tool_specs(args.agent_profile,require_intent=args.require_tool_intent),
                                                   args.output,deadline)
         metadata['mcp_preflight']['inside_client_storage_namespace']=native_sessions is not None
     except Exception as exc:

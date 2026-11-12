@@ -76,10 +76,80 @@ GOAL_SKILL_INSTRUCTION = '\nBefore the first act/look, also read goal-decomposit
 SKILLS_PROMPT = SKILLS_BASE_PROMPT + GOAL_SKILL_INSTRUCTION
 SYSTEM_PROMPT = SKILLS_PROMPT
 
-def system_prompt(profile='skills', *, goal_skill='hierarchical'):
+TOOL_INTENT_PROMPT = '''Every tool call must include intent: one concise public sentence stating the immediate purpose of this particular call. This includes initialize, look, act, list_skills, read_skill, task_notes and finish, and any other enabled tool. Intent is a required tool argument, not a replacement for task_notes or an occasional progress message. Base it on the task and evidence already available; before initialize, state what you intend to inspect without inventing scene facts. Do not provide a private reasoning transcript.
+'''
+
+def _replace_once(text, old, new):
+    if text.count(old) != 1:
+        raise ValueError('Inline skill rewrite no longer matches its source text: ' + old[:60])
+    return text.replace(old, new)
+
+
+# skills_inline: the skill files the skills prompt requires before acting. In 59 recorded
+# Codex episodes these were read in 46-55 episodes; failure-recovery (8),
+# visual-exploration (1) and evidence.md (0) stay out. Rewrites remove read_skill steps.
+INLINE_SKILL_RESOURCES = (
+    ('visual-manipulation', 'SKILL.md', [(
+        'Read each relevant resource once; reread only if its instructions are no longer available in context:\n\n'
+        '- `visual-exploration`: finding objects and traveling between areas.\n'
+        '- `pick-and-place`: carrying, placing and attaching objects.\n'
+        '- [references/material-actions.md](references/material-actions.md): cleaning, treating, soaking or cutting, before using those actions.\n'
+        '- `failure-recovery`: diagnosing a rejected or partially executed action.\n'
+        '- [references/evidence.md](references/evidence.md): deciding whether uncertain results support completion.\n\n',
+        '')]),
+    ('visual-manipulation', 'references/material-actions.md', []),
+    ('pick-and-place', 'SKILL.md', []),
+    ('goal-decomposition', 'SKILL.md', [(
+        'Read [references/working-state.md](references/working-state.md) and write the initial tree before the first act/look.',
+        'Using the task notes format in goal-decomposition/references/working-state.md below, write the initial tree before the first act/look.')]),
+    ('goal-decomposition', 'references/working-state.md', []),
+)
+INLINE_PROMPT_REWRITES = [
+    ('seven tools: initialize, look, act, finish, list_skills, read_skill, task_notes.',
+     'five tools: initialize, look, act, finish, task_notes.'),
+    ('Read visual-manipulation/SKILL.md through list_skills/read_skill before acting. Read relevant available skills as needed, including pick-and-place before carrying objects. ',
+     'Follow the workflow guidance included at the end of these instructions. '),
+    ('Skills are workflow documents, not autonomous executors.',
+     'The included workflow guidance is documentation, not an autonomous executor.'),
+    ('actually attempt initialize or list_skills', 'actually attempt initialize'),
+    ('Before first using material or cutting actions, read visual-manipulation/references/material-actions.md through read_skill; reread only if its instructions are no longer available in context.\n', ''),
+    ('Initialization, reading skills, task_notes and finish', 'Initialization, task_notes and finish'),
+]
+INLINE_GOAL_INSTRUCTION = '\nBefore the first act/look, also follow the included goal-decomposition guidance for planning and maintaining your task notes.\n'
+
+
+def inline_skill_guidance(goal_skill='hierarchical'):
+    from .skill_runtime import skill_root
+    root, sections = skill_root(), []
+    for name, resource, rewrites in INLINE_SKILL_RESOURCES:
+        if name == 'goal-decomposition' and goal_skill == 'none':
+            continue
+        text = (root / name / resource).read_text()
+        if text.startswith('---\n'):
+            text = text.split('\n---\n', 1)[1]
+        for old, new in rewrites:
+            text = _replace_once(text, old, new)
+        sections.append(f'=== {name}/{resource} ===\n{text.strip()}\n')
+    return ('\nWorkflow guidance, included in full. There are no skill-reading tools.\n\n' + '\n'.join(sections))
+
+
+def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_intent=False):
     if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
-    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
-            'workflow':WORKFLOW_PROMPT}[profile]
+    if profile == 'skills_inline':
+        prompt = SKILLS_BASE_PROMPT
+        for old, new in INLINE_PROMPT_REWRITES:
+            prompt = _replace_once(prompt, old, new)
+        prompt += (INLINE_GOAL_INSTRUCTION if goal_skill == 'hierarchical' else '') + inline_skill_guidance(goal_skill)
+    else:
+        prompt = {'minimal':MINIMAL_PROMPT,'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
+                  'workflow':WORKFLOW_PROMPT}[profile]
+    if require_tool_intent:
+        intent = TOOL_INTENT_PROMPT
+        if profile == 'skills_inline':
+            intent = _replace_once(intent, 'list_skills, read_skill, ', '')
+        prompt = intent + prompt.replace(
+            'initialize({})', 'initialize(intent="Inspect the initial four views to locate the task-relevant items.")')
+    return prompt
 
 class RGBResponsesPolicy(ResponsesPolicy):
     def _request_with_observation_jobs(self, harness, payload):
@@ -92,7 +162,8 @@ class RGBResponsesPolicy(ResponsesPolicy):
             return future.result()
 
     def run(self, harness, instruction, *, image_history_captures=0):
-        loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile,goal_skill=harness.goal_skill),
+        loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile,goal_skill=harness.goal_skill,
+            require_tool_intent=getattr(harness, 'require_tool_intent', False)),
                               request=self._request_with_observation_jobs,
                               config=LoopConfig(max_turns=self.max_turns, max_tokens=self.max_tokens,
                                                 image_history_captures=image_history_captures))

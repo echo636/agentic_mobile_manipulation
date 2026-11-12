@@ -50,6 +50,35 @@ def review_metadata(data, run_record, controller_record=None):
             'model': model, 'reasoning_effort': effort if effort is not None else '未记录'}
 
 
+def review_score(run_record):
+    """Use the recorded evaluator for this protocol, including public terminal checks."""
+    evaluation = run_record.get('evaluation') or {}
+    reference_success = evaluation.get('full_task_success')
+    if isinstance(evaluation.get('native_evaluation'), dict):
+        evaluation = evaluation['native_evaluation']
+    score = ((evaluation.get('official_metrics') or {}).get('q_score') or {}).get('final', '未评分')
+    label = '本地官方指标 Q'
+    success = evaluation.get('official_task_success', run_record.get('task_success'))
+    if evaluation.get('score_type') in ('custom_joint_terminal_and_public_history_v1',
+                                       'custom_joint_terminal_and_public_history_v2'):
+        score = evaluation.get('goal_satisfaction_fraction', '未评分')
+        label = '自定义目标满足比例（非官方 Q）'
+    protocol = evaluation.get('protocol')
+    if protocol in {'rgb_agent_custom_native_bddl_sampled_instance',
+                    'rgb_agent_custom_native_bddl_additional_terminal_conditions_v1',
+                    'rgb_agent_custom_native_bddl_lineage_returns_v1'}:
+        score = evaluation.get('goal_satisfaction_fraction', '未评分')
+        label = ('原生 BDDL 目标满足比例＋显式终态检查（非官方 Q）'
+                 if protocol.endswith('additional_terminal_conditions_v1') else
+                 '原生 BDDL 目标满足比例（非官方 Q）')
+        success = evaluation.get('task_success', run_record.get('task_success'))
+        if protocol == 'rgb_agent_custom_native_bddl_lineage_returns_v1':
+            label = '原生 BDDL 目标满足比例＋材料来源、归位和空手检查（非官方 Q）'
+    if reference_success is not None:
+        success = reference_success
+    return score, label, success
+
+
 def h(value):
     return html.escape(str(value), quote=True)
 
@@ -180,13 +209,7 @@ def main():
           <details open><summary>工具调用参数与结果</summary><div class="detailsgrid"><div><h4>参数</h4><pre>{j(step.get('arguments') or {})}</pre></div><div><h4>结果摘要</h4><pre>{j(result_summary)}</pre></div></div></details>
           <details><summary>完整工具结果</summary><pre>{j(result)}</pre></details>
         </article>''')
-    evaluation = run_record.get("evaluation") or {}
-    score = ((evaluation.get("official_metrics") or {}).get("q_score") or {}).get("final", "未评分")
-    score_label = '本地官方指标 Q'
-    if evaluation.get('score_type') in ('custom_joint_terminal_and_public_history_v1', 'custom_joint_terminal_and_public_history_v2'):
-        score=evaluation.get('goal_satisfaction_fraction','未评分')
-        score_label='自定义目标满足比例（非官方 Q）'
-    success = evaluation.get("official_task_success", run_record.get("task_success"))
+    score, score_label, success = review_score(run_record)
     html_doc = f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>机器人实验审阅 · {h(data.get('run_id', ''))}</title><style>
     :root{{--bg:#0b1320;--panel:#142235;--line:#2c4058;--text:#e8f0f8;--muted:#a8bacb;--accent:#73d6ca}}

@@ -10,6 +10,14 @@ from unittest.mock import patch
 @unittest.skipUnless(importlib.util.find_spec('cv2') and importlib.util.find_spec('torch'),
                      'Run with the pinned simulator Python; simulator itself is not started')
 class LiveGridTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # patch.dict(sys.modules) restores its entire snapshot on exit. Load
+        # the real numerical dependencies first so it cannot unload SciPy
+        # while cached navigation functions still retain its sparse classes.
+        import scipy.spatial
+        import scipy.sparse.csgraph
+
     def test_gap_between_robot_and_carried_body_is_not_a_solid_bridge(self):
         import cv2
         import numpy as np
@@ -128,7 +136,10 @@ class LiveGridTests(unittest.TestCase):
     def test_hypothetical_door_replaces_stale_query_pose_and_keeps_other_obstacles(self):
         self.door_cache_fixture(stale_queries=True)
 
-    def door_cache_fixture(self,stale_queries=False):
+    def test_closed_door_and_driveway_support_survive_the_live_cache(self):
+        self.door_cache_fixture(support_category='driveway')
+
+    def door_cache_fixture(self,stale_queries=False,support_category=None):
         import cv2
         import numpy as np
         import torch
@@ -142,7 +153,7 @@ class LiveGridTests(unittest.TestCase):
                 if not self.n_joints:raise AssertionError('Rigid entity must not receive a joint query')
                 return torch.tensor([self.angle])
         with tempfile.TemporaryDirectory() as temp:
-            layout=Path(temp)/'layout';layout.mkdir();cv2.imwrite(str(layout/'floor_trav_no_obj_0.png'),np.full((40,40),255,dtype='uint8'))
+            layout=Path(temp)/'layout';layout.mkdir();cv2.imwrite(str(layout/'floor_trav_no_obj_0.png'),np.full((40,40),0 if support_category else 255,dtype='uint8'))
             robot=Obj('robot',[-.8,-.1,0.],[-.6,.1,1.5],[-.7,0.,0.])
             link=SimpleNamespace(is_meta_link=False,prim_path='/robot/base',collision_boundary_points_world=torch.tensor([
                 [-.8,-.1,.05],[-.8,.1,.05],[-.6,-.1,.05],[-.6,.1,.05]]))
@@ -164,9 +175,26 @@ class LiveGridTests(unittest.TestCase):
                         if np.all(hi>=lower) and np.all(lo<=upper):
                             if callback(SimpleNamespace(rigid_body=path)) is False:break
             fake=ModuleType('omnigibson');lazy=ModuleType('omnigibson.lazy');fake.lazy=lazy
-            lazy.omni=SimpleNamespace(physx=SimpleNamespace(get_physx_scene_query_interface=lambda:SimpleNamespace(overlap_box=overlap)))
+            def ground_hit(origin):
+                return SimpleNamespace(rigid_body='/ground/base',
+                    position=(origin[0],origin[1],-.0224611312),normal=(0.,0.,1.))
+            def closest(origin,direction,distance):
+                if physical_angle[0]==0 and abs(origin[0])<.025 and abs(origin[1])<.425:
+                    return {'hit':True,'rigidBody':'/door/leaf','position':origin,'normal':(0.,0.,1.)}
+                hit=ground_hit(origin)
+                return {'hit':True,'rigidBody':hit.rigid_body,'position':hit.position,'normal':hit.normal}
+            def all_hits(origin,direction,distance,report):
+                report(ground_hit(origin))
+            query=SimpleNamespace(overlap_box=overlap,raycast_closest=closest,raycast_all=all_hits)
+            lazy.omni=SimpleNamespace(physx=SimpleNamespace(get_physx_scene_query_interface=lambda:query))
             trav=SimpleNamespace(map_resolution=.05,floor_heights=[0.],floor_map=[torch.ones((40,40))])
-            scene=SimpleNamespace(scene_dir=temp,trav_map=trav,objects=[wall,door,robot])
+            objects=[wall,door,robot]
+            if support_category:
+                ground=Obj('ground',[-1.,-1.,-.3],[1.,1.,-.0224611312],[0.,0.,-.2])
+                ground.category=support_category
+                ground.links={'base':SimpleNamespace(is_meta_link=False,prim_path='/ground/base')}
+                objects.append(ground)
+            scene=SimpleNamespace(scene_dir=temp,trav_map=trav,objects=objects)
             backend=SimpleNamespace(robot=robot,env=SimpleNamespace(scene=scene),_get_held=lambda:None,_carry_contents=[],deadline=SimpleNamespace(check=lambda:None))
             with patch.dict(sys.modules,{'omnigibson':fake,'omnigibson.lazy':lazy}):
                 closed,meta=build_navigation_grid(backend,0)

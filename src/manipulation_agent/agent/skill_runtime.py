@@ -7,11 +7,16 @@ import sys
 from ..contracts import SkillError
 from ..records import write_json
 
+def skill_root():
+    root = Path(__file__).resolve().parents[3] / "skills"
+    if not root.is_dir():
+        root = Path(sys.prefix) / "share/manipulation-agentic-system/skills"
+    return root
+
+
 class SkillLibrary:
     def __init__(self, output: Path, *, exclude=()):
-        root = Path(__file__).resolve().parents[3] / "skills"
-        if not root.is_dir():
-            root = Path(sys.prefix) / "share/manipulation-agentic-system/skills"
+        root = skill_root()
         self.resources = {}; self.entries = []
         digest = hashlib.sha256()
         for main in sorted(root.glob("*/SKILL.md")):

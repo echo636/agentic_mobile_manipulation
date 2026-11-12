@@ -71,6 +71,64 @@ class LiveFloorSupportTests(unittest.TestCase):
         self.assertFalse(raw[3,3])
         self.assertGreater(details['added_cells'],0)
 
+    def test_closed_door_cannot_erase_underlying_structural_support(self):
+        from types import SimpleNamespace
+        from manipulation_agent.executors.navigation.live_gt_map import rasterize_collision_cells
+        class Query:
+            opened = False
+            def raycast_closest(self, origin, direction, distance):
+                x, y, z = origin
+                return {'hit': True, 'rigidBody': 'door' if not self.opened else 'floor',
+                        'normal': (0., 0., 1.), 'position': (x, y, z if not self.opened else 0.)}
+            def raycast_all(self, origin, direction, distance, report):
+                x, y, z = origin
+                if not self.opened:
+                    report(SimpleNamespace(rigid_body='door', position=(x, y, z), normal=(0., 0., 1.)))
+                report(SimpleNamespace(rigid_body='floor', position=(x, y, 0.), normal=(0., 0., 1.)))
+            def overlap_box(self, half, center, rotation, callback, any_hit):
+                if not self.opened: callback(SimpleNamespace(rigid_body='door'))
+        query = Query()
+        support, _ = repair_floor_support(np.zeros((1, 1), dtype='uint8'), (0., 0.),
+                                          .05, 0., {'floor'}, query, lambda: None)
+        # The real closed-door ray first hits the door at distance zero. The
+        # floor beneath must be cached independently of that movable obstacle.
+        self.assertTrue(support[0, 0])
+        for opened in (False, True, False):
+            query.opened = opened
+            occupancy = support.copy()
+            rasterize_collision_cells(query, occupancy, support.astype(bool), (0., 0.),
+                                      .05, .03, 1.5, {'floor'}, lambda: None)
+            self.assertEqual(bool(occupancy[0, 0]), opened)
+
+    def test_near_level_driveway_is_support_but_large_drop_is_not(self):
+        from types import SimpleNamespace
+        # Recorded native house_single_floor driveway height in the garage
+        # doorway diagnostic: -0.0224611312 m, with floor_heights[0] == 0.
+        for z, expected in ((-.0224611312, True), (-.04, False), (.025, False)):
+            with self.subTest(z=z):
+                def ray(origin, direction, distance):
+                    return {'hit': True, 'rigidBody': 'driveway', 'normal': (0., 0., 1.),
+                            'position': (origin[0], origin[1], z)}
+                repaired, _ = repair_floor_support(np.zeros((1, 1), dtype='uint8'),
+                    (0., 0.), .05, 0., {'driveway'}, SimpleNamespace(raycast_closest=ray), lambda: None)
+                self.assertEqual(bool(repaired[0, 0]), expected)
+
+    def test_white_traversal_pixels_do_not_bridge_an_unsupported_pool(self):
+        from types import SimpleNamespace
+        raw = np.ones((3, 9), dtype='uint8')
+        def ray(origin, direction, distance):
+            x, y, _ = origin
+            if .25 <= x <= .55:
+                return {'hit': False}  # The pool bottom is below this floor.
+            return {'hit': True, 'rigidBody': 'floor', 'normal': (0., 0., 1.),
+                    'position': (x, y, 0.)}
+        support, _ = repair_floor_support(raw, (0., 0.), .1, 0., {'floor'},
+            SimpleNamespace(raycast_closest=ray), lambda: None)
+        self.assertTrue(support[1, 0])
+        self.assertFalse(support[1, 4])
+        self.assertTrue(support[1, 8])
+        self.assertTrue(raw[1, 4])
+
     def test_rejects_a_cell_with_an_unsupported_corner(self):
         from types import SimpleNamespace
         def ray(origin, direction, distance):

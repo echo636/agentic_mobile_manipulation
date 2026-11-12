@@ -101,39 +101,88 @@ def floor_support_window(raw, original_resolution, resolution, window):
 
 
 def repair_floor_support(raw, origin, resolution, floor_z, floor_links, query, check):
-    """Recover omitted floor cells from current structural floor collisions.
+    """Validate and recover structural ground independently of movable obstacles.
 
-    The asset's no-object traversal image can still seal an open doorway.
-    A black pixel is not proof of missing floor. Add a cell only when its
-    centre and corners hit upward-facing structural floor at this elevation.
-    This supplies support only; ordinary height-layer queries still check all
-    walls, doors and furniture before any robot pose or motion is admitted.
+    A closed door can be the nearest ray hit above a valid floor. Cache the
+    underlying support; height-layer occupancy still checks the door on every
+    changed scene. Require support at the cell centre and all four corners.
+    Near-level outdoor ground may be up to 3 cm below the floor datum; upward
+    tolerance remains 2 cm. This does not authorize stairs or change body
+    collision checks.
     """
     import numpy as np
-    support = raw.copy()
-    details = {'method': 'structural_floor_rays_for_missing_cells',
-               'added_cells': 0, 'ray_queries': 0}
+    support = np.zeros_like(raw)
+    details = {'method': 'structural_ground_verified_v3',
+               'added_cells': 0, 'removed_cells': 0, 'ray_queries': 0, 'all_hit_queries': 0,
+               'source_validation': 'all_cells_native_ground',
+               'max_ground_drop_m': .03, 'max_ground_rise_m': .02}
     if not floor_links:
-        return support, details
-    rows, cols = np.nonzero(raw == 0)
+        details['source_validation'] = 'traversal_only_no_ground_geometry'
+        return raw.copy(), details
+
+    def eligible(body, position, normal):
+        return (str(body) in floor_links and normal[2] >= .98
+                and -.03 <= float(position[2])-floor_z <= .02)
+
+    def supported(x, y):
+        origin = (float(x), float(y), floor_z+.025)
+        hit = query.raycast_closest(origin, (0., 0., -1.), .055)
+        details['ray_queries'] += 1
+        if not hit.get('hit'):
+            return False
+        if eligible(hit.get('rigidBody'), hit['position'], hit['normal']):
+            return True
+        # A first hit on a door/furniture must not permanently erase its floor.
+        # APIs without all-hit queries retain the conservative rejection.
+        raycast_all = getattr(query, 'raycast_all', None)
+        if raycast_all is None:
+            return False
+        found = False
+        query_error = None
+        def collect(candidate):
+            nonlocal found, query_error
+            try:
+                found = found or eligible(candidate.rigid_body, candidate.position, candidate.normal)
+                return not found
+            except Exception as exc:
+                query_error = exc
+                return False
+        details['ray_queries'] += 1
+        details['all_hit_queries'] += 1
+        raycast_all(origin, (0., 0., -1.), .055, collect)
+        if query_error is not None:
+            raise RuntimeError('PhysX ground-support callback failed') from query_error
+        return found
+
+    # The source's white pixels can include an empty pool or other void.
+    # Validate them too. Adjacent cells share corners; retain only two rows
+    # of cached corner queries instead of issuing each shared ray four times.
+    height, width = raw.shape
     half = resolution/2
-    offsets = ((0., 0.), (-half, -half), (-half, half),
-               (half, -half), (half, half))
-    for index, (row, col) in enumerate(zip(rows, cols)):
-        if index % 256 == 0:
-            check()
-        x, y = origin[0]+col*resolution, origin[1]+row*resolution
-        for dx, dy in offsets:
-            hit = query.raycast_closest((float(x+dx), float(y+dy), floor_z+.025),
-                                        (0., 0., -1.), .05)
-            details['ray_queries'] += 1
-            if (not hit.get('hit') or hit.get('rigidBody') not in floor_links
-                    or hit['normal'][2] < .98
-                    or abs(hit['position'][2]-floor_z) > .02):
-                break
-        else:
-            support[row, col] = 1
-            details['added_cells'] += 1
+    lower = np.full(width+1, -1, dtype='int8')
+    for row in range(height):
+        upper = np.full(width+1, -1, dtype='int8')
+        y = origin[1]+row*resolution
+        for col in range(width):
+            if (row*width+col) % 256 == 0:
+                check()
+            x = origin[0]+col*resolution
+            if not supported(x, y):
+                continue
+            valid = True
+            for corners, cy in ((lower, y-half), (upper, y+half)):
+                for index in (col, col+1):
+                    if corners[index] < 0:
+                        corners[index] = int(supported(origin[0]+(index-.5)*resolution, cy))
+                    if not corners[index]:
+                        valid = False
+                        break
+                if not valid:
+                    break
+            support[row, col] = int(valid)
+        lower = upper
+    details['added_cells'] = int(np.count_nonzero((support != 0) & (raw == 0)))
+    details['removed_cells'] = int(np.count_nonzero((support == 0) & (raw != 0)))
     return support, details
 
 
@@ -311,7 +360,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
             raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE)
             raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
             floor_links={str(link.prim_path) for obj in scene.objects
-                         if getattr(obj,'category',None) in {'floor','floors'}
+                         if getattr(obj,'category',None) in {'floor','floors','driveway','lawn'}
                          for link in obj.links.values() if not link.is_meta_link}
             raw,support_details=repair_floor_support(raw,(-w*original_resolution/2,-h*original_resolution/2),
                 original_resolution,floor_z,floor_links,lazy.omni.physx.get_physx_scene_query_interface(),

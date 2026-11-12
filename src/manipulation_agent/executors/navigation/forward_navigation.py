@@ -341,17 +341,19 @@ def select_forward_route(options, actual, collision, *, target_slack=.1,
             projection_budget=PlanningBudget(budget.check,seconds=3.)
             collision.check_cancelled=projection_budget.check
             try:
-                projected=project_forward_point(options,actual,collision,projection_budget.check)
+                projected=project_forward_point(options,actual,collision,projection_budget.check,
+                                                allow_lateral=allow_lateral)
             except (SearchBudgetExhausted,ImportError):
                 projected=None
             finally:
                 collision.check_cancelled=budget.check
             if projected is not None:
                 selected,poses,details=projected
-                route=route_from_poses(selected,poses,collision,method='checked_forward_point_projection',
-                                       check_cancelled=budget.check)
+                route=route_from_poses(selected,poses,collision,
+                    method='checked_holonomic_point_projection' if allow_lateral else 'checked_forward_point_projection',
+                    allow_lateral=allow_lateral,check_cancelled=budget.check)
                 details.update(closest_candidate_m=closest,target_slack_m=None,total_seconds=planning_seconds,
-                               objective='nearest_checked_forward_reachable_grid_pose_then_motion_cost')
+                               objective='nearest_checked_reachable_grid_pose_then_motion_cost')
                 return selected,route,details
         route=plan_forward_route(ordered[0],actual,collision,check_cancelled=budget.check,
                                  max_expansions=20000,alternatives=ordered[1:],

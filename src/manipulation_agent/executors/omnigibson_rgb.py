@@ -113,6 +113,17 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         super().__init__(*args,**kwargs)
         self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
                                  if self.demo_motion else None)
+        # Native symbolic operations do not command trunk motion. Hold the
+        # restored posture through the position controller instead of adopting
+        # each load-induced deflection as the next no-op target. Physics still
+        # owns the measured joints; no pose is reset during stepping.
+        self._trunk_hold_target = (None if self.demo_motion else
+            self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone())
+        (self.output/'trunk_control.json').write_text(json.dumps({
+            'policy': 'explicit_demo_motion' if self.demo_motion else 'fixed_restored_position_target',
+            'target': None if self._trunk_hold_target is None else self._trunk_hold_target.tolist(),
+            'actuation': 'ordinary_position_controller', 'per_step_joint_pose_writes': False,
+        }, indent=2)+'\n')
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
         # throttling extension toggles asynchronous rendering. Our capture
         # contract requires synchronous render-only flushes on the owner thread.
@@ -410,6 +421,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
         if self._base_target is not None:
             target, self._base_target = self._base_target, None
             self._transfer_base_pose(target['position'],target['orientation'])
+        trunk_target = getattr(self, '_trunk_hold_target', None)
+        if trunk_target is not None:
+            action = action.clone()
+            action[self.robot.controller_action_idx['trunk']] = trunk_target.to(action)
         # RGB observation boundaries and the video cadence already own rendering.
         # OmniGibson's ordinary env.step also renders implicitly, duplicating
         # that work. Its native no-render branch advances the same physics
@@ -970,11 +985,12 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedMaterialActions, Check
                         target_slack=.1 if mode=='point' or standoff else 0.,check_cancelled=self.deadline.check,
                         project_point=mode=='point',allow_lateral=allow_lateral,
                         planning_seconds=getattr(self,'forward_route_planning_seconds',10.))
-                if detour is None:
+                if detour is None or mode=='point':
                     with component(self,'navigation_detour_refinement'):
                         grid,map_details,plan,prepared_route,endpoint_collision,selection,detour=refine_navigation_detour(
                             self,floor,grid,map_details,(*initial_xy,travel_yaw),
-                            options,plan,prepared_route,endpoint_collision,selection)
+                            options,plan,prepared_route,endpoint_collision,selection,
+                            project_point=mode=='point')
             if detour is not None:
                 details['detour_refinement']=detour
                 if detour['status']=='refined_route_selected':

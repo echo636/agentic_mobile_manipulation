@@ -3,14 +3,37 @@ import hashlib
 import json
 from pathlib import Path
 
+from .native_definition import resolve_definition
+from .lineage_goals import validate_relational_goals
+
 
 def load_catalog_spec(path):
     path = Path(path).resolve()
     spec = json.loads(path.read_text())
-    if spec.get('schema_version') != 1 or spec.get('kind') != 'behavior1k_sampled_instance':
-        raise ValueError('Expected a sampled full-catalog BEHAVIOR instance')
+    if spec.get('schema_version') != 1 or spec.get('kind') not in {
+            'behavior1k_sampled_instance', 'custom_bddl_sampled_instance'}:
+        raise ValueError('Expected a sampled native BDDL instance')
+    resolve_definition(spec, path)
+    validate_relational_goals(spec)
+    support = spec.get('cutting_support')
+    if support is not None:
+        if (spec['kind'] != 'custom_bddl_sampled_instance' or not isinstance(support, dict)
+                or set(support) != {'support_binding', 'target_bindings'}
+                or not isinstance(support['support_binding'], str) or not support['support_binding']
+                or not isinstance(support['target_bindings'], list) or not support['target_bindings']
+                or any(not isinstance(x, str) or not x for x in support['target_bindings'])
+                or len(set(support['target_bindings'])) != len(support['target_bindings'])):
+            raise ValueError('Invalid custom cutting support constraint')
+    if 'use_gpu_dynamics' in spec and type(spec['use_gpu_dynamics']) is not bool:
+        raise ValueError('Native dynamics mode must be an explicit boolean')
     if not spec.get('public_instruction', '').isascii() or not spec['public_instruction'].strip():
         raise ValueError('An English final-goal description is required')
+    terminal = spec.get('additional_terminal_conditions', [])
+    if (not isinstance(terminal, list) or any(c != 'hand_empty' for c in terminal)
+            or len(terminal) != len(set(terminal))):
+        raise ValueError('Unsupported additional terminal conditions')
+    if terminal and spec['kind'] != 'custom_bddl_sampled_instance':
+        raise ValueError('Additional terminal conditions require a custom task')
     for key in ('frozen_instance', 'sampling_record'):
         entry = spec[key]
         target = (path.parent / entry['path']).resolve()
