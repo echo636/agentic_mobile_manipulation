@@ -603,9 +603,23 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         cells=np.column_stack(np.where((labels==labels[source]) & (occupancy!=0)))
         if not len(cells):
             raise SkillError('navigation_invalid_start','No native traversable neighbor at the start')
-        reach_fallback=None
+        reach_fallback=None;floor_snap=None
         if floor_click:
             endpoint=hint
+            clicked=tuple(trav.world_to_map(hint).tolist())
+            walkable=(0<=clicked[0]<occupancy.shape[0] and 0<=clicked[1]<occupancy.shape[1]
+                      and occupancy[clicked]!=0)
+            if not walkable:
+                # A floor spot under a chair or beside a wall is a real place the
+                # base cannot occupy. Go to the closest connected walkable cell
+                # and report the move as incomplete. A walkable click in another,
+                # disconnected region is still refused by the pathfinder below.
+                points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
+                distances=self.torch.linalg.norm(points-hint,dim=1)
+                nearest=int(self.torch.argmin(distances))
+                if float(distances[nearest])>self.local_limits.floor_click_snap_m:
+                    raise SkillError('navigation_unreachable','Selected floor point is not walkable and no walkable floor is near it')
+                endpoint=points[nearest];floor_snap=float(distances[nearest])
         else:
             # Use cell centers for object approaches. Both explicit navigation
             # and local manipulation must stay near the selected object.
@@ -639,7 +653,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'resolution_m':float(trav.map_resolution),'precomputed_walkability':True,
                 'map_sha256':hashlib.sha256(occupancy.tobytes()).hexdigest(),
                 'native_map_open_doors':opened_doors,'native_map_added_fixtures':added_fixtures,
-                'reach_fallback_m':reach_fallback,
+                'reach_fallback_m':reach_fallback,'floor_click_snap_m':floor_snap,
                 'dynamic_collision_check':False}
         try:
             self.deadline.check()
@@ -647,7 +661,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             if path is None:
                 raise SkillError('navigation_unreachable','Native pathfinder found no route to the destination')
             route=[start.tolist(),*path.cpu().tolist(),endpoint.tolist()]
-            heading=hint-(start if floor_click else endpoint)
+            heading=hint-(start if floor_click and floor_snap is None else endpoint)
             yaw=math.atan2(float(heading[1]),float(heading[0]))
             record.update(status='planned',path=route,path_distance_m=float(length))
             result=self._execute_base_path(route,yaw,max_steps)
@@ -938,7 +952,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'scope':'GT-assisted symbolic endpoint; no continuous driving or real-arm IK',
             'reach_check':'base_to_selected_point_xy','reach_limit_m':self.local_limits.reach_m,
             'reach_fallback':'closest walkable cell when none lies within the nominal reach',
-            'reach_fallback_limit_m':self.local_limits.fallback_reach_m}
+            'reach_fallback_limit_m':self.local_limits.fallback_reach_m,
+            'floor_click_snap':'closest connected walkable cell when the clicked floor cell is not walkable; reported incomplete',
+            'floor_click_snap_limit_m':self.local_limits.floor_click_snap_m}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
             'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,

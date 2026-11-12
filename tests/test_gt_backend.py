@@ -166,6 +166,32 @@ class GTBackendTests(unittest.TestCase):
         with self.assertRaises(SkillError):b._navigate(target,700)
         b._execute_base_path.assert_not_called()
 
+    def test_floor_click_on_an_unwalkable_cell_moves_beside_it_and_reports_incomplete(self):
+        b=self.backend()
+        # The walkable map ends at x=2.95; this floor spot lies 0.35 m past it.
+        target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([3.3,0.,0.]),None))
+        result=b._navigate(target,700)
+        route=b._execute_base_path.call_args.args[0]
+        distance=float(b.torch.linalg.norm(b.torch.tensor(route[-1])-b.torch.tensor([3.3,0.])))
+        self.assertLess(distance,.45)
+        self.assertEqual(result['nav_status'],'incomplete')
+        record=json.loads((self.output/'navigation_plans.jsonl').read_text())
+        self.assertAlmostEqual(record['floor_click_snap_m'],distance,places=5)
+
+    def test_floor_click_on_the_wall_cell_stays_on_the_start_side(self):
+        b=self.backend()
+        target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([0.02,0.,0.]),None))
+        b._navigate(target,700)
+        route=b._execute_base_path.call_args.args[0]
+        self.assertLess(route[-1][0],0.)
+
+    def test_floor_click_far_inside_unwalkable_area_is_refused(self):
+        b=self.backend()
+        target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([4.5,0.,0.]),None))
+        with self.assertRaises(SkillError) as failure:b._navigate(target,700)
+        self.assertEqual(failure.exception.code,'navigation_unreachable')
+        b._execute_base_path.assert_not_called()
+
     def test_applied_endpoint_without_arrival_reports_incomplete(self):
         b=self.backend()
         b._execute_base_path=Mock(return_value={'actual_path_distance_m':0.,'nav_status':'endpoint_applied'})

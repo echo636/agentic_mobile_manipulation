@@ -877,10 +877,12 @@ class CheckedPlacement:
         """
         from omnigibson.utils.sampling_utils import raytest
         ignored = [link.prim_path for obj in (held, self.robot, target, *payload) for link in obj.links.values()]
-        start = point + self.torch.tensor([0., 0., .01], device=point.device)
+        # Start just below the selected surface: contents resting on the support
+        # are neighbors that must keep ranking, not the base underneath it.
+        start = point - self.torch.tensor([0., 0., .002], device=point.device)
         end = point - self.torch.tensor([0., 0., .06], device=point.device)
         hit = raytest(start, end, ignore_bodies=ignored)
-        body = hit.get('rigidBody') if hit.get('hit') else None
+        body = hit.get('rigidBody') if hit.get('hit') and float(hit.get('distance', 1.)) > 0. else None
         return (str(body),) if body else ()
 
     def _inside_overlap_ranker(self,assembly):
