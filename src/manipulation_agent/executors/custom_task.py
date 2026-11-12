@@ -109,6 +109,8 @@ class CustomTaskBackend(RGBBackend):
         self._initial_entity_names = None
         self._protected_initial_positions = {}
         self.build_instance = Path(build_instance) if build_instance else None
+        # Fixed supports created by this task are absent from the scene's baked map.
+        self._native_map_added_fixtures = [fixture['name'] for fixture in self.custom_spec.get('fixtures', [])]
         self._custom_motion_positions = {}; self._custom_state_errors = []
         base = (dict(task=self.custom_spec['id'], instance=0, seed=self.custom_spec.get('seed', 0))
                 if self.standalone_scene else self.custom_spec['base'])

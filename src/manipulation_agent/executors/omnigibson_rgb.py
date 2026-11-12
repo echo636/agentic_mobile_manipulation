@@ -579,8 +579,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         """Select one walkable destination and call OmniGibson's native pathfinder."""
         import cv2
         import numpy as np
-        from .compat.native_astar import sync_open_door_map
+        from .compat.native_astar import sync_added_fixture_map, sync_open_door_map
         opened_doors = sync_open_door_map(self)
+        added_fixtures = sync_added_fixture_map(self)
         trav=self.env.scene.trav_map
         position=self.robot.get_position_orientation()[0]
         point=target.get_position_orientation()[0]
@@ -623,7 +624,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'floor':floor,'mode':'point' if floor_click else 'approach',
                 'resolution_m':float(trav.map_resolution),'precomputed_walkability':True,
                 'map_sha256':hashlib.sha256(occupancy.tobytes()).hexdigest(),
-                'native_map_open_doors':opened_doors,
+                'native_map_open_doors':opened_doors,'native_map_added_fixtures':added_fixtures,
                 'dynamic_collision_check':False}
         try:
             self.deadline.check()
@@ -946,6 +947,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'search':'OmniGibson TraversableMap.get_shortest_path',
             'localization':'private simulator pose','precomputed_walkability':True,
             'door_state_sync':'opened doorway footprints only; closed doors retain the native map',
+            'added_fixture_sync':'footprints of task-declared fixed supports are blocked',
             'online_mapping':False,'dynamic_collision_check':False,
             'continuous_motion_simulated':False,'physical_controller':False,
             'departure_certificate':False,'endpoint_settling_gate':False,
