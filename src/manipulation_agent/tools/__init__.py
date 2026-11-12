@@ -6,9 +6,11 @@ from copy import deepcopy
 from .intent import INTENT_SCHEMA, PROTOCOL as INTENT_PROTOCOL
 
 MINIMAL_TOOLS = frozenset({'initialize', 'look', 'act', 'finish'})
-SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill', 'task_notes'}
+BASIC_SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill'}
+SKILL_TOOLS = BASIC_SKILL_TOOLS | {'task_notes'}
 INLINE_SKILL_TOOLS = MINIMAL_TOOLS | {'task_notes'}
-PROFILE_TOOLS = {'minimal': MINIMAL_TOOLS, 'skills': SKILL_TOOLS, 'skills_inline': INLINE_SKILL_TOOLS}
+PROFILE_TOOLS = {'minimal': MINIMAL_TOOLS, 'basic-skills': BASIC_SKILL_TOOLS, 'goal-tree': SKILL_TOOLS,
+                 'skills': SKILL_TOOLS, 'skills_inline': INLINE_SKILL_TOOLS}
 
 # Execution hints, not additional permission gates or changed input contracts.
 _METADATA = {
@@ -41,6 +43,13 @@ def tool_specs(profile='skills', *, require_intent=False):
         schema = deepcopy(t.schema)
         metadata = {'profile': profile, **t.metadata.as_dict()}
         description = t.description
+        if profile == 'goal-tree' and t.name == 'task_notes':
+            schema['properties']['operation']['enum'] = ['read', 'write', 'update']
+            description = ('Store the model-authored goal tree and progress. read returns notes and recent public action receipts; '
+                'write replaces the JSON text; update merges goals by id and replaces other supplied fields. '
+                'Omitted goals persist; supply active when updating the current local plan. '
+                'Use the current expected_version for writes/updates, initially 0. For read, content and expected_version are null. '
+                'Notes do not execute actions, choose goals, search plans or verify task success.')
         if require_intent:
             schema['properties']['intent'] = deepcopy(INTENT_SCHEMA)
             schema['required'].append('intent')

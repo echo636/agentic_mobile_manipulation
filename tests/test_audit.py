@@ -29,6 +29,19 @@ class ModelEvidenceAudit(unittest.TestCase):
     def test_matching_evidence_passes(self):
         self.assertEqual(self.audit()['status'],'passed')
 
+    def test_declared_controller_planning_is_separate_from_robot_evidence(self):
+        extra = [{'type': 'item.completed', 'item': {'type': 'mcp_tool_call',
+            'server': 'manipulation', 'tool': 'plan_task', 'arguments': {'progress': 'Task completed.'},
+            'result': {'content': [{'type': 'text', 'text': '{"ok":true,"nodes":[],"next":[]}' }]}}}]
+        self.assertEqual(self.audit(extra)['evidence_alignment'], 'failed')
+        self.ctrl['planning_subagent'] = {'model': 'fixture'}
+        audit = self.audit(extra)
+        self.assertEqual(audit['evidence_alignment'], 'passed')
+        self.assertEqual(audit['robot_tool_calls'], 1)
+        self.assertEqual(audit['planner_tool_calls'], 1)
+        self.run['task_success'] = False
+        self.assertEqual(self.audit(extra)['status'], 'failed')
+
     def test_custom_score_requires_frozen_scene_and_evaluator_provenance(self):
         self.run['config']['custom_task']='/private/frozen_spec.json'
         self.run['evaluation']={

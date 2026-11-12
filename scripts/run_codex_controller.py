@@ -14,6 +14,7 @@ import signal
 import sys
 import itertools
 import re
+import tomllib
 from dataclasses import asdict
 
 from manipulation_agent.clients import ClientConfig, get_adapter
@@ -22,6 +23,7 @@ from manipulation_agent.clients.events import write_derived_events
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.tools.intent import PROTOCOL as INTENT_PROTOCOL, LEGACY_PROTOCOL
 from manipulation_agent.agent.vision_policy import system_prompt
+from manipulation_agent.agent.planning_subagent import ACTOR_INSTRUCTION, PLANNER_TOOL
 from manipulation_agent.records import now, write_json, source_version
 from manipulation_agent.reporting.model_trace import export_summaries
 from manipulation_agent.transport.mcp_preflight import check_server
@@ -59,16 +61,26 @@ def provider_recovery_mode(events, *, resumes, forks, max_resumes, max_forks):
     if (forks < max_forks and 'OPENAI_PERMANENT_STICKY_ACCOUNT_UNAVAILABLE' in message
             and not any(value in message for value in ('401 Unauthorized', '403 Forbidden',
                                                        'refresh token was revoked'))):
-        pending = set()
+        pending = {}
         for event in events:
             item = event.get('item') or {}
             if item.get('type') != 'mcp_tool_call':
                 continue
             if event.get('type') == 'item.started':
-                pending.add(item.get('id'))
+                pending[item.get('id')] = item
             elif event.get('type') == 'item.completed':
-                pending.discard(item.get('id'))
-        return None if pending else 'fork'
+                pending.pop(item.get('id'), None)
+        if not pending:
+            return 'fork'
+        # A visual call may finish after the client loses its response. The
+        # bridge queues initialize behind it; old revisions cannot execute an
+        # act twice. Recover from current RGB, without replaying the lost call.
+        if len(pending) == 1:
+            item = next(iter(pending.values()))
+            revision = (item.get('arguments') or {}).get('revision')
+            if item.get('tool') in {'act', 'look'} and type(revision) is int and revision >= 0:
+                return 'fork'
+        return None
     if rate_limit_error(events) and (max_resumes == -1 or resumes < max_resumes):
         return 'resume'
     return None
@@ -121,8 +133,8 @@ def main(argv=None, *, allow_client=False):
                         help='Private argv JSON: atomically arm remote execution clock after MCP handshake')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
-    p.add_argument('--agent-profile', choices=['minimal','skills','skills_inline','workflow'], default='skills')
-    p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
+    p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
+    p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
     p.add_argument('--require-tool-intent',action='store_true',
                    help='Match the simulator public_tool_intent_v1 tool schemas and prompt')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh','max','ultra'])
@@ -132,6 +144,9 @@ def main(argv=None, *, allow_client=False):
                    help='Codex only: direct exposes MCP tools as model functions instead of code-mode exec')
     p.add_argument('--codex-context', choices=['client_default', 'minimal'], default='client_default',
                    help='Codex only: minimal removes Codex base prompt, skills, environment and native tools')
+    p.add_argument('--planner-model', help='Optional independent visual planning model; basic-skills profile only')
+    p.add_argument('--planner-reasoning-effort', default='xhigh', choices=['low','medium','high','xhigh','max','ultra'])
+    p.add_argument('--planner-python', default=sys.executable, help='Controller-side interpreter with the MCP extra')
     p.add_argument('--rate-limit-resumes', '--provider-error-resumes', type=int, default=None,
                    help='Same-session transient provider recovery count; -1 is unbounded (default for unbounded Codex episodes)')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
@@ -157,14 +172,37 @@ def main(argv=None, *, allow_client=False):
         p.error('Rate-limit resume is supported only for Codex')
     if args.permanent_route_forks < 0 or (args.permanent_route_forks and client != 'codex'):
         p.error('Permanent route forks require Codex and a nonnegative count')
+    if args.planner_model and (args.agent_profile != 'basic-skills' or not args.model_provider_profile
+                              or not args.model_provider_gateway):
+        p.error('The planning subagent requires basic-skills and an explicit provider/gateway')
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill,
+                                 require_tool_intent=args.require_tool_intent)
+    catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent)
+    planner_config = None
+    mcp_env_vars = ()
+    if args.planner_model:
+        provider_path = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))) / 'config.toml'
+        provider = tomllib.loads(provider_path.read_text())['model_providers'][args.model_provider_profile]
+        # Codex filters MCP subprocess environments. Forward names, never write credential values.
+        mcp_env_vars = ('PYTHONPATH', 'CODEX_HOME', 'MAS_CLIENT_STATE_ROOT', 'no_proxy', 'NO_PROXY', provider['env_key'])
+        planner_config = dict(model=args.planner_model, effort=args.planner_reasoning_effort,
+            instruction=args.instruction, provider=args.model_provider_profile, gateway=args.model_provider_gateway,
+            upstream_command=args.mcp_command, upstream_args=json.loads(args.mcp_args_json),
+            output=str((args.output / 'planner').resolve()))
+        planner_path = (args.output / 'planner_config.json').resolve()
+        write_json(planner_path, planner_config)
+        args.mcp_command = args.planner_python
+        args.mcp_args_json = json.dumps(['-m', 'manipulation_agent.planner_server', '--config', str(planner_path)])
+        instructions += ACTOR_INSTRUCTION
+        catalog = [*catalog, PLANNER_TOOL]
     config = ClientConfig(client, args.model, args.instruction, args.mcp_command,
                           json.loads(args.mcp_args_json), args.output, args.timeout,
                           args.agent_profile, args.isolate_client_storage,
                           args.reasoning_effort, args.model_provider_profile, args.model_provider_gateway,
-                          args.mcp_tool_exposure, args.codex_context)
+                          args.mcp_tool_exposure, args.codex_context, mcp_env_vars=mcp_env_vars)
     capability = adapter.probe()
     if capability.status != 'available':
         write_json(args.output / 'controller.json', {
@@ -176,9 +214,7 @@ def main(argv=None, *, allow_client=False):
         print(json.dumps(asdict(capability)))
         return 3
     try:
-        project = adapter.prepare_project(config, system_prompt(args.agent_profile,goal_skill=args.goal_skill,
-                require_tool_intent=args.require_tool_intent),
-                                          [t['name'] for t in tool_specs(args.agent_profile,require_intent=args.require_tool_intent)])
+        project = adapter.prepare_project(config, instructions, [t['name'] for t in catalog])
     except (ValueError, RuntimeError) as exc:
         write_json(args.output / 'controller.json', {
             'started_at': now(), 'finished_at': now(), 'status': 'unsupported',
@@ -200,6 +236,8 @@ def main(argv=None, *, allow_client=False):
                 "host": os.uname().nodename, "controller": client + "_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": capability.version, "client_capability": asdict(capability)}
+    if planner_config is not None:
+        metadata['planning_subagent'] = planner_config
     if project.client_storage is not None:
         metadata['client_storage'] = project.client_storage
     metadata['provider_recovery'] = dict(max_resumes=args.rate_limit_resumes,
@@ -221,7 +259,7 @@ def main(argv=None, *, allow_client=False):
             # access to /dev/null. A host-only handshake misses mount failures.
             prefix=project.mcp_prefix
             mcp_command=prefix[0];mcp_args=prefix[1:]+['--',args.mcp_command,*mcp_args]
-        metadata['mcp_preflight']=preflight_server(mcp_command,mcp_args,tool_specs(args.agent_profile,require_intent=args.require_tool_intent),
+        metadata['mcp_preflight']=preflight_server(mcp_command,mcp_args,catalog,
                                                   args.output,deadline)
         metadata['mcp_preflight']['inside_client_storage_namespace']=native_sessions is not None
     except Exception as exc:
@@ -284,6 +322,10 @@ def main(argv=None, *, allow_client=False):
                        'Use the prior conversation and current RGB tool feedback; continue choosing '
                        'actions yourself, then call finish. Do not restart the task or claim success '
                        'without visual evidence.')
+        if mode == 'fork':
+            resume_prompt += (' A previous tool response may have been lost. Do not replay any pending call. '
+                              'First call initialize to read the current RGB and your task notes; '
+                              'initialize does not reset or advance the scene. Then continue from that observation.')
         resume_project=(adapter.prepare_fork(project,thread_id,resume_prompt) if mode == 'fork'
                         else adapter.prepare_resume(project,thread_id,resume_prompt))
         resumed=adapter.run(resume_project,segment_dir,remaining,on_start)

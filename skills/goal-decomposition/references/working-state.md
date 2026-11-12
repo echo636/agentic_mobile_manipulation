@@ -1,52 +1,80 @@
-# Task notes format
+# Working state and automatically composed operation DAG
 
-Write the complete replacement JSON string with `task_notes(operation="write", content=..., expected_version=...)`. Start at version 0; each reply supplies the next version. After missing context or a version conflict, read with `operation="read", content=null, expected_version=null`. Maximum content length: 12000 characters. Keep completed branches concise: retain their IDs, relationships, result and evidence, but remove obsolete action plans and repeated prose. Keep each item subtotal in one member entry and refer to it from goals instead of duplicating the ledger.
+Store one `goal-tree-v2` document through `task_notes`. `goals` describes results, `planning.state` records observed beliefs, and `execution.operators` describes available work. The program generates `execution.operations` and selects its first operation on write/update. All labels come from your RGB understanding, never simulator IDs.
 
-Tree shape follows the task. This example has a root, two intermediate layers on one branch, and leaves at different depths. The current action plan is stored separately in `active` (labels illustrate structure, not task content):
-
-```text
-g0 Task end state (root)
-├─ g1 Contributing result A (intermediate)
-│  ├─ g11 Finer result A1 (intermediate)
-│  │  ├─ g111 Directly pursuable result A1a (leaf)
-│  │  └─ g112 Directly pursuable result A1b (leaf)
-│  └─ g12 Directly pursuable result A2 (leaf)
-├─ g2 Directly pursuable result B (leaf)
-└─ g3 Directly pursuable result C (leaf)
-```
-
-Here `g111.parent_id` is `g11`, and `g11.parent_id` is `g1`. If A2 requires B, set `g12.depends_on` to `["g2"]` while keeping `g12.parent_id` as `g1`. Do not copy the example's depth or counts; expand any leaf if it later needs decomposition.
-
-Use the following fields. Only two goal records are shown for brevity; put **every node**, including intermediate parents and deeper descendants, in the flat `goals` list:
+Write before the first act/look with `operation="write", expected_version=0`. Read after missing context. Use `update` with the current version to reconcile changed fields. Each input can contain up to 12000 characters; merged notes and generated DAGs can be larger. Keep working notes concise; do not append a transcript.
 
 ```json
 {
-  "format": "goal-tree-v2",
-  "root_id": "g0",
-  "requirements": [{"id": "r1", "condition": "Required result or constraint", "basis": "explicit or assumed"}],
-  "goals": [{
-    "id": "g0", "parent_id": null, "goal": "Complete end state in your own words",
-    "covers": ["r1"], "depends_on": [], "status": "active",
-    "check": "Evidence establishing the complete result", "evidence": []
-  }, {
-    "id": "g1", "parent_id": "g0", "goal": "Result contributing to its parent", "covers": ["r1"],
-    "depends_on": [], "status": "active",
-    "check": "Evidence needed to establish this result", "evidence": []
-  }],
-  "active": {"goal_id": "g1", "serves": ["g1"], "steps": ["Immediate next action"], "next_check": "Expected result"},
-  "members": [{"label": "local-a", "description": "Recognizable visual features", "location": "Last observed location", "state": "Current task-relevant state", "remaining": "Unfinished work", "count": 1, "evidence": []}],
-  "assumptions": [],
-  "uncertainties": [],
-  "change": "Reason for this revision"
+  "format":"goal-tree-v2","root_id":"root",
+  "requirements":[{"id":"r1","condition":"Both items processed and arranged","basis":"explicit"}],
+  "goals":[
+    {"id":"root","parent_id":null,"goal":"Both requested items processed and arranged","status":"active","covers":["r1"],"check":"Both final results inspected","evidence":[]},
+    {"id":"a","parent_id":"root","goal":"Item A processed and arranged","status":"pending","condition":{"a":"finished"},"check":"A has required form and placement","evidence":[]},
+    {"id":"b","parent_id":"root","goal":"Item B processed and arranged","status":"pending","condition":{"b":"finished"},"check":"B has required form and placement","evidence":[]}
+  ],
+  "planning":{
+    "location":"bench","state":{"hand":"empty","tool":"bench","a":"raw","b":"raw"}
+  },
+  "execution":{
+    "operators":[
+      {"id":"get-tool","description":"Pick up the visible tool","action":"grasp","at":"bench","seconds":3,"requires":{"hand":"empty","tool":"bench"},"effects":{"hand":"tool","tool":"held"},"check":"Correct tool held"},
+      {"id":"process-a","description":"Process A on its support","at":"bench","seconds":8,"requires":{"hand":"tool","a":"raw"},"effects":{"a":"processed"},"check":"A has required form"},
+      {"id":"process-b","description":"Process B on its support","at":"bench","seconds":8,"requires":{"hand":"tool","b":"raw"},"effects":{"b":"processed"},"check":"B has required form"},
+      {"id":"put-tool","description":"Set the tool down on the bench","at":"bench","seconds":3,"requires":{"hand":"tool"},"effects":{"hand":"empty","tool":"bench"},"check":"Tool supported, hand empty"},
+      {"id":"arrange-a","description":"Arrange processed A at its final bench position","at":"bench","seconds":3,"requires":{"hand":"empty","a":"processed"},"effects":{"a":"finished"},"check":"A has required form and placement"},
+      {"id":"arrange-b","description":"Arrange processed B at its final bench position","at":"bench","seconds":3,"requires":{"hand":"empty","b":"processed"},"effects":{"b":"finished"},"check":"B has required form and placement"}
+    ],
+    "operations":[]
+  },
+  "active":null,"members":[],"assumptions":[],"uncertainties":[],"change":"Initial grounded model"
 }
 ```
 
-IDs are unique; only the root has a null parent. Every other `parent_id` references an existing goal; parent links form one tree. Dependencies reference goal IDs and may cross branches. Keep both relations acyclic. Parentage alone does not require sibling execution order; children do not wait for their parent to be done.
+This illustrates a complete declared workflow, not a task recipe: intermediate `processed` states enable final arrangement. The program can compare doing each item end to end against sharing the tool across both. Include the actual task's resource, access, support and processing conditions. A short operator must not hide decisions about resources, workstations or order.
 
-Statuses are `pending`, `active`, `done`, `blocked`, `retired`. `active.goal_id` identifies the focal leaf; `active.serves` lists all ready leaves advanced by the current batch or shared trip. Their ancestors can also have status `active`. With none ready, set `active.goal_id` to null and `steps` to an empty list. In `steps`, name the batch's source, carrier, destination and next useful work at that destination; use `members` for its inventory. Keep this short, not a complete future action transcript.
+## Results and observed beliefs
 
-Use `members` when item coverage matters. Labels are your own, not simulator IDs. An entry represents one item or a distinguishable group in the same state; split a mixed-state entry into pending inputs and finished outputs, with their current locations and count units. Update state and remaining work from RGB and feedback. A spill reopens the affected goal; temporary placement does not complete storage.
+Each goal has `id`, `parent_id`, `goal`, `status`, `check` and `evidence`. Only the root has a null parent. Intermediate layers may repeat. `covers` references requirement IDs. Statuses are `pending`, `active`, `done`, `blocked`, `retired`.
 
-For repeated transfers, save each subtotal with the last feedback event it includes in `evidence`. Before changing areas or subtasks, reconcile completed processing and deliveries with `members`; replace stale counts, including any conflicting summary. On resuming, read `action_feedback_since_write` from the returned notes and reconcile those public receipts with the checkpoint before acting or replacing notes. If `omitted` is nonzero or item correspondence is unavailable, mark the affected count uncertain. Keep uninspected supply, work in progress and confirmed delivery distinct. Replace stale entries rather than appending a transcript.
+Give required leaves a nonempty `condition` dictionary using the same state keys as operator effects. Values are strings. All required conditions must hold together at the end. Temporary preparation and tool occupancy belong in operator states, not extra final requirements. Preserve completed result conditions so later work cannot silently undo them. Intermediate groups need no condition unless they have an additional independent terminal requirement.
 
-Before finish, use `change` to reconcile each criterion and `uncertainties` for remaining gaps. An evidence ID alone, a successful notes write or a `done` label does not verify a result. Preserve original requirements and valid progress when replacing the state.
+`planning.state` holds the states currently supported by RGB and public receipts. Missing is unknown, not false or freely achievable. Use distinguishable states for whole, half-cut, diced, transferred and cooked items where relevant. Moving an object changes its recorded location too. A discovery result can record a location inspected or identity resolved; keep unfinished physical results separate.
+
+`members` preserves recognizable identity/group, location, state, remaining work, count and evidence. Revise stale inventory instead of appending history.
+
+## Available operators and costs
+
+Each operator has:
+
+- `id`, `description`, optional `action`: concrete local work, with an optional primitive name.
+- `at`: observed work location; distinct workstations remain distinct even in one room.
+- `requires`, `effects`: named states required before and predicted after the operation. Include hand/tool occupancy, access, object location, compatibility and any prior results it can disturb. Unmentioned states are predicted unchanged.
+- `seconds`: estimated local work cost, excluding travel; optional `recovery_seconds` describes extra work supported by observed difficulty.
+- `check`: observable evidence needed to accept the actual result.
+
+Operators are reusable capabilities, not occurrences: give them no `status` or `depends_on`. A repeated use is possible only when its preconditions hold. Update capabilities when an object moves or changes form; retrieval from an old location is no longer available. The program cannot infer an omitted physical condition or invent a missing capability.
+
+`planning.travel` contains directed source/destination edges with estimated seconds. The program uses shortest paths over these edges; absent routes are gaps, not zero cost. Physical navigation belongs to the executor. Costs compare work + travel + expected recovery + remaining process waiting, not graph node count.
+
+For independent processing, put `starts:{"process":60}` on its start and `awaits:["process"]` on its check. Include the appropriate device/input preconditions and effects. `simulation_seconds` estimates simulation progress during an operation; omitted means zero. Use public `runtime.observed_simulation_seconds` from comparable completed work to estimate it, not `seconds` or model/network time. `planning.processes` holds remaining simulation seconds for already active processes. `planning.wait_cost_per_sim_second` prices explicit waiting; omission uses a reported nominal rate of 1, which you can revise from observed wait receipts. Update clocks from public capture timestamps and receipts. Elapsed time does not prove the transformation succeeded.
+
+## Comparison, selection and reconciliation
+
+The program searches operator combinations under state, resource, location and process conditions. Replies contain ordered `steps`, `coverage`, `unplanned_results` and `comparison`; the complete DAG is stored in `execution.operations` and the replay. `comparison.missing_producers` identifies required conditions absent from current beliefs and all operator effects. Read these and resource/route gaps before treating a plan as complete. `search_truncated` and `optimal_in_declared_model` describe the bounded search within your declared model, not physical optimality.
+
+For incomplete models, search maximizes satisfied terminal conditions, then minimizes cost. `coverage.conditions_scheduled` counts these predicted conditions separately from fully covered goals; useful work within an unfinished group is still scheduled. Neither count is observed task success.
+
+Write/update stores the generated graph and selects its first operation. `active.steps` and `active.next_check` describe the selected local work and expected evidence; no separate `select` call is needed. To override, use `operation="select"` with the returned `plan_id`, `operation_id`, short RGB-grounded `steps` and `next_check`. Generated operation IDs differ from reusable operator IDs. Edges preserve producing conditions and resource conflicts; ordered steps give the single-robot schedule. Selection does not execute an action.
+
+Action replies retain the selected operation and measured tool/simulation time. After its local work finishes, fails or reveals new information, update actual state and result evidence. For example:
+
+```json
+{"planning":{"location":"bench","state":{"hand":"tool","tool":"held","a":"raw","b":"raw"}},"change":"Tool grasp confirmed"}
+```
+
+`update` merges goals and operators by ID. `execution.remove_operators` removes obsolete capabilities. Supplied `planning.state`, `processes` and lists replace their previous values; omitted fields persist. Omitted `active` ends the previous interval and lets the program select from the reconciled state. Do not mark an operator done: update observed state so remaining work is searched afresh. The generated graph and selection are preserved exactly in the replay.
+
+`previous_execution` retains predicted costs and measured time for the last selected interval. A partial attempt or recovery is not a completed-operation cost sample. Keep travel separate from local work when revising estimates.
+
+Before finish, verify the result tree and member inventory from evidence. Task success is established by the independent evaluator, not by graph completion or tool receipts.

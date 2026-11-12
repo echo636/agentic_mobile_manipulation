@@ -5,6 +5,25 @@ DIRECTIONS = ('front', 'back', 'left', 'right')
 YAW_DEGREES = {'front': 0, 'back': 180, 'left': 90, 'right': -90}
 
 
+def robot_head_mount_height(robot, **kwargs):
+    """Mount to the head/body, independent of the saved arm and hand posture.
+
+    Extended arms may enter an image; they must not raise a fixed head rig.
+    Reading only the body geometry avoids moving joints for camera calibration.
+    """
+    appendages = set(robot.eef_link_names.values())
+    for groups in (robot.arm_link_names, robot.gripper_link_names, robot.finger_link_names):
+        appendages.update(name for names in groups.values() for name in names)
+    points = []
+    for name, link in robot.links.items():
+        if name in appendages:
+            continue
+        vertices = link.visual_boundary_points_world
+        if vertices is not None:
+            points.extend(vertices.tolist())
+    return centered_head_height(points, robot.get_position_orientation()[0].tolist(), **kwargs)
+
+
 def centered_head_height(visual_points, base_position, *, pitch_degrees=20, radius=0.,
                          vertical_fov_degrees=90, body_below_fraction=.8, clearance=.05):
     """Place the virtual head rig above its own visible body, using robot geometry.

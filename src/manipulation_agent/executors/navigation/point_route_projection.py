@@ -55,6 +55,10 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
     directions=((1,0),(2,1),(1,1),(1,2),(0,1),(-1,2),(-1,1),(-2,1),
                 (-1,0),(-2,-1),(-1,-1),(-1,-2),(0,-1),(1,-2),(1,-1),(2,-1))
     headings=tuple(math.atan2(dr,dc) for dc,dr in directions)
+    if allow_lateral:
+        # A loaded holonomic base may need to leave a narrow pocket at its
+        # measured heading before it has room to turn to a compass heading.
+        headings=tuple(sorted({*(yaw % (2*math.pi) for yaw in headings), actual[2] % (2*math.pi)}))
     free=[];indices=[];node_cells=[];node_headings=[];count=0
     for k,yaw in enumerate(headings):
         check_cancelled()
@@ -165,7 +169,11 @@ def project_forward_point(options, actual, collision, check_cancelled, *, max_en
                         if node<0 or not math.isfinite(distances[node]):continue
                         cost=float(distances[node])+math.dist(xy,option.goal)+.5*abs(angle(yaw-option.final_yaw))/(math.pi/3)
                         terminals.append((cost,option_index,node,xy,angle(yaw)))
-        for checked,(_,option_index,node,xy,yaw) in enumerate(sorted(terminals)[:max_endpoint_checks],1):
+        # These are connections to the already admitted stance set. A cheap
+        # roadmap prefix need not admit its continuous final connection. Keep
+        # checking that finite set under the caller's shared planning deadline;
+        # a separate top-k cutoff can hide the first actually usable route.
+        for checked,(_,option_index,node,xy,yaw) in enumerate(sorted(terminals),1):
             check_cancelled()
             chosen=options[option_index]
             terminal=connector((*xy,yaw),chosen.goal,chosen.final_yaw,collision,check_cancelled)

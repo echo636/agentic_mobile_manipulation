@@ -116,10 +116,10 @@ def _policy(root, bundle, spec, spec_hash, release):
     config = run['config']
     _require(config.get('instruction') == '\n'.join([spec['public_instruction'], *spec['public_context']]),
              'Policy did not receive the complete frozen public requirements')
-    _require(config.get('agent_profile') == 'skills' and config.get('require_task_notes') is True
+    _require(config.get('agent_profile') == 'skills'
              and config.get('max_agent_steps') == 200 and 0 < run.get('agent_steps', 0) <= 200
              and not config.get('wall_seconds') and not config.get('episode_deadline_unix'),
-             'Policy acceptance did not exercise the frozen notes/action-budget protocol')
+             'Policy acceptance did not exercise the frozen action-budget protocol')
     observation = evidence(root, bundle['observation'])
     video = evidence(root, bundle['video_validation'])
     _require(observation['status'] == video['status'] == 'passed'

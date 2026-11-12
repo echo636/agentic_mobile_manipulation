@@ -214,7 +214,7 @@ class WorkerLease:
                           gpu=worker['gpu'], gpu_uuid=worker.get('expected_gpu_uuid'),
                           hard_limit_gib=worker.get('memory_budget_gib', 28),
                           memory_admission_mode='observed_peak' if adaptive_slot_count is not None else 'full_reservation')
-        if worker.get('memory_budget_gib', 28) > slot_memory_gib:
+        if adaptive_slot_count is None and worker.get('memory_budget_gib', 28) > slot_memory_gib:
             raise ValueError('Worker memory exceeds shared host slot size')
         self.slot_count = math.floor(host_budget_gib / slot_memory_gib)
         if adaptive_slot_count is not None:
@@ -237,10 +237,13 @@ class WorkerLease:
         return self.owner_active is None or self.owner_active(previous) is not False
 
     def acquire(self, *, adopting=None):
-        def occupied(previous):
-            if (adopting and previous.get('run_id') == adopting.get('run_id')
+        def same_attempt(previous):
+            return (adopting and previous.get('run_id') == adopting.get('run_id')
                     and previous.get('unit') == adopting.get('simulator_unit')
-                    and previous.get('unit')):
+                    and previous.get('unit'))
+
+        def occupied(previous):
+            if same_attempt(previous):
                 return False
             active = self._owner_is_active(previous)
             if active:
@@ -251,6 +254,7 @@ class WorkerLease:
         gpu = FileLease(self.directory / ('gpu-' + self.gpu_key + '.lock'), self.owner.copy())
         if not gpu.acquire():
             return False
+        fallback = None
         try:
             if occupied(gpu.previous_owner):
                 return False
@@ -260,12 +264,24 @@ class WorkerLease:
                     try:
                         if occupied(host.previous_owner):
                             continue
+                        # A reboot frees local locks, not remote simulators.
+                        # Reuse this attempt's original slot before an empty
+                        # one, or the old metadata counts it a second time.
+                        if adopting and not same_attempt(host.previous_owner):
+                            if fallback is None:
+                                fallback = host
+                            continue
                         self.gpu, self.host = gpu, host
                         return True
                     finally:
-                        if self.host is not host:
+                        if self.host is not host and fallback is not host:
                             host.release()
+            if fallback:
+                self.gpu, self.host = gpu, fallback
+                return True
         finally:
+            if fallback is not None and self.host is not fallback:
+                fallback.release()
             if self.gpu is not gpu:
                 gpu.release()
         return False

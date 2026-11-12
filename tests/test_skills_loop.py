@@ -36,7 +36,8 @@ class InlineSkillsProfileTests(unittest.TestCase):
         for absent in ['list_skills', 'read_skill', 'name: ', '=== failure-recovery', '=== visual-exploration',
                        'Read each relevant resource once', 'Read [references/working-state.md]']:
             self.assertNotIn(absent, prompt)
-        self.assertIn('five tools: initialize, look, act, finish, task_notes.', prompt)
+        self.assertIn('Follow the workflow guidance included at the end of these instructions.', prompt)
+        self.assertIn('Follow the included goal-decomposition guidance before acting.', prompt)
         self.assertIn('Workflow guidance, included in full', prompt)
         without_goal = system_prompt('skills_inline', goal_skill='none')
         self.assertNotIn('goal-decomposition', without_goal)
@@ -45,7 +46,7 @@ class InlineSkillsProfileTests(unittest.TestCase):
     def test_inline_profile_harness_exposes_task_notes_and_freezes_bundle(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / 'run'; r = Recorder(root, {'backend': 'mock', 'observation_mode': 'rgb_only'})
-            h = VisionHarness(MockRGBBackend(root), r, profile='skills_inline', require_task_notes=True)
+            h = VisionHarness(MockRGBBackend(root), r, profile='skills_inline')
             self.assertEqual({t['name'] for t in h.tool_specs()}, {'initialize', 'look', 'act', 'finish', 'task_notes'})
             self.assertEqual(h.call('read_skill', {'name': 'pick-and-place', 'resource': 'SKILL.md'}, 'r')['error']['code'],
                              'unknown_tool')

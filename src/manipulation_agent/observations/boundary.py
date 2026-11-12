@@ -24,7 +24,7 @@ ERROR_MESSAGES = {
     'articulation_endpoint_unresolved':'The executor could not find a checked, stable open position for the selected object\'s door or lid.',
     'look_rotation_blocked':'The requested turn has no checked clearance for the robot and carried item. Use the current four views; choose a different general approach if needed instead of repeating this turn.',
     'needs_macro_navigation':'The selected target is outside local adjustment range. Use navigate_to for a closer general approach, then select the target in the returned RGB.',
-    'local_adjustment_blocked':'The executor could not find a safe, visible, reachable operation stance around this selected target. Inspect the returned RGB and choose a different general approach or report blocked; do not repeat the same operation or make tiny navigation corrections.',
+    'local_adjustment_blocked':'The selected target could not be operated on after the approach. Inspect the returned RGB and choose a different general approach or report blocked; do not repeat the same operation or make tiny navigation corrections.',
     'local_adjustment_exhausted':'The executor reached its approach planning or operation work budget. Inspect the current RGB before choosing a different general approach; do not blindly repeat the same action.',
     "stale_image_ref":"Select a point in the latest returned image.",
     "no_surface_at_point":"The selected pixel could not be grounded to a surface. Inspect RGB and choose another point.",
@@ -37,13 +37,15 @@ ERROR_MESSAGES = {
     "navigation_stalled":"The navigation executor made no progress. Inspect the fresh RGB before trying one alternative; do not repeat the same request.",
     "navigation_path_blocked":"The selected navigation endpoint became blocked or unobserved. Inspect fresh RGB and choose a different visible approach.",
     "navigation_unobserved_route":"No observed free route reaches this point. Inspect fresh RGB and choose a different visible approach.",
-    "out_of_reach":"The selected surface cannot be reached from the current base position. Manipulation does not move the base. Call act with primitive=navigate_to to choose a closer visible approach, then reselect the target in the returned RGB before retrying.",
+    "out_of_reach":"The executor could not reach the selected surface from its attempted stance. Choose a different visible approach with navigate_to, then reselect the target in the returned RGB.",
     "hand_occupied":"The executor cannot perform this action while carrying an object.",
     "empty_hand":"The executor cannot place, attach or release without a held object.",
-    "container_closed":"The executor could not access the requested placement or grasp. Reinspect the opening in RGB.",
+    "container_closed":"A container involved in this action is closed. Open it before accessing or transferring its contents.",
     "fixed_object":"The selected object cannot be moved by this executor.",
     "particle_target":"The selected point is on loose particles, which cannot be grasped directly. Select a visible container or a suitable tool instead.",
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
+    "cutting_tool_required":"The held object cannot cut. Grasp a suitable cutting tool before cutting.",
+    "cut_target_unsupported":"The selected target cannot be sliced or diced. Use the returned RGB to select the intended unprocessed workpiece.",
     "no_removable_material":"The held tool found no material it can remove from the selected surface. The surface may already be clean, or the tool conditions may not match. Inspect RGB before repeating the operation.",
     "sampling_error":"The executor could not find a valid placement; inspect the new RGB before recovery.",
     "placement_surface_unavailable":"No upward receiving surface was found near the selected point. Select a clear, visible top surface in the returned RGB.",
@@ -56,6 +58,7 @@ ERROR_MESSAGES = {
     "episode_cancelled":"Episode closure was requested; the active action stopped before final scoring.",
     "sampling_budget_exhausted":"The executor exhausted its placement sampling budget.",
     "unsupported_relation":"The selected objects do not support the requested operation.",
+    "same_placement_object":"The selected placement reference is the object already being carried. Select a different destination or reference object in the current RGB.",
     "same_transfer_vessel":"The material source and receiving vessel are the same object. A transfer requires two different vessels.",
     "invalid_transfer_destination":"The selected receiving object has no supported volume for loose material. Select the receiving vessel itself.",
     "material_dispenser_off":"The material dispenser is switched off. Enable it with toggle_on before dispensing.",
@@ -79,6 +82,30 @@ LOCAL_STANCE_MESSAGES = {
 def public_execution_error(exc: SkillError) -> dict:
     code = exc.code if exc.code in ERROR_MESSAGES else "execution_error"
     result = {"code":code,"message":ERROR_MESSAGES[code],"world_may_have_changed":exc.changed}
+    if code == 'pre_condition_error' and exc.stage == 'unsupported_object_action':
+        result.update(stage=exc.stage, message='The selected object does not support the requested '
+                      'open/close or switch action. This is not a blocked mechanism; '
+                      'select the intended object or panel in RGB.')
     if code in {'local_adjustment_blocked','local_adjustment_exhausted'} and exc.stage in LOCAL_STANCE_MESSAGES:
         result.update(stage=exc.stage,message=LOCAL_STANCE_MESSAGES[exc.stage])
+    if code == 'postcondition_error' and exc.stage == 'released_placement_unconfirmed':
+        result.update(stage=exc.stage, message='The object was released; your hand is empty. '
+                      'The requested placement was not verified after settling. '
+                      'Inspect the returned RGB to locate the object before choosing the next action.')
+    if code == 'postcondition_error' and exc.stage == 'released_supported_not_adjacent':
+        result.update(stage=exc.stage, message='The object was released and remains on the receiving surface, '
+                      'but the requested next-to relation was not verified after settling. '
+                      'Your hand is empty. Inspect the returned RGB before choosing the next action.')
+    if code == 'postcondition_error' and exc.stage == 'released_supported_payload_unconfirmed':
+        result.update(stage=exc.stage, message='The object was released and remains on the receiving surface. '
+                      'Your hand is empty. Retention of its carried contents could not be confirmed; '
+                      'inspect the returned RGB for displaced contents before choosing the next action.')
+    if code == 'postcondition_error' and exc.stage == 'released_inside_payload_unconfirmed':
+        result.update(stage=exc.stage, message='The object was released and remains inside the selected container. '
+                      'Your hand is empty. Retention of the contents could not be confirmed; '
+                      'inspect the returned RGB for displaced contents before choosing the next action.')
+    if code == 'postcondition_error' and exc.stage == 'articulation_contents_unconfirmed':
+        result.update(stage=exc.stage, message='The requested open or closed state was reached, '
+                      'but retention of existing contents could not be confirmed. Inspect the returned RGB '
+                      'for displaced contents; repeating the door or lid operation alone does not recover them.')
     return result

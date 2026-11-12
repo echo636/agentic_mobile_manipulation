@@ -55,9 +55,15 @@ def checked_initial_inside(env, output):
                 from ..records import write_json
                 checkpoint_dir = output / 'partial_initial_instance'
                 try:
-                    env.task.save_task(env, save_dir=str(checkpoint_dir), task_relevant_only=False)
+                    # BehaviorTask assigns scene_name only after sampling
+                    # succeeds. Preserve the live scene before its failure
+                    # cleanup, without calling the not-yet-ready task saver.
+                    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                    env.scene.save(json_path=str(checkpoint_dir / 'scene.json'))
                     write_json(output / 'partial_initial_checkpoint.json', {
                         'status': 'passed', 'sampling_error': str(error),
+                        'object_bindings': {key: obj.name if obj is not None else None
+                                            for key, obj in sampler._object_scope.items()},
                         'files': sorted(p.name for p in checkpoint_dir.glob('*.json')),
                         'interpretation': 'Incomplete construction checkpoint; no valid episode or task success'})
                 except Exception as exc:
@@ -145,14 +151,21 @@ def checked_initial_inside(env, output):
                             break
                 else:
                     from .initial_surface import sample_initial_surface
-                    accepted = sample_initial_surface(adapter, held, target)
+                    from omnigibson.utils.object_state_utils import get_reachability_sampling_context
+                    context = get_reachability_sampling_context(
+                        target, 'onTop', use_trav_map=kwargs.get('use_trav_map', False))
+                    accepted = sample_initial_surface(adapter, held, target, reachability_context=context)
             except SkillError as exc:
                 if exc.code != 'sampling_budget_exhausted':
                     raise
                 adapter._placement_record({'status': 'initial_geometric_work_limit',
                                            'held': held.name, 'target': target.name})
                 accepted = False
-            if accepted and kwargs.get('use_trav_map', False):
+            # Contents of a movable vessel become accessible by moving that
+            # vessel. Its own initial placement establishes access; a static
+            # floor-map test on every nested item is not another prerequisite.
+            if (accepted and relation is Inside and target.fixed_base
+                    and kwargs.get('use_trav_map', False)):
                 from omnigibson.utils.object_state_utils import (
                     get_reachability_sampling_context, is_pose_reachable_for_predicate)
                 predicate = 'inside' if relation is Inside else 'onTop'
@@ -171,9 +184,9 @@ def checked_initial_inside(env, output):
     OnTop._set_value = sample
     BDDLSampler._sample_initial_conditions_final = final_conditions
     try:
-        from .initial_reachability import metric_initial_reachability
-        with metric_initial_reachability(adapter._placement_record):
-            yield adapter
+        # Keep the official sampling reachability policy. An inflated static
+        # footprint can veto stoves that runtime posture-aware navigation reaches.
+        yield adapter
     finally:
         for relation, original in originals.items():
             relation._set_value = original

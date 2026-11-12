@@ -16,7 +16,7 @@ def oriented_piece_box(points):
     return mean+rotation@((low+high)/2),np.maximum((high-low)/2,1e-6),rotation
 
 
-def assembly_overlap_ranker(backend, held, assembly):
+def assembly_overlap_ranker(backend, held, assembly, *, support_objects=(), ignored_robot_links=None):
     import omnigibson.lazy as lazy
     from omnigibson.utils import transform_utils as T
     root_position,root_quat=held.get_position_orientation()
@@ -36,24 +36,39 @@ def assembly_overlap_ranker(backend, held, assembly):
                 box=oriented_piece_box(points)
                 if box is not None:pieces.append(box)
     if not pieces:return None
-    ignored={str(link.prim_path) for obj in [backend.robot,*assembly] for link in obj.links.values()}
+    # A support can intersect a collider's enclosing box without intersecting
+    # the collider. Ignore it only when ordering supported surface proposals;
+    # contents and neighboring objects still contribute, and physics is unchanged.
+    ignored={str(link.prim_path) for obj in [*assembly,*support_objects] for link in obj.links.values()}
+    # Grasp proposals may touch the hand, but should still rank torso/base
+    # overlap. Placement retains its existing robot exclusion.
+    ignored.update(str(link.prim_path) for link in (
+        backend.robot.links.values() if ignored_robot_links is None else ignored_robot_links))
     ignored.update(str(link.prim_path) for obj in backend.env.scene.objects for link in obj.links.values() if link.is_meta_link)
-    query=lazy.omni.physx.get_physx_scene_query_interface();cache={};stats=dict(poses=0,queries=0,pieces=len(pieces))
+    query=lazy.omni.physx.get_physx_scene_query_interface();cache={};rotated_pieces={};stats=dict(poses=0,queries=0,pieces=len(pieces))
     def score(position,quaternion):
         pos=np.asarray(position,dtype=float)
         quat=quaternion if backend.torch.is_tensor(quaternion) else backend.torch.tensor(quaternion)
         key=tuple(round(float(v),5) for v in (*pos,*quat.cpu().tolist()))
         if key not in cache:
-            stats['poses']+=1;rotation=T.quat2mat(quat).cpu().numpy();collision=False
+            stats['poses']+=1;collision=False
+            orientation=tuple(quat.cpu().tolist())
+            if orientation not in rotated_pieces:
+                rotation=T.quat2mat(quat).cpu().numpy()
+                transformed=[]
+                for center,half,axes in pieces:
+                    matrix=backend.torch.tensor(rotation@axes,dtype=backend.torch.float32)
+                    box_quat=tuple(T.mat2quat(matrix).cpu().tolist())
+                    transformed.append((rotation@center,tuple(map(float,half)),box_quat))
+                rotated_pieces[orientation]=transformed
             def hit(row):
                 nonlocal collision
                 if str(row.rigid_body) in ignored:return True
                 collision=True;return False
-            for center,half,axes in pieces:
+            for center,half,box_quat in rotated_pieces[orientation]:
                 backend.deadline.check(changed=True)
-                box_quat=T.mat2quat(backend.torch.tensor(rotation@axes,dtype=backend.torch.float32)).cpu().tolist()
                 stats['queries']+=1
-                query.overlap_box(tuple(map(float,half)),tuple(map(float,pos+rotation@center)),tuple(box_quat),hit,False)
+                query.overlap_box(half,tuple(map(float,pos+center)),box_quat,hit,False)
                 if collision:break
             cache[key]=int(collision)
         return cache[key]

@@ -57,12 +57,17 @@ def envelope_protrusion(center, extent, low, high, settling_drop=0.):
 
 
 def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None, *, allow_reorientation=False):
-    """Resting proposals preserve payloads; unladen items may turn onto a side.
+    """Preserve vessel openings and payloads; other unladen items may turn.
 
 For payloads, compare local gravity and reject flips or large tilts. Unladen
 objects may try asset poses, principal faces or intermediate tilts when metadata is absent; these
 are proposals only, with unchanged collision and settling acceptance checks.
 """
+    # An empty vessel still needs its carried opening direction. Treating it
+    # as a solid item let the fit ranking invert an upright pot into a sink.
+    if any(link.is_meta_link and link.meta_link_type in {'fillable', 'openfillable'}
+           for link in getattr(held, 'links', {}).values()):
+        allow_reorientation = False
     current = transforms.quat2mat(root_quat)
     current_yaw = math.atan2(float(current[1,0]), float(current[0,0]))
     metadata = getattr(held, 'orientations', None)
@@ -110,6 +115,108 @@ are proposals only, with unchanged collision and settling acceptance checks.
     return result
 
 
+def select_inside_release(backend, held, target, contents, *, point=None, residents=()):
+    """Choose one pose from current geometry without moving or simulating bodies."""
+    from omnigibson.utils import transform_utils as T
+    from .particle_payload import particle_bounds
+    from .surface_geometry import bottom_anchor
+
+    torch = backend.torch
+    root, original_quat = held.get_position_orientation()
+    rotation = T.quat2mat(original_quat)
+    assembly = [held, *[obj for obj, _ in contents]]
+    particles = getattr(backend, '_placement_particle_payload', (None, []))[1]
+    held_shape = torch.as_tensor(backend._collision_vertices(held), dtype=root.dtype, device=root.device)
+    parts = [held_shape, *[torch.as_tensor(backend._collision_vertices(obj), dtype=root.dtype,
+                                        device=root.device) for obj in assembly[1:]]]
+    # Include the carried material envelope in pose construction. Reading its
+    # bounds once avoids hypothetical particle relocation for every orientation.
+    for low, high in particle_bounds(backend.env.scene, particles):
+        parts.append(torch.stack([torch.stack([low[i] if bit[i] == 0 else high[i] for i in range(3)])
+                                  for bit in itertools.product((0, 1), repeat=3)]))
+    shape = (torch.cat(parts) - root) @ rotation
+    held_shape = (held_shape - root) @ rotation
+    volumes = [link for link in target.links.values() if link.is_meta_link and
+               link.meta_link_type in {'fillable', 'openfillable'}]
+    loaded = bool(contents or particles)
+    orientations = assembly_orientations(held, original_quat, torch, T,
+        reference_quat=target.get_position_orientation()[1], allow_reorientation=not loaded)
+    # No body moves during proposal construction. Read receiver geometry once.
+    volume_geometry = []
+    for volume in volumes:
+        vlo, vhi = volume.visual_aabb
+        vp, vq = volume.get_position_orientation()
+        vr = T.quat2mat(vq)
+        cavity = (volume.visual_boundary_points_world - vp) @ vr
+        volume_geometry.append((volume, vlo, vhi, vp, vr, cavity.amin(0).tolist(), cavity.amax(0).tolist()))
+    proposals = []; seen = set(); ray_cache = {}
+    clearance = .025 + .5 * 9.81 * backend.og.sim.get_physics_dt() ** 2
+
+    def check():
+        backend.deadline.check()
+        local = getattr(backend, '_local_operation', None)
+        if local is not None: local.check()
+
+    for label, quat, _ in orientations:
+        check()
+        rotated = shape @ T.quat2mat(quat).T
+        low, high = rotated.amin(0), rotated.amax(0)
+        offset, extent = (low + high) / 2, high - low
+        bottom = bottom_anchor((held_shape @ T.quat2mat(quat).T).cpu().numpy())
+        for volume, vlo, vhi, vp, vr, cavity_low, cavity_high in volume_geometry:
+            local_shape = rotated @ vr
+            sl, sh = local_shape.amin(0), local_shape.amax(0)
+            domains = volume_center_domains(cavity_low, cavity_high, (sh - sl).tolist())
+            for domain, centers in domains:
+                local_centers = root.new_tensor(centers)
+                world = (local_centers - (sl + sh) / 2) @ vr.T + vp + offset
+                support = backend._inside_support_centers(held, target, volume, world.tolist(),
+                    offset, assembly[1:], check, point=point, residents=residents,
+                    query_cache=ray_cache, bottom_offset=bottom)
+                for kind, candidates in (('support_' + domain, support), (domain, world.tolist())):
+                    if not candidates:
+                        continue
+                    centers = root.new_tensor(candidates)
+                    admission = centers.clone()
+                    if kind.startswith('support_'):
+                        admission[:, 2] -= clearance
+                        # An unladen object may start above the opening and
+                        # fall onto the internal support already found.
+                        if not loaded: admission[:, 2].clamp_(max=float(vhi[2])-.001)
+                    # The native query accepts a batch. Preserve candidate order
+                    # without repeating its mesh transforms for each point.
+                    for center in centers[volume.check_points_in_volume(admission)]:
+                        position = center - offset
+                        key = tuple(round(float(v), 5) for v in (*position, *quat))
+                        if key in seen: continue
+                        seen.add(key)
+                        protrusion = envelope_protrusion(center.tolist(), extent.tolist(), vlo.tolist(),
+                            vhi.tolist(), clearance if kind.startswith('support_') else 0.)
+                        distance = float(torch.linalg.vector_norm(center - point)) if point is not None else float(center[2])
+                        priority = (round(protrusion, 5), not kind.startswith('support_'), distance)
+                        proposals.append((priority, position, quat, center, extent, volume, kind, label))
+    pose_score = backend._inside_pose_overlap_ranker(held, assembly)
+    envelope_score = backend._inside_overlap_ranker(assembly)
+    selected = None; best = None; scored = 0
+    # Bounds order candidates; they do not veto a pose in a hollow receiver.
+    # One physical release, below the caller, determines the actual outcome.
+    for candidate in sorted(proposals, key=lambda row: row[0]):
+        check()
+        priority, position, quat, center, extent, *_ = candidate
+        overlap = (pose_score(position, quat) if pose_score is not None else 0)
+        if particles: overlap += envelope_score(center.tolist(), extent.tolist())
+        scored += 1
+        rank = (overlap, *priority)
+        if best is None or rank < best: best, selected = rank, candidate
+        if overlap == 0: break
+    if selected is None:
+        raise SkillError('sampling_error', 'No receiving pose in the selected container')
+    _, position, quat, _, _, volume, kind, label = selected
+    return dict(pose=(position, quat), volume=volume.prim_path, domain=kind,
+                orientation_source=label, candidates=len(proposals), scored=scored,
+                proposal_overlap_score=best[0])
+
+
 def closure_preference_available(backend):
     """Keep a verified Inside result instead of spending its commit allowance.
 
@@ -145,7 +252,7 @@ Rejected candidate poses never become committed actions or task evidence.
     from omnigibson.object_states import Inside, Open
     from omnigibson.utils import transform_utils as T
     from omnigibson.utils.usd_utils import RigidContactAPI
-    from .particle_payload import particle_bounds, particles_in_volumes, verify_particles
+    from .particle_payload import particle_bounds, verify_particles
     from .particle_payload import snapshot_particle_state, particle_state_unchanged, restore_particle_state
     from .placement import scene_object_identities
     torch, sim = backend.torch, backend.og.sim
@@ -239,7 +346,8 @@ Rejected candidate poses never become committed actions or task evidence.
         for obj in assembly:
             for link in getattr(obj,'links',{}).values():
                 if link.is_meta_link:continue
-                points=link.collision_boundary_points_world
+                points=(link.compute_particle_positions() if hasattr(link,'compute_particle_positions')
+                        else link.collision_boundary_points_world)
                 if points is None or not len(points):continue
                 local=(points-root_pos)@root_rotation
                 shape_parts.append(local)
@@ -322,6 +430,10 @@ Rejected candidate poses never become committed actions or task evidence.
                             # reached physics because their centers were out.
                             points=torch.tensor(supported,dtype=root_pos.dtype,device=root_pos.device)
                             points[:,2]-=.025+.5*9.81*sim.get_physics_dt()**2
+                            if not payload_locked:
+                                # Admit release above the opening, preserving
+                                # its XY test and all post-settling checks.
+                                points[:,2].clamp_(max=float(hi[2])-.001)
                             valid=volume.check_points_in_volume(points).cpu().tolist()
                             supported=[center for center,keep in zip(supported,valid) if keep]
                         if supported:
@@ -376,7 +488,10 @@ Rejected candidate poses never become committed actions or task evidence.
             volume_bounds={v.prim_path:tuple(a.cpu().tolist() for a in v.visual_aabb) for v in volumes}
             settling_drop=.025+.5*9.81*sim.get_physics_dt()**2
             def priority(c):
-                return (closed_overlap(c), round(envelope_protrusion(c[1], extents[tuple(c[3].cpu().tolist())], *volume_bounds[c[0].prim_path], settling_drop), 6), round(occupancy(c),6), top_height(c) if was_open is True else 0.)
+                # A free support above existing contents can protrude while
+                # satisfying Inside. Try it before lower poses that overlap
+                # those contents; neither heuristic replaces native checks.
+                return (closed_overlap(c), round(occupancy(c),6), round(envelope_protrusion(c[1], extents[tuple(c[3].cpu().tolist())], *volume_bounds[c[0].prim_path], settling_drop), 6), top_height(c) if was_open is True else 0.)
             families={}
             for group in supported:
                 for candidate in group:
@@ -396,18 +511,26 @@ Rejected candidate poses never become committed actions or task evidence.
             tail=(c for layer in itertools.zip_longest(*chunks)
                   for chunk in layer if chunk is not None for c in chunk)
             candidates=itertools.chain(support_rounds,tail)
+        selected_height=float(point[2]) if payload_locked and point is not None else None
+        if selected_height is not None:
+            # Broad annotations can span several shelves behind separate doors.
+            # Position/orientation diversification must not put a lower shelf
+            # ahead of the selected upper region. Keep all fallback proposals.
+            candidates=sorted(candidates,key=lambda c:abs(c[1][2]-selected_height))
         ranker=getattr(backend,'_inside_overlap_ranker',None)
         pose_factory=getattr(backend,'_inside_pose_overlap_ranker',None)
         pose_score=pose_factory(held,assembly) if pose_factory is not None else None
         if ranker is not None:
             score=ranker(assembly)
             ranking = {'scored': 0, 'clear': 0, 'deferred': 0,
-                       'strategy': 'clear_poses_before_overlap_fallback' if pose_score is not None and not payload_locked
+                       'strategy': 'clear_poses_before_overlap_fallback' if pose_score is not None
                                    else 'bounded_window'}
             def ranked_windows(source):
                 # Piece-box overlap is conservative: retain every proposal.
                 # Spend cheap queries across the finite geometry generator
                 # before exhausting physics on the first overlapping window.
+                # Loaded assemblies need the same spatial coverage as empty
+                # objects; preserving payload orientation does not change this.
                 deferred=[]
                 while window:=list(itertools.islice(source,128 if pose_score is not None and was_open is True else 64)):
                     check()
@@ -416,6 +539,8 @@ Rejected candidate poses never become committed actions or task evidence.
                         check()
                         overlap=pose_score([float(v-o) for v,o in zip(c[1],c[2])],c[3]) if pose_score is not None else score(c[1],extents[tuple(c[3].cpu().tolist())])
                         priority=(overlap,)
+                        if selected_height is not None:
+                            priority+=(abs(c[1][2]-selected_height),)
                         if was_open is True and closure_geometry is not None:
                             # Loaded cookware needs door clearance too. Use
                             # the existing geometry score, without extra trials.
@@ -424,7 +549,7 @@ Rejected candidate poses never become committed actions or task evidence.
                                 priority+=(round(top_height(c)/.01),round(occupancy(c),6))
                         ranking['scored']+=1
                         ranking['clear']+=int(not overlap)
-                        if pose_score is not None and not payload_locked and overlap:
+                        if pose_score is not None and overlap:
                             deferred.append(c);ranking['deferred']+=1
                         else:ranked.append((priority,c))
                     yield from (c for _,c in sorted(ranked,key=lambda pair:pair[0]))
@@ -458,6 +583,8 @@ Rejected candidate poses never become committed actions or task evidence.
             admission_center = center.clone()
             if domain.startswith('support_'):
                 admission_center[2] -= .025+.5*9.81*sim.get_physics_dt()**2
+                if not payload_locked:
+                    admission_center[2].clamp_(max=float(volume.visual_aabb[1][2])-.001)
             if not bool(volume.check_points_in_volume(admission_center.unsqueeze(0)).item()):
                 reject('outside_fillable_volume', candidate)
                 continue
@@ -487,9 +614,9 @@ Rejected candidate poses never become committed actions or task evidence.
                 # and the enclosing operation's work limits still apply.
                 check(admission=False); sim.step_physics()
                 if contact(): break
-            else:
-                reject('no_support_contact', candidate)
-                continue
+            # RigidContactAPI cannot report support from physical particles.
+            # A rigid-only contact is not required: native Inside and the
+            # measured free-settling check below still decide acceptance.
             for _ in range(5):
                 check(admission=False); sim.step_physics()
             for _ in range(limit):
@@ -530,9 +657,8 @@ Rejected candidate poses never become committed actions or task evidence.
                 reject('unstable_after_release',candidate)
                 continue
             if particles:
-                if not particles_in_volumes(backend.env.scene, particles, [volume]):
-                    reject('particles_outside_destination', candidate)
-                    continue
+                # Contents stay with their vessel. A pot inside a shallow sink
+                # may hold food above the sink's fill annotation.
                 try:
                     verify_particles(backend.env.scene, particles)
                 except SkillError as exc:
@@ -585,5 +711,6 @@ Rejected candidate poses never become committed actions or task evidence.
                                        'unique_xy_attempted':len(locations) if 'locations' in locals() else 0,
                                        'duplicate_poses_skipped':duplicates if 'duplicates' in locals() else 0,
                                        'generation_seconds':generation_seconds if 'generation_seconds' in locals() else None,
+                                       'overlap_ranking':ranking if 'ranking' in locals() else None,
                                         'seconds':time.monotonic()-start, 'held':held.name, 'target':target.name,
                                        'identity_changed':identity_changed})

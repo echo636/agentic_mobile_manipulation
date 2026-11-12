@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
 from typing import Callable
 
@@ -26,20 +27,22 @@ def run_process(project: PreparedProject, output: Path, timeout: float | None,
         kwargs["cwd"] = str(project.cwd)
     if project.env_overlay:
         kwargs["env"] = {**os.environ, **project.env_overlay}
-    with (output / "model_events.jsonl").open("w") as stdout, (output / "client.stderr.log").open("w") as stderr:
-        process = subprocess.Popen(project.argv, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, **kwargs)
+    with tempfile.TemporaryFile(mode="w+t") as stdin, (output / "model_events.jsonl").open("w") as stdout, (output / "client.stderr.log").open("w") as stderr:
+        # A file supplies the complete prompt and EOF even if the client starts
+        # reading after the first polling interval. No pipe writes need resuming.
+        stdin.write(project.stdin or "")
+        stdin.seek(0)
+        process = subprocess.Popen(project.argv, stdin=stdin, stdout=stdout, stderr=stderr, **kwargs)
         if on_start:
             on_start(process.pid)
         # stdout remains the unmodified evidence file. Tail complete lines once,
         # without reparsing all previous RGB payloads on each poll.
         with (output / 'model_events.jsonl').open('rb') as stream:
-            first = True
             while True:
                 try:
-                    process.communicate(project.stdin if first else None, timeout=0.1)
+                    process.wait(timeout=0.1)
                 except subprocess.TimeoutExpired:
                     pass
-                first = False
                 if event_client == 'codex' and finish_at is None:
                     while True:
                         offset = stream.tell()

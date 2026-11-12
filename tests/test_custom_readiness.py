@@ -106,7 +106,6 @@ class ReadinessTests(unittest.TestCase):
                 for arm in ('hierarchical', 'unguided')]
         self.assertEqual([m['goal_skill'] for m in arms], ['hierarchical', 'none'])
         for manifest in arms:
-            self.assertTrue(manifest['require_task_notes'])
             self.assertEqual(manifest['max_agent_steps'], 200)
             self.assertIsNone(manifest['model_timeout_seconds'])
             self.assertEqual(manifest['model_reasoning_effort'], 'low')

@@ -13,11 +13,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from .omnigibson_rgb import RGBBackend
-from ..tasks.catalog_tasks import load_catalog_spec
+from ..tasks.catalog_tasks import complete_scene_context, load_catalog_spec
 from ..tasks.lineage_goals import check_initial_lineages, evaluate_relational_goals
 from ..tasks.native_definition import resolve_definition, register_definition
 from ..runtime.deadline import DEADLINE_STEP_SENTINEL
-from ..tasks.goal_grounding import efficient_grounding, evaluate_once_per_literal
+from ..tasks.goal_grounding import FactoredGoalOptions, efficient_grounding, evaluate_once_per_literal
 from .omnigibson_backend import normalize_embedded_robot
 from ..records import write_json
 
@@ -51,6 +51,7 @@ class CatalogRGBBackend(RGBBackend):
 
     def _catalog_config(self, gpu, max_steps):
         import bddl
+        from omnigibson.utils.asset_utils import get_scene_path
         spec = self.catalog_spec
         definition = resolve_definition(spec, self.spec_path)
         if definition is not None:
@@ -62,6 +63,19 @@ class CatalogRGBBackend(RGBBackend):
             raise ValueError('Runtime BDDL differs from the sampled task definition')
         frozen = (self.spec_path.parent / spec['frozen_instance']['path']).resolve()
         data = json.loads(frozen.read_text())
+        # Room-filtered sampling omits entire floor objects as well as furniture.
+        # Removing filters on reload cannot recover objects absent from the file.
+        # Keep the sampled task state and fill the missing surroundings from the
+        # official full scene that also supplies the native traversability map.
+        template_path = Path(get_scene_path(spec['scene'])) / 'json' / (spec['scene'] + '_best.json')
+        template_bytes = template_path.read_bytes()
+        restored = complete_scene_context(data, json.loads(template_bytes))
+        write_json(self.output / 'scene_context.json', {
+            'policy': 'official_full_scene_with_sampled_task_state',
+            'template_path': str(template_path),
+            'template_sha256': hashlib.sha256(template_bytes).hexdigest(),
+            'restored_objects': restored,
+            'sampled_objects_and_task_state_preserved': True})
         migrations = normalize_embedded_robot(data, reset_controller_state=True)
         config = copy.deepcopy(spec['environment_config'])
         embedded = [o for o in data['objects_info']['init_info'].values() if o['class_name'] == 'Robot']
@@ -80,9 +94,8 @@ class CatalogRGBBackend(RGBBackend):
         config['scene'].update(scene_file=str(scene_file), scene_model=spec['scene'],
             include_robots=True, trav_map_resolution=0.05, default_erosion_radius=0.57,
             waypoint_resolution=0.1)
-        # The frozen file already contains exactly the sampled scene. Reusing
-        # the sampler's room/category filters drops embedded robots and sampled
-        # movable objects whose serialized init args have no room annotation.
+        # Reusing sampler filters would drop the restored surroundings, embedded
+        # robot and sampled movable objects without room annotations.
         # Match InteractiveTraversableScene's own saved-scene reload policy.
         filters = {key: config['scene'].get(key) for key in (
             'load_room_types', 'load_room_instances', 'load_object_categories',
@@ -104,14 +117,18 @@ class CatalogRGBBackend(RGBBackend):
         write_json(self.output / 'scene_compatibility.json', {'changes': migrations,
             'original_template_unmodified': True, 'scope': 'sampled_full_catalog_instance',
             'sampling_filters_removed_for_frozen_reload': filters,
-            'frozen_object_count': len(data['objects_info']['init_info'])})
+            'frozen_object_count': len(data['objects_info']['init_info']) - len(restored),
+            'configured_object_count': len(data['objects_info']['init_info']),
+            'restored_context_count': len(restored)})
         return config
 
     def _load_catalog_environment(self, config):
         from .compat.articulation_sleep import ArticulationSleepPolicy
         from .compat.macro_particle_size import MacroParticleSizePolicy
+        from .compat.recipe_particle_output import RecipeParticleOutputPolicy
         self._articulation_sleep_policy = ArticulationSleepPolicy(gpu_dynamics=self.use_gpu_dynamics)
         try:
+            self._recipe_particle_output_policy = RecipeParticleOutputPolicy()
             self._macro_particle_size_policy = MacroParticleSizePolicy()
             self._load_catalog_environment_with_sleep_policy(config)
             self._articulation_sleep_policy.validate_scene(self.env.scene)
@@ -119,20 +136,30 @@ class CatalogRGBBackend(RGBBackend):
             self._articulation_sleep_policy.close()
             if getattr(self, '_macro_particle_size_policy', None) is not None:
                 self._macro_particle_size_policy.close()
+            if getattr(self, '_recipe_particle_output_policy', None) is not None:
+                self._recipe_particle_output_policy.close()
             raise
         finally:
             write_json(self.output / 'articulation_sleep_policy.json', self._articulation_sleep_policy.describe())
             if getattr(self, '_macro_particle_size_policy', None) is not None:
                 write_json(self.output / 'macro_particle_size_policy.json', self._macro_particle_size_policy.describe())
+            if getattr(self, '_recipe_particle_output_policy', None) is not None:
+                write_json(self.output / 'recipe_particle_output_policy.json', self._recipe_particle_output_policy.describe())
 
     def _load_catalog_environment_with_sleep_policy(self, config):
+        from .compat.broadphase import native_mbp_broadphase
         # Challenge-100 teleoperation disables several system cooking/mixing
         # rules. A full-catalog task uses the official simulator defaults; its
         # recipe transformations are necessary parts of the task semantics.
-        with self._startup_stage('reload_sampled_catalog_instance'), efficient_grounding(), self._native_startup_progress():
+        with self._startup_stage('reload_sampled_catalog_instance'), efficient_grounding(factorized=True), self._native_startup_progress(), native_mbp_broadphase(self.og) as broadphase:
             self.env = self.og.Environment(configs=config)
+        self._broadphase = broadphase
+        write_json(self.output / 'collision_broadphase.json', broadphase)
         with self._startup_stage('reset_sampled_catalog_instance'), self._native_startup_progress('initial_reset'):
             self.env.reset()
+        from .compat.particle_melting import install_particle_melting
+        self._particle_melting = install_particle_melting(self.env.scene)
+        write_json(self.output / 'particle_melting_policy.json', self._particle_melting)
         self.robot = self.env.robots[0]
         self.evaluator = SimpleNamespace(env=self.env, robot=self.robot, metrics=[])
         spec = self.catalog_spec
@@ -154,15 +181,24 @@ class CatalogRGBBackend(RGBBackend):
         write_json(self.output / 'catalog_instance_validation.json', result)
         if result['status'] != 'passed':
             raise ValueError('Reloaded catalog instance no longer satisfies its official initial conditions')
-        if any(option and all(option) for option in self.initial_goals):
+        if self.env.task.compiled_task.check_goal(self.env.task._evaluate_predicate)[0]:
             raise ValueError('Catalog instance is already complete before model execution')
+
+    def _goal_options(self):
+        options = self.env.task.ground_goal_state_options
+        if isinstance(options, FactoredGoalOptions):
+            return [options.best_truth_option(self.env.task._evaluate_predicate)]
+        return super()._goal_options()
 
     def evaluate(self):
         goals = self._goal_options()
-        result = {'task_success': any(bool(option) and all(option) for option in goals),
+        success, _ = self.env.task.compiled_task.check_goal(self.env.task._evaluate_predicate)
+        result = {'task_success': bool(success),
             'official_task_success': (None if self.catalog_spec['kind'] == 'custom_bddl_sampled_instance'
                                       else bool(self.env.task.success)),
             'goal_options': goals, 'initial_goal_options': self.initial_goals,
+            'goal_options_representation': ('best_scoring_ground_alternative' if
+                isinstance(self.env.task.ground_goal_state_options, FactoredGoalOptions) else 'all_ground_alternatives'),
             'goal_satisfaction_fraction': max((sum(o) / len(o) for o in goals if o), default=0),
             'official_metrics': {},
             'metric_scope': 'Official compiled BDDL predicates and BehaviorTask.success; no challenge human-normalized metrics for this sampled instance',
@@ -199,6 +235,9 @@ class CatalogRGBBackend(RGBBackend):
                       transition_policy='official_simulator_defaults_without_challenge100_teleop_rule_suppression',
                       articulation_sleep_policy=self._articulation_sleep_policy.describe(),
                       macro_particle_size_policy=self._macro_particle_size_policy.describe())
+        result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
+        result['particle_melting_policy'] = self._particle_melting
+        result['collision_broadphase'] = self._broadphase
         if self.catalog_spec.get('additional_terminal_conditions'):
             result.update(evaluator='official_BehaviorTask_BDDL_and_declared_terminal_conditions',
                           additional_terminal_conditions=self.catalog_spec['additional_terminal_conditions'])
@@ -211,14 +250,19 @@ class CatalogRGBBackend(RGBBackend):
     def close(self):
         policy = getattr(self, '_articulation_sleep_policy', None)
         particle_policy = getattr(self, '_macro_particle_size_policy', None)
+        recipe_policy = getattr(self, '_recipe_particle_output_policy', None)
         try:
             if policy is not None:
                 write_json(self.output / 'articulation_sleep_policy.json', policy.describe())
             if particle_policy is not None:
                 write_json(self.output / 'macro_particle_size_policy.json', particle_policy.describe())
+            if recipe_policy is not None:
+                write_json(self.output / 'recipe_particle_output_policy.json', recipe_policy.describe())
             super().close()
         finally:
             if policy is not None:
                 policy.close()
             if particle_policy is not None:
                 particle_policy.close()
+            if recipe_policy is not None:
+                recipe_policy.close()

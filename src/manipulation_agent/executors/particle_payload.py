@@ -60,7 +60,7 @@ def _particle_supports(system, path, center):
     return tuple(supports.values())
 
 
-def _supported_particles(systems, containers, owners):
+def _supported_particles(systems, containers, owners, trace=None):
     """Resolve support from bottom to top, including piles of different materials.
 
     A node can follow only a selected rigid link or an already owned lower
@@ -72,10 +72,13 @@ def _supported_particles(systems, containers, owners):
     if not links:
         return []
     bounds = [obj.aabb for obj in containers]
+    if trace is not None:
+        trace['carriers'] = {obj.name: [lo.tolist(), hi.tolist()]
+                             for obj, (lo, hi) in zip(containers, bounds)}
+        trace['candidates'] = []
     nodes = []
     for system in systems:
-        if getattr(system, 'particles_view', None) is None:
-            continue  # Fluid support is containment, not rigid contact rays.
+        view = physical_particle_view(system)
         centers, _ = system.get_particles_position_orientation()
         radius = float(system.particle_contact_radius)
         if not math.isfinite(radius) or radius <= 0:
@@ -87,14 +90,19 @@ def _supported_particles(systems, containers, owners):
                      (centers[:, 2] >= lo[2] - radius))
         near &= torch.isfinite(centers).all(dim=1)
         for i in near.nonzero().flatten().tolist():
-            path = system.particles_view.prim_paths[i]
+            path = view.prim_paths[i]
             nodes.append((float(centers[i, 2]), path, system, i, centers[i]))
     heights = {path: z for z, path, _, _, _ in nodes}
     selected = []
     for z, path, system, index, center in sorted(nodes, key=lambda node: (node[0], node[1])):
         if path in owners:
             continue
-        for support in _particle_supports(system, path, center):
+        supports = _particle_supports(system, path, center)
+        if trace is not None:
+            trace['candidates'].append(dict(path=path, material=system.name,
+                center=center.tolist(), radius=float(system.particle_contact_radius),
+                supporting_bodies=[support[0] for support in supports]))
+        for support in supports:
             parent = support[0]
             owner = links.get(parent)
             if owner is None and heights.get(parent, math.inf) < z:
@@ -118,7 +126,7 @@ def _payload(container, link, system, indices, relation='contained', supports=()
         relation, tuple((parent, offset @ rotation, vector @ rotation) for parent, offset, vector in supports))
 
 
-def snapshot_particles(scene, containers, *, include_supported=False):
+def snapshot_particles(scene, containers, *, include_supported=False, trace=None):
     systems = [system for system in getattr(scene, 'active_systems', {}).values()
                if system.n_particles and physical_particle_view(system) is not None]
     if not systems:
@@ -144,13 +152,17 @@ def snapshot_particles(scene, containers, *, include_supported=False):
             payload.append(_payload(container, link, system, indices))
     if include_supported:
         groups = {}
-        for (container, link), system, index, support in _supported_particles(systems, containers, owners):
+        for (container, link), system, index, support in _supported_particles(systems, containers, owners, trace):
             key = (id(container), id(link), id(system))
             group = groups.setdefault(key, (container, link, system, [], []))
             group[3].append(index)
             group[4].append(support)
         for container, link, system, indices, supports in groups.values():
             payload.append(_payload(container, link, system, indices, 'supported', supports))
+    if trace is not None:
+        trace['ownership'] = [dict(carrier=record.container.name,
+            material=record.system.name, relation=record.relation, count=len(record.paths))
+            for record in payload]
     return payload
 
 
@@ -182,9 +194,11 @@ def relocate_particles(scene, payload):
         # Use raw rigid-body frames. OG 3.9.2's macro pose getter returns
         # bounding-sphere centers; its setter has asymmetric offset handling.
         # Mixing those conventions silently displaces non-centered particles.
-        all_indices = torch.arange(len(transforms), device=transforms.device)
-        view.set_transforms(transforms, indices=all_indices)
-        view.set_velocities(velocities, indices=all_indices)
+        # PhysX requires full-size buffers; the indices limit which bodies
+        # receive the update. Do not reset unrelated material bodies.
+        selected_indices = torch.as_tensor(indices, dtype=torch.long, device=transforms.device)
+        view.set_transforms(transforms, indices=selected_indices)
+        view.set_velocities(velocities, indices=selected_indices)
     # Match native rigid-body setters: publish the new poses before the next
     # simulation update can reapply the previous Fabric transforms.
     import omnigibson as og
@@ -253,46 +267,44 @@ def particle_bounds(scene, payload):
     return result
 
 
-def particles_in_volumes(scene, payload, volumes):
-    """Each captured center must belong to a destination fillable volume.
-
-    This is additional to original containment/support checks: a grain can
-    remain on its bag while protruding beyond the selected appliance interior.
-    """
-    import torch
-    for record in payload:
-        indices = _indices(scene, record)
-        centers = record.system.get_particles_position_orientation()[0][indices]
-        inside = centers.new_zeros(len(indices), dtype=torch.bool)
-        for volume in volumes:
-            inside |= volume.check_points_in_volume(centers)
-        if not bool(inside.all()):
-            return False
-    return True
-
-
 def verify_particles(scene, payload):
     # Validate every captured identity before accepting any support chain.
-    # Contained particles remain subject to their original volume check.
+    # A solid grain can settle outside an annotated fill volume while still
+    # resting on its vessel. Verify physical ownership in that case too.
     verified = set()
     supported = {}
     for record in payload:
         indices = _indices(scene, record)
         centers, _ = record.system.get_particles_position_orientation()
-        verified.update(link.prim_path for link in getattr(record.container, 'links', {}).values()
-                        if not link.is_meta_link)
+        anchors = {link.prim_path for link in getattr(record.container, 'links', {}).values()
+                   if not link.is_meta_link}
+        verified.update(anchors)
         if record.relation == 'supported':
+            from omnigibson.object_states import ContainedParticles
             import omnigibson.utils.transform_utils as T
+            volume = record.container.states.get(ContainedParticles)
+            contained = (volume.link.check_points_in_volume(centers[indices]).tolist()
+                         if volume is not None else [False] * len(indices))
             rotation = T.quat2mat(record.link.get_position_orientation()[1])
-            for path, index, (parent, offset, vector) in zip(record.paths, indices, record.supports):
+            for path, index, (parent, offset, vector), inside in zip(record.paths, indices, record.supports, contained):
+                # Supported material can settle into its own vessel on release.
+                # Current containment does not require the previous contact.
+                if inside:
+                    verified.add(path)
+                    continue
                 # Keep rotated saved probes: a world-aligned resampling can
                 # miss an existing corner contact after an arbitrary yaw.
                 hit = _support_at(path, centers[index] + offset @ rotation.T, vector @ rotation.T)
                 supported[path] = (record.system, centers[index], parent if hit == parent else None)
         else:
-            if not bool(record.link.check_points_in_volume(centers[indices]).all()):
-                raise SkillError('postcondition_error', 'Contained particles left the carried container', changed=True)
-            verified.update(record.paths)
+            inside = record.link.check_points_in_volume(centers[indices])
+            for path, index, retained in zip(record.paths, indices, inside.tolist()):
+                if retained:
+                    verified.add(path)
+                elif anchors and not getattr(record.system, 'is_fluid', False):
+                    supported[path] = (record.system, centers[index], None)
+                else:
+                    raise SkillError('postcondition_error', 'Contained particles left the carried container', changed=True)
 
     # A grain can settle onto a different grain in the same carried assembly,
     # or lose one saved ray while retaining another real contact. Re-certify

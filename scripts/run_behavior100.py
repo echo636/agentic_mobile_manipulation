@@ -90,7 +90,7 @@ def worker_configs(config):
         lanes = [{'id':f'gpu{gpu}', 'gpu':gpu} for gpu in config['gpus']]
     if not lanes:
         raise ValueError('At least one worker is required')
-    allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env',
+    allowed = {'id', 'gpu', 'ssh', 'data_root', 'sim_python', 'sim_env', 'mcp_python',
                'base_port', 'minimum_free_gpu_mib', 'simulator_memory_max',
                'simulator_env', 'expected_gpu_uuid', 'memory_budget_gib', 'admission_delay_seconds',
                'simulator_appdata_path', 'simulator_tmpdir', 'startup_memory_gib',
@@ -108,7 +108,7 @@ def worker_configs(config):
         if (host,gpu) in devices or (host,port) in ports: raise ValueError('Worker GPU or port collision')
         env=merged.get('simulator_env',{})
         budget=merged.get('memory_budget_gib',28)
-        if type(budget) is not int or not 12<=budget<=28: raise ValueError('Invalid memory budget')
+        if type(budget) is not int or budget<12: raise ValueError('Invalid memory budget')
         if merged.get('simulator_memory_max',str(budget)+'G')!=str(budget)+'G':
             raise ValueError('Resource admission and hard simulator memory limit must agree')
         if not 12<=merged.get('startup_memory_gib',budget)<=budget:
@@ -144,7 +144,7 @@ def worker_configs(config):
     for worker in result:
         limit=config.get('host_worker_memory_budget_gib',{}).get(worker['ssh'][-1],slot_size)
         if limit is None and profile!='throughput':raise ValueError('Dynamic host budget requires throughput admission')
-        if worker.get('memory_budget_gib',28)>slot_size or (limit is not None and limit<slot_size):
+        if (not adaptive and worker.get('memory_budget_gib',28)>slot_size) or (limit is not None and limit<slot_size):
             raise ValueError('Worker memory exceeds shared host slot capacity')
     return result
 
@@ -214,7 +214,8 @@ def startup_resource_rejection(record, controller, preflight):
     failed={key for key,value in preflight.get('checks',{}).items() if value is False}
     dynamic={'gpu_capacity','cgroup_reclaimable_headroom','bridge_port_free',
              'host_memory_including_peer_reservations','adaptive_account_memory',
-             'host_working_memory_headroom','data_disk_free_40GiB','runtime_storage_headroom_16GiB'}
+             'host_working_memory_headroom','data_disk_free_40GiB','runtime_storage_headroom_16GiB',
+             'quota_headroom_16GiB'}
     return sorted(failed) if failed and failed<=dynamic else None
 
 
@@ -574,9 +575,18 @@ class Batch:
         # Do not reuse that slot until its unit is terminal, or explicitly adopt
         # exactly that existing attempt without starting another model.
         try:
+            recovered = {}
+            if adopting:
+                stage = next((owner.get('runtime_stage') for owner in lease.previous_owners
+                              if owner.get('run_id') == adopting['run_id']
+                              and owner.get('unit') == adopting.get('simulator_unit')
+                              and owner.get('runtime_stage')), 'starting')
+                recovered['runtime_stage'] = ('ready' if adopting.get('execution_started_at_unix')
+                                              or adopting.get('bridge_ready_at') else stage)
             lease.record(released=False,run_id=adopting['run_id'] if adopting else None,
                          unit=adopting.get('simulator_unit') if adopting else None,
-                         startup_memory_gib=self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)))
+                         startup_memory_gib=self.c.get('startup_memory_gib',self.c.get('memory_budget_gib',28)),
+                         **recovered)
         except BaseException:
             lease.release()
             raise
@@ -1169,7 +1179,7 @@ class Batch:
             if lease:lease.record(runtime_stage='ready')
             self.release_startup_gate()
             self.worker_state('controller_starting',run_id=runid,startup_deadline_unix=row['startup_deadline_unix'])
-            remote=shlex.join(['env','PYTHONPATH='+str(self.remote_source/'src'),self.c['sim_python'],
+            remote=shlex.join(['env','PYTHONPATH='+str(self.remote_source/'src'),self.c.get('mcp_python',self.c['sim_python']),
                 '-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
             cmd=[sys.executable,str(self.source/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
                  '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
@@ -1184,6 +1194,10 @@ class Batch:
                 cmd += ['--model-provider-profile',self.c['model_provider_profile']]
             if self.c.get('model_provider_gateway'):
                 cmd += ['--model-provider-gateway',self.c['model_provider_gateway']]
+            if self.manifest.get('planner_model'):
+                cmd += ['--planner-model', self.manifest['planner_model'],
+                        '--planner-reasoning-effort', self.manifest['planner_reasoning_effort'],
+                        '--planner-python', self.c.get('planner_python', sys.executable)]
             if self.c.get('isolate_client_storage'):cmd.append('--isolate-client-storage')
             if self.c.get('provider_transient_resumes'):
                 cmd += ['--rate-limit-resumes',str(self.c['provider_transient_resumes']),
@@ -1475,7 +1489,7 @@ class Batch:
             self.update(row,heartbeat_at=now(),simulator_pid=spec['simulator_pid']);time.sleep(4)
         self.update(row,stage='controller_starting' if row.get('execution_clock_path') else 'policy_running',
                     bridge_ready_at=now(),simulator_pid=spec['simulator_pid'])
-        remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c['sim_python'],'-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
+        remote=shlex.join(['env','PYTHONPATH='+str(runtime/'src'),self.c.get('mcp_python',self.c['sim_python']),'-m','manipulation_agent.mcp_server','--bridge',f'http://127.0.0.1:{port}'])
         cmd=[sys.executable,str(runtime/'scripts/run_codex_controller.py'),'--model',self.manifest['model'],
              '--instruction',row['instruction'],'--mcp-command',self.c['ssh'][0],
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
@@ -1491,6 +1505,10 @@ class Batch:
                     '--resume-backoff-seconds',str(self.c.get('provider_resume_backoff_seconds',90))]
         if self.c.get('model_provider_gateway'):
             cmd += ['--model-provider-gateway',self.c['model_provider_gateway']]
+        if self.manifest.get('planner_model'):
+            cmd += ['--planner-model', self.manifest['planner_model'],
+                    '--planner-reasoning-effort', self.manifest['planner_reasoning_effort'],
+                    '--planner-python', self.c.get('planner_python', sys.executable)]
         if row.get('execution_clock_path'):
             cmd+=['--execution-clock-command-json',json.dumps(self.execution_clock_command(
                 row['execution_clock_path'],row.get('episode_timeout_seconds',self.manifest['model_timeout_seconds']),runtime,row=row))]

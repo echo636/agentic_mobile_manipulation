@@ -30,9 +30,8 @@ def main():
     p.add_argument('--custom-task',type=Path,help='Private frozen custom task specification; public instruction only goes to controller')
     p.add_argument('--catalog-task',type=Path,help='Frozen native BDDL instance with pinned sampling evidence; includes explicit custom definitions')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
-    p.add_argument('--agent-profile', choices=['minimal','skills','skills_inline','workflow'], default='skills')
-    p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
-    p.add_argument('--require-task-notes',action='store_true',help='Require model-authored working notes before the first action; same rule in both comparison arms')
+    p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
+    p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
     p.add_argument('--require-tool-intent',action='store_true',
                    help='Require a concise public intent argument on every tool call; use identically in both arms')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
@@ -106,7 +105,7 @@ def main():
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
                                                           wall_seconds=a.wall_seconds),profile=a.agent_profile,
                                   agent_step_limit=a.max_agent_steps,goal_skill=a.goal_skill,
-                                  require_task_notes=a.require_task_notes,unbounded_episode=a.unbounded_episode,
+                                  unbounded_episode=a.unbounded_episode,
                                   require_tool_intent=a.require_tool_intent)
         if policy:
             harness.start_standalone_clock()

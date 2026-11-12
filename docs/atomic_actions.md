@@ -1,11 +1,10 @@
 # Atomic actions with native physics
 
-Candidate sampling and committed execution have separate lifetimes. Rejected
-hypothetical placement trials restore their snapshot, including the native grasp;
-otherwise failed search would leave an unexecuted collision in the scene. Once a
-pose is selected and environment stepping begins, physical outcomes are retained,
-including failed postconditions. `place_next_to` commits only once and does not
-rewind an executed release to try another candidate.
+Ordinary placement constructs a release pose from geometry, releases once, and
+retains the physical outcome. It reports the placed object's resulting relation;
+it does not require every carried object or particle to retain its previous
+containment or support. Returned RGB shows the contents after release, and the
+unchanged official task evaluator determines whether final requirements hold.
 
 Placement collision geometry reads explicitly synchronize PhysX to Fabric.
 Without rendering, a live body pose and a stale mesh transform can disagree and
@@ -17,13 +16,11 @@ resolves that target, checks the action's prerequisites, changes the requested
 state and observes the native result. Task success comes from the independent
 official evaluator.
 
-The executor uses OmniGibson's assisted-grasp fixed joint while an object is held.
+The executor uses OmniGibson's assisted-grasp fixed joint while a rigid object is held.
 A symbolic transfer moves the selected object and its current payload once;
 subsequent gravity, contact, joint motion and released contents belong to PhysX.
 There is no per-step pose projection, fixed released container, resident-content
-pinning, or rollback of a committed physical outcome. Candidate sampling can
-restore hypothetical trials before choosing a pose; this is separate from
-maintaining an action result.
+pinning, or rollback of a committed physical outcome.
 
 Navigation certifies a geometric route and commits its endpoint once, followed
 by native settling. It does not simulate continuous driving or charge the
@@ -44,12 +41,14 @@ continuous recording is optional in iteration batches.
 
 The material transfer actions also include `pour` and `scoop`. `pour` takes a
 held vessel, board or ready dispenser and a selected receiver. It
-attempts loose rigid contents with native `Inside` placement into vessels or
-`OnTop` placement onto work surfaces. Material uses volume sampling or native
+releases loose rigid contents above the receiver using one common translation,
+preserving their relative arrangement and orientation. It does not arrange
+individual objects into slots or simulate the source vessel tipping.
+Material uses volume sampling or native
 top-down surface sampling; existing particle identities are moved once and
 settle freely. Surface receipts count contacts after settling. The source stays
 in hand. `scoop` transfers material from
-the selected source into the held vessel. Both preserve existing contents;
+the selected source into the held vessel. Both transfer existing identities;
 dispensers supply only their authored material. Receiving capacity can leave
 contents behind. Rigid transfer feedback distinguishes moved, retained and
 remaining objects. Settling, including any spill, remains physical. Adding this
@@ -62,3 +61,11 @@ CPU tests cover the public catalog, preconditions, state changes, projection con
 The eight added names also appear in the real MCP `act` input schema and each dispatches through MCP in a mock RGB episode (`scripts/probe_rgb_mcp.py`). Separately, actual `gpt-6-astra` RGB/MCP controller trials on public instance 301 have independently verified official task success and passed model-call, simulator-effect, and video audits for `wipe` (`clean_a_keyboard`), `cut` (`chopping_wood`), `sweep` (`sweeping_garage`), `spray` (`spraying_for_bugs`), `hang` (`hanging_pictures`), and `vacuum` (`vacuuming_floors`). The `spray` task passed twice: a previously started `high`-effort run and a later `low`-effort run. Both models selected the two distinct potted plants and passed all six audit checks. The `low` run made three extra navigation calls after both sprays; its full trajectory remains available for review. Those trials, including unsuccessful attempts, are published with model, reasoning effort, task, ordered `act` calls, five-view video, and audit checks in the [internal model review](http://10.130.140.115:8769/autonomous_model_index.html). Scripted and manually selected-point trials remain labeled separately in the internal scripted review; neither is counted as an autonomous model result. The acceptance contract, including the current `gpt-6.1-sol`/`low` default for new trials and labeling of completed `high` trials, is in [atomic_action_experiment_requirements.md](atomic_action_experiment_requirements.md).
 
 The supplied coverage page is an analysis input, not simulator authority. The pinned BDDL defines `hanging_pictures` with `attached`; `laying_tile_floors` with `ontop` and `nextto`; and `polishing_shoes` with removal of shoe `Covered(dust)` plus placement relations. Its classification of the latter two as `spread` tasks is therefore not used as implementation evidence. No 100-task coverage or success claim follows from adding action names.
+
+## Cloth folding
+
+`fold` selects cloth from the current RGB and requires an empty hand. Place the cloth on a supporting surface before folding. The executor constructs one finite-radius fold from the native rest mesh at the current footprint and support height, sets particle positions and zero velocities once, then runs eight seconds of native physics. It returns success only when the unchanged official `Folded` state is true afterward. Geometry topology, collisions and gravity remain enabled; there is no per-frame pose correction. This is an ideal state action, not a simulated two-hand folding trajectory.
+
+Native napkin components have retained the official folded state, but towel folds remain unstable under free physics. The cloth output adapter synchronizes native USD output after tensor pose setters; R1Pro link poses and geometry agree in the targeted probe.
+
+Direct particle attachments to R1Pro articulation links fail in the pinned runtime. Cloth grasps instead attach the selected vertex to a 1 g dynamic rigid anchor, connected to the gripper by a native fixed joint. The anchor has no collision geometry and receives no per-frame pose updates. Native grasp serialization recreates both constraints, and native release removes their shared scope. R590 verified holding, 25 cm robot translation, serialized restore and release on a hand towel and dinner napkin: attachment errors were at most 1.18 cm and 0.53 cm respectively. The anchor uses a separate namespace to avoid the simulator's robot articulation wildcard. Other clothing assets, placement integration and complete tasks remain under validation. Component results are not autonomous task successes.

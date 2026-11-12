@@ -143,7 +143,7 @@ class MotorContractRegression(unittest.TestCase):
 
     def test_selected_surface_failure_never_retries_without_the_point(self):
         b=CheckedPlacement();b._get_held=lambda:object();calls=[]
-        def fail(held,target,steps,point,yaw,*,roll_degrees=None):
+        def fail(held,target,steps,point,yaw,**kwargs):
             calls.append(point);raise SkillError('sampling_error','no local pose')
         b._try_place_on_top=fail
         states=types.ModuleType('omnigibson.object_states');states.OnTop=object()
@@ -199,7 +199,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
             self.assertFalse(valid)
 
 
-    def test_final_placement_checks_current_support_after_candidate_settling(self):
+    def test_final_placement_checks_selected_support_without_rejecting_residual_motion(self):
         import torch
         states=types.ModuleType('omnigibson.object_states')
         for name in ('OnTop','Touching','VerticalAdjacency'):setattr(states,name,type(name,(),{}))
@@ -218,18 +218,16 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b.robot=types.SimpleNamespace(get_joint_positions=lambda:None,q_to_action=lambda q:None)
         b.primitives=types.SimpleNamespace(_empty_action=lambda:None)
         b._placement_record=lambda data:None;b._get_held=lambda:None
-        b._verify_payload=lambda *a,**kw:None
-        b._surface_candidate_payload=lambda *a:None
+        b._verify_payload=lambda *a,**kw:self.fail('Placement must not require every payload relation to persist')
+        b._inside_pose_overlap_ranker=lambda *a,**kw:None
         b._settle_surface_contacts=lambda *a,**kw:None
-        with patch.dict('sys.modules',{'omnigibson.object_states':states,'omnigibson.action_primitives.action_primitive_set_base':errors}), \
-                patch('manipulation_agent.executors.placement.placement_transaction',lambda *a:nullcontext()):
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
             for correct_shelf in (False,True):
                 with self.subTest(correct_shelf=correct_shelf):
                     # R387: the accepted placement retained support and native
                     # OnTop, but a small residual rotation failed the rest window.
-                    checks=iter([(True,{}),(False,{'checks':{
-                        'selected_shelf_height':correct_shelf,'settled':False}})])
-                    b._selected_surface_support=lambda *a,**kw:next(checks)
+                    b._selected_surface_support=lambda *a,**kw:(False,{'checks':{
+                        'selected_shelf_height':correct_shelf,'settled':False}})
                     if correct_shelf:
                         self.assertEqual(b._try_place_on_top(held,target,1,torch.zeros(3)),
                                          'selected_surface_collision_support_after_free_settling')

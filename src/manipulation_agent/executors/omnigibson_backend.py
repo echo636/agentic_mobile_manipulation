@@ -143,6 +143,26 @@ def restore_static_floor_geometry(data, full):
     return added
 
 
+def configure_research_robot(robot_cfg, *, fixed_surround=False, image_size=256):
+    """Use the same absolute-joint motor interface for native and imported scenes."""
+    robot_cfg = copy.deepcopy(robot_cfg)
+    robot_cfg.pop('eval', None)
+    robot_cfg.update(grasping_mode='sticky', disable_grasp_handling=True,
+                     obs_modalities=['rgb', 'depth_linear', 'proprio'])
+    if fixed_surround:
+        robot_cfg['include_sensor_names'] = []
+        robot_cfg.pop('exclude_sensor_names', None)
+    robot_cfg['sensor_config']['VisionSensor']['sensor_kwargs'].update(
+        image_height=image_size, image_width=image_size)
+    for name in ('base', 'trunk', 'arm_left', 'arm_right', 'gripper_left', 'gripper_right'):
+        robot_cfg['controller_config'][name] = dict(
+            name='HolonomicBaseJointController' if name == 'base' else 'JointController',
+            motor_type='position', command_input_limits=None, command_output_limits=None,
+            use_impedances=False, use_delta_commands=False)
+    robot_cfg['controller_config']['base'].pop('use_delta_commands')
+    return robot_cfg
+
+
 class OmniGibsonBackend:
     mode = "oracle_task_state"
 
@@ -169,9 +189,14 @@ class OmniGibsonBackend:
         def fixed_key(name):
             return lambda *a, **kw: prefix + name
 
-        def object_key(operation):
-            return lambda obj, *a, **kw: (
-                f'{prefix}object_{obj.name}_{operation}' if isinstance(obj, USDObject) else None)
+        def object_key(operation, *, once=False):
+            seen = set()
+            def key(obj, *a, **kw):
+                if not isinstance(obj, USDObject) or (once and id(obj) in seen):
+                    return None
+                seen.add(id(obj))
+                return f'{prefix}object_{obj.name}_{operation}'
+            return key
 
         calls = [
             (scene_base, 'create_object_from_init_info',
@@ -179,8 +204,11 @@ class OmniGibsonBackend:
             (USDObject, 'prebuild', object_key('prebuild')),
             (BasePrim, 'load', object_key('load')),
             (BasePrim, 'initialize', object_key('initialize')),
-            (USDObject, 'dump_state', object_key('snapshot')),
-            (USDObject, '_load_state', object_key('restore')),
+            # Rejection sampling can restore the whole scene thousands of
+            # times. Keep the first detailed pass; subsequent scene-level
+            # completions below still report real progress and failures.
+            (USDObject, 'dump_state', object_key('snapshot', once=True)),
+            (USDObject, '_load_state', object_key('restore', once=True)),
         ]
         for owner, label, methods in [
             (scene_base.Scene, 'scene', ('load', 'prebuild', 'initialize', 'reset',
@@ -215,19 +243,26 @@ class OmniGibsonBackend:
             import omnigibson as og
             from .usd_diagnostics import install_usd_caller_metadata
             write_json(output/'usd_caller_diagnostics.json',install_usd_caller_metadata())
+            from .compat.native_astar import install_sparse_native_astar
+            write_json(output/'native_astar_compatibility.json', install_sparse_native_astar())
             from .compat.particle_quaternions import install_particle_quaternion_serialization
             write_json(output/'particle_quaternion_serialization.json',
                        install_particle_quaternion_serialization())
             from .compat.particle_emission import install_particle_emission_clearance
             write_json(output/'particle_emission_compatibility.json',
                        install_particle_emission_clearance(output))
-            from .compat.material_conditions import install_default_saturation_names
+            from .compat.particle_contacts import install_particle_contact_identity
+            write_json(output/'particle_contact_identity.json', install_particle_contact_identity())
+            from .compat.material_conditions import install_default_saturation_names, install_dicing_derivative_names
             write_json(output/'default_saturation_names.json', install_default_saturation_names())
+            write_json(output/'dicing_derivative_names.json', install_dicing_derivative_names())
             from .compat.solvent_conditions import install_native_solvent_alternatives
             write_json(output/'native_solvent_alternatives.json', install_native_solvent_alternatives())
             from .compat.macro_particle_pose import install_macro_particle_pose_repair
             write_json(output/'macro_particle_pose_compatibility.json',
                        install_macro_particle_pose_repair())
+            from .compat.macro_particle_batching import install_macro_particle_batching
+            write_json(output/'macro_particle_batching.json', install_macro_particle_batching())
             from .compat.inside_fabric import install_inside_sampling_fabric_sync
             write_json(output/'inside_sampling_fabric_sync.json',
                        install_inside_sampling_fabric_sync())
@@ -242,6 +277,8 @@ class OmniGibsonBackend:
             write_json(output/'heat_source_links_compatibility.json', install_heat_source_links())
             from .compat.cloth_import import install_nested_cloth_import
             write_json(output/'cloth_import_compatibility.json', install_nested_cloth_import(output))
+            from .compat.cloth_grasp import install_native_cloth_grasp
+            write_json(output/'cloth_grasp_compatibility.json', install_native_cloth_grasp())
             from omnigibson.macros import gm
             from omnigibson.eval.evaluator import Evaluator, resolve_instance_ids
             from omnigibson.eval.utils.eval_utils import NUM_PUBLIC_TEST_INSTANCES
@@ -250,7 +287,8 @@ class OmniGibsonBackend:
             from omegaconf import OmegaConf
             from gello.utils.og_teleop_cfg import DISABLED_TRANSITION_RULES
 
-        if not getattr(self, "catalog_spec", None) and instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
+        standalone = bool(getattr(self, 'standalone_scene', None))
+        if not standalone and not getattr(self, "catalog_spec", None) and instance not in resolve_instance_ids(task, list(range(NUM_PUBLIC_TEST_INSTANCES)), "public_test"):
             raise ValueError("Instance must belong to this pinned source's public test split")
         gm.HEADLESS = True
         gm.RENDER_VIEWER_CAMERA = bool(getattr(self,'private_viewer_grounding',False))
@@ -308,7 +346,10 @@ class OmniGibsonBackend:
             configure_native_fault_reporting(output)
         from .renderer_health import RendererHealth
         self._renderer_health = RendererHealth(output)
-        if getattr(self, 'catalog_spec', None):
+        if standalone:
+            self._load_standalone_environment(config)
+            self._check_renderer_health()
+        elif getattr(self, 'catalog_spec', None):
             self._load_catalog_environment(config)
             self._check_renderer_health()
         else:
@@ -349,7 +390,7 @@ class OmniGibsonBackend:
         with self._startup_stage('initial_goal_evaluation'):
             self.initial_goals = self._goal_options()
         # Keep original task-instance files intact. Evaluator performs its official restoration.
-        if not getattr(self, 'catalog_spec', None):
+        if not standalone and not getattr(self, 'catalog_spec', None):
             self.task_metadata = {"task": task, "instance": instance, "split": "public_test",
                                   "scene": self.env.task.scene_name, "seed": seed}
         self._prepare_task_instance()
@@ -364,6 +405,9 @@ class OmniGibsonBackend:
             health.check()
 
     def _config(self, task: str, gpu: int, max_steps: int) -> dict:
+        if getattr(self, 'standalone_scene', None):
+            from .standalone_scene import scene_config
+            return scene_config(self)
         if getattr(self, 'catalog_spec', None):
             return self._catalog_config(gpu, max_steps)
         import yaml
@@ -374,24 +418,9 @@ class OmniGibsonBackend:
         task_cfg = yaml.safe_load(manifest.read_text())[task][0]
         config = generate_basic_environment_config(task, task_cfg)
         robot_cfg = yaml.safe_load((Path(self.og.__file__).parent / "eval" / "r1pro.yaml").read_text())
-        robot_cfg.pop("eval", None)
-        robot_cfg.update(grasping_mode="sticky", disable_grasp_handling=True,
-                         obs_modalities=["rgb", "depth_linear", "proprio"])
-        if getattr(self, 'fixed_surround_rgb', False):
-            # A separate calibrated four-camera rig replaces the stock head/wrist sensors.
-            robot_cfg['include_sensor_names'] = []
-            robot_cfg.pop('exclude_sensor_names', None)
         image_size = getattr(self, "image_size", 256)
-        robot_cfg["sensor_config"]["VisionSensor"]["sensor_kwargs"].update(image_height=image_size, image_width=image_size)
-        # Symbolic settling converts joint positions to actions; every actuated group must be absolute position.
-        for name in ("base", "trunk", "arm_left", "arm_right", "gripper_left", "gripper_right"):
-            robot_cfg["controller_config"][name] = {
-                "name": "HolonomicBaseJointController" if name == "base" else "JointController",
-                "motor_type": "position", "command_input_limits": None, "command_output_limits": None,
-                "use_impedances": False, "use_delta_commands": False,
-            }
-        # HolonomicBaseJointController fixes this internally and has no such constructor argument.
-        robot_cfg["controller_config"]["base"].pop("use_delta_commands")
+        robot_cfg = configure_research_robot(robot_cfg,
+            fixed_surround=getattr(self, 'fixed_surround_rgb', False), image_size=image_size)
         scene = task_cfg["scene_model"]
         template = instances / "scene_test" / "public" / scene / "json" / f"{scene}_task_{task}_0_0_template-partial_rooms.json"
         if getattr(self, "custom_spec", {}).get("reference_plan", {}).get("kind") == "full_workflow":

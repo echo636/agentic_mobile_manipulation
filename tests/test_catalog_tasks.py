@@ -116,7 +116,11 @@ class CatalogTerminalScoringTests(unittest.TestCase):
         backend.inside_placement = 'official_volume'
         backend.sampling_physics_steps = 0
         backend.navigation_distance = 0.0
-        backend.env = SimpleNamespace(task=SimpleNamespace(success=True))
+        # Native success comes from the compiled BDDL goal, as in the executor.
+        native = any(bool(option) and all(option) for option in goals)
+        backend.env = SimpleNamespace(task=SimpleNamespace(success=True, _evaluate_predicate=None,
+            ground_goal_state_options=goals,
+            compiled_task=SimpleNamespace(check_goal=lambda evaluate: (native, None))))
         return backend
 
     def test_native_goals_do_not_override_declared_empty_hand(self):

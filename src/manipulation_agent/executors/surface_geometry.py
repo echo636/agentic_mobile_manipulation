@@ -5,6 +5,40 @@ in world coordinates, including the object's current orientation and scale.
 """
 
 
+def upward_surface_points(triangles, maximum=32):
+    """Spread proposal rays over real upward faces, including narrow rims."""
+    import numpy as np
+    faces = np.asarray(triangles, dtype=float).reshape(-1, 3, 3)
+    normals = np.cross(faces[:, 1]-faces[:, 0], faces[:, 2]-faces[:, 0])
+    lengths = np.linalg.norm(normals, axis=1)
+    points = np.unique(faces[(lengths > 1e-10) & (normals[:, 2] > .9*lengths)].mean(axis=1), axis=0)
+    if len(points) <= maximum:
+        return points
+    selected = [int(np.argmax(points[:, 2]))]
+    distances = np.sum((points-points[selected[0]])**2, axis=1)
+    while len(selected) < maximum:
+        index = int(np.argmax(distances))
+        selected.append(index)
+        distances = np.minimum(distances, np.sum((points-points[index])**2, axis=1))
+    return points[selected]
+
+
+def opening_release_points(low, high, extent):
+    """Retain central drops and expose empty corners before stacking higher.
+
+    Thin trays may have no 3D inset but still have ample horizontal area.
+    These are only proposals; native opening and overlap queries still apply.
+    """
+    points = [(low[0]+x*(high[0]-low[0]), low[1]+y*(high[1]-low[1]))
+              for x, y in ((.5, .5), (.25, .5), (.75, .5), (.5, .25), (.5, .75))]
+    lo = [low[i]+extent[i]/2 for i in (0, 1)]
+    hi = [high[i]-extent[i]/2 for i in (0, 1)]
+    if all(a <= b for a, b in zip(lo, hi)):
+        points.extend((lo[0]+x*(hi[0]-lo[0]), lo[1]+y*(hi[1]-lo[1]))
+                      for x in (.5, .25, .75, .05, .95) for y in (.5, .25, .75, .05, .95))
+    return list(dict.fromkeys(points))
+
+
 def single_support_height(triangles):
     """Identify a single horizontal receiving plane, never choose among shelves."""
     import numpy as np
@@ -59,11 +93,13 @@ def bottom_support_points(points, maximum=17):
     return np.asarray(probes)
 
 
-def rotated_surface_geometry(points_world, origin, yaw_degrees=None, roll_degrees=None):
+def rotated_surface_geometry(points_world, origin, yaw_degrees=None, roll_degrees=None, *,
+                             center_footprint=False):
     """Rotate about the root by world-X roll, then world-Z yaw.
 
     Returns root-relative rotated vertices and their bottom anchor. A null yaw
     preserves the held orientation; this never expands the shape to a square.
+    Cloth can center its full footprint instead of aligning a low, curled edge.
     """
     import numpy as np
     points = np.asarray(points_world, dtype=float)
@@ -87,21 +123,47 @@ def rotated_surface_geometry(points_world, origin, yaw_degrees=None, roll_degree
         cosine, sine = np.cos(angle), np.sin(angle)
         rotation = np.array([[cosine, -sine, 0.], [sine, cosine, 0.], [0., 0., 1.]])
         relative = relative @ rotation.T
-    return relative, bottom_anchor(relative)
+    anchor = bottom_anchor(relative)
+    if center_footprint:
+        anchor[:2] = (relative.min(axis=0)[:2] + relative.max(axis=0)[:2]) / 2
+    return relative, anchor
+
+
+def adjacent_support_points(relative, anchor, reference, selected):
+    """Propose four separated footprints, accounting for both objects' sizes.
+
+    Returned XY points locate the moving object's bottom anchor. Surface rays
+    and subsequent physics still determine whether each proposal is usable.
+    """
+    import numpy as np
+    low, high = relative.min(axis=0), relative.max(axis=0)
+    other = np.asarray(reference, dtype=float)
+    ref_low, ref_high = other.min(axis=0), other.max(axis=0)
+    gap = min(.01, float(np.mean(high-low+ref_high-ref_low)) / 24)
+    centered = (ref_low + ref_high - low - high) / 2
+    points = []
+    for axis in (0, 1):
+        for coordinate in (ref_low[axis] - high[axis] - gap,
+                           ref_high[axis] - low[axis] + gap):
+            root = centered.copy(); root[axis] = coordinate
+            points.append((root + anchor)[:2])
+    return sorted(points, key=lambda xy: float(np.sum((xy-np.asarray(selected)[:2])**2)))
 
 
 def native_resting_orientation(current, orientations):
     """Use the nearest authored resting tilt while preserving world heading.
 
-    DatasetObject.sample_orientation uses identity for an empty orientation
-    table. Reuse those native poses without its random yaw. This constructs a
-    proposal only; collision, support and payload still need free settling.
+    Missing annotations do not define an upright pose. Keep the current tilt
+    in that case: resetting a loaded tray to identity can invert its contents.
+    Authored poses are aligned without the native sampler's random yaw.
     """
     import numpy as np
     from scipy.spatial.transform import Rotation
     current = Rotation.from_quat(current)
-    poses = [entry['rotation'] for entry in orientations.values()
-             if entry['prob'] > 0] if orientations else [[0., 0., 0., 1.]]
+    poses = [entry['rotation'] for entry in (orientations or {}).values()
+             if entry['prob'] > 0]
+    if not poses:
+        return current.as_quat(), np.eye(3)
     candidates = []
     for pose in poses:
         stable = Rotation.from_quat(pose)

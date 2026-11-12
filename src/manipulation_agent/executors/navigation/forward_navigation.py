@@ -172,6 +172,23 @@ def local_exit_certificate(pose, collision, *, distance=.3, incoming=False, chec
                     'displacement_m': math.dist(pose[:2], end[:2]),
                     'distance_m': distance+2*staging, 'motion_mode': 'forward',
                     'scope': ('local_arrival' if incoming else 'local_departure')+'_in_current_collision_geometry'}
+    # Float32 settling can shift a grid-centred pose by a fraction of a
+    # millimetre. Sparse straight exits can then all graze a blocked cell even
+    # though a checked correction followed by the original exit is available.
+    # Reuse the same bounded numerical connector as ordinary route planning.
+    center = (*collision.grid.world(collision.grid.cell(pose[:2])), pose[2])
+    correction = math.dist(pose[:2], center[:2])
+    if 1e-9 < correction <= .002:
+        a, b = (center, pose) if incoming else (pose, center)
+        connector = checked_connection(a, b[:2], b[2], collision, check_cancelled)
+        if connector is not None:
+            tail = local_exit_certificate(center, collision, distance=distance+correction,
+                incoming=incoming, check_cancelled=check_cancelled, allow_lateral=allow_lateral)
+            if tail is not None:
+                poses = tail['poses']+connector[1:] if incoming else connector+tail['poses'][1:]
+                return {**tail, 'poses': poses,
+                        'displacement_m': math.dist(poses[0][:2], poses[-1][:2]),
+                        'distance_m': tail['distance_m']+correction}
     return None
 
 

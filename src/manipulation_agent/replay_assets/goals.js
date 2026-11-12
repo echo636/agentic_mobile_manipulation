@@ -89,6 +89,51 @@ window.renderTaskNotes = function(root, notes, options = {}) {
   }
   if(!children.childElementCount)children.append(node('li','尚未记录子目标','goal-empty'));
   root.append(tree);
+  const operations=list(state.execution?.operations);
+  if(operations.length){
+    const panel=node('details',null,'operation-plan');panel.open=!options.compact;
+    panel.append(node('summary',`操作 DAG · ${operations.length} 项工作`),
+      node('p','节点是操作，箭头是必要前置；目标树记录结果。状态和耗时估计均由模型记录。','goal-caption'));
+    const byOp=new Map(operations.map(op=>[op.id,op])),levels=new Map();
+    let remaining=[...operations];
+    while(remaining.length){
+      const ready=remaining.filter(op=>list(op.depends_on).every(id=>levels.has(id)));
+      if(!ready.length)break;
+      for(const op of ready)levels.set(op.id,Math.max(-1,...list(op.depends_on).map(id=>levels.get(id)))+1);
+      remaining=remaining.filter(op=>!levels.has(op.id));
+    }
+    if(remaining.length||byOp.size!==operations.length){
+      panel.append(node('p','操作依赖有缺失或循环，查看笔记原文。','goal-warning'));
+    }else{
+      const counts=new Map(),positions=new Map();
+      for(const op of operations){const depth=levels.get(op.id),row=counts.get(depth)??0;counts.set(depth,row+1);positions.set(op.id,{x:20+depth*245,y:20+row*110});}
+      const width=(Math.max(...levels.values())+1)*245,height=Math.max(...counts.values())*110+20;
+      const svg=(tag,attrs={})=>{const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e;};
+      const canvas=svg('svg',{width,height,role:'img','aria-label':'操作依赖图'}),viewport=node('div',null,'operation-viewport');
+      for(const op of operations){
+        const end=positions.get(op.id);
+        for(const id of list(op.depends_on)){
+          const start=positions.get(id),x=start.x+195,y=start.y+40,tx=end.x,ty=end.y+40;
+          canvas.append(svg('path',{d:`M${x},${y} C${x+25},${y} ${tx-25},${ty} ${tx},${ty}`,fill:'none',stroke:'#8794a6','stroke-width':1.5}),
+            svg('path',{d:`M${tx-6},${ty-4} L${tx},${ty} L${tx-6},${ty+4}`,fill:'none',stroke:'#8794a6','stroke-width':1.5}));
+        }
+      }
+      const detail=node('pre',null,'operation-detail');detail.hidden=true;
+      for(const op of operations){
+        const {x,y}=positions.get(op.id),current=op.id===state.active?.operation_id,done=op.status==='done';
+        const group=svg('g',{'data-operation-id':op.id,tabindex:0,role:'button','aria-label':op.description});
+        group.append(svg('rect',{x,y,width:195,height:80,rx:6,fill:done?'#e6f4ea':current?'#e6f0ff':'#f3f5f7',stroke:current?'#3978c5':'#b8c2cf'}));
+        [op.id,op.description,`${op.at} · ${op.seconds??'?'} 秒 · ${done?'模型记录已执行':current?'当前':'待执行'}`].forEach((value,i)=>{
+          const label=svg('text',{x:x+8,y:y+19+i*23,fill:'#263244','font-size':i===1?12:10});
+          const str=String(value??'');label.textContent=str.length>28?str.slice(0,27)+'…':str;group.append(label);
+        });
+        const show=()=>{detail.hidden=false;detail.textContent=JSON.stringify(op,null,2);};
+        group.onclick=show;group.onkeydown=e=>{if(e.key==='Enter')show();};canvas.append(group);
+      }
+      viewport.append(canvas);panel.append(viewport,detail);
+    }
+    root.append(panel);
+  }
   const requirements=v2?state.requirements:state.L1.criteria;
   if(list(requirements).length){
     const detail=node('details',null,'goal-support goal-requirements');detail.append(node('summary','要求与约束'));
@@ -98,7 +143,8 @@ window.renderTaskNotes = function(root, notes, options = {}) {
   const active=state.active;
   if(active&&(list(active.steps).length||active.next_check)){
     const local=node('details',null,'goal-local');local.open=!options.compact;
-    local.append(node('summary',`当前步骤${activeId?' · '+text(activeId):''}`));
+    const selectedId=active.operation_id??activeId;
+    local.append(node('summary',`当前步骤${selectedId?' · '+text(selectedId):''}`));
     if(list(active.steps).length){const steps=node('ol');for(const s of active.steps)steps.append(node('li',text(s)));local.append(steps);}
     if(active.next_check)local.append(node('p','下一检查：'+text(active.next_check)));
     root.append(local);

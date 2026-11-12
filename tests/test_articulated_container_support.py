@@ -106,6 +106,33 @@ class ArticulatedSupportTests(unittest.TestCase):
                     position=[0,0,.525],normal=[1,0,0])):
                 self.assertIsNone(contacting_support(b,tray,[oven]))
 
+    def test_closed_parent_volume_requires_physical_cover_for_grasp_and_transfer(self):
+        from manipulation_agent.contracts import SkillError
+        from manipulation_agent.executors.omnigibson_rgb import RGBBackend
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        b,oven,_,(tray,_,_),modules,state=self.fixture()
+        state['closed']=True
+        b.local_manipulation=False
+        contained=type('ContainedParticles',(),{})
+        modules['omnigibson.object_states'].ContainedParticles=contained
+        receiver=SimpleNamespace(states={contained:object()})
+        sampling=modules['omnigibson.utils.sampling_utils']
+        for covering, hits in [(False,[]),(False,[dict(rigidBody='/tray')]),
+                               (True,[dict(rigidBody='/rack')])]:
+            with self.subTest(covering=covering,hits=hits), patch.dict('sys.modules',modules), \
+                    patch.object(sampling,'raytest',return_value=hits):
+                b._get_held=lambda:None
+                grasp=lambda:RGBBackend._manipulation_preconditions(b,'grasp',tray)
+                if covering:
+                    with self.assertRaisesRegex(SkillError,'closed container'):grasp()
+                else:grasp()
+                b._get_held=lambda:receiver
+                transfer=lambda:CheckedMaterialTransfer._transfer_preconditions(b,'scoop',tray)
+                if covering:
+                    with self.assertRaisesRegex(SkillError,'closed container'):transfer()
+                else:self.assertEqual(transfer(),(tray,receiver))
+
     def test_closed_support_contact_allowed_but_new_door_contact_rejected(self):
         for collision in (False,True):
             with self.subTest(door_collision=collision):

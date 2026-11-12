@@ -62,6 +62,10 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
                 pending.append({'id':item.get('id'),'text':item.get('text',''),
                                 'source_event_index':event_index,'source':'LLM public assistant message, verbatim'})
             elif item.get('type') == 'mcp_tool_call':
+                # The independent planner has no simulator event. Keep its
+                # call in the transcript without shifting robot-step alignment.
+                if item.get('server') == 'manipulation' and item.get('tool') == 'plan_task':
+                    continue
                 model_index += 1
                 model_messages[model_index] = pending
                 model_payloads[model_index] = {
@@ -124,12 +128,24 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
         if result and result.get('ok'):
             if name == 'update_plan': plan = copy.deepcopy(args['subgoals'])
             if name == 'remember': notes[args['key']] = {'text': args['text'], 'revision': args['revision']}
-            if name == 'task_notes' and args.get('operation') == 'write':
+            if name == 'task_notes' and args.get('operation') in {'write', 'update', 'select'}:
                 task_notes=copy.deepcopy(result['notes'])
                 # New write receipts acknowledge metadata; the accepted text is
                 # already archived in the model's tool call. Preserve old receipts.
                 if 'content' not in task_notes:
-                    task_notes['content'] = args['content']
+                    if args['operation'] == 'write':
+                        task_notes['content'] = args['content']
+                    elif args['operation'] == 'update':
+                        from .agent.task_notes import merge_goal_update
+                        task_notes['content'] = merge_goal_update(notes_before['content'], args['content'])
+                    else:
+                        task_notes['content'] = notes_before['content']
+                    if 'selected' in result:
+                        content = json.loads(task_notes['content'])
+                        content['active'] = result['selected']
+                        if 'selected_execution' in result:
+                            content['execution'] = result['selected_execution']
+                        task_notes['content'] = json.dumps(content, separators=(',', ':'))
                 note_versions.append({**task_notes,'tool_step':len(steps)+1,'result_event_id':event['id']})
         seconds = (datetime.fromisoformat(event['at']) - datetime.fromisoformat(call['at'])).total_seconds() if event else None
         steps.append({'index': len(steps) + 1, 'event_id': call['id'], 'result_event_id': event['id'] if event else None,

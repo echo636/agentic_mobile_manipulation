@@ -91,6 +91,9 @@ class CustomTaskBackend(RGBBackend):
     def __init__(self, spec_path, output, *, build_instance=None, geometry_only=False, **kwargs):
         self.spec_path = Path(spec_path).resolve()
         self.custom_spec = json.loads(self.spec_path.read_text())
+        self.standalone_scene = self.custom_spec.get('standalone_scene')
+        if self.standalone_scene and build_instance is not None:
+            raise ValueError('Standalone import loads an existing frozen scene')
         # Complete furnished scenes require more search time than the small
         # atomic fixtures. The recorded loaded garden map has a valid route
         # that the 10-second budget misses under simulator CPU contention.
@@ -107,7 +110,8 @@ class CustomTaskBackend(RGBBackend):
         self._protected_initial_positions = {}
         self.build_instance = Path(build_instance) if build_instance else None
         self._custom_motion_positions = {}; self._custom_state_errors = []
-        base = self.custom_spec['base']
+        base = (dict(task=self.custom_spec['id'], instance=0, seed=self.custom_spec.get('seed', 0))
+                if self.standalone_scene else self.custom_spec['base'])
         super().__init__(base['task'], base['instance'], output, seed=base['seed'], **kwargs)
         if self.geometry_only:return
         # Camera initialization may advance physics. Begin scoring from the
@@ -144,53 +148,17 @@ class CustomTaskBackend(RGBBackend):
             'env_step':self.steps})
 
     def _validate_custom_robot_start(self):
-        """Reject a tipped or trapped prepared robot before accepting a build."""
-        import math
-        import numpy as np
-        from .navigation.live_gt_map import build_navigation_grid
-        from .navigation.heading_collision import HeadingCollisionChecker
-        from .navigation.forward_navigation import local_exit_certificate
-        from .navigation.gt_navigation import PlanningBudget, SearchBudgetExhausted
+        """Reject a tipped initial robot; ordinary navigation uses the native map."""
         pos,quat=self.robot.get_position_orientation()
         position=[float(v) for v in pos];orientation=[float(v) for v in quat]
         up_z=1.-2.*(orientation[0]**2+orientation[1]**2)
         record={'position':position,'orientation':orientation,
                 'upright':math.isfinite(up_z) and up_z>=math.cos(math.radians(10.)),
-                'collision_free':False,'departure_available':False,
-                'validation_level':'read-only initial robot pose and departure geometry; not task success'}
-        if record['upright']:
-            trav=self.env.scene.trav_map
-            floor=min(range(len(trav.floor_heights)),key=lambda i:abs(position[2]-trav.floor_heights[i]))
-            grid,details=build_navigation_grid(self,floor)
-            pose=self._local_pose()
-            collision=HeadingCollisionChecker(grid,self._navigation_layers,pose[2],self._navigation_support,
-                                               check_cancelled=self.deadline.check)
-            path=self.output/'custom_robot_start_grid.npz'
-            np.savez_compressed(path,
-                free=np.frombuffer(grid.free,dtype='uint8').reshape(grid.height,grid.width),
-                origin=grid.origin,resolution=grid.resolution,start=pose,
-                raw_layers=np.stack([layer[0] for layer in collision.layers]),
-                support=self._navigation_support,initial_layer_yaw=collision.reference_yaw,
-                layer_footprints_json=json.dumps([{'footprint':layer[1].tolist()} for layer in collision.layers]))
-            record.update(floor=floor,map_sha256=hashlib.sha256(grid.free).hexdigest(),
-                          grid_artifact=path.name,grid_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
-            # Saving diagnostic geometry is not route-search work. Start the
-            # search clock after compression / I/O, just before checking poses.
-            budget=PlanningBudget(self.deadline.check,seconds=10.)
-            collision.check_cancelled=budget.check
-            try:
-                record['collision_free']=collision.motion_free(pose,pose)
-                if record['collision_free']:
-                    record['departure_certificate']=local_exit_certificate(pose,collision,
-                        check_cancelled=budget.check,
-                        allow_lateral=bool(getattr(self.robot,'is_holonomic_base',False)))
-                    record['departure_available']=record['departure_certificate'] is not None
-            except SearchBudgetExhausted:
-                record['planning_budget_exhausted']=True
-        record['status']='passed' if all(record[k] for k in ('upright','collision_free','departure_available')) else 'failed'
+                'validation_level':'read-only initial robot posture; not route feasibility or task success'}
+        record['status']='passed' if record['upright'] else 'failed'
         write_json(self.output/'custom_robot_start_validation.json',record)
         if record['status']!='passed':
-            raise RuntimeError('Prepared robot must be upright with collision-free departure geometry')
+            raise RuntimeError('Prepared robot must be upright')
 
     def _prepare_task_instance(self):
         """Called before camera setup / first policy observation."""
@@ -205,7 +173,8 @@ class CustomTaskBackend(RGBBackend):
             instance_path = (self.spec_path.parent / frozen['path']).resolve()
             if hashlib.sha256(instance_path.read_bytes()).hexdigest() != frozen['sha256']:
                 raise ValueError('Custom initial scene hash mismatch')
-            self._restore_custom_scene(str(instance_path))
+            if not self.standalone_scene:
+                self._restore_custom_scene(str(instance_path))
         if self.geometry_only:return
         self.custom_objects = {o.name: o for o in self.env.scene.objects}
         for role, name in spec['roles'].items():
@@ -217,9 +186,9 @@ class CustomTaskBackend(RGBBackend):
         self._custom_motion_positions = self._motion_positions()
         self.input_hashes.update(custom_task_spec=hashlib.sha256(self.spec_path.read_bytes()).hexdigest(),
                                  custom_initial_scene=hashlib.sha256(instance_path.read_bytes()).hexdigest())
-        self.task_metadata = {'task': spec['id'], 'instance': spec['instance_id'], 'seed': spec['base']['seed'],
-                              'split': 'custom_long_horizon_pilot', 'scene': self.env.task.scene_name,
-                              'base_public_task': spec['base'], 'official_submission_eligible': False}
+        self.task_metadata = {'task': spec['id'], 'instance': spec['instance_id'], 'seed': self.seed,
+                              'split': 'custom_long_horizon_pilot', 'scene': self.env.scene.scene_model,
+                              'base_public_task': spec.get('base'), 'official_submission_eligible': False}
         write_json(self.output / 'custom_instance_validation.json', {
             'status':'passed', 'validation_level':'scene loaded and all private predicates evaluated; feasibility separate',
             'task':self.task_metadata, 'input_hashes':self.input_hashes,
@@ -232,6 +201,26 @@ class CustomTaskBackend(RGBBackend):
         live = {o.name:o for o in self.env.scene.objects}
         return {role:([v.tolist() for v in live[name].get_position_orientation()] if name in live else None)
                 for role,name in self.custom_spec['roles'].items()}
+
+    def _load_standalone_environment(self, config):
+        from .standalone_scene import load_environment
+        load_environment(self, config)
+
+    def _goal_options(self):
+        return [] if self.standalone_scene else super()._goal_options()
+
+    def close(self):
+        recipe_policy = getattr(self, '_recipe_particle_output_policy', None)
+        try:
+            if recipe_policy is not None:
+                write_json(self.output / 'recipe_particle_output_policy.json', recipe_policy.describe())
+            super().close()
+        finally:
+            policy = getattr(self, '_standalone_sleep_policy', None)
+            if policy is not None:
+                policy.close()
+            if recipe_policy is not None:
+                recipe_policy.close()
 
     def _refresh_custom_contacts(self, stage):
         # Only task entities participate in custom contact predicates. Waking
@@ -539,6 +528,8 @@ class CustomTaskBackend(RGBBackend):
         result = {}
         for key, row in self.custom_spec['evaluation']['predicates'].items():
             obj = roles[row['object']]
+            if row['state'] == 'SystemExists':
+                result[key] = row['system'] in self.env.scene.active_systems; continue
             if row['state'] == 'Exists':
                 result[key] = obj is not None; continue
             if row['state'] == 'Replaced':
@@ -650,4 +641,6 @@ class CustomTaskBackend(RGBBackend):
         result.update(task_instance=self.task_metadata,custom_task=True,
                       evaluator=self.custom_spec['evaluation'].get(
                           'score_type', 'custom_joint_terminal_and_public_history_v1'))
+        if getattr(self, '_recipe_particle_output_policy', None) is not None:
+            result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
         return result

@@ -14,13 +14,17 @@ class Attached: pass
 class Inside: pass
 class OnTop: pass
 class Touching: pass
+class PrimType:
+ RIGID = 0
+ CLOTH = 1
 
 class AttachedPayloadTests(unittest.TestCase):
  def setUp(self):
   self.states=types.ModuleType('omnigibson.object_states')
   for n,v in [('AttachedTo',Attached),('Inside',Inside),('OnTop',OnTop),('Touching',Touching)]:setattr(self.states,n,v)
-  self.mock=patch.dict(sys.modules,{'omnigibson':types.ModuleType('omnigibson'),'omnigibson.object_states':self.states});self.mock.start();self.addCleanup(self.mock.stop)
-  def obj(name,z):return NS(name=name,fixed_base=False,states={},aabb=(torch.tensor([0.,0.,z]),torch.tensor([1.,1.,z+.05])),points=np.array([[0.,0.,z],[1.,1.,z+.05]]),
+  constants=types.ModuleType('omnigibson.utils.constants');constants.PrimType=PrimType
+  self.mock=patch.dict(sys.modules,{'omnigibson':types.ModuleType('omnigibson'),'omnigibson.object_states':self.states,'omnigibson.utils.constants':constants});self.mock.start();self.addCleanup(self.mock.stop)
+  def obj(name,z):return NS(name=name,prim_type=PrimType.RIGID,fixed_base=False,states={},aabb=(torch.tensor([0.,0.,z]),torch.tensor([1.,1.,z+.05])),points=np.array([[0.,0.,z],[1.,1.,z+.05]]),
                            get_position_orientation=lambda:(torch.tensor([0.,0.,z]),torch.tensor([0.,0.,0.,1.])),
                            get_linear_velocity=lambda:torch.zeros(3))
   self.top=obj('top',.7);self.bracket=obj('bracket',.65);self.leg=obj('leg',0.);self.unrelated=obj('other',.2)
@@ -33,6 +37,21 @@ class AttachedPayloadTests(unittest.TestCase):
  def test_grasp_collects_attachment_grandchildren(self):
   edges=ControlledCarry._grasp_dependencies(self.backend,self.top)
   self.assertEqual([(a.name,b.name,k) for a,b,k in edges],[('bracket','top','AttachedTo'),('leg','bracket','AttachedTo')])
+
+ def test_reciprocal_native_inside_keeps_outer_vessel_out_of_inner_payload(self):
+  small,outer,food=self.top,self.bracket,self.leg
+  for obj,volume in ((small,.002642),(outer,.012948)):
+   obj.aabb=(torch.tensor([-.2,-.2,0.]),torch.tensor([.2,.2,.3]))
+   obj.links={'cavity':NS(is_meta_link=True,meta_link_type='fillable',volume=volume)}
+   obj.states={Inside:NS(get_value=lambda p:p is small or p is outer)}
+  food.aabb=(torch.tensor([-.01,-.01,.1]),torch.tensor([.01,.01,.12]))
+  food.states={Inside:NS(get_value=lambda p:p is small)}
+  self.backend.env.scene.objects=[small,outer,food]
+  edges=ControlledCarry._grasp_dependencies(self.backend,small)
+  self.assertEqual([(a.name,b.name,k) for a,b,k in edges],[(food.name,small.name,'Inside')])
+  edges=ControlledCarry._grasp_dependencies(self.backend,outer)
+  self.assertEqual([(a.name,b.name,k) for a,b,k in edges],
+                   [(small.name,outer.name,'Inside'),(food.name,small.name,'Inside')])
 
  def test_surface_anchor_uses_feet_and_excludes_unattached_objects(self):
   class Adapter(CheckedPlacement):
@@ -51,8 +70,8 @@ class AttachedPayloadTests(unittest.TestCase):
   with self.assertRaisesRegex(SkillError,'attachment'):ControlledCarry._verify_payload(self.backend,edges)
 
  def test_grasping_a_leg_includes_ancestors_siblings_and_their_payload(self):
-  sibling=NS(name='sibling',fixed_base=False,states={Attached:NS(get_value=lambda p:p is self.bracket)},aabb=self.leg.aabb)
-  payload=NS(name='payload',fixed_base=False,states={OnTop:NS(get_value=lambda p:p is self.top),
+  sibling=NS(name='sibling',prim_type=PrimType.RIGID,fixed_base=False,states={Attached:NS(get_value=lambda p:p is self.bracket)},aabb=self.leg.aabb)
+  payload=NS(name='payload',prim_type=PrimType.RIGID,fixed_base=False,states={OnTop:NS(get_value=lambda p:p is self.top),
               Touching:NS(get_value=lambda p:p is self.top)},aabb=(torch.tensor([0.,0.,.76]),torch.tensor([.1,.1,.8])))
   self.top.scene.objects.extend([sibling,payload])
   edges=ControlledCarry._grasp_dependencies(self.backend,self.leg)

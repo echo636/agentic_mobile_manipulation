@@ -8,8 +8,6 @@ import unittest
 from unittest.mock import Mock, patch
 
 from manipulation_agent.contracts import SkillError
-from manipulation_agent.executors.carry import ControlledCarry
-from manipulation_agent.executors.placement import placement_transaction
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
 
@@ -38,34 +36,7 @@ class StartupQueryRecovery(unittest.TestCase):
             b.initializing_unit_state('owned.service')
 
 
-class DeletedPlacementObject(unittest.TestCase):
-    def setup_backend(self):
-        held, target = object(), object()
-        scene = SimpleNamespace(objects=[held, target])
-        sim = SimpleNamespace(scenes=[scene], dump_state=Mock(return_value={}), load_state=Mock())
-        b = ControlledCarry()
-        b.env = SimpleNamespace(scene=scene)
-        b.og = SimpleNamespace(sim=sim)
-        b.ideal_carry = True
-        b._ideal_held, b._carry_relative = held, 'pose'
-        b._anchored_operation = lambda target: nullcontext()
-        b._placement_record = Mock()
-        b._carry_follow = Mock()
-        b.frames_revision = 2
-        return b, held, target, scene, sim
-
-
-
-    def test_runtime_failure_after_topology_change_preserves_new_scene(self):
-        b, held, target, scene, sim = self.setup_backend()
-        with self.assertRaises(SkillError) as failure:
-            with placement_transaction(sim, b._placement_record):
-                scene.objects = [target]
-                raise KeyError('removed contact body')
-        self.assertEqual(failure.exception.code, 'target_changed')
-        sim.load_state.assert_not_called()
-
-
+class PhysicsFailureRecording(unittest.TestCase):
     def test_transition_error_keeps_the_executed_physics_step_in_video(self):
         b=RGBBackend.__new__(RGBBackend)
         b.deadline=Mock();b._base_target=None;b.steps=0

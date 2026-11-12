@@ -108,7 +108,11 @@ class CodexAdapter(ClientAdapter):
                    "--sandbox", "read-only", "--model", config.model, "--cd", str(workspace.resolve()),
                    "-c", 'approval_policy="never"', "-c", 'web_search="disabled"',
                    "-c", "project_doc_max_bytes=0", "-c", 'model_reasoning_summary="auto"',
-                   "-c", "mcp_optional_startup_grace_ms=0"]
+                   "-c", "mcp_optional_startup_grace_ms=0",
+                   # Keep RGB delivery in Codex's native MCP handler, even when
+                   # the model catalog selects code_mode_only. Model-authored
+                   # JS can drop images before forwarding the tool result.
+                   "-c", 'features.code_mode.direct_only_tool_namespaces=["mcp__manipulation"]']
         if config.codex_context == "minimal":
             catalog, model_entry = minimal_model_catalog(bundled_model_catalog(), config.model, instructions)
             catalog_path = (config.output / "codex_model_catalog.json").resolve()
@@ -206,17 +210,20 @@ class CodexAdapter(ClientAdapter):
         for feature in ("shell_tool", "unified_exec", "plugins", "apps", "hooks", "view_image", "multi_agent",
                         "browser_use", "computer_use", "image_generation"):
             command += ["--disable", feature]
-        server = {"command": config.mcp_command, "args": config.mcp_args, "enabled_tools": tool_names,
-                  "startup_timeout_sec": 60, "required": True,
-                  "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
-        if config.mcp_tool_exposure == "direct":
-            # Code-mode-only model metadata otherwise hides MCP tools behind a model-written exec
-            # script, which can stringify image blocks into truncated text.
-            server["omit_tools_from"] = ["code_mode"]
-        for key, value in server.items():
-            command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
-        if pythonpath := os.environ.get('PYTHONPATH'):
-            command += ["-c", 'mcp_servers.manipulation.env.PYTHONPATH=' + json.dumps(pythonpath)]
+        if tool_names:
+            server = {"command": config.mcp_command, "args": config.mcp_args, "enabled_tools": tool_names,
+                      "startup_timeout_sec": 60, "required": True,
+                      "tool_timeout_sec": tool_wait_seconds(config.timeout), "default_tools_approval_mode": "approve"}
+            if config.mcp_tool_exposure == "direct":
+                # Code-mode-only model metadata otherwise hides MCP tools behind a model-written exec
+                # script, which can stringify image blocks into truncated text.
+                server["omit_tools_from"] = ["code_mode"]
+            if config.mcp_env_vars:
+                server['env_vars'] = list(config.mcp_env_vars)
+            for key, value in server.items():
+                command += ["-c", f"mcp_servers.manipulation.{key}=" + json.dumps(value)]
+            if pythonpath := os.environ.get('PYTHONPATH'):
+                command += ["-c", 'mcp_servers.manipulation.env.PYTHONPATH=' + json.dumps(pythonpath)]
         command += ["-"]
         return PreparedProject(command, None, config.prompt, native_sessions=native_sessions,
                                client_storage=storage, mcp_prefix=prefix)

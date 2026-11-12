@@ -31,11 +31,12 @@ class MacroParticlePoseTests(unittest.TestCase):
             return (self.raw[:, :3] + transform.quat2mat(self.raw[:, 3:]) @ offset,
                     self.raw[:, 3:])
         def write(values, indices):
-            self.raw[indices] = values
+            # Native RigidBodyView indexes a full-view buffer, not a compact subset.
+            self.raw[indices] = values[indices]
         self.system = SimpleNamespace(n_particles=2, _particle_offset=offset,
             get_particles_position_orientation=pose,
             get_particle_position_orientation=lambda idx: tuple(x[idx] for x in pose()),
-            particles_view=SimpleNamespace(set_transforms=write))
+            particles_view=SimpleNamespace(get_transforms=lambda: self.raw, set_transforms=write))
 
     def test_repeated_snapshot_restore_has_no_center_drift(self):
         torch = self.torch

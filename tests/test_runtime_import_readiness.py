@@ -69,7 +69,7 @@ class ImportReadinessTests(unittest.TestCase):
                 result = self.quota_preflight(response)
                 self.assertEqual(result['status'], 'passed')
                 self.assertIsNone(result['quota_free_bytes'])
-                self.assertNotIn('quota_headroom_2GiB', result['checks'])
+                self.assertNotIn('quota_headroom_16GiB', result['checks'])
 
     def test_exhausted_local_quota_still_blocks_including_partial_timeout_output(self):
         exhausted = '/dev/root 20971521* 20971520 20971520 10 0 0\n'
@@ -79,7 +79,15 @@ class ImportReadinessTests(unittest.TestCase):
                 result = self.quota_preflight(response)
                 self.assertEqual(result['status'], 'blocked')
                 self.assertEqual(result['quota_free_bytes'], 0)
-                self.assertFalse(result['checks']['quota_headroom_2GiB'])
+                self.assertFalse(result['checks']['quota_headroom_16GiB'])
+
+    def test_roomy_disk_cannot_hide_insufficient_account_space_for_scene_cache(self):
+        for used_gib, expected in [(16, 'blocked'), (2, 'passed')]:
+            with self.subTest(used_gib=used_gib):
+                quota = f'/dev/root {used_gib*1024**2} {20*1024**2} {20*1024**2} 10 0 0\n'
+                result = self.quota_preflight({'exit_code': 0, 'stdout': quota, 'stderr': ''})
+                self.assertTrue(result['checks']['data_disk_free_40GiB'])
+                self.assertEqual(result['status'], expected)
 
     def test_wrong_host_editable_and_missing_import_are_rejected_without_loading_simulator(self):
         with tempfile.TemporaryDirectory() as folder:

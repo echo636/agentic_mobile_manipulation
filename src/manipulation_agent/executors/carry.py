@@ -46,6 +46,12 @@ class ControlledCarry:
         arm = self.primitives.arm
         indices = self.robot.arm_control_idx[arm]
         ready = self.robot.untucked_default_joint_pos[indices]
+        if self.robot.model == 'r1pro':
+            # Keep the hand upright and in front of the torso. The native
+            # untucked arm extends sideways beyond the navigation footprint;
+            # the reset arm instead holds containers against the base.
+            ready = ready.new_tensor([math.pi / 3, 0., 0., -2 * math.pi / 3,
+                                      0., -math.pi / 6, 0.])
         self.robot.set_joint_positions(ready, indices=indices)
         self.primitives._arm_targets['arm_' + arm] = ready.clone()
         self.og.sim.sync_physx_to_fabric()
@@ -57,10 +63,6 @@ class ControlledCarry:
         held = self._get_held()
         if held is obj:
             return {'primitive': 'grasp', 'postcondition': 'selected_object_already_held'}
-        if held is not None:
-            raise SkillError('hand_occupied', 'An object is already grasped')
-        if obj.fixed_base:
-            raise SkillError('fixed_object', 'The selected object has a fixed base')
         arm = self.primitives.arm
         original = obj.get_position_orientation()
         dependencies = self._grasp_dependencies(obj)
@@ -68,6 +70,29 @@ class ControlledCarry:
                     for child, _, _ in dependencies]
         particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
                                        include_supported=True)
+        position, orientation, contact = self._grasp_pose(obj, point, dependencies)
+        obj.set_position_orientation(position=position, orientation=orientation)
+        self._relocate_contents(obj, contents)
+        relocate_particles(self.env.scene, particles)
+        self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
+        if max_steps > 0:
+            self._step(self.primitives._empty_action())
+        if self._get_held() is not obj:
+            raise SkillError('postcondition_error', 'Native grasp did not hold the selected object', changed=True)
+        self.frames_revision = -1
+        from omnigibson.utils.constants import PrimType
+        cloth = obj.prim_type == PrimType.CLOTH
+        return {'primitive': 'grasp',
+                'implementation': 'native_cloth_attachment_and_gripper_joint' if cloth else 'native_assisted_grasp_joint',
+                'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
+                'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
+
+    def _grasp_pose(self, obj, point, dependencies):
+        """Rank fingertip poses; approximate boxes cannot reject a grasp."""
+        from omnigibson.utils import transform_utils as T
+        from .placement_overlap import assembly_overlap_ranker
+        original = obj.get_position_orientation()
+        arm = self.primitives.arm
         direction = T.quat2mat(self.robot.get_eef_orientation(arm))[:, 2]
         contact = (self.robot.get_eef_position(arm) + direction *
                    max(self.robot.eef_to_fingertip_lengths[arm].values()))
@@ -76,47 +101,46 @@ class ControlledCarry:
         # the fingertip plane, intersecting the fingers and palm.
         vertices = self.torch.as_tensor(self._collision_vertices(obj),
                                        dtype=point.dtype, device=point.device)
-        from .placement_overlap import assembly_overlap_ranker
-        overlap = assembly_overlap_ranker(self, obj, [obj, *[child for child, _ in contents]])
+        hand_names = {self.robot.eef_link_names[arm], *self.robot.finger_link_names[arm],
+                      *self.robot.gripper_link_names[arm]}
+        overlap = assembly_overlap_ranker(self, obj, [obj, *[child for child, _, _ in dependencies]],
+            ignored_robot_links=[self.robot.links[name] for name in hand_names])
         # Preserve the original yaw when it fits. A long tool can otherwise
         # reach through a wall when transferred to the fingertips. Compare
         # upright yaw alternatives without moving any body during the search.
+        proposals = []
         for yaw in (0., math.pi / 2, -math.pi / 2, math.pi):
             turn = T.euler2quat(original[1].new_tensor([0., 0., yaw]))
             rotation = T.quat2mat(turn)
             rotated = (vertices - original[0]) @ rotation.T + original[0]
             selected = rotation @ (point - original[0]) + original[0]
+            orientation = T.quat_multiply(turn, original[1])
             depths = rotated @ direction
             surface = rotated[depths <= depths.min() + 1e-5]
-            grasp_point = surface[self.torch.linalg.vector_norm(surface - selected, dim=1).argmin()]
-            position = original[0] + contact - grasp_point
-            orientation = T.quat_multiply(turn, original[1])
-            if overlap is None or overlap(position, orientation) == 0:
-                break
-        else:
-            # The object is unchanged; the existing local approach loop may
-            # choose another stance before trying the grasp again.
-            raise SkillError('out_of_reach', 'No unobstructed grasp pose at this stance')
-        obj.set_position_orientation(position=position, orientation=orientation)
-        self._relocate_contents(obj, contents)
-        relocate_particles(self.env.scene, particles)
-        self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
-        for _ in range(min(6, max_steps)):
-            self._step(self.primitives._empty_action())
-        if self._get_held() is not obj:
-            raise SkillError('postcondition_error', 'Native grasp did not hold the selected object', changed=True)
-        self.frames_revision = -1
-        return {'primitive': 'grasp', 'implementation': 'native_assisted_grasp_joint',
-                'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
-                'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
+            selected_contact = surface[self.torch.linalg.vector_norm(surface - selected, dim=1).argmin()]
+            # Yaw alone cannot lift a tall object's bottom out of a countertop.
+            # Compare contact heights on the same finger-facing plane, without
+            # moving the object or stepping physics to try each proposal.
+            for anchor in (selected_contact, rotated[rotated[:, 2].argmin()],
+                           rotated[rotated[:, 2].argmax()]):
+                grasp_point = anchor + direction * (depths.min() - self.torch.dot(anchor, direction))
+                position = original[0] + contact - grasp_point
+                proposals.append((position, orientation, contact))
+        # The enclosure may overlap where the actual collider does not. Use
+        # it only to prefer a pose; native grasp and physics own the result.
+        return min(proposals, key=lambda pose: overlap(*pose[:2]) if overlap is not None else 0)
 
     def _place_state(self, primitive, target, max_steps, point, yaw_degrees=None, *, roll_degrees=None):
         """Snapshot transported material once; never pin it during settling."""
+        from omnigibson.utils.constants import PrimType
         held=self._get_held()
         contents=self._carry_contents
         self._placement_particle_payload=(held,snapshot_particles(
             self.env.scene,[held,*[child for child,_ in contents]],include_supported=True))
         try:
+            if held.prim_type == PrimType.CLOTH and primitive in {'place_on_top', 'place_next_to'}:
+                return self._place_cloth_surface(primitive, held, target, max_steps, point,
+                                                 yaw_degrees, roll_degrees=roll_degrees)
             if primitive=='place_inside':
                 return self._checked_place_inside(target,max_steps,point=point)
             if primitive=='place_under':
@@ -132,7 +156,9 @@ class ControlledCarry:
         from omnigibson.object_states import Open,ToggledOn
         state=Open if primitive in {'open','close'} else ToggledOn
         wanted=primitive in {'open','toggle_on'}
-        if state not in obj.states:raise SkillError('pre_condition_error','Selected object does not support this operation')
+        if state not in obj.states:
+            raise SkillError('pre_condition_error','Selected object does not support this operation',
+                             stage='unsupported_object_action')
         # Open.set_value teleports articulated joints. Drawer contents must move
         # with their supporting volume, not be left at the previous world pose.
         payload=self._container_payload(obj) if state is Open else []
@@ -140,9 +166,10 @@ class ControlledCarry:
         from .particle_payload import particle_link_motion, particle_containment_observation
         moved_particles=particle_link_motion(particles)
         open_goal=None
+        opening_feedback={}
         if primitive=='open':
-            from .articulation_goal import checked_open_goal
-            open_goal=checked_open_goal(self,obj,self.deadline.check)
+            from .articulation_goal import native_open_goal, opened_joints
+            open_goal,controlled_joints=native_open_goal(self,obj,feedback=opening_feedback)
         samples=[]
         def capture(phase):
             if state is Open:
@@ -158,15 +185,17 @@ class ControlledCarry:
                 from .articulation_diagnostics import record_articulation
                 record_articulation(self,obj,primitive,samples,status=status,**details)
         capture('before_setter')
-        # Upstream symbolic OPEN samples a random opening and returns early
-        # when already ajar. Use a checked usable opening; close fully.
+        # Apply the native annotated opening to the selected panel; close fully.
         if open_goal is not None:
-            obj.set_joint_positions(open_goal);obj.keep_still()
+            obj.set_joint_positions(open_goal)
             obj.states[state].clear_cache();obj.state_updated()
-            accepted=bool(obj.states[state].get_value())
+            accepted=True
         else:
             accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
         if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
+        # Position setters retain joint velocities. A closed door must not
+        # inherit the preceding swing; subsequent motion remains native physics.
+        if state is Open:obj.keep_still()
         self._relocate_container_payload(payload)
         transported_particles=moved_particles()
         # A door setter moves only its articulated support frames. Leave
@@ -175,14 +204,14 @@ class ControlledCarry:
         relocate_particles(self.env.scene,transported_particles)
         verify_particles(self.env.scene,transported_particles)
         capture('after_setter')
-        for step in range(min(30,max_steps)):
-            self._step(self.primitives._empty_action())
-            if step in (0,4,14,29):capture('settle_'+str(step+1))
-        if bool(obj.states[state].get_value())!=wanted:
-            report('failed',reason='state_reopened_or_reclosed_after_settling',
+        self._step(self.primitives._empty_action())
+        capture('after_step')
+        actual=opened_joints(obj,controlled_joints) if primitive=='open' else bool(obj.states[state].get_value())
+        if actual!=wanted:
+            report('failed',reason='state_reopened_or_reclosed_after_step',
                    payload=[child.name for child,_,_ in payload])
             raise SkillError('postcondition_error','Requested object operation did not remain stable',changed=True)
-        self._verify_container_payload(obj,payload)
+        self._verify_container_payload(obj,payload,stage='articulation_contents_unconfirmed')
         if particles:
             self._placement_record({'status':'articulation_particle_settle',
                 'target':obj.name,'primitive':primitive,
@@ -194,8 +223,9 @@ class ControlledCarry:
         verify_particles(self.env.scene,transported_particles)
         report('passed',payload=[child.name for child,_,_ in payload])
         return {'primitive':primitive,'implementation':'official_state_setter_with_link_payload',
-                'fully_open_or_closed':primitive=='close','opening_policy':'largest_checked_usable_endpoint' if primitive=='open' else None,
-                'postcondition':'official_state_and_containment_after_settling',
+                'fully_open_or_closed':primitive=='close','opening_policy':'native_joint_metadata' if primitive=='open' else None,
+                **opening_feedback,
+                'postcondition':'official_state_and_containment_after_step',
                 'preserved_contained_objects':len(payload),'failure_policy':'retain_physical_result'}
 
     def _checked_attach(self, parent, max_steps):
@@ -274,7 +304,7 @@ class ControlledCarry:
         for child,link,relative in payload:
             child.set_position_orientation(*T.pose_transform(*link.get_position_orientation(),*relative));child.keep_still()
 
-    def _verify_container_payload(self,container,payload):
+    def _verify_container_payload(self,container,payload,*,stage=None):
         from omnigibson.object_states import Inside
         escaped=[record for record in payload if not record[0].states[Inside].get_value(container)]
         if escaped:
@@ -293,7 +323,8 @@ class ControlledCarry:
                         'linear_velocity':child.get_linear_velocity().tolist()})
                 self._carry_record(event='container_payload_violation',container=container.name,
                                    escaped_contents=details)
-            raise SkillError('postcondition_error','Operation displaced existing contents from the container',changed=True)
+            raise SkillError('postcondition_error','Operation displaced existing contents from the container',
+                             changed=True,stage=stage)
 
     @property
     def _carry_dependencies(self):
@@ -341,14 +372,27 @@ class ControlledCarry:
     def _grasp_dependencies(self,obj):
         """Read-only closure shared by grasp and loaded-departure prediction."""
         from omnigibson.object_states import Inside,OnTop,Touching
+        from omnigibson.utils.constants import PrimType
         candidates=[child for child in self.env.scene.objects if child not in (obj,self.robot)
                     and hasattr(child,'states')]
+        def capacity(container):
+            return sum(float(link.volume) for link in container.links.values()
+                       if link.is_meta_link and link.meta_link_type in {'fillable','openfillable'})
         def relation(child,parent):
+            # Native OnTop/Inside do not define cloth as a support/container.
+            # Objects resting on fabric remain subject to ordinary contacts.
+            if parent.prim_type == PrimType.CLOTH:return None
             attached=attachment_relation(child,parent)
             if attached:return attached
             if getattr(child,'fixed_base',True):return None
             lo,hi=parent.aabb;clo,chi=child.aabb;center=(clo+chi)/2
-            if Inside in child.states and bool(((center>=lo-.02)&(center<=hi+.02)).all()) and child.states[Inside].get_value(parent):return 'Inside'
+            if Inside in child.states and bool(((center>=lo-.02)&(center<=hi+.02)).all()) and child.states[Inside].get_value(parent):
+                # Native Inside tests only the AABB center: nested containers
+                # can contain each other's centers. Keep the smaller cavity as
+                # payload, never carry its outer vessel through that ambiguity.
+                reciprocal=(child.prim_type != PrimType.CLOTH and Inside in parent.states
+                            and parent.states[Inside].get_value(child))
+                if not reciprocal or capacity(child)<capacity(parent):return 'Inside'
             overlap=bool(((chi[:2]>=lo[:2])&(clo[:2]<=hi[:2])).all())
             if overlap and float(clo[2])>=float(lo[2])-.02 and float(clo[2])<=float(hi[2])+.08:
                 if OnTop in child.states and Touching in child.states and child.states[OnTop].get_value(parent) and child.states[Touching].get_value(parent):return 'OnTop'
@@ -356,8 +400,9 @@ class ControlledCarry:
         return support_closure(obj,candidates,relation)
 
 
-    def _verify_payload(self, dependencies, *, support_target=None, support_resting=None):
-        from omnigibson.object_states import Inside,OnTop,Touching,AttachedTo
+    def _verify_payload(self, dependencies):
+        """Attachment assembly check; ordinary placement does not require this."""
+        from omnigibson.object_states import Inside,OnTop,AttachedTo
         verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
         for child,parent,kind in dependencies:
             if kind=='AttachedToParent':
@@ -365,20 +410,14 @@ class ControlledCarry:
                 kind='AttachedTo'
             state={'Inside':Inside,'OnTop':OnTop,'AttachedTo':AttachedTo}[kind]
             if state not in child.states or not child.states[state].get_value(parent):
-                # Releasing an assembly on a surface can transfer a supported
-                # child's weight to that same surface. Requiring the old
-                # OnTop edge would reject an otherwise stable placement.
-                # Containment remains mandatory; sliding/falling elsewhere or
-                # an unmeasured resting state never qualifies.
-                resting=(support_resting or {}).get(id(child),{})
-                if (kind=='OnTop' and support_target is not None
-                        and resting.get('stable',False)
-                        and OnTop in child.states and Touching in child.states
-                        and child.states[OnTop].get_value(support_target)
-                        and child.states[Touching].get_value(support_target)):
-                    self._placement_record({'status':'payload_support_transferred',
-                        'child':child.name,'original_parent':parent.name,
-                        'support':support_target.name,'resting_motion':resting})
+                # A rigid item can settle below a shallow tray's annotated
+                # volume while remaining physically supported by that tray.
+                # Preserve the carrier, rather than its initial predicate.
+                if (kind=='Inside' and OnTop in child.states
+                        and child.states[OnTop].get_value(parent)):
+                    self._placement_record({'status':'payload_support_preserved',
+                        'child':child.name,'parent':parent.name,
+                        'original_relation':kind,'current_relation':'OnTop'})
                     continue
                 self._placement_record({'status':'payload_relation_failed',
                     'child':child.name,'parent':parent.name,'relation':kind,
@@ -387,4 +426,4 @@ class ControlledCarry:
                     'child_orientation':child.get_position_orientation()[1].tolist(),
                     'parent_orientation':parent.get_position_orientation()[1].tolist(),
                     'child_linear_velocity':child.get_linear_velocity().tolist()})
-                raise SkillError('postcondition_error','Carried payload lost its original support, containment or attachment after placement',changed=True)
+                raise SkillError('postcondition_error','Attachment payload lost its original support, containment or attachment',changed=True)

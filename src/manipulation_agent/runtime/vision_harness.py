@@ -15,18 +15,17 @@ from ..tools.intent import validate_intent, PROTOCOL as INTENT_PROTOCOL, LEGACY_
 from .tool_context import ToolContext
 from ..observations.surround import SurroundJobs
 from .closure import EpisodeClosure
-from ..agent.task_notes import TaskNotes
+from ..agent.task_notes import TaskNotes, model_planning_reply
 
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
-                 goal_skill='hierarchical', require_task_notes=False, unbounded_episode=False,
-                 require_tool_intent=False):
-        if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
-        if require_task_notes and profile not in {'skills','skills_inline','workflow'}:
-            raise ValueError('Task notes require a skills or workflow profile')
-        self.goal_skill=goal_skill;self.require_task_notes=require_task_notes
+                 goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False):
+        if profile == 'basic-skills': goal_skill = 'none'
+        if profile == 'goal-tree': goal_skill = 'tree'
+        if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
+        self.goal_skill=goal_skill
         self.require_tool_intent=require_tool_intent
-        self.task_notes=TaskNotes(recorder.output)
+        self.task_notes=TaskNotes(recorder.output, auto_select=goal_skill == 'hierarchical')
         if agent_step_limit is not None and (type(agent_step_limit) is not int or agent_step_limit<=0):
             raise ValueError('agent_step_limit must be a positive integer')
         if agent_step_limit is not None and budget.wall_seconds is not None:
@@ -56,11 +55,12 @@ class VisionHarness:
         self.skills = None
         if profile == 'workflow':
             self.plan,self.memory=[],{}
-        if profile in {'skills','skills_inline','workflow'}:
+        if profile in {'basic-skills','goal-tree','skills','skills_inline','workflow'}:
             # skills_inline freezes the same bundle for provenance; its prompt carries the text.
-            self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition'} if goal_skill=='none' else ())
+            planning_skill = {'hierarchical': 'goal-decomposition', 'tree': 'goal-tree'}.get(goal_skill)
+            self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition','goal-tree'} - {planning_skill})
         recorder.run['config']['agent_profile'] = profile
-        recorder.run['config'].update(goal_skill=goal_skill,require_task_notes=require_task_notes,
+        recorder.run['config'].update(goal_skill=goal_skill,
             require_tool_intent=require_tool_intent,
             tool_intent_protocol=INTENT_PROTOCOL if require_tool_intent else LEGACY_PROTOCOL)
         recorder.run['episode_deadline_unix']=self.deadline.unix
@@ -106,9 +106,10 @@ class VisionHarness:
         """Deliver the ready episode snapshot without reset, physics or rendering."""
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
         if hasattr(self.backend,'local_manipulation'):
-            result['control']={'manipulation_protocol':
-                'target_locked_approach_v2' if self.backend.local_manipulation else 'explicit_navigation_v1',
-                'local_base_adjustment':bool(self.backend.local_manipulation)}
+            result['control']={'manipulation':
+                'Select the visible target directly; the robot can approach it before manipulating it.'
+                if self.backend.local_manipulation else
+                'Move within reach with navigate_to before manipulating a target.'}
         if 'task_notes' in self.catalog: result['notes']=self.task_notes.read()
         if self.require_tool_intent: result['tool_intent_protocol']=INTENT_PROTOCOL
         return result
@@ -153,6 +154,8 @@ class VisionHarness:
             if old!=fingerprint: return {'ok':False,'error':{'code':'request_id_conflict','message':'Use a new request ID'}}
             return copy.deepcopy(result)
         self.calls+=1
+        call_started = time.monotonic()
+        observed_sim_start = self.snapshot.get('capture', {}).get('sim_time_seconds')
         self.sync_execution_clock()
         self.recorder.event('tool_call',{'name':name,'arguments':arguments,'request_id':request_id,'origin':origin})
         self._call_origin=origin
@@ -177,8 +180,6 @@ class VisionHarness:
             if name=='act' and isinstance(arguments,dict):
                 arguments={'placement_yaw_degrees':None,'placement_roll_degrees':None,'wait_seconds':None,**arguments}
             validate(arguments,self.catalog[name]['inputSchema'])
-            if name in {'act','look'} and self.require_task_notes and not self.task_notes.state['content']:
-                raise SkillError('task_notes_required','Before acting, write your intended approach with task_notes. Choose your own note format.')
             if name!='finish': self.deadline.check()
             if name!='finish' and (
                     (self.legacy_limits_active and self.calls>self.budget.max_calls) or
@@ -211,11 +212,34 @@ class VisionHarness:
                 'remaining_seconds': round(remaining, 1),
                 'scope': 'execution_wall_time_excluding_initialization',
             }
+        if name in {'act', 'look'}:
+            result['runtime'] = {'tool_seconds': round(time.monotonic() - call_started, 3)}
+            observed_sim_end = self.snapshot.get('capture', {}).get('sim_time_seconds')
+            if observed_sim_start is not None and observed_sim_end is not None:
+                result['runtime']['observed_simulation_seconds'] = max(0., observed_sim_end - observed_sim_start)
+        if ('task_notes' in self.catalog and self.goal_skill == 'hierarchical'
+                and origin == 'controller' and name in {'initialize', 'task_notes', 'act', 'look'}):
+            pending = None
+            if name in {'act', 'look'}:
+                pending = {'primitive': arguments.get('primitive', name) if isinstance(arguments, dict) else name,
+                           **result['runtime'],
+                           **{key: result[key] for key in ('ok', 'effect', 'error') if key in result}}
+            result['planning'] = self.task_notes.planning(pending)
+            if pending is not None:
+                # Checkpoint comparisons and the previous interval were already
+                # returned with notes. Keep them available on read/resume, not
+                # duplicated after every action within the selected operation.
+                result['planning'].pop('checkpoint_comparison', None)
+                result['planning'].pop('previous_execution', None)
         event_id=self.recorder.event('tool_result',{'name':name,'request_id':request_id,'result':result,'origin':origin})
         result['evidence_id']=event_id
         if name in {'act','look'} and 'task_notes' in self.catalog and origin=='controller':
             self.task_notes.record_action(name,arguments,result,self.agent_steps)
         self.evidence[event_id]={'name':'act' if name in {'act','look'} else name,'ok':result['ok'],'revision':self.revision}
+        # Archive the complete authored/generated graph above, but do not echo
+        # it in every model response. read/initialize still restore full notes.
+        if origin == 'controller':
+            result = model_planning_reply(result)
         self.cache[request_id]=(fingerprint,copy.deepcopy(result))
         if name=='finish' and result.get('closed'):
             self.closure.advance('result_ready')
@@ -254,6 +278,10 @@ class VisionHarness:
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
+        if primitive=='open' and details.get('other_panels_not_operated') is True:
+            effect['opening']={'other_panels_not_operated':True,
+                'message':'The opening command applied only to part of this object. '
+                          'Other doors or drawers were not operated. Inspect access in the returned RGB.'}
         if primitive=='cut':
             # Report this action's transformation, without object/material IDs
             # or task-goal state. Particle counts are not physical piece counts.
@@ -271,28 +299,46 @@ class VisionHarness:
                     'source_has_more_material':remaining if isinstance(remaining,bool) else None,
                     'held_object_retained':True,
                     'message':'Contents were transferred. Check remaining contents and the receiver in the returned RGB.'}
+                receiver = details.get('receiver_kind')
+                if receiver in {'container', 'surface'}:
+                    effect['transfer']['receiver_kind'] = receiver
+                    effect['transfer']['message'] = (
+                        f'Contents were transferred to the selected {receiver}. '
+                        'Check remaining contents and the receiver in the returned RGB.')
                 if rigid:
                     effect['transfer'].update(rigid)
+                partial = []
+                if details.get('some_material_not_transferred'):
+                    effect['transfer']['some_material_not_transferred'] = True
+                    partial.append('some material could not be transferred')
+                if any(not item.get('identities_changed_during_settling') and
+                       item.get('retained_particles', item['moved_particles']) < item['moved_particles']
+                       for item in materials):
+                    effect['transfer']['some_material_not_retained'] = True
+                    partial.append('some material did not remain at the receiver')
+                if partial:
+                    effect['transfer']['message'] = (
+                        'Transfer was partial: ' + '; '.join(partial) + '. '
+                        'Inspect the receiver, source and surrounding surfaces in the returned RGB.')
         local=details.get('local_manipulation')
         if local:
             effect['local_adjustment']={'repositions':int(local['repositions']),
                 'primitive_attempts':int(local['primitive_attempts']),
-                'departure':local['departure'],
                 'operation_committed':True,
-                'recovery_required':local['departure']!='checked',
-                'message':('Operation completed. Local departure is not certified after bounded recovery; inspect RGB and select a different navigation approach. Do not repeat the completed operation.'
-                           if local['departure']!='checked' else
-                           'Operation completed on the same selected target after bounded local preparation.')}
+                'message':'Operation completed on the selected target. Inspect the returned RGB.'}
         if primitive=='navigate_to':
             # Only an action outcome crosses the RGB boundary, never private
             # coordinates, target distances, object identities or map geometry.
             messages={
+                'endpoint_applied':'Navigation applied. Inspect the returned RGB for the actual position and surroundings.',
                 'reached':'Reached the selected point. Inspect the updated RGB.',
                 'approached':'Moved to a feasible approach toward the selected point. This does not verify manipulation reach; inspect the updated RGB.',
+                'incomplete':'The move did not reach the selected destination. Inspect the returned RGB before choosing the next action.',
                 'already_at_closest_approach':'Already at the closest approach found by this navigation search. Repeating the same click will not move closer; inspect the updated RGB for an alternative.',
             }
             status=details.get('nav_status')
             if status in messages:effect.update(navigation_status=status,message=messages[status])
+            if status=='incomplete':effect['status']='incomplete'
             handoff=details.get('manipulation_handoff')
             handoffs={
                 'travel_only':'Ground-point travel completed. Select the intended object in the updated RGB for local manipulation.',

@@ -1,8 +1,29 @@
-"""Adapt grouped cloth visuals to the pinned native cloth importer."""
+"""Adapt grouped cloth visuals and native cloth output to the pinned simulator."""
 from functools import wraps
+from contextlib import nullcontext
 import hashlib
 import json
 from pathlib import Path
+
+
+def install_usd_pose_output(sim):
+    """Publish tensor pose setters through the cloth scene's native USD route."""
+    original = sim.sync_physx_to_fabric
+    if getattr(original, '_mas_usd_pose_output', False):
+        return
+
+    @wraps(original)
+    def sync():
+        assert not sim.currently_stepping, 'Cannot refresh poses during a physics step'
+        if sim.is_playing():
+            with nullcontext() if sim._editing_usd else sim.editing_usd():
+                # Consume pending cloth/USD edits before reading physics back.
+                sim.psi.flush_changes()
+                sim.pi.update_transformations(False, True, True)
+        sim.fabric_hierarchy.update_world_xforms()
+
+    sync._mas_usd_pose_output = True
+    sim.sync_physx_to_fabric = sync
 
 
 def mesh_with_optional_normals(native, mesh_prim, include_normals=True, include_texcoord=True):
@@ -85,16 +106,26 @@ def install_nested_cloth_import(output):
                 def copy_prim(source, destination):
                     lazy.omni.kit.commands.execute('CopyPrim', path_from=source, path_to=str(destination))
                 with og.sim.editing_usd():
+                    # Isaac 5.1's PhysX Fabric output leaves legacy cloth points
+                    # stale (and can corrupt their GPU readback). Keep the
+                    # Fabric scene graph, but use native USD physics output in
+                    # scenes containing cloth. No geometry or physics changes.
+                    settings = lazy.carb.settings.get_settings()
+                    settings.set_bool('/physics/fabricEnabled', False)
+                    settings.set_bool('/physics/updateToUsd', True)
+                    settings.set_bool('/physics/updateParticlesToUsd', True)
                     record = prepare_nested_cloth_visual(entity._prim, copy_prim)
                 if record is not None:
                     with (Path(output) / 'cloth_imports.jsonl').open('a') as stream:
                         stream.write(json.dumps(record) + '\n')
+                install_usd_pose_output(og.sim)
             return original(entity)
 
         post_load._mas_nested_cloth_import = True
         module.EntityPrim._post_load = post_load
     return dict(status='configured', scope='nested_visual_cloth_import',
                 optional_normals='derive missing normals from native mesh geometry',
+                cloth_scene_output='native_usd; Fabric scene graph retained',
                 upstream_path=module.__file__,
                 upstream_sha256=hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest(),
                 task_predicates_changed=False)

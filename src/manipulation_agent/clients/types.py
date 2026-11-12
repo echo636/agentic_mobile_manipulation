@@ -45,6 +45,7 @@ class ClientConfig:
     model_provider_gateway: str | None = None
     mcp_tool_exposure: str = "client_default"
     codex_context: str = "client_default"
+    mcp_env_vars: tuple[str, ...] = ()
 
     def __post_init__(self):
         if self.client not in {"codex", "opencode", "kimi"}:

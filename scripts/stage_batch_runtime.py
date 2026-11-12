@@ -33,14 +33,27 @@ def build_bundle(config, worker):
     assert all(not i['dirty'] and i['identity_method'] == 'verified_source_freeze'
                for i in identities.values()), 'Only frozen, verified sources may be staged'
     assert identities['executor']['commit'] == config['source_commit']
+    files = {}
+    for label, path in sources.items():
+        # This is a small, known frozen release, not an asset/cache traversal.
+        for folder in ('src', 'scripts', 'skills', 'task_designs', 'web'):
+            for child in sorted((path / folder).rglob('*')):
+                if child.is_file() and '__pycache__' not in child.parts and child.suffix != '.pyc':
+                    assert not child.is_symlink(), 'Release must not reference external files'
+                    files[label + '/' + str(child.relative_to(path))] = child.read_bytes()
+        for name in ('source_freeze.json', 'pyproject.toml'):
+            files[label + '/' + name] = (path / name).read_bytes()
+    manifest = json.loads((Path(config['batch']) / 'manifest.json').read_text())
+    # Task-spec hashes in the manifest also pin their referenced scene inputs.
+    # Reuse identical deployments; a source or input change gets a new path.
+    revision = digest(json.dumps({'files': {name: digest(data) for name, data in files.items()},
+                                  'manifest': manifest}, sort_keys=True).encode())[:16]
     staging_root = worker.get('runtime_staging_root')
     destination = (Path(staging_root) if staging_root else
-                   Path(worker['simulator_tmpdir']).parents[2] / 'dispatch') / config['batch_tag']
+                   Path(worker['simulator_tmpdir']).parents[2] / 'dispatch') / (config['batch_tag'] + '-' + revision)
     source_target = destination / 'executor'
     scheduler_target = destination / ('scheduler' if 'scheduler' in sources else 'executor')
-    manifest = json.loads((Path(config['batch']) / 'manifest.json').read_text())
     manifest['source_path'] = str(source_target)
-    files = {}
     relocated = []
     for row in manifest['tasks']:
         spec_key = 'catalog_task_spec' if row.get('catalog_task_spec') else 'custom_task_spec'
@@ -68,15 +81,6 @@ def build_bundle(config, worker):
                           'runtime_spec_sha256': row[spec_key + '_sha256'],
                           'physical_instance_sha256': row.get('catalog_instance_sha256') or row.get('custom_instance_sha256')})
     files['manifest.json'] = (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode()
-    for label, path in sources.items():
-        # This is a small, known frozen release, not an asset/cache traversal.
-        for folder in ('src', 'scripts', 'skills', 'task_designs', 'web'):
-            for child in sorted((path / folder).rglob('*')):
-                if child.is_file() and '__pycache__' not in child.parts and child.suffix != '.pyc':
-                    assert not child.is_symlink(), 'Release must not reference external files'
-                    files[label + '/' + str(child.relative_to(path))] = child.read_bytes()
-        for name in ('source_freeze.json', 'pyproject.toml'):
-            files[label + '/' + name] = (path / name).read_bytes()
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode='w') as archive:
         for name, data in sorted(files.items()):

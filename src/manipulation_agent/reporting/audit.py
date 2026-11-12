@@ -23,6 +23,17 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         e.get('origin')=='supervisor' and e.get('name')=='finish' and
         e.get('kind') in {'tool_call','tool_result'})]
     model_events = [json.loads(s) for s in event_path(controller_dir).read_text().splitlines()]
+    # plan_task lives on the controller; it never issues a simulator call.
+    # Keep it in the public transcript, but align robot calls with robot records.
+    planner_calls = []
+    if controller.get('planning_subagent'):
+        def is_planner(event):
+            item = event.get('item', {})
+            return (item.get('type'), item.get('server'), item.get('tool')) == (
+                'mcp_tool_call', 'manipulation', 'plan_task')
+        planner_calls = [event['item'] for event in model_events
+                         if is_planner(event) and event.get('type') == 'item.completed']
+        model_events = [event for event in model_events if not is_planner(event)]
     sim_calls = [{'name': e['name'], 'arguments': e['arguments']} for e in model_sim_events if e['kind'] == 'tool_call']
     calls = []; unexpected = []; usage = {}; closed = False
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
@@ -83,11 +94,11 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         if 'goal_skill' in run.get('config',{}):
             checks['same_goal_skill_mode'] = run['config']['goal_skill'] == controller.get('goal_skill')
         profile = run.get('config', {}).get('agent_profile', 'workflow')
-        if profile in {'workflow','skills','skills_inline'}:
+        if profile in {'workflow','skills','skills_inline','basic-skills','goal-tree'}:
             manifest = run_dir / 'skill_manifest.json'
             checks['frozen_skill_manifest'] = manifest.exists() and bool(run.get('skill_bundle_sha256')) and (
                 json.loads(manifest.read_text()).get('bundle_sha256') == run.get('skill_bundle_sha256'))
-            if profile in {'skills','skills_inline'}:
+            if profile in {'skills','skills_inline','basic-skills','goal-tree'}:
                 checks['skills_profile_on_both_sides'] = controller.get('agent_profile') == profile
                 checks['no_plan_memory_tools_called'] = all(c['name'] in catalog for c in calls)
                 checks['recorded_summary_fields_valid_if_present'] = all(
@@ -108,7 +119,8 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
             'controller_exit': 'passed' if checks['real_controller_finished'] else 'failed',
             'supervisor_finish_calls': len(supervisor_calls),
             'task_success': run.get('task_success'), 'checks': checks, 'unexpected_items': unexpected,
-            'model_tool_calls': len(calls), 'usage': usage,
+            'model_tool_calls': len(calls) + len(planner_calls), 'robot_tool_calls': len(calls),
+            'planner_tool_calls': len(planner_calls), 'usage': usage,
             'rgb_evidence': rgb_evidence,
             'protocol': run.get('evaluation', {}).get('protocol'),
             'official_submission_eligible': False,

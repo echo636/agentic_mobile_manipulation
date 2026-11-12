@@ -26,6 +26,7 @@ def clipped_body_projection(points, low, high):
     from scipy.spatial import ConvexHull, QhullError
     if points[:,2].max()<low or points[:,2].min()>high:return None
     clipped=list(points[(points[:,2]>=low)&(points[:,2]<=high),:2])
+    if len(clipped)==len(points):return np.asarray(clipped)
     try:
         hull=ConvexHull(points)
         edges={tuple(sorted((int(a),int(b)))) for face in hull.simplices
@@ -67,6 +68,64 @@ def navigation_height_edges(height, payload_bounds=()):
     return sorted(set(edges))
 
 
+def classify_low_terrain(query, raw, support, origin, resolution, floor_z,
+                         low, high, fixed_roots, ignored, check, *, step_height=.04):
+    """Separate grounded low steps from obstacles in the base's lowest band.
+
+    The full upper column must be clear, and five downward probes must find
+    upward fixed support. Movable objects and articulated leaves remain
+    obstacles. This changes route geometry only; physical collisions remain.
+    """
+    import numpy as np
+    result = raw.copy()
+    if not fixed_roots or not low < step_height < high:
+        return result, 0
+    dirty = (raw == 0) & (support != 0)
+    upper = np.ones_like(raw)
+    rasterize_collision_cells(query, upper, dirty, origin, resolution,
+                              floor_z+step_height, floor_z+high, ignored, check)
+    half = resolution/2
+    admitted = 0
+    for row, col in zip(*np.nonzero(dirty & (upper != 0))):
+        check()
+        x, y = origin[0]+col*resolution, origin[1]+row*resolution
+        bodies = set()
+
+        def contacts(hit):
+            body = str(hit.rigid_body)
+            if body not in ignored:
+                bodies.add(body)
+            return True
+
+        query.overlap_box((half, half, (step_height-low)/2),
+                          (x, y, floor_z+(step_height+low)/2),
+                          (0., 0., 0., 1.), contacts, False)
+        if not bodies or not bodies <= fixed_roots:
+            continue
+        for dx, dy in ((0., 0.), (-half, -half), (-half, half),
+                       (half, -half), (half, half)):
+            hits = []
+
+            def supports(hit):
+                if str(hit.rigid_body) not in ignored:
+                    hits.append((float(hit.position[2]), float(hit.normal[2]),
+                                 str(hit.rigid_body)))
+                return True
+
+            query.raycast_all((x+dx, y+dy, floor_z+step_height+.001),
+                              (0., 0., -1.), step_height+.021, supports)
+            if not hits:
+                break
+            height, normal, body = max(hits)
+            if (body not in fixed_roots or normal <= 0. or
+                    not floor_z-.02 <= height <= floor_z+step_height):
+                break
+        else:
+            result[row, col] = 1
+            admitted += 1
+    return result, admitted
+
+
 def floor_support_window(raw, original_resolution, resolution, window):
     """Resample floor support in a bounded world window, preserving its origin.
 
@@ -101,88 +160,49 @@ def floor_support_window(raw, original_resolution, resolution, window):
 
 
 def repair_floor_support(raw, origin, resolution, floor_z, floor_links, query, check):
-    """Validate and recover structural ground independently of movable obstacles.
+    """Resolve floor support from current structural floor collisions.
 
-    A closed door can be the nearest ray hit above a valid floor. Cache the
-    underlying support; height-layer occupancy still checks the door on every
-    changed scene. Require support at the cell centre and all four corners.
-    Near-level outdoor ground may be up to 3 cm below the floor datum; upward
-    tolerance remains 2 cm. This does not authorize stairs or change body
-    collision checks.
+    The asset's no-object traversal image can still seal an open doorway.
+    Neither image color proves physical support. Admit a cell only when its
+    centre and corners hit upward-facing structural floor at this elevation.
+    This supplies support only; ordinary height-layer queries still check all
+    walls, doors and furniture before any robot pose or motion is admitted.
     """
     import numpy as np
     support = np.zeros_like(raw)
-    details = {'method': 'structural_ground_verified_v3',
-               'added_cells': 0, 'removed_cells': 0, 'ray_queries': 0, 'all_hit_queries': 0,
-               'source_validation': 'all_cells_native_ground',
-               'max_ground_drop_m': .03, 'max_ground_rise_m': .02}
+    details = {'method': 'structural_floor_rays_for_all_cells',
+               'added_cells': 0, 'removed_cells': 0, 'ray_queries': 0}
     if not floor_links:
-        details['source_validation'] = 'traversal_only_no_ground_geometry'
-        return raw.copy(), details
-
-    def eligible(body, position, normal):
-        return (str(body) in floor_links and normal[2] >= .98
-                and -.03 <= float(position[2])-floor_z <= .02)
-
-    def supported(x, y):
-        origin = (float(x), float(y), floor_z+.025)
-        hit = query.raycast_closest(origin, (0., 0., -1.), .055)
-        details['ray_queries'] += 1
-        if not hit.get('hit'):
-            return False
-        if eligible(hit.get('rigidBody'), hit['position'], hit['normal']):
-            return True
-        # A first hit on a door/furniture must not permanently erase its floor.
-        # APIs without all-hit queries retain the conservative rejection.
-        raycast_all = getattr(query, 'raycast_all', None)
-        if raycast_all is None:
-            return False
-        found = False
-        query_error = None
-        def collect(candidate):
-            nonlocal found, query_error
-            try:
-                found = found or eligible(candidate.rigid_body, candidate.position, candidate.normal)
-                return not found
-            except Exception as exc:
-                query_error = exc
-                return False
-        details['ray_queries'] += 1
-        details['all_hit_queries'] += 1
-        raycast_all(origin, (0., 0., -1.), .055, collect)
-        if query_error is not None:
-            raise RuntimeError('PhysX ground-support callback failed') from query_error
-        return found
-
-    # The source's white pixels can include an empty pool or other void.
-    # Validate them too. Adjacent cells share corners; retain only two rows
-    # of cached corner queries instead of issuing each shared ray four times.
-    height, width = raw.shape
+        raise ValueError('Navigation requires loaded structural floor collision geometry')
     half = resolution/2
-    lower = np.full(width+1, -1, dtype='int8')
-    for row in range(height):
-        upper = np.full(width+1, -1, dtype='int8')
-        y = origin[1]+row*resolution
-        for col in range(width):
-            if (row*width+col) % 256 == 0:
-                check()
-            x = origin[0]+col*resolution
-            if not supported(x, y):
-                continue
-            valid = True
-            for corners, cy in ((lower, y-half), (upper, y+half)):
-                for index in (col, col+1):
-                    if corners[index] < 0:
-                        corners[index] = int(supported(origin[0]+(index-.5)*resolution, cy))
-                    if not corners[index]:
-                        valid = False
-                        break
-                if not valid:
-                    break
-            support[row, col] = int(valid)
-        lower = upper
-    details['added_cells'] = int(np.count_nonzero((support != 0) & (raw == 0)))
-    details['removed_cells'] = int(np.count_nonzero((support == 0) & (raw != 0)))
+    offsets = ((0., 0.), (-half, -half), (-half, half),
+               (half, -half), (half, half))
+    for index, (row, col) in enumerate(np.ndindex(raw.shape)):
+        if index % 256 == 0:
+            check()
+        x, y = origin[0]+col*resolution, origin[1]+row*resolution
+        for dx, dy in offsets:
+            supported = False
+
+            def hit_floor(hit):
+                nonlocal supported
+                if (str(hit.rigid_body) in floor_links and hit.normal[2] >= .98
+                        and abs(hit.position[2]-floor_z) <= .02):
+                    supported = True
+                    return False
+                return True
+
+            # Low furniture or robot geometry may precede the floor hit.
+            # They affect occupancy, not whether structural support exists.
+            query.raycast_all((float(x+dx), float(y+dy), floor_z+.025),
+                              (0., 0., -1.), .05, hit_floor)
+            details['ray_queries'] += 1
+            if not supported:
+                break
+        else:
+            support[row, col] = 1
+    details['added_cells'] = int(np.count_nonzero((raw == 0) & (support != 0)))
+    details['removed_cells'] = int(np.count_nonzero((raw != 0) & (support == 0)))
     return support, details
 
 
@@ -294,7 +314,9 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         object_hulls=0
         for link in obj.links.values():
             if link.is_meta_link:continue
-            points=link.collision_boundary_points_world
+            # Cloth supplies its deformed particle positions, not rigid meshes.
+            points=(link.compute_particle_positions() if hasattr(link,'compute_particle_positions')
+                    else link.collision_boundary_points_world)
             if points is not None:
                 vertices=points.cpu().numpy()
                 if obj in prospective_carry:vertices=vertices+np.array([0.,0.,.18])
@@ -323,10 +345,12 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         if group:
             # Carry clearance uses the payload's actual Z extent. A plate
             # lifted above a counter must not inherit the counter's entire
-            # 0.8--1.25 m occupancy slab. Quantization is outward, not inward.
+            # 0.8--1.25 m occupancy slab. Keep the 2 mm clearance reserve;
+            # centimetre rounding can falsely merge a raised load with its
+            # lower support. Millimetre rounding still encloses the geometry.
             vertices=[p for g,p in bodies if g==group]
-            low=max(.03,math.floor((min(float(p[:,2].min()) for p in vertices)-floor_z-.002)*100)/100)
-            high=math.ceil((max(float(p[:,2].max()) for p in vertices)-floor_z+.002)*100)/100
+            low=max(.03,math.floor((min(float(p[:,2].min()) for p in vertices)-floor_z-.002)*1000)/1000)
+            high=math.ceil((max(float(p[:,2].max()) for p in vertices)-floor_z+.002)*1000)/1000
             body_edges=[low,*[round(low+.1*i,8) for i in range(1,math.ceil((high-low)/.1))],high]
         for lo,hi in zip(body_edges,body_edges[1:]):
             # Keep disjoint robot / payload bodies disjoint. A convex hull across
@@ -360,7 +384,7 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
             raw=cv2.imread(str(source),cv2.IMREAD_GRAYSCALE)
             raw=(cv2.resize(raw,(w,h))==255).astype('uint8')
             floor_links={str(link.prim_path) for obj in scene.objects
-                         if getattr(obj,'category',None) in {'floor','floors','driveway','lawn'}
+                         if getattr(obj,'category',None) in {'floor','floors'}
                          for link in obj.links.values() if not link.is_meta_link}
             raw,support_details=repair_floor_support(raw,(-w*original_resolution/2,-h*original_resolution/2),
                 original_resolution,floor_z,floor_links,lazy.omni.physx.get_physx_scene_query_interface(),
@@ -459,6 +483,19 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
     free=np.stack(raw_bands);count=int(updated.sum())
     cached.update(objects=current,height=height,bands=bands,free=free)
     collision_raw=[free[index] for index in band_indices]
+    terrain_cells = 0
+    # Hypothetical articulated occupancy must remain authoritative. Apply
+    # terrain classification only to actual scene queries and robot bands;
+    # a carried object retains its ordinary collision columns.
+    if not projected:
+        fixed_roots = {str(obj.root_link.prim_path) for obj in scene.objects
+                       if getattr(obj, 'fixed_base', False)}
+        for index, (lo, hi, _, group) in enumerate(layers):
+            if group == 0 and lo < .04 < hi:
+                collision_raw[index], admitted = classify_low_terrain(
+                    query, collision_raw[index], support, origin, resolution,
+                    floor_z, lo, hi, fixed_roots, ignored_links, check)
+                terrain_cells += admitted
     navigable=support.copy();overlap=np.zeros_like(support,dtype='float32')
     for raw,(_,_,footprint,_) in zip(collision_raw,layers):
         k=footprint_kernel(footprint,resolution)
@@ -482,9 +519,12 @@ def build_navigation_grid(backend, floor, *, prospective_carry=(), robot_only=Fa
         'footprint':'current_yaw_height_matched_collision_hulls',
         'forward_clearance_reserve':'half_cell_translation_and_outward_quantized_yaw_sweep',
         'height_band_policy':'disjoint_payload_actual_height_v2',
+        'fixed_low_terrain_cells':terrain_cells,
+        'fixed_low_terrain_max_height_m':.04,
         'payload_height_bounds_m':payload_bounds,
         'height_edges_m':edges,
         'collision_layers':[{'z_min':lo,'z_max':hi,'footprint':p.tolist(),'body_group':group} for lo,hi,p,group in layers],
+        'collision_group_objects':[str(obj.prim_path) for obj in moving_objects],
         'disjoint_payload_footprints':True,
         'hypothetical_projected_links':list(projected),
         'occupancy_height_bands':len(bands),

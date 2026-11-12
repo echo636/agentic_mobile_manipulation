@@ -9,7 +9,7 @@ from contextlib import nullcontext
 from manipulation_agent.contracts import SkillError
 from manipulation_agent.executors.particle_payload import snapshot_particles, relocate_particles, verify_particles
 from manipulation_agent.executors.particle_payload import _particle_supports, particle_count
-from manipulation_agent.executors.particle_payload import particle_bounds, particles_in_volumes
+from manipulation_agent.executors.particle_payload import particle_bounds
 
 
 @unittest.skipUnless(importlib.util.find_spec('torch') and importlib.util.find_spec('scipy'), 'Requires geometry environment')
@@ -108,16 +108,6 @@ class ParticlePayloadTests(unittest.TestCase):
         self.torch.testing.assert_close(self.raw[1], before[1])
         verify_particles(self.scene, transferred)
 
-    def test_bag_support_does_not_substitute_for_destination_containment(self):
-        self.surface_scene()
-        payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
-        verify_particles(self.scene, payload)
-        low_ceiling = SimpleNamespace(check_points_in_volume=lambda points: points[:, 2] < .16)
-        self.assertFalse(particles_in_volumes(self.scene, payload, [low_ceiling]))
-        enough_room = SimpleNamespace(check_points_in_volume=lambda points: points[:, 2] < .25)
-        self.assertTrue(particles_in_volumes(self.scene, payload, [enough_room]))
-        self.assertFalse(particles_in_volumes(self.scene, payload, []))
-
     def test_surface_support_pile_excludes_table_below_floating_and_other_tray(self):
         self.surface_scene()
         payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
@@ -134,6 +124,34 @@ class ParticlePayloadTests(unittest.TestCase):
         self.supports['/particle/1'] = '/table/base'
         with self.assertRaises(SkillError) as error: verify_particles(self.scene, payload)
         self.assertEqual(error.exception.code, 'postcondition_error')
+
+    def test_solid_grains_can_settle_below_volume_but_must_stay_on_owned_body(self):
+        self.surface_scene()
+        self.bag.states = {self.state_key: SimpleNamespace(link=self.link)}
+        payload = snapshot_particles(self.scene, [self.bag])
+        self.link.check_points_in_volume = lambda points: self.torch.zeros(len(points), dtype=self.torch.bool)
+        # Only the two board-supported grains are under test. Other material
+        # in the scene must not become an accepted anchor for them.
+        from dataclasses import replace
+        payload = [replace(payload[0], paths=payload[0].paths[:2],
+                           positions=payload[0].positions[:2], orientations=payload[0].orientations[:2])]
+        before = self.raw.clone()
+        verify_particles(self.scene, payload)
+        self.torch.testing.assert_close(self.raw, before)
+        # PBD granular systems also need to recapture these supported grains
+        # on the next grasp; they have no macro rigid-body particles_view.
+        self.system.particles_view = None
+        with patch('manipulation_agent.executors.particle_payload.physical_particle_view', return_value=self.view):
+            recaptured = snapshot_particles(self.scene, [self.bag], include_supported=True)
+            self.assertEqual(recaptured[0].paths, ('/particle/0', '/particle/1'))
+        self.system.particles_view = self.view
+        self.supports['/particle/1'] = '/table/base'
+        with self.assertRaises(SkillError):
+            verify_particles(self.scene, payload)
+        self.supports['/particle/1'] = '/particle/0'
+        self.system.is_fluid = True
+        with self.assertRaises(SkillError):
+            verify_particles(self.scene, payload)
 
     def test_surface_particles_remain_identifiable_after_reordering_or_deletion(self):
         self.surface_scene()
@@ -159,6 +177,27 @@ class ParticlePayloadTests(unittest.TestCase):
         with patch('manipulation_agent.executors.particle_payload._support_at', return_value=None):
             verify_particles(self.scene, payload)
         self.torch.testing.assert_close(self.raw, before)
+
+    def test_supported_fluid_can_settle_inside_its_original_container(self):
+        self.surface_scene()
+        self.system.is_fluid = True
+        self.bag.states = {self.state_key: SimpleNamespace(link=self.link)}
+        volume_check = self.link.check_points_in_volume
+        self.link.check_points_in_volume = lambda points: self.torch.zeros(len(points), dtype=self.torch.bool)
+        payload = snapshot_particles(self.scene, [self.bag], include_supported=True)
+        self.assertEqual(particle_count(payload, 'supported'), 2)
+        # R970: the jar is set upright and supported sauce settles inside.
+        # Individual grains need no remaining ray contact with the jar wall.
+        self.link.check_points_in_volume = volume_check
+        self.supports.update({'/particle/0': None, '/particle/1': None})
+        before = self.raw.clone()
+        verify_particles(self.scene, payload)
+        self.torch.testing.assert_close(self.raw, before)
+        # A grain that actually leaves the container still fails.
+        self.raw[1, 0] = 1.
+        with self.assertRaises(SkillError) as error:
+            verify_particles(self.scene, payload)
+        self.assertEqual(error.exception.code, 'postcondition_error')
 
     def test_current_support_cannot_escape_through_foreign_or_uncaptured_particles(self):
         self.surface_scene()

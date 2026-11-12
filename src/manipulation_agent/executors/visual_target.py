@@ -37,7 +37,7 @@ class LockedTarget:
         local = rotate(tuple(v-float(p) for v,p in zip(world,pos)),quat,inverse=True)
         return cls(obj,anchor,local,world,dict(grounding))
 
-    def resolve(self,objects,max_drift):
+    def resolve(self,objects):
         if not any(o is self.obj for o in objects):
             raise SkillError('target_changed','Bound target is no longer in this scene')
         if self.anchor is not self.obj and not any(link is self.anchor for link in self.obj.links.values()):
@@ -49,8 +49,8 @@ class LockedTarget:
         except SkillError:raise
         except Exception as exc:
             raise SkillError('target_changed','Cannot resolve the bound surface') from exc
-        if not all(math.isfinite(v) for v in point) or math.dist(point,self.initial_point)>max_drift:
-            raise SkillError('target_changed','Selected surface moved outside tracking tolerance')
+        if not all(math.isfinite(v) for v in point):
+            raise SkillError('target_changed','Selected surface has invalid coordinates')
         return self.obj,point
 
     def describe(self):

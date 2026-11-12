@@ -51,6 +51,7 @@ class ClientAdapterTests(unittest.TestCase):
             configs = [argv[i+1] for i, v in enumerate(argv[:-1]) if v == '-c']
             self.assertIn('mcp_servers.manipulation.enabled_tools=["initialize", "finish"]', configs)
             self.assertIn('mcp_servers.manipulation.required=true', configs)
+            self.assertIn('features.code_mode.direct_only_tool_namespaces=["mcp__manipulation"]', configs)
             self.assertIn('mcp_servers.manipulation.tool_timeout_sec=1020', configs)
             for tool in ['shell_tool', 'view_image', 'multi_agent', 'plugins']:
                 self.assertIn(tool, argv)
@@ -387,6 +388,15 @@ wire_api = "responses"
             result=run_process(PreparedProject([sys.executable,'-c','raise SystemExit(7)'],None,None),Path(folder),3)
         self.assertEqual(result.returncode,7)
         self.assertFalse(result.timed_out)
+
+    def test_long_prompt_reaches_a_client_that_starts_reading_late(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder)
+            code = 'import sys,time; time.sleep(.25); print(len(sys.stdin.read()))'
+            result = run_process(PreparedProject([sys.executable, '-S', '-c', code],
+                None, 'x' * 200000), output, 3)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual((output / 'model_events.jsonl').read_text().strip(), '200000')
 
     def test_successful_finish_receipt_reaps_lingering_client_without_task_timeout(self):
         event={'type':'item.completed','item':{'type':'mcp_tool_call','server':'manipulation',

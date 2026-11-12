@@ -61,7 +61,7 @@ def prepare(release_path, asset_manifest_path, output, tag):
                   source_commit=release['source_commit'], readiness_release=str(release_path.resolve()),
                   readiness_manifest_sha256=sha256(release_path), readiness_validation=gate,
                   model='gpt-6.1-sol', model_reasoning_effort='low', agent_profile='skills',
-                  goal_skill=None, require_task_notes=True, model_timeout_seconds=None,
+                  goal_skill=None, model_timeout_seconds=None,
                   episode_budget_policy='agent_steps', max_agent_steps=budget,
                   max_actions=budget, max_sim_steps=1000000, startup_timeout_seconds=1200,
                   simulator_runtime_max_seconds=None, policy_retries=0,

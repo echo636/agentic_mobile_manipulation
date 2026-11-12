@@ -39,12 +39,27 @@ class RGBBoundary(unittest.TestCase):
     def test_success_effect_does_not_leak_grounding(self):
         r=self.act()
         self.assertTrue(r['ok']);self.assertNotIn('private_object',json.dumps(r));self.assertNotIn('private_pose',json.dumps(r))
+    def test_partial_open_reports_unoperated_panels_without_private_geometry(self):
+        for partial in (False, True):
+            self.backend.execute_visual=lambda *a,**kw:{
+                'other_panels_not_operated':partial,
+                'selected_link':'PRIVATE_OBJECT_NAME', 'goal_joints':[1.047]}
+            result=self.act('open')
+            self.assertTrue(result['ok'])
+            self.assertEqual('opening' in result['effect'],partial)
+            if partial:
+                self.assertEqual(result['effect']['opening']['other_panels_not_operated'], partial)
+                self.assertEqual('Other doors or drawers were not operated' in result['effect']['opening']['message'], partial)
+            self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
+            self.assertNotIn('goal_joints',json.dumps(result))
     def test_action_failure_categories_survive_the_public_boundary(self):
         from manipulation_agent.contracts import SkillError
         for code, phrase in [('same_transfer_vessel','same object'),
                              ('invalid_transfer_destination','receiving object'),
                              ('material_dispenser_off','switched off'),
                              ('material_source_empty','No transferable contents'),
+                             ('cutting_tool_required','held object cannot cut'),
+                             ('cut_target_unsupported','target cannot be sliced or diced'),
                              ('placement_surface_unavailable','visible top surface')]:
             def fail(*args, **kwargs):
                 raise SkillError(code, 'PRIVATE_OBJECT_NAME / private geometry and diagnostics')
@@ -56,15 +71,75 @@ class RGBBoundary(unittest.TestCase):
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('private geometry',json.dumps(result))
     def test_transfer_reports_partial_source_without_private_material_identity(self):
-        for remaining, expected in ((0,False),(12,True),(None,None)):
+        for remaining, expected, receiver in ((0,False,'container'),(12,True,'surface'),
+                                               (None,None,None),(0,False,'PRIVATE_OBJECT_NAME')):
             self.backend.execute_visual=lambda *a,**kw:{'materials':[{
                 'material':'PRIVATE_MATERIAL_SYSTEM','moved_particles':512,
-                'source_remaining_particles':remaining}], 'source_has_more_material':expected, 'private_pose':[1,2,3]}
+                'source_remaining_particles':remaining}], 'source_has_more_material':expected,
+                'receiver_kind':receiver, 'private_pose':[1,2,3]}
             result=self.act('pour')
             self.assertIs(result['effect']['transfer']['source_has_more_material'],expected)
             self.assertTrue(result['effect']['transfer']['held_object_retained'])
+            if receiver in {'container','surface'}:
+                self.assertEqual(result['effect']['transfer']['receiver_kind'],receiver)
+                self.assertIn('selected '+receiver,result['effect']['transfer']['message'])
+            else:
+                self.assertNotIn('receiver_kind',result['effect']['transfer'])
+            self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('PRIVATE_MATERIAL_SYSTEM',json.dumps(result))
             self.assertNotIn('moved_particles',json.dumps(result))
+        self.backend.execute_visual=lambda *a,**kw:{'materials':[
+            {'material':'PRIVATE_FOOD_A','moved_particles':16,'retained_particles':16},
+            {'material':'PRIVATE_FOOD_B','moved_particles':1,'retained_particles':0}]}
+        partial=self.act('scoop')
+        self.assertTrue(partial['ok'])
+        self.assertTrue(partial['effect']['transfer']['some_material_not_retained'])
+        self.assertIn('partial',partial['effect']['transfer']['message'])
+        self.assertNotIn('PRIVATE_FOOD',json.dumps(partial))
+        self.backend.execute_visual=lambda *a,**kw:{'materials':[
+            {'material':'PRIVATE_FOOD_A','moved_particles':16,'retained_particles':16}],
+            'source_has_more_material':True, 'some_material_not_transferred':True}
+        partial=self.act('scoop')['effect']['transfer']
+        self.assertTrue(partial['some_material_not_transferred'])
+        self.assertNotIn('some_material_not_retained',partial)
+        self.assertIn('could not be transferred',partial['message'])
+        self.assertNotIn('PRIVATE_FOOD',json.dumps(partial))
+    def test_unsupported_object_action_is_distinct_from_other_preconditions(self):
+        from manipulation_agent.contracts import SkillError
+        for stage in ('unsupported_object_action', None, 'PRIVATE_STAGE'):
+            def fail(*args, **kwargs):
+                raise SkillError('pre_condition_error', 'PRIVATE_OBJECT_NAME has no Open state', stage=stage)
+            self.backend.execute_visual = fail
+            result = self.act('open')
+            self.assertEqual(result['error']['code'], 'pre_condition_error')
+            self.assertEqual('does not support' in result['error']['message'], stage == 'unsupported_object_action')
+            self.assertFalse(result['error']['world_may_have_changed'])
+            self.assertNotIn('PRIVATE_', json.dumps(result))
+    def test_supported_placement_failure_keeps_the_release_result_without_private_state(self):
+        from manipulation_agent.contracts import SkillError
+        for stage in ('released_supported_not_adjacent', 'released_supported_payload_unconfirmed',
+                      'released_inside_payload_unconfirmed', 'released_placement_unconfirmed', 'PRIVATE_STAGE'):
+            def fail(*args, **kwargs):
+                raise SkillError('postcondition_error', 'PRIVATE_OBJECT_NAME hidden geometry',
+                                 changed=True, stage=stage)
+            self.backend.execute_visual = fail
+            result = self.act('place_inside' if stage == 'released_inside_payload_unconfirmed' else 'place_next_to')
+            self.assertFalse(result['ok'])
+            self.assertTrue(result['error']['world_may_have_changed'])
+            if stage == 'released_placement_unconfirmed':
+                self.assertIn('your hand is empty', result['error']['message'])
+                self.assertNotIn('remains on', result['error']['message'])
+                self.assertNotIn('remains inside', result['error']['message'])
+                self.assertEqual(result['error']['stage'], stage)
+            elif stage != 'PRIVATE_STAGE':
+                relation = ('inside the selected container' if stage == 'released_inside_payload_unconfirmed'
+                            else 'on the receiving surface')
+                self.assertIn('remains ' + relation, result['error']['message'])
+                self.assertEqual(result['error']['stage'], stage)
+                self.assertIn('Your hand is empty', result['error']['message'])
+            else:
+                self.assertNotIn('stage', result['error'])
+            self.assertNotIn('PRIVATE_', json.dumps(result))
     def test_cut_reports_actual_transformation_without_private_identity(self):
         for transition, count, expected in (
                 ('SlicingRule',2,{'result':'sliced','pieces_created':2}),
@@ -80,11 +155,12 @@ class RGBBoundary(unittest.TestCase):
             for private in ('PRIVATE_OBJECT_NAME','PRIVATE_MATERIAL_SYSTEM','goal_satisfied','transition'):
                 self.assertNotIn(private,json.dumps(result))
     def test_navigation_partial_approach_is_public_but_geometry_stays_private(self):
-        for status in ('reached','approached','already_at_closest_approach'):
+        for status in ('reached','approached','already_at_closest_approach','incomplete'):
             self.backend.execute_visual=lambda *a,**kw:{'nav_status':status,'private_pose':[1,2,3],
                 'target_projection_distance_m':2.5,'private_object':'hidden'}
             result=self.act('navigate_to')
             self.assertEqual(result['effect']['navigation_status'],status)
+            if status=='incomplete':self.assertEqual(result['effect']['status'],'incomplete')
             self.assertNotIn('private_pose',json.dumps(result))
             self.assertNotIn('target_projection_distance_m',json.dumps(result))
             self.assertNotIn('hidden',json.dumps(result))

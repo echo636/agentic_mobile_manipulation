@@ -1,6 +1,34 @@
 """Resolve articulated contents to the physical support that moves them."""
 
 
+def closed_container(obj, objects, *, exclude=()):
+    """Find a closed parent whose geometry actually covers the target.
+
+    Inside alone also includes exposed sink contents in an overlapping cabinet
+    volume. A single downward ray distinguishes that open top from a lid or
+    shelf. This is a read-only enclosure check, not an extraction planner.
+    """
+    from omnigibson.object_states import Inside, Open
+
+    if Inside not in obj.states:
+        return None
+    for parent in objects:
+        if (parent is obj or any(parent is item for item in exclude)
+                or Open not in getattr(parent, 'states', {})
+                or parent.states[Open].get_value() or not obj.states[Inside].get_value(parent)):
+            continue
+        from omnigibson.utils.sampling_utils import raytest
+        low, high = obj.aabb
+        center = (low + high) / 2
+        above = center.clone()
+        above[2] = max(float(high[2]), float(parent.aabb[1][2])) + .01
+        bodies = {str(link.prim_path) for link in parent.links.values() if not link.is_meta_link}
+        if any(hit['rigidBody'] in bodies
+               for hit in raytest(above, center, only_closest=False)):
+            return parent
+    return None
+
+
 def contacting_support(backend, child, objects):
     """Return one unambiguous upward support, using contacts and lower rays.
 
@@ -9,14 +37,13 @@ def contacting_support(backend, child, objects):
     Ambiguous or absent physical support leaves the caller's volume fallback.
     """
     from omnigibson.utils.sampling_utils import raytest
-    from omnigibson.utils.usd_utils import RigidContactAPI
+    from .placement_contacts import assembly_contact_pairs
     from .surface_geometry import bottom_support_points
 
     candidates = {str(link.prim_path): (obj, link) for obj in objects if obj is not child
                   for link in obj.links.values() if not link.is_meta_link}
     own = {str(link.prim_path) for link in child.links.values()}
-    pairs = RigidContactAPI.get_contact_pairs(child.scene.idx, query_set=[child],
-                                              with_set=None, current_only=True)
+    pairs = assembly_contact_pairs(child)
     contacts = {str(b) if str(a) in own else str(a) for a, b in pairs
                 if str(a) in own or str(b) in own}
     if not contacts.intersection(candidates):

@@ -1,5 +1,6 @@
 """Offline interpretation of explicit working notes, never generated model reasoning."""
 import json
+from ..agent.task_notes import merge_goal_update
 
 
 def goal_state(notes):
@@ -29,12 +30,17 @@ def goal_state(notes):
 def planning_metrics(steps):
     actions = [s for s in steps if s['is_motor_action']]
     writes = [s for s in steps if s['tool'] == 'task_notes' and
-              s['arguments'].get('operation') == 'write' and s['status'] == 'passed']
+              s['arguments'].get('operation') in {'write', 'update'} and s['status'] == 'passed']
+    selections = [s for s in steps if s['tool'] == 'task_notes' and
+                  s['arguments'].get('operation') == 'select' and s['status'] == 'passed']
     reads = [s for s in steps if s['tool'] == 'read_skill' and s['status'] == 'passed' and
              s['arguments'].get('name') == 'goal-decomposition']
     trees = [s for s in writes if s.get('goal_state') is not None]
     first = actions[0]['index'] if actions else None
-    return {'notes_writes': len(writes), 'goal_tree_versions': len(trees),
+    operation_selections = sum(bool(s.get('goal_state', {}).get('active', {}).get('operation_id'))
+                               for s in selections)
+    return {'notes_writes': len(writes), 'method_selections': len(selections)-operation_selections,
+            'operation_selections': operation_selections, 'goal_tree_versions': len(trees),
             'notes_before_first_action': any(s['index'] < first for s in writes) if first else None,
             'goal_tree_before_first_action': any(s['index'] < first for s in trees) if first else None,
             'goal_skill_read_before_first_action': any(s['index'] < first for s in reads) if first else None,
@@ -51,16 +57,19 @@ def goal_replacement_review(events):
                if e.get('kind') == 'tool_result' and e.get('name') == 'task_notes'
                and e.get('request_id') is not None}
     previous = {}
+    content = ''
     transitions = []
     for event in events:
         args = event.get('arguments') or {}
         if (event.get('kind') != 'tool_call' or event.get('name') != 'task_notes'
-                or args.get('operation') != 'write'):
+                or args.get('operation') not in {'write', 'update'}):
             continue
         reply = results.get(event.get('request_id'), {})
         if reply.get('ok') is not True:
             continue
-        tree = goal_state(args)
+        content = (merge_goal_update(content, args['content']) if args['operation'] == 'update'
+                   else args['content'])
+        tree = goal_state({'content': content})
         if tree is None or tree.get('format') != 'goal-tree-v2':
             previous = {}
             transitions.append({'call_id': event['id'], 'comparison': 'unrecognized_notes_format'})

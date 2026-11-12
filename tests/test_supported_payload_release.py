@@ -1,4 +1,4 @@
-"""Safe release of a supported child must not relax containment or stability."""
+"""Attachment payload checks; ordinary placement has no payload retention gate."""
 import types
 import numpy as np
 import unittest
@@ -32,27 +32,25 @@ class SupportedPayloadRelease(unittest.TestCase):
             self.states.OnTop: types.SimpleNamespace(get_value=lambda other: other is self.target and self.supported),
             self.states.Touching: types.SimpleNamespace(get_value=lambda other: other is self.target and self.touching)}
 
-    def verify(self, kind='OnTop', *, stable=True, target=True):
-        return self.backend._verify_payload([(self.child,self.parent,kind)],
-            support_target=self.target if target else None,
-            support_resting={id(self.child): {'stable':stable}})
+    def verify(self, kind='OnTop'):
+        return self.backend._verify_payload([(self.child,self.parent,kind)])
 
-    def test_stable_child_can_rest_on_the_same_selected_surface(self):
-        self.verify()
-        self.assertEqual(self.records[0]['status'],'payload_support_transferred')
-
-    def test_contained_child_must_remain_inside_its_original_container(self):
+    def test_contained_child_cannot_transfer_to_the_placement_surface(self):
         with self.assertRaises(SkillError):self.verify('Inside')
         self.assertEqual(self.records[-1]['status'],'payload_relation_failed')
 
-    def test_falling_or_unsupported_child_still_rejects_placement(self):
-        for stable,supported,touching in ((False,True,True),(True,False,True),(True,True,False)):
-            with self.subTest(stable=stable,supported=supported,touching=touching):
-                self.supported,self.touching=supported,touching
-                with self.assertRaises(SkillError):self.verify(stable=stable)
+    def test_contained_child_can_settle_on_its_original_tray(self):
+        self.child.states[self.states.OnTop].get_value = lambda other: other is self.parent
+        self.verify('Inside')
+        self.assertEqual(self.records[0]['status'], 'payload_support_preserved')
 
-    def test_other_operations_preserve_the_original_support_requirement(self):
-        with self.assertRaises(SkillError):self.verify(target=False)
+    def test_contained_child_without_carrier_support_still_fails(self):
+        self.child.states[self.states.OnTop].get_value = lambda other: False
+        with self.assertRaises(SkillError):self.verify('Inside')
+        self.assertEqual(self.records[-1]['status'], 'payload_relation_failed')
+
+    def test_attachment_preserves_the_original_support_requirement(self):
+        with self.assertRaises(SkillError):self.verify()
 
 
 if __name__=='__main__':unittest.main()

@@ -4,7 +4,23 @@ import math
 
 from .gt_navigation import NavigationError, PlanningBudget, plan_navigation
 from .heading_collision import HeadingCollisionChecker
-from .forward_navigation import local_exit_certificate, select_forward_route, route_from_poses
+from .forward_navigation import local_exit_certificate, select_forward_route
+
+
+def approach_sampling(collision, actual, point, reach_m, check_cancelled):
+    """Choose the local map once, before stance or route search.
+
+    The coarse guide preserves detours; native queries supply the fine geometry.
+    Target 1.25 cm cells, with the existing 250,000-cell limit for large windows.
+    """
+    window = approach_refinement_window(collision, actual, point, reach_m, check_cancelled)
+    width, height = (window[i+2]-window[i] for i in (0, 1))
+    # ceil(end/r) - floor(start/r) + 1 is strictly below span/r + 3.
+    # Include both fractional alignment margins and the inclusive last cell.
+    span = width + height
+    fitting = (3*span + math.sqrt(9*span*span + 4*249991*width*height)) / (2*249991)
+    return {'resolution': max(min(.0125, collision.grid.resolution), fitting*(1+1e-9)),
+            'window': window}
 
 
 def approach_refinement_window(collision, actual, point, reach_m, check_cancelled):
@@ -118,38 +134,58 @@ def detour_sampling(grid, actual, goal):
         previous = resolution
 
 
+def continued_navigation_sampling(grid, actual, goal, previous):
+    """Keep a certified local map's precision when navigating within its area.
+
+    Only the sampling resolution is retained. The caller rebuilds collision
+    geometry, so moved objects and doors are still included in the new query.
+    """
+    if not previous or previous['resolution'] >= grid.resolution:
+        return None
+    window = previous.get('window')
+    if window is None or any(not window[i] <= xy[i] <= window[i+2]
+                             for xy in (actual, goal) for i in (0, 1)):
+        return None
+    selected = None
+    for sampling in detour_sampling(grid, actual, goal):
+        selected = sampling
+        if sampling['resolution'] <= previous['resolution'] + 1e-6:
+            break
+    return selected
+
+
 def refine_navigation_detour(backend, floor, grid, map_details, actual,
                              options, plan, route, collision, selection, *, project_point=False):
-    """Improve a detour or a partial floor projection with finer native geometry.
+    """Refine a detour or a route that falls short of an admitted floor target.
 
     Refinement is optional: the old geometry and certified route survive any
-    bounded planning failure. Object approaches preserve endpoint identity and
-    visibility; floor clicks may reach a strictly closer certified endpoint.
-    Both retain full entry/exit and swept body/payload checks.
+    bounded planning failure. Endpoint identity, visibility, entry/exit and
+    swept body/payload checks retain their normal semantics.
     """
-    # A short route can be a coarse-map dead end, not a successful approach.
-    # Only floor clicks permit reprojecting the endpoint; object stances retain
-    # their previously admitted identity and visibility constraints.
-    partial = (project_point and route is not None and
-               math.dist(plan.goal, plan.target) > max(.1, 2*grid.resolution))
-    direct = math.dist(actual[:2], plan.goal)
+    closest = min(options, key=lambda candidate: candidate.score)
+    tolerance = grid.resolution/math.sqrt(2)
+    projected = (project_point and route is not None and
+                 plan.score > closest.score+tolerance)
+    refinement_goal = closest.goal if projected else plan.goal
+    direct = math.dist(actual[:2], refinement_goal)
     coarse_distance = route.distance_m if route is not None else plan.geodesic_m
-    if (not partial and coarse_distance <= max(3*direct, direct+4.)) or grid.resolution <= .0125:
+    if (not projected and coarse_distance <= max(3*direct, direct+4.)) or grid.resolution <= .0125:
         return grid, map_details, plan, route, collision, selection, None
     from .live_gt_map import build_navigation_grid
     attributes = ('_navigation_layers', '_navigation_support', '_navigation_clearance',
                   '_navigation_layer_yaw')
     original = {key: getattr(backend, key) for key in attributes}
     accepted = False
-    record = {'reason': 'partial_floor_point_projection' if partial else
-              'long_coarse_grid_detour' if route is not None else 'long_coarse_grid_guide',
+    record = {'reason': ('coarse_route_projected_before_admitted_target' if projected else
+                         'long_coarse_grid_detour' if route is not None else 'long_coarse_grid_guide'),
               'coarse_distance_m': coarse_distance,
+              'coarse_target_distance_m': plan.score,
               'direct_distance_m': direct, 'coarse_resolution_m': grid.resolution,
               'attempts': [], 'status': 'kept_coarse_route'}
     allow_lateral = bool(getattr(backend.robot, 'is_holonomic_base', False))
-    candidates = [p for p in options if p.score <= plan.score+1e-9]
+    candidates = [p for p in options if p.score <= (closest.score if projected else plan.score)+1e-9]
     try:
-        for sampling in detour_sampling(grid, actual, plan.target if partial else plan.goal):
+        for sampling in detour_sampling(grid, actual, refinement_goal):
             backend.deadline.check()
             row = dict(sampling, status='checking')
             record['attempts'].append(row)
@@ -158,31 +194,55 @@ def refine_navigation_detour(backend, floor, grid, map_details, actual,
             budget = PlanningBudget(backend.deadline.check, seconds=10.)
             checker = HeadingCollisionChecker(finer, backend._navigation_layers, actual[2],
                 backend._navigation_support, check_cancelled=budget.check)
+            proposals = []
+            certificates = {}
             try:
-                if partial:
-                    from .point_route_projection import project_forward_point
-                    projected = project_forward_point([plan], actual, checker, budget.check,
-                                                      allow_lateral=allow_lateral)
-                    if projected is None:
-                        row.update(status='rejected', reason='no_certified_projection')
+                for candidate in candidates:
+                    budget.check()
+                    pose = (*candidate.goal, candidate.final_yaw)
+                    if pose in certificates:
                         continue
-                    selected, poses, refined_selection = projected
-                    row['target_distance_m'] = selected.score
-                    if selected.score >= math.dist(plan.goal, plan.target)-grid.resolution:
-                        row.update(status='rejected', reason='no_target_improvement')
+                    if not checker.motion_free(pose, pose):
                         continue
-                    refined_route = route_from_poses(selected, poses, checker,
-                        method='refined_checked_point_projection', allow_lateral=allow_lateral,
-                        check_cancelled=budget.check)
-                    # The projection routine certifies the complete swept
-                    # route and both entry/departure at this new floor pose.
-                    entry = refined_selection['local_entry_certificate']
-                    departure = refined_selection['local_exit_certificate']
-                else:
-                    selected, refined_route, refined_selection, entry, departure = _refined_detour_route(
-                        candidates, actual, checker, finer, budget, allow_lateral, coarse_distance, route)
+                    entry = local_exit_certificate(pose, checker, incoming=True,
+                        check_cancelled=budget.check, allow_lateral=allow_lateral)
+                    departure = local_exit_certificate(pose, checker,
+                        check_cancelled=budget.check, allow_lateral=allow_lateral)
+                    if entry is None or departure is None:
+                        continue
+                    certificates[pose] = (entry, departure)
+                    # The endpoint is unchanged. A finer fixed-heading guide
+                    # helps the full pose planner but need not exist itself.
+                    points = (actual[:2], candidate.goal)
+                    distance = math.dist(actual[:2], candidate.goal)
+                    try:
+                        guide = plan_navigation(checker.grid_at_heading(candidate.final_yaw),
+                            actual[:2], candidate.goal, goal_mode='point', max_snap=None,
+                            candidate_filter=lambda xy: math.dist(xy, candidate.goal) <= finer.resolution/math.sqrt(2)+1e-8,
+                            check_cancelled=budget.check)
+                        points = (*guide.points[:-1], candidate.goal)
+                        distance = guide.geodesic_m
+                    except NavigationError:
+                        pass
+                    proposals.append(replace(candidate, points=points, geodesic_m=distance))
+                row['endpoints'] = len(proposals)
+                if not proposals:
+                    row.update(status='rejected', reason='no_admitted_endpoint')
+                    continue
+                selected, refined_route, refined_selection = select_forward_route(
+                    proposals, actual, checker, target_slack=0.,
+                    check_cancelled=budget.check, planning_seconds=10., allow_lateral=allow_lateral)
                 row.update(distance_m=refined_route.distance_m,
                            motion_seconds=refined_route.estimated_motion_seconds)
+                if not projected and (refined_route.distance_m >= coarse_distance-.5 or
+                        (route is not None and
+                         refined_route.estimated_motion_seconds >= route.estimated_motion_seconds)):
+                    row.update(status='rejected', reason='no_motion_improvement')
+                    continue
+                entry, departure = next(value for pose, value in certificates.items()
+                    if math.dist(pose[:2], selected.goal) < 1e-8 and
+                    abs(math.atan2(math.sin(pose[2]-selected.final_yaw),
+                                   math.cos(pose[2]-selected.final_yaw))) < 1e-8)
                 refined_selection.update(local_entry_certificate=entry, local_exit_certificate=departure)
                 checker.check_cancelled = backend.deadline.check
                 row['status'] = 'accepted'
@@ -210,52 +270,3 @@ def refine_navigation_detour(backend, floor, grid, map_details, actual,
             for key, value in original.items():
                 setattr(backend, key, value)
     return grid, map_details, plan, route, collision, selection, record
-
-
-def _refined_detour_route(candidates, actual, checker, finer, budget, allow_lateral,
-                          coarse_distance, route):
-    """Certify a shorter route without changing the admitted endpoint."""
-    proposals = []
-    certificates = {}
-    for candidate in candidates:
-        budget.check()
-        pose = (*candidate.goal, candidate.final_yaw)
-        if pose in certificates:
-            continue
-        if not checker.motion_free(pose, pose):
-            continue
-        entry = local_exit_certificate(pose, checker, incoming=True,
-            check_cancelled=budget.check, allow_lateral=allow_lateral)
-        departure = local_exit_certificate(pose, checker,
-            check_cancelled=budget.check, allow_lateral=allow_lateral)
-        if entry is None or departure is None:
-            continue
-        certificates[pose] = (entry, departure)
-        # The endpoint is unchanged. A finer fixed-heading guide
-        # helps the full pose planner but need not exist itself.
-        points = (actual[:2], candidate.goal)
-        distance = math.dist(actual[:2], candidate.goal)
-        try:
-            guide = plan_navigation(checker.grid_at_heading(candidate.final_yaw),
-                actual[:2], candidate.goal, goal_mode='point', max_snap=None,
-                candidate_filter=lambda xy: math.dist(xy, candidate.goal) <= finer.resolution/math.sqrt(2)+1e-8,
-                check_cancelled=budget.check)
-            points = (*guide.points[:-1], candidate.goal)
-            distance = guide.geodesic_m
-        except NavigationError:
-            pass
-        proposals.append(replace(candidate, points=points, geodesic_m=distance))
-    if not proposals:
-        raise NavigationError('No admitted endpoint on refined geometry', 'no_admitted_endpoint')
-    selected, refined_route, refined_selection = select_forward_route(
-        proposals, actual, checker, target_slack=0.,
-        check_cancelled=budget.check, planning_seconds=10., allow_lateral=allow_lateral)
-    if (refined_route.distance_m >= coarse_distance-.5 or
-            (route is not None and
-             refined_route.estimated_motion_seconds >= route.estimated_motion_seconds)):
-        raise NavigationError('No shorter refined route', 'no_motion_improvement')
-    entry, departure = next(value for pose, value in certificates.items()
-        if math.dist(pose[:2], selected.goal) < 1e-8 and
-        abs(math.atan2(math.sin(pose[2]-selected.final_yaw),
-                       math.cos(pose[2]-selected.final_yaw))) < 1e-8)
-    return selected, refined_route, refined_selection, entry, departure

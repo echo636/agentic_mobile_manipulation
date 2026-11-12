@@ -238,13 +238,21 @@ class HeadingCollisionChecker:
             ra,rb,ca,cb=self.window
             free[(np.arange(r0,r1)<ra)|(np.arange(r0,r1)>=rb),:]=0
             free[:,(np.arange(c0,c1)<ca)|(np.arange(c0,c1)>=cb)]=0
-        for (raw,_),kernel in zip(self.layers,self._kernels(key)):
+        for index,(raw,_) in enumerate(self.layers):
             self.check_cancelled()
-            half=kernel.shape[0]//2
+            half=self.footprint_bounds[index][1]
             ra,rb=max(0,r0-half),min(self.grid.height,r1+half)
             ca,cb=max(0,c0-half),min(self.grid.width,c1+half)
-            eroded=cv2.erode(raw[ra:rb,ca:cb],kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
+            window=raw[ra:rb,ca:cb]
+            # As for in-place turns, a completely clear footprint halo needs
+            # neither angular rasterization nor erosion. Keep the boundary
+            # check: padding outside the known map is still occupied.
+            if window.shape == (r1-r0+2*half,c1-c0+2*half) and np.all(window):
+                continue
+            kernel=self._kernel(key,index)
+            eroded=cv2.erode(window,kernel,borderType=cv2.BORDER_CONSTANT,borderValue=0)
             free &= eroded[r0-ra:r1-ra,c0-ca:c1-ca]
+            if not np.any(free):return False
         segment=GridMap(c1-c0,r1-r0,self.grid.resolution,self.grid.world((r0,c0)),free.tobytes())
         return segment.segment_free(start[:2],end[:2],clearance=clearance)
 

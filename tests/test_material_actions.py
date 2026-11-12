@@ -72,9 +72,11 @@ class MaterialActionTests(unittest.TestCase):
         inside = type('Inside', (), {})
         on_top = type('OnTop', (), {})
         volume = type('ContainedParticles', (), {})
-        retained = [True, True]
+        retained = [True, True, False]
         objects = [types.SimpleNamespace(name=str(i), states={inside: types.SimpleNamespace(
-            get_value=lambda destination, i=i: retained[i])}) for i in range(2)]
+            get_value=lambda destination, i=i: retained[i])}) for i in range(3)]
+        # A third piece rests on the receiver rim without entering its volume.
+        objects[2].states[on_top] = types.SimpleNamespace(get_value=lambda destination: True)
         source = types.SimpleNamespace(name='source')
         destination = types.SimpleNamespace(name='receiver', states={volume: object()})
         remaining = []
@@ -84,6 +86,7 @@ class MaterialActionTests(unittest.TestCase):
         backend._transfer_preconditions = lambda *args: (source, destination)
         backend._pour_objects = lambda source: remaining or objects
         backend._pour_rigid_objects = lambda *args: objects
+        backend._grasp_dependencies = lambda target: []
         backend._placement_record = lambda record: None
 
         def transfer_material(*args, **kwargs):
@@ -91,15 +94,24 @@ class MaterialActionTests(unittest.TestCase):
             # Later free physics dislodges one rigid object back to the source.
             retained[1] = False
             remaining.append(objects[1])
-            return {'materials': [{'moved_particles': 3, 'retained_particles': 3}]}
+            return {'materials': [{'moved_particles': 3, 'retained_particles': 3}],
+                    'source_has_more_material': False}
 
         backend._transfer_material_portion = transfer_material
         with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
                 Inside=inside, OnTop=on_top, ContainedParticles=volume, create=True):
             result = backend._checked_transfer('pour', destination, 6)
+            # Retained material still counts when all rigid pieces spill.
+            retained[:] = [False, False, False]
+            objects[2].states[on_top].get_value = lambda target: False
+            partial = backend._checked_transfer('pour', destination, 6)
+            self.assertEqual(partial['rigid_transfer']['retained_objects'], 0)
+            self.assertEqual(partial['materials'][0]['retained_particles'], 3)
         self.assertEqual(result['rigid_transfer'], {
-            'moved_objects': 2, 'retained_objects': 1, 'source_remaining_objects': 1,
+            'moved_objects': 3, 'retained_objects': 2, 'source_remaining_objects': 1,
+            'inside_objects': 1, 'on_top_objects': 1, 'indirectly_supported_objects': 0,
             'identities_changed_during_settling': False})
+        self.assertTrue(result['source_has_more_material'])
 
     def test_pour_receipt_does_not_query_objects_replaced_by_native_transition(self):
         from unittest.mock import Mock
@@ -133,6 +145,7 @@ class MaterialActionTests(unittest.TestCase):
         stale_contact.assert_not_called()
         self.assertEqual(result['rigid_transfer'], {
             'moved_objects': 1, 'retained_objects': 0, 'source_remaining_objects': 0,
+            'inside_objects': 0, 'on_top_objects': 0, 'indirectly_supported_objects': 0,
             'identities_changed_during_settling': True})
 
     def test_pour_accepts_surfaces_while_scoop_requires_a_vessel(self):
@@ -174,61 +187,33 @@ class MaterialActionTests(unittest.TestCase):
             selected = backend._pour_objects(source)
         self.assertEqual([obj.name for obj in selected], ['bottom_piece', 'top_piece', 'nested_vessel'])
 
-    def test_rigid_pour_commits_once_and_keeps_failed_physical_result(self):
-        import numpy as np
-        from unittest.mock import Mock
+    def test_pour_retains_pile_through_native_support_chain(self):
         from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
-
-        states = {name: type(name, (), {}) for name in ('Inside', 'OnTop', 'ContainedParticles')}
-        import itertools
-        for relation, retained in itertools.product(('OnTop', 'Inside'), (False, True)):
-            with self.subTest(relation=relation, retained=retained):
-                receiver = types.SimpleNamespace(name='receiver', states=(
-                    {states['ContainedParticles']: object()} if relation == 'Inside' else {}),
-                    aabb=(np.zeros(3), np.ones(3)))
-                objects = [types.SimpleNamespace(name=str(i), states={states[relation]:
-                    types.SimpleNamespace(set_value=Mock(side_effect=AssertionError('cuboid sampler')),
-                                          get_value=lambda target: retained)},
-                    set_position_orientation=Mock(), keep_still=Mock()) for i in range(2)]
-                backend = CheckedMaterialTransfer()
-                backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
-                    object_registry=lambda key, name: next(obj for obj in objects if obj.name == name)))
-                backend.og = types.SimpleNamespace(sim=types.SimpleNamespace(
-                    get_physics_dt=lambda: 1/120, get_sim_step_dt=lambda: 1/30,
-                    load_state=Mock(side_effect=AssertionError('scene rewind'))))
-                backend.deadline = types.SimpleNamespace(check=lambda **kw: None)
-                backend._grasp_dependencies = lambda obj: []
-                selected_point = np.array([.8, .2, .3])
-                # A clear patch on a lower shelf; the box center is not a
-                # usable receiving surface (for example a countertop sink).
-                backend._surface_candidates = Mock(side_effect=lambda obj, target, point:
-                    [dict(index=2, pose=(np.zeros(3), np.ones(4)))]
-                    if np.array_equal(point, selected_point) else [])
-                backend._volume_pour_pose = lambda *args: (np.zeros(3), np.ones(4))
-                backend._relocate_contents = Mock()
-                backend._placement_physics_step = Mock()
-                backend._placement_record = Mock()
-                backend.primitives = types.SimpleNamespace(_empty_action=lambda: [])
-                backend._step = Mock()
-                with self.modules, patch.multiple(sys.modules['omnigibson.object_states'], **states, create=True), \
-                        patch.object(sys.modules['omnigibson.utils'], 'transform_utils', object(), create=True), \
-                        patch('manipulation_agent.executors.material_transfer.snapshot_particles', return_value=[]), \
-                        patch('manipulation_agent.executors.particle_payload.relocate_particles'):
-                    moved = backend._pour_rigid_objects(object(), receiver, objects, 6, selected_point)
-                self.assertEqual(moved, objects if retained else objects[:1])
-                for obj in moved:
-                    obj.set_position_orientation.assert_called_once()
-                if not retained:
-                    objects[1].set_position_orientation.assert_not_called()
-                backend._placement_physics_step.assert_not_called()
-                backend._step.assert_called()
-                np.testing.assert_array_equal(selected_point, [.8, .2, .3])
-                if relation == 'OnTop':
-                    self.assertEqual(backend._surface_candidates.call_count, len(moved))
-                else:
-                    backend._surface_candidates.assert_not_called()
-                key = 'official_on_top' if relation == 'OnTop' else 'official_inside'
-                self.assertEqual(backend._placement_record.call_args.args[0][key], retained)
+        inside, on_top, volume = (type(name, (), {}) for name in ('Inside', 'OnTop', 'ContainedParticles'))
+        source = types.SimpleNamespace(name='source')
+        receiver = types.SimpleNamespace(name='board', states={})
+        bottom = types.SimpleNamespace(name='bottom', states={on_top: types.SimpleNamespace(
+            get_value=lambda target: target is receiver)})
+        stacked = types.SimpleNamespace(name='stacked', states={on_top: types.SimpleNamespace(
+            get_value=lambda target: target is bottom)})
+        spilled = types.SimpleNamespace(name='spilled', states={on_top: types.SimpleNamespace(
+            get_value=lambda target: False)})
+        objects = [bottom, stacked, spilled]
+        backend = CheckedMaterialTransfer()
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
+            object_registry=lambda key, name: next(obj for obj in objects if obj.name == name)))
+        backend._transfer_preconditions = lambda *args: (source, receiver)
+        backend._pour_rigid_objects = lambda *args: objects
+        backend._placement_record = lambda row: None
+        backend._transfer_material_portion = lambda *args, **kwargs: {'materials': []}
+        backend._pour_objects = lambda target: objects if target is source else []
+        backend._grasp_dependencies = lambda target: [(bottom, receiver, 'OnTop'), (stacked, bottom, 'OnTop')]
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
+                Inside=inside, OnTop=on_top, ContainedParticles=volume, create=True):
+            result = backend._checked_transfer('pour', receiver, 6)
+        self.assertEqual(result['rigid_transfer']['retained_objects'], 2)
+        self.assertEqual(result['rigid_transfer']['on_top_objects'], 1)
+        self.assertEqual(result['rigid_transfer']['indirectly_supported_objects'], 1)
 
     def test_surface_pour_moves_existing_portion_and_measures_contact_after_settling(self):
         import numpy as np
@@ -266,6 +251,17 @@ class MaterialActionTests(unittest.TestCase):
                       return_value=np.ones((2, 3))), \
                 patch('manipulation_agent.executors.material_transfer.move_particle_centers') as move:
             result = backend._transfer_material_portion('pour', source, destination, 6)
+            contacts.clear()
+            backend._step = lambda action: None
+            spilled = backend._transfer_material_portion('pour', source, destination, 6)
+            self.assertEqual(spilled['materials'][0]['retained_particles'], 0)
+            # Only the combined action decides total failure, after all
+            # components have been measured. There is no retry or rollback.
+            backend._transfer_preconditions = lambda *args: (source, destination)
+            backend._pour_objects = lambda obj: []
+            with self.assertRaises(SkillError) as failure:
+                backend._checked_transfer('pour', destination, 6)
+            self.assertEqual(failure.exception.code, 'postcondition_error')
         self.assertEqual(move.call_args.args[1], [0, 1])
         system.generate_particles.assert_not_called()
         self.assertEqual(view.prim_paths, ['a', 'b', 'c'])
@@ -274,6 +270,74 @@ class MaterialActionTests(unittest.TestCase):
                           receipt['source_remaining_particles']), (2, 1, 1))
         self.assertEqual(receipt['retained_relation'], 'surface_contact')
         self.assertTrue(result['source_has_more_material'])
+
+    def test_shallow_tray_accepts_solid_surface_portion_without_relaxing_fluid_volume(self):
+        import numpy as np
+        from unittest.mock import Mock
+        from manipulation_agent.executors.material_transfer import CheckedMaterialTransfer
+
+        volume, contact, modified = (type(name, (), {}) for name in
+                                     ('ContainedParticles', 'ContactParticles', 'ModifiedParticles'))
+        saturated = types.ModuleType('omnigibson.object_states.saturated')
+        saturated.ModifiedParticles = modified
+        solid, fluid = [types.SimpleNamespace(name=name, n_particles=1, is_fluid=is_fluid,
+            get_particles_position_orientation=lambda: (np.zeros((1, 3)), None))
+            for name, is_fluid in [('granules', False), ('water', True)]]
+        source = types.SimpleNamespace(name='source', states={})
+        receiver = types.SimpleNamespace(name='tray', states={
+            volume: types.SimpleNamespace(link=types.SimpleNamespace(
+                check_points_in_volume=lambda centers: np.ones(len(centers), dtype=bool))),
+            contact: types.SimpleNamespace(get_value=lambda system: {0})})
+        payload = [types.SimpleNamespace(container=source, system=system, paths=(system.name,))
+                   for system in (solid, fluid)]
+        backend = CheckedMaterialTransfer()
+        backend.env = types.SimpleNamespace(scene=types.SimpleNamespace(
+            active_systems={system.name: system for system in (solid, fluid)}))
+        backend._grasp_dependencies = lambda obj: []
+        backend._get_held = lambda: source
+        backend._placement_record = lambda record: None
+        backend.primitives = types.SimpleNamespace(_empty_action=lambda: [])
+        backend._step = lambda action: None
+        with self.modules, patch.multiple(sys.modules['omnigibson.object_states'],
+                ContainedParticles=volume, ContactParticles=contact, create=True), \
+                patch.dict(sys.modules, {'omnigibson.object_states.saturated': saturated}), \
+                patch('manipulation_agent.executors.material_transfer.snapshot_particles', return_value=payload) as capture, \
+                patch('manipulation_agent.executors.material_transfer._indices', return_value=[0]), \
+                patch('manipulation_agent.executors.material_transfer.physical_particle_view',
+                      side_effect=lambda system: types.SimpleNamespace(prim_paths=[system.name])), \
+                patch('manipulation_agent.executors.material_transfer.free_volume_positions',
+                      side_effect=lambda scene, dest, system, *args, **kw:
+                          np.zeros((1 if system.is_fluid else 0, 3))) as volume_sample, \
+                patch('manipulation_agent.executors.material_transfer.free_surface_positions',
+                      return_value=np.zeros((1, 3))) as surface_sample, \
+                patch('manipulation_agent.executors.material_transfer.move_particle_centers') as move:
+            for primitive in ('pour', 'scoop'):
+                with self.subTest(primitive=primitive):
+                    backend._get_held = lambda: source if primitive == 'pour' else receiver
+                    move.reset_mock()
+                    surface_sample.reset_mock()
+                    result = backend._transfer_material_portion(primitive, source, receiver, 6)
+                    self.assertEqual([(x['material'], x['retained_relation']) for x in result['materials']],
+                                     [('granules', 'surface_contact'), ('water', 'inside_volume')])
+                    self.assertEqual(move.call_count, 2)
+                    self.assertEqual(surface_sample.call_count, 1)
+                    self.assertIs(surface_sample.call_args.args[2], solid)
+                    self.assertFalse(result['some_material_not_transferred'])
+            # A mixed scoop may move the solids while leaving every fluid
+            # particle behind. A remaining-source flag alone hides that loss.
+            volume_sample.side_effect = lambda *args, **kw: np.zeros((0, 3))
+            partial = backend._transfer_material_portion('scoop', source, receiver, 6)
+            self.assertEqual([x['material'] for x in partial['materials']], ['granules'])
+            self.assertTrue(partial['some_material_not_transferred'])
+            # A fluid with no free receiving volume must never switch to a
+            # surface or claim success by wetting the tray's exterior.
+            capture.return_value = payload[1:]
+            volume_sample.side_effect = lambda *args, **kw: np.zeros((0, 3))
+            surface_sample.reset_mock()
+            for primitive in ('pour', 'scoop'):
+                with self.subTest(primitive=primitive), self.assertRaises(SkillError):
+                    backend._transfer_material_portion(primitive, source, receiver, 6)
+            surface_sample.assert_not_called()
 
     def test_sweep_removes_only_compatible_selected_material(self):
         from manipulation_agent.observations.boundary import public_execution_error
@@ -416,11 +480,15 @@ class MaterialActionTests(unittest.TestCase):
             self.assertEqual(name, 'cooked__diced__clove')
             return self.system
         self.scene.get_system = system_by_name
-        self.scene.transition_rule_api = types.SimpleNamespace(active_rules=[DicingRule()],
+        rule = DicingRule()
+        rule.scene = self.scene
+        self.scene.transition_rule_api = types.SimpleNamespace(active_rules=[rule],
             execute_transition=lambda **kw: self.scene.objects.remove(self.target))
         system = self.asset_root/'systems/cooked__diced__clove'
         with self.modules, patch.dict(sys.modules, {'omnigibson.transition_rules': transitions,
                                                    'omnigibson.utils.bddl_utils': bddl_utils}):
+            from manipulation_agent.executors.compat.material_conditions import install_dicing_derivative_names
+            install_dicing_derivative_names()
             with self.assertRaises(SkillError) as missing_system:
                 self.backend._checked_cut(self.target, 6)
             self.assertFalse(missing_system.exception.changed)
@@ -436,6 +504,11 @@ class MaterialActionTests(unittest.TestCase):
             self.assertIn(self.target, self.scene.objects)
             (system/'part/usd/part.encrypted.usd').write_bytes(b'fixture')
             result = self.backend._checked_cut(self.target, 6)
+            # Background contacts enter the rule without an explicit cut.
+            self.generated = False
+            output = rule.transition({'diceable': [self.target]})
+            self.assertEqual(output.remove, [self.target])
+            self.assertEqual(output.add, [])
         self.assertTrue(self.generated)
         self.assertEqual(result['transition'], 'DicingRule')
         self.assertNotIn(self.target, self.scene.objects)

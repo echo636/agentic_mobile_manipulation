@@ -1,39 +1,13 @@
 """Assembly placement geometry, collision recovery and transaction behavior."""
 import importlib.util
+import itertools
 import math
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from manipulation_agent.executors.inside_sampling import assembly_orientations, inset_centers, sample_assembly_inside, envelope_protrusion
-from manipulation_agent.executors.placement import inside_sample_with_fallback
 from manipulation_agent.contracts import SkillError
-
-
-class SamplerBudgetRecoveryTests(unittest.TestCase):
-    def test_native_exhaustion_restores_before_fallback(self):
-        calls=[]
-        def native():
-            calls.append('native')
-            raise SkillError('native_sampling_budget_exhausted','fixture budget')
-        result=inside_sample_with_fallback(native,lambda:calls.append('fallback') or True,
-                                          lambda:calls.append('restore'),lambda record:None)
-        self.assertEqual(result,(True,True))
-        self.assertEqual(calls,['native','restore','fallback'])
-
-    def test_external_deadline_never_starts_fallback(self):
-        calls=[]
-        def native():raise SkillError('execution_timeout','episode deadline')
-        with self.assertRaises(SkillError):
-            inside_sample_with_fallback(native,lambda:calls.append('fallback'),lambda:calls.append('restore'),lambda r:None)
-        self.assertEqual(calls,[])
-
-    def test_scene_change_during_native_search_prevents_fallback(self):
-        calls=[]
-        def restore():raise SkillError('target_changed','scene identity changed')
-        with self.assertRaises(SkillError):
-            inside_sample_with_fallback(lambda:False,lambda:calls.append('fallback'),restore,lambda r:None)
-        self.assertEqual(calls,[])
 
 
 class InsetCentersTests(unittest.TestCase):
@@ -140,6 +114,43 @@ class AssemblySamplingTests(unittest.TestCase):
         return backend,held,target,[(child,None)],state,records,{
             'omnigibson.object_states':states,'omnigibson.utils':utils,'omnigibson.utils.usd_utils':usd}
 
+    def test_single_release_keeps_unladen_drop_above_opening_without_simulating(self):
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        for loaded in (False, True):
+            with self.subTest(loaded=loaded):
+                b, held, target, contents, state, _, modules = self.fixture()
+                torch = b.torch
+                corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+                volume = target.links['volume']
+                volume.visual_boundary_points_world = corners(volume.visual_aabb)
+                b.env = SimpleNamespace(scene=SimpleNamespace())
+                b._collision_vertices = lambda obj: corners(obj.aabb)
+                b._inside_support_centers = lambda *args, **kwargs: [(0., 0., 1.125)]
+                b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: int(float((position + held.offset)[2]) < 1.)
+                b._inside_overlap_ranker = lambda *args: lambda *args: 0
+                before = held.get_position_orientation()
+                with patch.dict('sys.modules', modules), patch(
+                    'manipulation_agent.executors.inside_sampling.assembly_orientations',
+                    return_value=[('carried_pose', held.quat, 0.)]):
+                    candidate = select_inside_release(b, held, target, contents if loaded else [])
+                self.assertEqual(float((candidate['pose'][0] + held.offset)[2]) > 1., not loaded)
+                self.assertEqual(state, {'steps': 0, 'loads': 0})
+                self.assertTrue(all(torch.equal(a, z) for a, z in zip(before, held.get_position_orientation())))
+
+    def test_loaded_placement_prefers_selected_shelf_after_diversification(self):
+        # Both shelves pass the same native checks. The click, rather than
+        # the broad volume's lowest support, selects which one to try first.
+        for selected, expected in ((.8, .825), (.2, .225)):
+            b,held,target,contents,_,records,modules=self.fixture(collide=False)
+            b._inside_support_centers=lambda *a,**kw:[(0.,0.,.225),(0.,0.,.825)]
+            b._inside_overlap_ranker=lambda assembly:lambda center,extent:0
+            b._inside_pose_overlap_ranker=lambda held,assembly:lambda position,quat:0
+            with patch.dict('sys.modules',modules):
+                self.assertTrue(sample_assembly_inside(b,held,target,contents,
+                    point=b.torch.tensor([0.,0.,selected])))
+            accepted=next(r for r in records if r['status']=='inside_candidate_accepted')
+            self.assertAlmostEqual(accepted['center'][2],expected)
+
     def test_nearby_resting_pose_corrects_tilt_without_flipping_payload(self):
         b,held,_,_,_,_,modules=self.fixture()
         held.orientations={'upright':{'rotation':[0.,0.,0.,1.],'prob':.8},
@@ -186,6 +197,16 @@ class AssemblySamplingTests(unittest.TestCase):
         for _,quat,_ in candidates:
             self.assertTrue(b.torch.allclose(transforms.quat2mat(quat)[2],transforms.quat2mat(carried)[2],atol=1e-6))
 
+    def test_empty_vessel_is_not_inverted_by_unladen_pose_search(self):
+        b,held,_,_,_,_,modules=self.fixture()
+        transforms=modules['omnigibson.utils'].transform_utils
+        held.links={'volume':SimpleNamespace(is_meta_link=True,meta_link_type='fillable')}
+        held.orientations={'inverted':{'rotation':[1.,0.,0.,0.],'prob':1.}}
+        carried=b.torch.tensor([0.,0.,0.,1.])
+        candidates=assembly_orientations(held,carried,b.torch,transforms,allow_reorientation=True)
+        self.assertTrue(candidates)
+        self.assertTrue(all(float(transforms.quat2mat(quat)[2,2])>.99 for _,quat,_ in candidates))
+
     def test_occupied_center_searches_alternative_and_preserves_payload(self):
         b,held,target,contents,state,records,modules=self.fixture()
         with patch.dict('sys.modules',modules):
@@ -213,6 +234,28 @@ class AssemblySamplingTests(unittest.TestCase):
             self.assertFalse(sample_assembly_inside(b,held,target,[],max_candidates=1))
         self.assertTrue(b.torch.equal(held.position,original[0]))
         self.assertEqual(records[-1]['rejections'],{'initial_collision':1})
+
+    def test_above_opening_release_requires_actual_settled_containment(self):
+        for falls_inside in (True, False):
+            with self.subTest(falls_inside=falls_inside):
+                b,held,target,_,state,records,modules=self.fixture(collide=False)
+                b._inside_support_centers=lambda *a,**kw:[(0.,0.,1.15)]
+                inside=held.states[modules['omnigibson.object_states'].Inside]
+                inside._get_value=inside.get_value
+                b.og.sim.current_time_step_index=0
+                released=[]
+                def step():
+                    state['steps']+=1
+                    if state['steps']==1:
+                        released.append(float((held.position+held.offset)[2]))
+                    if falls_inside:
+                        held.position[2]=max(float(held.position[2])-.1,.8-float(held.offset[2]))
+                b.og.sim.step_physics=step
+                with patch.dict('sys.modules',modules):
+                    self.assertEqual(sample_assembly_inside(b,held,target,[],max_candidates=1),falls_inside)
+                self.assertGreater(released[0],float(target.links['volume'].visual_aabb[1][2]))
+                if not falls_inside:
+                    self.assertEqual(records[-1]['rejections'],{'official_inside_false':1})
 
     def test_loaded_container_prioritizes_door_clear_pose_with_one_trial(self):
         import numpy as np
@@ -278,6 +321,22 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertEqual(records[-1]['attempted'],1)
         self.assertGreater(float((held.position+held.offset)[2]),.3)
 
+    def test_loaded_assembly_reaches_clear_pose_beyond_first_overlap_window(self):
+        b,held,target,contents,state,records,modules=self.fixture()
+        # More than one ranking window of blocked shelf poses precedes the
+        # usable compartment. Spend the one physics trial on that clear pose.
+        b._inside_support_centers=lambda *a,**kw:[
+            (0.,0.,.1+i*.001) for i in range(80)]+[(.2,.2,.525)]
+        b._inside_overlap_ranker=lambda assembly:lambda center,extent:1
+        b._inside_pose_overlap_ranker=lambda held,assembly:lambda position,quat:(
+            int(float(b.torch.linalg.norm(b.torch.as_tensor(position)+held.offset-
+                                         b.torch.tensor([.2,.2,.525])))>.01))
+        with patch.dict('sys.modules',modules):
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+        self.assertEqual(records[-1]['attempted'],1)
+        self.assertGreater(records[-1]['overlap_ranking']['deferred'],64)
+        self.assertTrue(b.torch.allclose(contents[0][0].position,held.position+held.offset))
+
     def test_passive_lid_motion_does_not_reject_stationary_open_interior(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         target.n_joints=1
@@ -312,6 +371,26 @@ class AssemblySamplingTests(unittest.TestCase):
             self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=3))
         self.assertTrue(b.torch.equal(held.position,original[0]))
         self.assertEqual(records[-1]['rejections']['initial_collision'],3)
+
+    def test_missing_rigid_contact_requires_native_containment_and_stability(self):
+        for stable in (True, False):
+            with self.subTest(stable=stable):
+                b, held, target, _, state, records, modules = self.fixture(collide=False)
+                # Native rigid-body contact views exclude physical particles;
+                # particle support must reach the existing resting check.
+                modules['omnigibson.utils.usd_utils'].RigidContactAPI.is_in_contact = lambda **kw: False
+                observed = []
+                def resting(*args, **kwargs):
+                    observed.append(state['steps'])
+                    return stable
+                b._inside_resting_check = resting
+                with patch.dict('sys.modules', modules):
+                    result = sample_assembly_inside(b, held, target, [], max_candidates=1)
+                self.assertEqual(result, stable)
+                self.assertTrue(observed)
+                self.assertGreaterEqual(observed[0], 60)
+                if not stable:
+                    self.assertEqual(records[-1]['rejections']['unstable_after_release'], 1)
 
     def test_slow_physics_finishes_admitted_trial(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
@@ -423,47 +502,42 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertEqual(records[-1]['rejections'],{'payload_outside_destination':1})
         self.assertEqual(float(held.position[0]),5.)
 
-    def test_carrier_fits_but_captured_particle_extent_is_too_large(self):
-        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+    def test_nested_particle_ownership_does_not_require_outer_volume(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False,oversize=True)
         b.env=SimpleNamespace(scene=object())
         b._placement_particle_payload=(held,[object()])
-        def oversized(*args):
+        def tall_contents(*args):
+            # A carrier's center can satisfy native Inside while its retained
+            # contents extend past the outer fill annotation (R670 pot/sink).
+            # Geometry remains a proposal input; ownership decides retention.
             return [(held.position-b.torch.tensor([.6,.1,.1]),
                      held.position+b.torch.tensor([.6,.1,.1]))]
         with patch.dict('sys.modules',modules), \
-             patch('manipulation_agent.executors.particle_payload.particle_bounds', side_effect=oversized), \
-             patch('manipulation_agent.executors.particle_payload.particles_in_volumes', return_value=False) as check:
-            self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+             patch('manipulation_agent.executors.particle_payload.particle_bounds', side_effect=tall_contents), \
+             patch('manipulation_agent.executors.particle_payload.verify_particles') as check:
+            self.assertTrue(sample_assembly_inside(b,held,target,contents,max_candidates=1))
         check.assert_called_once()
-        self.assertEqual(state['steps'],0)
-        self.assertEqual(records[-1]['attempted'],1)
         self.assertEqual(records[-1]['domain_attempts'],{'full_volume':1})
-        self.assertIn('particles_outside_destination',records[-1]['rejections'])
-        self.assertEqual(float(held.position[0]),5.)
+        self.assertTrue(held.states[modules['omnigibson.object_states'].Inside].get_value(target))
 
-    def test_destination_and_actual_particle_support_are_both_required(self):
-        for outside in (True,False):
-            with self.subTest(outside=outside):
-                b,held,target,contents,state,records,modules=self.fixture(collide=False)
-                b.env=SimpleNamespace(scene=object())
-                b._placement_particle_payload=(held,[object()])
-                with patch.dict('sys.modules',modules), \
-                     patch('manipulation_agent.executors.particle_payload.particle_bounds',return_value=[]), \
-                     patch('manipulation_agent.executors.particle_payload.particles_in_volumes',return_value=not outside), \
-                     patch('manipulation_agent.executors.particle_payload.verify_particles',
-                           side_effect=SkillError('postcondition_error','foreign support')) as check:
-                    self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
-                self.assertEqual(float(held.position[0]),5.)
-                reason='particles_outside_destination' if outside else 'particle_payload_postcondition'
-                self.assertEqual(records[-1]['rejections'][reason],1)
-                self.assertEqual(check.call_count,0 if outside else 1)
+    def test_spilled_particle_payload_is_still_rejected(self):
+        b,held,target,contents,state,records,modules=self.fixture(collide=False)
+        b.env=SimpleNamespace(scene=object())
+        b._placement_particle_payload=(held,[object()])
+        with patch.dict('sys.modules',modules), \
+             patch('manipulation_agent.executors.particle_payload.particle_bounds',return_value=[]), \
+             patch('manipulation_agent.executors.particle_payload.verify_particles',
+                   side_effect=SkillError('postcondition_error','foreign support')) as check:
+            self.assertFalse(sample_assembly_inside(b,held,target,contents,max_candidates=1))
+        self.assertEqual(float(held.position[0]),5.)
+        self.assertEqual(records[-1]['rejections']['particle_payload_postcondition'],1)
+        check.assert_called_once()
 
     def test_particle_identity_change_aborts_search_instead_of_trying_another_pose(self):
         b,held,target,contents,state,records,modules=self.fixture(collide=False)
         b.env=SimpleNamespace(scene=object());b._placement_particle_payload=(held,[object()])
         with patch.dict('sys.modules',modules), \
              patch('manipulation_agent.executors.particle_payload.particle_bounds',return_value=[]), \
-             patch('manipulation_agent.executors.particle_payload.particles_in_volumes',return_value=True), \
              patch('manipulation_agent.executors.particle_payload.verify_particles',
                    side_effect=SkillError('target_changed','cooking replaced captured particle')):
             with self.assertRaises(SkillError) as error:

@@ -13,6 +13,8 @@ import sys
 from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
+MIN_RUNTIME_FREE_BYTES = 16 * 1024**3
+
 
 def command(args):
     p = subprocess.run(args, capture_output=True, text=True, timeout=30)
@@ -101,9 +103,9 @@ def runtime_storage_readiness(paths):
             free = shutil.disk_usage(resolved).free
             writable = resolved.is_dir() and os.access(resolved, os.W_OK | os.X_OK)
             checks.append({'path': value, 'resolved_path': str(resolved),
-                           'free_bytes': free, 'minimum_free_bytes': 16 * 1024**3,
+                           'free_bytes': free, 'minimum_free_bytes': MIN_RUNTIME_FREE_BYTES,
                            'writable': writable,
-                           'status': 'passed' if writable and free > 16 * 1024**3 else 'blocked'})
+                           'status': 'passed' if writable and free > MIN_RUNTIME_FREE_BYTES else 'blocked'})
         except OSError as exc:
             checks.append({'path': value, 'status': 'blocked', 'error': str(exc)})
     return {'status': 'passed' if all(c['status'] == 'passed' for c in checks) else 'blocked',
@@ -151,8 +153,8 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
         port_free = sock.connect_ex(('127.0.0.1', port)) != 0
     if min_free_gpu_mib and min_free_gpu_mib<12288:
         raise ValueError('Shared GPU mode requires at least 12 GiB free before each episode')
-    if not 12<=memory_budget_gib<=28:
-        raise ValueError('Simulator working-memory budget must be between 12 and 28 GiB')
+    if not 12<=memory_budget_gib<float('inf'):
+        raise ValueError('Simulator working-memory budget must be finite and at least 12 GiB')
     if not 0<=reserved_host_memory_gib<=1024:
         raise ValueError('Invalid shared host memory reservation')
     imports = source_import_readiness(data_root) if not light else None
@@ -199,7 +201,9 @@ def preflight(gpu, port, data_root, min_free_gpu_mib=0, memory_budget_gib=28, *,
             quota_devices = [device.strip() for device in quota_devices if device.strip()]
     quota_free=quota_headroom(queries['quota']['stdout'],devices=quota_devices)
     if quota_free is not None:
-        checks['quota_headroom_2GiB']=quota_free>2*1024**3
+        # Disk capacity and the account quota constrain the same runtime files.
+        # A cold scene's texture cache alone can exceed the former 2 GiB margin.
+        checks['quota_headroom_16GiB']=quota_free>MIN_RUNTIME_FREE_BYTES
     return {'at': datetime.now(timezone.utc).isoformat(), 'host': socket.gethostname(),
             'interpreter': sys.executable, 'pid': os.getpid(), 'gpu_index': gpu,
             'gpu_uuid': selected[1].strip(), 'cgroup': cg, 'checks': checks, 'source_imports': imports,
@@ -249,6 +253,28 @@ def assets(manifest, data_root):
             if hashlib.sha256(custom_path.read_bytes()).hexdigest() != task['custom_task_spec_sha256']:
                 raise ValueError('Frozen custom task specification changed')
             custom = json.loads(custom_path.read_text())
+            if custom.get('standalone_scene'):
+                from manipulation_agent.tasks.custom_tasks import load_spec
+                from manipulation_agent.batch.asset_preflight import inspect_model_assets, inspect_particle_system_assets
+                custom, validation = load_spec(custom_path, require_frozen=True)
+                frozen = Path(validation['scene_path'])
+                data = json.loads(frozen.read_text())
+                assets_root = data_root / 'data/omnigibson/behavior-1k-assets'
+                models = {(o['args']['category'], o['args']['model'])
+                          for o in data['objects_info']['init_info'].values() if o['class_name'] == 'DatasetObject'}
+                check = inspect_model_assets(models, assets_root)
+                systems = {r['system'] for r in custom['evaluation']['predicates'].values() if r.get('system')}
+                particles = [inspect_particle_system_assets(s, assets_root) for s in sorted(systems)]
+                matches = (custom['id'] == task['task'] and
+                           custom['standalone_scene']['scene_model'] == task['scene'] and
+                           custom['frozen_instance']['sha256'] == task['custom_instance_sha256'])
+                layout = assets_root / 'scenes' / task['scene'] / 'layout'
+                passed = matches and layout.is_dir() and check['status'] == 'passed' and all(
+                    not r['missing_assets'] for r in particles)
+                rows.append(dict(task=task['task'], status='passed' if passed else 'failed',
+                    runtime_assets=check, particle_assets=particles, instance_matches=matches,
+                    scope='standalone_custom_scene; no installed official task definition or official score'))
+                continue
             base = custom['base']
             name, instance = base['task'], base['instance']
         else:
@@ -354,7 +380,6 @@ def main():
         args+=['--custom-task',row['custom_task_spec']]
     if row.get('catalog_task_spec'):
         args+=['--catalog-task',row['catalog_task_spec']]
-    if manifest.get('require_task_notes'): args.append('--require-task-notes')
     if manifest.get('require_tool_intent'): args.append('--require-tool-intent')
     if a.executor_source is not None:
         # exec starts a new interpreter. Keep its imports on the selected
