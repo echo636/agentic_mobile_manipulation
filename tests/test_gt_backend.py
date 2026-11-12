@@ -116,6 +116,36 @@ class GTBackendTests(unittest.TestCase):
         self.assertEqual(record['audience'],'executor_private')
         self.assertFalse(record['dynamic_collision_check'])
 
+    def test_closest_walkable_cell_is_used_only_when_none_is_within_reach(self):
+        b=self.backend()
+        # The walkable map ends at x=2.95: 1.65 m from this target, beyond the 1.4 m reach.
+        target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([4.6,0.,1.]),None))
+        b._local_operation=SimpleNamespace(reach_m=b.local_limits.reach_m,admit_pose=lambda pose:None)
+        result=b._navigate(target,700,for_manipulation=True)
+        route=b._execute_base_path.call_args.args[0]
+        distance=float(b.torch.linalg.norm(b.torch.tensor(route[-1])-b.torch.tensor([4.6,0.])))
+        self.assertGreater(distance,b.local_limits.reach_m)
+        self.assertLess(distance,1.65+2*.1)
+        self.assertGreaterEqual(b._local_operation.reach_m,distance)
+        self.assertLessEqual(b._local_operation.reach_m,b.local_limits.fallback_reach_m)
+        self.assertEqual(result['nav_status'],'approached')
+        record=json.loads((self.output/'navigation_plans.jsonl').read_text())
+        # The record keeps the closest cell's distance; the endpoint may be one cell farther.
+        self.assertLessEqual(record['reach_fallback_m'],distance)
+        self.assertGreater(record['reach_fallback_m'],distance-.11)
+
+    def test_reach_fallback_is_bounded_and_absent_for_reachable_targets(self):
+        b=self.backend()
+        far=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([5.5,0.,1.]),None))
+        with self.assertRaises(SkillError) as failure:b._navigate(far,700,for_manipulation=True)
+        self.assertEqual(failure.exception.code,'navigation_unreachable')
+        b._execute_base_path.assert_not_called()
+        near=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([2.,0.,1.]),None))
+        b._local_operation=SimpleNamespace(reach_m=b.local_limits.reach_m,admit_pose=lambda pose:None)
+        b._navigate(near,700,for_manipulation=True)
+        self.assertEqual(b._local_operation.reach_m,b.local_limits.reach_m)
+        self.assertIsNone(json.loads((self.output/'navigation_plans.jsonl').read_text().splitlines()[-1])['reach_fallback_m'])
+
     def test_disconnected_target_has_no_remote_effect(self):
         b=self.backend(blocked=True)
         target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([2.,0.,1.]),None))

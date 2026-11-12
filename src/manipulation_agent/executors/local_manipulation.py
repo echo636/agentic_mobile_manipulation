@@ -12,6 +12,8 @@ from ..contracts import SkillError
 @dataclass(frozen=True)
 class LocalLimits:
     reach_m: float = 1.4
+    # Used only when the static map leaves no standing cell within reach_m.
+    fallback_reach_m: float = 2.0
     max_env_steps: int = 600  # Atomic manipulation allowance, separate from episode policy.
     max_sampling_steps: int = 1200
     wall_seconds: float = 300.0
@@ -25,6 +27,7 @@ class LocalOperation:
     def __init__(self, backend, primitive, binding, max_steps, options, *, clock=time.monotonic):
         self.backend, self.primitive, self.binding = backend, primitive, binding
         self.limits = backend.local_limits
+        self.reach_m = self.limits.reach_m  # widened by the approach only for a reach fallback
         self.options = options
         self.clock, self.started = clock, clock()
         self.start_steps = backend.steps

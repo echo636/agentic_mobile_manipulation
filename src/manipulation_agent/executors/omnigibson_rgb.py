@@ -603,6 +603,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         cells=np.column_stack(np.where((labels==labels[source]) & (occupancy!=0)))
         if not len(cells):
             raise SkillError('navigation_invalid_start','No native traversable neighbor at the start')
+        reach_fallback=None
         if floor_click:
             endpoint=hint
         else:
@@ -611,13 +612,26 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
             distances=self.torch.linalg.norm(points-hint,dim=1)
             within=distances<=self.local_limits.reach_m
-            points=points[within];distances=distances[within]
-            if not len(points):
-                raise SkillError('navigation_unreachable','No native walkable destination within target reach')
-            scores=abs(distances-1.25)
+            if bool(within.any()):
+                points=points[within];distances=distances[within]
+                scores=abs(distances-1.25)
+            else:
+                # The eroded static map can keep the base farther from a deep
+                # table or a furnished corner than the nominal reach. Stand at
+                # the closest walkable cell instead of refusing the target;
+                # the wider bound applies only when no nearer cell exists.
+                within=distances<=self.local_limits.fallback_reach_m
+                points=points[within];distances=distances[within]
+                if not len(points):
+                    raise SkillError('navigation_unreachable','No native walkable destination within target reach')
+                scores=distances
+                reach_fallback=float(distances.min())
             near=scores<=scores.min()+trav.map_resolution
             points=points[near]
             endpoint=points[self.torch.argmin(self.torch.linalg.norm(points-start,dim=1))]
+            operation=getattr(self,'_local_operation',None)
+            if reach_fallback is not None and operation is not None:
+                operation.reach_m=min(self.local_limits.fallback_reach_m,reach_fallback+2*float(trav.map_resolution))
         record={'at':now(),'parent_request_id':getattr(self,'_active_request_id',None),
                 'audience':'executor_private','start':start.tolist(),'target':point.cpu().tolist(),
                 'endpoint':endpoint.tolist(),'strategy':'omnigibson_native_shortest_path',
@@ -625,6 +639,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'resolution_m':float(trav.map_resolution),'precomputed_walkability':True,
                 'map_sha256':hashlib.sha256(occupancy.tobytes()).hexdigest(),
                 'native_map_open_doors':opened_doors,'native_map_added_fixtures':added_fixtures,
+                'reach_fallback_m':reach_fallback,
                 'dynamic_collision_check':False}
         try:
             self.deadline.check()
@@ -639,7 +654,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             self.navigation_distance+=result['actual_path_distance_m']
             actual=self.robot.get_position_orientation()[0][:2].cpu()
             target_distance=float(self.torch.linalg.norm(actual-hint))
-            tolerance=trav.map_resolution if floor_click else self.local_limits.reach_m
+            tolerance=(trav.map_resolution if floor_click else self.local_limits.reach_m if reach_fallback is None
+                       else min(self.local_limits.fallback_reach_m,reach_fallback+2*float(trav.map_resolution)))
             nav_status=('reached' if floor_click else 'approached') if target_distance<=tolerance else 'incomplete'
             return {**result,'strategy':record['strategy'],'path_distance_m':float(length),
                     'nav_status':nav_status,
@@ -920,7 +936,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'dynamic_collision_check':False,'departure_check':False,'settling_verification':False,
             'target_lock':'private_selected_link_relative_surface',
             'scope':'GT-assisted symbolic endpoint; no continuous driving or real-arm IK',
-            'reach_check':'base_to_selected_point_xy','reach_limit_m':1.4}
+            'reach_check':'base_to_selected_point_xy','reach_limit_m':self.local_limits.reach_m,
+            'reach_fallback':'closest walkable cell when none lies within the nominal reach',
+            'reach_fallback_limit_m':self.local_limits.fallback_reach_m}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
             'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,
