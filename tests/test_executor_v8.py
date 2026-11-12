@@ -220,6 +220,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b._placement_record=lambda data:None;b._get_held=lambda:None
         b._verify_payload=lambda *a,**kw:self.fail('Placement must not require every payload relation to persist')
         b._inside_pose_overlap_ranker=lambda *a,**kw:None
+        b._thin_support_base = lambda *a, **kw: ()  # needs a simulator ray query
         b._settle_surface_contacts=lambda *a,**kw:None
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):
             for correct_shelf in (False,True):

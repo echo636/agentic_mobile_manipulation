@@ -572,7 +572,9 @@ class CheckedPlacement:
             raise SkillError('placement_surface_unavailable', 'Select a receiving surface for placement')
         candidates = self._surface_candidates(held, target, point, yaw_degrees, payload,
                                               roll_degrees=roll_degrees)
-        ranker = self._inside_pose_overlap_ranker(held, [held, *payload], support_objects=(target,))
+        base = self._thin_support_base(held, target, point, payload)
+        ranker = self._inside_pose_overlap_ranker(held, [held, *payload], support_objects=(target,),
+                                                  support_paths=base)
 
         def score(candidate):
             position, orientation = candidate['pose']
@@ -591,7 +593,7 @@ class CheckedPlacement:
             raise SkillError('placement_surface_unavailable', 'No upward receiving surface near the selected point')
         # Private evidence for diagnosing why a proposal away from the click won.
         self._placement_record({'status': 'surface_candidates_scored', 'target': target.name, 'held': held.name,
-            'selected': candidate['index'],
+            'selected': candidate['index'], 'thin_support_base': list(base),
             'scores': [{'index': row['index'], 'offset_xy_m': row.get('offset_xy_m'),
                         'overlap_score': row.get('proposal_overlap_score'),
                         'rim': bool(row.get('selected_rim_surface'))} for row in candidates]})
@@ -860,9 +862,26 @@ class CheckedPlacement:
                                 'speed_m_s':float(self.torch.linalg.norm(held.get_linear_velocity()))})
         return False
 
-    def _inside_pose_overlap_ranker(self,held,assembly,*,support_objects=()):
+    def _inside_pose_overlap_ranker(self,held,assembly,*,support_objects=(),support_paths=()):
         from .placement_overlap import assembly_overlap_ranker
-        return assembly_overlap_ranker(self,held,assembly,support_objects=support_objects)
+        return assembly_overlap_ranker(self,held,assembly,support_objects=support_objects,
+                                       support_paths=support_paths)
+
+    def _thin_support_base(self, held, target, point, payload=()):
+        """Body directly beneath a thin selected support, such as the table under a plate.
+
+        A proposal's enclosing box can dip a few millimetres below its lowest
+        vertex. On a 2 cm plate that reaches the table, so every proposal near
+        the click ranked worse than one balanced on the rim. Thick supports
+        have nothing within 6 cm below their surface and are unaffected.
+        """
+        from omnigibson.utils.sampling_utils import raytest
+        ignored = [link.prim_path for obj in (held, self.robot, target, *payload) for link in obj.links.values()]
+        start = point + self.torch.tensor([0., 0., .01], device=point.device)
+        end = point - self.torch.tensor([0., 0., .06], device=point.device)
+        hit = raytest(start, end, ignore_bodies=ignored)
+        body = hit.get('rigidBody') if hit.get('hit') else None
+        return (str(body),) if body else ()
 
     def _inside_overlap_ranker(self,assembly):
         """Cheap current-world envelope checks order, never reject, proposals."""

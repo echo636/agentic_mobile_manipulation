@@ -45,6 +45,15 @@ class ColliderPieceBoundsTests(unittest.TestCase):
                     pose = held.get_position_orientation()
                     self.assertEqual(ordinary(*pose), 1)
                     self.assertEqual(supported(*pose), expected)
+            # The table under a thin plate is declared by path and no longer ranks as a neighbor.
+            hits[:] = ['/tray', '/counter']
+            thin = assembly_overlap_ranker(backend, held, [held], support_objects=(receiver,),
+                                           support_paths=('/counter',))
+            self.assertEqual(thin(*held.get_position_orientation()), 0)
+            hits[:] = ['/tray', '/counter', '/existing']
+            thin = assembly_overlap_ranker(backend, held, [held], support_objects=(receiver,),
+                                           support_paths=('/counter',))
+            self.assertEqual(thin(*held.get_position_orientation()), 1)
 
     def test_rotated_scaled_piece_and_new_root_pose_enclose_every_vertex(self):
         vertices=np.array(list(itertools.product((-.3,.3),(-.04,.04),(-.01,.01))))
