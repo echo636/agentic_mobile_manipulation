@@ -589,6 +589,12 @@ class CheckedPlacement:
             candidate = min([*candidates, *alternatives], key=score, default=None)
         if candidate is None:
             raise SkillError('placement_surface_unavailable', 'No upward receiving surface near the selected point')
+        # Private evidence for diagnosing why a proposal away from the click won.
+        self._placement_record({'status': 'surface_candidates_scored', 'target': target.name, 'held': held.name,
+            'selected': candidate['index'],
+            'scores': [{'index': row['index'], 'offset_xy_m': row.get('offset_xy_m'),
+                        'overlap_score': row.get('proposal_overlap_score'),
+                        'rim': bool(row.get('selected_rim_surface'))} for row in candidates]})
         return candidate
 
     def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None, *, roll_degrees=None):
