@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 import math
 import time
 from ..contracts import SkillError
+from ..runtime.robot_clock import clocked_leaf
 
 
 @dataclass(frozen=True)
@@ -83,9 +84,10 @@ class LocalOperation:
             self.check()
             self.attempts=1
             self.record('execute')
-            result=self.backend._execute_bound_manipulation(
+            # Robot clock (accounting only): note whether the manipulation started physically.
+            result=clocked_leaf(self.backend,lambda:self.backend._execute_bound_manipulation(
                 self.primitive,obj,point,self.binding.grounding,
-                self.step_limit-(self.backend.steps-self.start_steps),**self.options)
+                self.step_limit-(self.backend.steps-self.start_steps),**self.options))
             self.changed=True
             self.record('complete')
             return {**result,'local_manipulation':{

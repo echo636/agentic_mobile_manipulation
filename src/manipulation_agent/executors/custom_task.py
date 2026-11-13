@@ -13,6 +13,7 @@ from .omnigibson_rgb import RGBBackend
 from ..tasks.long_horizon import TemporalGoalEvaluator
 from ..tasks.custom_tasks import validate_spec
 from ..records import write_json
+from ..runtime.robot_clock import robot_clock_record
 
 
 def imported_state_with_velocities(source_state):
@@ -636,6 +637,7 @@ class CustomTaskBackend(RGBBackend):
         result['task_success'] = result['task_success'] and not missing
         result.update(task_instance=self.task_metadata,input_hashes=self.input_hashes,
                       observation_mode='rgb_only',ideal_navigation_distance_m=self.navigation_distance)
+        result.update(robot_clock_record(self))
         return result
 
     def provenance(self):

@@ -12,6 +12,7 @@ from ..runtime.deadline import EpisodeDeadline
 from .omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, robot_head_mount_height, look_at_orientation
 from ..records import JsonlAppend, now
+from ..runtime.robot_clock import charge_base_motion, clocked_action, clocked_leaf, robot_clock_record
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
@@ -713,6 +714,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if local is not None:local.admit_pose((*points[-1],end_yaw))
         before=self.steps
         self._transfer_base_pose(goal,quat)
+        # Robot clock (accounting only): charged at commit, before the step, so
+        # a committed motion counts even if the action later fails.
+        clock_row=charge_base_motion(self,points,orientation,end_yaw)
         # This updates native physics, object states and evaluation once. There
         # is no fixed settling window, endpoint rejection or automatic retry.
         self._step(self.primitives._empty_action())
@@ -725,6 +729,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'actual_orientation':actual_quat.tolist(),'commanded_yaw':end_yaw,
                 'position_error_m':math.dist(actual[:2].cpu().tolist(),points[-1]),
                 'planned_route_distance_m':route_distance,'continuous_motion_simulated':False,
+                'robot_time':clock_row,
                 'follower':'symbolic_route_endpoint'})+'\n')
         return {'steps':self.steps-before,'motion_steps':self.steps-before,
                 'motor':'symbolic_route_endpoint','nav_status':'endpoint_applied',
@@ -737,7 +742,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         before=self.steps
         complete=getattr(self,'_complete_pending_object_initialization',None)
         try:
-            result=RGBBackend._execute_visual(self,primitive,target,max_steps,**kwargs)
+            # Robot clock (accounting only). Model episodes and privileged
+            # references both enter here, so both are charged by the same rules.
+            result=clocked_action(self,primitive,kwargs,lambda:RGBBackend._execute_visual(
+                self,primitive,target,max_steps,**kwargs))
         except SkillError:
             if complete is not None:complete(max_steps-(self.steps-before))
             raise
@@ -769,7 +777,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
         if getattr(self,'local_manipulation',False):
             return self._execute_local_manipulation(primitive,obj,point,grounding,max_steps,kwargs)
-        return self._execute_bound_manipulation(primitive,obj,point,grounding,max_steps,**kwargs)
+        # Robot clock (accounting only): note whether the manipulation started physically.
+        return clocked_leaf(self,lambda:self._execute_bound_manipulation(
+            primitive,obj,point,grounding,max_steps,**kwargs))
 
     def _manipulation_preconditions(self,primitive,obj):
         if obj is None or not hasattr(obj,'states'):
@@ -921,6 +931,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         result['protocol']='rgb_agent_ideal_executor_v9_shared_episode_clock'
         result['observation_mode']=self.mode
         result['demo_motion']=getattr(self,'demo_motion',False)
+        result.update(robot_clock_record(self))
         return result
 
     def provenance(self):

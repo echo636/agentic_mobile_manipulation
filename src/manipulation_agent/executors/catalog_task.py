@@ -20,6 +20,7 @@ from ..runtime.deadline import DEADLINE_STEP_SENTINEL
 from ..tasks.goal_grounding import FactoredGoalOptions, efficient_grounding, evaluate_once_per_literal
 from .omnigibson_backend import normalize_embedded_robot
 from ..records import write_json
+from ..runtime.robot_clock import robot_clock_record
 
 
 class CatalogRGBBackend(RGBBackend):
@@ -208,7 +209,7 @@ class CatalogRGBBackend(RGBBackend):
                          else 'rgb_agent_official_bddl_sampled_instance'), 'observation_mode': 'rgb_only',
             'inside_placement': self.inside_placement,
             'volume_sampling_physics_steps': self.sampling_physics_steps,
-            'ideal_navigation_distance_m': self.navigation_distance}
+            'ideal_navigation_distance_m': self.navigation_distance, **robot_clock_record(self)}
         if self.catalog_spec.get('additional_terminal_conditions'):
             additional = {'hand_empty': self._get_held() is None}
             result.update(bddl_task_success=result['task_success'],

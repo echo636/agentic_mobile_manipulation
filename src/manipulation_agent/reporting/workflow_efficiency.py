@@ -11,6 +11,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 
+from .efficiency_table import actions_from_events, robot_time_review
 from .goal_replay import goal_replacement_review
 
 
@@ -50,7 +51,7 @@ def goal_progress_review(evaluation):
             'scope': 'Alternative bindings, not temporal subgoals; gains can offset losses.'}
 
 
-def analyze_events(events, episode, controller=None):
+def analyze_events(events, episode, controller=None, run_dir=None):
     controller = controller or {}
     results = {e['request_id']: e for e in events
                if e.get('kind') == 'tool_result' and e.get('request_id') is not None}
@@ -85,6 +86,8 @@ def analyze_events(events, episode, controller=None):
     errors = Counter(row['error'] or 'unspecified' for row in actions if row['ok'] is False)
     evaluation = episode.get('evaluation') or {}
     config = episode.get('config') or {}
+    robot_time = (robot_time_review(run_dir, evaluation, actions_from_events(events))
+                  if run_dir is not None else None)
     return {
         'run_id': episode.get('run_id'), 'task': config.get('task'),
         'instance': config.get('instance'), 'seed': config.get('seed'),
@@ -108,7 +111,11 @@ def analyze_events(events, episode, controller=None):
         'pre_dispatch_rejections': [row for row in requests if row['ok'] is False and row['action_number'] is None],
         'unclassified_motor_responses': sum(row['ok'] is True and row['action_number'] is None for row in requests),
         'motor_tool_wall_seconds': sum(row['tool_wall_seconds'] or 0 for row in requests),
-        'navigation_distance_m': evaluation.get('ideal_navigation_distance_m'),
+        # Travel is the committed route length; the evaluator's older figure is endpoint displacement.
+        'navigation_distance_m': (robot_time or {}).get('travel_distance_m'),
+        'navigation_distance_measure': 'committed_native_route_length',
+        'endpoint_displacement_m': evaluation.get('ideal_navigation_distance_m'),
+        'robot_time': robot_time,
         'opposite_door_action_candidates': [
             [left['call_id'], right['call_id']] for left, right in zip(requests, requests[1:])
             if left['ok'] and right['ok'] and {left['primitive'], right['primitive']} == {'open', 'close'}],
@@ -129,7 +136,7 @@ def analyze(run_dir, controller_dir=None):
     with (run_dir / 'events.jsonl').open() as stream:
         events = [json.loads(line) for line in stream if line.strip()]
     controller = read_json(controller_dir / 'controller.json') if controller_dir else {}
-    return analyze_events(events, read_json(run_dir / 'run.json'), controller)
+    return analyze_events(events, read_json(run_dir / 'run.json'), controller, run_dir)
 
 
 def main():
