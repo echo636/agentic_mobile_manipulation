@@ -239,7 +239,10 @@ class CheckedPlacement:
         try:
             held.set_position_orientation(*candidate['pose'])
             self._relocate_contents(held, contents)
-            held.keep_still(); held.wake()
+            held.keep_still()
+            for item in (held, *payload):
+                if hasattr(item, 'wake'):
+                    item.wake()
             self._settle_surface_contacts(held, candidate['support'], payload, max_steps)
             valid, details = self._next_to_check(held, target, candidate['support'], payload,
                                                  support_point=support_point)
@@ -647,6 +650,9 @@ class CheckedPlacement:
         objects = (held, target, *payload)
         steps = min(50, max_steps)
         substeps = max(1, round(self.og.sim.get_sim_step_dt() / self.og.sim.get_physics_dt()))
+        snapshot_doors = getattr(self, '_snapshot_closed_doors', None)
+        restore_doors = getattr(self, '_restore_closed_doors', None)
+        closed_doors = snapshot_doors() if snapshot_doors is not None else []
         for index in range(steps):
             if index == max(0, steps - 5):
                 for obj in (held, *payload):
@@ -656,6 +662,8 @@ class CheckedPlacement:
                         state.clear_cache()
             for _ in range(substeps):
                 self._placement_physics_step()
+            if closed_doors and restore_doors is not None:
+                restore_doors(closed_doors, sync_fabric=False)
             self.og.sim.sync_physx_to_fabric()
             if resting is not None:
                 resting.add(*held.get_position_orientation())
@@ -683,7 +691,9 @@ class CheckedPlacement:
         held.set_position_orientation(*candidate['pose'])
         self._relocate_contents(held, contents)
         held.keep_still()
-        held.wake()
+        for item in (held, *payload):
+            if hasattr(item, 'wake'):
+                item.wake()
         resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
         self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
         try:
@@ -810,8 +820,12 @@ class CheckedPlacement:
         self._carry_detach()
         held.set_position_orientation(*candidate['pose'])
         self._relocate_contents(held, contents)
-        held.keep_still(); held.wake()
-        self._settle_surface_contacts(held, target, [obj for obj, _ in contents], max_steps)
+        held.keep_still()
+        payload_objs = [obj for obj, _ in contents]
+        for item in (held, *payload_objs):
+            if hasattr(item, 'wake'):
+                item.wake()
+        self._settle_surface_contacts(held, target, payload_objs, max_steps)
         try:
             inside = bool(held.states[Inside].get_value(target))
             self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,

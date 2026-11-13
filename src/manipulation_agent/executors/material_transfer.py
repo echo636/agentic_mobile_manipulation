@@ -176,7 +176,9 @@ class CheckedMaterialTransfer:
     def _pour_objects(self, source):
         """Pour loose stacked items separately; nested vessels keep contents."""
         from omnigibson.object_states import ContainedParticles, Inside, OnTop, AttachedTo
-        dependencies = self._grasp_dependencies(source)
+        dependencies = (self._carry_dependencies
+                        if hasattr(self, '_carry_dependencies') and source is self._get_held()
+                        else self._grasp_dependencies(source))
         members = [child for child, _, _ in dependencies]
         candidates = [child for child, _, kind in dependencies if kind in {'Inside', 'OnTop'}]
         return [child for child in candidates if not any(
@@ -249,6 +251,8 @@ class CheckedMaterialTransfer:
             obj.set_position_orientation(position + offset, orientation)
             obj.keep_still()
         relocate_particles(self.env.scene, particles)
+        if source is self._get_held() and hasattr(self, '_drop_grasped_payload_objects'):
+            self._drop_grasped_payload_objects(assembly)
         for _ in range(min(max_steps, max(1, round(.5 / self.og.sim.get_sim_step_dt())))):
             self._step(self.primitives._empty_action())
         return list(objects)
@@ -354,7 +358,10 @@ class CheckedMaterialTransfer:
         scene = self.env.scene
         # Nested bowls/bags own their contents; pouring an outer tray must not
         # extract material through those intervening objects.
-        descendants = [child for child, _, _ in self._grasp_dependencies(source)]
+        descendants = [child for child, _, _ in (
+            self._carry_dependencies
+            if hasattr(self, '_carry_dependencies') and source is self._get_held()
+            else self._grasp_dependencies(source))]
         support_trace = {}
         captured = snapshot_particles(scene, [source, *descendants], include_supported=True,
                                       trace=support_trace)

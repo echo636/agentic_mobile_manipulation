@@ -407,6 +407,89 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                                          'retries':readiness_failures,'physics_steps':0})+'\n')
         raise RuntimeError('Camera render products did not become ready: '+json.dumps({'rgb_shapes':shapes,'calibration':pending}))
 
+    def _snapshot_closed_doors(self):
+        """Record closed Open-state joints outside any active open/close target."""
+        env = getattr(self, 'env', None)
+        scene = getattr(env, 'scene', None)
+        if scene is None:
+            return []
+        from omnigibson.object_states import Open
+        from omnigibson.object_states.open_state import _compute_joint_threshold, _is_in_range
+        active_joints = set(getattr(self, '_active_open_joints', ()) or ())
+        latched = getattr(self, '_latched_closed_positions', None)
+        if latched is None:
+            latched = {}
+            self._latched_closed_positions = latched
+        robot = getattr(self, 'robot', None)
+        snapped = []
+        for obj in scene.objects:
+            if obj is robot or not getattr(obj, 'n_joints', 0):
+                continue
+            open_state = getattr(obj, 'states', {}).get(Open)
+            if open_state is None or not getattr(open_state, '_initialized', True):
+                continue
+            info = getattr(open_state, 'relevant_joints_info', None)
+            if not info or not info[1]:
+                continue
+            both_sides, joints, directions = info
+            closed_targets = []
+            if both_sides:
+                is_open = bool(open_state.get_value())
+                for joint in joints:
+                    key = (id(obj), getattr(joint, 'joint_name', getattr(joint, 'name', str(id(joint)))))
+                    if joint in active_joints or is_open:
+                        latched.pop(key, None)
+                        continue
+                    target_pos = latched.setdefault(key, float(joint.get_state()[0]))
+                    closed_targets.append((joint, target_pos))
+            else:
+                for joint, direction in zip(joints, directions):
+                    key = (id(obj), getattr(joint, 'joint_name', getattr(joint, 'name', str(id(joint)))))
+                    if joint in active_joints:
+                        latched.pop(key, None)
+                        continue
+                    pos = float(joint.get_state()[0])
+                    threshold, open_end, _ = _compute_joint_threshold(joint, direction)
+                    if _is_in_range(pos, threshold, open_end):
+                        latched.pop(key, None)
+                        continue
+                    target_pos = latched.setdefault(key, pos)
+                    closed_targets.append((joint, target_pos))
+            if closed_targets:
+                snapped.append((obj, open_state, closed_targets))
+        return snapped
+
+    def _restore_closed_doors(self, snapped, *, sync_fabric=True):
+        """Hold closed doors shut against passive gravity or nearby brush contacts."""
+        if not snapped:
+            return False
+        env = getattr(self, 'env', None)
+        scene = getattr(env, 'scene', None)
+        live_ids = {id(o) for o in scene.objects} if scene is not None else None
+        restored_any = False
+        for obj, open_state, joint_targets in snapped:
+            if live_ids is not None and id(obj) not in live_ids:
+                continue
+            obj_changed = False
+            for joint, closed_pos in joint_targets:
+                state = joint.get_state()
+                cur_pos = float(state[0])
+                cur_vel = float(state[1]) if len(state) > 1 else 0.0
+                if abs(cur_pos - closed_pos) > 1e-5 or abs(cur_vel) > 1e-5:
+                    joint.set_pos(closed_pos)
+                    joint.set_vel(0.0)
+                    obj_changed = True
+            if obj_changed:
+                open_state.clear_cache()
+                if hasattr(obj, 'state_updated'):
+                    obj.state_updated()
+                restored_any = True
+        if restored_any and sync_fabric:
+            sim = getattr(getattr(self, 'og', None), 'sim', None)
+            if sim is not None and hasattr(sim, 'sync_physx_to_fabric'):
+                sim.sync_physx_to_fabric()
+        return restored_any
+
     def _step(self, action):
         self._check_renderer_health()
         self.deadline.check(changed=True)
@@ -419,6 +502,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if trunk_target is not None:
             action = action.clone()
             action[self.robot.controller_action_idx['trunk']] = trunk_target.to(action)
+        closed_doors = self._snapshot_closed_doors()
         # RGB observation boundaries and the video cadence already own rendering.
         # OmniGibson's ordinary env.step also renders implicitly, duplicating
         # that work. Its native no-render branch advances the same physics
@@ -429,6 +513,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         try:
             with self.og.sim.render_on_step(False):
                 with component(self,'physics_and_metrics'):super()._step(action)
+            self._restore_closed_doors(closed_doors)
         finally:
             self.og.sim._render_on_step = implicit_render
         try:
@@ -687,15 +772,16 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         from omnigibson.utils import transform_utils as T
         from .particle_payload import snapshot_particles, relocate_particles
         held=self._get_held()
-        objects=[] if held is None else [held,*[child for child,_,_ in self._grasp_dependencies(held)]]
+        contents=[] if held is None else list(self._carry_contents)
+        objects=[] if held is None else [held,*[child for child,_ in contents]]
         # Robot.set_position_orientation already transports the native AG
         # object. Carry only its loose contents across this symbolic change.
-        relative=[] if held is None else [(obj,T.relative_pose_transform(
-            *obj.get_position_orientation(),*held.get_position_orientation())) for obj in objects[1:]]
         particles=snapshot_particles(self.env.scene,objects,include_supported=True) if objects else []
         self.robot.set_position_orientation(position,orientation)
-        for obj,pose in relative:
+        for obj,pose in contents:
             obj.set_position_orientation(*T.pose_transform(*held.get_position_orientation(),*pose))
+            if hasattr(obj, 'keep_still'):
+                obj.keep_still()
         relocate_particles(self.env.scene,particles)
 
     def _execute_base_path(self, points, end_yaw, max_steps):
@@ -775,6 +861,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             for _ in range(count):self._step(self.primitives._empty_action())
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
         if primitive=='release':
+            self._grasped_payload = None
             return self.execute(primitive,None,max_steps)
         obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to',reject_particles=primitive=='grasp')
         if primitive=='navigate_to':

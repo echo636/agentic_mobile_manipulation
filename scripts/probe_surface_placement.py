@@ -82,6 +82,7 @@ def clone_python(value, torch):
 
 
 PYTHON_STATE = ('_ideal_held', '_carry_relative', '_carry_contents', '_carry_dependencies',
+                '_grasped_payload', '_latched_closed_positions',
                 '_stabilized_containers', '_stabilized_container_payloads', '_base_target',
                 '_object_anchor', '_demo_focus', '_demo_arm')
 

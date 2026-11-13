@@ -65,7 +65,7 @@ class ControlledCarry:
             return {'primitive': 'grasp', 'postcondition': 'selected_object_already_held'}
         arm = self.primitives.arm
         original = obj.get_position_orientation()
-        dependencies = self._grasp_dependencies(obj)
+        dependencies = self._grasp_carried_dependencies(obj, self._grasp_dependencies(obj))
         contents = [(child, T.relative_pose_transform(*child.get_position_orientation(), *original))
                     for child, _, _ in dependencies]
         particles = snapshot_particles(self.env.scene, [obj, *[child for child, _ in contents]],
@@ -75,9 +75,11 @@ class ControlledCarry:
         self._relocate_contents(obj, contents)
         relocate_particles(self.env.scene, particles)
         self.robot._establish_grasp(obj, obj.root_link_name, arm, contact, 'FixedJoint')
+        self._grasped_payload = (obj, list(dependencies), list(contents))
         if max_steps > 0:
             self._step(self.primitives._empty_action())
         if self._get_held() is not obj:
+            self._grasped_payload = None
             raise SkillError('postcondition_error', 'Native grasp did not hold the selected object', changed=True)
         self.frames_revision = -1
         from omnigibson.utils.constants import PrimType
@@ -86,6 +88,33 @@ class ControlledCarry:
                 'implementation': 'native_cloth_attachment_and_gripper_joint' if cloth else 'native_assisted_grasp_joint',
                 'postcondition': 'selected_object_in_native_grasp', 'fixed_joint_created': True,
                 'payload_transfer': 'once_at_grasp', 'subsequent_motion': 'native_physics'}
+
+    def _grasp_carried_dependencies(self, obj, dependencies):
+        """Carry an OnTop rider only when the grasped assembly alone supports it."""
+        if not dependencies or not hasattr(self, '_placement_contacts') or not hasattr(self, 'robot'):
+            return list(dependencies)
+        kept, left = list(dependencies), []
+        while True:
+            members = [obj, *[child for child, _, _ in kept]]
+            allowed = {link.prim_path for body in (*members, self.robot) for link in body.links.values()}
+            ids = {id(body) for body in members}
+            keep, drop = [], []
+            for child, parent, kind in kept:
+                external = ['support_left_in_place'] if id(parent) not in ids else (
+                    [body for body in self._placement_contacts(child) if body not in allowed]
+                    if kind == 'OnTop' else [])
+                (drop if external else keep).append((child, parent, kind, external))
+            kept = [(child, parent, kind) for child, parent, kind, _ in keep]
+            if not drop:
+                break
+            left += drop
+        if left and hasattr(self, 'output'):
+            self._carry_record(event='grasp_payload_left_in_place', grasped=obj.name,
+                               carried=[[child.name, parent.name, kind] for child, parent, kind in kept],
+                               left=[{'object': child.name, 'parent': parent.name, 'relation': kind,
+                                      'external_contacts': sorted(external)[:12]}
+                                     for child, parent, kind, external in left])
+        return kept
 
     def _grasp_pose(self, obj, point, dependencies):
         """Rank fingertip poses; approximate boxes cannot reject a grasp."""
@@ -185,28 +214,39 @@ class ControlledCarry:
                 from .articulation_diagnostics import record_articulation
                 record_articulation(self,obj,primitive,samples,status=status,**details)
         capture('before_setter')
-        # Apply the native annotated opening to the selected panel; close fully.
-        if open_goal is not None:
-            obj.set_joint_positions(open_goal)
-            obj.states[state].clear_cache();obj.state_updated()
-            accepted=True
-        else:
-            accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
-        if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
-        # Position setters retain joint velocities. A closed door must not
-        # inherit the preceding swing; subsequent motion remains native physics.
-        if state is Open:obj.keep_still()
-        self._relocate_container_payload(payload)
-        transported_particles=moved_particles()
-        # A door setter moves only its articulated support frames. Leave
-        # material in stationary shelves/bottles to ordinary physics rather
-        # than resetting its velocities or demanding zero natural settling.
-        relocate_particles(self.env.scene,transported_particles)
-        verify_particles(self.env.scene,transported_particles)
-        capture('after_setter')
-        self._step(self.primitives._empty_action())
-        capture('after_step')
-        actual=opened_joints(obj,controlled_joints) if primitive=='open' else bool(obj.states[state].get_value())
+        operated_open_joints = ()
+        if state is Open:
+            if primitive == 'open':
+                operated_open_joints = {joint for joint, _ in controlled_joints}
+            else:
+                info = getattr(obj.states[Open], 'relevant_joints_info', None)
+                operated_open_joints = set(info[1]) if info and info[1] else ()
+        self._active_open_joints = operated_open_joints
+        try:
+            # Apply the native annotated opening to the selected panel; close fully.
+            if open_goal is not None:
+                obj.set_joint_positions(open_goal)
+                obj.states[state].clear_cache();obj.state_updated()
+                accepted=True
+            else:
+                accepted=obj.states[state].set_value(wanted,**({'fully':True} if state is Open else {}))
+            if not accepted:raise SkillError('execution_error','Object state setter rejected the selected operation',changed=True)
+            # Position setters retain joint velocities. A closed door must not
+            # inherit the preceding swing; subsequent motion remains native physics.
+            if state is Open:obj.keep_still()
+            self._relocate_container_payload(payload)
+            transported_particles=moved_particles()
+            # A door setter moves only its articulated support frames. Leave
+            # material in stationary shelves/bottles to ordinary physics rather
+            # than resetting its velocities or demanding zero natural settling.
+            relocate_particles(self.env.scene,transported_particles)
+            verify_particles(self.env.scene,transported_particles)
+            capture('after_setter')
+            self._step(self.primitives._empty_action())
+            capture('after_step')
+            actual=opened_joints(obj,controlled_joints) if primitive=='open' else bool(obj.states[state].get_value())
+        finally:
+            self._active_open_joints = ()
         if actual!=wanted:
             report('failed',reason='state_reopened_or_reclosed_after_step',
                    payload=[child.name for child,_,_ in payload])
@@ -326,16 +366,54 @@ class ControlledCarry:
             raise SkillError('postcondition_error','Operation displaced existing contents from the container',
                              changed=True,stage=stage)
 
+    def _active_grasped_payload(self, held):
+        saved = getattr(self, '_grasped_payload', None)
+        if saved is None or saved[0] is not held:
+            return None
+        env = getattr(self, 'env', None)
+        scene = getattr(env, 'scene', None)
+        live_ids = {id(o) for o in scene.objects} if scene is not None else None
+        dependencies, contents = saved[1], saved[2]
+        if live_ids is not None:
+            dependencies = [(c, p, k) for c, p, k in dependencies
+                            if id(c) in live_ids and id(p) in live_ids]
+            kept_ids = {id(c) for c, _, _ in dependencies}
+            contents = [(c, rel) for c, rel in contents if id(c) in kept_ids]
+        return dependencies, contents
+
+    def _drop_grasped_payload_objects(self, removed):
+        saved = getattr(self, '_grasped_payload', None)
+        if saved is None or not removed:
+            return
+        removed_ids = {id(o) for o in removed}
+        obj, dependencies, contents = saved
+        dependencies = [(c, p, k) for c, p, k in dependencies
+                        if id(c) not in removed_ids and id(p) not in removed_ids]
+        kept_ids = {id(c) for c, _, _ in dependencies}
+        contents = [(c, rel) for c, rel in contents if id(c) in kept_ids]
+        self._grasped_payload = (obj, dependencies, contents)
+
     @property
     def _carry_dependencies(self):
         held = self._get_held()
-        return [] if held is None else self._grasp_dependencies(held)
+        if held is None:
+            return []
+        saved = self._active_grasped_payload(held)
+        if saved is not None:
+            return list(saved[0])
+        return self._grasp_dependencies(held)
 
     @property
     def _carry_contents(self):
         held = self._get_held()
-        dependencies=[] if held is None else self._grasp_dependencies(held)
-        if not dependencies:return []
+        if held is None:
+            return []
+        saved = self._active_grasped_payload(held)
+        if saved is not None:
+            return list(saved[1])
+        dependencies = self._grasp_dependencies(held)
+        if not dependencies:
+            return []
         from omnigibson.utils import transform_utils as T
         pose = held.get_position_orientation()
         return [(child, T.relative_pose_transform(*child.get_position_orientation(), *pose))
@@ -358,6 +436,7 @@ class ControlledCarry:
 
 
     def _carry_detach(self):
+        self._grasped_payload = None
         for arm in self.robot.arm_names:
             self.robot.release_grasp_immediately(arm=arm)
 
