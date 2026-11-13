@@ -165,6 +165,119 @@ class AssemblySamplingTests(unittest.TestCase):
         self.assertAlmostEqual(float(chosen_center[0]), -.20, places=4)
         self.assertEqual(state, {'steps': 0, 'loads': 0})
 
+    def test_single_release_prefers_inset_resting_pose_over_lip_edge_standing_proposal(self):
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        b, held, target, _, state, _, modules = self.fixture()
+        torch = b.torch
+        held.extent = torch.tensor([.20, .12, .06])
+        held.offset = torch.zeros(3)
+        corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+        volume = target.links['volume']
+        volume.visual_aabb = (torch.tensor([0., -.40, 1.20]), torch.tensor([.40, .40, 1.50]))
+        volume.visual_boundary_points_world = corners(volume.visual_aabb)
+        volume.check_points_in_volume = lambda points: (
+            (points >= volume.visual_aabb[0]) & (points <= volume.visual_aabb[1])
+        ).all(dim=1)
+        b.env = SimpleNamespace(scene=SimpleNamespace())
+        b._collision_vertices = lambda obj: corners(obj.aabb)
+        shelf_z = 1.225
+        # Mirror _inside_support_centers: inset domain keeps x >= 0.10, while
+        # full_volume adds x = 0.06 overhanging the front shelf lip toward the
+        # exterior cabinet frame click at x = -0.08, z = 1.43.
+        def support_centers(_h, _t, _v, centers, offset, *_a, bottom_offset=None, **_kw):
+            half_z = float(offset[2] - bottom_offset[2])
+            return [(float(c[0]), float(c[1]), shelf_z + half_z + .025) for c in centers]
+        b._inside_support_centers = support_centers
+        b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: 0
+        b._inside_overlap_ranker = lambda *args: lambda *args: 0
+        flat_quat = torch.tensor([0., 0., 0., 1.])
+        stand_quat = torch.tensor([0., math.sqrt(.5), 0., math.sqrt(.5)])
+        frame_click = torch.tensor([-.08, .20, 1.43])
+        with patch.dict('sys.modules', modules), \
+             patch('manipulation_agent.executors.inside_sampling.assembly_orientations',
+                   return_value=[('asset_resting_pose', flat_quat, 0.),
+                                 ('unladen_face_proposal', stand_quat, 0.)]), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',
+                   return_value=None):
+            candidate = select_inside_release(b, held, target, [], point=frame_click)
+        self.assertEqual(candidate['domain'], 'support_inset')
+        self.assertEqual(candidate['orientation_source'], 'asset_resting_pose')
+        self.assertGreaterEqual(float(candidate['pose'][0][0]), .10 - 1e-5)
+        self.assertEqual(state, {'steps': 0, 'loads': 0})
+
+    def test_single_release_falls_back_to_face_proposal_when_resting_pose_collides(self):
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        b, held, target, _, _, _, modules = self.fixture()
+        torch = b.torch
+        held.extent = torch.tensor([.20, .12, .06])
+        held.offset = torch.zeros(3)
+        corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+        volume = target.links['volume']
+        volume.visual_boundary_points_world = corners(volume.visual_aabb)
+        b.env = SimpleNamespace(scene=SimpleNamespace())
+        b._collision_vertices = lambda obj: corners(obj.aabb)
+        b._inside_support_centers = lambda _h, _t, _v, centers, *_a, **_kw: [
+            (float(c[0]), float(c[1]), .20) for c in centers[:2]
+        ]
+        flat_quat = torch.tensor([0., 0., 0., 1.])
+        stand_quat = torch.tensor([0., math.sqrt(.5), 0., math.sqrt(.5)])
+        b._inside_pose_overlap_ranker = lambda *args: (
+            lambda position, quat: int(float(torch.abs(torch.dot(quat, flat_quat))) > .99)
+        )
+        b._inside_overlap_ranker = lambda *args: lambda *args: 0
+        with patch.dict('sys.modules', modules), \
+             patch('manipulation_agent.executors.inside_sampling.assembly_orientations',
+                   return_value=[('asset_resting_pose', flat_quat, 0.),
+                                 ('unladen_face_proposal', stand_quat, 0.)]), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',
+                   return_value=None):
+            candidate = select_inside_release(b, held, target, [])
+        self.assertEqual(candidate['orientation_source'], 'unladen_face_proposal')
+        self.assertEqual(candidate['proposal_overlap_score'], 0)
+
+    def test_inside_support_centers_admits_flush_drawer_floor_and_rejects_lower_compartment(self):
+        from manipulation_agent.executors.placement import CheckedPlacement
+        b, held, target, _, _, records, modules = self.fixture()
+        torch = b.torch
+        placement = CheckedPlacement()
+        placement.torch = torch
+        placement.og = b.og
+        placement.robot = SimpleNamespace(links={'base': SimpleNamespace(prim_path='/robot')})
+        placement._placement_record = records.append
+        held.links = {'base': SimpleNamespace(prim_path='/held', is_meta_link=False)}
+        drawer_link = SimpleNamespace(prim_path='/drawer/right', is_meta_link=False)
+        volume = SimpleNamespace(
+            prim_path='/drawer/meta_fillable', is_meta_link=True, meta_link_type='fillable',
+            visual_aabb=(torch.tensor([-.2, -.3, .250]), torch.tensor([.2, .3, .440])),
+        )
+        target.links = {'right': drawer_link, 'vol': volume}
+        sampling = ModuleType('omnigibson.utils.sampling_utils')
+        # Hit 1: drawer bottom slab 3 mm below visual_aabb low[2] (0.247 vs 0.250).
+        # Hit 2: lower shelf 20 cm below visual_aabb low[2] (0.050).
+        sampling.raytest = lambda *_a, **_kw: [
+            {'rigidBody': '/drawer/right', 'normal': torch.tensor([0., 0., 1.]),
+             'position': torch.tensor([0., 0., .247]), 'collision': '/drawer/right/floor'},
+            {'rigidBody': '/drawer/right', 'normal': torch.tensor([0., 0., 1.]),
+             'position': torch.tensor([0., 0., .050]), 'collision': '/drawer/right/lower'},
+        ]
+        with patch.dict('sys.modules', {**modules, 'omnigibson.utils.sampling_utils': sampling}):
+            # Normal 8 cm tall pencil case: resting_z = 0.247 + 0.040 = 0.287 >= 0.250 -> admitted;
+            # lower compartment hit at 0.050 < 0.250 - 0.015 -> rejected.
+            admitted = placement._inside_support_centers(
+                held, target, volume, [(0., 0., .30)], torch.zeros(3), [],
+                lambda: None, bottom_offset=torch.tensor([0., 0., -.04]),
+            )
+            # Paper-thin 2 mm item on 0.247 floor: resting_z = 0.248 < 0.250 -> rejected.
+            too_low = placement._inside_support_centers(
+                held, target, volume, [(0., 0., .30)], torch.zeros(3), [],
+                lambda: None, bottom_offset=torch.tensor([0., 0., -.001]),
+            )
+        expected_z = .247 + .040 + .025 + .5 * 9.81 * (1 / 120) ** 2
+        self.assertEqual(len(admitted), 9)
+        for _, _, z in admitted:
+            self.assertAlmostEqual(z, expected_z, places=6)
+        self.assertEqual(too_low, [])
+
     def test_closed_geometry_proposals_excludes_comoving_drawer_body_and_keeps_hinged_door(self):
         from manipulation_agent.executors.closure_clearance import (
             closed_geometry_overlap, closed_geometry_proposals,

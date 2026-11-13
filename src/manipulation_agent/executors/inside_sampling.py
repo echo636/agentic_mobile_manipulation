@@ -197,7 +197,14 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                         closed_overlap = round(closed_geometry_overlap(
                             closure_geometry, volume, center.tolist(), extent.tolist()), 6)
                         distance = float(torch.linalg.vector_norm(center - point)) if point is not None else float(center[2])
-                        priority = (round(protrusion, 5), closed_overlap, not kind.startswith('support_'), distance)
+                        domain_rank = {'support_inset': 0, 'support_full_volume': 1, 'inset': 2, 'full_volume': 3}[kind]
+                        priority = (
+                            round(protrusion, 5),
+                            closed_overlap,
+                            domain_rank,
+                            label == 'unladen_face_proposal',
+                            distance,
+                        )
                         proposals.append((priority, position, quat, center, extent, volume, kind, label))
     pose_score = backend._inside_pose_overlap_ranker(held, assembly)
     envelope_score = backend._inside_overlap_ranker(assembly)

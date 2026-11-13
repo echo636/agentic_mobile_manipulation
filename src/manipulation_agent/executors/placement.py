@@ -983,10 +983,13 @@ class CheckedPlacement:
                 if hit.get('rigidBody') not in support_paths or float(hit['normal'][2])<.9:continue
                 z=float(hit['position'][2])+float(center_offset[2]-bottom[2])+clearance
                 # An unladen item can start above existing contents and fall
-                # into the cavity. Its support must be inside; its center is
-                # checked against native Inside only after free settling.
-                admission_z=float(hit['position'][2]) if allow_drop else z-clearance
-                if not float(low[2])<=admission_z<=float(high[2]):continue
+                # into the cavity. Its support must be inside (including a
+                # drawer/box floor mesh authored up to 15 mm below visual_aabb);
+                # its center is checked against native Inside after settling.
+                resting_z=z-clearance
+                if allow_drop:
+                    if not (resting_z>=float(low[2]) and float(low[2])-.015<=float(hit['position'][2])<=float(high[2])):continue
+                elif not float(low[2])<=resting_z<=float(high[2]):continue
                 center=(x,y,z)
                 if any(sum((a-b)**2 for a,b in zip(center,old))<1e-8 for old in proposals):continue
                 proposals.append(center)
