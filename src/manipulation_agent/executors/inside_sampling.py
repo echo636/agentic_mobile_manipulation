@@ -118,6 +118,7 @@ are proposals only, with unchanged collision and settling acceptance checks.
 def select_inside_release(backend, held, target, contents, *, point=None, residents=()):
     """Choose one pose from current geometry without moving or simulating bodies."""
     from omnigibson.utils import transform_utils as T
+    from .closure_clearance import closed_geometry_overlap, closed_geometry_proposals
     from .particle_payload import particle_bounds
     from .surface_geometry import bottom_anchor
 
@@ -141,6 +142,7 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
     loaded = bool(contents or particles)
     orientations = assembly_orientations(held, original_quat, torch, T,
         reference_quat=target.get_position_orientation()[1], allow_reorientation=not loaded)
+    closure_geometry = closed_geometry_proposals(backend, target)
     # No body moves during proposal construction. Read receiver geometry once.
     volume_geometry = []
     for volume in volumes:
@@ -192,8 +194,10 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                         seen.add(key)
                         protrusion = envelope_protrusion(center.tolist(), extent.tolist(), vlo.tolist(),
                             vhi.tolist(), clearance if kind.startswith('support_') else 0.)
+                        closed_overlap = round(closed_geometry_overlap(
+                            closure_geometry, volume, center.tolist(), extent.tolist()), 6)
                         distance = float(torch.linalg.vector_norm(center - point)) if point is not None else float(center[2])
-                        priority = (round(protrusion, 5), not kind.startswith('support_'), distance)
+                        priority = (round(protrusion, 5), closed_overlap, not kind.startswith('support_'), distance)
                         proposals.append((priority, position, quat, center, extent, volume, kind, label))
     pose_score = backend._inside_pose_overlap_ranker(held, assembly)
     envelope_score = backend._inside_overlap_ranker(assembly)

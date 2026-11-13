@@ -137,6 +137,93 @@ class AssemblySamplingTests(unittest.TestCase):
                 self.assertEqual(state, {'steps': 0, 'loads': 0})
                 self.assertTrue(all(torch.equal(a, z) for a, z in zip(before, held.get_position_orientation())))
 
+    def test_single_release_prefers_closed_door_clear_pose_over_nearer_doorway_point(self):
+        import numpy as np
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        b, held, target, _, state, _, modules = self.fixture()
+        torch = b.torch
+        corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+        volume = target.links['volume']
+        volume.visual_boundary_points_world = corners(volume.visual_aabb)
+        b.env = SimpleNamespace(scene=SimpleNamespace())
+        b._collision_vertices = lambda obj: corners(obj.aabb)
+        # Support exists both near the front doorway (x=0.25, overlapping the
+        # closed door plug x=[0.15, 0.45]) and deeper inside the drum (x=-0.20).
+        b._inside_support_centers = lambda *args, **kwargs: [(.25, 0., .3), (-.20, 0., .3)]
+        b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: 0
+        b._inside_overlap_ranker = lambda *args: lambda *args: 0
+        geometry = ({'volume': [(np.array([.15, -.5, 0.]), np.array([.45, .5, 1.]))]},
+                    {'volume': (np.eye(3), np.zeros(3))})
+        doorway_click = torch.tensor([.45, 0., .5])
+        with patch.dict('sys.modules', modules), \
+             patch('manipulation_agent.executors.inside_sampling.assembly_orientations',
+                   return_value=[('carried_pose', held.quat, 0.)]), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',
+                   return_value=geometry):
+            candidate = select_inside_release(b, held, target, [], point=doorway_click)
+        chosen_center = candidate['pose'][0] + held.offset
+        self.assertAlmostEqual(float(chosen_center[0]), -.20, places=4)
+        self.assertEqual(state, {'steps': 0, 'loads': 0})
+
+    def test_closed_geometry_proposals_excludes_comoving_drawer_body_and_keeps_hinged_door(self):
+        from manipulation_agent.executors.closure_clearance import (
+            closed_geometry_overlap, closed_geometry_proposals,
+        )
+        b, _, _, _, _, _, modules = self.fixture()
+        torch = b.torch
+        Open = modules['omnigibson.object_states'].Open
+        joint = {'closed': False}
+        ident = torch.tensor([0., 0., 0., 1.])
+        yaw90 = torch.tensor([0., 0., math.sqrt(.5), math.sqrt(.5)])
+        corners = lambda lo, hi: torch.tensor(list(itertools.product(*zip(lo, hi))), dtype=torch.float32)
+        drawer_tub = SimpleNamespace(
+            prim_path='drawer_tub', is_meta_link=False,
+            get_position_orientation=lambda: (
+                torch.tensor([0. if joint['closed'] else .35, 0., .2]), ident),
+            collision_boundary_points_world=corners([-.2, -.3, 0.], [.2, .3, .4]),
+        )
+        hinged_door = SimpleNamespace(
+            prim_path='hinged_door', is_meta_link=False,
+            get_position_orientation=lambda: (
+                torch.tensor([.25, 0., .7]), ident if joint['closed'] else yaw90),
+            collision_boundary_points_world=corners([.15, -.3, .45], [.30, .3, .95]),
+        )
+        drawer_vol = SimpleNamespace(
+            prim_path='drawer_vol', is_meta_link=True, meta_link_type='fillable',
+            get_position_orientation=lambda: (
+                torch.tensor([0. if joint['closed'] else .35, 0., .2]), ident),
+        )
+        drum_vol = SimpleNamespace(
+            prim_path='drum_vol', is_meta_link=True, meta_link_type='fillable',
+            get_position_orientation=lambda: (torch.tensor([0., 0., .7]), ident),
+        )
+
+        def set_open(val, fully=False):
+            joint['closed'] = not val
+            return True
+
+        def set_joints(j):
+            joint['closed'] = float(j[0]) == 0.
+
+        open_state = SimpleNamespace(
+            get_value=lambda: not joint['closed'], set_value=set_open, clear_cache=lambda: None,
+        )
+        container = SimpleNamespace(
+            states={Open: open_state},
+            get_joint_positions=lambda: torch.tensor([0. if joint['closed'] else 1.]),
+            set_joint_positions=set_joints,
+            state_updated=lambda: None,
+            links={'tub': drawer_tub, 'door': hinged_door, 'dvol': drawer_vol, 'bvol': drum_vol},
+        )
+        with patch.dict('sys.modules', modules):
+            geometry = closed_geometry_proposals(b, container)
+        self.assertFalse(joint['closed'])
+        # Inside the sliding drawer, the co-moving drawer_tub is excluded while
+        # the hinged_door (if overlapping closed x=[0.15,0.30]) is still scored.
+        self.assertEqual(closed_geometry_overlap(geometry, drawer_vol, [.35, 0., .2], [.1, .1, .1]), 0.)
+        self.assertGreater(closed_geometry_overlap(geometry, drum_vol, [.20, 0., .7], [.2, .2, .2]), 0.)
+        self.assertEqual(closed_geometry_overlap(geometry, drum_vol, [-.10, 0., .7], [.2, .2, .2]), 0.)
+
     def test_loaded_placement_prefers_selected_shelf_after_diversification(self):
         # Both shelves pass the same native checks. The click, rather than
         # the broad volume's lowest support, selects which one to try first.

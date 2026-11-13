@@ -28,7 +28,7 @@ def closed_geometry_proposals(backend, target):
     try:
         if not target.states[Open].set_value(False, fully=True):
             return None
-        bounds = []
+        moving_links = []
         for link in links:
             after = link.get_position_orientation()
             if all(backend.torch.allclose(a, b, atol=1e-5, rtol=0.)
@@ -36,15 +36,34 @@ def closed_geometry_proposals(backend, target):
                 continue
             points = link.collision_boundary_points_world
             if points is not None:
-                bounds.append((points.amin(dim=0).cpu().numpy(), points.amax(dim=0).cpu().numpy()))
+                moving_links.append((
+                    before[str(link.prim_path)],
+                    after,
+                    (points.amin(dim=0).cpu().numpy(), points.amax(dim=0).cpu().numpy()),
+                ))
+        bounds_by_volume = {}
         transforms = {}
         for link in volumes:
-            p0, q0 = open_poses[str(link.prim_path)]
+            vol_key = str(link.prim_path)
+            p0, q0 = open_poses[vol_key]
             p1, q1 = link.get_position_orientation()
             rotation = T.quat2mat(q1) @ T.quat2mat(q0).T
-            transforms[str(link.prim_path)] = (rotation.cpu().numpy(),
-                (p1-rotation@p0).cpu().numpy())
-        return bounds, transforms
+            translation = p1 - rotation @ p0
+            transforms[vol_key] = (rotation.cpu().numpy(), translation.cpu().numpy())
+            vol_bounds = []
+            for (lp0, lq0), (lp1, lq1), box in moving_links:
+                expected_p1 = rotation @ lp0 + translation
+                expected_r1 = rotation @ T.quat2mat(lq0)
+                actual_r1 = T.quat2mat(lq1)
+                if (backend.torch.allclose(lp1, expected_p1, atol=1e-4, rtol=0.)
+                        and backend.torch.allclose(actual_r1, expected_r1, atol=1e-4, rtol=0.)):
+                    # A link that moves rigidly with this fillable volume (such
+                    # as a sliding drawer body) is the carrying cavity itself,
+                    # not a door or lid closing across the cavity.
+                    continue
+                vol_bounds.append(box)
+            bounds_by_volume[vol_key] = vol_bounds
+        return bounds_by_volume, transforms
     finally:
         target.set_joint_positions(joints)
         target.states[Open].clear_cache()
@@ -58,12 +77,16 @@ def closed_geometry_overlap(geometry, volume, center, extent):
         return 0.
     import numpy as np
     bounds, transforms = geometry
-    rotation, translation = transforms[str(volume.prim_path)]
+    vol_key = str(volume.prim_path)
+    vol_bounds = bounds.get(vol_key, ()) if isinstance(bounds, dict) else bounds
+    if not vol_bounds:
+        return 0.
+    rotation, translation = transforms[vol_key]
     center = rotation @ np.asarray(center) + translation
     extent = abs(rotation) @ np.asarray(extent)
     low, high = center-extent/2, center+extent/2
     return sum(float(np.prod(np.maximum(0., np.minimum(high, b)-np.maximum(low, a))))
-               for a, b in bounds) / max(float(np.prod(extent)), 1e-12)
+               for a, b in vol_bounds) / max(float(np.prod(extent)), 1e-12)
 
 
 def check_closure_clearance(backend, target, assembly):
