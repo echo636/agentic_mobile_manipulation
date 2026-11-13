@@ -223,6 +223,42 @@ class OfflineReportTests(unittest.TestCase):
         self.assertEqual((row['robot_time']['source'], row['robot_time']['robot_time_seconds']),
                          ('robot_clock', 7.))
 
+    def test_token_usage_falls_back_to_verified_native_session_archive(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        root = Path(folder.name)
+        run = root / 'run'
+        controller = root / 'controller'
+        run.mkdir()
+        controller.mkdir()
+        (run / 'run.json').write_text(json.dumps({'task_success': True, 'wall_seconds': 120., 'evaluation': {}}))
+        (run / 'events.jsonl').write_text('')
+        (controller / 'model_events.jsonl').write_text(json.dumps({'type': 'turn.started'}) + '\n')
+        (controller / 'controller.json').write_text(json.dumps({
+            'reasoning_trace': {'session_sha256': 'pinned-sha-256'},
+        }))
+        (controller / 'native_session_token_usage.json').write_text(json.dumps({
+            'session_sha256': 'pinned-sha-256',
+            'final_total_token_usage': {
+                'input_tokens': 6890950,
+                'cached_input_tokens': 6687104,
+                'output_tokens': 5159,
+            },
+        }))
+        row = six_metrics(run, controller, label='model_ep')
+        self.assertEqual(row['usage'], {
+            'input_tokens': 6890950,
+            'cached_input_tokens': 6687104,
+            'output_tokens': 5159,
+        })
+        self.assertIn('6,890,950 / 6,687,104 / 5,159', markdown_table([row]))
+
+        (controller / 'native_session_token_usage.json').write_text(json.dumps({
+            'session_sha256': 'mismatched-sha-256',
+            'final_total_token_usage': {'input_tokens': 999},
+        }))
+        self.assertEqual(six_metrics(run, controller)['usage'], {})
+
 
 if __name__ == '__main__':
     unittest.main()

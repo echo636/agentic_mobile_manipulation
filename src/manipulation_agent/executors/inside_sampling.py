@@ -44,16 +44,19 @@ def volume_center_domains(low, high, extent):
     return domains
 
 
-def envelope_protrusion(center, extent, low, high, settling_drop=0.):
+def envelope_protrusion(center, extent, low, high, settling_drop=0., floor_tolerance=0.):
     """Rank a resting envelope within a volume; never reject conservative bounds.
 
     Native Inside can accept an item's center while it rests on a box rim and
     obstructs the lid. Prefer lower interior supports for unladen placements.
+    A verified internal support mesh may sit up to 15 mm below the conservative
+    fillable visual_aabb floor without protruding out of the container.
     Bounds are only a ranking hint: physical contact and Inside remain required.
     """
     resting = (*center[:2], center[2]-settling_drop)
-    return sum(max(0., lo-(c-e/2))+max(0., c+e/2-hi)
-               for c,e,lo,hi in zip(resting,extent,low,high))
+    return sum(max(0., (lo - (floor_tolerance if axis == 2 else 0.)) - (c - e/2))
+               + max(0., c + e/2 - hi)
+               for axis, (c, e, lo, hi) in enumerate(zip(resting, extent, low, high)))
 
 
 def assembly_orientations(held, root_quat, torch, transforms, reference_quat=None, *, allow_reorientation=False):
@@ -168,7 +171,11 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
         for volume, vlo, vhi, vp, vr, cavity_low, cavity_high in volume_geometry:
             local_shape = rotated @ vr
             sl, sh = local_shape.amin(0), local_shape.amax(0)
-            domains = volume_center_domains(cavity_low, cavity_high, (sh - sl).tolist())
+            local_ext = (sh - sl).tolist()
+            inset_xy_lo = [cavity_low[i] + local_ext[i] / 2 - 1e-5 for i in (0, 1)]
+            inset_xy_hi = [cavity_high[i] - local_ext[i] / 2 + 1e-5 for i in (0, 1)]
+            has_inset_xy = all(inset_xy_lo[i] <= inset_xy_hi[i] for i in (0, 1))
+            domains = volume_center_domains(cavity_low, cavity_high, local_ext)
             for domain, centers in domains:
                 local_centers = root.new_tensor(centers)
                 world = (local_centers - (sl + sh) / 2) @ vr.T + vp + offset
@@ -180,7 +187,8 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                         continue
                     centers = root.new_tensor(candidates)
                     admission = centers.clone()
-                    if kind.startswith('support_'):
+                    is_support = kind.startswith('support_')
+                    if is_support:
                         admission[:, 2] -= clearance
                         # An unladen object may start above the opening and
                         # fall onto the internal support already found.
@@ -192,12 +200,26 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                         key = tuple(round(float(v), 5) for v in (*position, *quat))
                         if key in seen: continue
                         seen.add(key)
-                        protrusion = envelope_protrusion(center.tolist(), extent.tolist(), vlo.tolist(),
-                            vhi.tolist(), clearance if kind.startswith('support_') else 0.)
+                        effective_kind = kind
+                        if kind == 'support_inset':
+                            local_c = (position - vp) @ vr + (sl + sh) / 2
+                            if not (has_inset_xy and all(
+                                    inset_xy_lo[i] <= float(local_c[i]) <= inset_xy_hi[i] for i in (0, 1))):
+                                effective_kind = 'support_full_volume'
+                        resting_center = [
+                            float(center[0]),
+                            float(center[1]),
+                            float(center[2]) - (clearance if is_support else 0.),
+                        ]
+                        protrusion = envelope_protrusion(
+                            center.tolist(), extent.tolist(), vlo.tolist(), vhi.tolist(),
+                            clearance if is_support else 0.,
+                            floor_tolerance=.015 if is_support else 0.,
+                        )
                         closed_overlap = round(closed_geometry_overlap(
-                            closure_geometry, volume, center.tolist(), extent.tolist()), 6)
+                            closure_geometry, volume, resting_center, extent.tolist()), 6)
                         distance = float(torch.linalg.vector_norm(center - point)) if point is not None else float(center[2])
-                        domain_rank = {'support_inset': 0, 'support_full_volume': 1, 'inset': 2, 'full_volume': 3}[kind]
+                        domain_rank = {'support_inset': 0, 'support_full_volume': 1, 'inset': 2, 'full_volume': 3}[effective_kind]
                         priority = (
                             round(protrusion, 5),
                             closed_overlap,
@@ -205,7 +227,7 @@ def select_inside_release(backend, held, target, contents, *, point=None, reside
                             label == 'unladen_face_proposal',
                             distance,
                         )
-                        proposals.append((priority, position, quat, center, extent, volume, kind, label))
+                        proposals.append((priority, position, quat, center, extent, volume, effective_kind, label))
     pose_score = backend._inside_pose_overlap_ranker(held, assembly)
     envelope_score = backend._inside_overlap_ranker(assembly)
     selected = None; best = None; scored = 0
@@ -502,7 +524,7 @@ Rejected candidate poses never become committed actions or task evidence.
                 # A free support above existing contents can protrude while
                 # satisfying Inside. Try it before lower poses that overlap
                 # those contents; neither heuristic replaces native checks.
-                return (closed_overlap(c), round(occupancy(c),6), round(envelope_protrusion(c[1], extents[tuple(c[3].cpu().tolist())], *volume_bounds[c[0].prim_path], settling_drop), 6), top_height(c) if was_open is True else 0.)
+                return (closed_overlap(c), round(occupancy(c),6), round(envelope_protrusion(c[1], extents[tuple(c[3].cpu().tolist())], *volume_bounds[c[0].prim_path], settling_drop, .015), 6), top_height(c) if was_open is True else 0.)
             families={}
             for group in supported:
                 for candidate in group:

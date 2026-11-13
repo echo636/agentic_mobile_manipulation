@@ -278,6 +278,104 @@ class AssemblySamplingTests(unittest.TestCase):
             self.assertAlmostEqual(z, expected_z, places=6)
         self.assertEqual(too_low, [])
 
+    def test_single_release_chooses_flush_floor_support_over_midair_inset_drop(self):
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        b, held, target, _, state, _, modules = self.fixture()
+        torch = b.torch
+        held.extent = torch.tensor([.20, .08, .08])
+        held.offset = torch.zeros(3)
+        corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+        volume = target.links['volume']
+        volume.visual_aabb = (torch.tensor([-.20, -.30, .250]), torch.tensor([.20, .30, .440]))
+        volume.visual_boundary_points_world = corners(volume.visual_aabb)
+        volume.check_points_in_volume = lambda points: (
+            (points >= volume.visual_aabb[0]) & (points <= volume.visual_aabb[1])
+        ).all(dim=1)
+        b.env = SimpleNamespace(scene=SimpleNamespace())
+        b._collision_vertices = lambda obj: corners(obj.aabb)
+        clearance = .025 + .5 * 9.81 * b.og.sim.get_physics_dt() ** 2
+        floor_z = .247  # 3 mm below fillable visual_aabb low[2] = 0.250
+        b._inside_support_centers = lambda _h, _t, _v, centers, *_a, **_kw: [
+            (float(c[0]), float(c[1]), floor_z + .04 + clearance) for c in centers
+        ]
+        b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: 0
+        b._inside_overlap_ranker = lambda *args: lambda *args: 0
+        with patch.dict('sys.modules', modules), \
+             patch('manipulation_agent.executors.inside_sampling.assembly_orientations',
+                   return_value=[('asset_resting_pose', held.quat, 0.)]), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',
+                   return_value=None):
+            candidate = select_inside_release(b, held, target, [], point=torch.tensor([0., 0., .38]))
+        self.assertEqual(candidate['domain'], 'support_inset')
+        self.assertAlmostEqual(float(candidate['pose'][0][2]), floor_z + .04 + clearance, places=6)
+        self.assertEqual(state, {'steps': 0, 'loads': 0})
+
+    def test_single_release_downgrades_out_of_inset_click_projection_to_support_full_volume(self):
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        b, held, target, _, state, _, modules = self.fixture()
+        torch = b.torch
+        held.extent = torch.tensor([.20, .12, .06])
+        held.offset = torch.zeros(3)
+        yaw90 = torch.tensor([0., 0., math.sqrt(.5), math.sqrt(.5)])
+        target.quat = yaw90
+        corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+        volume = target.links['volume']
+        # Rotated 90 deg around Z: world Y in [0.0, 0.40] is container depth (lip at y=0.0).
+        volume.visual_aabb = (torch.tensor([-.40, 0., 1.20]), torch.tensor([.40, .40, 1.50]))
+        volume.visual_boundary_points_world = corners(volume.visual_aabb)
+        volume.check_points_in_volume = lambda points: (
+            (points >= volume.visual_aabb[0]) & (points <= volume.visual_aabb[1])
+        ).all(dim=1)
+        b.env = SimpleNamespace(scene=SimpleNamespace())
+        b._collision_vertices = lambda obj: corners(obj.aabb)
+        clearance = .025 + .5 * 9.81 * b.og.sim.get_physics_dt() ** 2
+        # Simulate _inside_support_centers injecting a lip-projected click (y=0.04,
+        # overhanging the y=0.0 lip for a 0.20 m deep item) ahead of interior centers.
+        b._inside_support_centers = lambda _h, _t, _v, centers, *_a, **_kw: [
+            (0., .04, 1.22 + .03 + clearance),
+            *[(float(c[0]), float(c[1]), 1.22 + .03 + clearance) for c in centers],
+        ]
+        b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: 0
+        b._inside_overlap_ranker = lambda *args: lambda *args: 0
+        with patch.dict('sys.modules', modules), \
+             patch('manipulation_agent.executors.inside_sampling.assembly_orientations',
+                   return_value=[('asset_resting_pose', yaw90, 0.)]), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',
+                   return_value=None):
+            candidate = select_inside_release(b, held, target, [], point=torch.tensor([0., -.05, 1.40]))
+        self.assertEqual(candidate['domain'], 'support_inset')
+        self.assertGreaterEqual(float(candidate['pose'][0][1]), .10 - 1e-4)
+        self.assertEqual(state, {'steps': 0, 'loads': 0})
+
+    def test_single_release_scores_closed_lid_against_settled_support_height(self):
+        import numpy as np
+        from manipulation_agent.executors.inside_sampling import select_inside_release
+        b, held, target, _, _, _, modules = self.fixture()
+        torch = b.torch
+        held.extent = torch.tensor([.16, .16, .10])
+        held.offset = torch.zeros(3)
+        corners = lambda bounds: torch.tensor(list(itertools.product(*zip(*[v.tolist() for v in bounds]))))
+        volume = target.links['volume']
+        volume.visual_boundary_points_world = corners(volume.visual_aabb)
+        b.env = SimpleNamespace(scene=SimpleNamespace())
+        b._collision_vertices = lambda obj: corners(obj.aabb)
+        clearance = .025 + .5 * 9.81 * b.og.sim.get_physics_dt() ** 2
+        # Floor support settles center at z = 0.29 (top = 0.34 < lid at 0.35),
+        # whereas pre-drop release center is z = 0.3153 (top = 0.3653 > 0.35).
+        b._inside_support_centers = lambda *_a, **_kw: [(0., 0., .29 + clearance)]
+        b._inside_pose_overlap_ranker = lambda *args: lambda position, quat: 0
+        b._inside_overlap_ranker = lambda *args: lambda *args: 0
+        geometry = ({'volume': [(np.array([-.5, -.5, .35]), np.array([.5, .5, .40]))]},
+                    {'volume': (np.eye(3), np.zeros(3))})
+        with patch.dict('sys.modules', modules), \
+             patch('manipulation_agent.executors.inside_sampling.assembly_orientations',
+                   return_value=[('asset_resting_pose', held.quat, 0.)]), \
+             patch('manipulation_agent.executors.closure_clearance.closed_geometry_proposals',
+                   return_value=geometry):
+            candidate = select_inside_release(b, held, target, [])
+        self.assertEqual(candidate['domain'], 'support_inset')
+        self.assertAlmostEqual(float(candidate['pose'][0][2]), .29 + clearance, places=6)
+
     def test_closed_geometry_proposals_excludes_comoving_drawer_body_and_keeps_hinged_door(self):
         from manipulation_agent.executors.closure_clearance import (
             closed_geometry_overlap, closed_geometry_proposals,

@@ -132,12 +132,21 @@ def token_usage(controller_dir):
     if controller_dir is None:
         return {}
     from ..clients.events import event_path
+    controller_dir = Path(controller_dir)
     usage = {}
     for event in read_jsonl(event_path(controller_dir)):
         if event.get('type') == 'turn.completed':
             for key, value in (event.get('usage') or {}).items():
                 if isinstance(value, (int, float)):
                     usage[key] = usage.get(key, 0) + value
+    if not usage:
+        native = read_json(controller_dir / 'native_session_token_usage.json')
+        controller = read_json(controller_dir / 'controller.json')
+        pinned_sha = (controller.get('reasoning_trace') or {}).get('session_sha256')
+        if native.get('final_total_token_usage') and (not pinned_sha or native.get('session_sha256') == pinned_sha):
+            for key, value in native['final_total_token_usage'].items():
+                if isinstance(value, (int, float)):
+                    usage[key] = value
     return usage
 
 
