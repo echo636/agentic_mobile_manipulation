@@ -15,7 +15,7 @@ class LocalLimits:
     # Used only when the static map leaves no standing cell within reach_m.
     fallback_reach_m: float = 2.0
     # A floor click on a cell the base cannot occupy moves to walkable floor this close to it.
-    floor_click_snap_m: float = 1.0
+    floor_click_snap_m: float = 2.0
     max_env_steps: int = 600  # Atomic manipulation allowance, separate from episode policy.
     max_sampling_steps: int = 1200
     wall_seconds: float = 300.0

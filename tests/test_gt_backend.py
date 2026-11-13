@@ -187,7 +187,8 @@ class GTBackendTests(unittest.TestCase):
 
     def test_floor_click_far_inside_unwalkable_area_is_refused(self):
         b=self.backend()
-        target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([4.5,0.,0.]),None))
+        # 2.55 m past the walkable map edge, beyond the 2.0 m limit.
+        target=SimpleNamespace(get_position_orientation=lambda:(b.torch.tensor([5.5,0.,0.]),None))
         with self.assertRaises(SkillError) as failure:b._navigate(target,700)
         self.assertEqual(failure.exception.code,'navigation_unreachable')
         b._execute_base_path.assert_not_called()
