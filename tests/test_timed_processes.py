@@ -5,6 +5,7 @@ import unittest
 from manipulation_agent.contracts import Budget, SkillError
 from manipulation_agent.executors.timed_processes import TimedProcesses, validate_timed_processes
 from manipulation_agent.records import Recorder
+from manipulation_agent.references.full_workflow_reference import validate_workflow_plan
 from manipulation_agent.runtime.robot_clock import charge_base_motion, clocked_action, clocked_leaf
 from manipulation_agent.runtime.vision_harness import VisionHarness
 from manipulation_agent.tasks.custom_tasks import validate_spec
@@ -282,6 +283,35 @@ class TimedProcessesTests(unittest.TestCase):
             res = vh.perform('wait', None, 0, seconds=60.0)
             self.assertEqual(res['effect']['process']['message'],
                              'The microwave chime sounded: heating is complete.')
+
+    def test_workflow_plan_allows_strategy_variants_and_60s_wait_for(self):
+        spec = _sample_spec()
+        spec['acceptance_cases'] = {
+            'reference_orders': ['habit_seq', 'optimal_parallel'],
+            'physical_negative_cases': ['omit_heat'],
+            'fresh_restore_repetitions': 2,
+            'max_reference_action_attempts': 100,
+        }
+        spec['reference_plan'] = {
+            'kind': 'full_workflow',
+            'allow_strategy_variants': True,
+            'phases': {
+                'start_heat': {'actions': [{'primitive': 'toggle_on', 'role': 'microwave'}], 'after': []},
+                'idle_wait': {
+                    'actions': [{'primitive': 'wait_for', 'condition': 'hotdog1_cooked', 'seconds': 60.0, 'attempts': 3}],
+                    'after': ['start_heat'],
+                },
+                'parallel_prep': {'actions': [{'primitive': 'grasp', 'role': 'cup1'}], 'after': ['start_heat']},
+                'finish_heat': {'actions': [{'primitive': 'toggle_off', 'role': 'microwave'}], 'after': ['start_heat']},
+            },
+            'orders': {
+                'habit_seq': ['start_heat', 'idle_wait', 'parallel_prep', 'finish_heat'],
+                'optimal_parallel': ['start_heat', 'parallel_prep', 'finish_heat'],
+            },
+            'negative_omissions': {'omit_heat': 'finish_heat'},
+        }
+        info = validate_workflow_plan(spec)
+        self.assertEqual(info['phase_count'], 4)
 
 
 if __name__ == '__main__':
