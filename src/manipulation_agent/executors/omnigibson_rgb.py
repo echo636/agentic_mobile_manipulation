@@ -766,6 +766,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             self._demo_focus=None;self._spectator_anchor=None
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
         if primitive=='wait':
+            if getattr(self,'_symbolic_process_wait',False):
+                seconds=float(kwargs.get('seconds',5.0))
+                count=min(max_steps,5)
+                for _ in range(count):self._step(self.primitives._empty_action())
+                return {'primitive':'wait','steps':count,'sim_seconds':seconds,'symbolic_process_wait':True}
             count=min(max_steps,int(round(float(kwargs.get('seconds',5.0))/self.og.sim.get_sim_step_dt())))
             for _ in range(count):self._step(self.primitives._empty_action())
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}

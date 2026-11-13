@@ -326,6 +326,8 @@ class VisionHarness:
                 'primitive_attempts':int(local['primitive_attempts']),
                 'operation_committed':True,
                 'message':'Operation completed on the selected target. Inspect the returned RGB.'}
+        if details.get('public_process'):
+            effect['process']=details['public_process']
         if primitive=='navigate_to':
             # Only an action outcome crosses the RGB boundary, never private
             # coordinates, target distances, object identities or map geometry.

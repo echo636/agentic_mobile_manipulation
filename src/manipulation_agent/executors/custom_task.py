@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 from .omnigibson_rgb import RGBBackend
+from .timed_processes import TimedProcesses, VERSION as TIMED_PROCESSES_VERSION
 from ..tasks.long_horizon import TemporalGoalEvaluator
 from ..tasks.custom_tasks import validate_spec
 from ..records import write_json
@@ -106,6 +107,8 @@ class CustomTaskBackend(RGBBackend):
         validate_spec(self.custom_spec, spec_path=self.spec_path, require_frozen=build_instance is None)
         validate_system_references(self.custom_spec,
             Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/systems')
+        self.timed_processes = TimedProcesses.from_spec(self.custom_spec)
+        self._symbolic_process_wait = self.timed_processes is not None
         self.custom_tracker = None; self.custom_sequence = 0
         self._initial_entity_names = None
         self._protected_initial_positions = {}
@@ -524,6 +527,8 @@ class CustomTaskBackend(RGBBackend):
 
     def _predicate_values(self):
         from omnigibson import object_states
+        if getattr(self, 'timed_processes', None) is not None:
+            self.timed_processes.sync_all_states(self)
         live = {obj.name:obj for obj in self.env.scene.objects}
         if self._initial_entity_names is None:
             self._initial_entity_names = set(live)
@@ -531,6 +536,10 @@ class CustomTaskBackend(RGBBackend):
         result = {}
         for key, row in self.custom_spec['evaluation']['predicates'].items():
             obj = roles[row['object']]
+            if row['state'] == 'ProcessComplete':
+                result[key] = bool(self.timed_processes
+                                   and self.timed_processes.is_completed(row['process'], row['object']))
+                continue
             if row['state'] == 'SystemExists':
                 result[key] = row['system'] in self.env.scene.active_systems; continue
             if row['state'] == 'Exists':
@@ -593,6 +602,8 @@ class CustomTaskBackend(RGBBackend):
 
     def _step(self, action):
         super()._step(action)
+        if getattr(self, 'timed_processes', None) is not None:
+            self.timed_processes.sync_all_states(self)
         if self.custom_tracker is not None: self._check_custom_motion()
 
     def execute_visual(self, primitive, target, max_steps, **kwargs):
@@ -602,9 +613,17 @@ class CustomTaskBackend(RGBBackend):
         before_violations = copy.deepcopy(self.custom_tracker.violations)
         before_positions = self._motion_positions()
         before_values = self._predicate_values()
+        proc_snap = self.timed_processes.before_action(self) if self.timed_processes is not None else None
         try:
             result = super().execute_visual(primitive,target,max_steps,**kwargs)
-        except Exception:
+            if self.timed_processes is not None:
+                public_proc = self.timed_processes.after_action(
+                    self, proc_snap, primitive, details=result, error=None)
+                if public_proc is not None:
+                    result = {**result, 'public_process': public_proc}
+        except Exception as exc:
+            if self.timed_processes is not None:
+                self.timed_processes.after_action(self, proc_snap, primitive, details=None, error=exc)
             # Motion violations during a rolled-back atomic action are not a
             # committed trajectory. Current terminal state is still rechecked.
             current = self._motion_positions()
@@ -638,6 +657,8 @@ class CustomTaskBackend(RGBBackend):
         result.update(task_instance=self.task_metadata,input_hashes=self.input_hashes,
                       observation_mode='rgb_only',ideal_navigation_distance_m=self.navigation_distance)
         result.update(robot_clock_record(self))
+        if self.timed_processes is not None:
+            result['timed_processes'] = self.timed_processes.summary(self)
         return result
 
     def provenance(self):
@@ -647,4 +668,6 @@ class CustomTaskBackend(RGBBackend):
                           'score_type', 'custom_joint_terminal_and_public_history_v1'))
         if getattr(self, '_recipe_particle_output_policy', None) is not None:
             result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
+        if self.timed_processes is not None:
+            result['timed_processes'] = TIMED_PROCESSES_VERSION
         return result
