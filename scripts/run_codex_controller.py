@@ -166,6 +166,8 @@ def main(argv=None, *, allow_client=False):
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
     p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
+    p.add_argument('--autonomy-instruction', choices=['off','on'], default='off',
+                   help='Harness option: append the autonomous-episode operating instruction to the system prompt')
     p.add_argument('--require-tool-intent',action='store_true',
                    help='Match the simulator public_tool_intent_v1 tool schemas and prompt')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh','max','ultra'])
@@ -213,7 +215,8 @@ def main(argv=None, *, allow_client=False):
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill,
-                                 require_tool_intent=args.require_tool_intent)
+                                 require_tool_intent=args.require_tool_intent,
+                                 autonomy=args.autonomy_instruction == 'on')
     catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent)
     planner_config = None
     mcp_env_vars = ()
@@ -279,6 +282,7 @@ def main(argv=None, *, allow_client=False):
         backoff_seconds=args.resume_backoff_seconds, gateway=args.model_provider_gateway,
         scope='Same live MCP episode; transient same-thread resumes and explicitly enabled native-history route forks')
     metadata['unfinished_turn_nudges'] = args.unfinished_turn_nudges
+    metadata['autonomy_instruction'] = args.autonomy_instruction
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',

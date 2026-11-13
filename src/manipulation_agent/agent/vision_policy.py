@@ -30,6 +30,14 @@ Use remember and recall to retain useful observations, completed work and uncert
 '''
 SYSTEM_PROMPT = SKILLS_PROMPT
 
+# Harness option, off by default (system_prompt(autonomy=True), controller --autonomy-instruction on).
+# Operating facts only: who reads the messages, what ending a turn does, and when a stop outcome applies.
+# The first sentence and the blocked rule come from the frozen experiment line's prompt
+# (terra_direct_mcp_20261104 MINIMAL_PROMPT); the rewritten prompt above no longer states them.
+AUTONOMY_INSTRUCTION = '''
+Work autonomously through the whole instruction in this episode; nobody reads your messages or replies until you finish. Ending a turn without an accepted finish call only pauses the robot, so keep calling tools instead of reporting progress. Use finish(outcome=blocked) or finish(outcome=aborted) only for a concrete obstacle that persists after materially different attempts, or when no act/look steps remain; work that merely remains to be done is not a reason to stop.
+'''
+
 
 TOOL_INTENT_PROMPT = '''Every tool call must include intent: one concise public sentence stating the immediate purpose of this particular call. This includes initialize, look, act, list_skills, read_skill, task_notes and finish, and any other enabled tool. Intent is a required tool argument, not a replacement for task_notes or an occasional progress message. Base it on the task and evidence already available; before initialize, state what you intend to inspect without inventing scene facts. Do not provide a private reasoning transcript.
 '''
@@ -82,7 +90,7 @@ def inline_skill_guidance(goal_skill='hierarchical'):
     return ('\nWorkflow guidance, included in full. There are no skill-reading tools.\n\n' + '\n'.join(sections))
 
 
-def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_intent=False):
+def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_intent=False, autonomy=False):
     if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
     if profile == 'skills_inline':
         prompt = SKILLS_BASE_PROMPT
@@ -95,6 +103,8 @@ def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_i
         prompt = {'minimal':MINIMAL_PROMPT,'basic-skills':BASIC_SKILLS_PROMPT,'goal-tree':GOAL_TREE_PROMPT,
                   'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
                   'workflow':WORKFLOW_PROMPT}[profile]
+    if autonomy:
+        prompt += AUTONOMY_INSTRUCTION
     if require_tool_intent:
         intent = TOOL_INTENT_PROMPT
         if profile == 'skills_inline':

@@ -119,6 +119,25 @@ class FinishGuardRuleTests(unittest.TestCase):
             self.assertEqual(history[0]['steps_remaining'], 399)
 
 
+class AutonomyInstructionTests(unittest.TestCase):
+    """The prompt counterpart is appended only on request and leaves every default prompt unchanged."""
+
+    def test_off_by_default_and_appended_for_every_profile(self):
+        from manipulation_agent.agent.vision_policy import AUTONOMY_INSTRUCTION, system_prompt
+        for profile in ('minimal', 'basic-skills', 'goal-tree', 'skills', 'skills_inline', 'workflow'):
+            with self.subTest(profile=profile):
+                base = system_prompt(profile)
+                self.assertNotIn('nobody reads your messages', base)
+                self.assertEqual(system_prompt(profile, autonomy=True), base + AUTONOMY_INSTRUCTION)
+        intent = system_prompt('skills', require_tool_intent=True, autonomy=True)
+        self.assertEqual(intent.count(AUTONOMY_INSTRUCTION), 1)
+
+    def test_text_states_operating_facts_only(self):
+        from manipulation_agent.agent.vision_policy import AUTONOMY_INSTRUCTION
+        for word in ('first', 'batch', 'order', 'efficient', 'tray', 'route'):
+            self.assertNotIn(word, AUTONOMY_INSTRUCTION.lower())
+
+
 class UnfinishedTurnNudgeTests(unittest.TestCase):
     """The controller counterpart: a turn that ends without an accepted finish is continued, when enabled."""
 
