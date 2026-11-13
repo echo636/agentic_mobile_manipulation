@@ -119,6 +119,39 @@ class FinishGuardRuleTests(unittest.TestCase):
             self.assertEqual(history[0]['steps_remaining'], 399)
 
 
+class UnfinishedTurnNudgeTests(unittest.TestCase):
+    """The controller counterpart: a turn that ends without an accepted finish is continued, when enabled."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location(
+            'controller_nudge_test', Path(__file__).parents[1] / 'scripts/run_codex_controller.py')
+        cls.controller = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.controller)
+
+    def test_nudge_only_for_a_normal_open_turn_and_only_when_enabled(self):
+        nudge = self.controller.unfinished_turn_nudge
+        done = [{'type': 'turn.started'}, {'type': 'turn.completed'}]
+        state = dict(returncode=0, finish_received=False, timed_out=False, nudges=0, max_nudges=2)
+        self.assertTrue(nudge(done, **state))
+        self.assertFalse(nudge(done, **{**state, 'max_nudges': 0}))  # default: off
+        self.assertFalse(nudge(done, **{**state, 'finish_received': True}))
+        self.assertFalse(nudge(done, **{**state, 'timed_out': True}))
+        self.assertFalse(nudge(done, **{**state, 'returncode': 1}))
+        self.assertFalse(nudge(done, **{**state, 'nudges': 2}))
+        self.assertFalse(nudge([{'type': 'turn.failed', 'error': {'message': 'x'}}], **state))
+        self.assertFalse(nudge([{'type': 'turn.started'}], **state))
+
+    def test_only_act_and_look_count_as_robot_calls(self):
+        call = lambda tool, kind='item.completed': {'type': kind, 'item': {'type': 'mcp_tool_call', 'tool': tool}}
+        events = [call('act'), call('look'), call('task_notes'), call('finish'), call('act', 'item.started')]
+        self.assertEqual(self.controller.segment_robot_calls(events), 2)
+
+    def test_default_is_off(self):
+        import inspect
+        self.assertIn("'--unfinished-turn-nudges', type=int, default=0", inspect.getsource(self.controller.main))
+
+
 @unittest.skipUnless(importlib.util.find_spec('mcp'), 'Requires MCP SDK')
 class MCPFinishGuardTests(unittest.IsolatedAsyncioTestCase):
     async def serve(self, calls, **options):

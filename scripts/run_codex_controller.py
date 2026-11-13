@@ -46,6 +46,37 @@ def rate_limit_error(events):
             or 'stream disconnected before completion' in message)
 
 
+# Harness option (--unfinished-turn-nudges, default 0 = off): a turn that completed normally without an accepted
+# finish is continued in the same thread with a neutral reminder. Counterpart of tools/finish_guard.py: after a
+# deferred finish the model may simply end its turn, which exits the client and leaves the episode open.
+NUDGE_PROMPT = ('The episode is still open: your previous turn ended without an accepted finish call, and the '
+                'simulator is waiting for your next tool call. Continue the instruction from the current state with '
+                'tool calls. Call finish only when the whole instruction is done, or when an obstacle persists after '
+                'materially different attempts.')
+
+
+def segment_robot_calls(events):
+    """Completed act/look MCP calls in one client segment."""
+    return sum(1 for event in events if event.get('type') == 'item.completed'
+               and (event.get('item') or {}).get('type') == 'mcp_tool_call'
+               and (event.get('item') or {}).get('tool') in {'act', 'look'})
+
+
+def turn_completed_without_error(events):
+    terminal = next((event for event in reversed(events)
+                     if event.get('type') in {'error', 'turn.failed', 'turn.completed'}), None)
+    return terminal is not None and terminal.get('type') == 'turn.completed'
+
+
+def unfinished_turn_nudge(events, *, returncode, finish_received, timed_out, nudges, max_nudges):
+    """True when a normally completed turn left the episode open and a reminder is still allowed.
+
+    `nudges` counts consecutive reminders whose resumed segment made no act/look call.
+    """
+    return (max_nudges > 0 and returncode == 0 and not finish_received and not timed_out
+            and nudges < max_nudges and turn_completed_without_error(events))
+
+
 def codex_thread_id(events):
     return next((event.get('thread_id') for event in events
                  if event.get('type') == 'thread.started' and event.get('thread_id')), None)
@@ -150,6 +181,9 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--rate-limit-resumes', '--provider-error-resumes', type=int, default=None,
                    help='Same-session transient provider recovery count; -1 is unbounded (default for unbounded Codex episodes)')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
+    p.add_argument('--unfinished-turn-nudges', type=int, default=0,
+                   help='Harness option, Codex only: continue a normally completed turn that left the episode open; '
+                        'the value bounds consecutive reminders that produce no act/look call (0 disables)')
     p.add_argument('--permanent-route-forks', type=int, default=0,
                    help='Opt-in native-history forks for an unavailable sticky route; retains the same live robot episode')
     args = p.parse_args(argv)
@@ -244,6 +278,7 @@ def main(argv=None, *, allow_client=False):
         max_permanent_route_forks=args.permanent_route_forks,
         backoff_seconds=args.resume_backoff_seconds, gateway=args.model_provider_gateway,
         scope='Same live MCP episode; transient same-thread resumes and explicitly enabled native-history route forks')
+    metadata['unfinished_turn_nudges'] = args.unfinished_turn_nudges
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
@@ -298,26 +333,32 @@ def main(argv=None, *, allow_client=False):
     thread_id=codex_thread_id(first_events) if client == 'codex' else None
     segment_events=first_events
     continuations=[]
-    resume_count = fork_count = 0
+    resume_count = fork_count = nudge_count = 0
     for attempt in itertools.count(1):
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
         mode = provider_recovery_mode(segment_events, resumes=resume_count, forks=fork_count,
             max_resumes=args.rate_limit_resumes, max_forks=args.permanent_route_forks)
-        if (process.returncode == 0 or process.finish_received or process.timed_out or not thread_id or
-                mode is None or
-                (remaining is not None and remaining <= args.resume_backoff_seconds+30)):
+        if mode is None and client == 'codex' and unfinished_turn_nudge(
+                segment_events, returncode=process.returncode, finish_received=process.finish_received,
+                timed_out=process.timed_out, nudges=nudge_count, max_nudges=args.unfinished_turn_nudges):
+            mode = 'nudge'
+        backoff = 0 if mode == 'nudge' else args.resume_backoff_seconds
+        if ((process.returncode == 0 and mode != 'nudge') or process.finish_received or process.timed_out or
+                not thread_id or mode is None or
+                (remaining is not None and remaining <= backoff+30)):
             break
         metadata['provider_recovery'].update(state='waiting', next_attempt=attempt, next_mode=mode)
         write_json(args.output/'controller.json',metadata)
-        time.sleep(args.resume_backoff_seconds)
+        time.sleep(backoff)
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
         if remaining is not None and remaining <= 30:
             break
         segment_dir=args.output/'continuations'/str(attempt)
         segment_dir.mkdir(parents=True,exist_ok=False)
-        resume_prompt=('Continue the same robot task in the same simulator episode. '
+        resume_prompt=NUDGE_PROMPT if mode == 'nudge' else (
+                       'Continue the same robot task in the same simulator episode. '
                        'A model service error interrupted the previous turn. '
                        'Use the prior conversation and current RGB tool feedback; continue choosing '
                        'actions yourself, then call finish. Do not restart the task or claim success '
@@ -353,6 +394,8 @@ def main(argv=None, *, allow_client=False):
                 write_json(args.output/'controller.json',metadata)
                 break
             thread_id = continued_thread
+        elif mode == 'nudge':
+            nudge_count = 0 if segment_robot_calls(segment_events) else nudge_count + 1
         else:
             resume_count += 1
     if continuations:
