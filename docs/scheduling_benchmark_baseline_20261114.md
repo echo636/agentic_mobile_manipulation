@@ -36,7 +36,8 @@
 
 | 维度 | 任务 1：双人热午餐 L2（`hot_lunch_living_l2`） | 任务 2：书房/客房整理与双段洗烘配送（`study_guest_laundry`） | 任务 3：车库工坊与庭院露台晚间备场（`garage_garden_patio_prep`） |
 |---|---|---|---|
-| **任务规格路径**（相对 `../experiments/hot_lunch_benchmark_20261113/`） | `inputs/hot_lunch_living_l2/task.json` | `inputs/study_guest_laundry/task.json` | `inputs/garage_garden_patio_prep/task.json` |
+| **仓库内配方与冻结契约** | [`task_designs/scheduling_v1/hot_lunch_living_l2/`](../task_designs/scheduling_v1/hot_lunch_living_l2/task.json) | [`task_designs/scheduling_v1/study_guest_laundry/`](../task_designs/scheduling_v1/study_guest_laundry/task.json) | [`task_designs/scheduling_v1/garage_garden_patio_prep/`](../task_designs/scheduling_v1/garage_garden_patio_prep/task.json) |
+| **实验目录场景快照**（相对 `../experiments/hot_lunch_benchmark_20261113/`） | `inputs/hot_lunch_living_l2/initial_scene.json` | `inputs/study_guest_laundry/initial_scene.json` | `inputs/garage_garden_patio_prep/initial_scene.json` |
 | **规格 / 场景 SHA-256** | `spec: e1b3a2c7ed4a...`<br>`scene: a1336ec63ed6...` | `spec: a9ce1aa4463d...`<br>`scene: a0b48b029ef8...` | `spec: d44cddf6d9cb...`<br>`scene: 3447f3cfeff3...` |
 | **底层场景与连通区域** | `preparing_lunch_box`（`house_single_floor`）：厨房 + 餐厅 + 客厅 | `clean_up_your_desk`（`house_single_floor`）：南端家政间 + 走廊 + 书房 + 北端客卧 + 客卫（5 扇门） | `spraying_for_bugs`（`house_double_floor_lower`）：西侧车库工坊 + 室内走廊/厨房 + 东侧户外庭院 |
 | **跨区单程距离** | 厨房中岛 ↔ 客厅茶几约 **`9.5 m`** | 南端家政间 ↔ 北端客卧套间约 **`25.5 m`** | 西侧车库工作台 ↔ 东侧花园露台约 **`26.0 m`** |
@@ -117,7 +118,7 @@ PYTHONPATH=source_flush_support_a267904/src \
 4. **墙钟时间（模型 + 工具）**：回合总墙钟秒数，拆分为模型侧推理/通信墙钟与仿真器工具执行墙钟（不含约 2–4.7 分钟的 OmniGibson 启动加载耗时）。
 5. **轨迹长度**：严格取 `navigation_plans.jsonl` 中原生 A* 承诺可行走路径长度之和（`travel_distance_m`），**不使用**起止点欧氏位移 `ideal_navigation_distance_m`。
 6. **Token 用量（输入 / 其中缓存命中 / 输出）与多轮续跑核验提醒**：
-   - **重要发现**：当同一会话（同一 `thread_id`）因网关并发限流或空回复触发多次 `codex exec resume` 续接时（如任务 3 续接了 27 次），`controller/model_events.jsonl` 中每次输出的 `turn.completed.usage` 是**从第 0 轮起算的整段会话累计值**，而非当轮增量！若直接把多条 `turn.completed.usage` 相加，在任务 3 上会将真实的 `22,881,171` 输入 token 重复累加放大 10.01 倍变成 `229,109,229`（当前 `reporting/efficiency_table.py` 待提交补丁修复该多轮累加逻辑）。
+   - **重要发现与已修复口径**：当同一会话（同一 `thread_id`）因网关并发限流或空回复触发多次 `codex exec resume` 续接时（如任务 3 续接了 27 次），`controller/model_events.jsonl` 中每次输出的 `turn.completed.usage` 是**从第 0 轮起算的整段会话累计值**，而非当轮增量！若直接把多条 `turn.completed.usage` 相加，在任务 3 上会将真实的 `22,881,171` 输入 token 重复累加放大 10.01 倍变成 `229,109,229`。仓库 `reporting/efficiency_table.py` 已修复此逻辑：优先读取经 `session_sha256` 校验的原生会话归档 `native_session_token_usage.json`，解析 `model_events.jsonl` 时按 `thread_id` 去重保留各线程最后一条累计快照。
    - 下表及 `three_tasks_model_vs_ref_metrics.json` 中的全部 token 数字均已通过 `controller.json` 记录的 `session_sha256` 逐字节绑定核验 `~/.codex/sessions/2026/11/13/rollout-*.jsonl`，确保 `sum(last_token_usage) == final_total_token_usage` 零误差（核验文件归档在各回合 `controller/native_session_token_usage.json`）。
 
 ### 4.2 三项新任务 + 厨房整理版历史基线：六项效率指标同表汇总
@@ -163,7 +164,7 @@ PYTHONPATH=source_flush_support_a267904/src \
 
 ## 六、阶段 1b 四维覆盖扩展预备进度与文件索引
 
-除上述已完成模型基线闭环的 3 项带家电计时器任务外，为回答“**没有家电计时器时，纯空间载具路由与地点记忆是否有显著收益**”并补齐卧室（2/2）、书房（2/2）、吸尘清洁（`vacuum`）与半未知跨房找物维度，已完成**任务 4「二层双卧室与中央书房跨房载具巡回分拣及吸尘清洁」（`upstairs_study_bedrooms_exchange`）**的静态配方与二轮 CPU 可通行图/几何余量审校（真实 A* 下 `0 s` 等待，最优双向托盘巡回 `80 步 / 891.8 s / 114.8 m` vs 无绕路习惯顺序 `83 步 / 1,150.0 s [+29.0%] / 261.2 m [+127.6%]`），待排期上卡完成物理构建验收。
+除上述已完成模型基线闭环的 3 项带家电计时器任务外，为回答“**没有家电计时器时，纯空间载具路由与地点记忆是否有显著收益**”并补齐卧室（2/2）、书房（2/2）、吸尘清洁（`vacuum`）与半未知跨房找物维度，已完成**任务 4「二层双卧室与中央书房跨房载具巡回分拣及吸尘清洁」（`upstairs_study_bedrooms_exchange`）**的静态配方与二轮 CPU 可通行图/几何余量审校（仓库草稿路径：[`task_designs/drafts/upstairs_study_bedrooms_exchange/`](../task_designs/drafts/upstairs_study_bedrooms_exchange/README.md)；真实 A* 下 `0 s` 等待，最优双向托盘巡回 `80 步 / 891.8 s / 114.8 m` vs 无绕路习惯顺序 `83 步 / 1,150.0 s [+29.0%] / 261.2 m [+127.6%]`），待排期上卡完成物理构建验收。
 
 ### 完整实验产物索引（均位于 `/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/`）
 

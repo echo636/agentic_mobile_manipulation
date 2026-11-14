@@ -259,6 +259,32 @@ class OfflineReportTests(unittest.TestCase):
         }))
         self.assertEqual(six_metrics(run, controller)['usage'], {})
 
+    def test_token_usage_deduplicates_cumulative_codex_thread_resumes(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        root = Path(folder.name)
+        run = root / 'run'
+        controller = root / 'controller'
+        run.mkdir()
+        controller.mkdir()
+        (run / 'run.json').write_text(json.dumps({'task_success': True, 'wall_seconds': 240., 'evaluation': {}}))
+        (run / 'events.jsonl').write_text('')
+        events = [
+            {'type': 'thread.started', 'thread_id': 'thread-a'},
+            {'type': 'turn.completed', 'usage': {'input_tokens': 500000, 'cached_input_tokens': 400000, 'output_tokens': 900}},
+            {'type': 'thread.started', 'thread_id': 'thread-a'},
+            {'type': 'turn.completed', 'usage': {'input_tokens': 1200000, 'cached_input_tokens': 1050000, 'output_tokens': 1800}},
+            {'type': 'thread.started', 'thread_id': 'thread-b'},
+            {'type': 'turn.completed', 'usage': {'input_tokens': 300000, 'cached_input_tokens': 200000, 'output_tokens': 400}},
+        ]
+        (controller / 'model_events.jsonl').write_text(''.join(json.dumps(e) + '\n' for e in events))
+        row = six_metrics(run, controller, label='resumed_ep')
+        self.assertEqual(row['usage'], {
+            'input_tokens': 1500000,
+            'cached_input_tokens': 1250000,
+            'output_tokens': 2200,
+        })
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,1872 @@
+{
+ "schema_version": 3,
+ "id": "garage_garden_patio_prep",
+ "instance_id": "garage_garden_patio_prep_seed0_r1",
+ "status": "complete_recipe_physics_pending",
+ "benchmark_ready": false,
+ "official_submission_eligible": false,
+ "base": {
+  "task": "spraying_for_bugs",
+  "instance": 301,
+  "seed": 0
+ },
+ "roles": {
+  "garage_floor": "floors_nbxnpk_0",
+  "patio_floor": "floors_ghetev_0",
+  "lawn": "lawn_aztwla_0",
+  "garage_door": "door_bexenl_0",
+  "patio_door": "door_vudhlc_2",
+  "grill": "charcoal_grill_crdaeu_0",
+  "plant1": "pot_plant_172",
+  "plant2": "pot_plant_173",
+  "sprayer": "insectifuge_atomizer_174",
+  "kiln": "ggpp_kiln",
+  "garage_bench": "ggpp_garage_bench",
+  "tool_bench": "ggpp_tool_bench",
+  "patio_table": "ggpp_patio_table",
+  "firewood_table": "ggpp_firewood_table",
+  "lamp_stage": "ggpp_lamp_stage",
+  "toolbox": "ggpp_toolbox",
+  "axe": "ggpp_axe",
+  "block": "ggpp_block",
+  "log": "ggpp_log",
+  "tray": "ggpp_tray",
+  "brush": "ggpp_brush",
+  "bulb1": "ggpp_bulb1",
+  "bulb2": "ggpp_bulb2",
+  "lamp1": "ggpp_lamp1",
+  "lamp2": "ggpp_lamp2",
+  "log_half0": "half_ggpp_log_0",
+  "log_half1": "half_ggpp_log_1"
+ },
+ "scene_exclusions": [
+  "car_ssxsje_0",
+  "standing_mirror_wwkuuf_0",
+  "garden_chair_lraplz_0",
+  "garden_chair_cottya_1",
+  "garden_chair_cottya_2"
+ ],
+ "construction_asset_scales": [
+  {
+   "object": "sprayer",
+   "scale": [
+    1.8,
+    1.8,
+    1.8
+   ],
+   "reason": "Uniformly enlarge qnroki atomizer from 4.1 x 4.0 x 15.1 cm to 7.4 x 7.2 x 27.2 cm so it exceeds the 6 cm RGB clickability threshold while keeping uniform scale for ParticleApplier projection geometry."
+  }
+ ],
+ "asset_imports": [
+  {
+   "name": "ggpp_axe",
+   "source_task": "chopping_wood",
+   "source_object": "axe_173",
+   "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+   "position": [
+    104.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_block",
+   "source_task": "chopping_wood",
+   "source_object": "chopping_block_172",
+   "source_sha256": "0e5e638ae9ddb95a3d888eb026a3f94494ca6227ddc9326589db610c8e7fdffd",
+   "position": [
+    107.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_toolbox",
+   "source_task": "outfit_a_basic_toolbox",
+   "source_object": "toolbox_191",
+   "source_sha256": "dd7e35f3bb977176b280c84aa6fa1ef252bd9579e8d32a8b55114b7513aaf58e",
+   "position": [
+    110.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  }
+ ],
+ "native_assets": [
+  {
+   "name": "ggpp_kiln",
+   "category": "oven",
+   "model": "nvqqkv",
+   "usd_sha256": "028cb02e5f005d1112846c92e2999af412d2333421b482d175888cda2ac5a9ee",
+   "prim_type": 0,
+   "fixed_base": true,
+   "scale": [
+    1.2,
+    1.2,
+    1.3
+   ],
+   "position": [
+    74.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    -0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "name": "ggpp_garage_bench",
+   "category": "desk",
+   "model": "bhkhxo",
+   "usd_sha256": "bd90dd738a51fb20776c177efd1c2845a5b6368c02f81cb7e3dfd38a893d04d7",
+   "prim_type": 0,
+   "fixed_base": true,
+   "scale": [
+    1.15,
+    1.0,
+    1.0
+   ],
+   "position": [
+    77.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "name": "ggpp_tool_bench",
+   "category": "desk",
+   "model": "bhkhxo",
+   "usd_sha256": "bd90dd738a51fb20776c177efd1c2845a5b6368c02f81cb7e3dfd38a893d04d7",
+   "prim_type": 0,
+   "fixed_base": true,
+   "scale": [
+    0.95,
+    0.56,
+    1.0
+   ],
+   "position": [
+    80.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_patio_table",
+   "category": "desk",
+   "model": "bhkhxo",
+   "usd_sha256": "bd90dd738a51fb20776c177efd1c2845a5b6368c02f81cb7e3dfd38a893d04d7",
+   "prim_type": 0,
+   "fixed_base": true,
+   "scale": [
+    0.95,
+    0.96,
+    1.0
+   ],
+   "position": [
+    83.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_firewood_table",
+   "category": "desk",
+   "model": "bhkhxo",
+   "usd_sha256": "bd90dd738a51fb20776c177efd1c2845a5b6368c02f81cb7e3dfd38a893d04d7",
+   "prim_type": 0,
+   "fixed_base": true,
+   "scale": [
+    1.0,
+    0.68,
+    1.0
+   ],
+   "position": [
+    86.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_lamp_stage",
+   "category": "desk",
+   "model": "bhkhxo",
+   "usd_sha256": "bd90dd738a51fb20776c177efd1c2845a5b6368c02f81cb7e3dfd38a893d04d7",
+   "prim_type": 0,
+   "fixed_base": true,
+   "scale": [
+    0.95,
+    0.68,
+    1.0
+   ],
+   "position": [
+    89.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_tray",
+   "category": "tray",
+   "model": "coqeme",
+   "usd_sha256": "f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd",
+   "prim_type": 0,
+   "scale": [
+    3.8,
+    2.43,
+    1.8
+   ],
+   "position": [
+    92.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_brush",
+   "category": "scrub_brush",
+   "model": "hsejyi",
+   "usd_sha256": "727407d5b793fad3217a47ffa5273972787d2a3057489fc91241509cb81e1558",
+   "prim_type": 0,
+   "scale": [
+    2.0,
+    2.0,
+    2.0
+   ],
+   "position": [
+    95.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_log",
+   "category": "log",
+   "model": "pepele",
+   "usd_sha256": "59019e74b59f89f125a6f40f9d12cbe093f35e92545bd4ae6a15cb4f4e8ce4bb",
+   "prim_type": 0,
+   "position": [
+    98.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_bulb1",
+   "category": "light_bulb",
+   "model": "kfmkwd",
+   "usd_sha256": "e2fcd2fbd519407e50d84f0ddaa1b3409d891c07952089b5979663fd1d446c13",
+   "prim_type": 0,
+   "position": [
+    101.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_bulb2",
+   "category": "light_bulb",
+   "model": "kfmkwd",
+   "usd_sha256": "e2fcd2fbd519407e50d84f0ddaa1b3409d891c07952089b5979663fd1d446c13",
+   "prim_type": 0,
+   "position": [
+    101.0,
+    53.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_lamp1",
+   "category": "table_lamp",
+   "model": "ehjsdz",
+   "usd_sha256": "058b13cba1cb5a68c18df649bc6246020ff71115fcef159a7ca83cc75e174550",
+   "prim_type": 0,
+   "position": [
+    104.0,
+    53.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "ggpp_lamp2",
+   "category": "table_lamp",
+   "model": "ehjsdz",
+   "usd_sha256": "058b13cba1cb5a68c18df649bc6246020ff71115fcef159a7ca83cc75e174550",
+   "prim_type": 0,
+   "position": [
+    107.0,
+    53.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  }
+ ],
+ "timed_processes": [
+  {
+   "id": "kiln_dry_firewood",
+   "appliance": "kiln",
+   "items": [
+    "log_half0",
+    "log_half1"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 360.0,
+   "set_object_state": null,
+   "running_message": "The drying oven is running; the split firewood inside is still drying.",
+   "completed_message": "The drying oven timer finished: the split firewood inside is dry.",
+   "stopped_early_message": "The drying oven stopped before the firewood drying cycle finished."
+  }
+ ],
+ "robot_start": {
+  "position": [
+   -5.6,
+   5.2,
+   0.02
+  ],
+  "orientation": [
+   0.0,
+   0.0,
+   0.70710678,
+   0.70710678
+  ]
+ },
+ "initial_layout": [
+  {
+   "object": "kiln",
+   "target": "garage_floor",
+   "place_on_support": true,
+   "xy": [
+    -6.02,
+    6.48
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    -0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "garage_bench",
+   "target": "garage_floor",
+   "place_on_support": true,
+   "xy": [
+    -4.5,
+    6.52
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "tool_bench",
+   "target": "garage_floor",
+   "place_on_support": true,
+   "xy": [
+    -6.35,
+    7.5
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "patio_table",
+   "target": "patio_floor",
+   "place_on_support": true,
+   "xy": [
+    14.07,
+    11.16
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "firewood_table",
+   "target": "patio_floor",
+   "place_on_support": true,
+   "xy": [
+    17.75,
+    11.16
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "lamp_stage",
+   "target": "patio_floor",
+   "place_on_support": true,
+   "xy": [
+    17.39,
+    12.78
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "plant1",
+   "target": "lawn",
+   "place_on_support": true,
+   "xy": [
+    12.5,
+    9.55
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "plant2",
+   "target": "lawn",
+   "place_on_support": true,
+   "xy": [
+    12.55,
+    8.55
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "toolbox",
+   "target": "garage_bench",
+   "place_on_support": true,
+   "xy": [
+    -5.18,
+    6.52
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "tray",
+   "target": "garage_bench",
+   "place_on_support": true,
+   "xy": [
+    -4.52,
+    6.52
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "block",
+   "target": "garage_bench",
+   "place_on_support": true,
+   "xy": [
+    -3.9,
+    6.52
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "log",
+   "target": "block",
+   "place_on_support": true,
+   "xy": [
+    -3.9,
+    6.52
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "bulb1",
+   "target": "tray",
+   "place_on_support": true,
+   "support_uv": [
+    0.3,
+    0.5
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "bulb2",
+   "target": "tray",
+   "place_on_support": true,
+   "support_uv": [
+    0.7,
+    0.5
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "axe",
+   "target": "tool_bench",
+   "place_on_support": true,
+   "xy": [
+    -6.35,
+    7.18
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "brush",
+   "target": "tool_bench",
+   "place_on_support": true,
+   "xy": [
+    -6.35,
+    7.52
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "sprayer",
+   "target": "tool_bench",
+   "place_on_support": true,
+   "xy": [
+    -6.35,
+    7.8
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "lamp1",
+   "target": "lamp_stage",
+   "place_on_support": true,
+   "support_uv": [
+    0.5,
+    0.26
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "lamp2",
+   "target": "lamp_stage",
+   "place_on_support": true,
+   "support_uv": [
+    0.5,
+    0.74
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "garage_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "patio_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "toolbox",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "bulb1",
+   "state": "Inside",
+   "target": "toolbox",
+   "value": true,
+   "max_sampling_attempts": 3
+  },
+  {
+   "object": "bulb2",
+   "state": "Inside",
+   "target": "toolbox",
+   "value": true,
+   "max_sampling_attempts": 3
+  },
+  {
+   "object": "toolbox",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "patio_table",
+   "state": "Covered",
+   "system": "dust",
+   "value": true,
+   "max_sampling_attempts": 3,
+   "settle_steps": 1
+  },
+  {
+   "object": "plant1",
+   "state": "Covered",
+   "system": "insectifuge",
+   "value": false
+  },
+  {
+   "object": "plant2",
+   "state": "Covered",
+   "system": "insectifuge",
+   "value": false
+  },
+  {
+   "object": "kiln",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "kiln",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "sprayer",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "grill",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "lamp1",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "lamp2",
+   "state": "ToggledOn",
+   "value": false
+  }
+ ],
+ "initial_assertions": {
+  "garage_door_open": "garage_door_open",
+  "patio_door_open": "patio_door_open",
+  "toolbox_closed": {
+   "not": "toolbox_open"
+  },
+  "kiln_closed": {
+   "not": "kiln_open"
+  },
+  "kiln_off": {
+   "not": "kiln_on"
+  },
+  "sprayer_off": {
+   "not": "sprayer_on"
+  },
+  "grill_off": {
+   "not": "grill_on"
+  },
+  "lamp1_off": {
+   "not": "lamp1_on"
+  },
+  "lamp2_off": {
+   "not": "lamp2_on"
+  },
+  "bulb1_in_toolbox": "initial_bulb1_Inside",
+  "bulb2_in_toolbox": "initial_bulb2_Inside",
+  "bulb1_detached": {
+   "all": [
+    {
+     "not": "bulb1_attached_lamp1"
+    },
+    {
+     "not": "bulb1_attached_lamp2"
+    }
+   ]
+  },
+  "bulb2_detached": {
+   "all": [
+    {
+     "not": "bulb2_attached_lamp1"
+    },
+    {
+     "not": "bulb2_attached_lamp2"
+    }
+   ]
+  },
+  "patio_table_dusty": "patio_table_dusty",
+  "plant1_untreated": {
+   "not": "plant1_treated"
+  },
+  "plant2_untreated": {
+   "not": "plant2_treated"
+  },
+  "toolbox_on_bench": "initial_toolbox_OnTop",
+  "tray_on_bench": "initial_tray_OnTop",
+  "block_on_bench": "initial_block_OnTop",
+  "log_on_block": "initial_log_OnTop",
+  "axe_on_tool_bench": "axe_ontop_tool_bench",
+  "brush_on_tool_bench": "brush_ontop_tool_bench",
+  "sprayer_on_tool_bench": "sprayer_ontop_tool_bench",
+  "lamp1_on_stage": "initial_lamp1_OnTop",
+  "lamp2_on_stage": "initial_lamp2_OnTop",
+  "plant1_on_patio": "initial_plant1_OnTop",
+  "plant2_on_patio": "initial_plant2_OnTop",
+  "intact_log": {
+   "not": "log_replaced"
+  },
+  "hand_empty": "hand_empty"
+ },
+ "future_roles": [
+  "log_half0",
+  "log_half1"
+ ],
+ "replacements": [
+  {
+   "parent": "log",
+   "children": [
+    {
+     "role": "log_half0",
+     "category": "half_log",
+     "model": "bbieuz"
+    },
+    {
+     "role": "log_half1",
+     "category": "half_log",
+     "model": "rvtvqc"
+    }
+   ]
+  }
+ ],
+ "public_instruction": "Prepare the east garden patio for an evening barbecue and outdoor lighting while keeping the garage workshop tools and drying oven properly reset.",
+ "public_context": [
+  "Split the whole wooden log on the chopping block in the garage into two halves using the axe, dry both log halves inside the garage drying oven until the drying cycle finishes, deliver both dried log halves to the patio firewood table next to the charcoal grill (placed either directly on the firewood table or on the utility tray resting on the firewood table), and switch on the charcoal grill. The drying oven is the floor-standing appliance on the left side of the garage; the chopping block, whole log, and utility tray start on the main garage workbench; the axe starts on the side tool bench in the northwest corner of the garage; the charcoal grill and firewood table are on the east garden patio, reachable from the garage through the interior corridor and kitchen patio door.",
+  "Wipe the dust off the patio dining table using the scrub brush, move both table lamps from the patio lamp staging table onto the clean patio dining table, attach one light bulb from the garage metal toolbox to each table lamp, and switch both table lamps on. The scrub brush starts on the garage side tool bench; the two light bulbs start inside the closed metal toolbox on the main garage workbench; the patio dining table is west of the charcoal grill, and the lamp staging table with the two table lamps is just north of the firewood table.",
+  "Treat both potted patio plants with insectifuge using the atomizer sprayer. Both potted plants sit on the grass border along the west edge of the garden patio, and the atomizer sprayer starts on the garage side tool bench.",
+  "Return the axe, scrub brush, and atomizer sprayer to the garage side tool bench (placed directly on the side tool bench or on the utility tray resting on the side tool bench), leave the atomizer sprayer switched off, close the metal toolbox, and leave the garage drying oven closed and switched off.",
+  "Finish with no object held."
+ ],
+ "requirements": [
+  {
+   "id": "prepare_and_deliver_firewood_and_grill",
+   "text": "Split the whole wooden log on the chopping block in the garage into two halves using the axe, dry both log halves inside the garage drying oven until the drying cycle finishes, deliver both dried log halves to the patio firewood table next to the charcoal grill (placed either directly on the firewood table or on the utility tray resting on the firewood table), and switch on the charcoal grill. The drying oven is the floor-standing appliance on the left side of the garage; the chopping block, whole log, and utility tray start on the main garage workbench; the axe starts on the side tool bench in the northwest corner of the garage; the charcoal grill and firewood table are on the east garden patio, reachable from the garage through the interior corridor and kitchen patio door.",
+   "terminal": [
+    "firewood_and_grill_ready"
+   ]
+  },
+  {
+   "id": "dust_patio_table_and_setup_lamps",
+   "text": "Wipe the dust off the patio dining table using the scrub brush, move both table lamps from the patio lamp staging table onto the clean patio dining table, attach one light bulb from the garage metal toolbox to each table lamp, and switch both table lamps on. The scrub brush starts on the garage side tool bench; the two light bulbs start inside the closed metal toolbox on the main garage workbench; the patio dining table is west of the charcoal grill, and the lamp staging table with the two table lamps is just north of the firewood table.",
+   "terminal": [
+    "patio_table_and_lamps_ready"
+   ]
+  },
+  {
+   "id": "spray_patio_plants",
+   "text": "Treat both potted patio plants with insectifuge using the atomizer sprayer. Both potted plants sit on the grass border along the west edge of the garden patio, and the atomizer sprayer starts on the garage side tool bench.",
+   "terminal": [
+    "patio_plants_treated"
+   ]
+  },
+  {
+   "id": "reset_garage_tools_and_appliances",
+   "text": "Return the axe, scrub brush, and atomizer sprayer to the garage side tool bench (placed directly on the side tool bench or on the utility tray resting on the side tool bench), leave the atomizer sprayer switched off, close the metal toolbox, and leave the garage drying oven closed and switched off.",
+   "terminal": [
+    "tools_returned",
+    "appliances_and_containers_safe"
+   ]
+  },
+  {
+   "id": "hand_empty",
+   "text": "Finish with no object held.",
+   "terminal": [
+    "hand_empty"
+   ]
+  }
+ ],
+ "evaluation": {
+  "predicates": {
+   "garage_door_open": {
+    "object": "garage_door",
+    "state": "Open"
+   },
+   "patio_door_open": {
+    "object": "patio_door",
+    "state": "Open"
+   },
+   "toolbox_open": {
+    "object": "toolbox",
+    "state": "Open"
+   },
+   "kiln_open": {
+    "object": "kiln",
+    "state": "Open"
+   },
+   "kiln_on": {
+    "object": "kiln",
+    "state": "ToggledOn"
+   },
+   "sprayer_on": {
+    "object": "sprayer",
+    "state": "ToggledOn"
+   },
+   "grill_on": {
+    "object": "grill",
+    "state": "ToggledOn"
+   },
+   "lamp1_on": {
+    "object": "lamp1",
+    "state": "ToggledOn"
+   },
+   "lamp2_on": {
+    "object": "lamp2",
+    "state": "ToggledOn"
+   },
+   "log_replaced": {
+    "object": "log",
+    "state": "Replaced"
+   },
+   "log_half0_dried": {
+    "object": "log_half0",
+    "state": "ProcessComplete",
+    "process": "kiln_dry_firewood"
+   },
+   "log_half1_dried": {
+    "object": "log_half1",
+    "state": "ProcessComplete",
+    "process": "kiln_dry_firewood"
+   },
+   "tray_ontop_firewood_table": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "firewood_table"
+   },
+   "log_half0_ontop_firewood_table": {
+    "object": "log_half0",
+    "state": "OnTop",
+    "target": "firewood_table"
+   },
+   "log_half1_ontop_firewood_table": {
+    "object": "log_half1",
+    "state": "OnTop",
+    "target": "firewood_table"
+   },
+   "log_half0_ontop_tray": {
+    "object": "log_half0",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "log_half1_ontop_tray": {
+    "object": "log_half1",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "patio_table_dusty": {
+    "object": "patio_table",
+    "state": "Covered",
+    "system": "dust"
+   },
+   "lamp1_ontop_patio_table": {
+    "object": "lamp1",
+    "state": "OnTop",
+    "target": "patio_table"
+   },
+   "lamp2_ontop_patio_table": {
+    "object": "lamp2",
+    "state": "OnTop",
+    "target": "patio_table"
+   },
+   "bulb1_attached_lamp1": {
+    "object": "bulb1",
+    "state": "AttachedTo",
+    "target": "lamp1"
+   },
+   "bulb2_attached_lamp2": {
+    "object": "bulb2",
+    "state": "AttachedTo",
+    "target": "lamp2"
+   },
+   "bulb1_attached_lamp2": {
+    "object": "bulb1",
+    "state": "AttachedTo",
+    "target": "lamp2"
+   },
+   "bulb2_attached_lamp1": {
+    "object": "bulb2",
+    "state": "AttachedTo",
+    "target": "lamp1"
+   },
+   "plant1_treated": {
+    "object": "plant1",
+    "state": "Covered",
+    "system": "insectifuge"
+   },
+   "plant2_treated": {
+    "object": "plant2",
+    "state": "Covered",
+    "system": "insectifuge"
+   },
+   "tray_ontop_tool_bench": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "tool_bench"
+   },
+   "axe_ontop_tool_bench": {
+    "object": "axe",
+    "state": "OnTop",
+    "target": "tool_bench"
+   },
+   "brush_ontop_tool_bench": {
+    "object": "brush",
+    "state": "OnTop",
+    "target": "tool_bench"
+   },
+   "sprayer_ontop_tool_bench": {
+    "object": "sprayer",
+    "state": "OnTop",
+    "target": "tool_bench"
+   },
+   "axe_ontop_tray": {
+    "object": "axe",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "brush_ontop_tray": {
+    "object": "brush",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "sprayer_ontop_tray": {
+    "object": "sprayer",
+    "state": "OnTop",
+    "target": "tray"
+   },
+   "hand_empty": {
+    "object": "sprayer",
+    "state": "HandEmpty"
+   },
+   "initial_bulb1_Inside": {
+    "object": "bulb1",
+    "state": "Inside",
+    "target": "toolbox"
+   },
+   "initial_bulb2_Inside": {
+    "object": "bulb2",
+    "state": "Inside",
+    "target": "toolbox"
+   },
+   "initial_toolbox_OnTop": {
+    "object": "toolbox",
+    "state": "OnTop",
+    "target": "garage_bench"
+   },
+   "initial_tray_OnTop": {
+    "object": "tray",
+    "state": "OnTop",
+    "target": "garage_bench"
+   },
+   "initial_block_OnTop": {
+    "object": "block",
+    "state": "OnTop",
+    "target": "garage_bench"
+   },
+   "initial_log_OnTop": {
+    "object": "log",
+    "state": "OnTop",
+    "target": "block"
+   },
+   "initial_lamp1_OnTop": {
+    "object": "lamp1",
+    "state": "OnTop",
+    "target": "lamp_stage"
+   },
+   "initial_lamp2_OnTop": {
+    "object": "lamp2",
+    "state": "OnTop",
+    "target": "lamp_stage"
+   },
+   "initial_plant1_OnTop": {
+    "object": "plant1",
+    "state": "OnTop",
+    "target": "lawn"
+   },
+   "initial_plant2_OnTop": {
+    "object": "plant2",
+    "state": "OnTop",
+    "target": "lawn"
+   }
+  },
+  "terminal": {
+   "firewood_and_grill_ready": {
+    "all": [
+     "log_replaced",
+     "log_half0_dried",
+     "log_half1_dried",
+     {
+      "any": [
+       "log_half0_ontop_firewood_table",
+       {
+        "all": [
+         "log_half0_ontop_tray",
+         "tray_ontop_firewood_table"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "log_half1_ontop_firewood_table",
+       {
+        "all": [
+         "log_half1_ontop_tray",
+         "tray_ontop_firewood_table"
+        ]
+       }
+      ]
+     },
+     "grill_on"
+    ]
+   },
+   "patio_table_and_lamps_ready": {
+    "all": [
+     {
+      "not": "patio_table_dusty"
+     },
+     "lamp1_ontop_patio_table",
+     "lamp2_ontop_patio_table",
+     "lamp1_on",
+     "lamp2_on",
+     {
+      "any": [
+       {
+        "all": [
+         "bulb1_attached_lamp1",
+         "bulb2_attached_lamp2"
+        ]
+       },
+       {
+        "all": [
+         "bulb1_attached_lamp2",
+         "bulb2_attached_lamp1"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "patio_plants_treated": {
+    "all": [
+     "plant1_treated",
+     "plant2_treated"
+    ]
+   },
+   "tools_returned": {
+    "all": [
+     {
+      "any": [
+       "axe_ontop_tool_bench",
+       {
+        "all": [
+         "axe_ontop_tray",
+         "tray_ontop_tool_bench"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "brush_ontop_tool_bench",
+       {
+        "all": [
+         "brush_ontop_tray",
+         "tray_ontop_tool_bench"
+        ]
+       }
+      ]
+     },
+     {
+      "any": [
+       "sprayer_ontop_tool_bench",
+       {
+        "all": [
+         "sprayer_ontop_tray",
+         "tray_ontop_tool_bench"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "appliances_and_containers_safe": {
+    "all": [
+     {
+      "not": "sprayer_on"
+     },
+     {
+      "not": "toolbox_open"
+     },
+     {
+      "not": "kiln_open"
+     },
+     {
+      "not": "kiln_on"
+     }
+    ]
+   },
+   "hand_empty": "hand_empty"
+  },
+  "score_type": "custom_joint_terminal_and_public_history_v2"
+ },
+ "acceptance_cases": {
+  "reference_orders": [
+   "optimal_parallel_batch",
+   "habit_sequential"
+  ],
+  "physical_negative_cases": [
+   "omit_garden_spray",
+   "omit_kiln_reset",
+   "omit_firewood_delivery"
+  ],
+  "fresh_restore_repetitions": 2,
+  "max_reference_action_attempts": 400
+ },
+ "reference_plan": {
+  "kind": "full_workflow",
+  "allow_strategy_variants": true,
+  "phases": {
+   "start_kiln_firewood": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "axe"
+     },
+     {
+      "primitive": "cut",
+      "role": "log"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tool_bench",
+      "uv": [
+       0.5,
+       0.2
+      ]
+     },
+     {
+      "primitive": "open",
+      "role": "kiln"
+     },
+     {
+      "primitive": "grasp",
+      "role": "log_half0"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "kiln"
+     },
+     {
+      "primitive": "grasp",
+      "role": "log_half1"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "kiln"
+     },
+     {
+      "primitive": "close",
+      "role": "kiln"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "kiln"
+     }
+    ],
+    "after": []
+   },
+   "batch_outbound_to_patio": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "toolbox"
+     },
+     {
+      "primitive": "grasp",
+      "role": "bulb1",
+      "approach_role": "toolbox"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.34,
+       0.34
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "bulb2",
+      "approach_role": "toolbox"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.66,
+       0.34
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "toolbox"
+     },
+     {
+      "primitive": "grasp",
+      "role": "brush"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.36,
+       0.64
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "sprayer"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.64,
+       0.64
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "firewood_table",
+      "uv": [
+       0.5,
+       0.5
+      ]
+     }
+    ],
+    "after": []
+   },
+   "prep_patio_table_and_lamps": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "brush"
+     },
+     {
+      "primitive": "wipe",
+      "role": "patio_table"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.4,
+       0.58
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "lamp1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "patio_table",
+      "uv": [
+       0.5,
+       0.22
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "bulb1"
+     },
+     {
+      "primitive": "attach",
+      "role": "lamp1"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "lamp1"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lamp2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "patio_table",
+      "uv": [
+       0.5,
+       0.78
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "bulb2"
+     },
+     {
+      "primitive": "attach",
+      "role": "lamp2"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "lamp2"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "grill"
+     }
+    ],
+    "after": [
+     "batch_outbound_to_patio"
+    ]
+   },
+   "spray_patio_plants": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "sprayer"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "sprayer"
+     },
+     {
+      "primitive": "spray",
+      "role": "plant1"
+     },
+     {
+      "primitive": "spray",
+      "role": "plant2"
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "sprayer"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.58,
+       0.42
+      ]
+     }
+    ],
+    "after": [
+     "batch_outbound_to_patio"
+    ]
+   },
+   "return_tools_on_tray": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "garage_bench",
+      "uv": [
+       0.5,
+       0.5
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "brush"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tool_bench",
+      "uv": [
+       0.5,
+       0.52
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "sprayer"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tool_bench",
+      "uv": [
+       0.5,
+       0.8
+      ]
+     }
+    ],
+    "after": [
+     "prep_patio_table_and_lamps"
+    ]
+   },
+   "unload_kiln_onto_tray": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "log_half0_dried",
+        "log_half1_dried"
+       ]
+      },
+      "seconds": 30.0,
+      "attempts": 12
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "kiln"
+     },
+     {
+      "primitive": "open",
+      "role": "kiln"
+     },
+     {
+      "primitive": "grasp",
+      "role": "log_half0",
+      "approach_role": "kiln"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.44,
+       0.42
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "log_half1",
+      "approach_role": "kiln"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tray",
+      "uv": [
+       0.56,
+       0.58
+      ]
+     }
+    ],
+    "after": [
+     "start_kiln_firewood",
+     "return_tools_on_tray"
+    ]
+   },
+   "close_kiln": {
+    "actions": [
+     {
+      "primitive": "close",
+      "role": "kiln"
+     }
+    ],
+    "after": [
+     "unload_kiln_onto_tray"
+    ]
+   },
+   "deliver_dried_firewood": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "tray"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "firewood_table",
+      "uv": [
+       0.5,
+       0.5
+      ]
+     }
+    ],
+    "after": [
+     "unload_kiln_onto_tray"
+    ]
+   },
+   "idle_wait_kiln": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "log_half0_dried",
+        "log_half1_dried"
+       ]
+      },
+      "seconds": 60.0,
+      "attempts": 7
+     }
+    ],
+    "after": [
+     "start_kiln_firewood"
+    ]
+   },
+   "habit_deliver_firewood_and_grill": {
+    "actions": [
+     {
+      "primitive": "toggle_off",
+      "role": "kiln"
+     },
+     {
+      "primitive": "open",
+      "role": "kiln"
+     },
+     {
+      "primitive": "grasp",
+      "role": "log_half0",
+      "approach_role": "kiln"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "firewood_table",
+      "uv": [
+       0.5,
+       0.3
+      ]
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "grill"
+     },
+     {
+      "primitive": "grasp",
+      "role": "log_half1",
+      "approach_role": "kiln"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "firewood_table",
+      "uv": [
+       0.5,
+       0.72
+      ]
+     }
+    ],
+    "after": [
+     "idle_wait_kiln"
+    ]
+   },
+   "habit_wipe_patio_table_and_lamps": {
+    "actions": [
+     {
+      "primitive": "close",
+      "role": "kiln"
+     },
+     {
+      "primitive": "grasp",
+      "role": "brush"
+     },
+     {
+      "primitive": "wipe",
+      "role": "patio_table"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tool_bench",
+      "uv": [
+       0.5,
+       0.52
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "lamp1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "patio_table",
+      "uv": [
+       0.5,
+       0.22
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "lamp2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "patio_table",
+      "uv": [
+       0.5,
+       0.78
+      ]
+     },
+     {
+      "primitive": "open",
+      "role": "toolbox"
+     },
+     {
+      "primitive": "grasp",
+      "role": "bulb1",
+      "approach_role": "toolbox"
+     },
+     {
+      "primitive": "attach",
+      "role": "lamp1"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "lamp1"
+     },
+     {
+      "primitive": "grasp",
+      "role": "bulb2",
+      "approach_role": "toolbox"
+     },
+     {
+      "primitive": "attach",
+      "role": "lamp2"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "lamp2"
+     }
+    ],
+    "after": [
+     "habit_deliver_firewood_and_grill"
+    ]
+   },
+   "habit_spray_plants_and_reset": {
+    "actions": [
+     {
+      "primitive": "close",
+      "role": "toolbox"
+     },
+     {
+      "primitive": "grasp",
+      "role": "sprayer"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "sprayer"
+     },
+     {
+      "primitive": "spray",
+      "role": "plant1"
+     },
+     {
+      "primitive": "spray",
+      "role": "plant2"
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "sprayer"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tool_bench",
+      "uv": [
+       0.5,
+       0.8
+      ]
+     }
+    ],
+    "after": [
+     "habit_wipe_patio_table_and_lamps"
+    ]
+   }
+  },
+  "orders": {
+   "optimal_parallel_batch": [
+    "start_kiln_firewood",
+    "batch_outbound_to_patio",
+    "prep_patio_table_and_lamps",
+    "spray_patio_plants",
+    "return_tools_on_tray",
+    "unload_kiln_onto_tray",
+    "close_kiln",
+    "deliver_dried_firewood"
+   ],
+   "habit_sequential": [
+    "start_kiln_firewood",
+    "idle_wait_kiln",
+    "habit_deliver_firewood_and_grill",
+    "habit_wipe_patio_table_and_lamps",
+    "habit_spray_plants_and_reset"
+   ]
+  },
+  "negative_omissions": {
+   "omit_garden_spray": "spray_patio_plants",
+   "omit_kiln_reset": "close_kiln",
+   "omit_firewood_delivery": "deliver_dried_firewood"
+  }
+ },
+ "settle_steps": 30,
+ "frozen_instance": {
+  "path": "initial_scene.json",
+  "sha256": "3447f3cfeff3352a7c7a70f2c7823bc7c2b005254cf4f50d3c7873f49cc56476"
+ }
+}

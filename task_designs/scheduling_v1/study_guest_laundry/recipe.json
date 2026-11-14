@@ -1,0 +1,2292 @@
+{
+ "schema_version": 3,
+ "id": "study_guest_laundry",
+ "instance_id": "study_guest_laundry_seed0_r3",
+ "status": "complete_recipe_physics_pending",
+ "benchmark_ready": false,
+ "official_submission_eligible": false,
+ "base": {
+  "task": "clean_up_your_desk",
+  "instance": 301,
+  "seed": 0
+ },
+ "roles": {
+  "desk": "desk_bhkhxo_0",
+  "room_bed": "bed_rrcvaq_1",
+  "floor_a": "floors_qnvzkr_0",
+  "hall_floor": "floors_wkdxrr_0",
+  "shelf": "shelf_amyper_2",
+  "monitor": "laptop_233",
+  "keyboard": "sgl_keyboard",
+  "lamp1": "table_lamp_uupwiq_0",
+  "book1": "paperback_book_225",
+  "pencil": "pencil_case_224",
+  "picture1": "sgl_picture1",
+  "picture2": "sgl_picture2",
+  "nail1": "sgl_nail1",
+  "nail2": "sgl_nail2",
+  "drawer": "sgl_drawer",
+  "tool_home": "sgl_tool_home",
+  "rag": "sgl_rag",
+  "washer": "washer_ynwamu_0",
+  "dryer": "clothes_dryer_xsuyua_0",
+  "laundry": "countertop_ikwqer_0",
+  "carrier": "sgl_carrier",
+  "sock": "sgl_sock",
+  "shorts": "sgl_shorts",
+  "cup": "sgl_cup",
+  "water": "sgl_water",
+  "soap": "sgl_soap",
+  "paper": "sgl_paper",
+  "floor_b": "floors_htolat_0",
+  "bath_floor": "floors_shuuqu_0",
+  "guest_bed": "bed_gxfipj_0",
+  "bedside": "nightstand_wbxekb_0",
+  "cabinet": "sgl_cabinet",
+  "delivery": "sgl_delivery",
+  "toy_box": "sgl_toy_box",
+  "toy": "sgl_toy",
+  "book2": "paperback_book_226",
+  "lamp2": "table_lamp_qgdwbh_1",
+  "amenities": "sgl_amenities",
+  "study_door": "sliding_door_tprpvb_1",
+  "utility_entry": "sliding_door_tprpvb_12",
+  "utility_exit": "sliding_door_tprpvb_7",
+  "guest_entry": "sliding_door_tprpvb_0",
+  "guest_bath_door": "sliding_door_tprpvb_10",
+  "study_garden_door": "door_kwbnhy_3",
+  "study_closet_door": "sliding_door_tprpvb_8",
+  "hall_bath_door": "sliding_door_tprpvb_5",
+  "unused_room2_door": "sliding_door_tprpvb_6",
+  "unused_room0_door": "sliding_door_tprpvb_11",
+  "guest_closet0_door": "sliding_door_tprpvb_4",
+  "guest_closet1_door": "sliding_door_tprpvb_9",
+  "unused_floor": "floors_vmamhf_0",
+  "unused_chair": "eames_chair_hndxiw_0",
+  "unused_folder1": "folder_231",
+  "unused_folder2": "folder_232",
+  "unused_pen1": "pen_228",
+  "unused_pen2": "pen_229",
+  "unused_pencil": "pencil_230",
+  "unused_stapler": "stapler_227"
+ },
+ "scene_exclusions": [
+  "nightstand_wbxekb_1",
+  "nightstand_wbxekb_2",
+  "table_lamp_qgdwbh_0",
+  "wardrobe_lrokhl_0",
+  "bench_pfjnnj_0",
+  "multi_station_furniture_sink_upwldu_0",
+  "shelf_fjozhc_0",
+  "public_trash_can_gvnfgj_0",
+  "shelf_amyper_0",
+  "shelf_amyper_1",
+  "shelf_amyper_3",
+  "shelf_amyper_4",
+  "shelf_amyper_5",
+  "shelf_amyper_6",
+  "shelf_amyper_7",
+  "shelf_amyper_8",
+  "shelf_amyper_9",
+  "shelf_amyper_10",
+  "shelf_amyper_11"
+ ],
+ "construction_asset_scales": [
+  {
+   "object": "pencil",
+   "scale": [
+    1.1,
+    1.1,
+    1.1
+   ],
+   "reason": "Normalize clean_up_your_desk pencil_case_224 from oversized [1.613, 1.524, 1.50] (30.4 cm) to realistic 21.9 x 8.2 x 8.1 cm pencil case so it fits cleanly inside either drawer of the hallway drawer cabinet with >25 cm lateral clearance while staying clearly visible on the study bed in 512x512 RGB."
+  }
+ ],
+ "asset_imports": [
+  {
+   "name": "sgl_drawer",
+   "source_task": "clean_up_your_desk",
+   "source_object": "bottom_cabinet_rhdbzv_0",
+   "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+   "position": [
+    101.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "fixed_base": true,
+   "scale": [
+    1.05,
+    0.48,
+    1.32
+   ]
+  },
+  {
+   "name": "sgl_tool_home",
+   "source_task": "clean_up_your_desk",
+   "source_object": "desk_nbpuns_0",
+   "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+   "position": [
+    104.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "fixed_base": true,
+   "scale": [
+    0.68,
+    0.45,
+    1.0
+   ]
+  },
+  {
+   "name": "sgl_cabinet",
+   "source_task": "clean_up_your_desk",
+   "source_object": "bottom_cabinet_fancyy_0",
+   "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+   "position": [
+    107.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   "fixed_base": true,
+   "scale": [
+    0.8,
+    0.72,
+    0.9
+   ]
+  },
+  {
+   "name": "sgl_delivery",
+   "source_task": "clean_up_your_desk",
+   "source_object": "desk_nbpuns_0",
+   "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+   "position": [
+    110.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "fixed_base": true,
+   "scale": [
+    1.0,
+    0.78,
+    1.0
+   ]
+  },
+  {
+   "name": "sgl_amenities",
+   "source_task": "clean_up_your_desk",
+   "source_object": "bottom_cabinet_xqmipa_0",
+   "source_sha256": "6096a25139486cb627b5faa7b43c8ed20001d4ba8974bcd5b5e09182991df03f",
+   "position": [
+    113.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ],
+   "fixed_base": true
+  },
+  {
+   "name": "sgl_keyboard",
+   "source_task": "clean_a_keyboard",
+   "source_object": "keyboard_121",
+   "source_sha256": "f8a478a306d8e97c8c3bc42f5b224558bd1a615ca22b88e73f5bae86a4a0d0dd",
+   "position": [
+    152.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "sgl_toy",
+   "source_task": "putting_away_toys",
+   "source_object": "toy_figure_242",
+   "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+   "position": [
+    161.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.5,
+    1.5,
+    1.5
+   ]
+  },
+  {
+   "name": "sgl_toy_box",
+   "source_task": "putting_away_toys",
+   "source_object": "toy_box_240",
+   "source_sha256": "90e8f90b9980544e9280ac51c4afb077df50f29ff6fad03a299fcf2ceafc682f",
+   "position": [
+    164.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "fixed_base": true,
+   "scale": [
+    3.6,
+    3.5,
+    4.2
+   ]
+  },
+  {
+   "name": "sgl_carrier",
+   "source_task": "assembling_gift_baskets",
+   "source_object": "wicker_basket_89",
+   "source_sha256": "1c66f06ad635249ea0700537cdf1bb2196a1888701fe140ac20286eec6b369b8",
+   "position": [
+    167.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.8,
+    1.8,
+    1.4
+   ]
+  },
+  {
+   "name": "sgl_cup",
+   "source_task": "setting_the_table",
+   "source_object": "water_glass_bbpraa_0",
+   "source_sha256": "9a85e78695003b54e9486555a4d50830c477ddc81550fd2fdf4640923ea09b66",
+   "position": [
+    170.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "scale": [
+    1.2,
+    1.2,
+    1.1
+   ]
+  },
+  {
+   "name": "sgl_picture1",
+   "source_task": "hanging_pictures",
+   "source_object": "poster_73",
+   "source_sha256": "3922b24902d11c8fe30a57abe637904084a265f411c17929bf1354436e6d6994",
+   "position": [
+    197.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "sgl_nail1",
+   "source_task": "hanging_pictures",
+   "source_object": "wall_nail_wlnail_0",
+   "source_sha256": "3922b24902d11c8fe30a57abe637904084a265f411c17929bf1354436e6d6994",
+   "position": [
+    24.24,
+    13.46,
+    1.48
+   ],
+   "orientation": [
+    0.70710678,
+    0.0,
+    0.70710678,
+    0.0
+   ],
+   "fixed_base": true,
+   "scale": [
+    4.0,
+    4.0,
+    1.8
+   ]
+  },
+  {
+   "name": "sgl_picture2",
+   "source_task": "hanging_pictures",
+   "source_object": "poster_73",
+   "source_sha256": "3922b24902d11c8fe30a57abe637904084a265f411c17929bf1354436e6d6994",
+   "position": [
+    206.0,
+    50.0,
+    2.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "name": "sgl_nail2",
+   "source_task": "hanging_pictures",
+   "source_object": "wall_nail_wlnail_0",
+   "source_sha256": "3922b24902d11c8fe30a57abe637904084a265f411c17929bf1354436e6d6994",
+   "position": [
+    24.24,
+    14.0,
+    1.48
+   ],
+   "orientation": [
+    0.70710678,
+    0.0,
+    0.70710678,
+    0.0
+   ],
+   "fixed_base": true,
+   "scale": [
+    4.0,
+    4.0,
+    1.8
+   ]
+  }
+ ],
+ "native_assets": [
+  {
+   "name": "sgl_sock",
+   "category": "sock",
+   "model": "vpafgj",
+   "usd_sha256": "e7100fa6faef0ea985de7058d95893635276cc5fa25886fb234309a53224a074",
+   "prim_type": 0,
+   "position": [
+    176.0,
+    50.0,
+    2.0
+   ],
+   "scale": [
+    0.65,
+    0.65,
+    0.65
+   ]
+  },
+  {
+   "name": "sgl_shorts",
+   "category": "boxers",
+   "model": "uwzqxm",
+   "usd_sha256": "851e163d9279fd07d8037b819a621a539db64db787c29f5c50af43df4e5d400c",
+   "prim_type": 0,
+   "position": [
+    179.0,
+    50.0,
+    2.0
+   ],
+   "scale": [
+    0.62,
+    0.55,
+    1.1
+   ]
+  },
+  {
+   "name": "sgl_rag",
+   "category": "rag",
+   "model": "oocmed",
+   "usd_sha256": "732677fea4ca1e96c8b71f843249e2b5740287542aae48245871d7a6daeb7068",
+   "prim_type": 0,
+   "position": [
+    182.0,
+    50.0,
+    2.0
+   ],
+   "scale": [
+    1.0,
+    1.0,
+    10.0
+   ]
+  },
+  {
+   "name": "sgl_water",
+   "category": "bottle_of_water",
+   "model": "atvnqy",
+   "usd_sha256": "da8e2524f41fbae998ee82b50cb013d14a6a8b64ff986edb5a5fefcc8619417c",
+   "prim_type": 0,
+   "position": [
+    185.0,
+    50.0,
+    2.0
+   ]
+  },
+  {
+   "name": "sgl_soap",
+   "category": "bar_soap",
+   "model": "ozifwa",
+   "usd_sha256": "84ad6bc80bc8c25c136bdbcc51a06e5c672b9061026359893f3e87a609fea133",
+   "prim_type": 0,
+   "position": [
+    188.0,
+    50.0,
+    2.0
+   ],
+   "scale": [
+    1.3,
+    1.3,
+    1.5
+   ]
+  },
+  {
+   "name": "sgl_paper",
+   "category": "toilet_paper",
+   "model": "jlifcx",
+   "usd_sha256": "358062958131d0d1c967f3a14b3cb73f5951d4bc93e9f991174fbaf54f2bbd3e",
+   "prim_type": 0,
+   "position": [
+    191.0,
+    50.0,
+    2.0
+   ],
+   "scale": [
+    1.2,
+    1.2,
+    1.2
+   ]
+  }
+ ],
+ "fixtures": [],
+ "timed_processes": [
+  {
+   "id": "wash_cycle",
+   "appliance": "washer",
+   "items": [
+    "sock",
+    "shorts"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 180.0,
+   "set_object_state": null,
+   "running_message": "The washing machine is running; the wash cycle is still in progress.",
+   "completed_message": "The washing machine chime sounded: the wash cycle is complete.",
+   "stopped_early_message": "The washing machine stopped before the wash cycle finished."
+  },
+  {
+   "id": "dry_cycle",
+   "appliance": "dryer",
+   "items": [
+    "sock",
+    "shorts"
+   ],
+   "containment": "Inside",
+   "require_closed": true,
+   "require_toggled_on": true,
+   "duration_seconds": 180.0,
+   "set_object_state": null,
+   "running_message": "The clothes dryer is running; the drying cycle is still in progress.",
+   "completed_message": "The clothes dryer chime sounded: the drying cycle is complete.",
+   "stopped_early_message": "The clothes dryer stopped before the drying cycle finished."
+  }
+ ],
+ "initial_layout": [
+  {
+   "object": "drawer",
+   "target": "hall_floor",
+   "place_on_support": true,
+   "xy": [
+    19.88,
+    7.75
+   ],
+   "support_probe_height": 0.5,
+   "orientation": [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "object": "tool_home",
+   "target": "hall_floor",
+   "place_on_support": true,
+   "xy": [
+    19.89,
+    6.89
+   ],
+   "support_probe_height": 0.5,
+   "orientation": [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "object": "cabinet",
+   "target": "floor_b",
+   "place_on_support": true,
+   "xy": [
+    24.64,
+    22.5
+   ],
+   "support_probe_height": 0.5,
+   "orientation": [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "object": "delivery",
+   "target": "floor_b",
+   "place_on_support": true,
+   "xy": [
+    21.08,
+    23.9
+   ],
+   "support_probe_height": 0.5,
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "toy_box",
+   "target": "floor_b",
+   "place_on_support": true,
+   "xy": [
+    21.02,
+    24.72
+   ],
+   "support_probe_height": 0.5,
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "amenities",
+   "target": "bath_floor",
+   "place_on_support": true,
+   "xy": [
+    23.85,
+    19.85
+   ],
+   "support_probe_height": 0.5,
+   "orientation": [
+    0.0,
+    0.0,
+    0.70710678,
+    0.70710678
+   ]
+  },
+  {
+   "object": "unused_chair",
+   "target": "unused_floor",
+   "place_on_support": true,
+   "xy": [
+    21.0,
+    6.2
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "unused_folder1",
+   "target": "unused_floor",
+   "place_on_support": true,
+   "xy": [
+    21.6,
+    6.2
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "unused_folder2",
+   "target": "unused_floor",
+   "place_on_support": true,
+   "xy": [
+    22.1,
+    6.2
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "unused_pen1",
+   "target": "unused_floor",
+   "place_on_support": true,
+   "xy": [
+    22.6,
+    6.2
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "unused_pen2",
+   "target": "unused_floor",
+   "place_on_support": true,
+   "xy": [
+    21.0,
+    6.8
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "unused_pencil",
+   "target": "unused_floor",
+   "place_on_support": true,
+   "xy": [
+    21.5,
+    6.8
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "unused_stapler",
+   "target": "unused_floor",
+   "place_on_support": true,
+   "xy": [
+    22.0,
+    6.8
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "monitor",
+   "target": "desk",
+   "place_on_support": true,
+   "support_uv": [
+    0.55,
+    0.48
+   ]
+  },
+  {
+   "object": "keyboard",
+   "target": "desk",
+   "place_on_support": true,
+   "support_uv": [
+    0.38,
+    0.8
+   ]
+  },
+  {
+   "object": "lamp1",
+   "target": "floor_a",
+   "place_on_support": true,
+   "xy": [
+    22.75,
+    13.35
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "book1",
+   "target": "floor_a",
+   "place_on_support": true,
+   "xy": [
+    23.22,
+    13.3
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "pencil",
+   "target": "room_bed",
+   "place_on_support": true,
+   "xy": [
+    21.95,
+    13.3
+   ]
+  },
+  {
+   "object": "picture1",
+   "target": "room_bed",
+   "place_on_support": true,
+   "xy": [
+    21.35,
+    13.25
+   ],
+   "orientation": [
+    0.0,
+    0.70710678,
+    0.0,
+    0.70710678
+   ]
+  },
+  {
+   "object": "picture2",
+   "target": "room_bed",
+   "place_on_support": true,
+   "xy": [
+    20.72,
+    13.25
+   ],
+   "orientation": [
+    0.0,
+    0.70710678,
+    0.0,
+    0.70710678
+   ]
+  },
+  {
+   "object": "rag",
+   "target": "tool_home",
+   "place_on_support": true,
+   "support_uv": [
+    0.5,
+    0.5
+   ]
+  },
+  {
+   "object": "carrier",
+   "target": "laundry",
+   "place_on_support": true,
+   "xy": [
+    24.5,
+    1.65
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  {
+   "object": "sock",
+   "target": "laundry",
+   "place_on_support": true,
+   "xy": [
+    24.48,
+    0.98
+   ]
+  },
+  {
+   "object": "shorts",
+   "target": "laundry",
+   "place_on_support": true,
+   "xy": [
+    24.48,
+    0.58
+   ]
+  },
+  {
+   "object": "cup",
+   "target": "laundry",
+   "place_on_support": true,
+   "xy": [
+    24.36,
+    0.18
+   ]
+  },
+  {
+   "object": "water",
+   "target": "laundry",
+   "place_on_support": true,
+   "xy": [
+    24.62,
+    0.18
+   ]
+  },
+  {
+   "object": "soap",
+   "target": "laundry",
+   "place_on_support": true,
+   "xy": [
+    24.36,
+    -0.14
+   ]
+  },
+  {
+   "object": "paper",
+   "target": "laundry",
+   "place_on_support": true,
+   "xy": [
+    24.62,
+    -0.14
+   ]
+  },
+  {
+   "object": "book2",
+   "target": "guest_bed",
+   "place_on_support": true,
+   "xy": [
+    23.3,
+    23.45
+   ]
+  },
+  {
+   "object": "toy",
+   "target": "guest_bed",
+   "place_on_support": true,
+   "xy": [
+    23.3,
+    24.05
+   ]
+  },
+  {
+   "object": "lamp2",
+   "target": "floor_b",
+   "place_on_support": true,
+   "xy": [
+    21.05,
+    25.42
+   ],
+   "support_probe_height": 0.5
+  },
+  {
+   "object": "study_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "utility_entry",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "utility_exit",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "guest_entry",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "guest_bath_door",
+   "state": "Open",
+   "value": true,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "study_garden_door",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "study_closet_door",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "hall_bath_door",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "unused_room2_door",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "unused_room0_door",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "guest_closet0_door",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "guest_closet1_door",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "washer",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "washer",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "dryer",
+   "state": "ToggledOn",
+   "value": false
+  },
+  {
+   "object": "dryer",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "drawer",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "cabinet",
+   "state": "Open",
+   "value": false,
+   "kwargs": {
+    "fully": true
+   }
+  },
+  {
+   "object": "monitor",
+   "state": "ToggledOn",
+   "value": true
+  },
+  {
+   "object": "lamp1",
+   "state": "ToggledOn",
+   "value": true
+  },
+  {
+   "object": "lamp2",
+   "state": "ToggledOn",
+   "value": true
+  },
+  {
+   "object": "shelf",
+   "state": "Covered",
+   "value": true,
+   "max_sampling_attempts": 3,
+   "settle_steps": 1,
+   "system": "dust"
+  },
+  {
+   "object": "desk",
+   "state": "Covered",
+   "value": true,
+   "max_sampling_attempts": 3,
+   "settle_steps": 1,
+   "system": "dust"
+  },
+  {
+   "object": "keyboard",
+   "state": "Covered",
+   "value": true,
+   "max_sampling_attempts": 3,
+   "settle_steps": 1,
+   "system": "dust"
+  },
+  {
+   "object": "monitor",
+   "state": "Covered",
+   "value": true,
+   "max_sampling_attempts": 3,
+   "settle_steps": 1,
+   "system": "dust"
+  },
+  {
+   "object": "cabinet",
+   "state": "Covered",
+   "value": true,
+   "max_sampling_attempts": 3,
+   "settle_steps": 1,
+   "system": "dust"
+  },
+  {
+   "object": "amenities",
+   "state": "Covered",
+   "value": true,
+   "max_sampling_attempts": 3,
+   "settle_steps": 1,
+   "system": "dust"
+  }
+ ],
+ "initial_assertions": {
+  "shelf_dust": "shelf_dust",
+  "desk_dust": "desk_dust",
+  "keyboard_dust": "keyboard_dust",
+  "monitor_dust": "monitor_dust",
+  "cabinet_dust": "cabinet_dust",
+  "amenities_dust": "amenities_dust",
+  "monitor_on": "monitor_on",
+  "lamp1_on": "lamp1_on",
+  "lamp2_on": "lamp2_on",
+  "washer_closed": {
+   "not": "washer_open"
+  },
+  "washer_off": {
+   "not": "washer_on"
+  },
+  "dryer_closed": {
+   "not": "dryer_open"
+  },
+  "dryer_off": {
+   "not": "dryer_on"
+  },
+  "drawer_closed": {
+   "not": "drawer_open"
+  },
+  "cabinet_closed": {
+   "not": "cabinet_open"
+  },
+  "initial_monitor_OnTop": "monitor_ontop_desk",
+  "initial_keyboard_OnTop": "keyboard_ontop_desk",
+  "initial_lamp1_OnTop": "initial_lamp1_OnTop",
+  "initial_book1_OnTop": "initial_book1_OnTop",
+  "initial_pencil_OnTop": "initial_pencil_OnTop",
+  "initial_picture1_OnTop": "initial_picture1_OnTop",
+  "initial_picture2_OnTop": "initial_picture2_OnTop",
+  "initial_rag_OnTop": "rag_ontop_tool_home",
+  "initial_carrier_OnTop": "carrier_ontop_laundry",
+  "initial_sock_OnTop": "initial_sock_OnTop",
+  "initial_shorts_OnTop": "initial_shorts_OnTop",
+  "initial_cup_OnTop": "initial_cup_OnTop",
+  "initial_water_OnTop": "initial_water_OnTop",
+  "initial_soap_OnTop": "initial_soap_OnTop",
+  "initial_paper_OnTop": "initial_paper_OnTop",
+  "initial_book2_OnTop": "initial_book2_OnTop",
+  "initial_toy_OnTop": "initial_toy_OnTop",
+  "initial_lamp2_OnTop": "initial_lamp2_OnTop",
+  "hand_empty": "hand_empty"
+ },
+ "future_roles": [],
+ "replacements": [],
+ "public_instruction": "Reset the study and hallway workstation/bookshelf, wash and dry the two garments in the south utility room, clean and stock the north guest bedroom and its en-suite bathroom with the clean garments and guest supplies, hang both posters in the study, and leave all doors/appliances safe.",
+ "public_context": [
+  "Reset the study and hallway outside it: store the pencil case from the study bed inside the low hallway drawer cabinet (along the east hallway wall south of the study) and close the drawer; switch the study desk laptop off before wiping dust off its screen, wipe dust off the laptop, keyboard, study desk, and the floating wall shelf outside the study doorway using the cleaning cloth from the small wooden tool table next to the hallway drawer cabinet, leave the laptop and keyboard on the study desk with the laptop switched back on, place the study floor lamp onto the study desk switched off, place both paperback books (one on the study floor and one on the guest bed) onto the hallway wall shelf, hang both posters from the study bed onto the two wall pegs above the study desk below the wall clock, and return the cleaning cloth to the hallway tool table when all wiping is finished.",
+  "Prepare the north guest suite and complete laundry from the south utility room: wash both the sock and the boxers from the utility-room counter in the washing machine (closed and switched on until the wash cycle finishes), then dry both washed garments in the clothes dryer (closed and switched on until the drying cycle finishes); wipe dust off the tall guest-bedroom wardrobe (against the southeast guest-bedroom wall) before storing the washed and dried sock and boxers inside it and closing its doors; wipe dust off the guest en-suite bathroom vanity cabinet before placing the bar of soap and toilet paper roll from the utility-room counter on top of it; place the water glass and water bottle from the utility-room counter onto the guest-bedroom nightstand beside the bed; put the toy figure from the guest bed inside the open toy box along the west guest-bedroom wall; place the table lamp from the guest-bedroom floor beside the toy box onto the guest-bedroom nightstand switched off; leave the wicker basket on either the utility-room counter or the wooden side table along the west guest-bedroom wall; and leave the washing machine and clothes dryer switched off with their doors closed.",
+  "Finish with no object held."
+ ],
+ "requirements": [
+  {
+   "id": "study_and_corridor",
+   "text": "Reset the study and hallway outside it: store the pencil case from the study bed inside the low hallway drawer cabinet (along the east hallway wall south of the study) and close the drawer; switch the study desk laptop off before wiping dust off its screen, wipe dust off the laptop, keyboard, study desk, and the floating wall shelf outside the study doorway using the cleaning cloth from the small wooden tool table next to the hallway drawer cabinet, leave the laptop and keyboard on the study desk with the laptop switched back on, place the study floor lamp onto the study desk switched off, place both paperback books (one on the study floor and one on the guest bed) onto the hallway wall shelf, hang both posters from the study bed onto the two wall pegs above the study desk below the wall clock, and return the cleaning cloth to the hallway tool table when all wiping is finished.",
+   "terminal": [
+    "study_and_corridor_reset"
+   ],
+   "constraints": [
+    "monitor_off_when_cleaned"
+   ]
+  },
+  {
+   "id": "guest_suite_and_laundry",
+   "text": "Prepare the north guest suite and complete laundry from the south utility room: wash both the sock and the boxers from the utility-room counter in the washing machine (closed and switched on until the wash cycle finishes), then dry both washed garments in the clothes dryer (closed and switched on until the drying cycle finishes); wipe dust off the tall guest-bedroom wardrobe (against the southeast guest-bedroom wall) before storing the washed and dried sock and boxers inside it and closing its doors; wipe dust off the guest en-suite bathroom vanity cabinet before placing the bar of soap and toilet paper roll from the utility-room counter on top of it; place the water glass and water bottle from the utility-room counter onto the guest-bedroom nightstand beside the bed; put the toy figure from the guest bed inside the open toy box along the west guest-bedroom wall; place the table lamp from the guest-bedroom floor beside the toy box onto the guest-bedroom nightstand switched off; leave the wicker basket on either the utility-room counter or the wooden side table along the west guest-bedroom wall; and leave the washing machine and clothes dryer switched off with their doors closed.",
+   "terminal": [
+    "guest_suite_prepared",
+    "appliances_and_storage_safe"
+   ],
+   "constraints": [
+    "washed_before_dryer",
+    "cabinet_clean_receives_garments",
+    "amenities_clean_receives_supplies"
+   ]
+  },
+  {
+   "id": "hand_empty",
+   "text": "Finish with no object held.",
+   "terminal": [
+    "hand_empty"
+   ]
+  }
+ ],
+ "evaluation": {
+  "predicates": {
+   "washer_open": {
+    "object": "washer",
+    "state": "Open"
+   },
+   "washer_on": {
+    "object": "washer",
+    "state": "ToggledOn"
+   },
+   "dryer_open": {
+    "object": "dryer",
+    "state": "Open"
+   },
+   "dryer_on": {
+    "object": "dryer",
+    "state": "ToggledOn"
+   },
+   "drawer_open": {
+    "object": "drawer",
+    "state": "Open"
+   },
+   "cabinet_open": {
+    "object": "cabinet",
+    "state": "Open"
+   },
+   "monitor_on": {
+    "object": "monitor",
+    "state": "ToggledOn"
+   },
+   "lamp1_on": {
+    "object": "lamp1",
+    "state": "ToggledOn"
+   },
+   "lamp2_on": {
+    "object": "lamp2",
+    "state": "ToggledOn"
+   },
+   "shelf_dust": {
+    "object": "shelf",
+    "state": "Covered",
+    "system": "dust"
+   },
+   "desk_dust": {
+    "object": "desk",
+    "state": "Covered",
+    "system": "dust"
+   },
+   "keyboard_dust": {
+    "object": "keyboard",
+    "state": "Covered",
+    "system": "dust"
+   },
+   "monitor_dust": {
+    "object": "monitor",
+    "state": "Covered",
+    "system": "dust"
+   },
+   "cabinet_dust": {
+    "object": "cabinet",
+    "state": "Covered",
+    "system": "dust"
+   },
+   "amenities_dust": {
+    "object": "amenities",
+    "state": "Covered",
+    "system": "dust"
+   },
+   "sock_washed": {
+    "object": "sock",
+    "state": "ProcessComplete",
+    "process": "wash_cycle"
+   },
+   "shorts_washed": {
+    "object": "shorts",
+    "state": "ProcessComplete",
+    "process": "wash_cycle"
+   },
+   "sock_dried": {
+    "object": "sock",
+    "state": "ProcessComplete",
+    "process": "dry_cycle"
+   },
+   "shorts_dried": {
+    "object": "shorts",
+    "state": "ProcessComplete",
+    "process": "dry_cycle"
+   },
+   "sock_inside_dryer": {
+    "object": "sock",
+    "state": "Inside",
+    "target": "dryer"
+   },
+   "shorts_inside_dryer": {
+    "object": "shorts",
+    "state": "Inside",
+    "target": "dryer"
+   },
+   "sock_inside_cabinet": {
+    "object": "sock",
+    "state": "Inside",
+    "target": "cabinet"
+   },
+   "shorts_inside_cabinet": {
+    "object": "shorts",
+    "state": "Inside",
+    "target": "cabinet"
+   },
+   "cup_ontop_bedside": {
+    "object": "cup",
+    "state": "OnTop",
+    "target": "bedside"
+   },
+   "water_ontop_bedside": {
+    "object": "water",
+    "state": "OnTop",
+    "target": "bedside"
+   },
+   "soap_ontop_amenities": {
+    "object": "soap",
+    "state": "OnTop",
+    "target": "amenities"
+   },
+   "paper_ontop_amenities": {
+    "object": "paper",
+    "state": "OnTop",
+    "target": "amenities"
+   },
+   "carrier_ontop_laundry": {
+    "object": "carrier",
+    "state": "OnTop",
+    "target": "laundry"
+   },
+   "carrier_ontop_delivery": {
+    "object": "carrier",
+    "state": "OnTop",
+    "target": "delivery"
+   },
+   "book1_ontop_shelf": {
+    "object": "book1",
+    "state": "OnTop",
+    "target": "shelf"
+   },
+   "book2_ontop_shelf": {
+    "object": "book2",
+    "state": "OnTop",
+    "target": "shelf"
+   },
+   "pencil_inside_drawer": {
+    "object": "pencil",
+    "state": "Inside",
+    "target": "drawer"
+   },
+   "toy_inside_toy_box": {
+    "object": "toy",
+    "state": "Inside",
+    "target": "toy_box"
+   },
+   "keyboard_ontop_desk": {
+    "object": "keyboard",
+    "state": "OnTop",
+    "target": "desk"
+   },
+   "monitor_ontop_desk": {
+    "object": "monitor",
+    "state": "OnTop",
+    "target": "desk"
+   },
+   "lamp1_ontop_desk": {
+    "object": "lamp1",
+    "state": "OnTop",
+    "target": "desk"
+   },
+   "lamp2_ontop_bedside": {
+    "object": "lamp2",
+    "state": "OnTop",
+    "target": "bedside"
+   },
+   "rag_ontop_tool_home": {
+    "object": "rag",
+    "state": "OnTop",
+    "target": "tool_home"
+   },
+   "picture1_attachedto_nail1": {
+    "object": "picture1",
+    "state": "AttachedTo",
+    "target": "nail1"
+   },
+   "picture2_attachedto_nail2": {
+    "object": "picture2",
+    "state": "AttachedTo",
+    "target": "nail2"
+   },
+   "picture1_attachedto_nail2": {
+    "object": "picture1",
+    "state": "AttachedTo",
+    "target": "nail2"
+   },
+   "picture2_attachedto_nail1": {
+    "object": "picture2",
+    "state": "AttachedTo",
+    "target": "nail1"
+   },
+   "hand_empty": {
+    "object": "desk",
+    "state": "HandEmpty"
+   },
+   "initial_lamp1_OnTop": {
+    "object": "lamp1",
+    "state": "OnTop",
+    "target": "floor_a"
+   },
+   "initial_book1_OnTop": {
+    "object": "book1",
+    "state": "OnTop",
+    "target": "floor_a"
+   },
+   "initial_pencil_OnTop": {
+    "object": "pencil",
+    "state": "OnTop",
+    "target": "room_bed"
+   },
+   "initial_picture1_OnTop": {
+    "object": "picture1",
+    "state": "OnTop",
+    "target": "room_bed"
+   },
+   "initial_picture2_OnTop": {
+    "object": "picture2",
+    "state": "OnTop",
+    "target": "room_bed"
+   },
+   "initial_sock_OnTop": {
+    "object": "sock",
+    "state": "OnTop",
+    "target": "laundry"
+   },
+   "initial_shorts_OnTop": {
+    "object": "shorts",
+    "state": "OnTop",
+    "target": "laundry"
+   },
+   "initial_cup_OnTop": {
+    "object": "cup",
+    "state": "OnTop",
+    "target": "laundry"
+   },
+   "initial_water_OnTop": {
+    "object": "water",
+    "state": "OnTop",
+    "target": "laundry"
+   },
+   "initial_soap_OnTop": {
+    "object": "soap",
+    "state": "OnTop",
+    "target": "laundry"
+   },
+   "initial_paper_OnTop": {
+    "object": "paper",
+    "state": "OnTop",
+    "target": "laundry"
+   },
+   "initial_book2_OnTop": {
+    "object": "book2",
+    "state": "OnTop",
+    "target": "guest_bed"
+   },
+   "initial_toy_OnTop": {
+    "object": "toy",
+    "state": "OnTop",
+    "target": "guest_bed"
+   },
+   "initial_lamp2_OnTop": {
+    "object": "lamp2",
+    "state": "OnTop",
+    "target": "floor_b"
+   }
+  },
+  "terminal": {
+   "study_and_corridor_reset": {
+    "all": [
+     "book1_ontop_shelf",
+     "book2_ontop_shelf",
+     "pencil_inside_drawer",
+     "keyboard_ontop_desk",
+     "monitor_ontop_desk",
+     "monitor_on",
+     "lamp1_ontop_desk",
+     {
+      "not": "lamp1_on"
+     },
+     "rag_ontop_tool_home",
+     {
+      "not": "shelf_dust"
+     },
+     {
+      "not": "desk_dust"
+     },
+     {
+      "not": "keyboard_dust"
+     },
+     {
+      "not": "monitor_dust"
+     },
+     {
+      "any": [
+       {
+        "all": [
+         "picture1_attachedto_nail1",
+         "picture2_attachedto_nail2"
+        ]
+       },
+       {
+        "all": [
+         "picture1_attachedto_nail2",
+         "picture2_attachedto_nail1"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "guest_suite_prepared": {
+    "all": [
+     "toy_inside_toy_box",
+     "lamp2_ontop_bedside",
+     {
+      "not": "lamp2_on"
+     },
+     {
+      "not": "cabinet_dust"
+     },
+     {
+      "not": "amenities_dust"
+     },
+     "sock_washed",
+     "shorts_washed",
+     "sock_dried",
+     "shorts_dried",
+     "sock_inside_cabinet",
+     "shorts_inside_cabinet",
+     "cup_ontop_bedside",
+     "water_ontop_bedside",
+     "soap_ontop_amenities",
+     "paper_ontop_amenities",
+     {
+      "any": [
+       "carrier_ontop_laundry",
+       "carrier_ontop_delivery"
+      ]
+     }
+    ]
+   },
+   "appliances_and_storage_safe": {
+    "all": [
+     {
+      "not": "washer_open"
+     },
+     {
+      "not": "washer_on"
+     },
+     {
+      "not": "dryer_open"
+     },
+     {
+      "not": "dryer_on"
+     },
+     {
+      "not": "drawer_open"
+     },
+     {
+      "not": "cabinet_open"
+     }
+    ]
+   },
+   "hand_empty": "hand_empty"
+  },
+  "state_guards": [
+   {
+    "id": "washed_before_dryer",
+    "until": null,
+    "require": {
+     "any": [
+      {
+       "not": {
+        "any": [
+         "sock_inside_dryer",
+         "shorts_inside_dryer"
+        ]
+       }
+      },
+      {
+       "all": [
+        "sock_washed",
+        "shorts_washed"
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "id": "cabinet_clean_receives_garments",
+    "until": null,
+    "require": {
+     "any": [
+      {
+       "not": {
+        "any": [
+         "sock_inside_cabinet",
+         "shorts_inside_cabinet"
+        ]
+       }
+      },
+      {
+       "not": "cabinet_dust"
+      }
+     ]
+    }
+   },
+   {
+    "id": "amenities_clean_receives_supplies",
+    "until": null,
+    "require": {
+     "any": [
+      {
+       "not": {
+        "any": [
+         "soap_ontop_amenities",
+         "paper_ontop_amenities"
+        ]
+       }
+      },
+      {
+       "not": "amenities_dust"
+      }
+     ]
+    }
+   }
+  ],
+  "transition_guards": [
+   {
+    "id": "monitor_off_when_cleaned",
+    "predicate": "monitor_dust",
+    "from_value": true,
+    "to_value": false,
+    "require": {
+     "not": "monitor_on"
+    }
+   }
+  ],
+  "score_type": "custom_joint_terminal_and_public_history_v2"
+ },
+ "acceptance_cases": {
+  "reference_orders": [
+   "optimal_parallel_carrier",
+   "habit_sequential"
+  ],
+  "physical_negative_cases": [
+   "omit_wiping_and_drawer",
+   "omit_room_tidy",
+   "omit_guest_delivery"
+  ],
+  "fresh_restore_repetitions": 2,
+  "max_reference_action_attempts": 400
+ },
+ "reference_plan": {
+  "kind": "full_workflow",
+  "allow_strategy_variants": true,
+  "phases": {
+   "prep_monitor_off": {
+    "actions": [
+     {
+      "primitive": "toggle_off",
+      "role": "monitor"
+     }
+    ],
+    "after": []
+   },
+   "start_washer": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "washer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "sock"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "washer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "shorts"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "washer"
+     },
+     {
+      "primitive": "close",
+      "role": "washer"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "washer"
+     }
+    ],
+    "after": []
+   },
+   "idle_wait_washer": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "sock_washed",
+        "shorts_washed"
+       ]
+      },
+      "seconds": 60.0,
+      "attempts": 4
+     }
+    ],
+    "after": [
+     "start_washer"
+    ]
+   },
+   "prepack_amenities_in_carrier": {
+    "actions": [
+     {
+      "primitive": "grasp",
+      "role": "cup"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "carrier"
+     },
+     {
+      "primitive": "grasp",
+      "role": "water"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "carrier"
+     },
+     {
+      "primitive": "grasp",
+      "role": "soap"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "carrier"
+     },
+     {
+      "primitive": "grasp",
+      "role": "paper"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "carrier"
+     }
+    ],
+    "after": []
+   },
+   "wipe_all_and_store_pencil": {
+    "actions": [
+     {
+      "primitive": "open",
+      "role": "drawer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "pencil"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "drawer"
+     },
+     {
+      "primitive": "close",
+      "role": "drawer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "rag"
+     },
+     {
+      "primitive": "wipe",
+      "role": "shelf"
+     },
+     {
+      "primitive": "wipe",
+      "role": "monitor"
+     },
+     {
+      "primitive": "wipe",
+      "role": "keyboard"
+     },
+     {
+      "primitive": "wipe",
+      "role": "desk"
+     },
+     {
+      "primitive": "wipe",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "wipe",
+      "role": "amenities"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "tool_home",
+      "uv": [
+       0.5,
+       0.5
+      ]
+     }
+    ],
+    "after": [
+     "prep_monitor_off"
+    ]
+   },
+   "transfer_to_dryer_and_start": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "sock_washed",
+        "shorts_washed"
+       ]
+      },
+      "seconds": 20.0,
+      "attempts": 10
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "washer"
+     },
+     {
+      "primitive": "open",
+      "role": "washer"
+     },
+     {
+      "primitive": "open",
+      "role": "dryer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "sock",
+      "approach_role": "washer"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dryer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "shorts",
+      "approach_role": "washer"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "dryer"
+     },
+     {
+      "primitive": "close",
+      "role": "dryer"
+     },
+     {
+      "primitive": "toggle_on",
+      "role": "dryer"
+     },
+     {
+      "primitive": "close",
+      "role": "washer"
+     }
+    ],
+    "after": [
+     "start_washer"
+    ]
+   },
+   "idle_wait_dryer": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "sock_dried",
+        "shorts_dried"
+       ]
+      },
+      "seconds": 60.0,
+      "attempts": 4
+     }
+    ],
+    "after": [
+     "transfer_to_dryer_and_start"
+    ]
+   },
+   "tidy_study_and_guest_rooms": {
+    "actions": [
+     {
+      "primitive": "toggle_on",
+      "role": "monitor"
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "lamp1"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lamp1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "desk",
+      "uv": [
+       0.5,
+       0.16
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "picture1"
+     },
+     {
+      "primitive": "attach",
+      "role": "nail1"
+     },
+     {
+      "primitive": "grasp",
+      "role": "picture2"
+     },
+     {
+      "primitive": "attach",
+      "role": "nail2"
+     },
+     {
+      "primitive": "grasp",
+      "role": "book1"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "shelf",
+      "uv": [
+       0.5,
+       0.28
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "toy"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "toy_box"
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "lamp2"
+     },
+     {
+      "primitive": "grasp",
+      "role": "lamp2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "bedside",
+      "uv": [
+       0.5,
+       0.72
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "book2"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "shelf",
+      "uv": [
+       0.5,
+       0.72
+      ]
+     }
+    ],
+    "after": [
+     "wipe_all_and_store_pencil"
+    ]
+   },
+   "unload_dryer_and_batch_deliver": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "sock_dried",
+        "shorts_dried"
+       ]
+      },
+      "seconds": 20.0,
+      "attempts": 10
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "dryer"
+     },
+     {
+      "primitive": "open",
+      "role": "dryer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "sock",
+      "approach_role": "dryer"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "carrier"
+     },
+     {
+      "primitive": "grasp",
+      "role": "shorts",
+      "approach_role": "dryer"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "carrier"
+     },
+     {
+      "primitive": "close",
+      "role": "dryer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "carrier"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "delivery",
+      "uv": [
+       0.5,
+       0.5
+      ]
+     },
+     {
+      "primitive": "open",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "grasp",
+      "role": "sock",
+      "approach_role": "carrier"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "grasp",
+      "role": "shorts",
+      "approach_role": "carrier"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "close",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "grasp",
+      "role": "cup",
+      "approach_role": "carrier"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "bedside",
+      "uv": [
+       0.28,
+       0.22
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "water",
+      "approach_role": "carrier"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "bedside",
+      "uv": [
+       0.72,
+       0.22
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "soap",
+      "approach_role": "carrier"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "amenities",
+      "uv": [
+       0.28,
+       0.5
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "paper",
+      "approach_role": "carrier"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "amenities",
+      "uv": [
+       0.72,
+       0.5
+      ]
+     }
+    ],
+    "after": [
+     "transfer_to_dryer_and_start",
+     "prepack_amenities_in_carrier"
+    ]
+   },
+   "unload_dryer_and_single_trip_deliver": {
+    "actions": [
+     {
+      "primitive": "wait_for",
+      "condition": {
+       "all": [
+        "sock_dried",
+        "shorts_dried"
+       ]
+      },
+      "seconds": 20.0,
+      "attempts": 10
+     },
+     {
+      "primitive": "toggle_off",
+      "role": "dryer"
+     },
+     {
+      "primitive": "open",
+      "role": "dryer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "sock",
+      "approach_role": "dryer"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "laundry",
+      "uv": [
+       0.5,
+       0.72
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "shorts",
+      "approach_role": "dryer"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "laundry",
+      "uv": [
+       0.5,
+       0.62
+      ]
+     },
+     {
+      "primitive": "close",
+      "role": "dryer"
+     },
+     {
+      "primitive": "grasp",
+      "role": "sock"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "delivery",
+      "uv": [
+       0.5,
+       0.5
+      ]
+     },
+     {
+      "primitive": "open",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "grasp",
+      "role": "sock"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "grasp",
+      "role": "shorts"
+     },
+     {
+      "primitive": "place_inside",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "close",
+      "role": "cabinet"
+     },
+     {
+      "primitive": "grasp",
+      "role": "cup"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "bedside",
+      "uv": [
+       0.28,
+       0.22
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "water"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "bedside",
+      "uv": [
+       0.72,
+       0.22
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "soap"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "amenities",
+      "uv": [
+       0.28,
+       0.5
+      ]
+     },
+     {
+      "primitive": "grasp",
+      "role": "paper"
+     },
+     {
+      "primitive": "place_on_top",
+      "role": "amenities",
+      "uv": [
+       0.72,
+       0.5
+      ]
+     }
+    ],
+    "after": [
+     "transfer_to_dryer_and_start"
+    ]
+   }
+  },
+  "orders": {
+   "optimal_parallel_carrier": [
+    "prep_monitor_off",
+    "start_washer",
+    "prepack_amenities_in_carrier",
+    "wipe_all_and_store_pencil",
+    "transfer_to_dryer_and_start",
+    "tidy_study_and_guest_rooms",
+    "unload_dryer_and_batch_deliver"
+   ],
+   "habit_sequential": [
+    "prep_monitor_off",
+    "wipe_all_and_store_pencil",
+    "tidy_study_and_guest_rooms",
+    "start_washer",
+    "idle_wait_washer",
+    "transfer_to_dryer_and_start",
+    "idle_wait_dryer",
+    "unload_dryer_and_single_trip_deliver"
+   ]
+  },
+  "negative_omissions": {
+   "omit_wiping_and_drawer": "wipe_all_and_store_pencil",
+   "omit_room_tidy": "tidy_study_and_guest_rooms",
+   "omit_guest_delivery": "unload_dryer_and_batch_deliver"
+  }
+ },
+ "robot_start": {
+  "position": [
+   22.7,
+   14.2,
+   0.02
+  ],
+  "orientation": [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ },
+ "settle_steps": 30
+}

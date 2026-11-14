@@ -128,25 +128,37 @@ def robot_time_review(run_dir, evaluation, actions):
 
 
 def token_usage(controller_dir):
-    """Summed usage of the controller's completed turns, or {} without a controller directory."""
+    """Total token usage of a controller directory, deduplicating cumulative thread resumes."""
     if controller_dir is None:
         return {}
     from ..clients.events import event_path
     controller_dir = Path(controller_dir)
-    usage = {}
+    native = read_json(controller_dir / 'native_session_token_usage.json')
+    controller = read_json(controller_dir / 'controller.json')
+    pinned_sha = (controller.get('reasoning_trace') or {}).get('session_sha256')
+    if native.get('final_total_token_usage') and (not pinned_sha or native.get('session_sha256') == pinned_sha):
+        return {key: value for key, value in native['final_total_token_usage'].items()
+                if isinstance(value, (int, float))}
+    by_thread, anonymous = {}, {}
+    current_thread = None
     for event in read_jsonl(event_path(controller_dir)):
-        if event.get('type') == 'turn.completed':
-            for key, value in (event.get('usage') or {}).items():
-                if isinstance(value, (int, float)):
-                    usage[key] = usage.get(key, 0) + value
-    if not usage:
-        native = read_json(controller_dir / 'native_session_token_usage.json')
-        controller = read_json(controller_dir / 'controller.json')
-        pinned_sha = (controller.get('reasoning_trace') or {}).get('session_sha256')
-        if native.get('final_total_token_usage') and (not pinned_sha or native.get('session_sha256') == pinned_sha):
-            for key, value in native['final_total_token_usage'].items():
-                if isinstance(value, (int, float)):
-                    usage[key] = value
+        if event.get('type') == 'thread.started' and event.get('thread_id'):
+            current_thread = str(event['thread_id'])
+        elif event.get('type') == 'turn.completed':
+            numeric = {key: value for key, value in (event.get('usage') or {}).items()
+                       if isinstance(value, (int, float))}
+            if not numeric:
+                continue
+            if current_thread is not None:
+                # `codex exec resume <thread_id>` emits cumulative session totals on each turn.completed.
+                by_thread[current_thread] = numeric
+            else:
+                for key, value in numeric.items():
+                    anonymous[key] = anonymous.get(key, 0) + value
+    usage = dict(anonymous)
+    for thread_usage in by_thread.values():
+        for key, value in thread_usage.items():
+            usage[key] = usage.get(key, 0) + value
     return usage
 
 
