@@ -11,6 +11,7 @@ from ..observations.boundary import public_observation, public_execution_error
 from ..records import write_json
 from ..agent.skill_runtime import SkillLibrary
 from ..tools import REGISTRY, tool_specs
+from ..tools.intent import validate_intent, PROTOCOL as INTENT_PROTOCOL, LEGACY_PROTOCOL
 from .tool_context import ToolContext
 from ..observations.surround import SurroundJobs
 from .closure import EpisodeClosure
@@ -18,11 +19,12 @@ from ..agent.task_notes import TaskNotes, model_planning_reply
 
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
-                 goal_skill='hierarchical', unbounded_episode=False):
+                 goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False):
         if profile == 'basic-skills': goal_skill = 'none'
         if profile == 'goal-tree': goal_skill = 'tree'
         if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
         self.goal_skill=goal_skill
+        self.require_tool_intent=require_tool_intent
         self.task_notes=TaskNotes(recorder.output, auto_select=goal_skill == 'hierarchical')
         if agent_step_limit is not None and (type(agent_step_limit) is not int or agent_step_limit<=0):
             raise ValueError('agent_step_limit must be a positive integer')
@@ -48,16 +50,19 @@ class VisionHarness:
         self.closure=EpisodeClosure(recorder.output)
         self.profile = profile
         self.surround = SurroundJobs(self)
-        self.catalog = {t['name']: t for t in tool_specs(profile)}
+        self.catalog = {t['name']: t for t in tool_specs(profile, require_intent=require_tool_intent)}
         self.cache,self.evidence={},{}
         self.skills = None
         if profile == 'workflow':
             self.plan,self.memory=[],{}
-        if profile in {'basic-skills','goal-tree','skills','workflow'}:
+        if profile in {'basic-skills','goal-tree','skills','skills_inline','workflow'}:
+            # skills_inline freezes the same bundle for provenance; its prompt carries the text.
             planning_skill = {'hierarchical': 'goal-decomposition', 'tree': 'goal-tree'}.get(goal_skill)
             self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition','goal-tree'} - {planning_skill})
         recorder.run['config']['agent_profile'] = profile
-        recorder.run['config'].update(goal_skill=goal_skill)
+        recorder.run['config'].update(goal_skill=goal_skill,
+            require_tool_intent=require_tool_intent,
+            tool_intent_protocol=INTENT_PROTOCOL if require_tool_intent else LEGACY_PROTOCOL)
         recorder.run['episode_deadline_unix']=self.deadline.unix
         self.deadline.check()
         self.snapshot=self.refresh()
@@ -106,6 +111,7 @@ class VisionHarness:
                 if self.backend.local_manipulation else
                 'Move within reach with navigate_to before manipulating a target.'}
         if 'task_notes' in self.catalog: result['notes']=self.task_notes.read()
+        if self.require_tool_intent: result['tool_intent_protocol']=INTENT_PROTOCOL
         return result
 
     def refresh(self):
@@ -119,6 +125,7 @@ class VisionHarness:
         if self.closed or not isinstance(request_id,str) or not 0<len(request_id)<=200:
             return
         try:
+            if self.require_tool_intent: validate_intent(arguments)
             validate(arguments,self.catalog['finish']['inputSchema'])
             fingerprint=json.dumps(['finish',arguments],sort_keys=True,allow_nan=False)
         except (SkillError,ValueError,TypeError):
@@ -167,6 +174,7 @@ class VisionHarness:
                 write_json(self.recorder.output/'run.json',self.recorder.run)
                 self.recorder.event('agent_step_admitted',{'step':self.agent_steps,
                     'limit':self.agent_step_limit,'tool':name,'request_id':request_id})
+            if self.require_tool_intent: validate_intent(arguments)
             # Compatibility for archived callers; model schema explicitly carries
             # nullable action options. Original input remains in the event ledger.
             if name=='act' and isinstance(arguments,dict):
@@ -177,7 +185,7 @@ class VisionHarness:
                     (self.legacy_limits_active and self.calls>self.budget.max_calls) or
                     (self.budget.wall_seconds is not None and not self.deadline.managed and time.monotonic()-self.started>self.budget.wall_seconds)):
                 raise SkillError('budget_exhausted','Call/time budget exhausted; finish the episode')
-            execution_args = {k:v for k,v in arguments.items() if k != 'decision'}
+            execution_args = {k:v for k,v in arguments.items() if k not in {'decision', 'intent'}}
             context=ToolContext(self, request_id=request_id, tool_name=name)
             result={'ok':True,**REGISTRY[name].handler(context,**execution_args)}
         except SkillError as exc:
@@ -318,6 +326,8 @@ class VisionHarness:
                 'primitive_attempts':int(local['primitive_attempts']),
                 'operation_committed':True,
                 'message':'Operation completed on the selected target. Inspect the returned RGB.'}
+        if details.get('public_process'):
+            effect['process']=details['public_process']
         if primitive=='navigate_to':
             # Only an action outcome crosses the RGB boundary, never private
             # coordinates, target distances, object identities or map geometry.

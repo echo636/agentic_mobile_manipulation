@@ -82,14 +82,18 @@ def clone_python(value, torch):
 
 
 PYTHON_STATE = ('_ideal_held', '_carry_relative', '_carry_contents', '_carry_dependencies',
+                '_grasped_payload', '_latched_closed_positions',
                 '_stabilized_containers', '_stabilized_container_payloads', '_base_target',
                 '_object_anchor', '_demo_focus', '_demo_arm')
 
 
 def snapshot(backend):
+    # Native grasp/payload properties derive from the simulator snapshot. Only
+    # legacy executors own writable Python copies of those names. Reading the
+    # derived properties here would also do an unnecessary geometry query.
     return {'sim': backend.og.sim.dump_state(serialized=False),
-            'python': {name: clone_python(getattr(backend, name), backend.torch)
-                       for name in PYTHON_STATE if hasattr(backend, name)}}
+            'python': {name: clone_python(backend.__dict__[name], backend.torch)
+                       for name in PYTHON_STATE if name in backend.__dict__}}
 
 
 def restore(backend, state, seed):
@@ -100,7 +104,10 @@ def restore(backend, state, seed):
         elif name in backend.__dict__:
             delattr(backend, name)
     backend.frames_revision = -1
-    backend._carry_follow()
+    # Historical fixtures used a Python-held pose; current native grasp joints
+    # are restored by sim.load_state and must not be projected afterwards.
+    if '_ideal_held' in state['python']:
+        backend._carry_follow()
     random.seed(seed)
     import numpy as np
     np.random.seed(seed)

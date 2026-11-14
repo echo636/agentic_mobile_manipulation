@@ -1187,6 +1187,7 @@ class Batch:
                  '--timeout',str(seconds if seconds is not None else 0),'--execution-clock-command-json',
                  json.dumps(self.execution_clock_command(clock_path,seconds,row=row)),
                  '--agent-profile',self.manifest['agent_profile'],'--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+            if self.manifest.get('require_tool_intent'):cmd.append('--require-tool-intent')
             if self.manifest.get('model_reasoning_effort'):
                 cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
             if self.c.get('model_provider_profile'):
@@ -1256,8 +1257,11 @@ class Batch:
         if not metadata.get('formal_finish_observed') and not (health or {}).get('closed') and not known:
             self.update(row,supervisor_intervention=True,stage='finishing')
             timeout=self._config.get('finish_stage_timeout_seconds',600)
+            from manipulation_agent.tools.intent import supervisor_finish_arguments
+            arguments=supervisor_finish_arguments('Controller ended or episode deadline reached',
+                require_intent=bool(self.manifest.get('require_tool_intent')))
             code=("from manipulation_agent.transport.bridge import rpc; print(rpc("+repr(f'http://127.0.0.1:{row["port"]}')+
-                ",'finish',{'outcome':'aborted','reason':'Controller ended or episode deadline reached'},'batch-supervisor-finish',timeout="+str(timeout)+",origin='supervisor'))")
+                ",'finish',"+repr(arguments)+",'batch-supervisor-finish',timeout="+str(timeout)+",origin='supervisor'))")
             result=self.ssh(['env','PYTHONPATH='+str(Path(row.get('runtime_source', self.remote_source))/'src'),self.c['sim_python'],'-c',code],timeout=timeout+5)
             (self.root/'logs'/f'{row["run_id"]}_forced_finish.log').write_text(result.stdout+result.stderr)
             self.update(row,supervisor_finish_exit_code=result.returncode)
@@ -1491,6 +1495,7 @@ class Batch:
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
              '--timeout',str(self.manifest['model_timeout_seconds'] or 0),'--agent-profile',self.manifest['agent_profile'],
              '--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+        if self.manifest.get('require_tool_intent'):cmd.append('--require-tool-intent')
         if self.manifest.get('model_reasoning_effort'):
             cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
         if self.c.get('model_provider_profile'):

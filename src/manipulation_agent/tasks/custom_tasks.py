@@ -49,6 +49,9 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
                     or any(type(v) not in (int, float) or not math.isfinite(v) or v <= 0
                            for v in scale)):
                 raise ValueError('Imported asset scale must contain three finite positive numbers')
+    from ..executors.timed_processes import validate_timed_processes
+    validate_timed_processes(spec)
+    proc_items = {row['id']: set(row['items']) for row in spec.get('timed_processes', [])}
     evaluation = spec['evaluation']
     TemporalGoalEvaluator(evaluation)
     for key, row in evaluation['predicates'].items():
@@ -56,6 +59,10 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
             raise ValueError('Predicate references unknown entity: ' + key)
         if not isinstance(row.get('state'), str) or not row['state']:
             raise ValueError('Predicate needs an explicit state: ' + key)
+        if row['state'] == 'ProcessComplete':
+            proc = row.get('process')
+            if proc not in proc_items or row['object'] not in proc_items[proc]:
+                raise ValueError('ProcessComplete predicate references unknown process/item: ' + key)
     values = dict.fromkeys(evaluation['predicates'], False)
     if not spec.get('initial_assertions'):
         raise ValueError('A custom task needs initial assertions')

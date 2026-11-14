@@ -4,6 +4,10 @@ An independent research system for **RGB observation -> LLM action and target se
 
 Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/agentic_mobile_manipulation). Reference repositories and existing navigation environments remain separate from this project.
 
+On this host, use the single checkout `agentic_mobile_manipulation`; see the
+[local workspace and archived-runtime guide](docs/local_workspace.md) for source,
+data, compatibility paths and validation commands.
+
 Start with the [code map and entry points](docs/code_organization.md) to locate
 runtime, executor, task, skill and reporting code. See
 [task cards and the readiness protocol](docs/custom_long_horizon.md) for custom

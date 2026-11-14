@@ -34,7 +34,7 @@ class LocalRGBManipulation:
         return obj,self.torch.tensor(point,dtype=base.dtype,device=base.device)
 
     def _local_ready(self,primitive,obj,point,operation):
-        return math.dist(self._local_pose()[:2],point[:2])<=operation.limits.reach_m
+        return math.dist(self._local_pose()[:2],point[:2])<=operation.reach_m
 
     def _local_reposition(self,primitive,obj,point,operation):
         anchor=SimpleNamespace(get_position_orientation=lambda:(point,None))

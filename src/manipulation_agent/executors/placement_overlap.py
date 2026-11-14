@@ -16,7 +16,8 @@ def oriented_piece_box(points):
     return mean+rotation@((low+high)/2),np.maximum((high-low)/2,1e-6),rotation
 
 
-def assembly_overlap_ranker(backend, held, assembly, *, support_objects=(), ignored_robot_links=None):
+def assembly_overlap_ranker(backend, held, assembly, *, support_objects=(), ignored_robot_links=None,
+                            support_paths=()):
     import omnigibson.lazy as lazy
     from omnigibson.utils import transform_utils as T
     root_position,root_quat=held.get_position_orientation()
@@ -40,6 +41,9 @@ def assembly_overlap_ranker(backend, held, assembly, *, support_objects=(), igno
     # the collider. Ignore it only when ordering supported surface proposals;
     # contents and neighboring objects still contribute, and physics is unchanged.
     ignored={str(link.prim_path) for obj in [*assembly,*support_objects] for link in obj.links.values()}
+    # The surface under a thin support (a table under a plate) meets a tilted
+    # enclosing box the same way; it is not a neighbor to be avoided.
+    ignored.update(str(path) for path in support_paths)
     # Grasp proposals may touch the hand, but should still rank torso/base
     # overlap. Placement retains its existing robot exclusion.
     ignored.update(str(link.prim_path) for link in (

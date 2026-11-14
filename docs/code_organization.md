@@ -135,3 +135,13 @@ presentation material belongs outside the source repository.
 
 The user selected `main` as the merge target on 2026-10-29, superseding the earlier
 `feat/harness-fastmcp` target.
+
+## Local historical analysis
+
+The consolidated local checkout additionally retains `tasks/hot_drink_state.py`
+and `reporting/legacy_hot_drink.py` for read-only verification of the historical
+high-level hot-drink protocol. They are not imported by the active executor.
+Standalone historical HTTP diagnostics live in `scripts/transport/`; their
+activation is explicit. Local experiment narratives are under
+`docs/archive/local/`, and the unbuilt dinner draft is under `task_designs/drafts/`.
+See [workspace migration and source preservation](local_workspace.md).

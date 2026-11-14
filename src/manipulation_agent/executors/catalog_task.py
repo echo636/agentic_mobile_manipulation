@@ -1,7 +1,8 @@
-"""RGB execution of frozen official BDDL instances outside the challenge-100 catalog.
+"""RGB execution of frozen native BDDL instances with pinned sampling evidence.
 
-Goals and transitions come from the installed official task. There are no custom
-goal predicates, reference actions, or fabricated human-normalized metrics.
+Installed tasks and explicit custom definitions use the same native predicates.
+Custom definitions are registered only in the worker, with separate provenance
+and no official-challenge or human-normalized score.
 """
 import copy
 import hashlib
@@ -13,17 +14,39 @@ from types import SimpleNamespace
 
 from .omnigibson_rgb import RGBBackend
 from ..tasks.catalog_tasks import complete_scene_context, load_catalog_spec
+from ..tasks.lineage_goals import check_initial_lineages, evaluate_relational_goals
+from ..tasks.native_definition import resolve_definition, register_definition
 from ..runtime.deadline import DEADLINE_STEP_SENTINEL
 from ..tasks.goal_grounding import FactoredGoalOptions, efficient_grounding, evaluate_once_per_literal
 from .omnigibson_backend import normalize_embedded_robot
 from ..records import write_json
+from ..runtime.robot_clock import robot_clock_record
 
 
 class CatalogRGBBackend(RGBBackend):
+    def _checked_cut(self, target, max_steps):
+        constraint = self.catalog_spec.get('cutting_support')
+        if constraint is not None:
+            from omnigibson.object_states import OnTop
+            from ..contracts import SkillError
+            scope = self.env.task.object_scope
+            support = scope[constraint['support_binding']]
+            allowed = [scope[key] for key in constraint['target_bindings']]
+            valid_target = any(target is obj for obj in allowed)
+            supported = bool(valid_target and target.states[OnTop].get_value(support))
+            row = {'env_step': self.steps, 'target': target.name, 'support': support.name,
+                   'declared_target': valid_target, 'on_required_support': supported}
+            with (self.output / 'cutting_support_checks.jsonl').open('a') as stream:
+                stream.write(json.dumps(row) + '\n')
+            if not supported:
+                raise SkillError('pre_condition_error',
+                    'Cut the task material while it rests on the required work surface.')
+        return super()._checked_cut(target, max_steps)
+
     def __init__(self, spec_path, output, **kwargs):
         self.spec_path = Path(spec_path).resolve()
         self.catalog_spec = load_catalog_spec(self.spec_path)
-        self.use_gpu_dynamics = True
+        self.use_gpu_dynamics = self.catalog_spec.get('use_gpu_dynamics', True)
         spec = self.catalog_spec
         super().__init__(spec['task'], 0, output, seed=spec['seed'], **kwargs)
 
@@ -31,7 +54,12 @@ class CatalogRGBBackend(RGBBackend):
         import bddl
         from omnigibson.utils.asset_utils import get_scene_path
         spec = self.catalog_spec
-        definition = Path(bddl.__file__).parent / 'activity_definitions' / spec['task'] / 'problem0.bddl'
+        definition = resolve_definition(spec, self.spec_path)
+        if definition is not None:
+            from omnigibson.utils.bddl_utils import get_knowledge_base
+            register_definition(get_knowledge_base(), spec['task'], definition.read_text())
+        else:
+            definition = Path(bddl.__file__).parent / 'activity_definitions' / spec['task'] / 'problem0.bddl'
         if hashlib.sha256(definition.read_bytes()).hexdigest() != spec['bddl_sha256']:
             raise ValueError('Runtime BDDL differs from the sampled task definition')
         frozen = (self.spec_path.parent / spec['frozen_instance']['path']).resolve()
@@ -137,12 +165,14 @@ class CatalogRGBBackend(RGBBackend):
         self.evaluator = SimpleNamespace(env=self.env, robot=self.robot, metrics=[])
         spec = self.catalog_spec
         self.task_metadata = {'task': spec['task'], 'instance': spec['instance_id'],
-            'split': 'behavior1k_sampled_development', 'scene': spec['scene'], 'seed': spec['seed'],
+            'split': ('custom_native_bddl_development' if spec['kind'] == 'custom_bddl_sampled_instance'
+                      else 'behavior1k_sampled_development'), 'scene': spec['scene'], 'seed': spec['seed'],
             'official_submission_eligible': False}
         write_json(self.output / 'dependency_versions.json',
                    {d.metadata['Name']: d.version for d in metadata.distributions() if d.metadata['Name']})
 
     def _prepare_task_instance(self):
+        check_initial_lineages(self.catalog_spec, lambda name: self.env.scene.object_registry('name', name, None))
         conditions = self.env.task.compiled_task.initial_conditions
         with evaluate_once_per_literal([conditions]):
             checked = [bool(c.evaluate(self.env.task._evaluate_predicate)) for c in conditions]
@@ -164,8 +194,9 @@ class CatalogRGBBackend(RGBBackend):
     def evaluate(self):
         goals = self._goal_options()
         success, _ = self.env.task.compiled_task.check_goal(self.env.task._evaluate_predicate)
-        return {'task_success': bool(success),
-            'official_task_success': bool(self.env.task.success),
+        result = {'task_success': bool(success),
+            'official_task_success': (None if self.catalog_spec['kind'] == 'custom_bddl_sampled_instance'
+                                      else bool(self.env.task.success)),
             'goal_options': goals, 'initial_goal_options': self.initial_goals,
             'goal_options_representation': ('best_scoring_ground_alternative' if
                 isinstance(self.env.task.ground_goal_state_options, FactoredGoalOptions) else 'all_ground_alternatives'),
@@ -173,19 +204,48 @@ class CatalogRGBBackend(RGBBackend):
             'official_metrics': {},
             'metric_scope': 'Official compiled BDDL predicates and BehaviorTask.success; no challenge human-normalized metrics for this sampled instance',
             'task_instance': self.task_metadata, 'official_submission_eligible': False,
-            'protocol': 'rgb_agent_official_bddl_sampled_instance', 'observation_mode': 'rgb_only',
+            'protocol': ('rgb_agent_custom_native_bddl_sampled_instance'
+                         if self.catalog_spec['kind'] == 'custom_bddl_sampled_instance'
+                         else 'rgb_agent_official_bddl_sampled_instance'), 'observation_mode': 'rgb_only',
             'inside_placement': self.inside_placement,
-            'volume_sampling_physics_steps': self.sampling_physics_steps}
+            'volume_sampling_physics_steps': self.sampling_physics_steps,
+            'ideal_navigation_distance_m': self.navigation_distance, **robot_clock_record(self)}
+        if self.catalog_spec.get('additional_terminal_conditions'):
+            additional = {'hand_empty': self._get_held() is None}
+            result.update(bddl_task_success=result['task_success'],
+                additional_terminal_conditions=additional,
+                task_success=result['task_success'] and all(additional.values()),
+                protocol='rgb_agent_custom_native_bddl_additional_terminal_conditions_v1',
+                metric_scope='Official compiled BDDL predicates plus declared public terminal conditions; no official challenge score')
+        if self.catalog_spec.get('lineage_containment_goals') or self.catalog_spec.get('return_region_goals'):
+            from omnigibson.object_states import Inside
+            checks = evaluate_relational_goals(self.catalog_spec,
+                lambda name: self.env.scene.object_registry('name', name, None),
+                lambda obj, destination: bool(obj.states[Inside].get_value(destination)))
+            result.update(before_relational_goal_success=result['task_success'],
+                relational_terminal_conditions=checks,
+                task_success=result['task_success'] and all(checks.values()),
+                protocol='rgb_agent_custom_native_bddl_lineage_returns_v1',
+                metric_scope='Native BDDL plus parent-derived output containment, declared return regions and public terminal conditions; no official challenge score')
+        return result
 
     def provenance(self):
         result = super().provenance()
-        result.update(catalog_task=True, evaluator='official_BehaviorTask_BDDL_conditions',
+        result.update(catalog_task=True, custom_bddl=self.catalog_spec['kind'] == 'custom_bddl_sampled_instance',
+                      evaluator='official_BehaviorTask_BDDL_conditions',
                       transition_policy='official_simulator_defaults_without_challenge100_teleop_rule_suppression',
                       articulation_sleep_policy=self._articulation_sleep_policy.describe(),
                       macro_particle_size_policy=self._macro_particle_size_policy.describe())
         result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
         result['particle_melting_policy'] = self._particle_melting
         result['collision_broadphase'] = self._broadphase
+        if self.catalog_spec.get('additional_terminal_conditions'):
+            result.update(evaluator='official_BehaviorTask_BDDL_and_declared_terminal_conditions',
+                          additional_terminal_conditions=self.catalog_spec['additional_terminal_conditions'])
+        if self.catalog_spec.get('lineage_containment_goals') or self.catalog_spec.get('return_region_goals'):
+            result.update(evaluator='native_BDDL_and_private_parent_lineage_terminal_relations',
+                lineage_containment_goals=self.catalog_spec.get('lineage_containment_goals', []),
+                return_region_goals=self.catalog_spec.get('return_region_goals', []))
         return result
 
     def close(self):

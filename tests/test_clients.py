@@ -59,6 +59,56 @@ class ClientAdapterTests(unittest.TestCase):
             self.assertIsNone(prepared.cwd)
             self.assertTrue(prepared.stdin.endswith('Inspect and finish.'))
 
+    def test_codex_direct_mcp_exposure_omits_tools_from_code_mode_only_when_requested(self):
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            default = get_adapter('codex').prepare_project(self.config(Path(first)), 'Policy', ['act'])
+            direct = get_adapter('codex').prepare_project(
+                self.config(Path(second), mcp_tool_exposure='direct'), 'Policy', ['act'])
+            resumed = get_adapter('codex').prepare_resume(direct, '01a19d72-3a1f-7e32-a85c-479ddc8865a3', 'Continue')
+        setting = 'mcp_servers.manipulation.omit_tools_from=["code_mode"]'
+        self.assertNotIn(setting, default.argv)
+        self.assertIn(setting, direct.argv)
+        self.assertIn(setting, resumed.argv)
+        with self.assertRaises(ValueError):
+            self.config(Path('/unused'), 'kimi', mcp_tool_exposure='direct')
+        with self.assertRaises(ValueError):
+            self.config(Path('/unused'), mcp_tool_exposure='exec')
+
+    def test_codex_minimal_context_replaces_codex_prompt_and_agent_tool_modes(self):
+        bundled = {'models': [{'slug': 'gpt-6-luna', 'context_window': 272000, 'tool_mode': 'code_mode_only',
+                               'multi_agent_version': 'v2', 'model_messages': {'instructions_template': 'Codex'},
+                               'base_instructions': 'You are Codex', 'apply_patch_tool_type': 'freeform',
+                               'use_responses_lite': True, 'supports_search_tool': True,
+                               'experimental_supported_tools': ['clock']}]}
+        with tempfile.TemporaryDirectory() as folder, \
+             patch('manipulation_agent.clients.codex.bundled_model_catalog', return_value=bundled):
+            root = Path(folder)
+            minimal = get_adapter('codex').prepare_project(self.config(root, codex_context='minimal'), 'Policy', ['act'])
+            resumed = get_adapter('codex').prepare_resume(minimal, '01a19d72-3a1f-7e32-a85c-479ddc8865a3', 'Continue')
+            catalog = json.loads((root / 'codex_model_catalog.json').read_text())
+            record = json.loads((root / 'codex_context.json').read_text())
+        configs = [minimal.argv[i + 1] for i, v in enumerate(minimal.argv[:-1]) if v == '-c']
+        self.assertFalse(any(c.startswith('developer_instructions=') for c in configs))
+        for setting in ['skills.include_instructions=false', 'include_environment_context=false',
+                        'model_catalog_json=' + json.dumps(str((root / 'codex_model_catalog.json').resolve()))]:
+            self.assertIn(setting, configs)
+            self.assertIn(setting, resumed.argv)
+        self.assertEqual([m['slug'] for m in catalog['models']], ['gpt-6-luna', 'provider/model'])
+        for entry in catalog['models']:
+            self.assertEqual(entry['base_instructions'], 'Policy')
+            self.assertEqual(entry['context_window'], 272000)
+            self.assertFalse({'tool_mode', 'multi_agent_version', 'model_messages'} & set(entry))
+            self.assertEqual((entry['use_responses_lite'], entry['supports_search_tool']), (False, False))
+        self.assertEqual(record['model_entry'], 'cloned_from:gpt-6-luna')
+        with self.assertRaises(ValueError):
+            self.config(Path('/unused'), 'kimi', codex_context='minimal')
+
+    def test_codex_mcp_process_uses_selected_checkout_pythonpath(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'PYTHONPATH': '/chosen/checkout/src'}):
+            prepared = get_adapter('codex').prepare_project(self.config(Path(folder)), 'Policy', ['act'])
+        configs = [prepared.argv[i+1] for i, value in enumerate(prepared.argv[:-1]) if value == '-c']
+        self.assertIn('mcp_servers.manipulation.env.PYTHONPATH="/chosen/checkout/src"', configs)
+
     @unittest.skipUnless(shutil.which('bwrap'), 'bubblewrap is required for the mount regression')
     def test_codex_session_symlink_is_isolated_by_actual_mount(self):
         with tempfile.TemporaryDirectory() as folder:

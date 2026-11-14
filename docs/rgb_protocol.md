@@ -1,18 +1,45 @@
 # RGB agent protocol · skills profile / rendered-pixel executor
 
-The current default exposes initialize, look, act, finish, list_skills and read_skill. Explicit plan and memory stores are deferred. The agent performs RGB search, recognition, action choice, recovery and verification; only motor execution is idealized. Public model messages and MCP results are replayed verbatim without forced Chinese decision summaries. v0.1 oracle runs remain historical harness probes, not validation of this RGB protocol.
+The skills profile exposes initialize, look, act, finish, list_skills, read_skill and task_notes. Task notes store model-authored working text and public action receipts; they are not evaluator truth. The agent performs RGB search, recognition, action choice, recovery and verification; only motor execution is idealized. Public model messages and MCP results are replayed verbatim without forced Chinese decision summaries. v0.1 oracle runs remain historical harness probes, not validation of this RGB protocol.
 
 ## Three distinct layers
 
 - `skills/*/SKILL.md`: agent workflow instructions, with references; no simulator code. Five packages: visual-manipulation, goal-decomposition, visual-exploration, pick-and-place, failure-recovery.
-- `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry. `minimal` exposes initialize/look/act/finish; `skills` adds list_skills/read_skill. The optional historical `workflow` profile retains observe, asynchronous observation jobs, update_plan, remember and recall for compatibility.
+- `src/manipulation_agent/tools/`: schemas, handlers and a profile-filtered registry. `minimal` exposes initialize/look/act/finish; `skills` adds list_skills/read_skill/task_notes. The optional historical `workflow` profile retains observe, asynchronous observation jobs, update_plan, remember and recall for compatibility.
 - `src/manipulation_agent/executors/`: the motor primitive catalog and OmniGibson adapter. Primitives are not the workflow skill packages.
 
 `skill_runtime.py` freezes skill text and references into each run, hashes the bundle and permits only enumerated resources through read_skill. This lets a model consume skill documents without an arbitrary file-reading tool. This is a human-authored skill library, not automatic skill learning or evolution.
 
+## Per-call public intent
+
+The planning-interactions pilot enables `public_tool_intent_v1` in both arms.
+Pass `--require-tool-intent` to both `vision_cli` and the model controller, or set
+`require_tool_intent: true` in the batch manifest so both launch paths receive
+it. Legacy/frozen episodes keep their original tool schemas.
+
+Every enabled tool schema then requires `intent`: a nonblank string of at most
+600 characters stating the immediate purpose of that specific call. This
+includes initialize, skill discovery/reading, task_notes, act/look and finish.
+The common control prompt requires it equally in both arms. A periodic plan or
+notes update does not replace the per-call field. Intent is a concise public
+purpose, not a private reasoning transcript or a request for hidden state.
+
+The owner-thread harness rejects missing, blank, wrong-type or oversized intent
+before calling the tool handler. Invalid motor requests retain the existing
+failed-attempt budget accounting. Invalid finish intent cannot set the stop
+latch. The original request remains in the event log; valid action intents also
+appear in the public receipts returned by task_notes. Intent is stripped only
+from handler/motor arguments, so it cannot change the selected action or pixel.
+Supervisor closure supplies its own intent and keeps `origin=supervisor`.
+
+The runtime and controller record `tool_intent_protocol`; the proxy preserves
+the declared schema and model-supplied text. Nonempty text alone does not prove
+that the explanation is accurate or the action is useful. Actual provider-side
+schema enforcement is still audited separately from local rejection.
+
 ## Observation and action contract
 
-Call initialize({}) first. It returns the prepared episode's current snapshot without resetting the scene or performing an additional render. After inspecting the initial images, choose an act or look and inspect the next four-camera snapshot included in that same response. There is no observation-job submission or polling step in the default model loop.
+Call initialize first, including intent when public_tool_intent_v1 is enabled (legacy calls use initialize({})). It returns the prepared episode's current snapshot without resetting the scene or performing an additional render. After inspecting the initial images, choose an act or look and inspect the next four-camera snapshot included in that same response. There is no observation-job submission or polling step in the default model loop.
 
 Once the execution clock is armed, tool replies also report `execution_budget.remaining_seconds`, sampled after the tool finishes. This is runtime metadata, not simulator state. It excludes initialization, includes model/tool waiting, and does not add or extend any limit. Before the clock is armed, the field is absent. The goal-decomposition skill uses it to prioritize remaining work and leave time for an honest finish.
 
@@ -33,6 +60,24 @@ Depth must still be finite, positive and below the executor's existing 30 m limi
 an absent depth sample cannot define a 3D position.
 
 Navigation uses the backprojected point directly, without an object lookup.
+For floor-point projection, a holonomic base uses collision-checked lateral
+translations as well as forward/reverse motion. A route ending more than
+`max(0.1 m, 2 * grid resolution)` short of the clicked floor point may trigger
+bounded native resampling down to 0.0125 m. The finer route is accepted only
+if it reaches a strictly closer endpoint with full swept body/payload, floor
+support, and local entry/departure checks. Failed refinement preserves the
+original certified route and geometry. Object approach stances keep their
+existing endpoint identity and visibility requirements. This changes the motor
+protocol and requires a new frozen source and readiness validation for runs.
+
+Native symbolic operations hold the restored trunk joint target through the
+ordinary absolute-position controller. The target stays fixed across settling
+steps, so a load-induced joint deflection is not adopted as the next holding
+posture. Native physics still determines the actual joints and contacts; no
+joint pose is rewritten during stepping. Optional explicit demo motion retains
+its own trunk commands. This control change also requires a new source freeze
+and native readiness validation.
+
 The four RGB views are 512×512 by default. Experiments may set
 `MAS_RGB_IMAGE_SIZE` to 768 or 1024 to test small-object perception; the
 selected normalized pixel still refers to the returned image's own dimensions.

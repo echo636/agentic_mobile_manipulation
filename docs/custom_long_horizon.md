@@ -377,3 +377,42 @@ across tasks with different condition sets.
 The executor uses private ground truth and idealized carrying/navigation. These
 tasks evaluate agent decisions and long-range ordering under that executor. They
 do not establish end-to-end learned motor control or physical-robot performance.
+
+## Explicit native BDDL pilot definitions
+
+`task_designs/drafts/planning_interactions_v1/` contains two unbuilt native BDDL
+proposals. `scripts/sample_native_bddl_task.py` can register a pinned definition
+in the worker's in-memory knowledge base and run native online sampling. It
+writes a frozen scene, initial-condition evidence and a
+`custom_bddl_sampled_instance` specification for `--catalog-task`. Registration
+does not edit the installed BDDL library or replace an existing definition.
+
+This path evaluates the exact compiled BDDL with native simulator predicates;
+`official_task_success` is null for custom definitions. Initial sampling and
+four-camera readiness do not establish action-chain feasibility or policy
+success. Complete the declared carrier/cutting/cleanup reference and fresh
+restore checks before running the paired pilot. Runtime and sampling inputs
+must retain their explicit physics mode and definition/scene hashes.
+
+Online sampling loads native furniture before task-specific object bindings
+exist. A task-relevant-only filter at that point can discard all unbound
+cabinets/counters while preserving floors, making the initial task unsampleable.
+The sampler therefore clears old scene caches and category/room filters in its
+private configuration. Frozen reload uses the exact saved object set.
+
+Custom catalog specifications may explicitly declare
+`additional_terminal_conditions: ["hand_empty"]` when the public instruction
+requires an empty hand and the pinned BDDL backend cannot express it. The
+catalog evaluator then records the native BDDL result and the hand condition
+separately; task success requires both. This uses the recorded
+`rgb_agent_custom_native_bddl_additional_terminal_conditions_v1` protocol.
+Specs without the field keep their existing BDDL-only scoring. Official task
+specs and unsupported or duplicate additional conditions are rejected.
+
+An authored scene may use a truthful admission record backed by its exact
+export, fresh native initial-condition checks and a complete scripted
+reference. Record the construction method as authored fixture derivation;
+passing this gate does not imply online sampling, autonomous RGB success or
+feasibility of every possible plan. `prepare_verified_resource_catalog.py`
+builds this evidence for the resource-return candidate while preserving its
+scene, BDDL and public instruction.

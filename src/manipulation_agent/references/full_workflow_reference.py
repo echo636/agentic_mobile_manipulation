@@ -14,17 +14,25 @@ from ..tasks.long_horizon import expression
 def validate_workflow_plan(spec):
     plan=spec['reference_plan']; roles=spec['roles']; phases=plan['phases']
     if plan['kind']!='full_workflow' or not phases: raise ValueError('Missing complete workflow phases')
+    allow_variants=bool(plan.get('allow_strategy_variants',False))
+    used_phases=set()
     for order in spec['acceptance_cases']['reference_orders']:
         sequence=plan['orders'][order]
-        if len(sequence)!=len(phases) or set(sequence)!=set(phases):
+        if not sequence or len(sequence)!=len(set(sequence)) or not set(sequence)<=set(phases):
+            raise ValueError('Each reference must cover declared workflow phases without duplicates')
+        if not allow_variants and set(sequence)!=set(phases):
             raise ValueError('Each reference must cover every workflow phase exactly once')
+        used_phases.update(sequence)
         done=set()
         for key in sequence:
             if not set(phases[key].get('after',[]))<=done:raise ValueError('Reference violates a physical phase dependency')
             done.add(key)
+    if used_phases!=set(phases):
+        raise ValueError('Every declared workflow phase must appear in at least one reference order')
     if set(plan.get('negative_omissions',{})) != set(spec['acceptance_cases']['physical_negative_cases']):
         raise ValueError('Every physical negative needs an explicit omission')
-    if not set(plan['negative_omissions'].values()) <= set(phases):
+    primary_phases=set(plan['orders'][spec['acceptance_cases']['reference_orders'][0]])
+    if not set(plan['negative_omissions'].values()) <= primary_phases:
         raise ValueError('Unknown omitted phase')
     for phase in phases.values():
         if not phase.get('actions'):raise ValueError('A workflow phase must do physical work')
@@ -36,7 +44,7 @@ def validate_workflow_plan(spec):
             if action['primitive']=='wait_for':
                 if type(action.get('attempts',18)) is not int or not 1<=action.get('attempts',18)<=60:
                     raise ValueError('Invalid native process wait budget')
-                if not 0<float(action.get('seconds',10.))<=30:raise ValueError('Invalid native process wait interval')
+                if not 0<float(action.get('seconds',10.))<=120:raise ValueError('Invalid native process wait interval')
                 expression(action['condition'],dict.fromkeys(spec['evaluation']['predicates'],False))
             elif action['primitive'] not in {'grasp','place_on_top','place_inside','open','close','toggle_on',
                     'toggle_off','wipe','sweep','vacuum','spray','soak','spread','cut','attach','hang','wait','navigate_to'}:

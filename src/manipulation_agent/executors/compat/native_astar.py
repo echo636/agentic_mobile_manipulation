@@ -112,3 +112,44 @@ def sync_open_door_map(backend):
             trav.floor_map[floor][window] = opened
             opened_doors.append(name)
     return opened_doors
+
+
+def sync_added_fixture_map(backend):
+    """Block fixed supports that a task added after the scene's static map was baked.
+
+    The native traversability image only knows the authored scene. A custom
+    task's fixed work surface would otherwise be selected as a standing cell,
+    and the single endpoint transfer would put the base inside it. Only the
+    declared fixtures' footprints are cleared; movable clutter, doors and the
+    native erosion / A* are unchanged. Call after ``sync_open_door_map``, which
+    rewrites the floors it patches.
+    """
+    names = getattr(backend, '_native_map_added_fixtures', None)
+    if not names:
+        return []
+    scene = backend.env.scene
+    trav = scene.trav_map
+    cache = getattr(backend, '_native_fixture_map_cache', None)
+    if cache is None:
+        cache = []
+        for name in names:
+            obj = scene.object_registry('name', name, None)
+            if obj is None:
+                continue
+            low, high = obj.aabb
+            floor = min(range(len(trav.floor_heights)),
+                        key=lambda i: abs(float(low[2])-trav.floor_heights[i]))
+            floor_z = float(trav.floor_heights[floor])
+            # A mat-like support does not obstruct the base; an overhead one neither.
+            if float(high[2]) <= floor_z+.1 or float(low[2]) >= floor_z+1.5:
+                continue
+            first = trav.world_to_map(low[:2]).tolist()
+            second = trav.world_to_map(high[:2]).tolist()
+            window = tuple(slice(min(size, max(0, min(a, b))), min(size, max(0, max(a, b)+1)))
+                           for a, b, size in zip(first, second, trav.floor_map[floor].shape))
+            cache.append((name, floor, window))
+        backend._native_fixture_map_cache = cache
+    for _, floor, window in cache:
+        trav.floor_map[floor][window] = 0
+    return [name for name, _, _ in cache]
+

@@ -28,10 +28,12 @@ def main():
     p.add_argument('--seed',type=int,default=0);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--instruction');p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
     p.add_argument('--custom-task',type=Path,help='Private frozen custom task specification; public instruction only goes to controller')
-    p.add_argument('--catalog-task',type=Path,help='Frozen official BDDL instance sampled outside the challenge-100 catalog')
+    p.add_argument('--catalog-task',type=Path,help='Frozen native BDDL instance with pinned sampling evidence; includes explicit custom definitions')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
-    p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','workflow'], default='skills')
+    p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
+    p.add_argument('--require-tool-intent',action='store_true',
+                   help='Require a concise public intent argument on every tool call; use identically in both arms')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
                    help='Record a control-step timeline with explicit frame holds (default on for OmniGibson); spectator RGB stays offline')
     p.add_argument('--max-actions',type=int,default=80);p.add_argument('--max-sim-steps',type=int,default=20000)
@@ -103,7 +105,8 @@ def main():
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
                                                           wall_seconds=a.wall_seconds),profile=a.agent_profile,
                                   agent_step_limit=a.max_agent_steps,goal_skill=a.goal_skill,
-                                  unbounded_episode=a.unbounded_episode)
+                                  unbounded_episode=a.unbounded_episode,
+                                  require_tool_intent=a.require_tool_intent)
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)

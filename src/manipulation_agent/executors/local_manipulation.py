@@ -7,11 +7,16 @@ from dataclasses import asdict, dataclass
 import math
 import time
 from ..contracts import SkillError
+from ..runtime.robot_clock import clocked_leaf
 
 
 @dataclass(frozen=True)
 class LocalLimits:
     reach_m: float = 1.4
+    # Used only when the static map leaves no standing cell within reach_m.
+    fallback_reach_m: float = 2.0
+    # A floor click on a cell the base cannot occupy moves to walkable floor this close to it.
+    floor_click_snap_m: float = 2.0
     max_env_steps: int = 600  # Atomic manipulation allowance, separate from episode policy.
     max_sampling_steps: int = 1200
     wall_seconds: float = 300.0
@@ -25,6 +30,7 @@ class LocalOperation:
     def __init__(self, backend, primitive, binding, max_steps, options, *, clock=time.monotonic):
         self.backend, self.primitive, self.binding = backend, primitive, binding
         self.limits = backend.local_limits
+        self.reach_m = self.limits.reach_m  # widened by the approach only for a reach fallback
         self.options = options
         self.clock, self.started = clock, clock()
         self.start_steps = backend.steps
@@ -78,9 +84,10 @@ class LocalOperation:
             self.check()
             self.attempts=1
             self.record('execute')
-            result=self.backend._execute_bound_manipulation(
+            # Robot clock (accounting only): note whether the manipulation started physically.
+            result=clocked_leaf(self.backend,lambda:self.backend._execute_bound_manipulation(
                 self.primitive,obj,point,self.binding.grounding,
-                self.step_limit-(self.backend.steps-self.start_steps),**self.options)
+                self.step_limit-(self.backend.steps-self.start_steps),**self.options))
             self.changed=True
             self.record('complete')
             return {**result,'local_manipulation':{

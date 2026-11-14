@@ -49,3 +49,11 @@
 ## 不纳入统计
 
 未构建的提案、短版重设计，以及 yujie 的餐后清台设计不收录。BEHAVIOR 原有的蘑菇、披萨、海鲜饭、派对清理、餐厅摆台和自助餐任务等，也不因换了执行器或实例而计作自建任务。
+
+2026-10-31 新增 [规划相互影响候选与两份 BDDL 草案](drafts/planning_interactions_v1/README.md)：从完整 BEHAVIOR 库筛选载具、准备和调度机制，补充刚体换台与两区备柴定义。两份均未构建仿真实例，仅通过原生编译/目标逻辑检查，不计入上述 16 项已构建任务。
+
+2026-11-02 新增 [最小资源图与加工配送/返还任务](drafts/minimal_resource_graph_v2/README.md)：三对象版本已有精确离散验证与36次模型对照，未显示测试中的文本规划skill增量；载具版本另有有限策略覆盖评估。完整原生任务尚未构建，不计入已构建清单。
+
+2026-11-03 新增 [跨房间收杯](drafts/cross_room_mug_collection_v1/README.md)：两杯在餐桌、两杯在洗衣房，检验走路真实昂贵时的载具方法选择。派生场景与 CPU 检查完成，原生参考进行中，不计入已构建清单。
+
+2026-11-14 新增 [跨区长程调度基准任务 3 项（`scheduling_v1`）](scheduling_v1/README.md)（`hot_lunch_living_l2`、`study_guest_laundry`、`garage_garden_patio_prep`：均已在远端 PRO 6000 冻结场景并通过双策略特权参考流程、物理反例及 `gpt-6.1-sol/low` 强模型基线回合，详见 [docs/scheduling_benchmark_baseline_20261114.md](../docs/scheduling_benchmark_baseline_20261114.md)）及未构建纯空间置换草稿 [`upstairs_study_bedrooms_exchange`](drafts/upstairs_study_bedrooms_exchange/README.md)。

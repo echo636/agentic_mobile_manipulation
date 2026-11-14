@@ -9,6 +9,7 @@ from dataclasses import asdict
 from ..contracts import Backend, Budget, SkillError, tool_specs, validate
 from .deadline import EpisodeDeadline
 from ..records import Recorder, write_json
+from .robot_clock import robot_clock_record
 from .closure import EpisodeClosure
 
 
@@ -213,6 +214,8 @@ class Harness:
                   "deadline_expired_at_finish": expired,
                   "evaluation_finished_at_unix": evaluation_finished_at,
                   "evaluation_finished_after_deadline": self.deadline.unix is not None and evaluation_finished_at >= self.deadline.unix}
+        # Robot time totals at the top level of run.json (also inside evaluation).
+        result.update(robot_clock_record(self.backend))
         if getattr(self.backend, 'diagnostic_write_failures', None):
             result['diagnostic_write_failures'] = self.backend.diagnostic_write_failures
         if getattr(self,'agent_step_limit',None) is not None or getattr(self,'unbounded_episode',False):

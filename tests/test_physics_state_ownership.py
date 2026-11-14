@@ -3,6 +3,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import Mock, patch
+import torch
 
 from manipulation_agent.executors.omnigibson_rgb import RGBBackend
 from manipulation_agent.executors.omnigibson_backend import OmniGibsonBackend
@@ -57,3 +58,36 @@ class PhysicsStateOwnershipTests(TestCase):
                 backend._step('hold')
         self.assertTrue(backend.og.sim._render_on_step)
         backend._transfer_base_pose.assert_not_called()
+
+    def test_settling_keeps_trunk_command_after_load_deflects_measured_joints(self):
+        backend = self.backend()
+        backend.robot = NS(controller_action_idx={'trunk': torch.tensor([1, 2])})
+        backend._trunk_hold_target = torch.tensor([.3, -.2])
+        measured = backend._trunk_hold_target.clone()
+        commands = []
+
+        def physics(action):
+            commands.append(action.clone())
+            # A passive joint's no-op command follows its measured position.
+            # A persistent holding target must survive that physical deflection.
+            measured.sub_(.01)
+
+        with patch.object(OmniGibsonBackend, '_step', side_effect=physics):
+            for _ in range(3):
+                action = torch.tensor([1., *measured.tolist(), 4.])
+                original = action.clone()
+                backend._step(action)
+                torch.testing.assert_close(action, original)
+        for action in commands:
+            torch.testing.assert_close(action[1:3], backend._trunk_hold_target)
+            torch.testing.assert_close(action[[0, 3]], torch.tensor([1., 4.]))
+        torch.testing.assert_close(measured, torch.tensor([.27, -.23]))
+        backend._transfer_base_pose.assert_not_called()
+
+    def test_explicit_motion_without_fixed_trunk_target_keeps_its_commands(self):
+        backend = self.backend()
+        backend._trunk_hold_target = None
+        action = torch.tensor([.7, .8])
+        with patch.object(OmniGibsonBackend, '_step') as step:
+            backend._step(action)
+        self.assertIs(step.call_args.args[0], action)

@@ -1,29 +1,38 @@
-# Independent manipulation system
+# `agentic_mobile_manipulation` 开发与实验规范
 
-This is a new project, not a fork of the source repositories. Keep simulator imports inside the OmniGibson adapter. The core must run on CPU without simulator dependencies.
+全局目标、benchmark/harness 划分原则与实验规则以上级 `../AGENTS.md` 为准；本文件仅规定本仓库的代码结构、测试方式与工程红线。
 
-The maintained origin is https://github.com/echo636/agentic_mobile_manipulation.git, explicitly authorized by the user. Develop this repository; do not push to reference repositories. Keep generated runs, assets, credentials and environments outside Git. Current observation is four fixed RGB cameras (front/back/left/right); no wrist camera or robot rotation is used to collect surround views.
+## 1. 分支与模块归属
 
-This worktree is dedicated to custom long-horizon task development, explicitly authorized by the user on 2026-10-19. Work in `/mnt/nas/home--xujingyi/agentic_mobile_manip/repos/manipulation-agentic-system-long-horizon` on `feat/long-horizon-tasks`, created from `feat/harness-fastmcp@924fa8c`. The original `repos/manipulation-agentic-system` worktree remains in use by other agents; make this task's source changes here.
+当前开发分支为 `feat/long-horizon-tasks`（上游 `echo636/agentic_mobile_manipulation`）。新改动只在本仓库进行，严禁直接修改 `../archive/` 或 `../experiments/` 下已冻结的 `source_*` 副本。详细文件映射见 [docs/code_organization.md](docs/code_organization.md)。
 
-Use `main` as the PR merge target (explicit user instruction, 2026-10-29, superseding the earlier `feat/harness-fastmcp` target). Do not create a separate integration branch solely to merge a PR. Resolve conflicts on this feature branch and complete relevant validation before merging.
+按上级 `../AGENTS.md` 的划分，源码（`src/manipulation_agent/`）对应关系如下：
+- **Benchmark 侧（对所有方法固定）**：
+  - `tasks/` + 仓库根 `task_designs/`：任务契约、场景构建与独立评估器（`task_designs/drafts/` 为未构建草稿；新建任务参考 [docs/custom_long_horizon.md](docs/custom_long_horizon.md)）。
+  - `observations/` + `executors/`：四路 RGB 采样、像素落点解析、导航与动作执行（精细物理过程可按上级规则简化，但须保留规划约束并做成冻结副本测试）。
+  - `references/`：不调模型的脚本参考流程，用于验证任务可达性与测算标准杆指标。
+- **Harness 侧（对照项，必须做成带独立开关的组件，默认不改变基线）**：
+  - `agent/` + 仓库根 `skills/`：系统提示词、技能加载、历史图像裁剪、任务笔记与规划策略。
+  - `tools/` + `runtime/`：公开工具定义、反馈/报错文案、预算控制、结束保护等回合护栏。
+  - `clients/` + `mcp_server.py` + `transport/`：外部模型客户端适配与 MCP 通信桥接。
+- **运行与统计**：`batch/` + `scripts/`（启动、显存锁与源码冻结）、`reporting/` + `web/`（录像导出、回放网页与指标统计）。
 
-Reuse environments and assets under the shared workspace root; keep new run outputs and operations records in separate long-horizon batches under `/mnt/nas/home--xujingyi/agentic_mobile_manip/operations/`. Historical custom task instances and evidence are in `operations/long_horizon_execution_20261015/`; preserve their frozen inputs and scores. The current task definitions are in `task_designs/runtime/`, with validation requirements in `docs/custom_long_horizon.md`.
+**依赖隔离**：OmniGibson 仿真器依赖只能在 `executors/` 适配层内导入；其余核心代码和单元测试必须在纯 CPU 环境下可导入、可运行，且仿真器操作限定在单所有者线程串行执行。
 
-New brain-model experiments default to `gpt-6.1-sol` with reasoning effort `low` (user instruction, 2026-10-13). Preserve the model/effort recorded in historical runs. New BEHAVIOR100 batches default to 50 agent act/look attempts and no episode wall-time deadline; initialization and post-budget closure watchdogs are separate from task execution.
+## 2. 运行测试
 
-2026-10-22 update: the user removed the action-count limit for subsequent tests. New starts, including queued tasks not yet launched, use explicit `unbounded` episode policy: no action-count, episode physics-step, or wall-time cutoff. Keep recording act/look counts. Preserve the original policy of already running and historical attempts; initialization and post-finish process cleanup remain separately monitored.
+使用主机已配好的 `behavior` 环境（系统 Python 缺测试依赖），跑全量测试前必须加虚拟内存上限（防止 `tests/test_episode_deadline.py` 耗尽内存）：
 
-The default model protocol starts with initialize, which returns the prepared episode's current four-camera snapshot without a reset or extra render. Each act/look response supplies the next snapshot; wait is an action when simulation time must advance. The minimal profile exposes initialize/look/act/finish, and skills adds list_skills/read_skill/task_notes. The latter is an episode-local, versioned model-authored text store shared by both goal-skill ablation arms. Keep observe and start/get/cancel observation jobs confined to legacy workflow compatibility. Default prompts and skills must not require those hidden tools or an extra observation before finish. All client prompts come from vision_policy.system_prompt.
+```bash
+ulimit -v 16000000 && PYTHONPATH=src /mnt/data/home/sunyujie/miniforge3/envs/behavior/bin/python -m pytest -q
+```
 
-Never label a mock, scripted policy, oracle-state experiment, or symbolic execution run as a visual autonomous policy or an official challenge submission. Record source, assets, task instance, host, interpreter, GPU UUID, PID/unit, configuration and validation level for each run. A tool success or agent finish claim is not task success: use the independent task evaluator.
+- 原生 BDDL 目标测试需额外在 `PYTHONPATH` 中加入 `../behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3`。
+- 测试被 `skipped` 不视为验证通过；脚本探测或 CPU 单测通过不等同于模型自主回合通过。
 
-For new atomic-action model experiments, reviews, and result publication, follow [the experiment requirements](docs/atomic_action_experiment_requirements.md).
+## 3. 协议红线与实验留痕
 
-Keep operational steps, faults and fixes in journals and structured records; do not create an HTML report for every operation. The existing retest32_v7 replay URL shows only the historical 32 tasks; use a separate summary page for current comparisons. Preserve bookmarked replay links, distinguish cohorts, and publish compact display data rather than full evaluator payloads.
-
-Do not log credentials. Do not modify upstream source snapshots or unrelated environments. Use bounded actions, structured errors, serialized simulator access and immutable episode records. Preserve failure evidence.
-
-- 2026-10-22 用户明确成功口径：只要独立官方任务评估器判定成功就计任务成功；finish、客户端退出、录像和证据完整性单独记录，不能据此否定任务成功。用户授权 241（本机双4090）、134、112、115、118 全部机器的可用计算资源纳入后续调度，不局限于原先几台。
-
-- 2026-10-27 用户明确执行器的最小干预原则：优先将工具调用转换为一次性状态设置或原生控制目标，后续碰撞、重力、接触和运动交给仿真器处理。修复优先检查状态构造和原生接口的使用；不为任务成功增加逐帧位姿固定、反复状态恢复、关闭碰撞或强制保持内容物等逻辑，不扩展无必要的仿真器补丁和复杂运动控制。
+- **严禁泄题**：模型只接收四路 RGB 快照与公开工具回执；私有几何、任务真值绑定与独立评估器内部状态严禁进入模型反馈或错误提示。
+- **先冻结再开跑**：跑实验前将当前源码冻结到 `../experiments/.../source_*`，记录模型与推理档位、任务/场景/源码/技能哈希、开关配置、预算及 GPU，保留所有失败回合。
+- **指标与评估口径**：独立评估器判定的“任务成功”须与“控制器正常结束”“录像完整性”分开记录；轨迹长度取 `navigation_plans.jsonl` 的认证路线长度之和，**不可**使用 `ideal_navigation_distance_m`（起止点直线位移）。
+- **仓库清洁与安全**：实验产物、录像、网页报告和运行时统一放仓库外的 `../experiments/`、`../review_sites/`、`../runtimes/`，不入 Git；密钥与凭证不入库、不打日志。

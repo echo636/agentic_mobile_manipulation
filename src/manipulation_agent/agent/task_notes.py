@@ -88,6 +88,7 @@ class TaskNotes:
         self.feedback.append(copy.deepcopy({
             'tool': name, 'primitive': arguments.get('primitive', name),
             'target': arguments.get('target'), 'agent_step': agent_step,
+            **({'intent': arguments['intent']} if isinstance(arguments.get('intent'), str) else {}),
             **{key: result[key] for key in ('ok', 'evidence_id', 'effect', 'error', 'runtime') if key in result}}))
         self.feedback_count += 1
         self.feedback_failures += result.get('ok') is False

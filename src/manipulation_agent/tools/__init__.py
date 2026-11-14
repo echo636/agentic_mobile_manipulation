@@ -3,10 +3,14 @@ from dataclasses import replace
 from .base import REGISTRY, ToolMetadata
 from . import observation, action, planning, memory, skills, session, surround, notes
 from copy import deepcopy
+from .intent import INTENT_SCHEMA, PROTOCOL as INTENT_PROTOCOL
 
 MINIMAL_TOOLS = frozenset({'initialize', 'look', 'act', 'finish'})
 BASIC_SKILL_TOOLS = MINIMAL_TOOLS | {'list_skills', 'read_skill'}
 SKILL_TOOLS = BASIC_SKILL_TOOLS | {'task_notes'}
+INLINE_SKILL_TOOLS = MINIMAL_TOOLS | {'task_notes'}
+PROFILE_TOOLS = {'minimal': MINIMAL_TOOLS, 'basic-skills': BASIC_SKILL_TOOLS, 'goal-tree': SKILL_TOOLS,
+                 'skills': SKILL_TOOLS, 'skills_inline': INLINE_SKILL_TOOLS}
 
 # Execution hints, not additional permission gates or changed input contracts.
 _METADATA = {
@@ -29,14 +33,15 @@ for _name, _metadata in _METADATA.items():
     if _name in REGISTRY:
         REGISTRY[_name] = replace(REGISTRY[_name], metadata=_metadata)
 
-def tool_specs(profile='skills'):
-    if profile not in {'minimal', 'basic-skills', 'goal-tree', 'skills', 'workflow'}:
+def tool_specs(profile='skills', *, require_intent=False):
+    if profile not in {*PROFILE_TOOLS, 'workflow'}:
         raise ValueError('Unknown agent profile')
-    allowed = {'minimal': MINIMAL_TOOLS, 'basic-skills': BASIC_SKILL_TOOLS}.get(profile, SKILL_TOOLS)
+    allowed = PROFILE_TOOLS.get(profile)
     result = []
     for t in REGISTRY.values():
         if profile != 'workflow' and t.name not in allowed: continue
         schema = deepcopy(t.schema)
+        metadata = {'profile': profile, **t.metadata.as_dict()}
         description = t.description
         if profile == 'goal-tree' and t.name == 'task_notes':
             schema['properties']['operation']['enum'] = ['read', 'write', 'update']
@@ -45,7 +50,12 @@ def tool_specs(profile='skills'):
                 'Omitted goals persist; supply active when updating the current local plan. '
                 'Use the current expected_version for writes/updates, initially 0. For read, content and expected_version are null. '
                 'Notes do not execute actions, choose goals, search plans or verify task success.')
+        if require_intent:
+            schema['properties']['intent'] = deepcopy(INTENT_SCHEMA)
+            schema['required'].append('intent')
+            metadata['tool_intent_protocol'] = INTENT_PROTOCOL
+            description += ' Include intent stating the immediate purpose of this call.'
         result.append({'name':t.name,'description':description,'inputSchema':schema,
                        'annotations':t.metadata.annotations(),
-                       '_meta':{'mas':{'profile':profile,**t.metadata.as_dict()}}})
+                       '_meta':{'mas':metadata}})
     return result

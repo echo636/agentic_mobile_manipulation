@@ -21,6 +21,7 @@ from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.events import write_derived_events
 
 from manipulation_agent.tools import tool_specs
+from manipulation_agent.tools.intent import PROTOCOL as INTENT_PROTOCOL, LEGACY_PROTOCOL
 from manipulation_agent.agent.vision_policy import system_prompt
 from manipulation_agent.agent.planning_subagent import ACTOR_INSTRUCTION, PLANNER_TOOL
 from manipulation_agent.records import now, write_json, source_version
@@ -43,6 +44,37 @@ def rate_limit_error(events):
             or 'API_KEY_CONCURRENCY_QUEUE_' in message
             or 'selected model is at capacity' in message.lower()
             or 'stream disconnected before completion' in message)
+
+
+# Harness option (--unfinished-turn-nudges, default 0 = off): a turn that completed normally without an accepted
+# finish is continued in the same thread with a neutral reminder. Counterpart of tools/finish_guard.py: after a
+# deferred finish the model may simply end its turn, which exits the client and leaves the episode open.
+NUDGE_PROMPT = ('The episode is still open: your previous turn ended without an accepted finish call, and the '
+                'simulator is waiting for your next tool call. Continue the instruction from the current state with '
+                'tool calls. Call finish only when the whole instruction is done, or when an obstacle persists after '
+                'materially different attempts.')
+
+
+def segment_robot_calls(events):
+    """Completed act/look MCP calls in one client segment."""
+    return sum(1 for event in events if event.get('type') == 'item.completed'
+               and (event.get('item') or {}).get('type') == 'mcp_tool_call'
+               and (event.get('item') or {}).get('tool') in {'act', 'look'})
+
+
+def turn_completed_without_error(events):
+    terminal = next((event for event in reversed(events)
+                     if event.get('type') in {'error', 'turn.failed', 'turn.completed'}), None)
+    return terminal is not None and terminal.get('type') == 'turn.completed'
+
+
+def unfinished_turn_nudge(events, *, returncode, finish_received, timed_out, nudges, max_nudges):
+    """True when a normally completed turn left the episode open and a reminder is still allowed.
+
+    `nudges` counts consecutive reminders whose resumed segment made no act/look call.
+    """
+    return (max_nudges > 0 and returncode == 0 and not finish_received and not timed_out
+            and nudges < max_nudges and turn_completed_without_error(events))
 
 
 def codex_thread_id(events):
@@ -132,17 +164,28 @@ def main(argv=None, *, allow_client=False):
                         help='Private argv JSON: atomically arm remote execution clock after MCP handshake')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
-    p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','workflow'], default='skills')
+    p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
+    p.add_argument('--autonomy-instruction', choices=['off','on'], default='off',
+                   help='Harness option: append the autonomous-episode operating instruction to the system prompt')
+    p.add_argument('--require-tool-intent',action='store_true',
+                   help='Match the simulator public_tool_intent_v1 tool schemas and prompt')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh','max','ultra'])
     p.add_argument('--model-provider-profile', help='Use only this provider from the existing Codex config')
     p.add_argument('--model-provider-gateway', help='Optional loopback request queue for this provider')
+    p.add_argument('--mcp-tool-exposure', choices=['client_default', 'direct'], default='client_default',
+                   help='Codex only: direct exposes MCP tools as model functions instead of code-mode exec')
+    p.add_argument('--codex-context', choices=['client_default', 'minimal'], default='client_default',
+                   help='Codex only: minimal removes Codex base prompt, skills, environment and native tools')
     p.add_argument('--planner-model', help='Optional independent visual planning model; basic-skills profile only')
     p.add_argument('--planner-reasoning-effort', default='xhigh', choices=['low','medium','high','xhigh','max','ultra'])
     p.add_argument('--planner-python', default=sys.executable, help='Controller-side interpreter with the MCP extra')
     p.add_argument('--rate-limit-resumes', '--provider-error-resumes', type=int, default=None,
                    help='Same-session transient provider recovery count; -1 is unbounded (default for unbounded Codex episodes)')
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
+    p.add_argument('--unfinished-turn-nudges', type=int, default=0,
+                   help='Harness option, Codex only: continue a normally completed turn that left the episode open; '
+                        'the value bounds consecutive reminders that produce no act/look call (0 disables)')
     p.add_argument('--permanent-route-forks', type=int, default=0,
                    help='Opt-in native-history forks for an unavailable sticky route; retains the same live robot episode')
     args = p.parse_args(argv)
@@ -171,8 +214,10 @@ def main(argv=None, *, allow_client=False):
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill)
-    catalog = tool_specs(args.agent_profile)
+    instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill,
+                                 require_tool_intent=args.require_tool_intent,
+                                 autonomy=args.autonomy_instruction == 'on')
+    catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent)
     planner_config = None
     mcp_env_vars = ()
     if args.planner_model:
@@ -194,7 +239,7 @@ def main(argv=None, *, allow_client=False):
                           json.loads(args.mcp_args_json), args.output, args.timeout,
                           args.agent_profile, args.isolate_client_storage,
                           args.reasoning_effort, args.model_provider_profile, args.model_provider_gateway,
-                          mcp_env_vars=mcp_env_vars)
+                          args.mcp_tool_exposure, args.codex_context, mcp_env_vars=mcp_env_vars)
     capability = adapter.probe()
     if capability.status != 'available':
         write_json(args.output / 'controller.json', {
@@ -222,6 +267,9 @@ def main(argv=None, *, allow_client=False):
                 "model_reasoning_effort": args.reasoning_effort, "observation_mode": "rgb_only",
                 "episode_deadline_unix":deadline.unix,"requested_timeout_seconds":args.timeout,
                 "agent_profile": args.agent_profile, "goal_skill": args.goal_skill,
+                "require_tool_intent": args.require_tool_intent, "mcp_tool_exposure": args.mcp_tool_exposure,
+                "codex_context": args.codex_context,
+                "tool_intent_protocol": INTENT_PROTOCOL if args.require_tool_intent else LEGACY_PROTOCOL,
                 "host": os.uname().nodename, "controller": client + "_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": capability.version, "client_capability": asdict(capability)}
@@ -233,6 +281,8 @@ def main(argv=None, *, allow_client=False):
         max_permanent_route_forks=args.permanent_route_forks,
         backoff_seconds=args.resume_backoff_seconds, gateway=args.model_provider_gateway,
         scope='Same live MCP episode; transient same-thread resumes and explicitly enabled native-history route forks')
+    metadata['unfinished_turn_nudges'] = args.unfinished_turn_nudges
+    metadata['autonomy_instruction'] = args.autonomy_instruction
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
@@ -287,26 +337,32 @@ def main(argv=None, *, allow_client=False):
     thread_id=codex_thread_id(first_events) if client == 'codex' else None
     segment_events=first_events
     continuations=[]
-    resume_count = fork_count = 0
+    resume_count = fork_count = nudge_count = 0
     for attempt in itertools.count(1):
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
         mode = provider_recovery_mode(segment_events, resumes=resume_count, forks=fork_count,
             max_resumes=args.rate_limit_resumes, max_forks=args.permanent_route_forks)
-        if (process.returncode == 0 or process.finish_received or process.timed_out or not thread_id or
-                mode is None or
-                (remaining is not None and remaining <= args.resume_backoff_seconds+30)):
+        if mode is None and client == 'codex' and unfinished_turn_nudge(
+                segment_events, returncode=process.returncode, finish_received=process.finish_received,
+                timed_out=process.timed_out, nudges=nudge_count, max_nudges=args.unfinished_turn_nudges):
+            mode = 'nudge'
+        backoff = 0 if mode == 'nudge' else args.resume_backoff_seconds
+        if ((process.returncode == 0 and mode != 'nudge') or process.finish_received or process.timed_out or
+                not thread_id or mode is None or
+                (remaining is not None and remaining <= backoff+30)):
             break
         metadata['provider_recovery'].update(state='waiting', next_attempt=attempt, next_mode=mode)
         write_json(args.output/'controller.json',metadata)
-        time.sleep(args.resume_backoff_seconds)
+        time.sleep(backoff)
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
         if remaining is not None and remaining <= 30:
             break
         segment_dir=args.output/'continuations'/str(attempt)
         segment_dir.mkdir(parents=True,exist_ok=False)
-        resume_prompt=('Continue the same robot task in the same simulator episode. '
+        resume_prompt=NUDGE_PROMPT if mode == 'nudge' else (
+                       'Continue the same robot task in the same simulator episode. '
                        'A model service error interrupted the previous turn. '
                        'Use the prior conversation and current RGB tool feedback; continue choosing '
                        'actions yourself, then call finish. Do not restart the task or claim success '
@@ -342,6 +398,8 @@ def main(argv=None, *, allow_client=False):
                 write_json(args.output/'controller.json',metadata)
                 break
             thread_id = continued_thread
+        elif mode == 'nudge':
+            nudge_count = 0 if segment_robot_calls(segment_events) else nudge_count + 1
         else:
             resume_count += 1
     if continuations:

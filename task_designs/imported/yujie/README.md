@@ -61,3 +61,11 @@ python3 task_designs/imported/yujie/carry_in_and_put_away_groceries/v2_design/bu
 本次整合范围是两个已构建任务的定义、输入、场景准备工具和来源；模型 skill、执行器、评分实现以及六份 runtime 的其他内容仍待审查。原作者 README 和任务卡可通过 provenance 中的固定版本链接查看；其中历史状态、预算和路径不自动成为当前系统的配置。
 
 2026-10-30 已用本机实际安装的数据集运行杂货构建器，生成双袋六食品、双柜绑定的独立叠加层；热饮三个场景文件已按源哈希恢复。产物及验证记录在共享根目录 `operations/custom_task_catalog_20261030/`，这验证的是文件准备，不是新仿真加载或自主成功。
+
+## 本机整合后的历史复核入口（2026-10-31）
+
+两项任务的固定定义与 provenance 保持不变。历史热饮的高层状态与逐动作重放
+已迁入 `manipulation_agent.tasks.hot_drink_state` 和
+`manipulation_agent.reporting.legacy_hot_drink`，仅用于离线复核，未接入当前原生执行器。
+本机旧 runner、完整场景及研究兼容层保留在冻结归档中，位置和复现方式见
+[本机工作区说明](../../../docs/local_workspace.md)。旧运行的成功不移算到新执行器。

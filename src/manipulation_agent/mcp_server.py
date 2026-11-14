@@ -32,6 +32,7 @@ def _startup(stage):
 _startup('proxy_import')
 from .transport.bridge import rpc
 from .runtime.deadline import tool_wait_seconds
+from .tools.finish_guard import FinishGuard
 
 
 def fetch(url):
@@ -49,7 +50,7 @@ def loopback_host(value):
     raise argparse.ArgumentTypeError('MCP HTTP supports loopback hosts only (one shared episode)')
 
 
-async def create_server(url: str, *, host='127.0.0.1', port=29431):
+async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=False, guard_state=None):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -76,6 +77,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
     if len({spec['name'] for spec in catalog}) != len(catalog):
         raise ValueError('Duplicate bridge tool names')
     lock = asyncio.Lock()
+    # Harness-side option, off by default: defer early finishes while act/look budget remains.
+    guard = FinishGuard(guard_state) if finish_guard else None
 
     class BridgeArguments(ArgModelBase):
         model_config = ConfigDict(extra='allow')
@@ -87,6 +90,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
         async def invoke(**arguments):
             async def call():
                 result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
+                if guard is not None:
+                    guard.observe(result, name, arguments)
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
                 observation = result.get('observation', {})
                 if observation.get('observation_mode') == 'rgb_only':
@@ -103,6 +108,9 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
             # The bridge sets only stop intent here; simulator access and scoring
             # still happen serially on its owner thread, after action cancellation.
             if name == 'finish':
+                deferred = guard.deferral(arguments) if guard is not None else None
+                if deferred is not None:
+                    return [types.TextContent(type='text', text=json.dumps(deferred, ensure_ascii=False))]
                 return await call()
             # Serialize ordinary actions and their RGB downloads to retain refs.
             async with lock:
@@ -124,8 +132,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431):
     )
 
 
-async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431):
-    server = await create_server(url, host=host, port=port)
+async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None):
+    server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state)
     _startup('serving')
     if transport == 'stdio':
         await server.run_stdio_async()
@@ -143,8 +151,12 @@ def main():
     parser.add_argument('--transport', choices=('stdio', 'sse', 'streamable-http'), default='stdio')
     parser.add_argument('--host', type=loopback_host, default='127.0.0.1')
     parser.add_argument('--port', type=int, default=29431)
+    parser.add_argument('--finish-guard', choices=('off', 'on'), default='off',
+                        help='harness option: defer early finishes while act/look budget remains')
+    parser.add_argument('--guard-state', default=None, help='finish-guard state file kept across client restarts')
     args = parser.parse_args()
-    asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port))
+    asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
+                    finish_guard=args.finish_guard == 'on', guard_state=args.guard_state))
 
 
 if __name__ == '__main__':

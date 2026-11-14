@@ -12,6 +12,7 @@ from ..runtime.deadline import EpisodeDeadline
 from .omnigibson_backend import OmniGibsonBackend
 from ..observations.rig import DIRECTIONS, camera_mount, robot_head_mount_height, look_at_orientation
 from ..records import JsonlAppend, now
+from ..runtime.robot_clock import charge_base_motion, clocked_action, clocked_leaf, robot_clock_record
 from .placement import CheckedPlacement
 from .profiling import component, action_profile
 from .carry import ControlledCarry
@@ -114,6 +115,17 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         self._base_floor_clearance = base_z-floor_z
         self._demo_trunk_home = (self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone()
                                  if self.demo_motion else None)
+        # Native symbolic operations do not command trunk motion. Hold the
+        # restored posture through the position controller instead of adopting
+        # each load-induced deflection as the next no-op target. Physics still
+        # owns the measured joints; no pose is reset during stepping.
+        self._trunk_hold_target = (None if self.demo_motion else
+            self.robot.get_joint_positions()[self.robot.trunk_control_idx].clone())
+        (self.output/'trunk_control.json').write_text(json.dumps({
+            'policy': 'explicit_demo_motion' if self.demo_motion else 'fixed_restored_position_target',
+            'target': None if self._trunk_hold_target is None else self._trunk_hold_target.tolist(),
+            'actuation': 'ordinary_position_controller', 'per_step_joint_pose_writes': False,
+        }, indent=2)+'\n')
         # Isaac Sim 5.1 documents a Replicator frame-loss issue when the
         # throttling extension toggles asynchronous rendering. Our capture
         # contract requires synchronous render-only flushes on the owner thread.
@@ -395,6 +407,89 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                                          'retries':readiness_failures,'physics_steps':0})+'\n')
         raise RuntimeError('Camera render products did not become ready: '+json.dumps({'rgb_shapes':shapes,'calibration':pending}))
 
+    def _snapshot_closed_doors(self):
+        """Record closed Open-state joints outside any active open/close target."""
+        env = getattr(self, 'env', None)
+        scene = getattr(env, 'scene', None)
+        if scene is None:
+            return []
+        from omnigibson.object_states import Open
+        from omnigibson.object_states.open_state import _compute_joint_threshold, _is_in_range
+        active_joints = set(getattr(self, '_active_open_joints', ()) or ())
+        latched = getattr(self, '_latched_closed_positions', None)
+        if latched is None:
+            latched = {}
+            self._latched_closed_positions = latched
+        robot = getattr(self, 'robot', None)
+        snapped = []
+        for obj in scene.objects:
+            if obj is robot or not getattr(obj, 'n_joints', 0):
+                continue
+            open_state = getattr(obj, 'states', {}).get(Open)
+            if open_state is None or not getattr(open_state, '_initialized', True):
+                continue
+            info = getattr(open_state, 'relevant_joints_info', None)
+            if not info or not info[1]:
+                continue
+            both_sides, joints, directions = info
+            closed_targets = []
+            if both_sides:
+                is_open = bool(open_state.get_value())
+                for joint in joints:
+                    key = (id(obj), getattr(joint, 'joint_name', getattr(joint, 'name', str(id(joint)))))
+                    if joint in active_joints or is_open:
+                        latched.pop(key, None)
+                        continue
+                    target_pos = latched.setdefault(key, float(joint.get_state()[0]))
+                    closed_targets.append((joint, target_pos))
+            else:
+                for joint, direction in zip(joints, directions):
+                    key = (id(obj), getattr(joint, 'joint_name', getattr(joint, 'name', str(id(joint)))))
+                    if joint in active_joints:
+                        latched.pop(key, None)
+                        continue
+                    pos = float(joint.get_state()[0])
+                    threshold, open_end, _ = _compute_joint_threshold(joint, direction)
+                    if _is_in_range(pos, threshold, open_end):
+                        latched.pop(key, None)
+                        continue
+                    target_pos = latched.setdefault(key, pos)
+                    closed_targets.append((joint, target_pos))
+            if closed_targets:
+                snapped.append((obj, open_state, closed_targets))
+        return snapped
+
+    def _restore_closed_doors(self, snapped, *, sync_fabric=True):
+        """Hold closed doors shut against passive gravity or nearby brush contacts."""
+        if not snapped:
+            return False
+        env = getattr(self, 'env', None)
+        scene = getattr(env, 'scene', None)
+        live_ids = {id(o) for o in scene.objects} if scene is not None else None
+        restored_any = False
+        for obj, open_state, joint_targets in snapped:
+            if live_ids is not None and id(obj) not in live_ids:
+                continue
+            obj_changed = False
+            for joint, closed_pos in joint_targets:
+                state = joint.get_state()
+                cur_pos = float(state[0])
+                cur_vel = float(state[1]) if len(state) > 1 else 0.0
+                if abs(cur_pos - closed_pos) > 1e-5 or abs(cur_vel) > 1e-5:
+                    joint.set_pos(closed_pos)
+                    joint.set_vel(0.0)
+                    obj_changed = True
+            if obj_changed:
+                open_state.clear_cache()
+                if hasattr(obj, 'state_updated'):
+                    obj.state_updated()
+                restored_any = True
+        if restored_any and sync_fabric:
+            sim = getattr(getattr(self, 'og', None), 'sim', None)
+            if sim is not None and hasattr(sim, 'sync_physx_to_fabric'):
+                sim.sync_physx_to_fabric()
+        return restored_any
+
     def _step(self, action):
         self._check_renderer_health()
         self.deadline.check(changed=True)
@@ -403,6 +498,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if self._base_target is not None:
             target, self._base_target = self._base_target, None
             self._transfer_base_pose(target['position'],target['orientation'])
+        trunk_target = getattr(self, '_trunk_hold_target', None)
+        if trunk_target is not None:
+            action = action.clone()
+            action[self.robot.controller_action_idx['trunk']] = trunk_target.to(action)
+        closed_doors = self._snapshot_closed_doors()
         # RGB observation boundaries and the video cadence already own rendering.
         # OmniGibson's ordinary env.step also renders implicitly, duplicating
         # that work. Its native no-render branch advances the same physics
@@ -413,6 +513,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         try:
             with self.og.sim.render_on_step(False):
                 with component(self,'physics_and_metrics'):super()._step(action)
+            self._restore_closed_doors(closed_doors)
         finally:
             self.og.sim._render_on_step = implicit_render
         try:
@@ -564,8 +665,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         """Select one walkable destination and call OmniGibson's native pathfinder."""
         import cv2
         import numpy as np
-        from .compat.native_astar import sync_open_door_map
+        from .compat.native_astar import sync_added_fixture_map, sync_open_door_map
         opened_doors = sync_open_door_map(self)
+        added_fixtures = sync_added_fixture_map(self)
         trav=self.env.scene.trav_map
         position=self.robot.get_position_orientation()[0]
         point=target.get_position_orientation()[0]
@@ -587,28 +689,57 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         cells=np.column_stack(np.where((labels==labels[source]) & (occupancy!=0)))
         if not len(cells):
             raise SkillError('navigation_invalid_start','No native traversable neighbor at the start')
+        reach_fallback=None;floor_snap=None
         if floor_click:
             endpoint=hint
+            clicked=tuple(trav.world_to_map(hint).tolist())
+            walkable=(0<=clicked[0]<occupancy.shape[0] and 0<=clicked[1]<occupancy.shape[1]
+                      and occupancy[clicked]!=0)
+            if not walkable:
+                # A floor spot under a chair or beside a wall is a real place the
+                # base cannot occupy. Go to the closest connected walkable cell
+                # and report the move as incomplete. A walkable click in another,
+                # disconnected region is still refused by the pathfinder below.
+                points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
+                distances=self.torch.linalg.norm(points-hint,dim=1)
+                nearest=int(self.torch.argmin(distances))
+                if float(distances[nearest])>self.local_limits.floor_click_snap_m:
+                    raise SkillError('navigation_unreachable','Selected floor point is not walkable and no walkable floor is near it')
+                endpoint=points[nearest];floor_snap=float(distances[nearest])
         else:
             # Use cell centers for object approaches. Both explicit navigation
             # and local manipulation must stay near the selected object.
             points=trav.map_to_world(self.torch.as_tensor(cells,dtype=start.dtype)+.5)
             distances=self.torch.linalg.norm(points-hint,dim=1)
             within=distances<=self.local_limits.reach_m
-            points=points[within];distances=distances[within]
-            if not len(points):
-                raise SkillError('navigation_unreachable','No native walkable destination within target reach')
-            scores=abs(distances-1.25)
+            if bool(within.any()):
+                points=points[within];distances=distances[within]
+                scores=abs(distances-1.25)
+            else:
+                # The eroded static map can keep the base farther from a deep
+                # table or a furnished corner than the nominal reach. Stand at
+                # the closest walkable cell instead of refusing the target;
+                # the wider bound applies only when no nearer cell exists.
+                within=distances<=self.local_limits.fallback_reach_m
+                points=points[within];distances=distances[within]
+                if not len(points):
+                    raise SkillError('navigation_unreachable','No native walkable destination within target reach')
+                scores=distances
+                reach_fallback=float(distances.min())
             near=scores<=scores.min()+trav.map_resolution
             points=points[near]
             endpoint=points[self.torch.argmin(self.torch.linalg.norm(points-start,dim=1))]
+            operation=getattr(self,'_local_operation',None)
+            if reach_fallback is not None and operation is not None:
+                operation.reach_m=min(self.local_limits.fallback_reach_m,reach_fallback+2*float(trav.map_resolution))
         record={'at':now(),'parent_request_id':getattr(self,'_active_request_id',None),
                 'audience':'executor_private','start':start.tolist(),'target':point.cpu().tolist(),
                 'endpoint':endpoint.tolist(),'strategy':'omnigibson_native_shortest_path',
                 'floor':floor,'mode':'point' if floor_click else 'approach',
                 'resolution_m':float(trav.map_resolution),'precomputed_walkability':True,
                 'map_sha256':hashlib.sha256(occupancy.tobytes()).hexdigest(),
-                'native_map_open_doors':opened_doors,
+                'native_map_open_doors':opened_doors,'native_map_added_fixtures':added_fixtures,
+                'reach_fallback_m':reach_fallback,'floor_click_snap_m':floor_snap,
                 'dynamic_collision_check':False}
         try:
             self.deadline.check()
@@ -616,14 +747,15 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             if path is None:
                 raise SkillError('navigation_unreachable','Native pathfinder found no route to the destination')
             route=[start.tolist(),*path.cpu().tolist(),endpoint.tolist()]
-            heading=hint-(start if floor_click else endpoint)
+            heading=hint-(start if floor_click and floor_snap is None else endpoint)
             yaw=math.atan2(float(heading[1]),float(heading[0]))
             record.update(status='planned',path=route,path_distance_m=float(length))
             result=self._execute_base_path(route,yaw,max_steps)
             self.navigation_distance+=result['actual_path_distance_m']
             actual=self.robot.get_position_orientation()[0][:2].cpu()
             target_distance=float(self.torch.linalg.norm(actual-hint))
-            tolerance=trav.map_resolution if floor_click else self.local_limits.reach_m
+            tolerance=(trav.map_resolution if floor_click else self.local_limits.reach_m if reach_fallback is None
+                       else min(self.local_limits.fallback_reach_m,reach_fallback+2*float(trav.map_resolution)))
             nav_status=('reached' if floor_click else 'approached') if target_distance<=tolerance else 'incomplete'
             return {**result,'strategy':record['strategy'],'path_distance_m':float(length),
                     'nav_status':nav_status,
@@ -640,15 +772,16 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         from omnigibson.utils import transform_utils as T
         from .particle_payload import snapshot_particles, relocate_particles
         held=self._get_held()
-        objects=[] if held is None else [held,*[child for child,_,_ in self._grasp_dependencies(held)]]
+        contents=[] if held is None else list(self._carry_contents)
+        objects=[] if held is None else [held,*[child for child,_ in contents]]
         # Robot.set_position_orientation already transports the native AG
         # object. Carry only its loose contents across this symbolic change.
-        relative=[] if held is None else [(obj,T.relative_pose_transform(
-            *obj.get_position_orientation(),*held.get_position_orientation())) for obj in objects[1:]]
         particles=snapshot_particles(self.env.scene,objects,include_supported=True) if objects else []
         self.robot.set_position_orientation(position,orientation)
-        for obj,pose in relative:
+        for obj,pose in contents:
             obj.set_position_orientation(*T.pose_transform(*held.get_position_orientation(),*pose))
+            if hasattr(obj, 'keep_still'):
+                obj.keep_still()
         relocate_particles(self.env.scene,particles)
 
     def _execute_base_path(self, points, end_yaw, max_steps):
@@ -667,6 +800,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if local is not None:local.admit_pose((*points[-1],end_yaw))
         before=self.steps
         self._transfer_base_pose(goal,quat)
+        # Robot clock (accounting only): charged at commit, before the step, so
+        # a committed motion counts even if the action later fails.
+        clock_row=charge_base_motion(self,points,orientation,end_yaw)
         # This updates native physics, object states and evaluation once. There
         # is no fixed settling window, endpoint rejection or automatic retry.
         self._step(self.primitives._empty_action())
@@ -679,6 +815,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
                 'actual_orientation':actual_quat.tolist(),'commanded_yaw':end_yaw,
                 'position_error_m':math.dist(actual[:2].cpu().tolist(),points[-1]),
                 'planned_route_distance_m':route_distance,'continuous_motion_simulated':False,
+                'robot_time':clock_row,
                 'follower':'symbolic_route_endpoint'})+'\n')
         return {'steps':self.steps-before,'motion_steps':self.steps-before,
                 'motor':'symbolic_route_endpoint','nav_status':'endpoint_applied',
@@ -691,7 +828,10 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         before=self.steps
         complete=getattr(self,'_complete_pending_object_initialization',None)
         try:
-            result=RGBBackend._execute_visual(self,primitive,target,max_steps,**kwargs)
+            # Robot clock (accounting only). Model episodes and privileged
+            # references both enter here, so both are charged by the same rules.
+            result=clocked_action(self,primitive,kwargs,lambda:RGBBackend._execute_visual(
+                self,primitive,target,max_steps,**kwargs))
         except SkillError:
             if complete is not None:complete(max_steps-(self.steps-before))
             raise
@@ -712,10 +852,16 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             self._demo_focus=None;self._spectator_anchor=None
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
         if primitive=='wait':
+            if getattr(self,'_symbolic_process_wait',False):
+                seconds=float(kwargs.get('seconds',5.0))
+                count=min(max_steps,5)
+                for _ in range(count):self._step(self.primitives._empty_action())
+                return {'primitive':'wait','steps':count,'sim_seconds':seconds,'symbolic_process_wait':True}
             count=min(max_steps,int(round(float(kwargs.get('seconds',5.0))/self.og.sim.get_sim_step_dt())))
             for _ in range(count):self._step(self.primitives._empty_action())
             return {'primitive':'wait','steps':count,'sim_seconds':count*self.og.sim.get_sim_step_dt()}
         if primitive=='release':
+            self._grasped_payload = None
             return self.execute(primitive,None,max_steps)
         obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to',reject_particles=primitive=='grasp')
         if primitive=='navigate_to':
@@ -723,7 +869,9 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
         if getattr(self,'local_manipulation',False):
             return self._execute_local_manipulation(primitive,obj,point,grounding,max_steps,kwargs)
-        return self._execute_bound_manipulation(primitive,obj,point,grounding,max_steps,**kwargs)
+        # Robot clock (accounting only): note whether the manipulation started physically.
+        return clocked_leaf(self,lambda:self._execute_bound_manipulation(
+            primitive,obj,point,grounding,max_steps,**kwargs))
 
     def _manipulation_preconditions(self,primitive,obj):
         if obj is None or not hasattr(obj,'states'):
@@ -875,6 +1023,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         result['protocol']='rgb_agent_ideal_executor_v9_shared_episode_clock'
         result['observation_mode']=self.mode
         result['demo_motion']=getattr(self,'demo_motion',False)
+        result.update(robot_clock_record(self))
         return result
 
     def provenance(self):
@@ -904,7 +1053,11 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'dynamic_collision_check':False,'departure_check':False,'settling_verification':False,
             'target_lock':'private_selected_link_relative_surface',
             'scope':'GT-assisted symbolic endpoint; no continuous driving or real-arm IK',
-            'reach_check':'base_to_selected_point_xy','reach_limit_m':1.4}
+            'reach_check':'base_to_selected_point_xy','reach_limit_m':self.local_limits.reach_m,
+            'reach_fallback':'closest walkable cell when none lies within the nominal reach',
+            'reach_fallback_limit_m':self.local_limits.fallback_reach_m,
+            'floor_click_snap':'closest connected walkable cell when the clicked floor cell is not walkable; reported incomplete',
+            'floor_click_snap_limit_m':self.local_limits.floor_click_snap_m}
         result['record_video'] = self.record_video
         result['video_capture_policy'] = {'render_stride':self.video_render_stride,
             'video_render_flushes':self.video_render_flushes, 'observation_render_flushes':4,
@@ -931,6 +1084,7 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             'search':'OmniGibson TraversableMap.get_shortest_path',
             'localization':'private simulator pose','precomputed_walkability':True,
             'door_state_sync':'opened doorway footprints only; closed doors retain the native map',
+            'added_fixture_sync':'footprints of task-declared fixed supports are blocked',
             'online_mapping':False,'dynamic_collision_check':False,
             'continuous_motion_simulated':False,'physical_controller':False,
             'departure_certificate':False,'endpoint_settling_gate':False,

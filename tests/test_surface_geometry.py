@@ -402,6 +402,7 @@ class PlacementRejectionTransactions(unittest.TestCase):
             {'index': i, 'pose': (torch.tensor([float(i+5), 0., 1.]), torch.tensor([0., 0., 0., 1.]))}
             for i in range(2)]
         backend._inside_pose_overlap_ranker = lambda *a, **kw: lambda p, q: float(p[0]) == 5.
+        backend._thin_support_base = lambda *a, **kw: ()  # needs a simulator ray query
         backend._surface_fallback_candidates = lambda *a, **kw: self.fail('A clear geometric candidate already exists')
         def settle(*args, **kwargs):
             physics.append(True)

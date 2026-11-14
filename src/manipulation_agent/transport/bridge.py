@@ -10,6 +10,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from ..contracts import tool_specs
+from ..tools.intent import supervisor_finish_arguments
 from ..runtime.deadline import tool_wait_seconds
 from ..batch.startup_progress import startup_event
 
@@ -119,11 +120,15 @@ def serve(harness, port: int) -> None:
                 if time.monotonic() - closed_at > CLOSED_REPLAY_SECONDS:
                     break
             elif harness.deadline.expired:
-                harness.call('finish', {'outcome':'aborted','reason':'Episode wall-clock deadline exhausted'}, 'episode-deadline-finish', origin='supervisor')
+                harness.call('finish', supervisor_finish_arguments('Episode wall-clock deadline exhausted',
+                    require_intent=getattr(harness, 'require_tool_intent', False)), 'episode-deadline-finish', origin='supervisor')
             elif hasattr(harness,'agent_step_closure_due') and harness.agent_step_closure_due():
-                harness.call('finish', {'outcome':'aborted','reason':'Agent step budget exhausted; controller did not finish during closure grace'}, 'agent-step-budget-finish', origin='supervisor')
+                harness.call('finish', supervisor_finish_arguments(
+                    'Agent step budget exhausted; controller did not finish during closure grace',
+                    require_intent=getattr(harness, 'require_tool_intent', False)), 'agent-step-budget-finish', origin='supervisor')
             elif harness.budget.wall_seconds is not None and not harness.deadline.managed and time.monotonic() - harness.started > harness.budget.wall_seconds:
-                harness.call("finish", {"outcome": "aborted", "reason": "Service wall-clock budget exhausted"}, "service-timeout", origin='supervisor')
+                harness.call('finish', supervisor_finish_arguments('Service wall-clock budget exhausted',
+                    require_intent=getattr(harness, 'require_tool_intent', False)), 'service-timeout', origin='supervisor')
             if hasattr(harness, 'tick_background') and not harness.closed and not harness.deadline.stop_requested:
                 harness.tick_background()
             try:

@@ -239,7 +239,10 @@ class CheckedPlacement:
         try:
             held.set_position_orientation(*candidate['pose'])
             self._relocate_contents(held, contents)
-            held.keep_still(); held.wake()
+            held.keep_still()
+            for item in (held, *payload):
+                if hasattr(item, 'wake'):
+                    item.wake()
             self._settle_surface_contacts(held, candidate['support'], payload, max_steps)
             valid, details = self._next_to_check(held, target, candidate['support'], payload,
                                                  support_point=support_point)
@@ -572,7 +575,9 @@ class CheckedPlacement:
             raise SkillError('placement_surface_unavailable', 'Select a receiving surface for placement')
         candidates = self._surface_candidates(held, target, point, yaw_degrees, payload,
                                               roll_degrees=roll_degrees)
-        ranker = self._inside_pose_overlap_ranker(held, [held, *payload], support_objects=(target,))
+        base = self._thin_support_base(held, target, point, payload)
+        ranker = self._inside_pose_overlap_ranker(held, [held, *payload], support_objects=(target,),
+                                                  support_paths=base)
 
         def score(candidate):
             position, orientation = candidate['pose']
@@ -589,6 +594,12 @@ class CheckedPlacement:
             candidate = min([*candidates, *alternatives], key=score, default=None)
         if candidate is None:
             raise SkillError('placement_surface_unavailable', 'No upward receiving surface near the selected point')
+        # Private evidence for diagnosing why a proposal away from the click won.
+        self._placement_record({'status': 'surface_candidates_scored', 'target': target.name, 'held': held.name,
+            'selected': candidate['index'], 'thin_support_base': list(base),
+            'scores': [{'index': row['index'], 'offset_xy_m': row.get('offset_xy_m'),
+                        'overlap_score': row.get('proposal_overlap_score'),
+                        'rim': bool(row.get('selected_rim_surface'))} for row in candidates]})
         return candidate
 
     def _checked_place_on_top(self, target, max_steps, point=None, yaw_degrees=None, *, roll_degrees=None):
@@ -639,6 +650,9 @@ class CheckedPlacement:
         objects = (held, target, *payload)
         steps = min(50, max_steps)
         substeps = max(1, round(self.og.sim.get_sim_step_dt() / self.og.sim.get_physics_dt()))
+        snapshot_doors = getattr(self, '_snapshot_closed_doors', None)
+        restore_doors = getattr(self, '_restore_closed_doors', None)
+        closed_doors = snapshot_doors() if snapshot_doors is not None else []
         for index in range(steps):
             if index == max(0, steps - 5):
                 for obj in (held, *payload):
@@ -648,6 +662,8 @@ class CheckedPlacement:
                         state.clear_cache()
             for _ in range(substeps):
                 self._placement_physics_step()
+            if closed_doors and restore_doors is not None:
+                restore_doors(closed_doors, sync_fabric=False)
             self.og.sim.sync_physx_to_fabric()
             if resting is not None:
                 resting.add(*held.get_position_orientation())
@@ -675,7 +691,9 @@ class CheckedPlacement:
         held.set_position_orientation(*candidate['pose'])
         self._relocate_contents(held, contents)
         held.keep_still()
-        held.wake()
+        for item in (held, *payload):
+            if hasattr(item, 'wake'):
+                item.wake()
         resting = RestingMotionWindow(self.og.sim.get_sim_step_dt())
         self._settle_surface_contacts(held, target, payload, max_steps, resting=resting)
         try:
@@ -802,8 +820,12 @@ class CheckedPlacement:
         self._carry_detach()
         held.set_position_orientation(*candidate['pose'])
         self._relocate_contents(held, contents)
-        held.keep_still(); held.wake()
-        self._settle_surface_contacts(held, target, [obj for obj, _ in contents], max_steps)
+        held.keep_still()
+        payload_objs = [obj for obj, _ in contents]
+        for item in (held, *payload_objs):
+            if hasattr(item, 'wake'):
+                item.wake()
+        self._settle_surface_contacts(held, target, payload_objs, max_steps)
         try:
             inside = bool(held.states[Inside].get_value(target))
             self._placement_record({'status': 'inside_result', 'held': held.name, 'target': target.name,
@@ -854,9 +876,28 @@ class CheckedPlacement:
                                 'speed_m_s':float(self.torch.linalg.norm(held.get_linear_velocity()))})
         return False
 
-    def _inside_pose_overlap_ranker(self,held,assembly,*,support_objects=()):
+    def _inside_pose_overlap_ranker(self,held,assembly,*,support_objects=(),support_paths=()):
         from .placement_overlap import assembly_overlap_ranker
-        return assembly_overlap_ranker(self,held,assembly,support_objects=support_objects)
+        return assembly_overlap_ranker(self,held,assembly,support_objects=support_objects,
+                                       support_paths=support_paths)
+
+    def _thin_support_base(self, held, target, point, payload=()):
+        """Body directly beneath a thin selected support, such as the table under a plate.
+
+        A proposal's enclosing box can dip a few millimetres below its lowest
+        vertex. On a 2 cm plate that reaches the table, so every proposal near
+        the click ranked worse than one balanced on the rim. Thick supports
+        have nothing within 6 cm below their surface and are unaffected.
+        """
+        from omnigibson.utils.sampling_utils import raytest
+        ignored = [link.prim_path for obj in (held, self.robot, target, *payload) for link in obj.links.values()]
+        # Start just below the selected surface: contents resting on the support
+        # are neighbors that must keep ranking, not the base underneath it.
+        start = point - self.torch.tensor([0., 0., .002], device=point.device)
+        end = point - self.torch.tensor([0., 0., .06], device=point.device)
+        hit = raytest(start, end, ignore_bodies=ignored)
+        body = hit.get('rigidBody') if hit.get('hit') and float(hit.get('distance', 1.)) > 0. else None
+        return (str(body),) if body else ()
 
     def _inside_overlap_ranker(self,assembly):
         """Cheap current-world envelope checks order, never reject, proposals."""
@@ -942,10 +983,13 @@ class CheckedPlacement:
                 if hit.get('rigidBody') not in support_paths or float(hit['normal'][2])<.9:continue
                 z=float(hit['position'][2])+float(center_offset[2]-bottom[2])+clearance
                 # An unladen item can start above existing contents and fall
-                # into the cavity. Its support must be inside; its center is
-                # checked against native Inside only after free settling.
-                admission_z=float(hit['position'][2]) if allow_drop else z-clearance
-                if not float(low[2])<=admission_z<=float(high[2]):continue
+                # into the cavity. Its support must be inside (including a
+                # drawer/box floor mesh authored up to 15 mm below visual_aabb);
+                # its center is checked against native Inside after settling.
+                resting_z=z-clearance
+                if allow_drop:
+                    if not (resting_z>=float(low[2]) and float(low[2])-.015<=float(hit['position'][2])<=float(high[2])):continue
+                elif not float(low[2])<=resting_z<=float(high[2]):continue
                 center=(x,y,z)
                 if any(sum((a-b)**2 for a,b in zip(center,old))<1e-8 for old in proposals):continue
                 proposals.append(center)

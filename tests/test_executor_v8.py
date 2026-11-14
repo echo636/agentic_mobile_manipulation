@@ -125,6 +125,13 @@ class MotorContractRegression(unittest.TestCase):
         self.assertEqual(result['primitive'],'attach')
         self.assertEqual(calls[0],'released')
         self.assertEqual(calls[1],{'bypass_alignment_checking':True,'check_physics_stability':False})
+        # The executor owns settling; a joint broken during those steps fails.
+        backend._step=lambda *a:linked.__setitem__(0,False)
+        with patch.dict('sys.modules',{'omnigibson.object_states':states}):
+            with self.assertRaises(SkillError) as failure:
+                backend._checked_attach(parent,2)
+        self.assertEqual(failure.exception.code,'postcondition_error')
+        self.assertTrue(failure.exception.changed)
         self.assertEqual(backend.frames_revision,-1)
 
     def test_support_payload_closure_includes_nested_items_without_cycles(self):
@@ -213,6 +220,7 @@ class AnchoringAndPlacementRegression(unittest.TestCase):
         b._placement_record=lambda data:None;b._get_held=lambda:None
         b._verify_payload=lambda *a,**kw:self.fail('Placement must not require every payload relation to persist')
         b._inside_pose_overlap_ranker=lambda *a,**kw:None
+        b._thin_support_base = lambda *a, **kw: ()  # needs a simulator ray query
         b._settle_surface_contacts=lambda *a,**kw:None
         with patch.dict('sys.modules',{'omnigibson.object_states':states}):
             for correct_shelf in (False,True):
