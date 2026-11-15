@@ -241,6 +241,17 @@ class AgyAdapter(ClientAdapter):
                 "\"completed_job_ids\": [], \"verified_closed_compartments\": []}}` "
                 "(or inspect `~/.gemini/antigravity-cli/mcp/manipulation/schedule_plan.json` via `read_file`)"
             )
+        if "plan_task_graph" in tool_names:
+            schema_lines.append(
+                "- `plan_task_graph`: `{\"Arguments\": {\"graph\": {\"agent_location\": \"L1\", "
+                "\"locations\": [{\"id\": \"L1\"}, {\"id\": \"L2\"}], "
+                "\"travel_cost\": [{\"from_location\": \"L1\", \"to_location\": \"L2\", \"cost_s\": 20.0}], "
+                "\"state_vars\": [{\"name\": \"v1\", \"value\": 0}], "
+                "\"entities\": [{\"id\": \"e1\", \"location\": \"L1\", \"movable\": true, \"capacity\": 0}], "
+                "\"operations\": [{\"id\": \"op1\", \"location\": \"L1\", \"effects\": [{\"var\": \"v1\", \"value\": 1}], \"active_duration_s\": 10.0}], "
+                "\"goals\": {\"predicates\": [{\"var\": \"v1\", \"value\": 1}], \"entity_locations\": [{\"entity_id\": \"e1\", \"location\": \"L2\"}]}}, "
+                "\"completed_operations\": []}}`"
+            )
         rule_header = (
             "# EMBODIED POLICY EVALUATION INSTRUCTIONS\n\n"
             "You are an embodied robot policy under evaluation in a simulator, NOT a coding assistant.\n"

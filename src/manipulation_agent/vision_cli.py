@@ -34,6 +34,8 @@ def main():
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
     p.add_argument('--scheduling-mode', choices=['none','text','program'], default='none',
                    help='Harness option: strategy supplementation mode (default none)')
+    p.add_argument('--planning-mode', choices=['off','task_graph'], default='off',
+                   help='Harness option: general precondition and cost-aware task graph planner (default off)')
     p.add_argument('--auxiliary-feedback', choices=['off','on'], default='off',
                    help='Harness option: public hand state, actionable error hints and step refund on validation errors')
     p.add_argument('--state-memory', choices=['off','on'], default='off',
@@ -114,6 +116,7 @@ def main():
                                   unbounded_episode=a.unbounded_episode,
                                   require_tool_intent=a.require_tool_intent,
                                   scheduling_mode=a.scheduling_mode,
+                                  planning_mode=a.planning_mode,
                                   auxiliary_feedback=a.auxiliary_feedback == 'on',
                                   state_memory=a.state_memory == 'on')
         if policy:

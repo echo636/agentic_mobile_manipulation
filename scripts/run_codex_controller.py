@@ -253,6 +253,8 @@ def main(argv=None, *, allow_client=False):
                    help='Harness option: enable structured public state memory prompt and handoff tracking (default off)')
     p.add_argument('--rolling-handoff-steps', type=int, default=0,
                    help='Harness option: roll over to a fresh client session with state_memory handoff summary every N act/look steps (0 disables)')
+    p.add_argument('--planning-mode', choices=['off','task_graph'], default='off',
+                   help='Harness option: general precondition and cost-aware task graph planner (default off)')
     p.add_argument('--autonomy-instruction', choices=['off','on'], default='off',
                    help='Harness option: append the autonomous-episode operating instruction to the system prompt')
     p.add_argument('--require-tool-intent',action='store_true',
@@ -307,9 +309,11 @@ def main(argv=None, *, allow_client=False):
                                  require_tool_intent=args.require_tool_intent,
                                  autonomy=args.autonomy_instruction == 'on',
                                  scheduling_mode=args.scheduling_mode,
-                                 state_memory=args.state_memory == 'on')
+                                 state_memory=args.state_memory == 'on',
+                                 planning_mode=args.planning_mode)
     catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent,
-                         scheduling_mode=args.scheduling_mode)
+                         scheduling_mode=args.scheduling_mode,
+                         planning_mode=args.planning_mode)
     raw_mcp_args = json.loads(args.mcp_args_json)
     if isinstance(raw_mcp_args, list) and (
         'manipulation_agent.mcp_server' in raw_mcp_args
@@ -319,6 +323,8 @@ def main(argv=None, *, allow_client=False):
             raw_mcp_args = [*raw_mcp_args, '--state-memory', 'on']
         if args.rolling_handoff_steps > 0 and '--rolling-handoff-steps' not in raw_mcp_args:
             raw_mcp_args = [*raw_mcp_args, '--rolling-handoff-steps', str(args.rolling_handoff_steps)]
+        if args.planning_mode == 'task_graph' and '--planning-mode' not in raw_mcp_args:
+            raw_mcp_args = [*raw_mcp_args, '--planning-mode', 'task_graph']
         args.mcp_args_json = json.dumps(raw_mcp_args)
     planner_config = None
     mcp_env_vars = ()
@@ -388,6 +394,7 @@ def main(argv=None, *, allow_client=False):
     metadata['scheduling_mode'] = args.scheduling_mode
     metadata['state_memory'] = args.state_memory
     metadata['rolling_handoff_steps'] = args.rolling_handoff_steps
+    metadata['planning_mode'] = args.planning_mode
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',

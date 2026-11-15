@@ -18,11 +18,12 @@ from .closure import EpisodeClosure
 from ..agent.task_notes import TaskNotes, model_planning_reply
 from ..agent.schedule_planner import PublicScheduleLedger
 from ..agent.state_memory import StateMemory
+from ..agent.task_graph_planner import TaskGraphSession
 
 # Pre-execution validation / non-mutating refusal codes that never touch physics or render a new capture.
 NO_WORLD_CHANGE_CODES = frozenset({
     'stale_observation', 'stale_image_ref', 'invalid_target', 'invalid_arguments',
-    'unknown_tool', 'unknown_skill_resource', 'invalid_schedule_input',
+    'unknown_tool', 'unknown_skill_resource', 'invalid_schedule_input', 'invalid_task_graph_input',
 })
 
 ACTION_FEEDBACK_HINTS = {
@@ -66,17 +67,20 @@ ACTION_FEEDBACK_HINTS = {
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
                  goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False,
-                 scheduling_mode='none', auxiliary_feedback=False, state_memory=False):
+                 scheduling_mode='none', planning_mode='off', auxiliary_feedback=False, state_memory=False):
         if profile == 'basic-skills': goal_skill = 'none'
         if profile == 'goal-tree': goal_skill = 'tree'
         if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
         if scheduling_mode not in {'none', 'text', 'program'}: raise ValueError('Unknown scheduling mode')
+        if planning_mode not in {'off', 'task_graph'}: raise ValueError('Unknown planning mode')
         self.goal_skill=goal_skill
         self.scheduling_mode=scheduling_mode
+        self.planning_mode=planning_mode
         self.auxiliary_feedback=bool(auxiliary_feedback)
         self.state_memory_enabled=bool(state_memory)
         self.state_memory=StateMemory(output_dir=recorder.output) if self.state_memory_enabled else None
         self.schedule_ledger=PublicScheduleLedger()
+        self.task_graph_session=TaskGraphSession()
         self.require_tool_intent=require_tool_intent
         self.task_notes=TaskNotes(recorder.output, auto_select=goal_skill == 'hierarchical')
         if agent_step_limit is not None and (type(agent_step_limit) is not int or agent_step_limit<=0):
@@ -105,7 +109,8 @@ class VisionHarness:
         self.profile = profile
         self.surround = SurroundJobs(self)
         self.catalog = {t['name']: t for t in tool_specs(
-            profile, require_intent=require_tool_intent, scheduling_mode=scheduling_mode)}
+            profile, require_intent=require_tool_intent,
+            scheduling_mode=scheduling_mode, planning_mode=planning_mode)}
         self.cache,self.evidence={},{}
         self.skills = None
         if profile == 'workflow':
@@ -116,10 +121,13 @@ class VisionHarness:
             excluded = {'goal-decomposition', 'goal-tree'} - {planning_skill}
             if scheduling_mode != 'text':
                 excluded = excluded | {'time-space-scheduling'}
+            if planning_mode != 'task_graph':
+                excluded = excluded | {'task-graph-planning'}
             self.skills=SkillLibrary(recorder.output,exclude=excluded)
         recorder.run['config']['agent_profile'] = profile
         recorder.run['config'].update(goal_skill=goal_skill,
             scheduling_mode=scheduling_mode,
+            planning_mode=planning_mode,
             auxiliary_feedback=self.auxiliary_feedback,
             state_memory=self.state_memory_enabled,
             require_tool_intent=require_tool_intent,
@@ -332,7 +340,8 @@ class VisionHarness:
                     err_code = result['error'].get('code')
                     if err_code in ACTION_FEEDBACK_HINTS:
                         result['error']['message'] = str(result['error'].get('message', '')) + ACTION_FEEDBACK_HINTS[err_code]
-            if self.auxiliary_feedback or self.scheduling_mode == 'program' or self.state_memory_enabled:
+            if (self.auxiliary_feedback or self.scheduling_mode == 'program'
+                    or self.state_memory_enabled or self.planning_mode == 'task_graph'):
                 rt_public = self._public_robot_time()
                 if rt_public is not None:
                     result['robot_time'] = rt_public
@@ -380,6 +389,12 @@ class VisionHarness:
                 result['state_memory'] = self.state_memory.public_view(
                     include_handoff=(name == 'initialize' and self.agent_steps > 0)
                 )
+        if self.planning_mode == 'task_graph' and name in {'act', 'look'} and not self.closed:
+            rt_for_tg = result.get('robot_time') or self._public_robot_time()
+            tg_input = result if 'robot_time' in result else {**result, **({'robot_time': rt_for_tg} if rt_for_tg else {})}
+            self.task_graph_session.sync_from_state_memory(getattr(self, 'state_memory', None))
+            self.task_graph_session.observe_public_action(name, arguments if isinstance(arguments, dict) else None, tg_input)
+            result['task_graph_status'] = self.task_graph_session.public_status()
         if ('task_notes' in self.catalog and self.goal_skill == 'hierarchical'
                 and origin == 'controller' and name in {'initialize', 'task_notes', 'act', 'look'}):
             pending = None
