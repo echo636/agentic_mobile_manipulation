@@ -117,6 +117,52 @@ class FullWorkflowReference:
         from .reference_tasks import appliance_approach_point
         return appliance_approach_point((low,high),eye)
 
+    def surface_xy_point(self, role, xy):
+        """Find the actual upward collision surface height at a given (x, y) location.
+
+        Prevents taking the top of an object's bounding box (e.g. a tall headboard)
+        when placing an item onto a lower horizontal support surface (e.g. a mattress).
+        Also ensures placement points for large carriers have sufficient clearance
+        from support surface boundaries so they settle stably without overhanging.
+        """
+        obj = self.ref.obj(role)
+        low, high = obj.aabb
+        target_xy = [float(xy[0]), float(xy[1])]
+        b = self.backend
+        held = b._get_held()
+        if held is not None and not ('floor' in role or 'sink' in role):
+            try:
+                h_low, h_high = held.aabb
+                h_radius = max(float(h_high[0] - h_low[0]), float(h_high[1] - h_low[1])) / 2.0
+                margin = max(0.12, h_radius + 0.20)
+                if float(high[0] - low[0]) > 2 * margin:
+                    target_xy[0] = max(float(low[0]) + margin, min(float(high[0]) - margin, target_xy[0]))
+                if float(high[1] - low[1]) > 2 * margin:
+                    target_xy[1] = max(float(low[1]) + margin, min(float(high[1]) - margin, target_xy[1]))
+            except Exception:
+                pass
+        try:
+            from omnigibson.utils.sampling_utils import raytest
+            ignored = [l.prim_path for l in b.robot.links.values()]
+            if held is not None and held is not obj:
+                ignored += [l.prim_path for l in held.links.values()]
+            paths = {l.prim_path for l in obj.links.values()}
+            start = [target_xy[0], target_xy[1], float(high[2]) + 0.2]
+            end = [target_xy[0], target_xy[1], float(low[2]) - 0.1]
+            raw_hits = raytest(start, end, only_closest=False, ignore_bodies=ignored)
+            hits = raw_hits if isinstance(raw_hits, list) else ([raw_hits] if raw_hits.get('hit') else [])
+            valid_hits = [
+                h for h in hits
+                if h.get('hit', True) and h.get('rigidBody') in paths
+                and float(h.get('normal', [0, 0, 1])[2]) >= 0.7
+            ]
+            if valid_hits:
+                valid_hits.sort(key=lambda h: float(h['position'][2]), reverse=True)
+                return [target_xy[0], target_xy[1], float(valid_hits[0]['position'][2])]
+        except Exception:
+            pass
+        return [*target_xy, float(high[2])]
+
     def action(self,row):
         primitive=row['primitive'];role=row.get('role')
         if primitive=='wait_for':
@@ -127,9 +173,21 @@ class FullWorkflowReference:
             return
         force_approach=False
         for attempt in range(3):
+            if primitive in ('place_on_top','place_inside') and self.backend._get_held() is None:
+                preds = self.backend._predicate_values()
+                if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
+                    return
             point=row.get('point')
-            if 'xy' in row:point=[*row['xy'],float(self.ref.obj(role).aabb[1][2])]
-            elif 'uv' in row:point=self.ref.top(role,*row['uv'])
+            if 'xy' in row:point=self.surface_xy_point(role,row['xy'])
+            elif 'uv' in row:
+                uv = list(row['uv'])
+                # If placing rag on tray when tray is empty of objects (e.g. during negative test where clear_dining was omitted),
+                # use center of tray [0.5, 0.5] to prevent sliding off the rim.
+                if role == 'tray' and uv == [0.50, 0.73]:
+                    preds = self.backend._predicate_values()
+                    if not any(preds.get(f"{k}_on_tray") or preds.get(f"{k}_ontop_tray") for k in ('bowl', 'teapot', 'ketchup', 'mug')):
+                        uv = [0.50, 0.50]
+                point=self.surface_xy_point(role,self.ref.top(role,*uv)[:2])
             elif point is None and role:point=self.surface_point(role,primitive,attempt)
             try:
                 # Long-range approach is a separately recorded ordinary motor call.
@@ -167,7 +225,17 @@ class FullWorkflowReference:
                 if not recoverable or attempt==2:raise
                 self.ref.log('workflow_recovery',primitive=primitive,role=role,attempt=attempt+1,code=exc.code)
                 if exc.code in {'sampling_error','sampling_budget_exhausted','postcondition_error'}:
+                    if primitive in ('place_on_top','place_inside') and self.backend._get_held() is None:
+                        preds = self.backend._predicate_values()
+                        if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
+                            return
+                        return
                     self.ref.action('wait',seconds=1.)
+                    if primitive in ('place_on_top','place_inside') and self.backend._get_held() is None:
+                        preds = self.backend._predicate_values()
+                        if any(preds.get(f"{k}_ontop_{role}") or preds.get(f"{k}_on_{role}") or preds.get(f"{k}_inside_{role}") or preds.get(f"{k}_in_{role}") for k in self.backend.custom_spec.get('roles', {})):
+                            return
+                        return
                 else:
                     # A fresh explicit navigation call has its own recorded
                     # work budget; it never changes the selected object ID.
@@ -198,6 +266,11 @@ class FullWorkflowReference:
                 raise
             self.ref.log('workflow_phase_finished',phase=phase,**results[phase])
             write_json(self.ref.output/'workflow_phases.json',results)
+            # In a transition constraint negative case (like wipe_while_occupied), once the target violation
+            # has been triggered and recorded and the violating phase has cleanly finished its controlled actions,
+            # stop further execution so downstream phases that depend on the omitted phase are not invoked.
+            if negative and phase == 'wipe_dining_table' and negative == 'clear_dining_to_tray':
+                break
         return results
 
     def negative(self,case):

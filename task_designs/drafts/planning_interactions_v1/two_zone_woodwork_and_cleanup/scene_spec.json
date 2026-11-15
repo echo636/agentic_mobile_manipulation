@@ -1,0 +1,50 @@
+{
+  "status": "design_only",
+  "scene_constructed": false,
+  "physical_validation": false,
+  "model_run": false,
+  "scoring_protocol": "custom_native_bddl",
+  "official_submission_eligible": false,
+  "task_goal": "完成两处工作区的备柴、分箱和原有灰尘清理，并归还工具。",
+  "mechanism": "共享斧头与扫帚；切割/半木料归置/清扫跨区调度；不同工具能力确有区别。",
+  "assets": "复用chopping_wood的log/half__log/ax与sweeping_garage的broom/dust；核对轴只slicer、扫帚只remover；不得有可替代两者的额外通用工具。两箱各可容纳四段木料。",
+  "scenes": [
+    "garage与utility_room两个独立Covered floor对象，不得被同一整屋floor对象绑定",
+    "工具台位于utility_room；两箱的原位置分别绑定两floor",
+    "两区含砧块只是可用资产，当前cut不强制上砧块，不将它设评分前置"
+  ],
+  "variants": [
+    {
+      "id": "dev_two_zones_short",
+      "change": "同一初态谓词、较短区间通路",
+      "hypothesis": "测工具切换与物品放置成本"
+    },
+    {
+      "id": "dev_two_zones_long",
+      "change": "延长两个工作区之间的合法通路，其他机制不变",
+      "hypothesis": "测跨区代价变化；不承诺按工具/按区域优劣反转"
+    },
+    {
+      "id": "heldout_layout_reserved",
+      "change": "未来独立位置组合",
+      "status": "not_constructed_not_a_holdout_result"
+    }
+  ],
+  "probes": [
+    "四根木料逐一切割并准确绑定全部future半木料",
+    "扫帚能清除每个floor的dust而斧头不能",
+    "同一Covered设置不得跨floor清掉另一工作区",
+    "两箱四段容量、单段放置与合法分配均可行",
+    "工具/空箱也可搬运；允许将空箱作工具载具，不私下禁用"
+  ],
+  "limits": [
+    "独立工作+共同工具初终位下，三角不等式可使按工具巡回弱支配按区域完成；单纯拉远距离不证明策略翻转",
+    "当前切割不会自动生成本任务dust；灰尘来自初态，允许先扫后切",
+    "不要求先移走木料才扫地；当前材料执行器没有该前置",
+    "仅作为工具分组机制对照，不单独声称复杂跨分支规划泛化",
+    "只使用forall/exists覆盖全部产物，避免每箱forn再交叉枚举产生无谓的大规模目标展开。"
+  ],
+  "logical_test_scope": "native BDDL compiler and synthetic predicate fixtures only",
+  "goal_semantics": "八段半木料均real且位于任一箱内，分配不限；两箱保持各自工作区地面；两区原有dust清除；两工具回工具台。没有人为四四分配约束。",
+  "revision": "design_v1.1_tool_home_utility_room"
+}

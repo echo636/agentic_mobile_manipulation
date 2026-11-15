@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "paths_relative_to": "repository_root",
+  "sources": [
+    {
+      "path": "../behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/prepare_a_breakfast_bar/problem0.bddl",
+      "sha256": "aa9c5cc9b7a08e146e8e84a79672522311a48cb989838036ae1c79bbc3d8c00c"
+    },
+    {
+      "path": "../behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/putting_away_games/problem0.bddl",
+      "sha256": "49bf5d8d2327fb665303cb4e4cd317185228661531ac09bbbd9c5fe9b6c55e26"
+    },
+    {
+      "path": "../behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_up_after_a_dinner_party/problem0.bddl",
+      "sha256": "ce0d0c10e74d8478bbcb02a126d637940880c97ef720423287610fce7db3d30b"
+    },
+    {
+      "path": "../behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/chopping_wood/problem0.bddl",
+      "sha256": "2ec0e9adb666075101c888d43b1c0ef48434ab0051d80de20eb49bf75fb04837"
+    },
+    {
+      "path": "../behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/sweeping_garage/problem0.bddl",
+      "sha256": "a4e9af08f357d4f469ab154a5a37803d569f296bcf7b3daccf45186adcce5ce2"
+    },
+    {
+      "path": "../behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/putting_dirty_dishes_in_sink/problem0.bddl",
+      "sha256": "d4ebcc9e444c6b9f448330623d0a4eaef0af1fc2fe8a650e2e8174c61200053b"
+    }
+  ],
+  "drafts": [
+    {
+      "path": "task_designs/drafts/planning_interactions_v1/table_service_turnover/problem0.bddl",
+      "sha256": "d957e0391b285ad5159a547f5a70814d6b496087e7e28b1a75acc08e179bb17f"
+    },
+    {
+      "path": "task_designs/drafts/planning_interactions_v1/two_zone_woodwork_and_cleanup/problem0.bddl",
+      "sha256": "ea6075bac11afaf5feef2edea7238e686af1fc0d8e13801057a1e13a36e79dfb"
+    }
+  ]
+}

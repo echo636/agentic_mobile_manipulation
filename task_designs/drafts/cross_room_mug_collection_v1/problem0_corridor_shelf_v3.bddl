@@ -1,0 +1,44 @@
+; Authoring draft, corridor-shelf layout v3. Two mugs start on the dining table near
+; the kitchen and two on the far hallway shelf; all four return directly onto the
+; L-shaped kitchen sink counter (either of its two countertop instances), the tray
+; ends there empty. Carrier use and order remain optional.
+(define (problem cross_room_mug_collection_corridor_v3-0)
+    (:domain behavior-1k)
+    (:objects
+        mug.n.04_1 mug.n.04_2 mug.n.04_3 mug.n.04_4 - mug.n.04
+        tray.n.01_1 - tray.n.01
+        countertop.n.01_1 countertop.n.01_2 - countertop.n.01
+        shelf.n.01_1 - shelf.n.01
+        breakfast_table.n.01_1 - breakfast_table.n.01
+        floor.n.01_1 floor.n.01_2 floor.n.01_3 - floor.n.01
+        agent.n.01_1 - agent.n.01
+    )
+    (:init
+        (ontop mug.n.04_1 breakfast_table.n.01_1)
+        (ontop mug.n.04_2 breakfast_table.n.01_1)
+        (ontop mug.n.04_3 shelf.n.01_1)
+        (ontop mug.n.04_4 shelf.n.01_1)
+        (ontop tray.n.01_1 countertop.n.01_1)
+        (inroom countertop.n.01_1 kitchen)
+        (inroom countertop.n.01_2 kitchen)
+        (inroom shelf.n.01_1 corridor)
+        (inroom breakfast_table.n.01_1 dining_room)
+        (inroom floor.n.01_1 kitchen)
+        (inroom floor.n.01_2 dining_room)
+        (inroom floor.n.01_3 corridor)
+        (ontop agent.n.01_1 floor.n.01_1)
+    )
+    (:goal
+        (and
+            (or (ontop mug.n.04_1 countertop.n.01_1) (ontop mug.n.04_1 countertop.n.01_2))
+            (or (ontop mug.n.04_2 countertop.n.01_1) (ontop mug.n.04_2 countertop.n.01_2))
+            (or (ontop mug.n.04_3 countertop.n.01_1) (ontop mug.n.04_3 countertop.n.01_2))
+            (or (ontop mug.n.04_4 countertop.n.01_1) (ontop mug.n.04_4 countertop.n.01_2))
+            (or (ontop tray.n.01_1 countertop.n.01_1) (ontop tray.n.01_1 countertop.n.01_2))
+            (not (ontop mug.n.04_1 tray.n.01_1))
+            (not (ontop mug.n.04_2 tray.n.01_1))
+            (not (ontop mug.n.04_3 tray.n.01_1))
+            (not (ontop mug.n.04_4 tray.n.01_1))
+        )
+    )
+)

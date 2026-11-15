@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "status": "selection_and_unbuilt_designs",
+  "date": "2026-10-31",
+  "source_scope": "1017 pinned problem0 definitions lexically screened; selected candidates manually read. Local files may include prior project modifications; hashes identify examined versions.",
+  "runtime_protocol": "target_locked_approach_v2; target choice and macro order remain policy decisions; internal motion costs must be counted.",
+  "mechanisms": {
+    "carrier_lifecycle": "目标物同时承担中间载具/工具用途",
+    "shared_setup": "多个目标共享入口、准备、目的地或工具",
+    "future_access": "当前动作改变后续可见性/空间/访问",
+    "route_tool_tradeoff": "跨区域路线与工具切换的组织成本",
+    "information_revision": "新观察改变剩余工作与运输安排"
+  },
+  "native_candidates": [
+    {
+      "task": "putting_away_games",
+      "priority": "首选原生准入候选",
+      "challenge100": false,
+      "definition": "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/putting_away_games/problem0.bddl",
+      "path_base": "workspace_root_parent_of_repository",
+      "sha256": "49bf5d8d2327fb665303cb4e4cd317185228661531ac09bbbd9c5fe9b6c55e26",
+      "structural_mechanisms": [
+        "carrier_lifecycle",
+        "shared_setup"
+      ],
+      "scene_or_protocol_conditional_mechanisms": [
+        "future_access"
+      ],
+      "goal_summary": "三件拼图、三件桌游分别装入两箱，禁止两类混装，两箱最终进入书架。",
+      "locally_reasonable_schedule": "把空箱先放书架，再逐件收纳。",
+      "lookahead_candidate": "在物品来源附近分类装箱，随后搬运载箱；也允许在书架内直接装箱。",
+      "countercondition": "若在架内装箱仍同样可见可达，或载箱搬运更贵，先归位未必更差。",
+      "admission_checks": [
+        "两箱实际容积",
+        "载箱搬运后Inside保持",
+        "当前局部接近是否已消除架内装箱困难"
+      ],
+      "validation": "source_review_only",
+      "benchmark_ready": false,
+      "policy_gain_verified": false
+    },
+    {
+      "task": "prepare_a_breakfast_bar",
+      "priority": "资产门槛通过后准入",
+      "challenge100": false,
+      "definition": "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/prepare_a_breakfast_bar/problem0.bddl",
+      "path_base": "workspace_root_parent_of_repository",
+      "sha256": "aa9c5cc9b7a08e146e8e84a79672522311a48cb989838036ae1c79bbc3d8c00c",
+      "structural_mechanisms": [
+        "carrier_lifecycle",
+        "shared_setup"
+      ],
+      "scene_or_protocol_conditional_mechanisms": [
+        "future_access",
+        "information_revision"
+      ],
+      "goal_summary": "八件食物上餐盘，两只煎饼同盘、两只华夫同盘；三盘在主托盘或餐桌，主托盘和果汁最终上桌。不同食物组可共盘。",
+      "locally_reasonable_schedule": "先将空盘与主托盘送到餐桌，再逐件找食物。",
+      "lookahead_candidate": "按食物来源决定装盘位置、承托组合和配送批次，餐厅原有煎饼也要取得餐盘。",
+      "countercondition": "厨房—餐厅距离短或载具容量不足时，集中装载可能不省。",
+      "admission_checks": [
+        "本地pancake/toast资产存在性",
+        "最多需要的嵌套载荷层数",
+        "三盘不必都装在同一托盘",
+        "初始柜内与冰箱内载盘可选可取"
+      ],
+      "validation": "source_review_only",
+      "benchmark_ready": false,
+      "policy_gain_verified": false
+    },
+    {
+      "task": "clean_up_after_a_dinner_party",
+      "priority": "跨区分装准入候选",
+      "challenge100": false,
+      "definition": "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_up_after_a_dinner_party/problem0.bddl",
+      "path_base": "workspace_root_parent_of_repository",
+      "sha256": "ce0d0c10e74d8478bbcb02a126d637940880c97ef720423287610fce7db3d30b",
+      "structural_mechanisms": [
+        "carrier_lifecycle",
+        "shared_setup"
+      ],
+      "scene_or_protocol_conditional_mechanisms": [
+        "information_revision"
+      ],
+      "goal_summary": "餐厅两汉堡同盒、两卷饼同另一盒，两个盒及酒瓶都进入厨房冰箱；原定义没有关门目标。",
+      "locally_reasonable_schedule": "先把所有食品逐件搬回厨房，再装盒。",
+      "lookahead_candidate": "比较把空盒带到餐厅装载再回运，及利用去程带酒/返程取盒的组合。",
+      "countercondition": "每盒只有两件，单手取空盒的额外往返可能抵消收益，必须实测全流程。",
+      "admission_checks": [
+        "载食物盒可运输",
+        "不同盒绑定均接受",
+        "显式计入取空盒与装卸成本"
+      ],
+      "validation": "source_review_only",
+      "benchmark_ready": false,
+      "policy_gain_verified": false
+    },
+    {
+      "task": "unloading_shopping_items",
+      "priority": "资产门槛通过后的发现/分流候选",
+      "challenge100": false,
+      "definition": "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/unloading_shopping_items/problem0.bddl",
+      "path_base": "workspace_root_parent_of_repository",
+      "sha256": "6c848d18e476a573c5acd55937e5689e24427fc7504055d5defc0549e886724e",
+      "structural_mechanisms": [
+        "carrier_lifecycle",
+        "shared_setup"
+      ],
+      "scene_or_protocol_conditional_mechanisms": [
+        "information_revision",
+        "future_access"
+      ],
+      "goal_summary": "两箱十四件物品分到console_table和柜顶，两个箱最终在console_table旁。",
+      "locally_reasonable_schedule": "每看到一件就运输，或把箱子提早归到终点后再发现其余物品。",
+      "lookahead_candidate": "逐步检查两箱，根据已发现物品的目的地调整箱位置和卸货批次。",
+      "countercondition": "若所有内容初始全可见且清单已公开，只能测运输/计数，不能称新信息重规划。",
+      "admission_checks": [
+        "本地lampshade资产",
+        "两箱每件都可发现",
+        "未公开作者清单的统一输入",
+        "NextTo闭环保持"
+      ],
+      "validation": "source_review_only",
+      "benchmark_ready": false,
+      "policy_gain_verified": false
+    },
+    {
+      "task": "boxing_books_up_for_storage",
+      "priority": "较浅的运输对照",
+      "challenge100": true,
+      "definition": "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/boxing_books_up_for_storage/problem0.bddl",
+      "path_base": "workspace_root_parent_of_repository",
+      "sha256": "f9390495b5f55154080f84da11282c8b8610f6eb20461796cd1ae804f17604f7",
+      "structural_mechanisms": [
+        "shared_setup"
+      ],
+      "scene_or_protocol_conditional_mechanisms": [],
+      "goal_summary": "把六本书从两个书架装进一个箱子，原目标没有规定箱子最终位置。",
+      "locally_reasonable_schedule": "固定箱子位置，逐本来回运输。",
+      "lookahead_candidate": "比较搬空箱靠近当前书架与逐本运输的成本。",
+      "countercondition": "书架和箱很近时收益可能消失；不可假设有送入储藏室的目标。",
+      "admission_checks": [
+        "满箱负载能力",
+        "不增加原定义没有的箱子终点"
+      ],
+      "validation": "source_review_only",
+      "benchmark_ready": false,
+      "policy_gain_verified": false
+    },
+    {
+      "task": "setup_a_bar_for_a_cocktail_party",
+      "priority": "较浅的载具对照",
+      "challenge100": true,
+      "definition": "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/setup_a_bar_for_a_cocktail_party/problem0.bddl",
+      "path_base": "workspace_root_parent_of_repository",
+      "sha256": "2b2bbf20d80a9042b0d2d5e0b7021cf788768fd91e65bb45537ebb5bff55eb25",
+      "structural_mechanisms": [
+        "carrier_lifecycle",
+        "shared_setup"
+      ],
+      "scene_or_protocol_conditional_mechanisms": [],
+      "goal_summary": "六块冰入桶，桶和酒瓶/酒杯等位于吧台；没有调酒过程目标。",
+      "locally_reasonable_schedule": "先把空桶送到吧台，再逐块取冰。",
+      "lookahead_candidate": "比较在来源装桶再运输，及源/目的地相近时直接逐件操作。",
+      "countercondition": "受实际冰块资产、源/目标距离、桶搬运保持影响，不预设批量总是更优。",
+      "admission_checks": [
+        "冰块物理/热状态",
+        "桶载荷保持",
+        "任务并不要求开瓶或混饮"
+      ],
+      "validation": "source_review_only",
+      "benchmark_ready": false,
+      "policy_gain_verified": false
+    },
+    {
+      "task": "clean_your_house_after_a_wild_party",
+      "priority": "后续综合候选",
+      "challenge100": false,
+      "definition": "behavior_challenge_sunyujie/BEHAVIOR-1K/bddl3/bddl/activity_definitions/clean_your_house_after_a_wild_party/problem0.bddl",
+      "path_base": "workspace_root_parent_of_repository",
+      "sha256": "6916c430efa6c7d3d0aa1be094d83cb27d3ad7c9d9d72d9f86b1bf9b778e6169",
+      "structural_mechanisms": [
+        "shared_setup"
+      ],
+      "scene_or_protocol_conditional_mechanisms": [
+        "route_tool_tradeoff",
+        "information_revision"
+      ],
+      "goal_summary": "餐具、回收物收纳与多个房间清洁构成完整派对后整理。",
+      "locally_reasonable_schedule": "按最近目标反复取放工具和跨区。",
+      "lookahead_candidate": "比较区域工作包与兼容工具工作包，并在新发现/失败后保留其余义务。",
+      "countercondition": "若一个工具可完成所有清洁，就不能以任务名称声称有强制多工具切换。",
+      "admission_checks": [
+        "逐目标材料工具兼容矩阵",
+        "原生粒子/布料稳定",
+        "剩余浴室访问链",
+        "保留完整失败而不归为策略缺陷"
+      ],
+      "validation": "source_review_only",
+      "benchmark_ready": false,
+      "policy_gain_verified": false
+    }
+  ],
+  "existing_draft": {
+    "path": "task_designs/drafts/clear_dinner_and_store_leftovers",
+    "status": "design_only",
+    "reuse": "完整清台/剩菜分装/托盘归位，可复用；不重复计为本轮新设计"
+  },
+  "new_drafts": [
+    {
+      "task": "table_service_turnover",
+      "mechanisms": [
+        "carrier_lifecycle",
+        "shared_setup"
+      ],
+      "status": "native_bddl_design_only",
+      "official_task_success": null
+    },
+    {
+      "task": "two_zone_woodwork_and_cleanup",
+      "mechanisms": [
+        "shared_setup",
+        "route_tool_tradeoff"
+      ],
+      "status": "native_bddl_design_only",
+      "official_task_success": null
+    }
+  ],
+  "not_claimed": [
+    "physical_admission",
+    "planning_gain",
+    "heldout_generalization",
+    "geometric_access_constraints_from_BDDL_alone",
+    "hidden_information_from_BDDL_alone"
+  ]
+}

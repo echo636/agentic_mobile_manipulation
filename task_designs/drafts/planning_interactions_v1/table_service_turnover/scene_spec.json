@@ -1,0 +1,55 @@
+{
+  "status": "design_only",
+  "scene_constructed": false,
+  "physical_validation": false,
+  "model_run": false,
+  "scoring_protocol": "custom_native_bddl",
+  "official_submission_eligible": false,
+  "task_goal": "为两位新客人换台，并回收旧餐具和归还托盘。",
+  "mechanism": "双向物品流、可选载具、载具最终归位与中途用途的时机。",
+  "goal_semantics": "新餐具送达、旧餐具入水槽不变；托盘可进本实例六只厨房柜中的任一只，所有厨房柜门终态关闭。未增加按序取放要求。",
+  "same_category_identity": "公共指令以初始来源区分备用和待回收餐具；必须提供可辨认外观/公开位置证据，不能让隐藏实例ID成为唯一身份线索。",
+  "assets": "优先复用现有mug/plate/tray/sink/cabinet资产；两柜都需足够容纳托盘；餐桌至少可临时容纳新旧餐具，避免未声明的清台前置。",
+  "scenes": [
+    "厨房与餐厅均真实加载且通路可走",
+    "源台面、目的桌、水槽与两柜从允许RGB逐步可见",
+    "原生OnTop/Inside评分，不使用热饮高层状态机"
+  ],
+  "variants": [
+    {
+      "id": "dev_far_carry",
+      "change": "较长跨房间路径；托盘能够一次稳定承载一组四件；两柜均可放托盘",
+      "hypothesis": "装载/卸载成本可能被较少的跨区移动抵消"
+    },
+    {
+      "id": "dev_near_carry",
+      "change": "保持同一目标和物品，缩短源台面/餐桌路径；载具能力不变",
+      "hypothesis": "集中搬运收益可能缩小或消失；不预设胜者"
+    },
+    {
+      "id": "dev_limited_capacity",
+      "change": "保持BDDL，托盘几何允许较小合法批次，逐件方案始终可行",
+      "hypothesis": "策略需要按实际容量选择批次，不能固定四件一托盘"
+    },
+    {
+      "id": "heldout_layout_reserved",
+      "change": "未来独立对象位置/通路组合",
+      "status": "not_constructed_not_a_holdout_result"
+    }
+  ],
+  "probes": [
+    "每件可发现/可选/抓放",
+    "四件与较小批次真实装载→跨区→卸载→内容保持",
+    "两柜各自接受托盘且关闭后保持",
+    "新旧杯盘身份经过换位仍可从公开证据追踪"
+  ],
+  "controls": [
+    "允许托盘完全不用；仍需满足其终态",
+    "允许先回收或先送新餐具或交错",
+    "不强制清空桌面后才送达",
+    "不把单个旧盘归位当整个回收完成"
+  ],
+  "logical_test_scope": "native BDDL compiler and synthetic predicate fixtures only",
+  "revision": "design_v1.2_all_six_kitchen_cabinets",
+  "cabinet_scope": "All six cabinet-category objects in kitchen_0 of the sampled house_single_floor; fixed identities are private, natural public instruction allows any kitchen cabinet."
+}

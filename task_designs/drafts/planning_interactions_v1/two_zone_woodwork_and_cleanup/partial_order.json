@@ -1,0 +1,21 @@
+{
+  "nodes": [
+    "split_each_log",
+    "store_each_half",
+    "clear_each_floor",
+    "return_tools"
+  ],
+  "unconditional_edges": [
+    [
+      "split_each_log",
+      "store_each_half"
+    ]
+  ],
+  "conditional_dependencies": [
+    {
+      "when": "axe or broom is still needed",
+      "rule": "return location is a terminal obligation; early return may remain legal but require retrieval"
+    }
+  ],
+  "meaning": "Schema edges apply per parent/product only. Do not wait for all logs to be split before storing any half. Sweeping has no cut-before-clean dependency."
+}

@@ -1,0 +1,20 @@
+{
+  "nodes": [
+    "deliver_each_new_dish",
+    "recover_each_original_dish",
+    "store_tray",
+    "close_each_cabinet"
+  ],
+  "unconditional_edges": [],
+  "conditional_dependencies": [
+    {
+      "when": "tray used as carrier",
+      "rule": "unload required dishes before final tray storage"
+    },
+    {
+      "when": "cabinet opened for tray storage",
+      "rule": "close that cabinet after its final use"
+    }
+  ],
+  "meaning": "Author-side state-dependent reasoning, not a timing gate or a mandatory plan. No universal clear-before-deliver edge."
+}

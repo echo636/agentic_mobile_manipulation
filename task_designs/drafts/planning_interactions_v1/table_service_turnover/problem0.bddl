@@ -1,0 +1,69 @@
+; design_v1: native goal definition only; no frozen scene or physical acceptance.
+; Carrier use and action order are optional. Each original item has its own goal.
+(define (problem table_service_turnover-0)
+    (:domain behavior-1k)
+    (:objects
+        mug.n.04_1 mug.n.04_2 mug.n.04_3 mug.n.04_4 - mug.n.04
+        plate.n.04_1 plate.n.04_2 plate.n.04_3 plate.n.04_4 - plate.n.04
+        tray.n.01_1 - tray.n.01
+        countertop.n.01_1 - countertop.n.01
+        breakfast_table.n.01_1 - breakfast_table.n.01
+        sink.n.01_1 - sink.n.01
+        cabinet.n.01_1 cabinet.n.01_2 cabinet.n.01_3 cabinet.n.01_4 cabinet.n.01_5 cabinet.n.01_6 - cabinet.n.01
+        floor.n.01_1 floor.n.01_2 - floor.n.01
+        agent.n.01_1 - agent.n.01
+    )
+    (:init
+        (ontop mug.n.04_1 countertop.n.01_1)
+        (ontop mug.n.04_2 countertop.n.01_1)
+        (ontop plate.n.04_1 countertop.n.01_1)
+        (ontop plate.n.04_2 countertop.n.01_1)
+        (ontop tray.n.01_1 countertop.n.01_1)
+        (ontop mug.n.04_3 breakfast_table.n.01_1)
+        (ontop mug.n.04_4 breakfast_table.n.01_1)
+        (ontop plate.n.04_3 breakfast_table.n.01_1)
+        (ontop plate.n.04_4 breakfast_table.n.01_1)
+        (not (open cabinet.n.01_1))
+        (not (open cabinet.n.01_2))
+        (inroom countertop.n.01_1 kitchen)
+        (inroom sink.n.01_1 kitchen)
+        (inroom cabinet.n.01_1 kitchen)
+        (inroom cabinet.n.01_2 kitchen)
+        (inroom cabinet.n.01_3 kitchen)
+        (inroom cabinet.n.01_4 kitchen)
+        (inroom cabinet.n.01_5 kitchen)
+        (inroom cabinet.n.01_6 kitchen)
+        (inroom breakfast_table.n.01_1 dining_room)
+        (inroom floor.n.01_1 kitchen)
+        (inroom floor.n.01_2 dining_room)
+        (ontop agent.n.01_1 floor.n.01_1)
+    )
+    (:goal
+        (and
+            (or
+                (ontop mug.n.04_1 breakfast_table.n.01_1)
+                (and (ontop mug.n.04_1 plate.n.04_1) (ontop plate.n.04_1 breakfast_table.n.01_1))
+                (and (ontop mug.n.04_1 plate.n.04_2) (ontop plate.n.04_2 breakfast_table.n.01_1))
+            )
+            (or
+                (ontop mug.n.04_2 breakfast_table.n.01_1)
+                (and (ontop mug.n.04_2 plate.n.04_1) (ontop plate.n.04_1 breakfast_table.n.01_1))
+                (and (ontop mug.n.04_2 plate.n.04_2) (ontop plate.n.04_2 breakfast_table.n.01_1))
+            )
+            (ontop plate.n.04_1 breakfast_table.n.01_1)
+            (ontop plate.n.04_2 breakfast_table.n.01_1)
+            (inside mug.n.04_3 sink.n.01_1)
+            (inside mug.n.04_4 sink.n.01_1)
+            (inside plate.n.04_3 sink.n.01_1)
+            (inside plate.n.04_4 sink.n.01_1)
+            (exists
+                (?cabinet.n.01 - cabinet.n.01)
+                (inside tray.n.01_1 ?cabinet.n.01)
+            )
+            (forall
+                (?cabinet.n.01 - cabinet.n.01)
+                (not (open ?cabinet.n.01))
+            )
+        )
+    )
+)

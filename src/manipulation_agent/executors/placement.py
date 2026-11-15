@@ -421,7 +421,7 @@ class CheckedPlacement:
         return candidates + rim_candidates
 
     def _surface_fallback_candidates(self, held, target, point, yaw_degrees=None, payload=(), *,
-                                     roll_degrees=None):
+                                     roll_degrees=None, center_footprint=False):
         """Cover nearby diagonal positions and yaw when the local geometry is crowded.
 
         The selected object, shelf and 20 cm verification neighborhood stay
@@ -446,7 +446,8 @@ class CheckedPlacement:
             if local is not None:
                 local.check()
             for candidate in self._surface_candidates(held, target, point, angle, payload,
-                                                       offsets=offsets, roll_degrees=roll_degrees):
+                                                       offsets=offsets, roll_degrees=roll_degrees,
+                                                       center_footprint=center_footprint):
                 position, orientation = candidate['pose']
                 key = tuple(round(float(v), 5) for v in (*position, *orientation))
                 if key in seen:
@@ -573,8 +574,14 @@ class CheckedPlacement:
         """Choose geometry without moving, stepping, or snapshotting the scene."""
         if point is None:
             raise SkillError('placement_surface_unavailable', 'Select a receiving surface for placement')
+        is_cloth = (
+            getattr(held, 'category', None) in {'rag', 'cloth', 'towel', 'dishtowel'}
+            or getattr(held, 'prim_type', None) == 1
+            or hasattr(getattr(held, 'root_link', None), 'compute_particle_positions')
+        )
         candidates = self._surface_candidates(held, target, point, yaw_degrees, payload,
-                                              roll_degrees=roll_degrees)
+                                              roll_degrees=roll_degrees,
+                                              center_footprint=is_cloth)
         base = self._thin_support_base(held, target, point, payload)
         ranker = self._inside_pose_overlap_ranker(held, [held, *payload], support_objects=(target,),
                                                   support_paths=base)
@@ -590,7 +597,8 @@ class CheckedPlacement:
         candidate = min(candidates, key=score, default=None)
         if candidate is None or candidate['proposal_overlap_score']:
             alternatives = self._surface_fallback_candidates(
-                held, target, point, yaw_degrees, payload, roll_degrees=roll_degrees)
+                held, target, point, yaw_degrees, payload, roll_degrees=roll_degrees,
+                center_footprint=is_cloth)
             candidate = min([*candidates, *alternatives], key=score, default=None)
         if candidate is None:
             raise SkillError('placement_surface_unavailable', 'No upward receiving surface near the selected point')
@@ -754,10 +762,16 @@ class CheckedPlacement:
             normal_z = float(hit['normal'][2]) if hit['hit'] else None
             height_error = abs(float(hit['position'][2] - point[2])) if hit['hit'] else None
             selected_xy_distance = float(self.torch.linalg.norm(probe[:2] - point[:2]))
+            is_cloth = (
+                getattr(held, 'category', None) in {'rag', 'cloth', 'towel', 'dishtowel'}
+                or getattr(held, 'prim_type', None) == 1
+                or hasattr(getattr(held, 'root_link', None), 'compute_particle_positions')
+            )
+            max_gap = .025 if is_cloth else .015
             support_checks = {
                 'support_ray_hits_selected_object': hit.get('rigidBody') in target_paths,
                 'upward_support': normal_z is not None and normal_z >= .9,
-                'bottom_near_support': gap is not None and -.01 <= gap <= .015,
+                'bottom_near_support': gap is not None and -.01 <= gap <= max_gap,
                 'selected_shelf_height': height_error is not None and height_error <= .05,
                 # The supporting patch must be near the click. An object's
                 # globally lowest vertex can be elsewhere (e.g. a tilted log

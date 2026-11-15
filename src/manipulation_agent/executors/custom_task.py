@@ -15,6 +15,7 @@ from ..tasks.long_horizon import TemporalGoalEvaluator
 from ..tasks.custom_tasks import validate_spec
 from ..records import write_json
 from ..runtime.robot_clock import robot_clock_record
+from ..contracts import SkillError
 
 
 def imported_state_with_velocities(source_state):
@@ -109,6 +110,8 @@ class CustomTaskBackend(RGBBackend):
             Path(os.environ['OMNIGIBSON_DATA_PATH'])/'behavior-1k-assets/systems')
         self.timed_processes = TimedProcesses.from_spec(self.custom_spec)
         self._symbolic_process_wait = self.timed_processes is not None
+        from .tool_cleanliness import ToolCleanlinessTracker
+        self.tool_cleanliness = ToolCleanlinessTracker.from_spec(self.custom_spec)
         self.custom_tracker = None; self.custom_sequence = 0
         self._initial_entity_names = None
         self._protected_initial_positions = {}
@@ -449,6 +452,10 @@ class CustomTaskBackend(RGBBackend):
                 slo,shi=support.aabb
                 uv=self.torch.tensor(operation['support_uv'],dtype=pos.dtype,device=pos.device)
                 xy=slo[:2]+uv*(shi[:2]-slo[:2])
+            elif 'uv' in operation:
+                slo,shi=support.aabb
+                uv=self.torch.tensor(operation['uv'],dtype=pos.dtype,device=pos.device)
+                xy=slo[:2]+uv*(shi[:2]-slo[:2])
             else:
                 xy = self.torch.tensor(operation['xy'],dtype=pos.dtype,device=pos.device)
             pos = pos.clone()
@@ -540,6 +547,9 @@ class CustomTaskBackend(RGBBackend):
                 result[key] = bool(self.timed_processes
                                    and self.timed_processes.is_completed(row['process'], row['object']))
                 continue
+            if row['state'] in ('CrossContaminationViolation', 'ToolCleanlinessViolation'):
+                result[key] = bool(self.tool_cleanliness and self.tool_cleanliness.has_violation())
+                continue
             if row['state'] == 'SystemExists':
                 result[key] = row['system'] in self.env.scene.active_systems; continue
             if row['state'] == 'Exists':
@@ -565,7 +575,8 @@ class CustomTaskBackend(RGBBackend):
             if row['state'] in ('PairedOnTop','CountOnTop'):
                 members = [roles[m] for m in row['members'] if roles[m] is not None]
                 supported = [m for m in members if object_states.OnTop in m.states
-                             and m.states[object_states.OnTop].get_value(obj)]
+                             and (bool(m.states[object_states.OnTop].get_value(obj))
+                                  or self._sleeping_on_top_fallback(m, obj))]
                 if row['state']=='CountOnTop':
                     result[key] = len(supported)==row['count']
                 else:
@@ -580,8 +591,59 @@ class CustomTaskBackend(RGBBackend):
                 if system is None:
                     result[key] = False; continue
                 args.append(system)
-            result[key] = bool(obj.states[cls].get_value(*args))
+            val = bool(obj.states[cls].get_value(*args))
+            if not val and row['state'] == 'OnTop' and len(args) == 1:
+                val = self._sleeping_on_top_fallback(obj, args[0])
+            result[key] = val
+        if self.tool_cleanliness is not None:
+            result['cross_contamination_violation'] = self.tool_cleanliness.has_violation()
         return result
+
+    def _sleeping_on_top_fallback(self, obj, target):
+        """Read-only geometric support fallback when PhysX sleeping omits ContactBodies."""
+        if obj is None or target is None or self._get_held() is obj:
+            return False
+        try:
+            contacts = self._placement_contacts(obj, ())
+            robot_paths = {link.prim_path for link in self.robot.links.values()}
+            if any(path in robot_paths for path in contacts):
+                return False
+            speed = float(self.torch.linalg.norm(obj.get_linear_velocity()))
+            angular_speed = float(self.torch.linalg.norm(obj.get_angular_velocity()))
+            if speed > .10 or angular_speed > .5:
+                return False
+            from omnigibson.object_states import VerticalAdjacency
+            if VerticalAdjacency in obj.states:
+                adj = obj.states[VerticalAdjacency].get_value()
+                if target in adj.positive_neighbors:
+                    return False
+            from .surface_geometry import bottom_support_points
+            from omnigibson.utils.sampling_utils import raytest
+            pos = obj.get_position_orientation()[0]
+            probes = self.torch.as_tensor(
+                bottom_support_points(self._collision_vertices(obj)),
+                dtype=pos.dtype, device=pos.device)
+            ignored = [link.prim_path for body in (obj, self.robot) for link in body.links.values()]
+            target_paths = {link.prim_path for link in target.links.values()}
+            is_cloth = (
+                getattr(obj, 'category', None) in {'rag', 'cloth', 'towel', 'dishtowel'}
+                or getattr(obj, 'prim_type', None) == 1
+                or hasattr(getattr(obj, 'root_link', None), 'compute_particle_positions')
+            )
+            max_gap = .025 if is_cloth else .015
+            for probe in probes:
+                start = probe + self.torch.tensor([0., 0., .03], device=pos.device)
+                end = probe - self.torch.tensor([0., 0., .04], device=pos.device)
+                hit = raytest(start, end, ignore_bodies=ignored)
+                if not hit.get('hit') or hit.get('rigidBody') not in target_paths:
+                    continue
+                gap = float(probe[2] - hit['position'][2])
+                normal_z = float(hit['normal'][2])
+                if normal_z >= .9 and -.01 <= gap <= max_gap:
+                    return True
+        except Exception:
+            return False
+        return False
 
     def _motion_positions(self):
         live = {obj.name:obj for obj in self.env.scene.objects}
@@ -606,6 +668,102 @@ class CustomTaskBackend(RGBBackend):
             self.timed_processes.sync_all_states(self)
         if self.custom_tracker is not None: self._check_custom_motion()
 
+    def _is_cleanliness_water_source(self, target):
+        if not getattr(self, 'tool_cleanliness', None):
+            return False
+        roles = self.custom_spec.get('roles', {})
+        name_to_role = {name: role for role, name in roles.items()}
+        target_name = getattr(target, 'name', None)
+        target_role = name_to_role.get(target_name)
+        return target_role in self.tool_cleanliness.water_sources
+
+    def _soak_preconditions(self, target):
+        if self._is_cleanliness_water_source(target):
+            tool = self._get_held()
+            if tool is None:
+                raise SkillError('empty_hand', 'A tool must be carried first')
+            return None, []
+        return super()._soak_preconditions(target)
+
+    def _checked_soak(self, target, max_steps):
+        if self._is_cleanliness_water_source(target):
+            tool = self._get_held()
+            if tool is None:
+                raise SkillError('empty_hand', 'A tool must be carried first')
+            from omnigibson.object_states import Saturated
+            if Saturated in tool.states:
+                sat = tool.states[Saturated]
+                for system in list(tool.scene.system_registry.objects):
+                    try:
+                        if sat.get_value(system):
+                            sat.set_value(system, False)
+                    except Exception:
+                        pass
+            for _ in range(min(6, max_steps)):
+                self._step(self.primitives._empty_action())
+            return {
+                'primitive': 'soak',
+                'implementation': 'cleanliness_water_source_rinse',
+                'water_source': getattr(target, 'name', 'sink'),
+                'postcondition': 'tool_cleanliness_decontaminated',
+            }
+        return super()._checked_soak(target, max_steps)
+
+    def _resolve_interior_surface_target(self, primitive, target):
+        """When wiping an open container whose interior shelf holds the surface state, bind that shelf."""
+        if primitive != 'wipe' or target is None or not hasattr(target, 'states'):
+            return target
+        from omnigibson.object_states import Covered, Open
+        scene = getattr(target, 'scene', None)
+        if scene is None:
+            return target
+        systems = list(scene.system_registry.objects)
+        if Covered in target.states and any(target.states[Covered].get_value(sys) for sys in systems):
+            return target
+        if Open not in target.states:
+            return target
+        roles = self.custom_spec.get('roles', {})
+        pred_objects = {
+            row.get('object')
+            for row in self.custom_spec.get('evaluation', {}).get('predicates', {}).values()
+            if row.get('state') == 'Covered'
+        }
+        if self.tool_cleanliness is not None:
+            pred_objects.update(self.tool_cleanliness.surface_levels.keys())
+        if not pred_objects:
+            return target
+        live = {obj.name: obj for obj in self.env.scene.objects}
+        t_low, t_high = target.aabb
+        candidates = []
+        for role_name in sorted(pred_objects):
+            ent_name = roles.get(role_name)
+            child = live.get(ent_name) if ent_name else None
+            if child is None or child is target or Covered not in child.states:
+                continue
+            c_low, c_high = child.aabb
+            c_center = [0.5 * float(c_low[i] + c_high[i]) for i in range(3)]
+            if all(float(t_low[i]) - 0.08 <= c_center[i] <= float(t_high[i]) + 0.08 for i in range(3)):
+                candidates.append(child)
+        if not candidates:
+            return target
+        if not bool(target.states[Open].get_value()):
+            raise SkillError('container_closed', 'Open the container before wiping its interior surface')
+        for child in candidates:
+            if any(child.states[Covered].get_value(sys) for sys in systems):
+                return child
+        return candidates[0]
+
+    def _surface_action_preconditions(self, primitive, target):
+        target = self._resolve_interior_surface_target(primitive, target)
+        return super()._surface_action_preconditions(primitive, target)
+
+    def _checked_surface_action(self, primitive, target, max_steps):
+        resolved = self._resolve_interior_surface_target(primitive, target)
+        res = super()._checked_surface_action(primitive, resolved, max_steps)
+        if resolved is not target and isinstance(res, dict):
+            res = {**res, 'resolved_surface_object': getattr(resolved, 'name', None)}
+        return res
+
     def execute_visual(self, primitive, target, max_steps, **kwargs):
         if self.custom_tracker is None: return super().execute_visual(primitive,target,max_steps,**kwargs)
         # Transactional executor errors restore the scene. Do not award history
@@ -621,6 +779,10 @@ class CustomTaskBackend(RGBBackend):
                     self, proc_snap, primitive, details=result, error=None)
                 if public_proc is not None:
                     result = {**result, 'public_process': public_proc}
+            if self.tool_cleanliness is not None:
+                public_tc = self._update_tool_cleanliness_after_action(primitive, target, result)
+                if public_tc is not None and isinstance(result, dict):
+                    result = {**result, 'public_tool_cleanliness': public_tc}
         except Exception as exc:
             if self.timed_processes is not None:
                 self.timed_processes.after_action(self, proc_snap, primitive, details=None, error=exc)
@@ -645,6 +807,56 @@ class CustomTaskBackend(RGBBackend):
             write_json(self.output/'custom_goal_trace.json',self.custom_tracker.result(self._predicate_values()))
         return result
 
+    def _update_tool_cleanliness_after_action(self, primitive, target, result):
+        if self.tool_cleanliness is None or primitive not in ('wipe', 'soak', 'grasp'):
+            return None
+        roles = self.custom_spec.get('roles', {})
+        name_to_role = {name: role for role, name in roles.items()}
+        held = self._get_held()
+        held_role = name_to_role.get(getattr(held, 'name', None)) if held is not None else None
+        if held_role not in self.tool_cleanliness.tools:
+            return None
+        if primitive == 'grasp':
+            return self.tool_cleanliness.public_receipt('grasp')
+
+        target_role = None
+        if isinstance(result, dict) and result.get('resolved_surface_object'):
+            target_role = name_to_role.get(result['resolved_surface_object'], result['resolved_surface_object'])
+        grounding = result.get('private_grounding', {}) if isinstance(result, dict) else {}
+        selected_prim = grounding.get('selected_object_prim')
+        selected_obj = grounding.get('selected_object')
+
+        if target_role is None and isinstance(target, dict) and target.get('role'):
+            target_role = target['role']
+        elif target_role is None and selected_obj is not None and hasattr(selected_obj, 'name'):
+            target_role = name_to_role.get(selected_obj.name)
+        elif target_role is None and selected_prim:
+            for obj in self.env.scene.objects:
+                if str(obj.prim_path) == str(selected_prim) or str(selected_prim).startswith(str(obj.prim_path) + '/'):
+                    target_role = name_to_role.get(obj.name)
+                    if target_role:
+                        break
+
+        if target_role is None and isinstance(result, dict) and result.get('water_source'):
+            target_role = name_to_role.get(result['water_source'], result['water_source'])
+
+        if target_role is None and isinstance(target, str):
+            target_role = name_to_role.get(target, target)
+
+        if primitive == 'wipe':
+            compliant = None
+            if target_role is not None:
+                level = self.tool_cleanliness.get_surface_level(target_role)
+                if level is not None:
+                    compliant = self.tool_cleanliness.record_wipe(level, surface=target_role)
+            return self.tool_cleanliness.public_receipt('wipe', compliant=compliant)
+        elif primitive == 'soak':
+            was_water = False
+            if target_role is not None:
+                was_water = self.tool_cleanliness.record_soak(target_role)
+            return self.tool_cleanliness.public_receipt('soak_reset' if was_water else 'soak')
+        return None
+
     def evaluate(self):
         values = self._predicate_values()
         result = self.custom_tracker.result(values)
@@ -659,6 +871,8 @@ class CustomTaskBackend(RGBBackend):
         result.update(robot_clock_record(self))
         if self.timed_processes is not None:
             result['timed_processes'] = self.timed_processes.summary(self)
+        if self.tool_cleanliness is not None:
+            result['tool_cleanliness'] = self.tool_cleanliness.to_dict()
         return result
 
     def provenance(self):
@@ -670,4 +884,7 @@ class CustomTaskBackend(RGBBackend):
             result['recipe_particle_output_policy'] = self._recipe_particle_output_policy.describe()
         if self.timed_processes is not None:
             result['timed_processes'] = TIMED_PROCESSES_VERSION
+        if self.tool_cleanliness is not None:
+            from .tool_cleanliness import VERSION as TOOL_CLEANLINESS_VERSION
+            result['tool_cleanliness'] = TOOL_CLEANLINESS_VERSION
         return result

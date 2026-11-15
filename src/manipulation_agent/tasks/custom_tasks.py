@@ -50,7 +50,9 @@ def validate_spec(spec, *, spec_path=None, require_frozen=False):
                            for v in scale)):
                 raise ValueError('Imported asset scale must contain three finite positive numbers')
     from ..executors.timed_processes import validate_timed_processes
+    from ..executors.tool_cleanliness import validate_tool_cleanliness
     validate_timed_processes(spec)
+    validate_tool_cleanliness(spec)
     proc_items = {row['id']: set(row['items']) for row in spec.get('timed_processes', [])}
     evaluation = spec['evaluation']
     TemporalGoalEvaluator(evaluation)

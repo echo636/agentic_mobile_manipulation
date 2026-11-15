@@ -12,3 +12,6 @@ runs/*
 # Keep them untracked if an output directory is created here by mistake.
 /reports/
 /operations/
+
+# Large simulation scene snapshots belong in ../experiments/**/inputs/, never in Git.
+task_designs/**/initial_scene.json

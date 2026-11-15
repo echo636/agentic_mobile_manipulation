@@ -1,0 +1,664 @@
+#!/usr/bin/env python3
+"""Generate recipe.json for custom task `tabletop_buffer_nonmonotonic_swap` (Benchmark side).
+
+Task: 有限缓冲区非单调换位重排与占满台面腾挪擦拭交换
+- 规划难点：无计时器纯空间路由 + 有限中转暂存 (K=2) + 双向移动载具托盘 (C=2) + 腾空擦拭守卫 (wipe_only_when_empty) + 洁净放物守卫 (place_only_when_clean).
+- 基础场景：`spraying_for_bugs` instance 301, seed 0 (`house_double_floor_lower`).
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import sys
+
+HERE = Path(__file__).resolve().parent
+REPO_ROOT = HERE.parents[2]
+sys.path.insert(0, str(REPO_ROOT / 'src'))
+
+from manipulation_agent.tasks.custom_tasks import validate_spec
+from manipulation_agent.references.full_workflow_reference import validate_workflow_plan
+
+
+def build_recipe() -> dict:
+    req1_text = (
+        'Wipe all dust off the kitchen island using the cleaning cloth and place the bowl and teapot from the '
+        'dining table onto the clean kitchen island. Rules: the kitchen island must have no tableware items on '
+        'it when wiped, and must be wiped clean before receiving the bowl or teapot.'
+    )
+    req2_text = (
+        'Wipe all dust off the dining table using the cleaning cloth and deliver the ketchup bottle and coffee '
+        'mug from the kitchen island to the clean dining table. Rules: the dining table must have no tableware '
+        'items on it when wiped, and must be wiped clean before receiving the ketchup bottle or coffee mug.'
+    )
+    req3_text = (
+        'Ensure the small coffee table beside the kitchen island holds no tableware items at completion, return '
+        'the cleaning cloth to the kitchen sink, and leave the wooden tray resting on the kitchen island, small '
+        'coffee table, or dining table.'
+    )
+    req4_text = 'Finish with no object held.'
+
+    spec = {
+        'schema_version': 3,
+        'id': 'tabletop_buffer_nonmonotonic_swap',
+        'instance_id': 'tabletop_buffer_nonmonotonic_swap_seed0_r1',
+        'status': 'complete_recipe_physics_pending',
+        'benchmark_ready': False,
+        'official_submission_eligible': False,
+        'base': {
+            'task': 'spraying_for_bugs',
+            'instance': 301,
+            'seed': 0,
+        },
+        'roles': {
+            # Floor meshes connecting kitchen, corridor, and living room
+            'kitchen_floor': 'floors_zqjkvm_0',
+            'living_floor': 'floors_ulujpr_0',
+            'corridor_floor': 'floors_xorxro_0',
+            # Fixed workstations & stations
+            'kitchen_island': 'bar_byvbuc_0',
+            'island_cooktop': 'burner_mdanhg_0',
+            'side_bar': 'bar_egwapq_0',
+            'sink_counter': 'countertop_tpuwys_0',
+            'dining_table': 'tbns_dining_table',
+            'staging_table': 'tbns_staging_table',
+            'sink': 'drop_in_sink_lkklqs_0',
+            # Tool and carrier
+            'rag': 'tbns_rag',
+            'tray': 'tbns_tray',
+            # Tableware items A (initial at dining_table)
+            'bowl': 'tbns_bowl',
+            'teapot': 'tbns_teapot',
+            # Tableware items B (initial at kitchen_island)
+            'ketchup': 'tbns_ketchup',
+            'mug': 'tbns_mug',
+        },
+        'scene_exclusions': [
+            'car_ssxsje_0',
+            'standing_mirror_wwkuuf_0',
+            'coffee_table_koagbh_0',
+            'straight_chair_hgunnf_0',
+            'straight_chair_zdhnyg_0',
+        ],
+        'construction_asset_scales': [],
+        'asset_imports': [],
+        'native_assets': [
+            {
+                'name': 'tbns_dining_table',
+                'category': 'breakfast_table',
+                'model': 'xftrki',
+                'usd_sha256': 'fd37bc0e41c04e8844b3705d814e9a2b9701bfd30bc64b120480c30b18c65742',
+                'prim_type': 0,
+                'fixed_base': True,
+                'position': [3.50, 5.30, 0.63],
+                'orientation': [0.0, 0.0, 0.0, 1.0],
+                'scale': [1.00, 1.00, 1.00],
+            },
+            {
+                'name': 'tbns_staging_table',
+                'category': 'coffee_table',
+                'model': 'koagbh',
+                'usd_sha256': '7623402e6727766739eecf92bd721d6291c9f8006325bf65b86bfc8d6dd3c81b',
+                'prim_type': 0,
+                'fixed_base': True,
+                'position': [5.80, 1.05, 0.45],
+                'orientation': [0.0, 0.0, 0.0, 1.0],
+                'scale': [0.65, 1.15, 1.80],
+            },
+            {
+                'name': 'tbns_tray',
+                'category': 'tray',
+                'model': 'coqeme',
+                'usd_sha256': 'f742b94604395437e931d8424c2803681c6331c6c983524d2c696cb0faec0ccd',
+                'prim_type': 0,
+                'position': [110.0, 50.0, 2.0],
+                'orientation': [0.0, 0.0, 0.0, 1.0],
+                'scale': [3.80, 2.43, 1.80],
+            },
+            {
+                'name': 'tbns_rag',
+                'category': 'rag',
+                'model': 'oocmed',
+                'usd_sha256': '732677fea4ca1e96c8b71f843249e2b5740287542aae48245871d7a6daeb7068',
+                'prim_type': 0,
+                'position': [113.0, 50.0, 2.0],
+                'orientation': [0.0, 0.0, 0.0, 1.0],
+                'scale': [1.00, 1.00, 10.0],
+            },
+            {
+                'name': 'tbns_bowl',
+                'category': 'bowl',
+                'model': 'ajzltc',
+                'usd_sha256': '9b6bb0e23e537cccaa2bc372997bceb1d0e7cc4f6a520119de03ea75b1a739ad',
+                'prim_type': 0,
+                'position': [116.0, 50.0, 2.0],
+                'orientation': [0.0, 0.0, 0.0, 1.0],
+                'scale': [1.30, 1.30, 1.30],
+            },
+            {
+                'name': 'tbns_teapot',
+                'category': 'teapot',
+                'model': 'foaehs',
+                'usd_sha256': '6e7f419e4834c35fc498687caf44146032ba8965f96bcb3db7ea9843165b8501',
+                'prim_type': 0,
+                'position': [119.0, 50.0, 2.0],
+                'orientation': [0.0, 0.0, 0.0, 1.0],
+                'scale': [1.00, 1.00, 1.00],
+            },
+            {
+                'name': 'tbns_ketchup',
+                'category': 'bottle_of_catsup',
+                'model': 'bcqfxb',
+                'usd_sha256': '0a1041e0d3511073a1f32bd3c91bcc1fb145a3bea7433e4649ff9d98a60ad404',
+                'prim_type': 0,
+                'position': [122.0, 50.0, 2.0],
+                'orientation': [0.0, 0.0, 0.0, 1.0],
+                'scale': [1.00, 1.00, 1.00],
+            },
+            {
+                'name': 'tbns_mug',
+                'category': 'mug',
+                'model': 'ppdqbj',
+                'usd_sha256': '13d62119f1ef0d3e44f105335d2a967b98e727f2ebf02d5e6524035767b45efa',
+                'prim_type': 0,
+                'position': [125.0, 50.0, 2.0],
+                'orientation': [0.0, 0.0, 0.0, 1.0],
+                'scale': [1.00, 1.00, 1.00],
+            },
+        ],
+        'fixtures': [],
+        'initial_layout': [
+            {'object': 'rag', 'target': 'sink', 'place_on_support': True, 'xy': [8.11, 0.26]},
+            {'object': 'tray', 'target': 'staging_table', 'place_on_support': True, 'xy': [5.80, 1.55]},
+            {'object': 'ketchup', 'target': 'kitchen_island', 'place_on_support': True, 'xy': [7.45, -0.68]},
+            {'object': 'mug', 'target': 'kitchen_island', 'place_on_support': True, 'xy': [7.70, -0.68]},
+            {'object': 'bowl', 'target': 'dining_table', 'place_on_support': True, 'xy': [3.30, 4.90]},
+            {'object': 'teapot', 'target': 'dining_table', 'place_on_support': True, 'xy': [3.70, 4.90]},
+            {'object': 'kitchen_island', 'state': 'Covered', 'value': True, 'max_sampling_attempts': 3, 'settle_steps': 1, 'system': 'dust'},
+            {'object': 'dining_table', 'state': 'Covered', 'value': True, 'max_sampling_attempts': 3, 'settle_steps': 1, 'system': 'dust'},
+        ],
+        'initial_assertions': {
+            'initial_island_dust': 'island_dust',
+            'initial_dining_dust': 'dining_dust',
+            'initial_ketchup_on_island': 'ketchup_on_island',
+            'initial_mug_on_island': 'mug_on_island',
+            'initial_bowl_on_dining': 'bowl_on_dining',
+            'initial_teapot_on_dining': 'teapot_on_dining',
+            'initial_rag_on_sink': 'rag_on_sink',
+            'initial_tray_on_staging': 'tray_on_staging',
+            'hand_empty': 'hand_empty',
+        },
+        'future_roles': [],
+        'replacements': [],
+        'public_instruction': (
+            'Swap the tableware items between the dusty kitchen island (ketchup bottle and coffee mug) and the '
+            'dusty dining table (bowl and teapot): each surface must hold no tableware items when wiped with the '
+            'cleaning cloth, and must be wiped clean before receiving the incoming items; leave the nearby small '
+            'coffee table empty of tableware at completion, return the cleaning cloth to the kitchen sink, leave '
+            'the wooden tray on a table or counter, and finish empty-handed.'
+        ),
+        'public_context': [req1_text, req2_text, req3_text, req4_text],
+        'requirements': [
+            {
+                'id': 'kitchen_island_swap_and_clean',
+                'text': req1_text,
+                'terminal': ['kitchen_island_swapped', 'kitchen_island_clean'],
+                'milestones': ['kitchen_island_cleared', 'kitchen_island_clean_milestone'],
+                'constraints': [
+                    'wipe_island_only_when_empty',
+                    'place_island_only_when_clean_bowl',
+                    'place_island_only_when_clean_teapot',
+                    'place_cooktop_only_when_clean_bowl',
+                    'place_cooktop_only_when_clean_teapot',
+                ],
+            },
+            {
+                'id': 'dining_table_swap_and_clean',
+                'text': req2_text,
+                'terminal': ['dining_table_swapped', 'dining_table_clean'],
+                'milestones': ['dining_table_cleared', 'dining_table_clean_milestone'],
+                'constraints': [
+                    'wipe_dining_only_when_empty',
+                    'place_dining_only_when_clean_ketchup',
+                    'place_dining_only_when_clean_mug',
+                ],
+            },
+            {
+                'id': 'buffer_restoration_and_tools',
+                'text': req3_text,
+                'terminal': ['staging_buffer_restored', 'tools_and_carrier_safe'],
+                'milestones': [],
+                'constraints': [],
+            },
+            {
+                'id': 'hand_empty',
+                'text': req4_text,
+                'terminal': ['hand_empty'],
+                'milestones': [],
+                'constraints': [],
+            },
+        ],
+        'evaluation': {
+            'predicates': {
+                'island_dust': {'object': 'kitchen_island', 'state': 'Covered', 'system': 'dust'},
+                'dining_dust': {'object': 'dining_table', 'state': 'Covered', 'system': 'dust'},
+                'ketchup_on_island': {'object': 'ketchup', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'mug_on_island': {'object': 'mug', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'bowl_on_island': {'object': 'bowl', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'teapot_on_island': {'object': 'teapot', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'ketchup_on_cooktop': {'object': 'ketchup', 'state': 'OnTop', 'target': 'island_cooktop'},
+                'mug_on_cooktop': {'object': 'mug', 'state': 'OnTop', 'target': 'island_cooktop'},
+                'bowl_on_cooktop': {'object': 'bowl', 'state': 'OnTop', 'target': 'island_cooktop'},
+                'teapot_on_cooktop': {'object': 'teapot', 'state': 'OnTop', 'target': 'island_cooktop'},
+                'bowl_on_dining': {'object': 'bowl', 'state': 'OnTop', 'target': 'dining_table'},
+                'teapot_on_dining': {'object': 'teapot', 'state': 'OnTop', 'target': 'dining_table'},
+                'ketchup_on_dining': {'object': 'ketchup', 'state': 'OnTop', 'target': 'dining_table'},
+                'mug_on_dining': {'object': 'mug', 'state': 'OnTop', 'target': 'dining_table'},
+                'ketchup_on_staging': {'object': 'ketchup', 'state': 'OnTop', 'target': 'staging_table'},
+                'mug_on_staging': {'object': 'mug', 'state': 'OnTop', 'target': 'staging_table'},
+                'bowl_on_staging': {'object': 'bowl', 'state': 'OnTop', 'target': 'staging_table'},
+                'teapot_on_staging': {'object': 'teapot', 'state': 'OnTop', 'target': 'staging_table'},
+                'ketchup_on_tray': {'object': 'ketchup', 'state': 'OnTop', 'target': 'tray'},
+                'mug_on_tray': {'object': 'mug', 'state': 'OnTop', 'target': 'tray'},
+                'bowl_on_tray': {'object': 'bowl', 'state': 'OnTop', 'target': 'tray'},
+                'teapot_on_tray': {'object': 'teapot', 'state': 'OnTop', 'target': 'tray'},
+                'rag_on_tray': {'object': 'rag', 'state': 'OnTop', 'target': 'tray'},
+                'rag_on_sink': {'object': 'rag', 'state': 'OnTop', 'target': 'sink'},
+                'rag_inside_sink': {'object': 'rag', 'state': 'Inside', 'target': 'sink'},
+                'rag_on_sink_counter': {'object': 'rag', 'state': 'OnTop', 'target': 'sink_counter'},
+                'rag_on_side_bar': {'object': 'rag', 'state': 'OnTop', 'target': 'side_bar'},
+                'tray_on_island': {'object': 'tray', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'tray_on_cooktop': {'object': 'tray', 'state': 'OnTop', 'target': 'island_cooktop'},
+                'tray_on_side_bar': {'object': 'tray', 'state': 'OnTop', 'target': 'side_bar'},
+                'tray_on_staging': {'object': 'tray', 'state': 'OnTop', 'target': 'staging_table'},
+                'tray_on_dining': {'object': 'tray', 'state': 'OnTop', 'target': 'dining_table'},
+                # Canonical ontop aliases for FullWorkflowReference and standard predicates
+                'ketchup_ontop_island': {'object': 'ketchup', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'mug_ontop_island': {'object': 'mug', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'bowl_ontop_island': {'object': 'bowl', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'teapot_ontop_island': {'object': 'teapot', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'bowl_ontop_dining': {'object': 'bowl', 'state': 'OnTop', 'target': 'dining_table'},
+                'teapot_ontop_dining': {'object': 'teapot', 'state': 'OnTop', 'target': 'dining_table'},
+                'ketchup_ontop_dining': {'object': 'ketchup', 'state': 'OnTop', 'target': 'dining_table'},
+                'mug_ontop_dining': {'object': 'mug', 'state': 'OnTop', 'target': 'dining_table'},
+                'ketchup_ontop_staging': {'object': 'ketchup', 'state': 'OnTop', 'target': 'staging_table'},
+                'mug_ontop_staging': {'object': 'mug', 'state': 'OnTop', 'target': 'staging_table'},
+                'bowl_ontop_staging': {'object': 'bowl', 'state': 'OnTop', 'target': 'staging_table'},
+                'teapot_ontop_staging': {'object': 'teapot', 'state': 'OnTop', 'target': 'staging_table'},
+                'ketchup_ontop_tray': {'object': 'ketchup', 'state': 'OnTop', 'target': 'tray'},
+                'mug_ontop_tray': {'object': 'mug', 'state': 'OnTop', 'target': 'tray'},
+                'bowl_ontop_tray': {'object': 'bowl', 'state': 'OnTop', 'target': 'tray'},
+                'teapot_ontop_tray': {'object': 'teapot', 'state': 'OnTop', 'target': 'tray'},
+                'rag_ontop_tray': {'object': 'rag', 'state': 'OnTop', 'target': 'tray'},
+                'rag_ontop_sink': {'object': 'rag', 'state': 'OnTop', 'target': 'sink'},
+                'tray_ontop_island': {'object': 'tray', 'state': 'OnTop', 'target': 'kitchen_island'},
+                'tray_ontop_staging': {'object': 'tray', 'state': 'OnTop', 'target': 'staging_table'},
+                'tray_ontop_dining': {'object': 'tray', 'state': 'OnTop', 'target': 'dining_table'},
+                'hand_empty': {'object': 'kitchen_island', 'state': 'HandEmpty'},
+            },
+            'milestones': {
+                'dining_table_cleared': {
+                    'when': {'all': [{'not': 'bowl_on_dining'}, {'not': 'teapot_on_dining'}]},
+                    'after': [],
+                },
+                'dining_table_clean_milestone': {
+                    'when': {'not': 'dining_dust'},
+                    'after': ['dining_table_cleared'],
+                },
+                'kitchen_island_cleared': {
+                    'when': {
+                        'all': [
+                            {'not': 'ketchup_on_island'},
+                            {'not': 'mug_on_island'},
+                            {'not': 'ketchup_on_cooktop'},
+                            {'not': 'mug_on_cooktop'},
+                        ]
+                    },
+                    'after': [],
+                },
+                'kitchen_island_clean_milestone': {
+                    'when': {'not': 'island_dust'},
+                    'after': ['kitchen_island_cleared'],
+                },
+            },
+            'terminal': {
+                'kitchen_island_swapped': {
+                    'all': [
+                        {
+                            'any': [
+                                'bowl_on_island',
+                                'bowl_on_cooktop',
+                                {'all': ['bowl_on_tray', {'any': ['tray_on_island', 'tray_on_cooktop']}]},
+                            ]
+                        },
+                        {
+                            'any': [
+                                'teapot_on_island',
+                                'teapot_on_cooktop',
+                                {'all': ['teapot_on_tray', {'any': ['tray_on_island', 'tray_on_cooktop']}]},
+                            ]
+                        },
+                    ]
+                },
+                'kitchen_island_clean': {'not': 'island_dust'},
+                'dining_table_swapped': {
+                    'any': [
+                        {'all': ['ketchup_on_dining', 'mug_on_dining']},
+                        {'all': ['ketchup_on_tray', 'mug_on_tray', 'tray_on_dining']},
+                        {'all': ['ketchup_on_dining', 'mug_on_tray', 'tray_on_dining']},
+                        {'all': ['ketchup_on_tray', 'mug_on_dining', 'tray_on_dining']},
+                    ]
+                },
+                'dining_table_clean': {'not': 'dining_dust'},
+                'staging_buffer_restored': {
+                    'all': [
+                        {'not': 'ketchup_on_staging'},
+                        {'not': 'mug_on_staging'},
+                        {'not': 'bowl_on_staging'},
+                        {'not': 'teapot_on_staging'},
+                    ]
+                },
+                'tools_and_carrier_safe': {
+                    'all': [
+                        {'any': ['rag_on_sink', 'rag_inside_sink', 'rag_on_sink_counter', 'rag_on_side_bar']},
+                        {
+                            'any': [
+                                'tray_on_island',
+                                'tray_on_cooktop',
+                                'tray_on_side_bar',
+                                'tray_on_staging',
+                                'tray_on_dining',
+                            ]
+                        },
+                    ]
+                },
+                'hand_empty': 'hand_empty',
+            },
+            'transition_guards': [
+                {
+                    'id': 'wipe_island_only_when_empty',
+                    'predicate': 'island_dust',
+                    'from_value': True,
+                    'to_value': False,
+                    'require': {
+                        'all': [
+                            {'not': 'ketchup_on_island'},
+                            {'not': 'mug_on_island'},
+                            {'not': 'bowl_on_island'},
+                            {'not': 'teapot_on_island'},
+                            {'not': 'ketchup_on_cooktop'},
+                            {'not': 'mug_on_cooktop'},
+                            {'not': 'bowl_on_cooktop'},
+                            {'not': 'teapot_on_cooktop'},
+                        ]
+                    },
+                },
+                {
+                    'id': 'wipe_dining_only_when_empty',
+                    'predicate': 'dining_dust',
+                    'from_value': True,
+                    'to_value': False,
+                    'require': {
+                        'all': [
+                            {'not': 'bowl_on_dining'},
+                            {'not': 'teapot_on_dining'},
+                            {'not': 'ketchup_on_dining'},
+                            {'not': 'mug_on_dining'},
+                        ]
+                    },
+                },
+                {
+                    'id': 'place_island_only_when_clean_bowl',
+                    'predicate': 'bowl_on_island',
+                    'from_value': False,
+                    'to_value': True,
+                    'require': {'not': 'island_dust'},
+                },
+                {
+                    'id': 'place_island_only_when_clean_teapot',
+                    'predicate': 'teapot_on_island',
+                    'from_value': False,
+                    'to_value': True,
+                    'require': {'not': 'island_dust'},
+                },
+                {
+                    'id': 'place_cooktop_only_when_clean_bowl',
+                    'predicate': 'bowl_on_cooktop',
+                    'from_value': False,
+                    'to_value': True,
+                    'require': {'not': 'island_dust'},
+                },
+                {
+                    'id': 'place_cooktop_only_when_clean_teapot',
+                    'predicate': 'teapot_on_cooktop',
+                    'from_value': False,
+                    'to_value': True,
+                    'require': {'not': 'island_dust'},
+                },
+                {
+                    'id': 'place_dining_only_when_clean_ketchup',
+                    'predicate': 'ketchup_on_dining',
+                    'from_value': False,
+                    'to_value': True,
+                    'require': {'not': 'dining_dust'},
+                },
+                {
+                    'id': 'place_dining_only_when_clean_mug',
+                    'predicate': 'mug_on_dining',
+                    'from_value': False,
+                    'to_value': True,
+                    'require': {'not': 'dining_dust'},
+                },
+            ],
+            'score_type': 'custom_joint_terminal_and_public_history_v2',
+        },
+        'acceptance_cases': {
+            'reference_orders': [
+                'optimal_carrier_tour',
+                'habit_sequential',
+            ],
+            'physical_negative_cases': [
+                'omit_ws1_wipe',
+                'omit_buffer_restore',
+                'wipe_while_occupied',
+                'omit_ws2_wipe',
+            ],
+            'fresh_restore_repetitions': 2,
+            'max_reference_action_attempts': 300,
+        },
+        'reference_plan': {
+            'kind': 'full_workflow',
+            'allow_strategy_variants': True,
+            'phases': {
+                # --- OPTIMAL CARRIER TOUR PHASES ---
+                'fetch_rag_to_tray': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'grasp', 'role': 'rag'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 1.10, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.50, 0.50]},
+                        {'primitive': 'grasp', 'role': 'tray'},
+                    ],
+                    'after': [],
+                },
+                'navigate_to_dining_and_place_tray': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'living_floor', 'point': [3.50, 4.00, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'living_floor', 'xy': [2.60, 4.20]},
+                    ],
+                    'after': ['fetch_rag_to_tray'],
+                },
+                'clear_dining_to_tray': {
+                    'actions': [
+                        {'primitive': 'grasp', 'role': 'bowl'},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.27, 0.27]},
+                        {'primitive': 'grasp', 'role': 'teapot'},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.73, 0.27]},
+                    ],
+                    'after': ['navigate_to_dining_and_place_tray'],
+                },
+                'wipe_dining_table': {
+                    'actions': [
+                        {'primitive': 'grasp', 'role': 'rag', 'approach_role': 'tray'},
+                        {'primitive': 'wipe', 'role': 'dining_table'},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.50, 0.73]},
+                        {'primitive': 'grasp', 'role': 'tray'},
+                    ],
+                    'after': ['clear_dining_to_tray'],
+                },
+                'stage_dining_and_clear_island': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 1.10, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'staging_table', 'xy': [5.80, 1.55]},
+                        {'primitive': 'grasp', 'role': 'bowl', 'approach_role': 'tray'},
+                        {'primitive': 'place_on_top', 'role': 'staging_table', 'xy': [5.80, 0.45]},
+                        {'primitive': 'grasp', 'role': 'teapot', 'approach_role': 'tray'},
+                        {'primitive': 'place_on_top', 'role': 'staging_table', 'xy': [5.80, 0.85]},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'grasp', 'role': 'ketchup'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 1.10, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.27, 0.27]},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'grasp', 'role': 'mug'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 1.10, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'tray', 'uv': [0.73, 0.27]},
+                    ],
+                    'after': ['wipe_dining_table'],
+                },
+                'wipe_kitchen_island': {
+                    'actions': [
+                        {'primitive': 'grasp', 'role': 'rag', 'approach_role': 'tray'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'wipe', 'role': 'kitchen_island'},
+                        {'primitive': 'place_inside', 'role': 'sink'},
+                    ],
+                    'after': ['stage_dining_and_clear_island'],
+                },
+                'restore_staging_to_island': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 0.60, 0.02]},
+                        {'primitive': 'grasp', 'role': 'bowl'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'kitchen_island', 'xy': [7.45, -0.68]},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 0.60, 0.02]},
+                        {'primitive': 'grasp', 'role': 'teapot'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'kitchen_island', 'xy': [7.70, -0.68]},
+                    ],
+                    'after': ['wipe_kitchen_island'],
+                },
+                'final_delivery_to_dining': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 1.10, 0.02]},
+                        {'primitive': 'grasp', 'role': 'tray'},
+                        {'primitive': 'navigate_to', 'role': 'living_floor', 'point': [3.50, 4.00, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'dining_table', 'xy': [3.50, 4.90]},
+                    ],
+                    'after': ['restore_staging_to_island'],
+                },
+                # --- HABIT SEQUENTIAL PHASES (Single-item reactive passes, zero tray use) ---
+                'habit_stage_b_items_and_wipe_island': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'grasp', 'role': 'ketchup'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 0.60, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'staging_table', 'xy': [5.80, 0.45]},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'grasp', 'role': 'mug'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 0.60, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'staging_table', 'xy': [5.80, 0.85]},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'grasp', 'role': 'rag'},
+                        {'primitive': 'wipe', 'role': 'kitchen_island'},
+                        {'primitive': 'place_inside', 'role': 'sink'},
+                    ],
+                    'after': [],
+                },
+                'habit_transfer_a_items_to_island': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'living_floor', 'point': [3.50, 4.00, 0.02]},
+                        {'primitive': 'grasp', 'role': 'bowl'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'kitchen_island', 'xy': [7.45, -0.68]},
+                        {'primitive': 'navigate_to', 'role': 'living_floor', 'point': [3.50, 4.00, 0.02]},
+                        {'primitive': 'grasp', 'role': 'teapot'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'kitchen_island', 'xy': [7.70, -0.68]},
+                    ],
+                    'after': ['habit_stage_b_items_and_wipe_island'],
+                },
+                'habit_wipe_dining_table': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'grasp', 'role': 'rag'},
+                        {'primitive': 'navigate_to', 'role': 'living_floor', 'point': [3.50, 4.00, 0.02]},
+                        {'primitive': 'wipe', 'role': 'dining_table'},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [7.20, 0.50, 0.02]},
+                        {'primitive': 'place_inside', 'role': 'sink'},
+                    ],
+                    'after': ['habit_transfer_a_items_to_island'],
+                },
+                'habit_transfer_b_from_staging_to_dining': {
+                    'actions': [
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 0.60, 0.02]},
+                        {'primitive': 'grasp', 'role': 'ketchup'},
+                        {'primitive': 'navigate_to', 'role': 'living_floor', 'point': [3.50, 4.00, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'dining_table', 'xy': [3.30, 4.90]},
+                        {'primitive': 'navigate_to', 'role': 'kitchen_floor', 'point': [6.50, 0.60, 0.02]},
+                        {'primitive': 'grasp', 'role': 'mug'},
+                        {'primitive': 'navigate_to', 'role': 'living_floor', 'point': [3.50, 4.00, 0.02]},
+                        {'primitive': 'place_on_top', 'role': 'dining_table', 'xy': [3.70, 4.90]},
+                    ],
+                    'after': ['habit_wipe_dining_table'],
+                },
+            },
+            'orders': {
+                'optimal_carrier_tour': [
+                    'fetch_rag_to_tray',
+                    'navigate_to_dining_and_place_tray',
+                    'clear_dining_to_tray',
+                    'wipe_dining_table',
+                    'stage_dining_and_clear_island',
+                    'wipe_kitchen_island',
+                    'restore_staging_to_island',
+                    'final_delivery_to_dining',
+                ],
+                'habit_sequential': [
+                    'habit_stage_b_items_and_wipe_island',
+                    'habit_transfer_a_items_to_island',
+                    'habit_wipe_dining_table',
+                    'habit_transfer_b_from_staging_to_dining',
+                ],
+            },
+            'negative_omissions': {
+                'omit_ws1_wipe': 'wipe_kitchen_island',
+                'omit_buffer_restore': 'restore_staging_to_island',
+                'wipe_while_occupied': 'clear_dining_to_tray',
+                'omit_ws2_wipe': 'wipe_dining_table',
+            },
+        },
+        'robot_start': {
+            'position': [6.80, 0.60, 0.02],
+            'orientation': [0.0, 0.0, 0.0, 1.0],
+        },
+        'settle_steps': 30,
+    }
+    return spec
+
+
+def main() -> None:
+    spec = build_recipe()
+    val = validate_spec(spec)
+    w_val = validate_workflow_plan(spec)
+
+    # Output to task_designs (frozen benchmark inputs live in their own versioned folders)
+    out_local = HERE / 'recipe.json'
+    out_local.parent.mkdir(parents=True, exist_ok=True)
+    out_local.write_text(json.dumps(spec, ensure_ascii=False, indent=2) + '\n')
+    print('WROTE_LOCAL:', out_local)
+
+    print('VALIDATE_SPEC:', json.dumps(val, indent=2))
+    print('VALIDATE_WORKFLOW_PLAN:', json.dumps(w_val, indent=2))
+
+
+if __name__ == '__main__':
+    main()

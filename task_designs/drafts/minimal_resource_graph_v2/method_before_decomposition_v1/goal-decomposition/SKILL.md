@@ -1,0 +1,44 @@
+---
+name: goal-decomposition
+description: Decompose task outcomes, schedule efficient batches across ready goals, and track item coverage and evidence.
+---
+# Plan from the end state down to executable goals
+
+Before fixing the dependency graph for processing and delivery, compare feasible processing locations and the material form carried along each route. A final requirement about processed items at a destination leaves open whether inputs or outputs travel there. Consider complete methods that move inputs before processing and methods that process first and move outputs, where the visible supports and tool capabilities allow them.
+
+For each method, count the items or supported assemblies that require separate handling in their transported form. Include getting and returning tools or carriers, loading and unloading, temporary tool staging, and all final placements. Compare the resulting handoffs and trips, rather than only the next pickup or the transport of already-processed items. Retain uncertainty about capacity and access instead of inventing an exact cost or a physical impossibility.
+
+Briefly record this method comparison and the selected method in the initial working notes. Then refine the chosen method into goals and necessary prerequisites. A prerequisite belonging to one method should not eliminate another method before this comparison.
+
+Plan top down and verify bottom up. Use these roles to organize the hierarchy:
+
+| Role | Purpose |
+|---|---|
+| Root: task end state | State what must be true when the whole task is complete, in your own words. Check coverage against the instruction. |
+| Intermediate goal layers | Describe the contributing results needed to achieve each parent. Group related subresults under a meaningful parent and preserve their dependencies and constraints. Repeat this decomposition at finer levels where needed. |
+| Leaf goals | State directly pursuable results, each with a feasible local plan and an observable completion check. A leaf may require several tool calls. |
+| Current action plan | Choose a short sequence serving one or several ready leaves; put it in `active.steps` with the next check, outside the goal tree. Select concrete targets from current RGB. |
+
+These are roles, not a fixed number of levels. Intermediate layers can repeat, and leaves can occur at different depths. Choose depth and child counts from the task; do not add levels just to fill a template. Keep intermediate parents when refining their children.
+
+Read [references/working-state.md](references/working-state.md) and write the initial tree before the first act/look. Notes record your beliefs, not simulator truth.
+
+Give requirements stable IDs, preserving quantities, destinations, relations, final device states and process or ordering constraints. Separate explicit requirements from assumptions; infer ordinary outcomes for vague wording without inventing a recipe or unrelated cleanup.
+
+Before pursuing a goal, split it if it still bundles results that can be achieved and checked separately; apply the same test to the child you pursue. Stop when it meets the leaf criteria above. Children must jointly cover their parent's result and constraints. Refine the current branch as observations arrive; other branches can stay coarse until needed. A former leaf can acquire children when new work becomes apparent.
+
+Use `parent_id` for decomposition and `depends_on` for prerequisites, including across branches. Keep dependencies acyclic and limited to necessary ordering. When a result requires combining inputs, include that combination in its prerequisites; processing one input alone does not establish the finished result. Select an unfinished leaf whose own and ancestors' prerequisites are satisfied; a blocked branch need not stop independent work.
+
+The tree describes results, not a fixed execution order. Before leaving an area or starting repeated transfers, compare the next ready work by travel, loading/unloading, tool changes and risk of disturbing completed results. Prefer a shared trip or work session when it reduces total work: gather compatible items onto a stable carrier, carry the loaded assembly once, then distribute them or pour loose contents into a common receiver. Include the cost of obtaining and returning the carrier; a nearby single delivery may be cheaper directly. Keep incompatible processing states separate and respect capacity and access.
+
+Choose transport and processing batch sizes separately. A whole load can share one trip while only a distinguishable subset enters the work area. Plan where pending inputs, work in progress and finished outputs will stay; consolidate outputs that need the same remaining work. Include handling and likely rework when comparing plans, not just travel or call count.
+
+Record the chosen batch, its destination and unfinished members in the local plan. Finish each storage visit with door closure before leaving or doing unrelated work, unless explicitly required open; plan stable staging to free a hand. A batch may advance several branches; update each only for results actually achieved. Revise the plan when a tool cannot support it or handling mixes or spills items.
+
+For groups, link pending work to identifiable members or spatially distinct groups sharing the same task-relevant state. Track appearance, last location, current state and remaining work; action counts alone cannot identify what remains. If movement, mixing or a view change breaks that correspondence, mark it uncertain and regain it through a clearer view or separating items before an irreversible operation. Items found so far do not establish the total; retain uninspected locations and uncertain identities or destination roles.
+
+After each action, check its actual result and revise the local plan. Once a leaf is supported, check its parent and continue upward only where each parent's own check is supported. Completed children alone do not prove their parent. Discovery or access does not establish delivery or processing; starting a device does not establish finished processing. Supported continuity and action feedback may establish occluded contents. Reopen or reinspect results and affected ancestors when later handling could have disturbed them.
+
+Save notes when goals complete or block, focus changes, or members or assumptions change. Keep stable IDs and actual evidence IDs; explain revised or retired goals without losing coverage.
+
+On failure, revise the unsupported assumption or local plan while preserving requirements. Temporary staging is not completed storage. Before finish, reconcile the root, every requirement and member with evidence; record unresolved or uncertain results rather than claiming completion.

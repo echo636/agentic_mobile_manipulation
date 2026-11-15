@@ -1,0 +1,86 @@
+{
+  "status": "proposed_scene_and_observation_conditions_only",
+  "rules": [
+    "Preserve every source init/goal relation; changes to bindings or initial predicates require a separate definition version.",
+    "Geometry and observation variants are unbuilt and need independent admission; no hidden evaluator state is policy input.",
+    "No extra phase gates, required carrier transport, or mandatory exploration are added to the score.",
+    "Used-to-debug layouts become development; held-out layouts are reserved, not yet built."
+  ],
+  "putting_away_games": [
+    {
+      "id": "source_cluster_far_shelf",
+      "variable": "bookcase distance, within the declared childs_room",
+      "keep": "all initial source support relations, two boxes, six items and goal unchanged",
+      "hypothesis": "locally pack before shelf placement may reduce transfers",
+      "checks": [
+        "loaded-box containment",
+        "all alternative box assignments",
+        "measure current internal approach paths"
+      ]
+    },
+    {
+      "id": "near_accessible_shelf",
+      "variable": "nearby shallow shelf with reachable box interior",
+      "keep": "same source init/goals",
+      "hypothesis": "early empty-box shelf placement may be equally good; there is no mandatory preferred order"
+    },
+    {
+      "id": "future_access_candidate",
+      "variable": "shelf/box mouth visibility after shelf placement",
+      "keep": "source boxes still start on their declared desk/floor; initial placement is not silently changed to inside shelf",
+      "hypothesis": "restoring view/retrieving a box may create a real downstream cost",
+      "reject_if": "current ideal grasp/inside sampler or auto-approach makes all required operations equally accessible"
+    }
+  ],
+  "unloading_shopping_items": [
+    {
+      "id": "visible_contents",
+      "variable": "initial packing geometry and camera visibility",
+      "keep": "same14 objects, same assigned source boxes and final destinations",
+      "hypothesis": "logistics/counted completion control, not hidden-information challenge"
+    },
+    {
+      "id": "progressive_contents",
+      "variable": "removable occlusion within original box bindings",
+      "keep": "identical public goal-only instruction in both arms; no numerical inventory/private bindings delivered",
+      "hypothesis": "later discovered object should change remaining inventory or destination batch",
+      "checks": [
+        "every item can become visible and selected through permitted actions",
+        "stopping criteria can be supported by inspection, not an impossible hidden count",
+        "one observed new item must actually affect a remaining decision",
+        "all failures and first finish attempts preserved"
+      ]
+    }
+  ],
+  "clean_up_after_a_dinner_party": [
+    {
+      "id": "empty_box_detour_short",
+      "variable": "kitchen cupboard/food table/fridge route geometry",
+      "hypothesis": "test full cost including fetching empty boxes and carrying wine"
+    },
+    {
+      "id": "empty_box_detour_long",
+      "variable": "increase box-fetch detour while preserving room and init predicates",
+      "hypothesis": "direct food transport may match or beat source-side packing; no fixed batching win promised"
+    }
+  ],
+  "prepare_a_breakfast_bar": [
+    {
+      "id": "far_rooms_large_carrier",
+      "variable": "route distance and actual carrier capacity",
+      "checks": [
+        "available assets",
+        "individually served platter alternatives",
+        "nested support preservation"
+      ]
+    },
+    {
+      "id": "near_rooms_small_batches",
+      "variable": "short routes or smaller valid carrier batches",
+      "checks": [
+        "same definition remains feasible without forcing all platters onto main tray",
+        "do not hide staging and retrieval costs"
+      ]
+    }
+  ]
+}
