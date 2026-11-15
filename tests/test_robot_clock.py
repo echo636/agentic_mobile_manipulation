@@ -12,7 +12,8 @@ from manipulation_agent.contracts import SkillError
 from manipulation_agent.runtime.robot_clock import (MANIPULATION_SECONDS, RobotClock, charge_base_motion,
                                                     clocked_action, clocked_leaf, robot_clock_record,
                                                     route_motion, simplify, yaw_of_xyzw)
-from manipulation_agent.reporting.efficiency_table import (markdown_table, offline_robot_time, six_metrics)
+from manipulation_agent.reporting.efficiency_table import (markdown_table, offline_robot_time, six_metrics,
+                                                             token_usage)
 
 
 def staircase(cells, step=.05):
@@ -284,6 +285,33 @@ class OfflineReportTests(unittest.TestCase):
             'cached_input_tokens': 1250000,
             'output_tokens': 2200,
         })
+
+    def test_token_usage_counts_handoff_segments_missing_turn_completed(self):
+        # Rolling handoff stops segment 1 and the finish tool stops segment 2 before their last
+        # turn.completed; native rollouts keep each session's cumulative token_count.
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        controller = Path(folder.name) / 'controller'
+        day = controller / 'native_sessions' / '2026' / '11' / '15'
+        day.mkdir(parents=True)
+        events = [
+            {'type': 'thread.started', 'thread_id': 'thread-a'},
+            {'type': 'turn.completed', 'usage': {'input_tokens': 400, 'cached_input_tokens': 300, 'output_tokens': 4}},
+            {'type': 'thread.started', 'thread_id': 'thread-b'},
+        ]
+        (controller / 'model_events.jsonl').write_text(''.join(json.dumps(e) + '\n' for e in events))
+
+        def rollout(name, session_id, totals):
+            lines = [{'type': 'session_meta', 'payload': {'id': session_id}}]
+            lines += [{'type': 'event_msg', 'payload': {'type': 'token_count', 'info': {
+                'total_token_usage': {'input_tokens': i, 'cached_input_tokens': c, 'output_tokens': o,
+                                      'total_tokens': i + o}}}} for i, c, o in totals]
+            (day / name).write_text(''.join(json.dumps(line) + '\n' for line in lines))
+
+        rollout('rollout-a.jsonl', 'thread-a', [(400, 300, 4), (1000, 900, 10)])
+        rollout('rollout-b.jsonl', 'thread-b', [(200, 100, 2), (500, 450, 5)])
+        self.assertEqual(token_usage(controller),
+                         {'input_tokens': 1500, 'cached_input_tokens': 1350, 'output_tokens': 15})
 
 
 if __name__ == '__main__':

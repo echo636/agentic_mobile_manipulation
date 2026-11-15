@@ -127,6 +127,36 @@ def robot_time_review(run_dir, evaluation, actions):
     return {'source': None, **{key: None for key in ROBOT_TIME_KEYS}, 'turn_seconds': None}
 
 
+def codex_rollout_token_usage(controller_dir):
+    """Last cumulative token_count per Codex native session under ``native_sessions/``."""
+    by_session = {}
+    root = Path(controller_dir) / 'native_sessions'
+    if not root.is_dir():
+        return by_session
+    for path in sorted(root.rglob('rollout-*.jsonl')):
+        session_id, last = None, None
+        with path.open() as stream:
+            for line in stream:
+                if '"session_meta"' not in line and '"token_count"' not in line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                payload = record.get('payload') or {}
+                if record.get('type') == 'session_meta':
+                    session_id = payload.get('id') or session_id
+                total = (payload.get('info') or {}).get('total_token_usage') if payload.get('type') == 'token_count' else None
+                if total:
+                    last = {key: value for key, value in total.items()
+                            if isinstance(value, (int, float)) and key != 'total_tokens'}
+        if last:
+            key = str(session_id or path.name)
+            if last.get('input_tokens', 0) >= by_session.get(key, {}).get('input_tokens', 0):
+                by_session[key] = last
+    return by_session
+
+
 def token_usage(controller_dir):
     """Total token usage of a controller directory, deduplicating cumulative thread resumes."""
     if controller_dir is None:
@@ -155,6 +185,12 @@ def token_usage(controller_dir):
             else:
                 for key, value in numeric.items():
                     anonymous[key] = anonymous.get(key, 0) + value
+    # A segment that ends by process stop (rolling handoff, finish-tool close) never emits
+    # turn.completed for its last turn. Codex native rollouts log a cumulative token_count per
+    # session, so take the larger of the two per session id (== thread id).
+    for session_id, rollout_usage in codex_rollout_token_usage(controller_dir).items():
+        if rollout_usage.get('input_tokens', 0) >= by_thread.get(session_id, {}).get('input_tokens', 0):
+            by_thread[session_id] = rollout_usage
     usage = dict(anonymous)
     for thread_usage in by_thread.values():
         for key, value in thread_usage.items():

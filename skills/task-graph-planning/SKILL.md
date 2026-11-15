@@ -29,7 +29,13 @@ Use `plan_task_graph` (0 action steps) to formulate observed task structure usin
 4. **`goals`**:
    - Terminal `predicates`, target `entity_locations` (`{entity_id, location}`), and `require_empty_hand`.
 
-## 2. Lightweight Incremental Updates (Delta Merge)
+## 2. Operation Granularity
+
+- One operation per single object transfer (one object from one place to another) or per single state change of one object; never bundle several objects or several state changes into one operation. Bundled operations hide the structure the solver needs to overlap, batch, and order work.
+- List every object that must end somewhere as an entity and put its target in `goals.entity_locations`.
+- Take durations from public receipts: `active_duration_s` from the `manipulation_s` each act reports, and travel from the measured `travel_s`; a process that keeps running on its own is a separate operation with `passive_duration_s`.
+
+## 3. Lightweight Incremental Updates (Delta Merge)
 
 - Keep calls concise: start with known locations, main entities, candidate operations, and terminal goals without enumerating unobserved details upfront.
 - Follow `plan.next_step` grounded in current RGB views.

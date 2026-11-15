@@ -494,6 +494,7 @@ def main(argv=None, *, allow_client=False):
                 args.instruction,
                 segment_index=handoff_count + 1,
                 steps_remaining=latest_steps_remaining(segment_events),
+                planning_mode=args.planning_mode,
             )
             resume_project = adapter.prepare_handoff(project, resume_prompt)
         else:

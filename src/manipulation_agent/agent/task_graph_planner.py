@@ -2630,6 +2630,9 @@ class TaskGraphSession:
         }
         if self._external_memory_synced:
             status['external_memory_synced'] = dict(self._external_memory_synced)
+        status['graph_declared'] = bool(self.operations)
+        if not self.operations:
+            status['note'] = 'No task graph declared yet; plan_task_graph (0 action steps) returns the next step.'
         if self.last_solution and self.last_solution.get('next_step') is not None:
             status['next_planned_step'] = self.last_solution['next_step']
         return status

@@ -115,3 +115,37 @@ def test_route_ab_end_to_end_synergy_and_three_tier_isolation(tmp_path: Path) ->
     assert plan['total_travel_cost_s'] == pytest.approx(36.0)
     used_cap = [s for s in plan['ordered_steps'] if s.get('target_host') == 'e_cap' or s.get('entity_id') == 'e_cap']
     assert len(used_cap) > 0
+
+
+def test_tier3_prompt_makes_planner_part_of_the_workflow_only_when_enabled() -> None:
+    # 2026-11-15 pilot: with the conditional wording the model never called the planner on T1.
+    tier3 = system_prompt('basic-skills', goal_skill='none', state_memory=True, planning_mode='task_graph')
+    tier2 = system_prompt('basic-skills', goal_skill='none', state_memory=True, planning_mode='off')
+    assert 'before your first act' in tier3 and 'plan_task_graph' in tier3
+    assert 'plan_task_graph' not in tier2 and 'task-graph-planning' not in tier2
+    inline = system_prompt('minimal', goal_skill='none', planning_mode='task_graph')
+    assert 'one operation per single object transfer' in inline
+
+
+def test_task_graph_status_flags_undeclared_graph() -> None:
+    from manipulation_agent.agent.task_graph_planner import TaskGraphSession
+    session = TaskGraphSession()
+    status = session.public_status()
+    assert status['graph_declared'] is False and 'plan_task_graph' in status['note']
+    session.update_and_solve({'graph': {
+        'locations': [{'id': 'a'}, {'id': 'b'}],
+        'entities': [{'id': 'x', 'location': 'a', 'movable': True}],
+        'operations': [{'id': 'move_x', 'location': 'a', 'active_duration_s': 10,
+                        'effects': [{'var': 'entity:x.location', 'op': 'set', 'value': 'b'}]}],
+        'goals': {'entity_locations': [{'entity_id': 'x', 'location': 'b'}]}}})
+    status = session.public_status()
+    assert status['graph_declared'] is True and 'note' not in status
+
+
+def test_handoff_mentions_persistent_task_graph_only_in_tier3() -> None:
+    from manipulation_agent.agent.state_memory import StateMemory
+    mem = StateMemory()
+    tier3 = mem.build_handoff_context('Do the task.', segment_index=1, steps_remaining=40, planning_mode='task_graph')
+    tier2 = mem.build_handoff_context('Do the task.', segment_index=1, steps_remaining=40)
+    assert 'plan_task_graph' in tier3 and 'persists' in tier3
+    assert 'plan_task_graph' not in tier2

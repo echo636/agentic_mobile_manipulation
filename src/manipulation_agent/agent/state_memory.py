@@ -1182,6 +1182,7 @@ class StateMemory:
         *,
         segment_index: int = 1,
         steps_remaining: int | None = None,
+        planning_mode: str = 'off',
     ) -> str:
         """Build a compact lossless continuation prompt for rolling session handoffs."""
         lines = [
@@ -1218,6 +1219,14 @@ class StateMemory:
             '1. Call `initialize({})` first (0 action steps; does not reset the scene) to receive the latest 4 RGB views and current revision.',
             '2. Continue only the remaining unfinished requirements from the current state, then verify and call `finish`.',
         ])
+        if planning_mode == 'task_graph':
+            # Harness option (tier 3 only): the planner session lives in the episode, not the chat.
+            lines.append(
+                '3. Any task graph you declared with `plan_task_graph` persists in this episode '
+                '(see `task_graph_status` in tool responses). Call `plan_task_graph` with only deltas '
+                '(e.g. `completed_operations`, updated `state_vars`) to get the next step; declare one '
+                'now if `graph_declared` is false.'
+            )
         if instruction and instruction.strip():
             lines.extend(['', 'Original Task Instruction:', instruction.strip()])
         return '\n'.join(lines)
