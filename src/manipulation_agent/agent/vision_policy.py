@@ -39,6 +39,15 @@ PROGRAM_SCHEDULING_INSTRUCTION = '''
 Use schedule_plan (0 action steps) to coordinate timed processes, cross-room carrier batches, and room passes without filling bloated upfront tables: start with a concise plan of the main areas, timed processes, and cross-room transfers (optional subfields can be omitted), and refine or append completed_job_ids / verified_closed_compartments incrementally as you enter new rooms or close stocked compartments. When loading a multi-stage appliance (e.g. stage 1 before stage 2), verify in close-up RGB that you are placing items into the stage-1 appliance rather than an adjacent stage-2 unit. Check schedule_status before calling wait or reopening verified doors.
 '''
 
+# Harness option, off by default (system_prompt(planning_mode='task_graph')).
+TASK_GRAPH_PLANNING_INSTRUCTION = '''
+Read task-graph-planning/SKILL.md via read_skill when modeling multi-step dependencies, then use plan_task_graph (0 action steps) to express observed locations, travel_cost, state_vars, entities (with generic movable and capacity attributes), candidate operations (preconditions, effects, active_duration_s, occupies_hand, passive_duration_s, resolves_unknowns), and terminal goals. Start with a compact graph, mark unobserved quantities unknown: true rather than guessing, execute plan.next_step from current RGB, and pass lightweight deltas (completed_operations, started_passive_operations, updated state_vars or entities) as observations evolve.
+'''
+
+TASK_GRAPH_INLINE_INSTRUCTION = '''
+Use plan_task_graph (0 action steps) to model observed locations, travel_cost, state_vars, entities (movable, capacity), candidate operations (location, preconditions, effects, active_duration_s, occupies_hand, passive_duration_s, resolves_unknowns), and goals. Mark unobserved state variables unknown: true instead of guessing, execute plan.next_step grounded in current RGB, and submit small incremental deltas (completed_operations, started_passive_operations, updated state_vars or entities) as new observations arrive.
+'''
+
 # Harness option, off by default (system_prompt(autonomy=True), controller --autonomy-instruction on).
 # Operating facts only: who reads the messages, what ending a turn does, and when a stop outcome applies.
 # The first sentence and the blocked rule come from the frozen experiment line's prompt
@@ -100,9 +109,10 @@ def inline_skill_guidance(goal_skill='hierarchical'):
 
 
 def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_intent=False,
-                  autonomy=False, scheduling_mode='none'):
+                  autonomy=False, scheduling_mode='none', planning_mode='off'):
     if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
     if scheduling_mode not in {'none', 'text', 'program'}: raise ValueError('Unknown scheduling mode')
+    if planning_mode not in {'off', 'task_graph'}: raise ValueError('Unknown planning mode')
     if profile == 'skills_inline':
         prompt = SKILLS_BASE_PROMPT
         for old, new in INLINE_PROMPT_REWRITES:
@@ -118,6 +128,9 @@ def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_i
         prompt += TEXT_SCHEDULING_INSTRUCTION
     elif scheduling_mode == 'program':
         prompt += PROGRAM_SCHEDULING_INSTRUCTION
+    if planning_mode == 'task_graph':
+        prompt += (TASK_GRAPH_INLINE_INSTRUCTION if profile in {'minimal', 'skills_inline'}
+                   else TASK_GRAPH_PLANNING_INSTRUCTION)
     if autonomy:
         prompt += AUTONOMY_INSTRUCTION
     if require_tool_intent:
@@ -141,7 +154,8 @@ class RGBResponsesPolicy(ResponsesPolicy):
 
     def run(self, harness, instruction, *, image_history_captures=0):
         loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile,goal_skill=harness.goal_skill,
-            require_tool_intent=getattr(harness, 'require_tool_intent', False)),
+            require_tool_intent=getattr(harness, 'require_tool_intent', False),
+            planning_mode=getattr(harness, 'planning_mode', 'off')),
                               request=self._request_with_observation_jobs,
                               config=LoopConfig(max_turns=self.max_turns, max_tokens=self.max_tokens,
                                                 image_history_captures=image_history_captures))

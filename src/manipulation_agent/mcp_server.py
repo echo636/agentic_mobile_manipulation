@@ -33,6 +33,8 @@ _startup('proxy_import')
 from .transport.bridge import rpc
 from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
+from .agent.task_graph_planner import TaskGraphSession
+from .contracts import SkillError, validate
 
 # Harness option (--click-echo on, default off): crop around the model's selected pixel on the chosen RGB image.
 ECHO_HALF_PX = 80
@@ -114,7 +116,7 @@ def loopback_host(value):
 
 
 async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
-                        enable_click_echo=False, max_inline_image_bytes=0):
+                        enable_click_echo=False, max_inline_image_bytes=0, planning_mode='off'):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -123,6 +125,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     It also preserves the existing nullable-default compatibility for old act
     clients; generating a Pydantic signature here would coerce or drop inputs.
     """
+    if planning_mode not in ('off', 'task_graph'):
+        raise ValueError('Unknown planning mode')
     _startup('sdk_import')
     from mcp import types
     from mcp.server.fastmcp import FastMCP
@@ -143,6 +147,12 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     lock = asyncio.Lock()
     # Harness-side option, off by default: defer early finishes while act/look budget remains.
     guard = FinishGuard(guard_state) if finish_guard else None
+    bridge_has_task_graph = any(spec['name'] == 'plan_task_graph' for spec in catalog)
+    local_task_graph = (
+        TaskGraphSession()
+        if (planning_mode == 'task_graph' and not bridge_has_task_graph)
+        else None
+    )
 
     class BridgeArguments(ArgModelBase):
         model_config = ConfigDict(extra='allow')
@@ -166,6 +176,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                 result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
                 if guard is not None:
                     guard.observe(result, name, arguments)
+                if local_task_graph is not None:
+                    local_task_graph.observe_public_action(name, arguments if isinstance(arguments, dict) else None, result)
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
                 if pre_source is not None and result.get('observation') is not None:
                     try:
@@ -209,6 +221,40 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
         annotations=types.ToolAnnotations(**spec['annotations']) if spec.get('annotations') else None,
         meta=deepcopy(spec.get('_meta')),
     ) for spec in catalog]
+    if local_task_graph is not None:
+        from .tools import tool_specs
+        from .tools.intent import validate_intent
+        require_intent = any(
+            'intent' in ((spec.get('inputSchema') or {}).get('properties') or {})
+            for spec in catalog
+        )
+        tg_spec = next(
+            s for s in tool_specs('minimal', require_intent=require_intent, planning_mode='task_graph')
+            if s['name'] == 'plan_task_graph'
+        )
+
+        async def invoke_local_task_graph(**arguments):
+            async with lock:
+                try:
+                    if require_intent:
+                        validate_intent(arguments)
+                    validate(arguments, tg_spec['inputSchema'])
+                    exec_args = {k: v for k, v in arguments.items() if k != 'intent'}
+                    payload = {'ok': True, **local_task_graph.update_and_solve(exec_args)}
+                except SkillError as exc:
+                    payload = {'ok': False, 'error': {'code': exc.code, 'message': str(exc)}}
+                return [types.TextContent(type='text', text=json.dumps(payload, ensure_ascii=False))]
+
+        registered.append(Tool(
+            fn=invoke_local_task_graph,
+            name=tg_spec['name'],
+            description=tg_spec.get('description', ''),
+            parameters=deepcopy(tg_spec['inputSchema']),
+            is_async=True,
+            fn_metadata=FuncMetadata(arg_model=BridgeArguments),
+            annotations=types.ToolAnnotations(**tg_spec['annotations']) if tg_spec.get('annotations') else None,
+            meta=deepcopy(tg_spec.get('_meta')),
+        ))
     return FastMCP(
         'manipulation-agentic-system', tools=registered, host=host, port=port,
         instructions='One shared simulator episode. All clients share image revisions, budgets and closure. '
@@ -218,10 +264,11 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
 
 
 async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
-              enable_click_echo=False, max_inline_image_bytes=0):
+              enable_click_echo=False, max_inline_image_bytes=0, planning_mode='off'):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
-                                 max_inline_image_bytes=max_inline_image_bytes)
+                                 max_inline_image_bytes=max_inline_image_bytes,
+                                 planning_mode=planning_mode)
     _startup('serving')
     if transport == 'stdio':
         await server.run_stdio_async()
@@ -246,11 +293,14 @@ def main():
                         help='harness option: attach enlarged crop around selected pixel on act calls')
     parser.add_argument('--max-inline-image-bytes', type=int, default=0,
                         help='harness option: re-encode MCP images above N bytes to WebP so CLI clients attach them inline (0=off)')
+    parser.add_argument('--planning-mode', choices=('off', 'task_graph'), default='off',
+                        help='harness option: general precondition and cost-aware task graph planner (default off)')
     args = parser.parse_args()
     asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
                     finish_guard=args.finish_guard == 'on', guard_state=args.guard_state,
                     enable_click_echo=args.click_echo == 'on',
-                    max_inline_image_bytes=max(0, int(args.max_inline_image_bytes))))
+                    max_inline_image_bytes=max(0, int(args.max_inline_image_bytes)),
+                    planning_mode=args.planning_mode))
 
 
 if __name__ == '__main__':

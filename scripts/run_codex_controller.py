@@ -189,6 +189,8 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
     p.add_argument('--scheduling-mode', choices=['none','text','program'], default='none',
                    help='Harness option: strategy supplementation mode (default none)')
+    p.add_argument('--planning-mode', choices=['off','task_graph'], default='off',
+                   help='Harness option: general precondition and cost-aware task graph planner (default off)')
     p.add_argument('--autonomy-instruction', choices=['off','on'], default='off',
                    help='Harness option: append the autonomous-episode operating instruction to the system prompt')
     p.add_argument('--require-tool-intent',action='store_true',
@@ -240,9 +242,11 @@ def main(argv=None, *, allow_client=False):
     instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill,
                                  require_tool_intent=args.require_tool_intent,
                                  autonomy=args.autonomy_instruction == 'on',
-                                 scheduling_mode=args.scheduling_mode)
+                                 scheduling_mode=args.scheduling_mode,
+                                 planning_mode=args.planning_mode)
     catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent,
-                         scheduling_mode=args.scheduling_mode)
+                         scheduling_mode=args.scheduling_mode,
+                         planning_mode=args.planning_mode)
     planner_config = None
     mcp_env_vars = ()
     if args.planner_model:
@@ -309,6 +313,7 @@ def main(argv=None, *, allow_client=False):
     metadata['unfinished_turn_nudges'] = args.unfinished_turn_nudges
     metadata['autonomy_instruction'] = args.autonomy_instruction
     metadata['scheduling_mode'] = args.scheduling_mode
+    metadata['planning_mode'] = args.planning_mode
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
