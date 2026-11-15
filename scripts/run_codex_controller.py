@@ -23,6 +23,7 @@ from manipulation_agent.clients.events import write_derived_events
 from manipulation_agent.tools import tool_specs
 from manipulation_agent.tools.intent import PROTOCOL as INTENT_PROTOCOL, LEGACY_PROTOCOL
 from manipulation_agent.agent.vision_policy import system_prompt
+from manipulation_agent.agent.state_memory import StateMemory
 from manipulation_agent.agent.planning_subagent import ACTOR_INSTRUCTION, PLANNER_TOOL
 from manipulation_agent.records import now, write_json, source_version
 from manipulation_agent.reporting.model_trace import export_summaries
@@ -58,11 +59,70 @@ NUDGE_PROMPT = ('The episode is still open: your previous turn ended without an 
                 'materially different attempts.')
 
 
+def _receipt_dicts_in_event(event):
+    item = (event.get('item') or {}) if isinstance(event, dict) else {}
+    res = item.get('result') if isinstance(item.get('result'), dict) else {}
+    out = []
+    for block in (res.get('content') or []):
+        if isinstance(block, dict) and block.get('type') == 'text' and isinstance(block.get('text'), str):
+            try:
+                val = json.loads(block['text'])
+                if isinstance(val, dict):
+                    out.append(val)
+            except ValueError:
+                pass
+    return out
+
+
 def segment_robot_calls(events):
-    """Completed act/look MCP calls in one client segment."""
-    return sum(1 for event in events if event.get('type') == 'item.completed'
-               and (event.get('item') or {}).get('type') == 'mcp_tool_call'
-               and (event.get('item') or {}).get('tool') in {'act', 'look'})
+    """Completed step-charging act/look MCP calls in one client segment."""
+    count = 0
+    for event in events:
+        if (event.get('type') != 'item.completed'
+                or (event.get('item') or {}).get('type') != 'mcp_tool_call'
+                or (event.get('item') or {}).get('tool') not in {'act', 'look'}):
+            continue
+        receipts = _receipt_dicts_in_event(event)
+        if any((r.get('error') or {}).get('action_step_used') is False for r in receipts if isinstance(r.get('error'), dict)):
+            continue
+        count += 1
+    return count
+
+
+def saw_rolling_handoff_checkpoint(events):
+    for event in events:
+        if event.get('type') != 'item.completed':
+            continue
+        for r in _receipt_dicts_in_event(event):
+            if (r.get('rolling_handoff') or {}).get('due') is True:
+                return True
+            if isinstance(r.get('error'), dict) and r['error'].get('code') == 'rolling_handoff_checkpoint':
+                return True
+    return False
+
+
+def latest_steps_remaining(events):
+    for event in reversed(events):
+        if event.get('type') != 'item.completed':
+            continue
+        for r in _receipt_dicts_in_event(event):
+            budget = r.get('execution_budget')
+            if isinstance(budget, dict) and isinstance(budget.get('steps_remaining'), int):
+                return budget['steps_remaining']
+    return None
+
+
+def rolling_handoff_due(events, *, returncode, finish_received, timed_out, rolling_handoff_steps,
+                        cleanup_reason=None, handoffs=0, max_handoffs=40):
+    """True when the segment reached its rolling step window without finishing the episode."""
+    if rolling_handoff_steps <= 0 or finish_received or timed_out or handoffs >= max_handoffs:
+        return False
+    if cleanup_reason == 'rolling_handoff_step_limit':
+        return True
+    return returncode == 0 and (
+        segment_robot_calls(events) >= rolling_handoff_steps
+        or saw_rolling_handoff_checkpoint(events)
+    )
 
 
 def turn_completed_without_error(events):
@@ -189,6 +249,10 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
     p.add_argument('--scheduling-mode', choices=['none','text','program'], default='none',
                    help='Harness option: strategy supplementation mode (default none)')
+    p.add_argument('--state-memory', choices=['off','on'], default='off',
+                   help='Harness option: enable structured public state memory prompt and handoff tracking (default off)')
+    p.add_argument('--rolling-handoff-steps', type=int, default=0,
+                   help='Harness option: roll over to a fresh client session with state_memory handoff summary every N act/look steps (0 disables)')
     p.add_argument('--autonomy-instruction', choices=['off','on'], default='off',
                    help='Harness option: append the autonomous-episode operating instruction to the system prompt')
     p.add_argument('--require-tool-intent',action='store_true',
@@ -222,6 +286,8 @@ def main(argv=None, *, allow_client=False):
     deadline=(EpisodeDeadline() if args.execution_clock_command_json is not None else
               EpisodeDeadline(args.deadline_unix) if args.deadline_unix is not None else EpisodeDeadline.from_env())
     if args.timeout<0:p.error('--timeout must be nonnegative')
+    if args.rolling_handoff_steps < 0:
+        p.error('--rolling-handoff-steps must be nonnegative')
     if args.timeout==0:args.timeout=None
     if args.rate_limit_resumes is None:
         args.rate_limit_resumes = -1 if client in {'codex', 'claude', 'agy'} and args.timeout is None else 0
@@ -240,9 +306,20 @@ def main(argv=None, *, allow_client=False):
     instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill,
                                  require_tool_intent=args.require_tool_intent,
                                  autonomy=args.autonomy_instruction == 'on',
-                                 scheduling_mode=args.scheduling_mode)
+                                 scheduling_mode=args.scheduling_mode,
+                                 state_memory=args.state_memory == 'on')
     catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent,
                          scheduling_mode=args.scheduling_mode)
+    raw_mcp_args = json.loads(args.mcp_args_json)
+    if isinstance(raw_mcp_args, list) and (
+        'manipulation_agent.mcp_server' in raw_mcp_args
+        or any(str(item).endswith('mcp_server.py') for item in raw_mcp_args)
+    ):
+        if args.state_memory == 'on' and '--state-memory' not in raw_mcp_args:
+            raw_mcp_args = [*raw_mcp_args, '--state-memory', 'on']
+        if args.rolling_handoff_steps > 0 and '--rolling-handoff-steps' not in raw_mcp_args:
+            raw_mcp_args = [*raw_mcp_args, '--rolling-handoff-steps', str(args.rolling_handoff_steps)]
+        args.mcp_args_json = json.dumps(raw_mcp_args)
     planner_config = None
     mcp_env_vars = ()
     if args.planner_model:
@@ -309,6 +386,8 @@ def main(argv=None, *, allow_client=False):
     metadata['unfinished_turn_nudges'] = args.unfinished_turn_nudges
     metadata['autonomy_instruction'] = args.autonomy_instruction
     metadata['scheduling_mode'] = args.scheduling_mode
+    metadata['state_memory'] = args.state_memory
+    metadata['rolling_handoff_steps'] = args.rolling_handoff_steps
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
@@ -357,25 +436,36 @@ def main(argv=None, *, allow_client=False):
         metadata['pid'] = pid
         write_json(args.output / 'controller.json', metadata)
     policy_started_monotonic=time.monotonic()
-    process = adapter.run(project, args.output, deadline.remaining(args.timeout), on_start)
+    hard_robot_cap = (args.rolling_handoff_steps + 2) if args.rolling_handoff_steps > 0 else 0
+    episode_memory = (StateMemory(output_dir=args.output)
+                      if (args.state_memory == 'on' or args.rolling_handoff_steps > 0) else None)
+    process = adapter.run(project, args.output, deadline.remaining(args.timeout), on_start,
+                          max_robot_calls=hard_robot_cap)
     raw_events=args.output/'model_events.jsonl'
     first_parsed=adapter.parse(raw_events)
     thread_id=session_thread_id(first_parsed.raw_events, client)
     segment_events=first_parsed.compat
+    if episode_memory is not None:
+        episode_memory.ingest_compat_events(segment_events)
     continuations=[]
-    resume_count = fork_count = nudge_count = 0
+    resume_count = fork_count = nudge_count = handoff_count = 0
     for attempt in itertools.count(1):
         remaining=(None if metadata['effective_timeout_seconds'] is None else
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
         mode = provider_recovery_mode(segment_events, resumes=resume_count, forks=fork_count,
             max_resumes=args.rate_limit_resumes, max_forks=args.permanent_route_forks)
+        if mode is None and client in {'codex', 'claude', 'agy'} and rolling_handoff_due(
+                segment_events, returncode=process.returncode, finish_received=process.finish_received,
+                timed_out=process.timed_out, rolling_handoff_steps=args.rolling_handoff_steps,
+                cleanup_reason=process.cleanup_reason, handoffs=handoff_count):
+            mode = 'handoff'
         if mode is None and client in {'codex', 'claude', 'agy'} and unfinished_turn_nudge(
                 segment_events, returncode=process.returncode, finish_received=process.finish_received,
                 timed_out=process.timed_out, nudges=nudge_count, max_nudges=args.unfinished_turn_nudges):
             mode = 'nudge'
-        backoff = 0 if mode == 'nudge' else args.resume_backoff_seconds
-        if ((process.returncode == 0 and mode != 'nudge') or process.finish_received or process.timed_out or
-                not thread_id or mode is None or
+        backoff = 0 if mode in {'nudge', 'handoff'} else args.resume_backoff_seconds
+        if ((process.returncode == 0 and mode not in {'nudge', 'handoff'}) or process.finish_received or process.timed_out or
+                (not thread_id and mode != 'handoff') or mode is None or
                 (remaining is not None and remaining <= backoff+30)):
             break
         metadata['provider_recovery'].update(state='waiting', next_attempt=attempt, next_mode=mode)
@@ -387,22 +477,33 @@ def main(argv=None, *, allow_client=False):
             break
         segment_dir=args.output/'continuations'/str(attempt)
         segment_dir.mkdir(parents=True,exist_ok=False)
-        resume_prompt=NUDGE_PROMPT if mode == 'nudge' else (
-                       'Continue the same robot task in the same simulator episode. '
-                       'A model service error interrupted the previous turn. '
-                       'Use the prior conversation and current RGB tool feedback; continue choosing '
-                       'actions yourself, then call finish. Do not restart the task or claim success '
-                       'without visual evidence.')
-        if mode == 'fork':
-            resume_prompt += (' A previous tool response may have been lost. Do not replay any pending call. '
-                              'First call initialize to read the current RGB and your task notes; '
-                              'initialize does not reset or advance the scene. Then continue from that observation.')
-        resume_project=(adapter.prepare_fork(project,thread_id,resume_prompt) if mode == 'fork'
-                        else adapter.prepare_resume(project,thread_id,resume_prompt))
-        resumed=adapter.run(resume_project,segment_dir,remaining,on_start)
+        if mode == 'handoff':
+            mem_for_handoff = episode_memory or StateMemory()
+            resume_prompt = mem_for_handoff.build_handoff_context(
+                args.instruction,
+                segment_index=handoff_count + 1,
+                steps_remaining=latest_steps_remaining(segment_events),
+            )
+            resume_project = adapter.prepare_handoff(project, resume_prompt)
+        else:
+            resume_prompt=NUDGE_PROMPT if mode == 'nudge' else (
+                           'Continue the same robot task in the same simulator episode. '
+                           'A model service error interrupted the previous turn. '
+                           'Use the prior conversation and current RGB tool feedback; continue choosing '
+                           'actions yourself, then call finish. Do not restart the task or claim success '
+                           'without visual evidence.')
+            if mode == 'fork':
+                resume_prompt += (' A previous tool response may have been lost. Do not replay any pending call. '
+                                  'First call initialize to read the current RGB and your task notes; '
+                                  'initialize does not reset or advance the scene. Then continue from that observation.')
+            resume_project=(adapter.prepare_fork(project,thread_id,resume_prompt) if mode == 'fork'
+                            else adapter.prepare_resume(project,thread_id,resume_prompt))
+        resumed=adapter.run(resume_project,segment_dir,remaining,on_start,max_robot_calls=hard_robot_cap)
         segment_path=segment_dir/'model_events.jsonl'
         seg_parsed=adapter.parse(segment_path)
         segment_events=seg_parsed.compat
+        if episode_memory is not None:
+            episode_memory.ingest_compat_events(segment_events)
         with raw_events.open('ab') as combined,segment_path.open('rb') as segment:
             combined.write(segment.read())
         continued_thread = session_thread_id(seg_parsed.raw_events, client)
@@ -425,6 +526,10 @@ def main(argv=None, *, allow_client=False):
                 write_json(args.output/'controller.json',metadata)
                 break
             thread_id = continued_thread
+        elif mode == 'handoff':
+            handoff_count += 1
+            if continued_thread:
+                thread_id = continued_thread
         elif mode == 'nudge':
             nudge_count = 0 if segment_robot_calls(segment_events) else nudge_count + 1
         else:

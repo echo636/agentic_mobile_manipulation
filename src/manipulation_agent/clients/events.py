@@ -131,6 +131,44 @@ def successful_finish_event(event):
     return False
 
 
+def completed_robot_action_event(event) -> bool:
+    """True when one raw stream line marks completion of a step-charging act/look tool call."""
+    if not isinstance(event, dict):
+        return False
+    if event.get('type') == 'item.completed':
+        item = event.get('item') or {}
+        if not isinstance(item, dict) or item.get('type') != 'mcp_tool_call':
+            return False
+        if item.get('tool') not in {'act', 'look'}:
+            return False
+        blocks = ((item.get('result') or {}).get('content') or []) if isinstance(item.get('result'), dict) else []
+        for b in blocks:
+            if isinstance(b, dict) and b.get('type') == 'text':
+                val = _object(b.get('text'))
+                if isinstance(val, dict) and isinstance(val.get('error'), dict):
+                    if val['error'].get('action_step_used') is False:
+                        return False
+        return True
+    if event.get('event') == 'step_update':
+        su = event.get('step_update') or {}
+        if su.get('step_type') != 'tool' or su.get('state') != 'DONE':
+            return False
+        info = su.get('tool_info') or {}
+        params = info.get('parameters') or {}
+        tool_name = info.get('name') or su.get('tool_name') or ''
+        if tool_name == 'call_mcp_tool':
+            server, tool = params.get('ServerName'), params.get('ToolName')
+        else:
+            server, tool = _tool(tool_name)
+        if server != 'manipulation' or tool not in {'act', 'look'}:
+            return False
+        out = _object(info.get('output'))
+        if isinstance(out, dict) and isinstance(out.get('error'), dict) and out['error'].get('action_step_used') is False:
+            return False
+        return True
+    return False
+
+
 def parse_events(path: Path, client: str) -> ParsedEvents:
     rows = []; invalid = []; canonical = []; compat = []
     calls = {}; emitted = set(); completed = set(); turn = 0
@@ -256,6 +294,16 @@ def parse_events(path: Path, client: str) -> ParsedEvents:
                     message(part.get("text"), line_no, at)
         elif client == "claude":
             if typ == "system" and data.get("subtype") == "init":
+                if claude_pending_turn_usages:
+                    totals = {"input_tokens": 0, "cached_input_tokens": 0, "unbinned_input_tokens": 0,
+                              "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+                              "output_tokens": 0, "total_tokens": 0}
+                    for nu in claude_pending_turn_usages:
+                        for k in totals:
+                            totals[k] += int(nu.get(k) or 0)
+                    claude_pending_turn_usages.clear()
+                    emit("usage", line_no, at, usage=totals)
+                    compat.append({"type": "turn.completed", "at": at, "source": "claude_adapter_partial", "usage": totals})
                 sid = data.get("session_id")
                 emit("session_started", line_no, at, content={"session_id": sid})
             elif typ == "assistant":
@@ -295,6 +343,15 @@ def parse_events(path: Path, client: str) -> ParsedEvents:
         elif client == "agy":
             ev = data.get("event")
             if ev == "init":
+                if agy_pending_step_usages:
+                    totals = {"input_tokens": 0, "cached_input_tokens": 0, "uncached_input_tokens": 0,
+                              "output_tokens": 0, "thinking_tokens": 0, "total_tokens": 0}
+                    for nu in agy_pending_step_usages:
+                        for k in totals:
+                            totals[k] += int(nu.get(k) or 0)
+                    agy_pending_step_usages.clear()
+                    emit("usage", line_no, at, usage=totals)
+                    compat.append({"type": "turn.completed", "at": at, "source": "agy_adapter_partial", "usage": totals})
                 cid = data.get("conversation_id")
                 emit("session_started", line_no, at, content={"conversation_id": cid})
             elif ev == "step_update":

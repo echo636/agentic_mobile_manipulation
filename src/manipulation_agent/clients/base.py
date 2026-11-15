@@ -11,16 +11,20 @@ import tempfile
 import time
 from typing import Callable
 
+from dataclasses import replace
 from .types import ClientCapability, ClientRunResult, PreparedProject
-from .events import parse_events, successful_finish_event
+from .events import completed_robot_action_event, parse_events, successful_finish_event
 
 
 def run_process(project: PreparedProject, output: Path, timeout: float | None,
                 on_start: Callable[[int], None] | None = None, *,
-                event_client: str = 'codex', finish_exit_grace: float = 5.0) -> ClientRunResult:
+                event_client: str = 'codex', finish_exit_grace: float = 5.0,
+                max_robot_calls: int = 0) -> ClientRunResult:
     started = time.monotonic()
     timed_out = False
     finish_at = finish_monotonic = None
+    handoff_at = None
+    robot_calls_seen = 0
     cleanup_reason = None
     kwargs = {"start_new_session": True, "text": True}
     if project.cwd is not None:
@@ -50,6 +54,15 @@ def run_process(project: PreparedProject, output: Path, timeout: float | None,
                         if not line or not line.endswith(b'\n'):
                             stream.seek(offset)
                             break
+                        if max_robot_calls > 0 and (b'"act"' in line or b'"look"' in line):
+                            try:
+                                is_robot = completed_robot_action_event(json.loads(line))
+                            except (ValueError, UnicodeError):
+                                is_robot = False
+                            if is_robot:
+                                robot_calls_seen += 1
+                                if robot_calls_seen >= max_robot_calls:
+                                    handoff_at = time.time()
                         if b'closed' not in line:
                             continue
                         try:
@@ -60,13 +73,17 @@ def run_process(project: PreparedProject, output: Path, timeout: float | None,
                             finish_at, finish_monotonic = time.time(), time.monotonic()
                             break
                 if process.poll() is not None:
-                    finished = finish_at or time.time()
+                    finished = finish_at or handoff_at or time.time()
                     break
                 if finish_monotonic is not None:
                     if time.monotonic() - finish_monotonic >= finish_exit_grace:
                         finished = finish_at
                         cleanup_reason = 'client_linger_after_successful_finish'
                         break
+                elif handoff_at is not None:
+                    finished = handoff_at
+                    cleanup_reason = 'rolling_handoff_step_limit'
+                    break
                 elif timeout is not None and time.monotonic() - started >= timeout:
                     finished = time.time()
                     timed_out = True
@@ -128,8 +145,13 @@ class ClientAdapter:
     def prepare_project(self, config, instructions: str, tool_names: list[str]) -> PreparedProject:
         raise NotImplementedError
 
-    def run(self, project, output, timeout, on_start=None):
-        return run_process(project, output, timeout, on_start, event_client=self.name)
+    def prepare_handoff(self, project: PreparedProject, prompt: str) -> PreparedProject:
+        """Start a fresh client session against the same live MCP episode with a handoff prompt."""
+        return replace(project, stdin=prompt)
+
+    def run(self, project, output, timeout, on_start=None, *, max_robot_calls: int = 0):
+        return run_process(project, output, timeout, on_start, event_client=self.name,
+                           max_robot_calls=max_robot_calls)
 
     def parse(self, path: Path):
         return parse_events(path, self.name)

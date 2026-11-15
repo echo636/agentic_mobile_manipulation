@@ -17,6 +17,7 @@ from ..observations.surround import SurroundJobs
 from .closure import EpisodeClosure
 from ..agent.task_notes import TaskNotes, model_planning_reply
 from ..agent.schedule_planner import PublicScheduleLedger
+from ..agent.state_memory import StateMemory
 
 # Pre-execution validation / non-mutating refusal codes that never touch physics or render a new capture.
 NO_WORLD_CHANGE_CODES = frozenset({
@@ -65,7 +66,7 @@ ACTION_FEEDBACK_HINTS = {
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
                  goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False,
-                 scheduling_mode='none', auxiliary_feedback=False):
+                 scheduling_mode='none', auxiliary_feedback=False, state_memory=False):
         if profile == 'basic-skills': goal_skill = 'none'
         if profile == 'goal-tree': goal_skill = 'tree'
         if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
@@ -73,6 +74,8 @@ class VisionHarness:
         self.goal_skill=goal_skill
         self.scheduling_mode=scheduling_mode
         self.auxiliary_feedback=bool(auxiliary_feedback)
+        self.state_memory_enabled=bool(state_memory)
+        self.state_memory=StateMemory(output_dir=recorder.output) if self.state_memory_enabled else None
         self.schedule_ledger=PublicScheduleLedger()
         self.require_tool_intent=require_tool_intent
         self.task_notes=TaskNotes(recorder.output, auto_select=goal_skill == 'hierarchical')
@@ -118,6 +121,7 @@ class VisionHarness:
         recorder.run['config'].update(goal_skill=goal_skill,
             scheduling_mode=scheduling_mode,
             auxiliary_feedback=self.auxiliary_feedback,
+            state_memory=self.state_memory_enabled,
             require_tool_intent=require_tool_intent,
             tool_intent_protocol=INTENT_PROTOCOL if require_tool_intent else LEGACY_PROTOCOL)
         recorder.run['episode_deadline_unix']=self.deadline.unix
@@ -319,15 +323,16 @@ class VisionHarness:
             elif name in {'act', 'look'}:
                 self._consecutive_refunds = 0
         if name in {'act', 'look'} and not self.closed:
-            if self.auxiliary_feedback:
+            if self.auxiliary_feedback or self.state_memory_enabled:
                 hand = self._public_hand_state()
                 if hand is not None:
                     result['robot'] = {'hand': hand}
+            if self.auxiliary_feedback:
                 if not result.get('ok') and isinstance(result.get('error'), dict):
                     err_code = result['error'].get('code')
                     if err_code in ACTION_FEEDBACK_HINTS:
                         result['error']['message'] = str(result['error'].get('message', '')) + ACTION_FEEDBACK_HINTS[err_code]
-            if self.auxiliary_feedback or self.scheduling_mode == 'program':
+            if self.auxiliary_feedback or self.scheduling_mode == 'program' or self.state_memory_enabled:
                 rt_public = self._public_robot_time()
                 if rt_public is not None:
                     result['robot_time'] = rt_public
@@ -362,6 +367,19 @@ class VisionHarness:
             observed_sim_end = self.snapshot.get('capture', {}).get('sim_time_seconds')
             if observed_sim_start is not None and observed_sim_end is not None:
                 result['runtime']['observed_simulation_seconds'] = max(0., observed_sim_end - observed_sim_start)
+        if self.state_memory_enabled and self.state_memory is not None and not self.closed:
+            if name == 'initialize':
+                hand = self._public_hand_state()
+                if hand is not None and 'robot' not in result:
+                    result['robot'] = {'hand': hand}
+                rt_init = self._public_robot_time()
+                if rt_init is not None and 'robot_time' not in result:
+                    result['robot_time'] = rt_init
+            self.state_memory.observe(name, arguments if isinstance(arguments, dict) else None, result)
+            if name in {'initialize', 'act', 'look'}:
+                result['state_memory'] = self.state_memory.public_view(
+                    include_handoff=(name == 'initialize' and self.agent_steps > 0)
+                )
         if ('task_notes' in self.catalog and self.goal_skill == 'hierarchical'
                 and origin == 'controller' and name in {'initialize', 'task_notes', 'act', 'look'}):
             pending = None

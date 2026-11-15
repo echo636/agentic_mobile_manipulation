@@ -108,6 +108,37 @@ class AgyAdapter(ClientAdapter):
             mcp_prefix=prefix,
         )
 
+    def prepare_handoff(self, project: PreparedProject, prompt: str) -> PreparedProject:
+        """Start a fresh Agy conversation (0 prior images) against the same live MCP episode."""
+        prefix = project.mcp_prefix
+        argv = list(project.argv)
+        if prefix:
+            if argv[: len(prefix) + 1] != [*prefix, "--"]:
+                raise ValueError("Agy handoff namespace prefix differs from original project")
+            argv = argv[len(prefix) + 1 :]
+        if not argv or not argv[-1].startswith("-p="):
+            raise ValueError("Agy handoff requires an original argv ending with -p=...")
+        base_argv = [
+            arg for i, arg in enumerate(argv[:-1])
+            if arg != "--conversation" and (i == 0 or argv[i - 1] != "--conversation")
+        ]
+        agy_prompt = (
+            "Use ONLY `call_mcp_tool` with `ServerName='manipulation'` (including `ToolName='finish'` to end the episode) "
+            "to complete this simulation task.\n" + prompt
+        )
+        command = [*base_argv, f"-p={agy_prompt}"]
+        if prefix:
+            command = [*prefix, "--", *command]
+        return PreparedProject(
+            command,
+            project.cwd,
+            None,
+            env_overlay=project.env_overlay,
+            native_sessions=project.native_sessions,
+            client_storage=project.client_storage,
+            mcp_prefix=prefix,
+        )
+
     def prepare_project(self, config, instructions: str, tool_names: list[str]) -> PreparedProject:
         wrapper = shutil.which("bwrap")
         if not wrapper:
