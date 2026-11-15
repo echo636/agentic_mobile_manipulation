@@ -4,6 +4,22 @@ An independent research system for **RGB observation -> LLM action and target se
 
 Maintained at [echo636/agentic_mobile_manipulation](https://github.com/echo636/agentic_mobile_manipulation). Reference repositories and existing navigation environments remain separate from this project.
 
+## 论文核心贡献定位（路线 A + 路线 B 结合：严禁针对测试集写定制策略）
+
+本项目的核心方法贡献**绝不是针对某个特定测试集或某几类题型的专用策略**（严禁在提示词、技能或规划工具参数中硬编码“家电计时”、“托盘配货”、“先擦净再擦脏”等题型口诀或专用字段），而是构建一套**模型无关、任务无关的双层通用具身智能体架构**，同时在 **原版 BEHAVIOR-1K 长程任务集** 与 **多模式自建长程规划基准（[`task_designs/scheduling_v1`](task_designs/scheduling_v1/README.md)）** 上验证普适收益：
+
+1. **底层（路线 A）：通用具身闭环感知与记忆 Harness（保证“做得对、不忘事”）**
+   - **四向视觉锚定 + 选点局部放大回显**：四路固定机身视角同步观测锚定方向感，配合像素点击局部放大回显，消除小目标与边缘透视点偏；
+   - **空间/物体状态外部记忆压缩**：仅从公开动作回执与历史视觉观测自动抽取结构化状态记忆（去过的地点、见过的物体位置、容器开合、手部持有物与公开状态），并对远古图像帧做滑动窗口压缩（或滚动会话续跑），解决超 100 步失忆、千万级缓存 Token 膨胀与单会话 600 张图像硬上限；
+   - **预期偏差自纠错 + 防原地早退**：公开返回物理受阻因果归因，拦截同一动作原地重复报错混早退，促使模型在预期落空时切换动作自纠错；
+   - **结束前逐项视觉核验**：在声明完成前对照公开任务要求逐条核对已观测视觉与回执证据，杜绝长程尾段漏件与虚假完成。
+2. **上层（路线 B）：零领域假设的通用前置条件与时空代价图规划器（保证“做得快、不死锁”）**
+   - **将早期先导实验中写死电器（`timed_processes`）与托盘（`carriers`）的旧版 `schedule_planner` 彻底推倒重做**，抽象为零领域假设的通用前置条件与时空代价图规划器（General Precondition & Cost-Aware Task Graph Planner）；
+   - 输入与内部表示**只认物理世界通用的四个基本原语：“状态变量、前置条件与后置效果、持续时间（及是否占用单手）、空间移动代价”**，让**异步等待并行、跨区顺路合并、最少状态重置排序、有限空间无死锁借位腾挪**全部从同一个通用图搜索里**自然涌现**。
+3. **三级通用消融阶梯**：① **裸模型最小基线** → ② **+ 通用具身感知记忆 Harness（路线 A）** → ③ **+ 零领域假设通用前置条件与时空代价图规划器（路线 A + B 结合）**。完整进展与无代号六项指标实验表见 **[总进度与实验报告（2026-11-15）](docs/progress_and_results_20261115.md)** 与 **[多模式规划难任务构造规范](docs/multi_mode_planning_benchmark_design_20261115.md)**。
+
+---
+
 On this host, use the single checkout `agentic_mobile_manipulation`; see the
 [local workspace and archived-runtime guide](docs/local_workspace.md) for source,
 data, compatibility paths and validation commands.
@@ -16,10 +32,6 @@ scripted references and CPU tests alone do not establish autonomous task success
 The [constructed custom-task catalog](task_designs/README.md) lists only tasks
 with built scenes, including the two constructed tasks from yujie's PR #6 and the
 6-task multi-mode planning & scheduling benchmark suite ([`task_designs/scheduling_v1`](task_designs/scheduling_v1/README.md)).
-For the latest Benchmark/Harness architecture, multi-CLI adapters (`codex`, `claude`, `agy`),
-multi-mode planning task taxonomy, and strong/weak model evaluation tables, see
-[Progress & Results Master Report (2026-11-15)](docs/progress_and_results_20261115.md) and
-[Multi-Mode Planning Benchmark Design & Survey](docs/multi_mode_planning_benchmark_design_20261115.md).
 
 ## Observation: four fixed cameras
 
