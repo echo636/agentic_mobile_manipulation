@@ -17,6 +17,10 @@ import re
 import tomllib
 from dataclasses import asdict
 
+_SRC_ROOT = str(Path(__file__).resolve().parents[1] / 'src')
+if _SRC_ROOT not in sys.path:
+    sys.path.insert(0, _SRC_ROOT)
+
 from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.events import write_derived_events
 
