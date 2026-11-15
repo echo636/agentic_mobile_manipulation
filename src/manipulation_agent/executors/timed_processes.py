@@ -13,7 +13,10 @@ appliance conditions hold:
 
 Public feedback crosses the model boundary only as factual sensory text
 (``running_message``, ``completed_message``, ``stopped_early_message``) with no
-entity IDs, coordinates or remaining-time numbers. No simulator module is
+entity IDs or coordinates. Since v2 (2026-11-15, benchmark side, all tiers) the
+text also states the process's own timing, as a real appliance panel or a person
+who set the timer would know it: the total duration when a run starts, the
+remaining time while it runs, and the completed portion when it stops early. No simulator module is
 imported at module import time so CPU unit tests run without OmniGibson.
 """
 from __future__ import annotations
@@ -25,7 +28,7 @@ from typing import Any
 from ..records import now
 from ..runtime.robot_clock import clock_of
 
-VERSION = 'timed_processes_robot_clock_v1'
+VERSION = 'timed_processes_robot_clock_v2_public_timing'
 ALLOWED_CONTAINMENT = frozenset({'Inside', 'OnTop'})
 ALLOWED_OBJECT_STATES = frozenset({None, 'Cooked'})
 
@@ -305,6 +308,7 @@ class TimedProcesses:
 
         selected_prim = str(((details or {}).get('private_grounding') or {}).get('selected_object_prim') or '')
         transient_messages: list[str] = []
+        running_remaining: list[float] = []
         any_unfinished_running = False
 
         for rule in self.rules:
@@ -323,13 +327,30 @@ class TimedProcesses:
                 and not active_now[(pid, item)]
                 for item in rule['items']
             )
+            duration = rule['duration_seconds']
+            remaining = [duration - self.elapsed[pid][item] for item in rule['items']
+                         if active_now[(pid, item)] and not self.completed[pid][item]]
+            started_now = any(
+                active_now[(pid, item)] and not self.completed[pid][item]
+                and not snap['active_before'].get((pid, item), False)
+                for item in rule['items']
+            )
             if stopped_unfinished:
-                transient_messages.append(rule['stopped_early_message'])
+                done_s = max((self.elapsed[pid][item] for item in rule['items']
+                              if not self.completed[pid][item]), default=0.0)
+                transient_messages.append(
+                    f"{rule['stopped_early_message']} About {done_s:.0f} s of {duration:.0f} s were completed.")
+            elif started_now:
+                transient_messages.append(
+                    f"{rule['running_message']} This run takes about {duration:.0f} s in total; "
+                    f"about {max(remaining):.0f} s remain.")
+                running_remaining.append(round(max(remaining), 1))
             elif unfinished_running_now and (
                 primitive in {'wait', 'toggle_on', 'look'}
                 or self._selected_matches_rule(backend, rule, selected_prim, live)
             ):
-                transient_messages.append(rule['running_message'])
+                transient_messages.append(f"{rule['running_message']} About {max(remaining):.0f} s remain.")
+                running_remaining.append(round(max(remaining), 1))
 
         self._write_log(backend, primitive, error, delta_total, active_now)
 
@@ -339,11 +360,14 @@ class TimedProcesses:
         self.pending_messages.clear()
         if not delivered:
             return None
-        return {
+        result = {
             'messages': delivered,
             'message': ' '.join(delivered),
             'any_process_running': any_unfinished_running,
         }
+        if running_remaining:
+            result['running_remaining_s'] = sorted(running_remaining)
+        return result
 
     def _write_log(self, backend: Any, primitive: str, error: BaseException | None,
                    delta_s: float, active_now: dict[tuple[str, str], bool]) -> None:

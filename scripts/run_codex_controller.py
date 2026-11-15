@@ -21,6 +21,7 @@ _SRC_ROOT = str(Path(__file__).resolve().parents[1] / 'src')
 if _SRC_ROOT not in sys.path:
     sys.path.insert(0, _SRC_ROOT)
 
+from manipulation_agent.task_objective import with_scoring_objective
 from manipulation_agent.clients import ClientConfig, get_adapter
 from manipulation_agent.clients.events import write_derived_events
 
@@ -306,6 +307,9 @@ def main(argv=None, *, allow_client=False):
     if args.planner_model and (args.agent_profile != 'basic-skills' or not args.model_provider_profile
                               or not args.model_provider_gateway):
         p.error('The planning subagent requires basic-skills and an explicit provider/gateway')
+    # Benchmark side (all tiers): the scoring objective travels with the task text,
+    # including rolling-handoff prompts that restate args.instruction.
+    args.instruction = with_scoring_objective(args.instruction)
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))

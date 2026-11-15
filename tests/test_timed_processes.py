@@ -171,6 +171,9 @@ class TimedProcessesTests(unittest.TestCase):
             self.assertEqual(b.timed.elapsed['microwave_heat']['hotdog1'], 0.0)
             self.assertIn('still heating', out['public_process']['message'])
             self.assertFalse(h1.mock_states['Cooked'])
+            # v2 public timing: the run's own total and remaining time, like an appliance panel.
+            self.assertIn('takes about 60 s in total; about 60 s remain', out['public_process']['message'])
+            self.assertEqual(out['public_process']['running_remaining_s'], [60.0])
 
             # Doing two manipulations with 10 m travel each elsewhere: each costs 20s walk + 10s manip = 30s!
             b.run_action('grasp', travel_m=10.0, selected='cup_1')
@@ -201,12 +204,16 @@ class TimedProcessesTests(unittest.TestCase):
             out = b.run_action('wait', wait_s=25.0)
             self.assertAlmostEqual(b.timed.elapsed['microwave_heat']['hotdog1'], 25.0)
             self.assertIn('still heating', out['public_process']['message'])
+            self.assertIn('About 35 s remain.', out['public_process']['message'])
+            self.assertNotIn('in total', out['public_process']['message'])
 
             # Walk 5m (10s) to microwave and open door early -> travel counts (+10s = 35s), manipulation does not; emits stopped_early
             out2 = b.run_action('open', travel_m=5.0, selected='microwave_0',
                                 body=lambda: mw.mock_states.__setitem__('Open', True))
             self.assertAlmostEqual(b.timed.elapsed['microwave_heat']['hotdog1'], 35.0)
             self.assertIn('stopped before heating finished', out2['public_process']['message'])
+            self.assertIn('About 35 s of 60 s were completed.', out2['public_process']['message'])
+            self.assertNotIn('running_remaining_s', out2['public_process'])
 
             # While door is open, waiting does not advance heating
             b.run_action('wait', wait_s=50.0)

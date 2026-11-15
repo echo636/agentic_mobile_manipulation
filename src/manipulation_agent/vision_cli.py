@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import signal
 import traceback
+from .task_objective import with_scoring_objective
 from .contracts import Budget
 from .runtime.deadline import EpisodeDeadline
 from .records import Recorder
@@ -121,7 +122,7 @@ def main():
                                   state_memory=a.state_memory == 'on')
         if policy:
             harness.start_standalone_clock()
-            policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)
+            policy.run(harness,with_scoring_objective(a.instruction),image_history_captures=a.image_history_captures)
         else:bridge.serve(harness,a.port)
         return 0 if recorder.run.get('status')=='passed' else 2
     except BaseException as exc:
