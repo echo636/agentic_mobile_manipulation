@@ -47,6 +47,10 @@ AUTONOMY_INSTRUCTION = '''
 Work autonomously through the whole instruction in this episode; nobody reads your messages or replies until you finish. Ending a turn without an accepted finish call only pauses the robot, so keep calling tools instead of reporting progress. Use finish(outcome=blocked) or finish(outcome=aborted) only for a concrete obstacle that persists after materially different attempts, or when no act/look steps remain; work that merely remains to be done is not a reason to stop.
 '''
 
+STATE_MEMORY_INSTRUCTION = '''
+Each tool response includes state_memory summarizing visited locations, measured point-to-point travel times, current hand state, enclosure open/closed states, and verified placements from earlier steps. Consult state_memory across long horizons instead of revisiting or reopening already-verified closed enclosures unless modifying their contents.
+'''
+
 
 TOOL_INTENT_PROMPT = '''Every tool call must include intent: one concise public sentence stating the immediate purpose of this particular call. This includes initialize, look, act, list_skills, read_skill, task_notes and finish, and any other enabled tool. Intent is a required tool argument, not a replacement for task_notes or an occasional progress message. Base it on the task and evidence already available; before initialize, state what you intend to inspect without inventing scene facts. Do not provide a private reasoning transcript.
 '''
@@ -100,7 +104,7 @@ def inline_skill_guidance(goal_skill='hierarchical'):
 
 
 def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_intent=False,
-                  autonomy=False, scheduling_mode='none'):
+                  autonomy=False, scheduling_mode='none', state_memory=False):
     if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
     if scheduling_mode not in {'none', 'text', 'program'}: raise ValueError('Unknown scheduling mode')
     if profile == 'skills_inline':
@@ -118,6 +122,8 @@ def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_i
         prompt += TEXT_SCHEDULING_INSTRUCTION
     elif scheduling_mode == 'program':
         prompt += PROGRAM_SCHEDULING_INSTRUCTION
+    if state_memory:
+        prompt += STATE_MEMORY_INSTRUCTION
     if autonomy:
         prompt += AUTONOMY_INSTRUCTION
     if require_tool_intent:
@@ -141,7 +147,8 @@ class RGBResponsesPolicy(ResponsesPolicy):
 
     def run(self, harness, instruction, *, image_history_captures=0):
         loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile,goal_skill=harness.goal_skill,
-            require_tool_intent=getattr(harness, 'require_tool_intent', False)),
+            require_tool_intent=getattr(harness, 'require_tool_intent', False),
+            state_memory=getattr(harness, 'state_memory_enabled', False)),
                               request=self._request_with_observation_jobs,
                               config=LoopConfig(max_turns=self.max_turns, max_tokens=self.max_tokens,
                                                 image_history_captures=image_history_captures))

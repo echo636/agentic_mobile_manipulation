@@ -33,6 +33,7 @@ _startup('proxy_import')
 from .transport.bridge import rpc
 from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
+from .agent.state_memory import StateMemory
 
 # Harness option (--click-echo on, default off): crop around the model's selected pixel on the chosen RGB image.
 ECHO_HALF_PX = 80
@@ -114,7 +115,8 @@ def loopback_host(value):
 
 
 async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
-                        enable_click_echo=False, max_inline_image_bytes=0):
+                        enable_click_echo=False, max_inline_image_bytes=0, state_memory=False,
+                        rolling_handoff_steps=0):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -142,7 +144,9 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
         raise ValueError('Duplicate bridge tool names')
     lock = asyncio.Lock()
     # Harness-side option, off by default: defer early finishes while act/look budget remains.
-    guard = FinishGuard(guard_state) if finish_guard else None
+    guard = FinishGuard(guard_state, state_memory=state_memory) if finish_guard else None
+    proxy_memory = StateMemory() if state_memory else None
+    segment_steps = 0
 
     class BridgeArguments(ArgModelBase):
         model_config = ConfigDict(extra='allow')
@@ -153,6 +157,23 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     def wrap(name):
         async def invoke(**arguments):
             async def call():
+                nonlocal segment_steps
+                if rolling_handoff_steps > 0 and name in ('act', 'look') and segment_steps >= rolling_handoff_steps:
+                    checkpoint = {
+                        'ok': False,
+                        'error': {
+                            'code': 'rolling_handoff_checkpoint',
+                            'action_step_used': False,
+                            'world_may_have_changed': False,
+                            'message': (
+                                f'Rolling context checkpoint reached after {segment_steps} act/look steps in this '
+                                'session. Stop calling tools and end this turn briefly now (do NOT call finish); '
+                                'the controller will immediately continue this live episode in a fresh context '
+                                'window with your state_memory.'
+                            ),
+                        },
+                    }
+                    return [types.TextContent(type='text', text=json.dumps(checkpoint, ensure_ascii=False))]
                 target = arguments.get('target') if (enable_click_echo and name == 'act' and isinstance(arguments, dict)) else None
                 pre_source = None
                 if (isinstance(target, dict) and isinstance(target.get('image_ref'), str)
@@ -164,8 +185,29 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                     except Exception:
                         pre_source = None
                 result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
+                if proxy_memory is not None and isinstance(result, dict):
+                    proxy_memory.observe(name, arguments if isinstance(arguments, dict) else {}, result)
+                    if name in ('initialize', 'act', 'look') and 'state_memory' not in result:
+                        result['state_memory'] = proxy_memory.public_view(
+                            include_handoff=(name == 'initialize' and proxy_memory.steps_observed > 0)
+                        )
                 if guard is not None:
                     guard.observe(result, name, arguments)
+                if rolling_handoff_steps > 0 and name in ('act', 'look') and isinstance(result, dict):
+                    step_used = not (isinstance(result.get('error'), dict)
+                                     and result['error'].get('action_step_used') is False)
+                    if step_used:
+                        segment_steps += 1
+                        if segment_steps == rolling_handoff_steps:
+                            result['rolling_handoff'] = {
+                                'due': True,
+                                'segment_steps': segment_steps,
+                                'message': (
+                                    'Rolling context checkpoint reached. If the task is not yet complete, end this '
+                                    'turn briefly without calling finish so the controller can continue in a fresh '
+                                    'context window with state_memory.'
+                                ),
+                            }
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
                 if pre_source is not None and result.get('observation') is not None:
                     try:
@@ -218,10 +260,12 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
 
 
 async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
-              enable_click_echo=False, max_inline_image_bytes=0):
+              enable_click_echo=False, max_inline_image_bytes=0, state_memory=False, rolling_handoff_steps=0):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
-                                 max_inline_image_bytes=max_inline_image_bytes)
+                                 max_inline_image_bytes=max_inline_image_bytes,
+                                 state_memory=state_memory,
+                                 rolling_handoff_steps=rolling_handoff_steps)
     _startup('serving')
     if transport == 'stdio':
         await server.run_stdio_async()
@@ -246,11 +290,17 @@ def main():
                         help='harness option: attach enlarged crop around selected pixel on act calls')
     parser.add_argument('--max-inline-image-bytes', type=int, default=0,
                         help='harness option: re-encode MCP images above N bytes to WebP so CLI clients attach them inline (0=off)')
+    parser.add_argument('--state-memory', choices=('off', 'on'), default='off',
+                        help='harness option: attach structured public state memory and enable memory-aware finish guard')
+    parser.add_argument('--rolling-handoff-steps', type=int, default=0,
+                        help='harness option: pause session after N act/look steps for rolling context handoff (0=off)')
     args = parser.parse_args()
     asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
                     finish_guard=args.finish_guard == 'on', guard_state=args.guard_state,
                     enable_click_echo=args.click_echo == 'on',
-                    max_inline_image_bytes=max(0, int(args.max_inline_image_bytes))))
+                    max_inline_image_bytes=max(0, int(args.max_inline_image_bytes)),
+                    state_memory=args.state_memory == 'on',
+                    rolling_handoff_steps=max(0, int(args.rolling_handoff_steps))))
 
 
 if __name__ == '__main__':

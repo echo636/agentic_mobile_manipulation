@@ -36,6 +36,8 @@ def main():
                    help='Harness option: strategy supplementation mode (default none)')
     p.add_argument('--auxiliary-feedback', choices=['off','on'], default='off',
                    help='Harness option: public hand state, actionable error hints and step refund on validation errors')
+    p.add_argument('--state-memory', choices=['off','on'], default='off',
+                   help='Harness option: automatic spatial and object state memory compression from public receipts')
     p.add_argument('--require-tool-intent',action='store_true',
                    help='Require a concise public intent argument on every tool call; use identically in both arms')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
@@ -112,7 +114,8 @@ def main():
                                   unbounded_episode=a.unbounded_episode,
                                   require_tool_intent=a.require_tool_intent,
                                   scheduling_mode=a.scheduling_mode,
-                                  auxiliary_feedback=a.auxiliary_feedback == 'on')
+                                  auxiliary_feedback=a.auxiliary_feedback == 'on',
+                                  state_memory=a.state_memory == 'on')
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)
