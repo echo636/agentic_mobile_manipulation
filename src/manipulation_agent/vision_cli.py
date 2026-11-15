@@ -32,6 +32,10 @@ def main():
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
     p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
+    p.add_argument('--scheduling-mode', choices=['none','text','program'], default='none',
+                   help='Harness option: strategy supplementation mode (default none)')
+    p.add_argument('--auxiliary-feedback', choices=['off','on'], default='off',
+                   help='Harness option: public hand state, actionable error hints and step refund on validation errors')
     p.add_argument('--require-tool-intent',action='store_true',
                    help='Require a concise public intent argument on every tool call; use identically in both arms')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
@@ -106,7 +110,9 @@ def main():
                                                           wall_seconds=a.wall_seconds),profile=a.agent_profile,
                                   agent_step_limit=a.max_agent_steps,goal_skill=a.goal_skill,
                                   unbounded_episode=a.unbounded_episode,
-                                  require_tool_intent=a.require_tool_intent)
+                                  require_tool_intent=a.require_tool_intent,
+                                  scheduling_mode=a.scheduling_mode,
+                                  auxiliary_feedback=a.auxiliary_feedback == 'on')
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,a.instruction,image_history_captures=a.image_history_captures)

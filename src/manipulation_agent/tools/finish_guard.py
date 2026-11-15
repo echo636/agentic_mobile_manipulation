@@ -41,6 +41,12 @@ MESSAGES = {
                        'failed act/look attempt(s) in a row followed the previous deferral. Make at least {attempts} '
                        'materially different attempts (another view, stance, target point, or order of the remaining '
                        'subgoals) before finishing {outcome} again; a completed act is progress, so continue from it.'),
+    'blocked_same_primitive': ('finish(outcome={outcome}) was not accepted yet: {remaining} act/look steps remain and '
+                               'all {made} failed attempts since the last deferral repeated the same primitive '
+                               '({primitive}) without trying a structurally different recovery action. Repeating '
+                               'grasp/cut on a closed door or distant frame is not a blocked task: try open on a '
+                               'closed door/drawer, navigate_to to walk closer or enter another room, release to free '
+                               'your hand, or work on another independent subgoal first.'),
     'achieved': ('finish(outcome=achieved) was not accepted yet: {remaining} act/look steps remain. Verify the '
                  'instruction against fresh RGB before finishing: use look (or move) so that every required object '
                  'and its destination are visible in a new image, and count each required item in that image, not '
@@ -54,7 +60,7 @@ MESSAGES = {
 
 # Counters are persisted so that a client restart (provider resume, unfinished-turn nudge) keeps them.
 STATE_FIELDS = ('steps_remaining', 'deferrals', 'calls_since_blocked', 'calls_since_achieved', 'completed',
-                'failures_in_row', 'history')
+                'failures_in_row', 'failed_primitives_in_row', 'history')
 
 
 class FinishGuard:
@@ -65,6 +71,7 @@ class FinishGuard:
         self.calls_since_achieved = 0
         self.completed = []
         self.failures_in_row = 0
+        self.failed_primitives_in_row = []
         self.history = []
         self.path = path
         if path:
@@ -107,8 +114,11 @@ class FinishGuard:
                 step_used = not (reported and isinstance(before, int)) or self.steps_remaining < before
             if not result.get('ok') and step_used:
                 self.failures_in_row += 1
+                prim = str((arguments or {}).get('primitive') or name)
+                self.failed_primitives_in_row.append(prim)
             elif completed:
                 self.failures_in_row = 0
+                self.failed_primitives_in_row = []
         if completed:
             intent = ' '.join(str((arguments or {}).get('intent') or '').split())
             if len(intent) > INTENT_CHARS:
@@ -157,15 +167,22 @@ class FinishGuard:
         if count >= MAX_DEFERRALS[counter]:
             return None
         if counter == 'stop':
-            if count and self.failures_in_row >= ATTEMPTS:
+            distinct_failed = set(self.failed_primitives_in_row)
+            if count and self.failures_in_row >= ATTEMPTS and len(distinct_failed) >= 2:
                 return None
-            key = 'blocked_repeat' if count else 'blocked'
-            message = MESSAGES[key].format(outcome=outcome, remaining=self.steps_remaining,
-                                           made=self.failures_in_row, attempts=ATTEMPTS,
-                                           threshold=THRESHOLDS[outcome])
+            if count and self.failures_in_row >= ATTEMPTS and len(distinct_failed) == 1:
+                only_prim = next(iter(distinct_failed))
+                message = MESSAGES['blocked_same_primitive'].format(
+                    outcome=outcome, remaining=self.steps_remaining, made=self.failures_in_row, primitive=only_prim)
+            else:
+                key = 'blocked_repeat' if count else 'blocked'
+                message = MESSAGES[key].format(outcome=outcome, remaining=self.steps_remaining,
+                                               made=self.failures_in_row, attempts=ATTEMPTS,
+                                               threshold=THRESHOLDS[outcome])
             self._record('deferred', arguments)
             self.calls_since_blocked = 0
             self.failures_in_row = 0
+            self.failed_primitives_in_row = []
         else:
             if count and self.calls_since_achieved >= 1:
                 return None

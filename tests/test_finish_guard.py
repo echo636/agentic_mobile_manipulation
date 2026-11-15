@@ -52,13 +52,27 @@ class FinishGuardRuleTests(unittest.TestCase):
     def test_repeat_stop_needs_failed_attempts_in_a_row(self):
         guard = self.guard_after_progress()
         self.assertIsNotNone(guard.deferral(ABORT))
-        guard.observe(failed(397), 'act', {})
-        guard.observe(failed(396), 'act', {})
+        guard.observe(failed(397), 'act', {'primitive': 'grasp'})
+        guard.observe(failed(396), 'act', {'primitive': 'open'})
         again = guard.deferral({'outcome': 'blocked', 'reason': 'still stuck'})
         self.assertIn('2 failed act/look attempt(s) in a row', again['error']['message'])
-        for remaining in range(395, 395 - ATTEMPTS, -1):
-            guard.observe(failed(remaining), 'act', {})
+        for remaining, prim in zip(range(395, 395 - ATTEMPTS, -1), ('grasp', 'open', 'navigate_to')):
+            guard.observe(failed(remaining), 'act', {'primitive': prim})
         self.assertIsNone(guard.deferral(ABORT))
+
+    def test_repeat_stop_with_same_primitive_is_deferred_until_diverse_attempt(self):
+        guard = self.guard_after_progress()
+        self.assertIsNotNone(guard.deferral(ABORT))
+        for remaining in range(397, 397 - ATTEMPTS, -1):
+            guard.observe(failed(remaining, 'fixed_object'), 'act', {'primitive': 'grasp'})
+        same = guard.deferral({'outcome': 'blocked', 'reason': 'grasp failed 3 times'})
+        self.assertIsNotNone(same)
+        self.assertIn('repeated the same primitive (grasp)', same['error']['message'])
+        # After trying at least 2 distinct primitives that still fail, stop is accepted
+        guard.observe(failed(394, 'pre_condition_error'), 'act', {'primitive': 'open'})
+        guard.observe(failed(393, 'navigation_unreachable'), 'act', {'primitive': 'navigate_to'})
+        guard.observe(failed(392, 'fixed_object'), 'act', {'primitive': 'grasp'})
+        self.assertIsNone(guard.deferral({'outcome': 'blocked', 'reason': 'tried open, nav, grasp'}))
 
     def test_completed_act_restarts_the_failure_count(self):
         guard = self.guard_after_progress()

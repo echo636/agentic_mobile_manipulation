@@ -48,7 +48,7 @@ class ClientConfig:
     mcp_env_vars: tuple[str, ...] = ()
 
     def __post_init__(self):
-        if self.client not in {"codex", "opencode", "kimi"}:
+        if self.client not in {"codex", "opencode", "kimi", "claude", "agy"}:
             raise ValueError(f"Unsupported client: {self.client}")
         if self.timeout is not None and self.timeout <= 0:
             raise ValueError("timeout must be positive")
@@ -58,8 +58,10 @@ class ClientConfig:
             raise ValueError("model and mcp_command must be nonempty")
         if self.reasoning_effort is not None and self.reasoning_effort not in {'low','medium','high','xhigh','max','ultra'}:
             raise ValueError('Unsupported reasoning effort')
-        if self.client != 'codex' and (self.reasoning_effort is not None or self.model_provider_profile is not None):
-            raise ValueError('Model provider and reasoning effort overrides are supported only for Codex')
+        if self.reasoning_effort is not None and self.client not in {'codex', 'claude', 'agy'}:
+            raise ValueError('Reasoning effort overrides are supported only for Codex, Claude and Agy')
+        if self.client != 'codex' and self.model_provider_profile is not None:
+            raise ValueError('Model provider overrides are supported only for Codex')
         if self.model_provider_gateway is not None and (self.client != 'codex' or not self.model_provider_profile):
             raise ValueError('A provider gateway requires an explicit Codex provider profile')
         if self.mcp_tool_exposure not in {'client_default', 'direct'}:

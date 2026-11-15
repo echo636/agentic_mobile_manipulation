@@ -43,6 +43,9 @@ def rate_limit_error(events):
     return (bool(re.search(r'\b(?:429 Too Many Requests|(?:status|HTTP) (?:429|500|502|503|504)\b)', message))
             or 'API_KEY_CONCURRENCY_QUEUE_' in message
             or 'selected model is at capacity' in message.lower()
+            or 'overloaded' in message.lower()
+            or 'rate limit' in message.lower()
+            or 'resource_exhausted' in message.lower()
             or 'stream disconnected before completion' in message)
 
 
@@ -80,6 +83,24 @@ def unfinished_turn_nudge(events, *, returncode, finish_received, timed_out, nud
 def codex_thread_id(events):
     return next((event.get('thread_id') for event in events
                  if event.get('type') == 'thread.started' and event.get('thread_id')), None)
+
+
+def session_thread_id(events, client: str):
+    if client == 'codex':
+        return codex_thread_id(events)
+    if client == 'claude':
+        return next((event.get('session_id') for event in events
+                     if isinstance(event, dict) and event.get('session_id')), None)
+    if client == 'agy':
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            if event.get('conversation_id'):
+                return event['conversation_id']
+            su = event.get('step_update') or event.get('result') or {}
+            if isinstance(su, dict) and su.get('conversation_id'):
+                return su['conversation_id']
+    return None
 
 
 def provider_recovery_mode(events, *, resumes, forks, max_resumes, max_forks):
@@ -149,7 +170,7 @@ def main(argv=None, *, allow_client=False):
     probing = allow_client and '--probe' in argv
     p = argparse.ArgumentParser()
     if allow_client:
-        p.add_argument('--client', choices=['codex', 'opencode', 'kimi'], default='codex')
+        p.add_argument('--client', choices=['codex', 'opencode', 'kimi', 'claude', 'agy'], default='codex')
         p.add_argument('--probe', action='store_true', help='Report installed CLI capabilities; does not call a model')
     p.add_argument("--model", default='gpt-6.1-sol')
     p.add_argument("--instruction", required=not probing)
@@ -166,6 +187,8 @@ def main(argv=None, *, allow_client=False):
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
     p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
+    p.add_argument('--scheduling-mode', choices=['none','text','program'], default='none',
+                   help='Harness option: strategy supplementation mode (default none)')
     p.add_argument('--autonomy-instruction', choices=['off','on'], default='off',
                    help='Harness option: append the autonomous-episode operating instruction to the system prompt')
     p.add_argument('--require-tool-intent',action='store_true',
@@ -201,11 +224,11 @@ def main(argv=None, *, allow_client=False):
     if args.timeout<0:p.error('--timeout must be nonnegative')
     if args.timeout==0:args.timeout=None
     if args.rate_limit_resumes is None:
-        args.rate_limit_resumes = -1 if client == 'codex' and args.timeout is None else 0
+        args.rate_limit_resumes = -1 if client in {'codex', 'claude', 'agy'} and args.timeout is None else 0
     if args.rate_limit_resumes < -1 or args.resume_backoff_seconds < 1:
         p.error('Provider resume count must be -1 or nonnegative and backoff positive')
-    if args.rate_limit_resumes and client != 'codex':
-        p.error('Rate-limit resume is supported only for Codex')
+    if args.rate_limit_resumes and client not in {'codex', 'claude', 'agy'}:
+        p.error('Rate-limit resume is supported only for Codex, Claude and Agy')
     if args.permanent_route_forks < 0 or (args.permanent_route_forks and client != 'codex'):
         p.error('Permanent route forks require Codex and a nonnegative count')
     if args.planner_model and (args.agent_profile != 'basic-skills' or not args.model_provider_profile
@@ -216,8 +239,10 @@ def main(argv=None, *, allow_client=False):
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill,
                                  require_tool_intent=args.require_tool_intent,
-                                 autonomy=args.autonomy_instruction == 'on')
-    catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent)
+                                 autonomy=args.autonomy_instruction == 'on',
+                                 scheduling_mode=args.scheduling_mode)
+    catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent,
+                         scheduling_mode=args.scheduling_mode)
     planner_config = None
     mcp_env_vars = ()
     if args.planner_model:
@@ -283,6 +308,7 @@ def main(argv=None, *, allow_client=False):
         scope='Same live MCP episode; transient same-thread resumes and explicitly enabled native-history route forks')
     metadata['unfinished_turn_nudges'] = args.unfinished_turn_nudges
     metadata['autonomy_instruction'] = args.autonomy_instruction
+    metadata['scheduling_mode'] = args.scheduling_mode
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
@@ -333,9 +359,9 @@ def main(argv=None, *, allow_client=False):
     policy_started_monotonic=time.monotonic()
     process = adapter.run(project, args.output, deadline.remaining(args.timeout), on_start)
     raw_events=args.output/'model_events.jsonl'
-    first_events=adapter.parse(raw_events).raw_events
-    thread_id=codex_thread_id(first_events) if client == 'codex' else None
-    segment_events=first_events
+    first_parsed=adapter.parse(raw_events)
+    thread_id=session_thread_id(first_parsed.raw_events, client)
+    segment_events=first_parsed.compat
     continuations=[]
     resume_count = fork_count = nudge_count = 0
     for attempt in itertools.count(1):
@@ -343,7 +369,7 @@ def main(argv=None, *, allow_client=False):
                    metadata['effective_timeout_seconds']-(time.monotonic()-policy_started_monotonic))
         mode = provider_recovery_mode(segment_events, resumes=resume_count, forks=fork_count,
             max_resumes=args.rate_limit_resumes, max_forks=args.permanent_route_forks)
-        if mode is None and client == 'codex' and unfinished_turn_nudge(
+        if mode is None and client in {'codex', 'claude', 'agy'} and unfinished_turn_nudge(
                 segment_events, returncode=process.returncode, finish_received=process.finish_received,
                 timed_out=process.timed_out, nudges=nudge_count, max_nudges=args.unfinished_turn_nudges):
             mode = 'nudge'
@@ -375,10 +401,11 @@ def main(argv=None, *, allow_client=False):
                         else adapter.prepare_resume(project,thread_id,resume_prompt))
         resumed=adapter.run(resume_project,segment_dir,remaining,on_start)
         segment_path=segment_dir/'model_events.jsonl'
-        segment_events=adapter.parse(segment_path).raw_events
+        seg_parsed=adapter.parse(segment_path)
+        segment_events=seg_parsed.compat
         with raw_events.open('ab') as combined,segment_path.open('rb') as segment:
             combined.write(segment.read())
-        continued_thread = codex_thread_id(segment_events)
+        continued_thread = session_thread_id(seg_parsed.raw_events, client)
         continuations.append({'attempt':attempt,'mode':mode,'parent_thread_id':thread_id,
                               'thread_id':continued_thread or thread_id,
                               'returncode':resumed.returncode,'timed_out':resumed.timed_out,

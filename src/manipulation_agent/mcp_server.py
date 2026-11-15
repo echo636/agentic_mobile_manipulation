@@ -34,6 +34,69 @@ from .transport.bridge import rpc
 from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
 
+# Harness option (--click-echo on, default off): crop around the model's selected pixel on the chosen RGB image.
+ECHO_HALF_PX = 80
+ECHO_SCALE = 2
+
+
+def echo_caption(image_ref, size):
+    return (f'Click echo: your selected point on {image_ref} (the image you selected on, before '
+            f'this action). The crop shows {size}x{size} px around it, enlarged {ECHO_SCALE}x; the magenta ring is '
+            'centred on the exact pixel you selected.')
+
+
+def click_echo(data, point):
+    import io
+    from PIL import Image, ImageDraw
+    image = Image.open(io.BytesIO(data)).convert('RGB')
+    width, height = image.size
+    x = min(width - 1, max(0, round(float(point[0]) * (width - 1))))
+    y = min(height - 1, max(0, round(float(point[1]) * (height - 1))))
+    size = min(2 * ECHO_HALF_PX, width, height)
+    left = min(max(0, x - size // 2), width - size)
+    top = min(max(0, y - size // 2), height - size)
+    crop = image.crop((left, top, left + size, top + size)).resize((size * ECHO_SCALE, size * ECHO_SCALE), Image.LANCZOS)
+    cx, cy = (x - left) * ECHO_SCALE + ECHO_SCALE // 2, (y - top) * ECHO_SCALE + ECHO_SCALE // 2
+    draw = ImageDraw.Draw(crop)
+    for colour, line in (((0, 0, 0), 5), ((255, 0, 255), 2)):
+        draw.ellipse([cx - 13, cy - 13, cx + 13, cy + 13], outline=colour, width=line)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            draw.line([cx + 6 * dx, cy + 6 * dy, cx + 26 * dx, cy + 26 * dy], fill=colour, width=line)
+    out = io.BytesIO()
+    crop.save(out, format='JPEG', quality=90)
+    return out.getvalue(), size
+
+
+# Harness transport option (--max-inline-image-bytes N, default 0 = off):
+# Antigravity CLI (`agy`) offloads MCP ImageContent blocks > 10,240 bytes to disk files instead of
+# attaching them inline to the model turn. Adaptive WebP re-encoding on the MCP proxy side keeps
+# normalized [0, 1] coordinates 100% invariant while guaranteeing inline multimodal delivery.
+def encode_within_byte_limit(data: bytes, mime_type: str, max_bytes: int) -> tuple[bytes, str]:
+    if max_bytes <= 0 or len(data) <= max_bytes:
+        return data, mime_type
+    import io
+    from PIL import Image
+    image = Image.open(io.BytesIO(data)).convert('RGB')
+    orig_w, orig_h = image.size
+    for scale_px in (min(orig_w, orig_h), 448, 384, 320, 256, 192, 160, 128, 96):
+        if scale_px > min(orig_w, orig_h):
+            continue
+        if scale_px == min(orig_w, orig_h) and orig_w == orig_h:
+            resized = image
+        else:
+            w = max(64, round(orig_w * scale_px / max(orig_w, orig_h)))
+            h = max(64, round(orig_h * scale_px / max(orig_w, orig_h)))
+            resized = image.resize((w, h), Image.LANCZOS)
+        for quality in (75, 65, 55, 45, 35, 25, 15):
+            buf = io.BytesIO()
+            resized.save(buf, format='WEBP', quality=quality)
+            encoded = buf.getvalue()
+            if len(encoded) <= max_bytes:
+                return encoded, 'image/webp'
+    buf = io.BytesIO()
+    image.resize((64, 64), Image.LANCZOS).save(buf, format='WEBP', quality=10)
+    return buf.getvalue(), 'image/webp'
+
 
 def fetch(url):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -50,7 +113,8 @@ def loopback_host(value):
     raise argparse.ArgumentTypeError('MCP HTTP supports loopback hosts only (one shared episode)')
 
 
-async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=False, guard_state=None):
+async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
+                        enable_click_echo=False, max_inline_image_bytes=0):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -89,19 +153,40 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     def wrap(name):
         async def invoke(**arguments):
             async def call():
+                target = arguments.get('target') if (enable_click_echo and name == 'act' and isinstance(arguments, dict)) else None
+                pre_source = None
+                if (isinstance(target, dict) and isinstance(target.get('image_ref'), str)
+                        and isinstance(target.get('point'), list) and len(target['point']) == 2):
+                    try:
+                        pre_source = await asyncio.to_thread(
+                            fetch, url.rstrip('/') + '/image/' + quote(target['image_ref'], safe='')
+                        )
+                    except Exception:
+                        pre_source = None
                 result = await asyncio.to_thread(rpc, url, name, arguments, str(uuid.uuid4()),timeout=rpc_timeout)
                 if guard is not None:
                     guard.observe(result, name, arguments)
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
+                if pre_source is not None and result.get('observation') is not None:
+                    try:
+                        echo, size = click_echo(pre_source, target['point'])
+                        echo, echo_mime = encode_within_byte_limit(echo, 'image/jpeg', max_inline_image_bytes)
+                        content.append(types.TextContent(type='text', text=echo_caption(target['image_ref'], size)))
+                        content.append(types.ImageContent(
+                            type='image', data=base64.b64encode(echo).decode(), mimeType=echo_mime,
+                            _meta={'codex/imageDetail': 'original'}))
+                    except Exception:
+                        pass
                 observation = result.get('observation', {})
                 if observation.get('observation_mode') == 'rgb_only':
                     for frame in observation['images']:
                         data = await asyncio.to_thread(fetch, url.rstrip('/') + '/image/' + quote(frame['image_ref'], safe=''))
                         if hashlib.sha256(data).hexdigest() != frame['sha256']:
                             raise RuntimeError('RGB image content hash mismatch')
+                        out_data, out_mime = encode_within_byte_limit(data, frame['mime_type'], max_inline_image_bytes)
                         content.append(types.TextContent(type='text', text=f'RGB view={frame["view"]}, image_ref={frame["image_ref"]}'))
                         content.append(types.ImageContent(
-                            type='image', data=base64.b64encode(data).decode(), mimeType=frame['mime_type'],
+                            type='image', data=base64.b64encode(out_data).decode(), mimeType=out_mime,
                             _meta={'codex/imageDetail': 'original'}))
                 return content
             # Finish must reach bridge.request_finish while an action is pending.
@@ -132,8 +217,11 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     )
 
 
-async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None):
-    server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state)
+async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
+              enable_click_echo=False, max_inline_image_bytes=0):
+    server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
+                                 enable_click_echo=enable_click_echo,
+                                 max_inline_image_bytes=max_inline_image_bytes)
     _startup('serving')
     if transport == 'stdio':
         await server.run_stdio_async()
@@ -154,9 +242,15 @@ def main():
     parser.add_argument('--finish-guard', choices=('off', 'on'), default='off',
                         help='harness option: defer early finishes while act/look budget remains')
     parser.add_argument('--guard-state', default=None, help='finish-guard state file kept across client restarts')
+    parser.add_argument('--click-echo', choices=('off', 'on'), default='off',
+                        help='harness option: attach enlarged crop around selected pixel on act calls')
+    parser.add_argument('--max-inline-image-bytes', type=int, default=0,
+                        help='harness option: re-encode MCP images above N bytes to WebP so CLI clients attach them inline (0=off)')
     args = parser.parse_args()
     asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
-                    finish_guard=args.finish_guard == 'on', guard_state=args.guard_state))
+                    finish_guard=args.finish_guard == 'on', guard_state=args.guard_state,
+                    enable_click_echo=args.click_echo == 'on',
+                    max_inline_image_bytes=max(0, int(args.max_inline_image_bytes))))
 
 
 if __name__ == '__main__':

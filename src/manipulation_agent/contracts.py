@@ -87,7 +87,8 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
             return
         kind = next(k for k in kind if k != "null")
     valid = {"object": isinstance(value, dict), "array": isinstance(value, list),
-             "string": isinstance(value, str), "integer": type(value) is int,
+             "string": isinstance(value, str), "boolean": type(value) is bool,
+             "integer": type(value) is int,
              "number": type(value) in (int, float) and math.isfinite(value)}.get(kind, False)
     if not valid:
         raise SkillError("invalid_arguments", f"{path} must be {kind}")
@@ -95,10 +96,14 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
         raise SkillError("invalid_arguments", f"{path} is not an allowed value")
     if kind == "object":
         props = schema["properties"]
-        if set(value) != set(props):
-            raise SkillError("invalid_arguments", f"{path} needs exactly {sorted(props)}")
+        required = set(schema.get("required", props))
+        missing = sorted(required - set(value))
+        extra = sorted(set(value) - set(props)) if schema.get("additionalProperties") is False else []
+        if missing or extra:
+            raise SkillError("invalid_arguments", f"{path} needs required {sorted(required)} (allowed: {sorted(props)})")
         for k, v in value.items():
-            validate(v, props[k], f"{path}.{k}")
+            if k in props:
+                validate(v, props[k], f"{path}.{k}")
     elif kind == "array":
         if len(value) < schema.get("minItems", 0):
             raise SkillError("invalid_arguments", f"{path} is too short")

@@ -16,14 +16,64 @@ from .tool_context import ToolContext
 from ..observations.surround import SurroundJobs
 from .closure import EpisodeClosure
 from ..agent.task_notes import TaskNotes, model_planning_reply
+from ..agent.schedule_planner import PublicScheduleLedger
+
+# Pre-execution validation / non-mutating refusal codes that never touch physics or render a new capture.
+NO_WORLD_CHANGE_CODES = frozenset({
+    'stale_observation', 'stale_image_ref', 'invalid_target', 'invalid_arguments',
+    'unknown_tool', 'unknown_skill_resource', 'invalid_schedule_input',
+})
+
+ACTION_FEEDBACK_HINTS = {
+    'no_removable_material': (
+        ' Check the Click echo crop and returned RGB: your pixel may have landed on the adjacent floor, wall, '
+        'or countertop just outside the dirty surface edge rather than on the intended object itself.'
+    ),
+    'fixed_object': (
+        ' Check two common causes in RGB and Click echo: (1) if the intended item is inside a closed cabinet, '
+        'appliance, drawer, or glass door, your ray hit the closed door panel — call act(primitive="open") on '
+        'that door/container while your hand is empty first; (2) if you tried to move far away or clicked beside '
+        'a movable item, use act(primitive="navigate_to") to walk to distant areas/doorways, or reselect the '
+        'interior body of the movable item itself.'
+    ),
+    'pre_condition_error': (
+        ' Verify three prerequisites in RGB: (1) hand state matches the action (open/close and unheld switches '
+        'require robot.hand == "empty"; cut/clean/treat require holding the proper tool); (2) for open/close, '
+        'click the operable door panel or drawer front rather than the fixed outer frame, countertop, or an '
+        'already-open door panel — if a swung-open door blocks your view of the interior shelves, call '
+        'act(primitive="navigate_to") onto floor space past/facing the open cavity and inspect all 4 views; '
+        '(3) for distant rooms, walk closer with navigate_to before operating.'
+    ),
+    'unsupported_relation': (
+        ' Check the receiving object type and action primitive: place_inside requires an open container/compartment; '
+        'place_on_top requires a flat upward support surface; attach requires a compatible mounting peg/socket/fixture.'
+    ),
+    'cut_target_unsupported': (
+        ' Check Click echo: your pixel likely hit the cutting board or countertop under/beside the food/workpiece '
+        'rather than the uncut item itself, or the item is already sliced.'
+    ),
+    'hand_occupied': (
+        ' open/close and unheld switches require robot.hand == "empty". Stage the held item on a nearby clear '
+        'surface first, perform open/close/toggle, then re-grasp.'
+    ),
+    'container_closed': (
+        ' If your hand is occupied, stage the held item on a nearby surface first so your hand is empty, '
+        'open the container, then pick the item back up and place_inside.'
+    ),
+}
 
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
-                 goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False):
+                 goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False,
+                 scheduling_mode='none', auxiliary_feedback=False):
         if profile == 'basic-skills': goal_skill = 'none'
         if profile == 'goal-tree': goal_skill = 'tree'
         if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
+        if scheduling_mode not in {'none', 'text', 'program'}: raise ValueError('Unknown scheduling mode')
         self.goal_skill=goal_skill
+        self.scheduling_mode=scheduling_mode
+        self.auxiliary_feedback=bool(auxiliary_feedback)
+        self.schedule_ledger=PublicScheduleLedger()
         self.require_tool_intent=require_tool_intent
         self.task_notes=TaskNotes(recorder.output, auto_select=goal_skill == 'hierarchical')
         if agent_step_limit is not None and (type(agent_step_limit) is not int or agent_step_limit<=0):
@@ -47,10 +97,12 @@ class VisionHarness:
         self.legacy_limits_active=not self.unrestricted_physics
         self._video_finalized=False
         self.revision=self.actions=self.calls=0; self.closed=False
+        self._consecutive_refunds=0
         self.closure=EpisodeClosure(recorder.output)
         self.profile = profile
         self.surround = SurroundJobs(self)
-        self.catalog = {t['name']: t for t in tool_specs(profile, require_intent=require_tool_intent)}
+        self.catalog = {t['name']: t for t in tool_specs(
+            profile, require_intent=require_tool_intent, scheduling_mode=scheduling_mode)}
         self.cache,self.evidence={},{}
         self.skills = None
         if profile == 'workflow':
@@ -58,9 +110,14 @@ class VisionHarness:
         if profile in {'basic-skills','goal-tree','skills','skills_inline','workflow'}:
             # skills_inline freezes the same bundle for provenance; its prompt carries the text.
             planning_skill = {'hierarchical': 'goal-decomposition', 'tree': 'goal-tree'}.get(goal_skill)
-            self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition','goal-tree'} - {planning_skill})
+            excluded = {'goal-decomposition', 'goal-tree'} - {planning_skill}
+            if scheduling_mode != 'text':
+                excluded = excluded | {'time-space-scheduling'}
+            self.skills=SkillLibrary(recorder.output,exclude=excluded)
         recorder.run['config']['agent_profile'] = profile
         recorder.run['config'].update(goal_skill=goal_skill,
+            scheduling_mode=scheduling_mode,
+            auxiliary_feedback=self.auxiliary_feedback,
             require_tool_intent=require_tool_intent,
             tool_intent_protocol=INTENT_PROTOCOL if require_tool_intent else LEGACY_PROTOCOL)
         recorder.run['episode_deadline_unix']=self.deadline.unix
@@ -143,6 +200,51 @@ class VisionHarness:
         return (self.agent_steps_exhausted_at is not None and
                 time.monotonic()-self.agent_steps_exhausted_at>=FINISH_GRACE_SECONDS)
 
+    def _public_hand_state(self):
+        """Robot's own gripper proprioception ('empty' or 'holding_item'), zero object identity."""
+        getter = getattr(self.backend, '_get_held', None)
+        if getter is None:
+            return None
+        try:
+            return 'holding_item' if getter() is not None else 'empty'
+        except Exception:
+            return None
+
+    def _public_robot_time(self):
+        """Public robot_clock accounting entry for the action that just executed, if available."""
+        clock = getattr(self.backend, 'robot_clock', None)
+        last = getattr(clock, 'last_action', None)
+        return copy.deepcopy(last) if isinstance(last, dict) else None
+
+    def _normalize_auxiliary_args(self, name: str, arguments):
+        """Harness-only permissive argument normalization (active ONLY when self.auxiliary_feedback is True).
+
+        Eliminates schema friction on lazy-MCP CLI clients (`call_mcp_tool`) without changing
+        default-off Benchmark/Harness contracts. Original raw arguments remain recorded in events.jsonl.
+        """
+        if not self.auxiliary_feedback or not isinstance(arguments, dict):
+            return arguments
+        out = dict(arguments)
+        if name == 'read_skill':
+            lower_map = {str(k).lower(): v for k, v in out.items()}
+            norm = {}
+            skill_name = lower_map.get('name') or lower_map.get('skill_name') or lower_map.get('skill')
+            res_name = lower_map.get('resource')
+            if isinstance(skill_name, str):
+                if '/' in skill_name and not res_name:
+                    parts = skill_name.split('/', 1)
+                    norm['name'] = parts[0]
+                    norm['resource'] = parts[1]
+                else:
+                    norm['name'] = skill_name
+                    norm['resource'] = res_name if isinstance(res_name, str) and res_name else 'SKILL.md'
+                return norm
+        elif name == 'act':
+            if 'primitive' not in out and isinstance(out.get('action'), str):
+                out = {k: v for k, v in out.items() if k != 'action'}
+                out['primitive'] = arguments['action']
+        return out
+
     def call(self,name,arguments,request_id, *, origin='controller'):
         if threading.get_ident()!=self.owner: raise RuntimeError('Simulator owner thread required')
         if not isinstance(request_id,str) or not request_id or len(request_id)>200:
@@ -175,6 +277,7 @@ class VisionHarness:
                 self.recorder.event('agent_step_admitted',{'step':self.agent_steps,
                     'limit':self.agent_step_limit,'tool':name,'request_id':request_id})
             if self.require_tool_intent: validate_intent(arguments)
+            arguments = self._normalize_auxiliary_args(name, arguments)
             # Compatibility for archived callers; model schema explicitly carries
             # nullable action options. Original input remains in the event ledger.
             if name=='act' and isinstance(arguments,dict):
@@ -188,9 +291,51 @@ class VisionHarness:
             execution_args = {k:v for k,v in arguments.items() if k not in {'decision', 'intent'}}
             context=ToolContext(self, request_id=request_id, tool_name=name)
             result={'ok':True,**REGISTRY[name].handler(context,**execution_args)}
+            if name in {'act', 'look'}:
+                self._consecutive_refunds = 0
         except SkillError as exc:
             result={'ok':False,'error':{'code':exc.code,'message':str(exc)}}
             result['observation']=self.snapshot
+            if (self.auxiliary_feedback and name in {'act','look'} and exc.code in NO_WORLD_CHANGE_CODES
+                    and self.agent_step_limit is not None and self.agent_steps>0 and not self.closed):
+                self._consecutive_refunds += 1
+                if self._consecutive_refunds <= 6:
+                    self.agent_steps-=1
+                    self.recorder.run['agent_steps']=self.agent_steps
+                    write_json(self.recorder.output/'run.json',self.recorder.run)
+                    self.recorder.event('agent_step_refunded',{'step':self.agent_steps+1,'tool':name,
+                        'request_id':request_id,'code':exc.code})
+                    result['error']['action_step_used']=False
+                    result['error']['current_image_refs']=[image['image_ref'] for image in self.snapshot['images']]
+                    result.pop('observation',None)
+                else:
+                    result['error']['action_step_used']=True
+                    result['error']['message'] = (
+                        str(result['error'].get('message', '')) +
+                        ' Repeated schema/reference errors now consume step budget. '
+                        'For `look`, pass `{"yaw_degrees": 45, "revision": <latest_revision>}`; '
+                        'for `act`, pass `{"primitive": "...", "target": {"image_ref": "...", "point": [x, y]}, "revision": <latest_revision>}`.'
+                    )
+            elif name in {'act', 'look'}:
+                self._consecutive_refunds = 0
+        if name in {'act', 'look'} and not self.closed:
+            if self.auxiliary_feedback:
+                hand = self._public_hand_state()
+                if hand is not None:
+                    result['robot'] = {'hand': hand}
+                if not result.get('ok') and isinstance(result.get('error'), dict):
+                    err_code = result['error'].get('code')
+                    if err_code in ACTION_FEEDBACK_HINTS:
+                        result['error']['message'] = str(result['error'].get('message', '')) + ACTION_FEEDBACK_HINTS[err_code]
+            if self.auxiliary_feedback or self.scheduling_mode == 'program':
+                rt_public = self._public_robot_time()
+                if rt_public is not None:
+                    result['robot_time'] = rt_public
+            if self.scheduling_mode == 'program':
+                rt_for_ledger = result.get('robot_time') or self._public_robot_time()
+                ledger_input = result if 'robot_time' in result else {**result, **({'robot_time': rt_for_ledger} if rt_for_ledger else {})}
+                self.schedule_ledger.observe_public_action(name, arguments if isinstance(arguments, dict) else None, ledger_input)
+                result['schedule_status'] = self.schedule_ledger.public_summary()
         # Report the existing clock after execution/rendering, without arming,
         # extending or adding a limit. This is runtime metadata, never scene GT.
         remaining = self.deadline.remaining()
@@ -328,6 +473,8 @@ class VisionHarness:
                 'message':'Operation completed on the selected target. Inspect the returned RGB.'}
         if details.get('public_process'):
             effect['process']=details['public_process']
+        if details.get('public_tool_cleanliness'):
+            effect['tool_cleanliness']=details['public_tool_cleanliness']
         if primitive=='navigate_to':
             # Only an action outcome crosses the RGB boundary, never private
             # coordinates, target distances, object identities or map geometry.

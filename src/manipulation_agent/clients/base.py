@@ -43,14 +43,14 @@ def run_process(project: PreparedProject, output: Path, timeout: float | None,
                     process.wait(timeout=0.1)
                 except subprocess.TimeoutExpired:
                     pass
-                if event_client == 'codex' and finish_at is None:
+                if finish_at is None:
                     while True:
                         offset = stream.tell()
                         line = stream.readline()
                         if not line or not line.endswith(b'\n'):
                             stream.seek(offset)
                             break
-                        if b'"finish"' not in line or b'"mcp_tool_call"' not in line:
+                        if b'closed' not in line:
                             continue
                         try:
                             receipt = successful_finish_event(json.loads(line))
@@ -94,14 +94,28 @@ class ClientAdapter:
     required_flags: tuple[str, ...] = ()
     help_args: tuple[str, ...] = ("--help",)
 
-    def probe(self) -> ClientCapability:
+    def resolve_executable(self) -> str | None:
         executable = shutil.which(self.name)
+        if executable:
+            return executable
+        for fallback in getattr(self, "fallback_paths", ()):
+            path = Path(fallback).expanduser()
+            if path.is_file() and os.access(path, os.X_OK):
+                return str(path)
+        return None
+
+    def probe(self) -> ClientCapability:
+        executable = self.resolve_executable()
         if executable is None:
             return ClientCapability(self.name, "unavailable", reason="Executable is not installed on PATH")
         try:
-            version = subprocess.check_output([self.name, "--version"], text=True, stderr=subprocess.DEVNULL, timeout=10).strip()
+            version = subprocess.check_output(
+                [executable, "--version"], text=True, stderr=subprocess.STDOUT, timeout=10
+            ).strip()
             if self.required_flags:
-                help_text = subprocess.check_output([self.name, *self.help_args], text=True, stderr=subprocess.DEVNULL, timeout=10)
+                help_text = subprocess.check_output(
+                    [executable, *self.help_args], text=True, stderr=subprocess.STDOUT, timeout=10
+                )
                 missing = [flag for flag in self.required_flags if flag not in help_text]
                 if missing:
                     return ClientCapability(self.name, "unsupported", version, executable,

@@ -30,6 +30,15 @@ Use remember and recall to retain useful observations, completed work and uncert
 '''
 SYSTEM_PROMPT = SKILLS_PROMPT
 
+# Harness option, off by default (system_prompt(scheduling_mode='text'|'program')).
+TEXT_SCHEDULING_INSTRUCTION = '''
+Before starting local work or multi-item transport, read time-space-scheduling/SKILL.md via read_skill and follow its principles for starting unattended processes early, carrier batching, and single-pass room tracking.
+'''
+
+PROGRAM_SCHEDULING_INSTRUCTION = '''
+Use schedule_plan (0 action steps) to coordinate timed processes, cross-room carrier batches, and room passes without filling bloated upfront tables: start with a concise plan of the main areas, timed processes, and cross-room transfers (optional subfields can be omitted), and refine or append completed_job_ids / verified_closed_compartments incrementally as you enter new rooms or close stocked compartments. When loading a multi-stage appliance (e.g. stage 1 before stage 2), verify in close-up RGB that you are placing items into the stage-1 appliance rather than an adjacent stage-2 unit. Check schedule_status before calling wait or reopening verified doors.
+'''
+
 # Harness option, off by default (system_prompt(autonomy=True), controller --autonomy-instruction on).
 # Operating facts only: who reads the messages, what ending a turn does, and when a stop outcome applies.
 # The first sentence and the blocked rule come from the frozen experiment line's prompt
@@ -90,8 +99,10 @@ def inline_skill_guidance(goal_skill='hierarchical'):
     return ('\nWorkflow guidance, included in full. There are no skill-reading tools.\n\n' + '\n'.join(sections))
 
 
-def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_intent=False, autonomy=False):
+def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_intent=False,
+                  autonomy=False, scheduling_mode='none'):
     if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
+    if scheduling_mode not in {'none', 'text', 'program'}: raise ValueError('Unknown scheduling mode')
     if profile == 'skills_inline':
         prompt = SKILLS_BASE_PROMPT
         for old, new in INLINE_PROMPT_REWRITES:
@@ -103,6 +114,10 @@ def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_i
         prompt = {'minimal':MINIMAL_PROMPT,'basic-skills':BASIC_SKILLS_PROMPT,'goal-tree':GOAL_TREE_PROMPT,
                   'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
                   'workflow':WORKFLOW_PROMPT}[profile]
+    if scheduling_mode == 'text':
+        prompt += TEXT_SCHEDULING_INSTRUCTION
+    elif scheduling_mode == 'program':
+        prompt += PROGRAM_SCHEDULING_INSTRUCTION
     if autonomy:
         prompt += AUTONOMY_INSTRUCTION
     if require_tool_intent:

@@ -1,7 +1,7 @@
 """Public RGB agent tools. Historical oracle contracts are not this catalog."""
 from dataclasses import replace
 from .base import REGISTRY, ToolMetadata
-from . import observation, action, planning, memory, skills, session, surround, notes
+from . import observation, action, planning, memory, skills, session, surround, notes, schedule
 from copy import deepcopy
 from .intent import INTENT_SCHEMA, PROTOCOL as INTENT_PROTOCOL
 
@@ -22,6 +22,7 @@ _METADATA = {
     'list_skills': ToolMetadata(read_only=True, idempotent=True),
     'read_skill': ToolMetadata(read_only=True, idempotent=True),
     'task_notes': ToolMetadata(),
+    'schedule_plan': ToolMetadata(read_only=True),
     'start_observation': ToolMetadata(read_only=True),
     'get_observation': ToolMetadata(read_only=True),
     'cancel_observation': ToolMetadata(read_only=True),
@@ -33,12 +34,18 @@ for _name, _metadata in _METADATA.items():
     if _name in REGISTRY:
         REGISTRY[_name] = replace(REGISTRY[_name], metadata=_metadata)
 
-def tool_specs(profile='skills', *, require_intent=False):
+def tool_specs(profile='skills', *, require_intent=False, scheduling_mode='none'):
     if profile not in {*PROFILE_TOOLS, 'workflow'}:
         raise ValueError('Unknown agent profile')
+    if scheduling_mode not in {'none', 'text', 'program'}:
+        raise ValueError('Unknown scheduling mode')
     allowed = PROFILE_TOOLS.get(profile)
+    if allowed is not None and scheduling_mode == 'program':
+        allowed = allowed | {'schedule_plan'}
     result = []
     for t in REGISTRY.values():
+        if profile == 'workflow' and t.name == 'schedule_plan' and scheduling_mode != 'program':
+            continue
         if profile != 'workflow' and t.name not in allowed: continue
         schema = deepcopy(t.schema)
         metadata = {'profile': profile, **t.metadata.as_dict()}
