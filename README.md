@@ -14,7 +14,12 @@ runtime, executor, task, skill and reporting code. See
 long-horizon tasks and their versioned public/scoring contracts. Recipes,
 scripted references and CPU tests alone do not establish autonomous task success.
 The [constructed custom-task catalog](task_designs/README.md) lists only tasks
-with built scenes, including the two constructed tasks from yujie's PR #6.
+with built scenes, including the two constructed tasks from yujie's PR #6 and the
+6-task multi-mode planning & scheduling benchmark suite ([`task_designs/scheduling_v1`](task_designs/scheduling_v1/README.md)).
+For the latest Benchmark/Harness architecture, multi-CLI adapters (`codex`, `claude`, `agy`),
+multi-mode planning task taxonomy, and strong/weak model evaluation tables, see
+[Progress & Results Master Report (2026-11-15)](docs/progress_and_results_20261115.md) and
+[Multi-Mode Planning Benchmark Design & Survey](docs/multi_mode_planning_benchmark_design_20261115.md).
 
 ## Observation: four fixed cameras
 
