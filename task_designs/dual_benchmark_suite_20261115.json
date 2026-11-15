@@ -1,0 +1,641 @@
+{
+  "schema_version": 1,
+  "suite_id": "dual_benchmark_suite_20261115",
+  "title": "通用具身长程操作智能体双层评测基准清单（原版 BEHAVIOR-1K 长程任务集 + 多模式自建长程规划基准 T1–T7）",
+  "created_on": "2026-11-15",
+  "benchmark_harness_separation_policy": "Benchmark 侧（任务定义、初始场景快照、物理执行器、客观事实回执、独立评估器与六项指标计量）对所有模型与方法 100% 固定不变；Harness 侧（路线 A 通用闭环感知记忆设施与路线 B 零领域假设通用前置条件与时空代价图规划器）全部作为默认关闭的独立显式开关进行三级阶梯消融。",
+  "model_reporting_policy": {
+    "primary_strong_models": [
+      {
+        "client": "codex",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "low"
+      },
+      {
+        "client": "agy",
+        "model": "gemini-4-hydrogen-low",
+        "extra_mcp_server_args": [
+          "--max-inline-image-bytes",
+          "9600"
+        ]
+      }
+    ],
+    "primary_weak_models": [
+      {
+        "client": "codex",
+        "model": "gpt-6.1-terra",
+        "reasoning_effort": "low"
+      },
+      {
+        "client": "agy",
+        "model": "gemini-3.8-flash-low",
+        "extra_mcp_server_args": [
+          "--max-inline-image-bytes",
+          "9600"
+        ]
+      }
+    ],
+    "strict_separation_rule": "强模型与弱模型数字必须分表报告，严禁混算平均值；失败与超时回合 100% 原样保留。"
+  },
+  "evaluation_ladder": [
+    {
+      "tier_index": 1,
+      "id": "tier1_bare_minimal",
+      "chinese_name": "第一档：裸模型最小基线（仅基础原子动作工具，无操作护栏、无外部记忆、无规划器）",
+      "description": "仅暴露 initialize / look / act / finish 四个基础工具与纯操作说明；关闭辅助回执、关闭外部状态记忆、关闭结束守卫与自主提醒、关闭规划器。",
+      "vision_cli_args": [
+        "--agent-profile",
+        "minimal",
+        "--goal-skill",
+        "none",
+        "--auxiliary-feedback",
+        "off",
+        "--state-memory",
+        "off",
+        "--planning-mode",
+        "off"
+      ],
+      "mcp_server_args": [
+        "--finish-guard",
+        "off",
+        "--state-memory",
+        "off",
+        "--planning-mode",
+        "off"
+      ],
+      "controller_args": [
+        "--agent-profile",
+        "minimal",
+        "--goal-skill",
+        "none",
+        "--autonomy-instruction",
+        "off",
+        "--unfinished-turn-nudges",
+        "0",
+        "--state-memory",
+        "off",
+        "--rolling-handoff-steps",
+        "0",
+        "--planning-mode",
+        "off"
+      ]
+    },
+    {
+      "tier_index": 2,
+      "id": "tier2_route_a_harness",
+      "chinese_name": "第二档：+ 通用具身闭环感知与记忆设施（路线 A：四向视觉锚定放大回显 + 外部状态记忆压缩 + 预期偏差自纠错 + 记忆感知结束核验）",
+      "description": "开启路线 A 全套模型无关、任务无关的闭环感知与记忆设施（局部放大回显、公开因果受阻回执、仅从公开回执维护的外部空间/容器/手部记忆与滑窗/滚动续跑压缩、防同动作原地早退与已核实闭门保护核验），不启用任务图规划器。",
+      "vision_cli_args": [
+        "--agent-profile",
+        "skills",
+        "--goal-skill",
+        "hierarchical",
+        "--auxiliary-feedback",
+        "on",
+        "--state-memory",
+        "on",
+        "--planning-mode",
+        "off"
+      ],
+      "mcp_server_args": [
+        "--finish-guard",
+        "on",
+        "--state-memory",
+        "on",
+        "--planning-mode",
+        "off"
+      ],
+      "controller_args": [
+        "--agent-profile",
+        "skills",
+        "--goal-skill",
+        "hierarchical",
+        "--autonomy-instruction",
+        "on",
+        "--unfinished-turn-nudges",
+        "2",
+        "--state-memory",
+        "on",
+        "--rolling-handoff-steps",
+        "80",
+        "--planning-mode",
+        "off"
+      ]
+    },
+    {
+      "tier_index": 3,
+      "id": "tier3_route_ab_combined",
+      "chinese_name": "第三档：+ 零领域假设通用前置条件与时空代价图规划器（路线 A + 路线 B 结合：底层通用感知记忆 Harness + 上层通用代价图规划器）",
+      "description": "在第二档（路线 A）之上开启零领域假设通用任务图规划器（--planning-mode task_graph，暴露 0 动作步工具 plan_task_graph 并自动融合路线 A 公开实测点对点移动耗时），使异步等待并行、跨区顺路合并、最少状态重置、有限缓冲换位与先盘点后远途搬运从统一图搜索中自然涌现。",
+      "vision_cli_args": [
+        "--agent-profile",
+        "skills",
+        "--goal-skill",
+        "hierarchical",
+        "--auxiliary-feedback",
+        "on",
+        "--state-memory",
+        "on",
+        "--planning-mode",
+        "task_graph"
+      ],
+      "mcp_server_args": [
+        "--finish-guard",
+        "on",
+        "--state-memory",
+        "on",
+        "--planning-mode",
+        "task_graph"
+      ],
+      "controller_args": [
+        "--agent-profile",
+        "skills",
+        "--goal-skill",
+        "hierarchical",
+        "--autonomy-instruction",
+        "on",
+        "--unfinished-turn-nudges",
+        "2",
+        "--state-memory",
+        "on",
+        "--rolling-handoff-steps",
+        "80",
+        "--planning-mode",
+        "task_graph"
+      ]
+    }
+  ],
+  "metrics_schema": {
+    "same_table_rule": "任何效率对比必须在完成率不下降的前提下同表报告全部六项核心指标，不得只挑单一有利指标。",
+    "required_metrics": [
+      {
+        "id": "completion_and_subgoals",
+        "chinese_name": "完成率与子目标达成比例",
+        "fields": [
+          "run.json:evaluation.task_success",
+          "run.json:evaluation.goal_satisfaction_fraction"
+        ]
+      },
+      {
+        "id": "agent_steps",
+        "chinese_name": "步骤数（总步数 / 失败步数）",
+        "fields": [
+          "run.json:agent_steps_admitted",
+          "run.json:failed_actions"
+        ]
+      },
+      {
+        "id": "robot_time_seconds",
+        "chinese_name": "机器人时间 s（总计 = 路程 + 操作 + 等待）",
+        "fields": [
+          "run.json:robot_time.total_seconds",
+          "run.json:robot_time.travel_seconds",
+          "run.json:robot_time.manipulation_seconds",
+          "run.json:robot_time.wait_seconds"
+        ]
+      },
+      {
+        "id": "trajectory_length_meters",
+        "chinese_name": "原生 A* 行走轨迹长度 m",
+        "fields": [
+          "run.json:robot_time.travel_distance_m"
+        ]
+      },
+      {
+        "id": "wall_clock_seconds",
+        "chinese_name": "墙钟时间 s（总计 = 模型推理 + 工具执行）",
+        "fields": [
+          "summary.json:wall_seconds",
+          "summary.json:model_wall_seconds",
+          "summary.json:tool_wall_seconds"
+        ]
+      },
+      {
+        "id": "token_usage",
+        "chinese_name": "Token 消耗（总输入 / 缓存命中 / 输出）",
+        "fields": [
+          "summary.json:usage.input_tokens",
+          "summary.json:usage.cached_input_tokens",
+          "summary.json:usage.output_tokens"
+        ]
+      }
+    ]
+  },
+  "tier1_original_behavior1k": {
+    "description": "第一层试卷：原版 BEHAVIOR-1K 官方公开长程任务（零定制 BDDL 评估器、官方原始实例 301 与官方公开指令）+ 1 项已完成双顺序物理验收的 200 步超长压力锚点任务，用于检验路线 A 与路线 B 在完全未定制原生任务上的普适增益。",
+    "native_bddl_tasks": [
+      {
+        "code": "B1K-1",
+        "task": "putting_up_Christmas_decorations_inside",
+        "chinese_name": "室内跨房布置圣诞装饰（客厅开篮取物 + 客厅/餐厅多目标分拣摆放）",
+        "instance": 301,
+        "seed": 0,
+        "scene_model": "house_single_floor",
+        "rooms_spanned": [
+          "living_room",
+          "dining_room"
+        ],
+        "bddl_sha256": "10cf6f3d70edf4eeadf1e79c1f71b2d8122013f24040a2fe22ac902dccadfaae",
+        "instance_301_sha256": "01bad5a16cc7a1e6e2cca29b409e308cc798180fb636642abf63e4b872b796f4",
+        "instruction": "In the living room, take the wreath, three candy canes, and two pillar candles out of the wicker basket. Place the wreath and two of the candy canes on the same living-room sofa. Put the remaining candy cane on top of a dining-room table. Put both pillar candles together on top of one dining-room table (they can share the same table). Finally, place all three gift boxes under or right next to the Christmas tree in the living room.",
+        "instruction_sha256": "5efa02e2b96d9083be48ed2fd51edb1927849b94c8ca62bc7bcdf36d9e1a92ed",
+        "vision_cli_invocation": [
+          "--task",
+          "putting_up_Christmas_decorations_inside",
+          "--instance",
+          "301",
+          "--seed",
+          "0",
+          "--max-agent-steps",
+          "120"
+        ],
+        "audited_reference_actions": 30,
+        "recommended_max_agent_steps": 120,
+        "planning_structure_tags": [
+          "multi_room_routing",
+          "container_extraction",
+          "same_target_grouping_constraint",
+          "tail_item_verification"
+        ],
+        "why_selected": "覆盖客厅与餐厅双房间往返、柳条篮内部取物（6 件）与地礼盒搬运（3 件），且带有“同沙发配对”与“同餐桌配对”约束；已在当前 RGB 执行器上通过官方 BDDL 满分核验，无细小物体或卡死陷阱。"
+      },
+      {
+        "code": "B1K-2",
+        "task": "assembling_gift_baskets",
+        "chinese_name": "四组礼篮跨类精确配对组装（16 件物品 4×4 一对一防重防漏装篮）",
+        "instance": 301,
+        "seed": 0,
+        "scene_model": "house_double_floor_lower",
+        "rooms_spanned": [
+          "living_room"
+        ],
+        "bddl_sha256": "6e6c82bae96d3b4efaf3026ed84c2e0ea1aefa57e2f4763c51d2c2fe7b96267e",
+        "instance_301_sha256": "bb1f0710646988426e83b9faee34d9dc12e94e0215fda21cca6f53f6aaf3a647",
+        "instruction": "Place one candle, one butter cookie, one piece of Swiss cheese, and one bow from the table into each of the four wicker baskets on the floor in the living room.",
+        "instruction_sha256": "02423d146005a50812610d09468c200da7c9a8e48e86462afb954ad8c28469d8",
+        "vision_cli_invocation": [
+          "--task",
+          "assembling_gift_baskets",
+          "--instance",
+          "301",
+          "--seed",
+          "0",
+          "--max-agent-steps",
+          "160"
+        ],
+        "audited_reference_actions": 57,
+        "recommended_max_agent_steps": 160,
+        "planning_structure_tags": [
+          "exact_combinatorial_pairing",
+          "external_container_memory",
+          "multi_trip_routing",
+          "pre_finish_audit"
+        ],
+        "why_selected": "同时属于 BEHAVIOR-1K 官方挑战 100 题与 20 项长程候选集（INVENTORY.md 第二节）：需将 4 类共 16 件物品不重不漏地配入 4 个地面礼篮（57 步参考动作），直接检验路线 A 的容器状态外部记忆与结束前逐项核验。"
+      },
+      {
+        "code": "B1K-3",
+        "task": "loading_the_car",
+        "chinese_name": "跨房装箱与车库后备箱装载闭锁（客厅→收纳箱→车库后备箱层级封装）",
+        "instance": 301,
+        "seed": 0,
+        "scene_model": "house_double_floor_lower",
+        "rooms_spanned": [
+          "living_room",
+          "corridor",
+          "garage"
+        ],
+        "bddl_sha256": "c5efe2cb96a090c65bb0ef655a71c1e6143e0a4e379e9f03609d83d593cc6c8a",
+        "instance_301_sha256": "9989bfb491d200231b913f75dbe6dda1032f42372ecff3e4e1bc04085327fb30",
+        "instruction": "Put the digital camera from the living room table into the container on the living room floor. Then take the container and the tennis racket to the garage, place both in the car trunk, and close it.",
+        "instruction_sha256": "040f617228129fff908c21d7d6ba7f289514b90ad4faf7e2665a0797f5ccbc8f",
+        "vision_cli_invocation": [
+          "--task",
+          "loading_the_car",
+          "--instance",
+          "301",
+          "--seed",
+          "0",
+          "--max-agent-steps",
+          "120"
+        ],
+        "audited_reference_actions": 45,
+        "recommended_max_agent_steps": 120,
+        "planning_structure_tags": [
+          "hierarchical_carrier_packing",
+          "long_cross_room_travel",
+          "articulated_container_open_close"
+        ],
+        "why_selected": "原生包含“先将相机装入容器、再跨客厅至车库装入汽车后备箱并关盖”的层级载具与铰接门开合前置依赖（45 步参考动作），无液体/布料物理不稳定因素。"
+      },
+      {
+        "code": "B1K-4",
+        "task": "slicing_vegetables",
+        "chinese_name": "厨房开柜取菜与工具持握连续切丁闭柜（闭门冰箱取 5 菜 + 持刀切配 + 关门）",
+        "instance": 301,
+        "seed": 0,
+        "scene_model": "house_single_floor",
+        "rooms_spanned": [
+          "kitchen"
+        ],
+        "bddl_sha256": "783060c491bc4ec9cd9ad2bb2e58331ccc895fb4b0f0af418f9e2437135b15d0",
+        "instance_301_sha256": "038fad142630a6c766fedfaa97e5911f279889021fa3854d0861cbd8a4f7f789",
+        "instruction": "From the refrigerator in the kitchen, take out the two bell peppers, the two beets, and the zucchini. Then, on either chopping board on the countertop, use the parer to dice all of them so that only diced bell pepper, diced beet, and diced zucchini remain. Make sure the refrigerator is closed when you finish.",
+        "instruction_sha256": "8425a0e71d976846dffab02120ab6591a8590d8f07dba3e05e15690b20f97a5c",
+        "vision_cli_invocation": [
+          "--task",
+          "slicing_vegetables",
+          "--instance",
+          "301",
+          "--seed",
+          "0",
+          "--max-agent-steps",
+          "140"
+        ],
+        "audited_reference_actions": 39,
+        "recommended_max_agent_steps": 140,
+        "planning_structure_tags": [
+          "closed_container_extraction",
+          "tool_in_hand_precondition",
+          "batch_stage_ordering",
+          "final_door_closure"
+        ],
+        "why_selected": "覆盖铰接冰箱开门取 5 件蔬菜、砧板归集、持削皮刀连续切丁（单手占用约束：先全部取出摆上砧板再拿刀一次切完显著优于反复拿放刀具）及终态关门要求，参考流程 39 步满分通过。"
+      }
+    ],
+    "ultra_long_stress_anchor": {
+      "code": "B1K-S1",
+      "id": "kitchen_v2_tidy",
+      "task_id": "kitchen_reopen_meal_and_cold_storage_v2",
+      "instance_id": "kitchen_reopen_meal_and_cold_storage_v2_seed0_tidy_r1",
+      "chinese_name": "厨房启用、双人热餐备餐与留餐冷藏（INVENTORY 验收通过版 11 阶段超长压力测试）",
+      "local_spec_path": "/mnt/data/home/sunyujie/robot_manipulation/experiments/benchmark_inventory_20261112/inputs/kitchen_v2_tidy/task_pro6000.json",
+      "remote_spec_path": "/data/zx/sunyujie/robot_manipulation/experiments/benchmark_inventory_20261112_pro6000/inputs/kitchen_v2_tidy/task_pro6000.json",
+      "task_sha256": "32cc0527355a64656cad22448efa4673b28ac39da5f5338b288889d746a51f8d",
+      "scene_sha256": "df5546a9e1b7149e7028d104e5eece418575148f1ea3d6693a2d73ad8c95c221",
+      "audited_reference_orders": {
+        "order_1": {
+          "actions": 200,
+          "travel_distance_m": 418.5,
+          "task_success": true
+        },
+        "order_2": {
+          "actions": 203,
+          "travel_distance_m": 459.6,
+          "task_success": true
+        }
+      },
+      "recommended_max_agent_steps": 320,
+      "why_selected": "INVENTORY.md 第四节已完成场景去歧义（去除多余半苹果、加宽餐刀、消除假柜台歧义）并在 PRO 6000 跑通双顺序完整参考流程（200–203 步、418–460m），专门用于极限压测路线 A 的超百步记忆压缩与滚动会话续跑。"
+    }
+  },
+  "tier2_multimode_long_horizon": {
+    "suite_name": "scheduling_v1",
+    "description": "第二层试卷：自建多模式长程规划难任务集（T1–T7），系统覆盖异步计时等待掩蔽（T1–T3）与 0 秒等待纯空间/状态/条件耦合规划（T4–T7），每题均具备 PRO 6000 冻结场景、最优与习惯两条特权物理参考流程及物理违规负例验证。",
+    "tasks": [
+      {
+        "code": "T1",
+        "task_id": "hot_lunch_living_l2",
+        "instance_id": "hot_lunch_living_l2_seed0_r1",
+        "chinese_name": "双人热午餐跨房备餐与摆台 L2",
+        "repo_task_json": "task_designs/scheduling_v1/hot_lunch_living_l2/task.json",
+        "task_sha256": "e1b3a2c7ed4a5aff3c1aa15f16f329171945d4031d5049f7717c9dfaaacfbd15",
+        "scene_sha256": "a1336ec63ed6015d9d2b9a5c88492c8a5e48ddc02b55b4dad6d8f27c836d0e89",
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/inputs/hot_lunch_living_l2",
+        "appliance_wait_seconds": 180,
+        "planning_modes": [
+          "M1_carrier_batching",
+          "M2_async_timed_overlap"
+        ],
+        "recommended_max_agent_steps": 160,
+        "privileged_reference_comparison": {
+          "optimal": {
+            "order": "optimal_parallel_batch",
+            "task_success": true,
+            "robot_time_s": 618.1,
+            "travel_distance_m": 54.1,
+            "wait_s": 0.0
+          },
+          "habit": {
+            "order": "habit_sequential_single",
+            "task_success": true,
+            "robot_time_s": 918.4,
+            "travel_distance_m": 90.2,
+            "wait_s": 180.0
+          },
+          "robot_time_saving_pct": 32.7,
+          "travel_distance_saving_pct": 40.0
+        }
+      },
+      {
+        "code": "T2",
+        "task_id": "study_guest_laundry",
+        "instance_id": "study_guest_laundry_seed0_r3",
+        "chinese_name": "书房客房整理与双段串联洗烘配送",
+        "repo_task_json": "task_designs/scheduling_v1/study_guest_laundry/task.json",
+        "task_sha256": "a9ce1aa4463dc7c7ab0fb734b078816a25bd3c92464e3900604bd30bf05d9286",
+        "scene_sha256": "a0b48b029ef890b5ad3c6649673a6a3bbbebbdb5c482cabda11df3e8898d0600",
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/inputs/study_guest_laundry",
+        "appliance_wait_seconds": 540,
+        "planning_modes": [
+          "M1_carrier_batching",
+          "M2_chained_async_timed_overlap"
+        ],
+        "recommended_max_agent_steps": 280,
+        "privileged_reference_comparison": {
+          "optimal": {
+            "order": "optimal_parallel_batch",
+            "task_success": true,
+            "robot_time_s": 1465.2,
+            "travel_distance_m": 234.6,
+            "wait_s": 0.0
+          },
+          "habit": {
+            "order": "habit_sequential_single",
+            "task_success": true,
+            "robot_time_s": 2273.1,
+            "travel_distance_m": 476.5,
+            "wait_s": 480.0
+          },
+          "robot_time_saving_pct": 35.5,
+          "travel_distance_saving_pct": 50.8
+        }
+      },
+      {
+        "code": "T3",
+        "task_id": "garage_garden_patio_prep",
+        "instance_id": "garage_garden_patio_prep_seed0_r1",
+        "chinese_name": "车库工坊与庭院露台晚间备场",
+        "repo_task_json": "task_designs/scheduling_v1/garage_garden_patio_prep/task.json",
+        "task_sha256": "d44cddf6d9cb956c01b244098bcc1a9d6506cde35fac8535ff8c7bdf9ec2ae4d",
+        "scene_sha256": "3447f3cfeff3352a7c7a70f2c7823bc7c2b005254cf4f50d3c7873f49cc56476",
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/inputs/garage_garden_patio_prep",
+        "appliance_wait_seconds": 240,
+        "planning_modes": [
+          "M1_carrier_batching",
+          "M2_async_timed_overlap",
+          "M6_tool_prerequisite_unlock"
+        ],
+        "recommended_max_agent_steps": 240,
+        "privileged_reference_comparison": {
+          "optimal": {
+            "order": "optimal_parallel_batch",
+            "task_success": true,
+            "robot_time_s": 1120.8,
+            "travel_distance_m": 179.8,
+            "wait_s": 0.0
+          },
+          "habit": {
+            "order": "habit_sequential_single",
+            "task_success": true,
+            "robot_time_s": 1935.6,
+            "travel_distance_m": 477.2,
+            "wait_s": 240.0
+          },
+          "robot_time_saving_pct": 42.1,
+          "travel_distance_saving_pct": 62.3
+        }
+      },
+      {
+        "code": "T4",
+        "task_id": "upstairs_study_bedrooms_exchange",
+        "instance_id": "upstairs_study_bedrooms_exchange_seed0_r1",
+        "chinese_name": "二层双卧与中央书房 4 换 4 双向置换清洁（0 秒等待）",
+        "repo_task_json": "task_designs/scheduling_v1/upstairs_study_bedrooms_exchange/task.json",
+        "task_sha256": "cc024b8ce0e2b8ddcea183cd0f5396ceeda83cc8ff4c4b3c62a675b38111de91",
+        "scene_sha256": "aee964f69b1d724a61e73ad296a59740f8a2ce5fc93edeb7fd3b0bb37fcc6727",
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/inputs/upstairs_study_bedrooms_exchange",
+        "appliance_wait_seconds": 0,
+        "planning_modes": [
+          "M1_carrier_batching",
+          "M3_bidirectional_backhaul_exchange"
+        ],
+        "recommended_max_agent_steps": 180,
+        "privileged_reference_comparison": {
+          "optimal": {
+            "order": "optimal_carrier_tour",
+            "task_success": true,
+            "robot_time_s": 894.1,
+            "travel_distance_m": 134.8,
+            "wait_s": 0.0
+          },
+          "habit": {
+            "order": "habit_sequential",
+            "task_success": true,
+            "robot_time_s": 1040.9,
+            "travel_distance_m": 262.9,
+            "wait_s": 0.0
+          },
+          "robot_time_saving_pct": 14.1,
+          "travel_distance_saving_pct": 48.7
+        }
+      },
+      {
+        "code": "T5",
+        "task_id": "kitchen_dining_cleanliness_restock",
+        "instance_id": "kitchen_dining_cleanliness_restock_seed0_r3",
+        "chinese_name": "餐厨三级污渍防污染单调清洁与闭柜盘点补货（0 秒等待）",
+        "repo_task_json": "task_designs/scheduling_v1/kitchen_dining_cleanliness_restock/task.json",
+        "task_sha256": "f96749f82b24e3f48ea2eed68aa9953aa16d957ea47ba2bc8b94696400c5aaab",
+        "scene_sha256": "89eff5a6f09510fc99f5dacdc10e7fa937e7a434d62971241f33e332f647ab42",
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/inputs/kitchen_dining_cleanliness_restock",
+        "appliance_wait_seconds": 0,
+        "planning_modes": [
+          "M1_carrier_batching",
+          "M4_monotonic_state_minimum_reset",
+          "M5_blind_container_restock"
+        ],
+        "recommended_max_agent_steps": 140,
+        "privileged_reference_comparison": {
+          "optimal": {
+            "order": "optimal_monotonic_clean_and_batch_restock",
+            "task_success": true,
+            "robot_time_s": 501.8,
+            "travel_distance_m": 60.9,
+            "wait_s": 0.0
+          },
+          "habit": {
+            "order": "habit_out_of_order_rinse_and_single_restock",
+            "task_success": true,
+            "robot_time_s": 488.8,
+            "travel_distance_m": 92.6,
+            "wait_s": 0.0
+          },
+          "robot_time_saving_pct": -2.7,
+          "travel_distance_saving_pct": 34.2
+        }
+      },
+      {
+        "code": "T6",
+        "task_id": "tabletop_buffer_nonmonotonic_swap",
+        "instance_id": "tabletop_buffer_nonmonotonic_swap_seed0_r3",
+        "chinese_name": "有限缓冲台面非单调借位腾挪擦拭交换（0 秒等待）",
+        "repo_task_json": "task_designs/scheduling_v1/tabletop_buffer_nonmonotonic_swap/task.json",
+        "task_sha256": "c74dd28288ee181c3426c0863619e1b9963314d8279c4e207a96976b096c6676",
+        "scene_sha256": "00754c1d94844eb0c6598b040aa9bae0475f349827818476cb4229c01858bdc9",
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/inputs/tabletop_buffer_nonmonotonic_swap",
+        "appliance_wait_seconds": 0,
+        "planning_modes": [
+          "M1_carrier_batching",
+          "M7_bounded_buffer_nonmonotonic_swap"
+        ],
+        "recommended_max_agent_steps": 100,
+        "privileged_reference_comparison": {
+          "optimal": {
+            "order": "optimal_carrier_tour",
+            "task_success": true,
+            "robot_time_s": 418.4,
+            "travel_distance_m": 33.3,
+            "wait_s": 0.0
+          },
+          "habit": {
+            "order": "habit_sequential",
+            "task_success": true,
+            "robot_time_s": 527.0,
+            "travel_distance_m": 146.5,
+            "wait_s": 0.0
+          },
+          "robot_time_saving_pct": 20.6,
+          "travel_distance_saving_pct": 77.3
+        }
+      },
+      {
+        "code": "T7",
+        "task_id": "blind_cabinet_exact_restock_unlock",
+        "instance_id": "blind_cabinet_exact_restock_unlock_seed0_r1",
+        "chinese_name": "闭柜未知存货精确配平与走廊压盖工具箱多跳解锁（0 秒等待新任务）",
+        "repo_task_json": "task_designs/scheduling_v1/blind_cabinet_exact_restock_unlock/task.json",
+        "task_sha256": "23f559b2afd1a2a8eb15f373423e59a716219d53236dc83a7f6cdf8456291c31",
+        "scene_sha256": "9f7ea072112535353eb75fe9cf31b6f641325fcd06cd662ae6d164a85e400402",
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/route_ab_team_20261115/inputs/blind_cabinet_exact_restock_unlock",
+        "remote_scene_dir": "/data/zx/sunyujie/robot_manipulation/experiments/route_ab_team_20261115/inputs/blind_cabinet_exact_restock_unlock",
+        "appliance_wait_seconds": 0,
+        "planning_modes": [
+          "M1_carrier_batching",
+          "M5_contingent_blind_exact_balance_with_surplus_penalty",
+          "M6_multihop_blocked_container_unlock"
+        ],
+        "recommended_max_agent_steps": 160,
+        "privileged_reference_comparison": {
+          "optimal": {
+            "order": "optimal_inspect_unlock_carrier_loop",
+            "task_success": true,
+            "robot_time_s": 667.4,
+            "travel_distance_m": 114.9,
+            "wait_s": 0.0
+          },
+          "habit": {
+            "order": "habit_blind_overfetch_sequential",
+            "task_success": true,
+            "robot_time_s": 1146.0,
+            "travel_distance_m": 332.7,
+            "wait_s": 0.0
+          },
+          "cross_zone_one_way_astar_m": 25.4,
+          "robot_time_saving_pct": 41.8,
+          "travel_distance_saving_pct": 65.5
+        }
+      }
+    ]
+  }
+}
