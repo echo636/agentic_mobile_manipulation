@@ -467,10 +467,10 @@
         "instance_id": "garage_garden_patio_prep_seed0_r1",
         "chinese_name": "车库工坊与庭院露台晚间备场",
         "repo_task_json": "task_designs/scheduling_v1/garage_garden_patio_prep/task.json",
-        "task_sha256": "d44cddf6d9cb956c01b244098bcc1a9d6506cde35fac8535ff8c7bdf9ec2ae4d",
+        "task_sha256": "93c102ce78f5c1622102082b182ec6bc3975c033d3d606711582735823418988",
         "scene_sha256": "3447f3cfeff3352a7c7a70f2c7823bc7c2b005254cf4f50d3c7873f49cc56476",
-        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/inputs/garage_garden_patio_prep",
-        "appliance_wait_seconds": 240,
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/route_ab_team_20261115/inputs/garage_garden_patio_prep_r2",
+        "appliance_wait_seconds": 360,
         "planning_modes": [
           "M1_carrier_batching",
           "M2_async_timed_overlap",

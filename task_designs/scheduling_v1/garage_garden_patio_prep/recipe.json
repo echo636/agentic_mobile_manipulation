@@ -1602,8 +1602,8 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.44,
-       0.42
+       0.25,
+       0.50
       ]
      },
      {
@@ -1615,8 +1615,8 @@
       "primitive": "place_on_top",
       "role": "tray",
       "uv": [
-       0.56,
-       0.58
+       0.75,
+       0.50
       ]
      }
     ],
