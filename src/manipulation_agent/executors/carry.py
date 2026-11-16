@@ -94,7 +94,9 @@ class ControlledCarry:
         if not dependencies or not hasattr(self, '_placement_contacts') or not hasattr(self, 'robot'):
             return list(dependencies)
         kept, left = list(dependencies), []
+        rejected = set()
         while True:
+            kept += self._contact_riders(obj, kept, rejected)
             members = [obj, *[child for child, _, _ in kept]]
             allowed = {link.prim_path for body in (*members, self.robot) for link in body.links.values()}
             ids = {id(body) for body in members}
@@ -102,12 +104,13 @@ class ControlledCarry:
             for child, parent, kind in kept:
                 external = ['support_left_in_place'] if id(parent) not in ids else (
                     [body for body in self._placement_contacts(child) if body not in allowed]
-                    if kind == 'OnTop' else [])
+                    if kind in {'OnTop', 'RestingOn'} else [])
                 (drop if external else keep).append((child, parent, kind, external))
             kept = [(child, parent, kind) for child, parent, kind, _ in keep]
             if not drop:
                 break
             left += drop
+            rejected |= {id(child) for child, _, _, _ in drop}
         if left and hasattr(self, 'output'):
             self._carry_record(event='grasp_payload_left_in_place', grasped=obj.name,
                                carried=[[child.name, parent.name, kind] for child, parent, kind in kept],
@@ -115,6 +118,57 @@ class ControlledCarry:
                                       'external_contacts': sorted(external)[:12]}
                                      for child, parent, kind, external in left])
         return kept
+
+    def _rider_candidates(self, members):
+        """Loose rigid bodies whose AABB meets the assembly's AABB (+2 cm)."""
+        env = getattr(self, 'env', None)
+        scene = getattr(env, 'scene', None)
+        if scene is None:
+            return []
+        from omnigibson.utils.constants import PrimType
+        if not all(hasattr(body, 'aabb') for body in members):
+            return []
+        ids = {id(body) for body in members}
+        boxes = [body.aabb for body in members]
+        lo = self.torch.stack([b[0] for b in boxes]).amin(0) - .02
+        hi = self.torch.stack([b[1] for b in boxes]).amax(0) + .02
+        found = []
+        for child in scene.objects:
+            if id(child) in ids or child is self.robot or getattr(child, 'fixed_base', True):
+                continue
+            if getattr(child, 'prim_type', None) == PrimType.CLOTH or not hasattr(child, 'aabb'):
+                continue
+            clo, chi = child.aabb
+            if bool(((chi >= lo) & (clo <= hi)).all()):
+                found.append(child)
+        return found
+
+    def _contact_riders(self, obj, kept, rejected=()):
+        """Carry a loose body supported only by the grasped assembly.
+
+        Native OnTop misses a body that leans across two payload items (for
+        example, the second of two logs piled on a tray). Contacts decide:
+        every contact must be a payload member or the robot, and at least one
+        a payload member. No task binding or object category is read.
+        """
+        if not hasattr(self, '_placement_contacts') or not hasattr(self, 'robot'):
+            return []
+        added = []
+        while True:
+            members = [obj, *[child for child, _, _ in kept], *[child for child, _, _ in added]]
+            member_paths = {link.prim_path: body for body in members for link in body.links.values()}
+            robot_paths = {link.prim_path for link in self.robot.links.values()}
+            new = []
+            for child in self._rider_candidates(members):
+                if id(child) in rejected:
+                    continue
+                contacts = list(self._placement_contacts(child))
+                supports = [member_paths[path] for path in contacts if path in member_paths]
+                if supports and all(path in member_paths or path in robot_paths for path in contacts):
+                    new.append((child, supports[0], 'RestingOn'))
+            if not new:
+                return added
+            added += new
 
     def _grasp_pose(self, obj, point, dependencies):
         """Rank fingertip poses; approximate boxes cannot reject a grasp."""
@@ -484,6 +538,13 @@ class ControlledCarry:
         from omnigibson.object_states import Inside,OnTop,AttachedTo
         verify_particles(self.env.scene,getattr(self,'_placement_particle_payload',(None,[]))[1])
         for child,parent,kind in dependencies:
+            if kind=='RestingOn':
+                # A contact rider has no native relation to re-check; it must
+                # still touch the assembly it was carried with.
+                from omnigibson.object_states import Touching
+                if Touching in child.states and child.states[Touching].get_value(parent):
+                    continue
+                kind='OnTop'
             if kind=='AttachedToParent':
                 child,parent=parent,child
                 kind='AttachedTo'

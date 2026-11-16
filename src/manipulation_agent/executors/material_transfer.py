@@ -180,7 +180,7 @@ class CheckedMaterialTransfer:
                         if hasattr(self, '_carry_dependencies') and source is self._get_held()
                         else self._grasp_dependencies(source))
         members = [child for child, _, _ in dependencies]
-        candidates = [child for child, _, kind in dependencies if kind in {'Inside', 'OnTop'}]
+        candidates = [child for child, _, kind in dependencies if kind in {'Inside', 'OnTop', 'RestingOn'}]
         return [child for child in candidates if not any(
             other is not child and (
                 AttachedTo in child.states and child.states[AttachedTo].get_value(other)

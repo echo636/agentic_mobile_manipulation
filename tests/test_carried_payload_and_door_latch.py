@@ -143,6 +143,45 @@ class CarriedPayloadRetentionTests(unittest.TestCase):
         kept = backend._grasp_carried_dependencies(tray, deps)
         self.assertEqual([c.name for c, _, _ in kept], ['cup', 'fork', 'inside_item'])
 
+    def test_body_leaning_on_payload_is_carried_and_unblocks_its_support(self):
+        # Two logs piled on a tray: log0 is native OnTop; log1 leans on log0
+        # and the tray, so native OnTop misses it. Both must ride the tray.
+        tray = self._body('tray')
+        log0 = self._body('log0')
+        log1 = self._body('log1')
+        leaning_on_floor = self._body('broom')
+        robot_only = self._body('rag')
+        robot = self._body('robot')
+        contacts = {
+            'log0': ['/World/tray/base_link', '/World/log1/base_link'],
+            'log1': ['/World/tray/base_link', '/World/log0/base_link'],
+            'broom': ['/World/tray/base_link', '/World/floor/base_link'],
+            'rag': ['/World/robot/base_link'],
+        }
+        backend = ControlledCarry()
+        backend.robot = robot
+        backend._placement_contacts = lambda child, payload=(): contacts[child.name]
+        backend._rider_candidates = lambda members: [
+            body for body in (log1, leaning_on_floor, robot_only)
+            if all(body is not m for m in members)]
+        kept = backend._grasp_carried_dependencies(tray, [(log0, tray, 'OnTop')])
+        self.assertEqual([(c.name, p.name, k) for c, p, k in kept],
+                         [('log0', 'tray', 'OnTop'), ('log1', 'tray', 'RestingOn')])
+
+    def test_contact_rider_is_dropped_with_its_only_support(self):
+        tray = self._body('tray')
+        plate = self._body('plate')
+        crumb = self._body('crumb')
+        robot = self._body('robot')
+        contacts = {'plate': ['/World/tray/base_link', '/World/counter/base_link'],
+                    'crumb': ['/World/plate/base_link']}
+        backend = ControlledCarry()
+        backend.robot = robot
+        backend._placement_contacts = lambda child, payload=(): contacts[child.name]
+        backend._rider_candidates = lambda members: [crumb] if all(crumb is not m for m in members) else []
+        kept = backend._grasp_carried_dependencies(tray, [(plate, tray, 'OnTop')])
+        self.assertEqual(kept, [])
+
     def test_grasped_payload_survives_touching_dropout_across_navigation_until_detach(self):
         tray = self._body('tray', (1., 2., 0.8))
         cup = self._body('cup', (1.05, 2.0, 0.83))
