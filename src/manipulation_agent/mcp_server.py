@@ -22,6 +22,18 @@ from urllib.parse import quote
 _startup_started = time.monotonic()
 
 
+
+# Harness option (off by default): the next session starts without this
+# conversation or its images. Ask for facts only, never an ordering strategy.
+HANDOFF_NOTE_REQUEST = (
+    ' Before ending the turn, write a handoff note as your final message for a fresh session that will have '
+    'no access to this conversation or its images. State facts only: (1) task requirements already completed '
+    'and the evidence you saw; (2) requirements not yet completed; (3) where the relevant objects, furniture, '
+    'appliances and rooms are, described visually, with the state_memory location/container/item ids you '
+    'know for them; (4) what each opened or closed container or appliance now holds, any running or finished '
+    'process, and what the robot is holding.'
+)
+
 def _startup(stage):
     if __name__ == '__main__':
         print('MAS_MCP_STARTUP ' + json.dumps({
@@ -118,7 +130,7 @@ def loopback_host(value):
 
 async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
                         enable_click_echo=False, max_inline_image_bytes=0, state_memory=False,
-                        rolling_handoff_steps=0, planning_mode='off'):
+                        rolling_handoff_steps=0, planning_mode='off', handoff_note=False):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -180,6 +192,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                                 'session. Stop calling tools and end this turn briefly now (do NOT call finish); '
                                 'the controller will immediately continue this live episode in a fresh context '
                                 'window with your state_memory.'
+                                + (HANDOFF_NOTE_REQUEST if handoff_note else '')
                             ),
                         },
                     }
@@ -220,6 +233,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                                     'Rolling context checkpoint reached. If the task is not yet complete, end this '
                                     'turn briefly without calling finish so the controller can continue in a fresh '
                                     'context window with state_memory.'
+                                    + (HANDOFF_NOTE_REQUEST if handoff_note else '')
                                 ),
                             }
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
@@ -311,13 +325,13 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
 
 async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
               enable_click_echo=False, max_inline_image_bytes=0, state_memory=False, rolling_handoff_steps=0,
-              planning_mode='off'):
+              planning_mode='off', handoff_note=False):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
                                  max_inline_image_bytes=max_inline_image_bytes,
                                  state_memory=state_memory,
                                  rolling_handoff_steps=rolling_handoff_steps,
-                                 planning_mode=planning_mode)
+                                 planning_mode=planning_mode, handoff_note=handoff_note)
     _startup('serving')
     if transport == 'stdio':
         await server.run_stdio_async()
@@ -348,6 +362,8 @@ def main():
                         help='harness option: pause session after N act/look steps for rolling context handoff (0=off)')
     parser.add_argument('--planning-mode', choices=('off', 'task_graph'), default='off',
                         help='harness option: general precondition and cost-aware task graph planner (default off)')
+    parser.add_argument('--handoff-progress-note', choices=('off', 'on'), default='off',
+                        help='harness option: at the rolling checkpoint, ask the session for a factual handoff note')
     args = parser.parse_args()
     asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
                     finish_guard=args.finish_guard == 'on', guard_state=args.guard_state,
@@ -355,7 +371,8 @@ def main():
                     max_inline_image_bytes=max(0, int(args.max_inline_image_bytes)),
                     state_memory=args.state_memory == 'on',
                     rolling_handoff_steps=max(0, int(args.rolling_handoff_steps)),
-                    planning_mode=args.planning_mode))
+                    planning_mode=args.planning_mode,
+                    handoff_note=args.handoff_progress_note == 'on'))
 
 
 if __name__ == '__main__':

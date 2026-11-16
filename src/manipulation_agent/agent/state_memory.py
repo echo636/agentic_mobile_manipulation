@@ -1183,6 +1183,7 @@ class StateMemory:
         segment_index: int = 1,
         steps_remaining: int | None = None,
         planning_mode: str = 'off',
+        progress_note: str | None = None,
     ) -> str:
         """Build a compact lossless continuation prompt for rolling session handoffs."""
         lines = [
@@ -1212,6 +1213,14 @@ class StateMemory:
 
         if self.unresolved_notes_goals:
             lines.append(f"Unfinished subgoals from your task_notes: {', '.join(self.unresolved_notes_goals[:8])}.")
+
+        if progress_note and progress_note.strip():
+            # Harness option: the previous session's own note, passed verbatim.
+            lines.extend([
+                '',
+                'Handoff note written by the previous session (its own account; confirm against current RGB):',
+                progress_note.strip(),
+            ])
 
         lines.extend([
             '',

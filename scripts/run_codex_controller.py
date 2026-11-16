@@ -106,6 +106,19 @@ def saw_rolling_handoff_checkpoint(events):
     return False
 
 
+HANDOFF_NOTE_MAX_CHARS = 4000
+
+
+def last_agent_message(events):
+    """The segment's final model-written text, as it appeared in the public transcript."""
+    for event in reversed(events):
+        item = event.get('item') if isinstance(event, dict) else None
+        if (event.get('type') == 'item.completed' and isinstance(item, dict)
+                and item.get('type') == 'agent_message' and str(item.get('text') or '').strip()):
+            return str(item['text']).strip()[:HANDOFF_NOTE_MAX_CHARS]
+    return None
+
+
 def latest_steps_remaining(events):
     for event in reversed(events):
         if event.get('type') != 'item.completed':
@@ -260,6 +273,9 @@ def main(argv=None, *, allow_client=False):
                    help='Harness option: roll over to a fresh client session with state_memory handoff summary every N act/look steps (0 disables)')
     p.add_argument('--planning-mode', choices=['off','task_graph'], default='off',
                    help='Harness option: general precondition and cost-aware task graph planner (default off)')
+    p.add_argument('--handoff-progress-note', choices=['off','on'], default='off',
+                   help='Harness option: at each rolling checkpoint ask the session for a factual handoff note and '
+                        'pass it to the next session (default off)')
     p.add_argument('--autonomy-instruction', choices=['off','on'], default='off',
                    help='Harness option: append the autonomous-episode operating instruction to the system prompt')
     p.add_argument('--require-tool-intent',action='store_true',
@@ -333,6 +349,8 @@ def main(argv=None, *, allow_client=False):
             raw_mcp_args = [*raw_mcp_args, '--rolling-handoff-steps', str(args.rolling_handoff_steps)]
         if args.planning_mode == 'task_graph' and '--planning-mode' not in raw_mcp_args:
             raw_mcp_args = [*raw_mcp_args, '--planning-mode', 'task_graph']
+        if args.handoff_progress_note == 'on' and '--handoff-progress-note' not in raw_mcp_args:
+            raw_mcp_args = [*raw_mcp_args, '--handoff-progress-note', 'on']
         args.mcp_args_json = json.dumps(raw_mcp_args)
     planner_config = None
     mcp_env_vars = ()
@@ -403,6 +421,7 @@ def main(argv=None, *, allow_client=False):
     metadata['state_memory'] = args.state_memory
     metadata['rolling_handoff_steps'] = args.rolling_handoff_steps
     metadata['planning_mode'] = args.planning_mode
+    metadata['handoff_progress_note'] = args.handoff_progress_note
     write_json(args.output / "controller.json", metadata)
     def expired_before_policy(stage):
         metadata.update(status='failed',timeout=True,termination_reason='episode_deadline_exceeded',
@@ -499,6 +518,8 @@ def main(argv=None, *, allow_client=False):
                 segment_index=handoff_count + 1,
                 steps_remaining=latest_steps_remaining(segment_events),
                 planning_mode=args.planning_mode,
+                progress_note=(last_agent_message(segment_events)
+                               if args.handoff_progress_note == 'on' else None),
             )
             resume_project = adapter.prepare_handoff(project, resume_prompt)
         else:
