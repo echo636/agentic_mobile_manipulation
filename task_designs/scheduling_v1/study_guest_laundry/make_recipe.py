@@ -68,8 +68,8 @@ def build_recipe() -> dict:
     )
     req_guest_laundry_text = (
         'Prepare the north guest suite and complete laundry from the south utility room: wash both the '
-        'sock and the boxers from the utility-room counter in the washing machine (closed and switched on '
-        'until the wash cycle finishes), then dry both washed garments in the clothes dryer (closed and '
+        'sock and the boxers from the utility-room counter in the white washing machine (closed and switched on '
+        'until the wash cycle finishes), then dry both washed garments in the silver-grey clothes dryer beside it (closed and '
         'switched on until the drying cycle finishes); wipe dust off the tall guest-bedroom wardrobe '
         '(against the southeast guest-bedroom wall) before storing the washed and dried sock and boxers '
         'inside it and closing its doors; wipe dust off the guest en-suite bathroom vanity cabinet before '

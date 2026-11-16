@@ -433,9 +433,9 @@
         "instance_id": "study_guest_laundry_seed0_r3",
         "chinese_name": "书房客房整理与双段串联洗烘配送",
         "repo_task_json": "task_designs/scheduling_v1/study_guest_laundry/task.json",
-        "task_sha256": "a9ce1aa4463dc7c7ab0fb734b078816a25bd3c92464e3900604bd30bf05d9286",
+        "task_sha256": "c18ca001121f17d3f810a50fa7056f65c07d688133383ac04d568aa27bc1f73b",
         "scene_sha256": "a0b48b029ef890b5ad3c6649673a6a3bbbebbdb5c482cabda11df3e8898d0600",
-        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/hot_lunch_benchmark_20261113/inputs/study_guest_laundry",
+        "external_scene_dir": "/mnt/data/home/sunyujie/robot_manipulation/experiments/route_ab_team_20261115/inputs/study_guest_laundry_r4",
         "appliance_wait_seconds": 540,
         "planning_modes": [
           "M1_carrier_batching",
