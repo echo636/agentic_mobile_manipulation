@@ -345,6 +345,21 @@ class StateMemory:
             if info.get('state') == 'open'
         }
 
+    def _regrasped_unverified_item(self) -> str | None:
+        """Id to reuse when a grasp picks an item up again where an unverified release happened.
+
+        Public evidence only: an earlier receipt reported a release whose placement was not
+        verified at the robot's current memory location, and a grasp now completes at that same
+        location. The most recent such item is assumed to be the one picked up again, so it keeps
+        its id instead of leaving a stale unverified record behind.
+        """
+        candidates = [
+            (int(info.get('last_step') or 0), oid)
+            for oid, info in self.object_states.items()
+            if info.get('status') == 'unverified_after_release' and info.get('area') == self.current_location
+        ]
+        return max(candidates)[1] if candidates else None
+
     def unverified_items(self) -> list[str]:
         return [
             oid for oid, info in self.object_states.items()
@@ -736,8 +751,10 @@ class StateMemory:
             if explicit_item:
                 item_id = explicit_item
             else:
-                self._item_seq += 1
-                item_id = f'item_{self._item_seq}'
+                item_id = self._regrasped_unverified_item()
+                if item_id is None:
+                    self._item_seq += 1
+                    item_id = f'item_{self._item_seq}'
 
             # If grasping from a currently open container in the same view/proximity, remove one matching item if tracked
             src_cid = self._match_or_create_container(
@@ -1240,8 +1257,13 @@ class StateMemory:
             lines.extend(['', 'Original Task Instruction:', instruction.strip()])
         return '\n'.join(lines)
 
-    def ingest_compat_events(self, compat_events: list[dict[str, Any]]) -> int:
-        """Replay public MCP tool calls/results from controller `compat` events."""
+    def ingest_compat_events(self, compat_events: list[dict[str, Any]], *, namespace: str = '') -> int:
+        """Replay public MCP tool calls/results from controller `compat` events.
+
+        Client item ids (for example codex ``item_7``) restart in every new session, so callers
+        replaying several sessions pass a distinct ``namespace`` per session; de-duplication is
+        only within one namespace.
+        """
         newly_ingested = 0
         for event in compat_events:
             if not isinstance(event, dict) or event.get('type') != 'item.completed':
@@ -1249,7 +1271,8 @@ class StateMemory:
             item = event.get('item') or {}
             if not isinstance(item, dict) or item.get('type') != 'mcp_tool_call':
                 continue
-            call_id = str(item.get('id') or '')
+            raw_id = str(item.get('id') or '')
+            call_id = f'{namespace}#{raw_id}' if raw_id else ''
             if call_id and call_id in self._ingested_call_ids:
                 continue
             tool = str(item.get('tool') or '')

@@ -480,7 +480,7 @@ def main(argv=None, *, allow_client=False):
     thread_id=session_thread_id(first_parsed.raw_events, client)
     segment_events=first_parsed.compat
     if episode_memory is not None:
-        episode_memory.ingest_compat_events(segment_events)
+        episode_memory.ingest_compat_events(segment_events, namespace='segment0')
     continuations=[]
     resume_count = fork_count = nudge_count = handoff_count = 0
     for attempt in itertools.count(1):
@@ -540,7 +540,7 @@ def main(argv=None, *, allow_client=False):
         seg_parsed=adapter.parse(segment_path)
         segment_events=seg_parsed.compat
         if episode_memory is not None:
-            episode_memory.ingest_compat_events(segment_events)
+            episode_memory.ingest_compat_events(segment_events, namespace=f'segment{attempt}')
         with raw_events.open('ab') as combined,segment_path.open('rb') as segment:
             combined.write(segment.read())
         continued_thread = session_thread_id(seg_parsed.raw_events, client)
