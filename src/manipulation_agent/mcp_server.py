@@ -82,6 +82,39 @@ def click_echo(data, point):
     return out.getvalue(), size
 
 
+def adjusted_caption(image_ref, size):
+    return (f'Adjusted selection: the point the executor used instead, on {image_ref} (before this action). '
+            f'The crop shows {size}x{size} px around it, enlarged {ECHO_SCALE}x; the magenta ring marks the adjusted point.')
+
+
+def result_caption(image_ref, size, subject):
+    return (f'Result crop: where the {subject} is after this action, on {image_ref}. The crop shows {size}x{size} px '
+            f'around it, enlarged {ECHO_SCALE}x; the magenta ring marks that position.')
+
+
+def parse_string_tool_arguments(message):
+    """Client adaptation: some clients send tools/call `arguments` as a JSON string.
+
+    The MCP SDK rejects that as invalid request parameters before any tool runs.
+    Parse it into an object so the harness can validate (and record) the request.
+    Returns True when the message was changed.
+    """
+    root = getattr(message, 'root', None)
+    if getattr(root, 'method', None) != 'tools/call':
+        return False
+    params = getattr(root, 'params', None)
+    if not isinstance(params, dict) or not isinstance(params.get('arguments'), str):
+        return False
+    try:
+        parsed = json.loads(params['arguments'])
+    except ValueError:
+        return False
+    if not isinstance(parsed, dict):
+        return False
+    params['arguments'] = parsed
+    return True
+
+
 # Harness transport option (--max-inline-image-bytes N, default 0 = off):
 # Antigravity CLI (`agy`) offloads MCP ImageContent blocks > 10,240 bytes to disk files instead of
 # attaching them inline to the model turn. Adaptive WebP re-encoding on the MCP proxy side keeps
@@ -130,7 +163,8 @@ def loopback_host(value):
 
 async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
                         enable_click_echo=False, max_inline_image_bytes=0, state_memory=False,
-                        rolling_handoff_steps=0, planning_mode='off', handoff_note=False):
+                        rolling_handoff_steps=0, planning_mode='off', handoff_note=False,
+                        selection_assist=False, argument_tolerance=False):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -178,6 +212,13 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
 
     def wrap(name):
         async def invoke(**arguments):
+            if argument_tolerance:
+                # Same unwrapping as the harness, so the finish guard and proxy memory read the real fields.
+                from .tools.tolerance import unwrap
+                unwrapped, _ = unwrap(arguments)
+                if isinstance(unwrapped, dict):
+                    arguments = unwrapped
+
             async def call():
                 nonlocal segment_steps
                 if rolling_handoff_steps > 0 and name in ('act', 'look') and segment_steps >= rolling_handoff_steps:
@@ -197,7 +238,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         },
                     }
                     return [types.TextContent(type='text', text=json.dumps(checkpoint, ensure_ascii=False))]
-                target = arguments.get('target') if (enable_click_echo and name == 'act' and isinstance(arguments, dict)) else None
+                target = (arguments.get('target') if ((enable_click_echo or selection_assist) and name == 'act'
+                                                      and isinstance(arguments, dict)) else None)
                 pre_source = None
                 if (isinstance(target, dict) and isinstance(target.get('image_ref'), str)
                         and isinstance(target.get('point'), list) and len(target['point']) == 2):
@@ -237,7 +279,33 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                                 ),
                             }
                 content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
-                if pre_source is not None and result.get('observation') is not None:
+                adjustment = result.get('selection_adjustment') if isinstance(result, dict) else None
+                if (selection_assist and pre_source is not None and isinstance(adjustment, dict)
+                        and adjustment.get('applied') and adjustment.get('image_ref') == target.get('image_ref')):
+                    try:
+                        echo, size = click_echo(pre_source, adjustment['adjusted_point'])
+                        echo, echo_mime = encode_within_byte_limit(echo, 'image/jpeg', max_inline_image_bytes)
+                        content.append(types.TextContent(type='text', text=adjusted_caption(target['image_ref'], size)))
+                        content.append(types.ImageContent(
+                            type='image', data=base64.b64encode(echo).decode(), mimeType=echo_mime,
+                            _meta={'codex/imageDetail': 'original'}))
+                    except Exception:
+                        pass
+                where = result.get('result_echo') if isinstance(result, dict) else None
+                if selection_assist and isinstance(where, dict) and isinstance(where.get('image_ref'), str):
+                    try:
+                        after = await asyncio.to_thread(
+                            fetch, url.rstrip('/') + '/image/' + quote(where['image_ref'], safe=''))
+                        echo, size = click_echo(after, where['point'])
+                        echo, echo_mime = encode_within_byte_limit(echo, 'image/jpeg', max_inline_image_bytes)
+                        content.append(types.TextContent(type='text', text=result_caption(
+                            where['image_ref'], size, where.get('subject', 'item'))))
+                        content.append(types.ImageContent(
+                            type='image', data=base64.b64encode(echo).decode(), mimeType=echo_mime,
+                            _meta={'codex/imageDetail': 'original'}))
+                    except Exception:
+                        pass
+                if enable_click_echo and pre_source is not None and result.get('observation') is not None:
                     try:
                         echo, size = click_echo(pre_source, target['point'])
                         echo, echo_mime = encode_within_byte_limit(echo, 'image/jpeg', max_inline_image_bytes)
@@ -323,17 +391,44 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     )
 
 
+async def run_stdio_parsing_string_arguments(server):
+    """FastMCP stdio loop with one client adaptation: JSON-string tool arguments become objects."""
+    import anyio
+    from mcp.server.stdio import stdio_server
+    async with stdio_server() as (read_stream, write_stream):
+        send, receive = anyio.create_memory_object_stream(0)
+
+        async def pump():
+            async with send:
+                async for item in read_stream:
+                    if not isinstance(item, Exception):
+                        try:
+                            if parse_string_tool_arguments(item.message):
+                                print('MAS_MCP_ARGUMENTS_PARSED_FROM_STRING', file=sys.stderr, flush=True)
+                        except Exception:
+                            pass
+                    await send.send(item)
+
+        async with anyio.create_task_group() as group:
+            group.start_soon(pump)
+            await server._mcp_server.run(receive, write_stream, server._mcp_server.create_initialization_options())
+            group.cancel_scope.cancel()
+
+
 async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
               enable_click_echo=False, max_inline_image_bytes=0, state_memory=False, rolling_handoff_steps=0,
-              planning_mode='off', handoff_note=False):
+              planning_mode='off', handoff_note=False, selection_assist=False, argument_tolerance=False):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
                                  max_inline_image_bytes=max_inline_image_bytes,
                                  state_memory=state_memory,
                                  rolling_handoff_steps=rolling_handoff_steps,
-                                 planning_mode=planning_mode, handoff_note=handoff_note)
+                                 planning_mode=planning_mode, handoff_note=handoff_note,
+                                 selection_assist=selection_assist, argument_tolerance=argument_tolerance)
     _startup('serving')
-    if transport == 'stdio':
+    if transport == 'stdio' and argument_tolerance:
+        await run_stdio_parsing_string_arguments(server)
+    elif transport == 'stdio':
         await server.run_stdio_async()
     elif transport == 'sse':
         await server.run_sse_async()
@@ -364,6 +459,10 @@ def main():
                         help='harness option: general precondition and cost-aware task graph planner (default off)')
     parser.add_argument('--handoff-progress-note', choices=('off', 'on'), default='off',
                         help='harness option: at the rolling checkpoint, ask the session for a factual handoff note')
+    parser.add_argument('--selection-assist', choices=('off', 'on'), default='off',
+                        help='route A selection option: crops for an adjusted point and for the result position')
+    parser.add_argument('--argument-tolerance', choices=('off', 'on'), default='off',
+                        help='client adaptation (every arm): parse JSON-string tools/call arguments')
     args = parser.parse_args()
     asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
                     finish_guard=args.finish_guard == 'on', guard_state=args.guard_state,
@@ -372,7 +471,9 @@ def main():
                     state_memory=args.state_memory == 'on',
                     rolling_handoff_steps=max(0, int(args.rolling_handoff_steps)),
                     planning_mode=args.planning_mode,
-                    handoff_note=args.handoff_progress_note == 'on'))
+                    handoff_note=args.handoff_progress_note == 'on',
+                    selection_assist=args.selection_assist == 'on',
+                    argument_tolerance=args.argument_tolerance == 'on'))
 
 
 if __name__ == '__main__':

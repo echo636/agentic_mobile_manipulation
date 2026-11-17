@@ -49,7 +49,7 @@ class RGBBoundary(unittest.TestCase):
             self.assertEqual('opening' in result['effect'],partial)
             if partial:
                 self.assertEqual(result['effect']['opening']['other_panels_not_operated'], partial)
-                self.assertEqual('Other doors or drawers were not operated' in result['effect']['opening']['message'], partial)
+                self.assertEqual('other doors or drawers that stayed closed' in result['effect']['opening']['message'], partial)
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('goal_joints',json.dumps(result))
     def test_action_failure_categories_survive_the_public_boundary(self):

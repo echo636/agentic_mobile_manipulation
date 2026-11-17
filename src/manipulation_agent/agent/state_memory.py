@@ -117,6 +117,12 @@ def _is_image_part(node: Any) -> bool:
     return isinstance(mime, str) and mime.startswith('image/') and isinstance(node.get('data'), str)
 
 
+
+def _placed_by_robot(info):
+    """Memory only counts items the robot itself placed inside; it never observes other contents."""
+    n = len(info.get('items_inside') or [])
+    return f"robot placed {n} item(s) inside; other contents not tracked"
+
 class StateMemory:
     """Automatic public-receipt spatial and object state external memory."""
 
@@ -1018,12 +1024,12 @@ class StateMemory:
 
         # Line 2: Containers (verified closed with items vs currently open)
         closed_verified = [
-            f"{cid}@{info['location']}[closed, {len(info['items_inside'])} inside]"
+            f"{cid}@{info['location']}[closed, {_placed_by_robot(info)}]"
             for cid, info in self.container_states.items()
             if info.get('state') == 'closed' and info.get('verified_closed')
         ]
         open_now = [
-            f"{cid}@{info['location']}[open, {len(info['items_inside'])} inside"
+            f"{cid}@{info['location']}[open, {_placed_by_robot(info)}"
             + (', partial_open' if info.get('partial_opening') else '') + ']'
             for cid, info in self.container_states.items()
             if info.get('state') == 'open'

@@ -338,7 +338,7 @@ def test_long_horizon_summary_budget_image_window_and_handoff_context() -> None:
 
     summary = mem.render_memory_summary()
     assert len(summary) <= 620
-    assert 'container_1@loc_0[closed, 1 inside]' in summary
+    assert 'container_1@loc_0[closed, robot placed 1 item(s) inside; other contents not tracked]' in summary
 
     pruned, stats = mem.prune_image_window(messages, keep_latest_captures=4)
     assert stats['image_turns'] == 160

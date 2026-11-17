@@ -67,7 +67,8 @@ ACTION_FEEDBACK_HINTS = {
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
                  goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False,
-                 scheduling_mode='none', planning_mode='off', auxiliary_feedback=False, state_memory=False):
+                 scheduling_mode='none', planning_mode='off', auxiliary_feedback=False, state_memory=False,
+                 argument_tolerance=False, selection_assist=False, selection_names=False):
         if profile == 'basic-skills': goal_skill = 'none'
         if profile == 'goal-tree': goal_skill = 'tree'
         if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
@@ -77,6 +78,12 @@ class VisionHarness:
         self.scheduling_mode=scheduling_mode
         self.planning_mode=planning_mode
         self.auxiliary_feedback=bool(auxiliary_feedback)
+        # Client/interface adaptation (all arms alike, not route A): accept common client wrappings.
+        self.argument_tolerance=bool(argument_tolerance)
+        # Route A selection module options (default off): snapping + crops; object category names.
+        self.selection_assist=bool(selection_assist)
+        self.selection_names=bool(selection_names)
+        backend.selection_snap=self.selection_assist
         self.state_memory_enabled=bool(state_memory)
         self.state_memory=StateMemory(output_dir=recorder.output) if self.state_memory_enabled else None
         self.schedule_ledger=PublicScheduleLedger()
@@ -130,6 +137,9 @@ class VisionHarness:
             planning_mode=planning_mode,
             auxiliary_feedback=self.auxiliary_feedback,
             state_memory=self.state_memory_enabled,
+            argument_tolerance=self.argument_tolerance,
+            selection_assist=self.selection_assist,
+            selection_names=self.selection_names,
             require_tool_intent=require_tool_intent,
             tool_intent_protocol=INTENT_PROTOCOL if require_tool_intent else LEGACY_PROTOCOL)
         recorder.run['episode_deadline_unix']=self.deadline.unix
@@ -257,6 +267,23 @@ class VisionHarness:
                 out['primitive'] = arguments['action']
         return out
 
+    def _tolerate_client_arguments(self, name, arguments, request_id):
+        """Client/interface adaptation (switch `argument_tolerance`, same for every arm).
+
+        Accept wrappings seen from CLI clients without changing what an action means:
+        a JSON string instead of an object; one or two extra `Arguments`/`arguments`
+        layers (as dict or JSON string) with client routing keys; keys wrapped in
+        literal quotes; `primitive: "look"` sent to look, or act(primitive="look");
+        a missing `revision` (the latest one; image_ref still guards stale images).
+        The original request stays in the event ledger.
+        """
+        from ..tools.tolerance import tolerate_arguments
+        new_name, out, notes = tolerate_arguments(name, arguments, self.revision)
+        if notes:
+            self.recorder.event('arguments_normalized', {'request_id': request_id, 'tool': name,
+                                                         'routed_tool': new_name, 'notes': notes})
+        return new_name, out
+
     def call(self,name,arguments,request_id, *, origin='controller'):
         if threading.get_ident()!=self.owner: raise RuntimeError('Simulator owner thread required')
         if not isinstance(request_id,str) or not request_id or len(request_id)>200:
@@ -288,6 +315,8 @@ class VisionHarness:
                 write_json(self.recorder.output/'run.json',self.recorder.run)
                 self.recorder.event('agent_step_admitted',{'step':self.agent_steps,
                     'limit':self.agent_step_limit,'tool':name,'request_id':request_id})
+            if self.argument_tolerance:
+                name, arguments = self._tolerate_client_arguments(name, arguments, request_id)
             if self.require_tool_intent: validate_intent(arguments)
             arguments = self._normalize_auxiliary_args(name, arguments)
             # Compatibility for archived callers; model schema explicitly carries
@@ -454,12 +483,14 @@ class VisionHarness:
             # A timed-out action may have changed the world. Invalidate its RGB,
             # but do not spend the expired task budget rendering another capture.
             if not self.deadline.expired and not self.deadline.stop_requested: self.refresh()
-        if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions}
+        extras=self._selection_extras(primitive, error is None)
+        if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions,**extras}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
         if primitive=='open' and details.get('other_panels_not_operated') is True:
             effect['opening']={'other_panels_not_operated':True,
-                'message':'The opening command applied only to part of this object. '
-                          'Other doors or drawers were not operated. Inspect access in the returned RGB.'}
+                'message':'Opened only the door or drawer at the selected point; this object has other doors or '
+                          'drawers that stayed closed. Check in the returned RGB that the opened compartment is the '
+                          'one you need; if it is not, select the intended door or drawer.'}
         if primitive=='cut':
             # Report this action's transformation, without object/material IDs
             # or task-goal state. Particle counts are not physical piece counts.
@@ -520,7 +551,13 @@ class VisionHarness:
             }
             status=details.get('nav_status')
             if status in messages:effect.update(navigation_status=status,message=messages[status])
-            if status=='incomplete':effect['status']='incomplete'
+            if status=='incomplete':
+                effect['status']='incomplete'
+                if details.get('nav_incomplete_reason')=='floor_point_not_walkable':
+                    effect.update(incomplete_reason='floor_point_not_walkable',
+                        message='The selected floor point is not walkable (for example under furniture or against a '
+                                'wall), so the robot stopped at the nearest walkable spot. Inspect the returned RGB '
+                                'before choosing the next action.')
             handoff=details.get('manipulation_handoff')
             handoffs={
                 'travel_only':'Ground-point travel completed. Select the intended object in the updated RGB for local manipulation.',
@@ -530,7 +567,30 @@ class VisionHarness:
             }
             if handoff in handoffs:effect.update(manipulation_handoff=handoff,message=handoffs[handoff])
         return {'effect':effect,
-                'observation':self.snapshot,'actions_used':self.actions}
+                'observation':self.snapshot,'actions_used':self.actions,**extras}
+
+    def _selection_extras(self, primitive, succeeded):
+        """Route A selection options (default off): snap note, result position, category name."""
+        extras={}
+        if self.selection_assist:
+            snap=getattr(self.backend,'_last_selection_snap',None)
+            if snap:extras['selection_adjustment']=copy.deepcopy(snap)
+            point=getattr(self.backend,'_last_action_point',None)
+            locate=getattr(self.backend,'locate_world_point',None)
+            if point is not None and locate is not None and not self.deadline.expired:
+                try:where=locate(point)
+                except Exception:where=None
+                if where:
+                    noun=('released item' if primitive in {'place_on_top','place_inside','place_under','place_next_to',
+                                                           'release','attach','hang'} else 'operated point')
+                    extras['result_echo']={**where,'subject':noun,
+                        'message':(f'The {noun} is at result_echo.point on {where["image_ref"]} after this action'
+                                   + ('' if where['visible'] else ' (hidden behind another surface in that view)')
+                                   + '. See the result crop.')}
+        if self.selection_names:
+            category=getattr(self.backend,'_last_selected_category',None)
+            if category:extras['selected_object_category']=category
+        return extras
 
     def update_plan(self,reason,subgoals): return LegacyPlanHelpers._tool_update_plan(self,reason,subgoals)
     def remember(self,key,text,revision): return LegacyPlanHelpers._tool_remember(self,key,text,revision)

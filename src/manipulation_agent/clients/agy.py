@@ -223,6 +223,9 @@ class AgyAdapter(ClientAdapter):
         # so lazy-MCP models know exact argument keys immediately without wasting turns guessing schemas.
         schema_lines = [
             "## Exact `call_mcp_tool` Argument Signatures (`ServerName: \"manipulation\"`)",
+            "Call `call_mcp_tool` with `ServerName: \"manipulation\"`, `ToolName` set to the tool named on each line, "
+            "and the `Arguments` shown there. `Arguments` is a JSON object whose keys are the tool's own fields; "
+            "do not put it in quotes as a string and do not nest another `Arguments` inside it.",
             "- `initialize`: `{\"Arguments\": {}}`",
             "- `act`: `{\"Arguments\": {\"primitive\": \"<grasp|place_on_top|place_inside|place_next_to|place_under|open|close|toggle_on|toggle_off|navigate_to|cut|wipe|sweep|vacuum|spray|spread|soak|pour|scoop|attach|hang|fold|release|wait>\", \"target\": {\"image_ref\": \"rgb-00001-front\", \"point\": [0.5, 0.5]} /* or null for release/wait */, \"revision\": 0, \"placement_yaw_degrees\": null, \"placement_roll_degrees\": null, \"wait_seconds\": null}}`",
             "- `look`: `{\"Arguments\": {\"yaw_degrees\": 45, \"revision\": 0}}` (`yaw_degrees` in `[-90, 90]`, positive=left, negative=right)",

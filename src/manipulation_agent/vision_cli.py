@@ -41,6 +41,12 @@ def main():
                    help='Harness option: public hand state, actionable error hints and step refund on validation errors')
     p.add_argument('--state-memory', choices=['off','on'], default='off',
                    help='Harness option: automatic spatial and object state memory compression from public receipts')
+    p.add_argument('--argument-tolerance', choices=['off','on'], default='off',
+                   help='Client/interface adaptation (same for every arm): accept JSON-string, wrapped and quoted-key arguments')
+    p.add_argument('--selection-assist', choices=['off','on'], default='off',
+                   help='Route A selection option: snap an unsuitable point to the single suitable object within 24 px; report result position')
+    p.add_argument('--selection-names', choices=['off','on'], default='off',
+                   help='Route A selection option (separate decision): report the category of the selected object')
     p.add_argument('--require-tool-intent',action='store_true',
                    help='Require a concise public intent argument on every tool call; use identically in both arms')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
@@ -119,7 +125,10 @@ def main():
                                   scheduling_mode=a.scheduling_mode,
                                   planning_mode=a.planning_mode,
                                   auxiliary_feedback=a.auxiliary_feedback == 'on',
-                                  state_memory=a.state_memory == 'on')
+                                  state_memory=a.state_memory == 'on',
+                                  argument_tolerance=a.argument_tolerance == 'on',
+                                  selection_assist=a.selection_assist == 'on',
+                                  selection_names=a.selection_names == 'on')
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,with_scoring_objective(a.instruction),image_history_captures=a.image_history_captures)

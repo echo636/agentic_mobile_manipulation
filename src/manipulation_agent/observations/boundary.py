@@ -41,7 +41,9 @@ ERROR_MESSAGES = {
     "hand_occupied":"The executor cannot perform this action while carrying an object.",
     "empty_hand":"The executor cannot place, attach or release without a held object.",
     "container_closed":"A container involved in this action is closed. Open it before accessing or transferring its contents.",
-    "fixed_object":"The selected object cannot be moved by this executor.",
+    "fixed_object":("The selected point is on a fixed object (such as furniture, a counter, a wall, the floor or "
+                    "the body of a large fixture), which this executor cannot pick up. If you meant a smaller item, the point was "
+                    "not on that item's own body: select a point on the item itself in the latest RGB."),
     "particle_target":"The selected point is on loose particles, which cannot be grasped directly. Select a visible container or a suitable tool instead.",
     "pre_condition_error":"The executor rejected this operation. Reinspect the selected object and action using RGB.",
     "cutting_tool_required":"The held object cannot cut. Grasp a suitable cutting tool before cutting.",

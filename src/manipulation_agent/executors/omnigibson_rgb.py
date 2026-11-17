@@ -759,6 +759,8 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
             nav_status=('reached' if floor_click else 'approached') if target_distance<=tolerance else 'incomplete'
             return {**result,'strategy':record['strategy'],'path_distance_m':float(length),
                     'nav_status':nav_status,
+                    **({'nav_incomplete_reason':'floor_point_not_walkable'}
+                       if nav_status=='incomplete' and floor_snap is not None else {}),
                     'dynamic_collision_check':False,'precomputed_walkability':True}
         except SkillError as exc:
             record.update(status='failed',error_code=exc.code,error=str(exc))
@@ -848,6 +850,118 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         finish_pending_objects(self, remaining_steps)
 
     def _execute_visual(self,primitive,target,max_steps,**kwargs):
+        # Harness-visible extras of the latest action (all None unless a switch asks for them).
+        self._last_selection_snap=None;self._last_action_point=None;self._last_selected_category=None
+        get_held=getattr(self,'_get_held',None)
+        held_before=(get_held() if get_held is not None and primitive in {'place_on_top','place_inside','place_under',
+                     'place_next_to','release','attach','hang'} else None)
+        try:
+            return RGBBackend._execute_visual_inner(self,primitive,target,max_steps,**kwargs)
+        finally:
+            if held_before is not None and get_held() is not held_before:
+                # Where the released item is now (for the optional result echo crop).
+                try:
+                    where=held_before.get_position_orientation()[0]
+                    self._last_action_point=where.detach().cpu().clone() if hasattr(where,'detach') else where
+                except Exception:self._last_action_point=None
+
+    def _snap_suits(self,primitive,obj):
+        if obj is None or obj is self.robot or not hasattr(obj,'states'):return False
+        if primitive=='grasp':return not bool(getattr(obj,'fixed_base',False))
+        from omnigibson.object_states import Open,ToggledOn
+        if primitive in {'open','close'}:return Open in obj.states
+        if primitive in {'toggle_on','toggle_off'}:return ToggledOn in obj.states
+        if primitive=='cut':return bool({'sliceable','diceable'}.intersection(getattr(obj,'_abilities',None) or {}))
+        return False
+
+    def _snap_selection(self,primitive,target):
+        """Harness option: move an unsuitable point onto the single suitable object visible nearby."""
+        from .selection_assist import snap_radius,candidate_order,decide,public_adjustment,MAX_VERIFIED_CANDIDATES
+        import omnigibson.utils.transform_utils as T
+        frame=self.current_frames.get(target['image_ref'])
+        if frame is None:return target,None
+        try:
+            obj,_,_=self._ground(target,require_object=True,reject_particles=primitive=='grasp')
+        except SkillError as exc:
+            if exc.code=='stale_image_ref':raise
+            obj=None
+        if self._snap_suits(primitive,obj):return target,None
+        torch=self.torch
+        W,H=int(frame['width']),int(frame['height'])
+        radius=snap_radius(W)
+        x,y=target['point'];px=round(x*(W-1));py=round(y*(H-1))
+        rng=torch.arange(-radius,radius+1)
+        dy,dx=torch.meshgrid(rng,rng,indexing='ij')
+        disk=(dx*dx+dy*dy)<=radius*radius
+        xs=px+dx[disk];ys=py+dy[disk]
+        inb=(xs>=0)&(xs<W)&(ys>=0)&(ys<H);xs=xs[inb];ys=ys[inb]
+        depth=frame['depth_linear'][ys,xs].float().cpu()
+        ok=torch.isfinite(depth)&(depth>0)&(depth<30);xs,ys,depth=xs[ok],ys[ok],depth[ok]
+        if not len(xs):return target,None
+        K=frame['intrinsic'].cpu().float()
+        local=torch.stack([(xs.float()+.5-K[0,2])/K[0,0],-(ys.float()+.5-K[1,2])/K[1,1],-torch.ones_like(depth)],1)
+        R=T.quat2mat(frame['orientation'].cpu()).float()
+        world=frame['position'].cpu().float()+(local@R.T)*depth[:,None]
+        dist=torch.sqrt(((xs-px)**2+(ys-py)**2).float())
+        centre=world.mean(0);held=self._get_held()
+        boxed={}
+        for o in self.env.scene.objects:
+            if o is held or not self._snap_suits(primitive,o):continue
+            try:
+                if float(torch.linalg.norm(o.get_position_orientation()[0].cpu().float()-centre))>3.0:continue
+                lo,hi=o.aabb;lo=lo.cpu().float()-.01;hi=hi.cpu().float()+.01
+            except Exception:
+                continue
+            inside=((world>=lo)&(world<=hi)).all(1)
+            if bool(inside.any()):
+                idx=inside.nonzero().flatten()
+                boxed[o]=[(int(xs[i]),int(ys[i]),float(dist[i])) for i in idx.tolist()]
+        verified={};chosen={}
+        for o,pixels in sorted(boxed.items(),key=lambda kv:min(p[2] for p in kv[1]))[:MAX_VERIFIED_CANDIDATES+1]:
+            if len(verified)>MAX_VERIFIED_CANDIDATES:break
+            for cx,cy,d in candidate_order(pixels)[:4]:
+                trial={'image_ref':target['image_ref'],'point':[cx/(W-1),cy/(H-1)]}
+                try:owner,_,_=self._ground(trial,require_object=True,reject_particles=primitive=='grasp')
+                except SkillError:continue
+                if owner is o:
+                    verified[o.name]=(cx,cy,d);chosen[o.name]=trial;break
+        status,detail=decide(verified)
+        private={'at':now(),'audience':'executor_private','primitive':primitive,'image_ref':target['image_ref'],
+                 'selected_pixel':[px,py],'radius_px':radius,'boxed':[o.name for o in boxed],
+                 'verified':{k:list(v) for k,v in verified.items()},'status':status}
+        with (self.output/'selection_snap.jsonl').open('a') as stream:stream.write(json.dumps(private)+'\n')
+        if status=='adjusted':
+            cx,cy,d=verified[detail]
+            return chosen[detail],public_adjustment('adjusted',image_ref=target['image_ref'],selected_point=target['point'],
+                adjusted_point=chosen[detail]['point'],distance_px=d,radius_px=radius)
+        if status=='multiple':
+            return target,public_adjustment('multiple',image_ref=target['image_ref'],selected_point=target['point'],
+                                            candidates=detail,radius_px=radius)
+        return target,None
+
+    def locate_world_point(self,point):
+        """Pixel of a world point in the current four views (for the optional result echo crop)."""
+        import omnigibson.utils.transform_utils as T
+        if point is None:return None
+        point=self.torch.as_tensor(point)
+        best=None
+        for ref,frame in self.current_frames.items():
+            R=T.quat2mat(frame['orientation'].cpu()).float()
+            v=R.T@(point.cpu().float()-frame['position'].cpu().float())
+            z=-float(v[2])
+            if z<=.05:continue
+            K=frame['intrinsic'].cpu().float();W,H=int(frame['width']),int(frame['height'])
+            u=float(v[0])/z*float(K[0,0])+float(K[0,2])-.5
+            w=-float(v[1])/z*float(K[1,1])+float(K[1,2])-.5
+            if not (2<=u<=W-3 and 2<=w<=H-3):continue
+            d=float(frame['depth_linear'][round(w),round(u)])
+            visible=math.isfinite(d) and d>=z-.15
+            score=(not visible,(u-W/2)**2+(w-H/2)**2)
+            if best is None or score<best[0]:
+                best=(score,{'image_ref':ref,'point':[round(u/(W-1),4),round(w/(H-1),4)],'visible':bool(visible)})
+        return best[1] if best else None
+
+    def _execute_visual_inner(self,primitive,target,max_steps,**kwargs):
         if primitive in {'look','navigate_to','release','wait'} and getattr(self,'_demo_focus',None) is not None:
             self._demo_focus=None;self._spectator_anchor=None
         if primitive=='look':return self._turn(kwargs['yaw_degrees'],max_steps)
@@ -863,7 +977,20 @@ class RGBBackend(LocalRGBManipulation, DemoMotion, CheckedClothActions, CheckedM
         if primitive=='release':
             self._grasped_payload = None
             return self.execute(primitive,None,max_steps)
+        if getattr(self,'selection_snap',False) and primitive in {'grasp','open','close','toggle_on','toggle_off','cut'}:
+            try:target,self._last_selection_snap=RGBBackend._snap_selection(self,primitive,target)
+            except SkillError as exc:
+                if exc.code=='stale_image_ref':raise
+            except Exception as exc:
+                # Snapping is an optional aid; any internal failure leaves the selection unchanged.
+                with (self.output/'selection_snap.jsonl').open('a') as stream:
+                    stream.write(json.dumps({'at':now(),'audience':'executor_private','status':'snap_error',
+                                             'error':repr(exc)[:300]})+'\n')
         obj,point,grounding=self._ground(target,require_object=primitive!='navigate_to',reject_particles=primitive=='grasp')
+        if obj is not None and not isinstance(obj,SimpleNamespace):
+            self._last_selected_category=str(getattr(obj,'category','') or '') or None
+        if primitive in {'open','close','toggle_on','toggle_off'}:
+            self._last_action_point=point.detach().cpu().clone() if hasattr(point,'detach') else point
         if primitive=='navigate_to':
             anchor=SimpleNamespace(aabb=(point,point),get_position_orientation=lambda:(point,None),selected_object=obj)
             return {**self._navigate(anchor,max_steps),'private_grounding':grounding}
