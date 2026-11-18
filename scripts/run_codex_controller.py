@@ -354,6 +354,33 @@ def main(argv=None, *, allow_client=False):
         args.mcp_args_json = json.dumps(raw_mcp_args)
     planner_config = None
     mcp_env_vars = ()
+    # Harness option --finish-evidence (v9): the proxy's evidence judge is a separate, history-free, tool-free call
+    # of the SAME model on the SAME provider (codex: one-shot tool-free call; agy: one-shot call whose only tool
+    # returns the crops). Other clients get freshness checks only (no judge).
+    if isinstance(raw_mcp_args, list) and '--finish-evidence' in raw_mcp_args:
+        i = raw_mcp_args.index('--finish-evidence')
+        if i + 1 < len(raw_mcp_args) and raw_mcp_args[i + 1] == 'on' and '--finish-evidence-dir' not in raw_mcp_args:
+            evidence_dir = (args.output / 'finish_evidence').resolve()
+            extra = ['--finish-evidence-dir', str(evidence_dir)]
+            if client == 'codex' and args.model_provider_profile:
+                provider_path = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))) / 'config.toml'
+                provider = tomllib.loads(provider_path.read_text())['model_providers'][args.model_provider_profile]
+                judge_path = (args.output / 'finish_evidence_judge.json').resolve()
+                write_json(judge_path, dict(client='codex', model=args.model, effort=args.reasoning_effort,
+                                            provider=args.model_provider_profile,
+                                            gateway=args.model_provider_gateway, output=str(evidence_dir / 'judge')))
+                extra += ['--finish-evidence-judge', str(judge_path)]
+                # Codex filters MCP subprocess environments. Forward names, never write credential values.
+                mcp_env_vars = ('PYTHONPATH', 'CODEX_HOME', 'MAS_CLIENT_STATE_ROOT', 'no_proxy', 'NO_PROXY',
+                                *([provider['env_key']] if provider.get('env_key') else []))
+            elif client == 'agy':
+                judge_path = (args.output / 'finish_evidence_judge.json').resolve()
+                write_json(judge_path, dict(client='agy', model=args.model, effort=args.reasoning_effort,
+                                            provider='agy', output=str(evidence_dir / 'judge')))
+                extra += ['--finish-evidence-judge', str(judge_path)]
+                mcp_env_vars = ('PYTHONPATH', 'MAS_CLIENT_STATE_ROOT', 'HOME', 'PATH', 'no_proxy', 'NO_PROXY')
+            raw_mcp_args = [*raw_mcp_args, *extra]
+            args.mcp_args_json = json.dumps(raw_mcp_args)
     if args.planner_model:
         provider_path = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))) / 'config.toml'
         provider = tomllib.loads(provider_path.read_text())['model_providers'][args.model_provider_profile]

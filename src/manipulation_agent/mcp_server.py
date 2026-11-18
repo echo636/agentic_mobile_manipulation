@@ -13,6 +13,7 @@ from copy import deepcopy
 import hashlib
 import ipaddress
 import json
+from pathlib import Path
 import sys
 import time
 import uuid
@@ -47,6 +48,7 @@ from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
 from .agent.state_memory import StateMemory
 from .agent.failure_memory import FailureMemory
+from .tools.finish_evidence import FinishEvidence, agy_judge, codex_judge
 from .agent.task_graph_planner import TaskGraphSession
 from .contracts import SkillError, validate
 
@@ -151,6 +153,31 @@ def look_again_caption(kind, before_ref, after_ref, size):
             'surrounds it.')
 
 
+def place_look_again_caption(kind, before_ref, after_ref, size):
+    """Harness option --place-look-again (v9): same crops as the failure look-again, after a completed placement."""
+    if kind == 'pair':
+        return (f'Look again after placing: LEFT is {before_ref} before the action, RIGHT is {after_ref} (same camera '
+                f'view) after it, both {size}x{size} px around the point you selected, enlarged {ECHO_SCALE}x; the '
+                'magenta ring marks that point. Please confirm the item ended up where you meant to put it. If the '
+                'robot moved during the action, the same pixel may show a different spot; then check the full views.')
+    if kind == 'close':
+        return (f'Look again after placing: {after_ref} looks unchanged around your point. Close view, {size}x{size} '
+                f'px around it, enlarged {ECHO_SCALE}x. Please confirm the item ended up where you meant to put it; '
+                'check the full views if you cannot see it here.')
+    return (f'Look again after placing: wider view of {after_ref}, {size}x{size} px around the point you selected '
+            '(not enlarged); the magenta ring marks it. Please confirm the item ended up where you meant to put it.')
+
+
+def evidence_crops(data, point):
+    """Harness option --finish-evidence (v9): close and mid crops of the point the model cites as evidence."""
+    close, _ = _marked_window(data, point, ECHO_HALF_PX, ECHO_SCALE)
+    mid, _ = _marked_window(data, point, LOOK_AGAIN_MID_HALF_PX, 1)
+    return [('close', _jpeg(close)), ('wider', _jpeg(mid))]
+
+
+PLACE_PRIMITIVES = ('place_on_top', 'place_inside', 'place_next_to')
+
+
 def adjusted_caption(image_ref, size):
     return (f'Adjusted selection: the point the executor used instead, on {image_ref} (before this action). '
             f'The crop shows {size}x{size} px around it, enlarged {ECHO_SCALE}x; the magenta ring marks the adjusted point.')
@@ -234,7 +261,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         enable_click_echo=False, max_inline_image_bytes=0, state_memory=False,
                         rolling_handoff_steps=0, planning_mode='off', handoff_note=False,
                         selection_assist=False, argument_tolerance=False, failure_look_again=False,
-                        failure_memory=False):
+                        failure_memory=False, place_look_again=False, finish_evidence=False,
+                        finish_evidence_judge=None, finish_evidence_dir=None):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -268,6 +296,14 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     proxy_memory = StateMemory() if state_memory else None
     # Harness option (--failure-memory, default off): the model's own recent failed attempts.
     failures = FailureMemory() if failure_memory else None
+    # Harness option (--finish-evidence, v9, default off): item-by-item image evidence before finish(achieved).
+    evidence = None
+    if finish_evidence:
+        judge = None
+        if finish_evidence_judge:
+            judge_config = json.loads(Path(finish_evidence_judge).read_text())
+            judge = (agy_judge if judge_config.get('client') == 'agy' else codex_judge)(judge_config)
+        evidence = FinishEvidence(judge=judge, log_dir=finish_evidence_dir, crop=evidence_crops)
     segment_steps = 0
     bridge_has_task_graph = any(spec['name'] == 'plan_task_graph' for spec in catalog)
     local_task_graph = (
@@ -310,7 +346,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         },
                     }
                     return [types.TextContent(type='text', text=json.dumps(checkpoint, ensure_ascii=False))]
-                target = (arguments.get('target') if ((enable_click_echo or selection_assist or failure_look_again)
+                target = (arguments.get('target') if ((enable_click_echo or selection_assist or failure_look_again
+                                                       or place_look_again)
                                                       and name == 'act'
                                                       and isinstance(arguments, dict)) else None)
                 pre_source = None
@@ -335,6 +372,10 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         result['failure_memory'] = summary
                 if guard is not None:
                     guard.observe(result, name, arguments)
+                if evidence is not None and name in ('act', 'look') and isinstance(result, dict):
+                    note = evidence.observe(name, result)
+                    if note:
+                        result['finish_evidence_note'] = note
                 if local_task_graph is not None:
                     if proxy_memory is not None:
                         local_task_graph.sync_from_state_memory(proxy_memory)
@@ -412,6 +453,25 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                                     _meta={'codex/imageDetail': 'original'}))
                         except Exception:
                             pass
+                if (place_look_again and pre_source is not None and isinstance(result, dict)
+                        and result.get('ok') is True and arguments.get('primitive') in PLACE_PRIMITIVES
+                        and observation.get('observation_mode') == 'rgb_only'):
+                    view = target['image_ref'].rsplit('-', 1)[-1]
+                    same = next((f for f in observation['images'] if f.get('view') == view), None)
+                    if same is not None:
+                        try:
+                            after = await asyncio.to_thread(
+                                fetch, url.rstrip('/') + '/image/' + quote(same['image_ref'], safe=''))
+                            for kind, data, size in look_again_images(
+                                    pre_source, after, target['point'], close_already_shown=False):
+                                data, mime = encode_within_byte_limit(data, 'image/jpeg', max_inline_image_bytes)
+                                content.append(types.TextContent(type='text', text=place_look_again_caption(
+                                    kind, target['image_ref'], same['image_ref'], size)))
+                                content.append(types.ImageContent(
+                                    type='image', data=base64.b64encode(data).decode(), mimeType=mime,
+                                    _meta={'codex/imageDetail': 'original'}))
+                        except Exception:
+                            pass
                 if observation.get('observation_mode') == 'rgb_only':
                     for frame in observation['images']:
                         data = await asyncio.to_thread(fetch, url.rstrip('/') + '/image/' + quote(frame['image_ref'], safe=''))
@@ -430,6 +490,19 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                 deferred = guard.deferral(arguments) if guard is not None else None
                 if deferred is not None:
                     return [types.TextContent(type='text', text=json.dumps(deferred, ensure_ascii=False))]
+                if evidence is not None:
+                    def fetch_image(ref):
+                        return fetch(url.rstrip('/') + '/image/' + quote(ref, safe=''))
+                    forward, payload, images = await asyncio.to_thread(evidence.on_finish, arguments, fetch_image)
+                    if not forward:
+                        content = [types.TextContent(type='text', text=json.dumps(payload, ensure_ascii=False))]
+                        for caption, data in images:
+                            data, mime = encode_within_byte_limit(data, 'image/jpeg', max_inline_image_bytes)
+                            content.append(types.TextContent(type='text', text=caption))
+                            content.append(types.ImageContent(
+                                type='image', data=base64.b64encode(data).decode(), mimeType=mime,
+                                _meta={'codex/imageDetail': 'original'}))
+                        return content
                 return await call()
             # Serialize ordinary actions and their RGB downloads to retain refs.
             async with lock:
@@ -514,7 +587,8 @@ async def run_stdio_parsing_string_arguments(server):
 async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
               enable_click_echo=False, max_inline_image_bytes=0, state_memory=False, rolling_handoff_steps=0,
               planning_mode='off', handoff_note=False, selection_assist=False, argument_tolerance=False,
-              failure_look_again=False, failure_memory=False):
+              failure_look_again=False, failure_memory=False, place_look_again=False, finish_evidence=False,
+              finish_evidence_judge=None, finish_evidence_dir=None):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
                                  max_inline_image_bytes=max_inline_image_bytes,
@@ -522,7 +596,10 @@ async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, fini
                                  rolling_handoff_steps=rolling_handoff_steps,
                                  planning_mode=planning_mode, handoff_note=handoff_note,
                                  selection_assist=selection_assist, argument_tolerance=argument_tolerance,
-                                 failure_look_again=failure_look_again, failure_memory=failure_memory)
+                                 failure_look_again=failure_look_again, failure_memory=failure_memory,
+                                 place_look_again=place_look_again, finish_evidence=finish_evidence,
+                                 finish_evidence_judge=finish_evidence_judge,
+                                 finish_evidence_dir=finish_evidence_dir)
     _startup('serving')
     if transport == 'stdio' and argument_tolerance:
         await run_stdio_parsing_string_arguments(server)
@@ -565,6 +642,14 @@ def main():
                         help='harness option: after a failed act, attach before|after crops of the selected view at the selected pixel')
     parser.add_argument('--failure-memory', choices=('off', 'on'), default='off',
                         help='harness option: attach the model\'s own recent failed attempts and a repeat warning')
+    parser.add_argument('--place-look-again', choices=('off', 'on'), default='off',
+                        help='harness option (v9): after a completed placement, attach before|after crops at the selected point')
+    parser.add_argument('--finish-evidence', choices=('off', 'on'), default='off',
+                        help='harness option (v9): finish(achieved) needs per-item fresh image evidence, checked by a '
+                             'separate history-free call of the same model')
+    parser.add_argument('--finish-evidence-judge', default=None,
+                        help='JSON file {model, effort, provider, gateway, output} for the evidence judge (codex path)')
+    parser.add_argument('--finish-evidence-dir', default=None, help='directory for finish_evidence.jsonl')
     args = parser.parse_args()
     asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
                     finish_guard=args.finish_guard == 'on', guard_state=args.guard_state,
@@ -577,7 +662,11 @@ def main():
                     selection_assist=args.selection_assist == 'on',
                     argument_tolerance=args.argument_tolerance == 'on',
                     failure_look_again=args.failure_look_again == 'on',
-                    failure_memory=args.failure_memory == 'on'))
+                    failure_memory=args.failure_memory == 'on',
+                    place_look_again=args.place_look_again == 'on',
+                    finish_evidence=args.finish_evidence == 'on',
+                    finish_evidence_judge=args.finish_evidence_judge,
+                    finish_evidence_dir=args.finish_evidence_dir))
 
 
 if __name__ == '__main__':

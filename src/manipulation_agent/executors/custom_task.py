@@ -113,6 +113,9 @@ class CustomTaskBackend(RGBBackend):
         from .tool_cleanliness import ToolCleanlinessTracker
         self.tool_cleanliness = ToolCleanlinessTracker.from_spec(self.custom_spec)
         self.custom_tracker = None; self.custom_sequence = 0
+        # Evaluator v9 (benchmark side, all methods): stacked items count as on the surface; final state saved.
+        self.stacked_on_top = True
+        self.save_final_state = True
         self._initial_entity_names = None
         self._protected_initial_positions = {}
         self.build_instance = Path(build_instance) if build_instance else None
@@ -532,14 +535,57 @@ class CustomTaskBackend(RGBBackend):
             status='failed' if failed else 'passed',scope='post-settle initial openings; no state repair',joints=rows))
         if failed:raise RuntimeError('Initial articulation did not settle open within native joint limits')
 
-    def _predicate_values(self):
+    # Benchmark side (evaluator v9, 2026-11-18, every method): an item resting on other movable task items that rest
+    # on the required surface counts as on that surface ("stacked counts", user decision). Strict contact-only
+    # results are still reported next to it (strict_contact_evaluation) so earlier numbers stay comparable.
+    STACKED_ON_TOP_VERSION = 'stacked_on_top_v1'
+    STACKED_MAX_DEPTH = 3
+
+    def _direct_on_top(self, obj, target):
         from omnigibson import object_states
+        if obj is None or target is None or object_states.OnTop not in obj.states:
+            return False
+        return bool(obj.states[object_states.OnTop].get_value(target)) or self._sleeping_on_top_fallback(obj, target)
+
+    def _within_footprint(self, obj, target):
+        try:
+            lo, hi = target.aabb
+            pos = obj.get_position_orientation()[0]
+            return (float(lo[0]) <= float(pos[0]) <= float(hi[0])) and (float(lo[1]) <= float(pos[1]) <= float(hi[1]))
+        except Exception:
+            return False
+
+    def _stacked_on_top(self, obj, target, movable):
+        """obj rests on a chain of movable task items (no furniture in between) whose bottom item rests directly on
+        target, and obj's centre lies over target's footprint. Inside relations are never relaxed."""
+        if obj is None or target is None or not self._within_footprint(obj, target):
+            return False
+        frontier, seen = [obj], {obj.name}
+        for _ in range(self.STACKED_MAX_DEPTH):
+            nxt = []
+            for top in frontier:
+                for mid in movable:
+                    if mid.name in seen or mid is target or not self._direct_on_top(top, mid):
+                        continue
+                    if self._direct_on_top(mid, target):
+                        return True
+                    seen.add(mid.name); nxt.append(mid)
+            frontier = nxt
+            if not frontier:
+                break
+        return False
+
+    def _predicate_values(self, *, stacked=None):
+        from omnigibson import object_states
+        stacked = getattr(self, 'stacked_on_top', False) if stacked is None else stacked
         if getattr(self, 'timed_processes', None) is not None:
             self.timed_processes.sync_all_states(self)
         live = {obj.name:obj for obj in self.env.scene.objects}
         if self._initial_entity_names is None:
             self._initial_entity_names = set(live)
         roles = {key:live.get(name) for key,name in self.custom_spec['roles'].items()}
+        movable = ([o for o in roles.values() if o is not None and not getattr(o, 'fixed_base', False)
+                    and object_states.OnTop in o.states] if stacked else [])
         result = {}
         for key, row in self.custom_spec['evaluation']['predicates'].items():
             obj = roles[row['object']]
@@ -576,7 +622,8 @@ class CustomTaskBackend(RGBBackend):
                 members = [roles[m] for m in row['members'] if roles[m] is not None]
                 supported = [m for m in members if object_states.OnTop in m.states
                              and (bool(m.states[object_states.OnTop].get_value(obj))
-                                  or self._sleeping_on_top_fallback(m, obj))]
+                                  or self._sleeping_on_top_fallback(m, obj)
+                                  or (stacked and self._stacked_on_top(m, obj, movable)))]
                 if row['state']=='CountOnTop':
                     result[key] = len(supported)==row['count']
                 else:
@@ -594,6 +641,8 @@ class CustomTaskBackend(RGBBackend):
             val = bool(obj.states[cls].get_value(*args))
             if not val and row['state'] == 'OnTop' and len(args) == 1:
                 val = self._sleeping_on_top_fallback(obj, args[0])
+            if not val and stacked and row['state'] == 'OnTop' and len(args) == 1:
+                val = self._stacked_on_top(obj, args[0], movable)
             result[key] = val
         if self.tool_cleanliness is not None:
             result['cross_contamination_violation'] = self.tool_cleanliness.has_violation()
@@ -873,7 +922,39 @@ class CustomTaskBackend(RGBBackend):
             result['timed_processes'] = self.timed_processes.summary(self)
         if self.tool_cleanliness is not None:
             result['tool_cleanliness'] = self.tool_cleanliness.to_dict()
+        if getattr(self, 'stacked_on_top', False):
+            strict_values = self._predicate_values(stacked=False)
+            strict = self.custom_tracker.result(strict_values)
+            result['evaluator_relaxations'] = [self.STACKED_ON_TOP_VERSION]
+            result['strict_contact_evaluation'] = {
+                'task_success': strict['task_success'] and not missing,
+                'terminal_conditions': strict['terminal_conditions'],
+                'terminal_satisfaction_fraction': strict['terminal_satisfaction_fraction']}
+        if getattr(self, 'save_final_state', False):
+            self._write_final_state(values)
         return result
+
+    def _write_final_state(self, values):
+        """Benchmark-side record (evaluator v9): final poses of every task role object plus all predicate values,
+        so a later change of scoring rules can be re-judged offline. Never shown to the model."""
+        live = {obj.name: obj for obj in self.env.scene.objects}
+        poses = {}
+        for role, name in self.custom_spec['roles'].items():
+            obj = live.get(name)
+            if obj is None:
+                poses[role] = None; continue
+            try:
+                pos, quat = obj.get_position_orientation()
+                lo, hi = obj.aabb
+                poses[role] = {'name': name, 'position': [float(v) for v in pos], 'orientation': [float(v) for v in quat],
+                               'aabb': [[float(v) for v in lo], [float(v) for v in hi]]}
+            except Exception as exc:
+                poses[role] = {'name': name, 'error': repr(exc)[:200]}
+        write_json(self.output / 'final_state.json', {
+            'audience': 'evaluator_private', 'roles': poses,
+            'predicates': {k: bool(v) for k, v in values.items()},
+            'strict_predicates': ({k: bool(v) for k, v in self._predicate_values(stacked=False).items()}
+                                  if getattr(self, 'stacked_on_top', False) else None)})
 
     def provenance(self):
         result = super().provenance()
@@ -887,4 +968,6 @@ class CustomTaskBackend(RGBBackend):
         if self.tool_cleanliness is not None:
             from .tool_cleanliness import VERSION as TOOL_CLEANLINESS_VERSION
             result['tool_cleanliness'] = TOOL_CLEANLINESS_VERSION
+        if getattr(self, 'stacked_on_top', False):
+            result['evaluator_relaxations'] = [self.STACKED_ON_TOP_VERSION]
         return result
