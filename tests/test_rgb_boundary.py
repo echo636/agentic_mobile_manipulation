@@ -46,27 +46,25 @@ class RGBBoundary(unittest.TestCase):
                 'selected_link':'PRIVATE_OBJECT_NAME', 'goal_joints':[1.047]}
             result=self.act('open')
             self.assertTrue(result['ok'])
-            self.assertEqual('opening' in result['effect'],partial)
-            if partial:
-                self.assertEqual(result['effect']['opening']['other_panels_not_operated'], partial)
-                self.assertEqual('other doors or drawers that stayed closed' in result['effect']['opening']['message'], partial)
+            self.assertNotIn('opening', result['effect'])  # v8: articulation knowledge is not reported
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('goal_joints',json.dumps(result))
     def test_action_failure_categories_survive_the_public_boundary(self):
         from manipulation_agent.contracts import SkillError
-        for code, phrase in [('same_transfer_vessel','same object'),
-                             ('invalid_transfer_destination','receiving object'),
-                             ('material_dispenser_off','switched off'),
-                             ('material_source_empty','No transferable contents'),
-                             ('cutting_tool_required','held object cannot cut'),
-                             ('cut_target_unsupported','target cannot be sliced or diced'),
-                             ('placement_surface_unavailable','visible top surface')]:
+        # v8: robot-perceivable codes keep their receipt; simulator-semantic ones report only the outcome.
+        for code, public, phrase in [('same_transfer_vessel','same_transfer_vessel','same object'),
+                             ('invalid_transfer_destination','no_visible_change','had no effect'),
+                             ('material_dispenser_off','no_visible_change','had no effect'),
+                             ('material_source_empty','no_visible_change','had no effect'),
+                             ('cutting_tool_required','no_visible_change','had no effect'),
+                             ('cut_target_unsupported','no_visible_change','had no effect'),
+                             ('placement_surface_unavailable','placement_surface_unavailable','visible top surface')]:
             def fail(*args, **kwargs):
                 raise SkillError(code, 'PRIVATE_OBJECT_NAME / private geometry and diagnostics')
             self.backend.execute_visual=fail
             result=self.act('place_on_top' if code=='placement_surface_unavailable' else 'pour')
             self.assertFalse(result['ok'])
-            self.assertEqual(result['error']['code'],code)
+            self.assertEqual(result['error']['code'],public)
             self.assertIn(phrase,result['error']['message'])
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('private geometry',json.dumps(result))
@@ -80,11 +78,7 @@ class RGBBoundary(unittest.TestCase):
             result=self.act('pour')
             self.assertIs(result['effect']['transfer']['source_has_more_material'],expected)
             self.assertTrue(result['effect']['transfer']['held_object_retained'])
-            if receiver in {'container','surface'}:
-                self.assertEqual(result['effect']['transfer']['receiver_kind'],receiver)
-                self.assertIn('selected '+receiver,result['effect']['transfer']['message'])
-            else:
-                self.assertNotIn('receiver_kind',result['effect']['transfer'])
+            self.assertNotIn('receiver_kind',result['effect']['transfer'])  # v8: semantic kind not reported
             self.assertNotIn('PRIVATE_OBJECT_NAME',json.dumps(result))
             self.assertNotIn('PRIVATE_MATERIAL_SYSTEM',json.dumps(result))
             self.assertNotIn('moved_particles',json.dumps(result))
@@ -111,8 +105,10 @@ class RGBBoundary(unittest.TestCase):
                 raise SkillError('pre_condition_error', 'PRIVATE_OBJECT_NAME has no Open state', stage=stage)
             self.backend.execute_visual = fail
             result = self.act('open')
-            self.assertEqual(result['error']['code'], 'pre_condition_error')
-            self.assertEqual('does not support' in result['error']['message'], stage == 'unsupported_object_action')
+            # v8: same factual outcome whatever the private stage
+            self.assertEqual(result['error']['code'], 'no_visible_change')
+            self.assertNotIn('does not support', result['error']['message'])
+            self.assertNotIn('stage', result['error'])
             self.assertFalse(result['error']['world_may_have_changed'])
             self.assertNotIn('PRIVATE_', json.dumps(result))
     def test_supported_placement_failure_keeps_the_release_result_without_private_state(self):
@@ -126,19 +122,15 @@ class RGBBoundary(unittest.TestCase):
             result = self.act('place_inside' if stage == 'released_inside_payload_unconfirmed' else 'place_next_to')
             self.assertFalse(result['ok'])
             self.assertTrue(result['error']['world_may_have_changed'])
-            if stage == 'released_placement_unconfirmed':
+            # v8: every released_* stage reports only the hand fact, never where the object rests.
+            if stage != 'PRIVATE_STAGE':
                 self.assertIn('your hand is empty', result['error']['message'])
                 self.assertNotIn('remains on', result['error']['message'])
                 self.assertNotIn('remains inside', result['error']['message'])
-                self.assertEqual(result['error']['stage'], stage)
-            elif stage != 'PRIVATE_STAGE':
-                relation = ('inside the selected container' if stage == 'released_inside_payload_unconfirmed'
-                            else 'on the receiving surface')
-                self.assertIn('remains ' + relation, result['error']['message'])
-                self.assertEqual(result['error']['stage'], stage)
-                self.assertIn('Your hand is empty', result['error']['message'])
+                self.assertEqual(result['error']['stage'], 'released')
             else:
                 self.assertNotIn('stage', result['error'])
+            self.assertEqual(result['error']['code'], 'result_unconfirmed')
             self.assertNotIn('PRIVATE_', json.dumps(result))
     def test_cut_reports_actual_transformation_without_private_identity(self):
         for transition, count, expected in (

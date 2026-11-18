@@ -81,6 +81,79 @@ LOCAL_STANCE_MESSAGES = {
 }
 
 
+# v8 (benchmark side, all arms): a failure receipt states only what the robot itself could observe --
+# which action it made and whether its gripper now holds something. Executor checks that rely on simulator
+# knowledge (object identity/fixed base, articulation, semantic capabilities, internal state, simulator health)
+# are reported by their physical outcome. The original code stays in the private executor event.
+GRASP_PRIMITIVES = frozenset({'grasp'})
+PLACE_PRIMITIVES = frozenset({'place_on_top', 'place_inside', 'place_under', 'place_next_to', 'attach', 'hang'})
+SIMULATOR_SEMANTIC_CODES = frozenset({
+    'fixed_object', 'particle_target', 'invalid_visual_target', 'container_closed', 'pre_condition_error',
+    'unsupported_relation', 'cut_target_unsupported', 'cutting_tool_required', 'invalid_transfer_destination',
+    'material_dispenser_off', 'material_source_empty', 'no_removable_material',
+})
+SIMULATOR_UNCONFIRMED_CODES = frozenset({'target_changed', 'physics_instability', 'postcondition_error'})
+FACTUAL_CODES = ('nothing_lifted', 'not_placed', 'no_visible_change', 'result_unconfirmed')
+HAND_TEXT = {'empty': 'Your hand is empty.', 'holding_item': 'You are still holding the item.'}
+FACTUAL_MESSAGES = {
+    'nothing_lifted': 'The grasp was attempted at the selected point, but nothing was lifted.',
+    'not_placed': 'The item was not placed.',
+    'no_visible_change': 'The action was attempted at the selected point but had no effect.',
+    'result_unconfirmed': 'The result of this action could not be confirmed.',
+}
+TOOL_PRIMITIVES = frozenset({'wipe', 'sweep', 'vacuum', 'spray', 'spread', 'soak', 'cut', 'pour', 'scoop'})
+RELEASED_STAGES = frozenset({'released_placement_unconfirmed', 'released_supported_not_adjacent',
+                             'released_supported_payload_unconfirmed', 'released_inside_payload_unconfirmed'})
+
+
+def _factual_code(code: str, primitive: str | None, changed: bool, hand: str | None) -> str | None:
+    if code in SIMULATOR_UNCONFIRMED_CODES or (code in SIMULATOR_SEMANTIC_CODES and changed):
+        return 'result_unconfirmed'
+    if code not in SIMULATOR_SEMANTIC_CODES:
+        return None
+    # The robot knows its own hand: hand-state outcomes take priority over every semantic check, so the order
+    # of executor checks cannot reveal what kind of object was selected.
+    if primitive in GRASP_PRIMITIVES and hand == 'holding_item':
+        return 'hand_occupied'
+    if primitive in {'open', 'close'} and hand == 'holding_item':
+        return 'hand_occupied'
+    if (primitive in PLACE_PRIMITIVES or primitive in TOOL_PRIMITIVES) and hand == 'empty':
+        return 'empty_hand'
+    if primitive in GRASP_PRIMITIVES and hand != 'holding_item':
+        return 'nothing_lifted'
+    if primitive in PLACE_PRIMITIVES and hand == 'holding_item':
+        return 'not_placed'
+    return 'no_visible_change'
+
+
+def factual_execution_error(exc: SkillError, primitive: str | None, hand: str | None) -> dict:
+    """v8 public failure receipt: physical outcome + the robot's own gripper state, no simulator knowledge."""
+    code = exc.code if exc.code in ERROR_MESSAGES else 'execution_error'
+    stage = exc.stage
+    if code == 'postcondition_error' and stage in RELEASED_STAGES:
+        return {'code': 'result_unconfirmed', 'stage': 'released', 'world_may_have_changed': True,
+                'message': 'The object was released; your hand is empty. Where it ended up could not be '
+                           'confirmed. Inspect the returned RGB before choosing the next action.'}
+    if code == 'postcondition_error' and stage == 'articulation_contents_unconfirmed':
+        return {'code': 'result_unconfirmed', 'stage': 'articulation_motion_done', 'world_may_have_changed': True,
+                'message': 'The door or lid motion was carried out. Whether it reached the intended state and '
+                           'whether existing contents stayed in place could not be confirmed. Inspect the returned '
+                           'RGB; repeating the door or lid operation alone does not recover displaced contents.'}
+    factual = _factual_code(code, primitive, exc.changed, hand)
+    if factual is None:
+        return public_execution_error(exc)
+    if factual in ERROR_MESSAGES:  # hand_occupied / empty_hand: the unchanged robot-perceivable receipt
+        return public_execution_error(SkillError(factual, '', changed=exc.changed))
+    hand_text = HAND_TEXT.get(hand or '', '')
+    if factual == 'not_placed':
+        hand_text = 'The item is still in your hand.'
+    message = ' '.join(x for x in (FACTUAL_MESSAGES[factual], hand_text, 'Inspect the returned RGB.') if x)
+    result = {'code': factual, 'message': message, 'world_may_have_changed': bool(exc.changed or factual == 'result_unconfirmed')}
+    if hand in HAND_TEXT:
+        result['hand'] = hand
+    return result
+
+
 def public_execution_error(exc: SkillError) -> dict:
     code = exc.code if exc.code in ERROR_MESSAGES else "execution_error"
     result = {"code":code,"message":ERROR_MESSAGES[code],"world_may_have_changed":exc.changed}

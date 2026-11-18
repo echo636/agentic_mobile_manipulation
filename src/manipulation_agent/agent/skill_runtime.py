@@ -15,8 +15,10 @@ def skill_root():
 
 
 class SkillLibrary:
-    def __init__(self, output: Path, *, exclude=()):
+    def __init__(self, output: Path, *, exclude=(), appendix=None):
+        # appendix: {(skill name, resource): extra text} appended when serving (harness options, default none).
         root = skill_root()
+        appendix = dict(appendix or {})
         self.resources = {}; self.entries = []
         digest = hashlib.sha256()
         for main in sorted(root.glob("*/SKILL.md")):
@@ -29,6 +31,8 @@ class SkillLibrary:
             for path in files:
                 if path.is_symlink(): raise ValueError("Skill symlinks are not allowed")
                 relative = str(path.relative_to(main.parent)); data = path.read_bytes()
+                if (name, relative) in appendix:
+                    data = data + appendix[(name, relative)].encode()
                 if len(data) > 100000: raise ValueError("Skill document too large")
                 self.resources[(name, relative)] = data.decode()
                 key = name + "/" + relative

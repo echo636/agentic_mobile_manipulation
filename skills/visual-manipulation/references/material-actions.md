@@ -16,7 +16,7 @@ Identify the held tool and its readiness before selecting the target. A successf
 
 Toggle a tool before grasping or select its visible body while carrying it. If the held tool obscures its own selectable body, place it on a support, toggle it with an empty hand, then regrasp. An empty, off or incompatible tool needs a state/tool change; retrying other target pixels will not prepare it.
 
-For tiny or cropped tools, obtain a view of the body instead of guessing from a cap or tip. A `fixed_object` result suggests a different object was selected. `particle_target` means loose material cannot be grasped directly; use a suitable tool or container.
+For tiny or cropped tools, obtain a view of the body instead of guessing from a cap or tip. A `nothing_lifted` result suggests the point was not on the tool's own body. Loose material cannot be grasped directly; use a suitable tool or container.
 
 Material actions affect the selected object's simulator material state, not just a patch around the pixel. Successful spray feedback supports treatment even when the coating is difficult to see. Track distinct treated objects and complete any remaining goals.
 

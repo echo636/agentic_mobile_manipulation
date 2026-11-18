@@ -47,6 +47,8 @@ def main():
                    help='Route A selection option: snap an unsuitable point to the single suitable object within 24 px; report result position')
     p.add_argument('--selection-names', choices=['off','on'], default='off',
                    help='Route A selection option (separate decision): report the category of the selected object')
+    p.add_argument('--operation-tips', choices=['off','on'], default='off',
+                   help='Harness option: append general per-action operation checks to the visual-manipulation skill')
     p.add_argument('--require-tool-intent',action='store_true',
                    help='Require a concise public intent argument on every tool call; use identically in both arms')
     p.add_argument('--record-video', action=argparse.BooleanOptionalAction, default=None,
@@ -128,7 +130,8 @@ def main():
                                   state_memory=a.state_memory == 'on',
                                   argument_tolerance=a.argument_tolerance == 'on',
                                   selection_assist=a.selection_assist == 'on',
-                                  selection_names=a.selection_names == 'on')
+                                  selection_names=a.selection_names == 'on',
+                                  operation_tips=a.operation_tips == 'on')
         if policy:
             harness.start_standalone_clock()
             policy.run(harness,with_scoring_objective(a.instruction),image_history_captures=a.image_history_captures)

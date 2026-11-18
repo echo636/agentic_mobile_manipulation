@@ -30,7 +30,7 @@ INTENT_CHARS = 140
 REASON_CHARS = 400
 MESSAGES = {
     'blocked': ('finish(outcome={outcome}) was not accepted yet: {remaining} act/look steps remain. Remaining work is not '
-                'a blocker, and missed pixel selections (fixed_object, pre_condition_error, unsupported_relation, '
+                'a blocker, and missed pixel selections (nothing_lifted, not_placed, no_visible_change, '
                 'placement errors) are not blocked subgoals. Reinspect the newest RGB, move closer or use another view, '
                 'and reselect. finish(outcome={outcome}) is accepted only after at least {attempts} further act/look attempts '
                 'in a row have failed on the obstacle (a completed act is progress and restarts this count), or when '

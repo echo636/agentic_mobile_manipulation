@@ -46,6 +46,7 @@ from .transport.bridge import rpc
 from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
 from .agent.state_memory import StateMemory
+from .agent.failure_memory import FailureMemory
 from .agent.task_graph_planner import TaskGraphSession
 from .contracts import SkillError, validate
 
@@ -80,6 +81,74 @@ def click_echo(data, point):
     out = io.BytesIO()
     crop.save(out, format='JPEG', quality=90)
     return out.getvalue(), size
+
+
+LOOK_AGAIN_MID_HALF_PX = 160   # mid-scale context window: 320x320 px of the 512 px view
+LOOK_AGAIN_DIFF = 6.0          # mean absolute RGB difference (0-255) below which before/after count as unchanged
+
+
+def _marked_window(data, point, half, scale):
+    import io
+    from PIL import Image, ImageDraw
+    image = Image.open(io.BytesIO(data)).convert('RGB')
+    width, height = image.size
+    x = min(width - 1, max(0, round(float(point[0]) * (width - 1))))
+    y = min(height - 1, max(0, round(float(point[1]) * (height - 1))))
+    size = min(2 * half, width, height)
+    left = min(max(0, x - size // 2), width - size)
+    top = min(max(0, y - size // 2), height - size)
+    crop = image.crop((left, top, left + size, top + size))
+    if scale != 1:
+        crop = crop.resize((size * scale, size * scale), Image.LANCZOS)
+    cx, cy = (x - left) * scale + scale // 2, (y - top) * scale + scale // 2
+    draw = ImageDraw.Draw(crop)
+    for colour, line in (((0, 0, 0), 4), ((255, 0, 255), 2)):
+        draw.ellipse([cx - 10, cy - 10, cx + 10, cy + 10], outline=colour, width=line)
+    return crop, size
+
+
+def _jpeg(image):
+    import io
+    out = io.BytesIO()
+    image.save(out, format='JPEG', quality=90)
+    return out.getvalue()
+
+
+def look_again_images(before, after, point, *, close_already_shown):
+    """Harness option --failure-look-again. Returns [(kind, jpeg bytes, size)].
+
+    If the selected view changed around the pixel, one before|after pair of close crops. If it did not (a
+    rejected action leaves the scene as it was), the same pixel at two scales instead: the close crop (skipped
+    when the click echo already shows it) and a mid-scale crop with the surroundings.
+    """
+    from PIL import Image, ImageChops, ImageStat
+    a, size = _marked_window(before, point, ECHO_HALF_PX, ECHO_SCALE)
+    b, _ = _marked_window(after, point, ECHO_HALF_PX, ECHO_SCALE)
+    diff = sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 3.0
+    if diff >= LOOK_AGAIN_DIFF:
+        gap = 8
+        canvas = Image.new('RGB', (a.width + gap + b.width, max(a.height, b.height)), (255, 255, 255))
+        canvas.paste(a, (0, 0))
+        canvas.paste(b, (a.width + gap, 0))
+        return [('pair', _jpeg(canvas), size)]
+    out = [] if close_already_shown else [('close', _jpeg(b), size)]
+    mid, mid_size = _marked_window(after, point, LOOK_AGAIN_MID_HALF_PX, 1)
+    out.append(('mid', _jpeg(mid), mid_size))
+    return out
+
+
+def look_again_caption(kind, before_ref, after_ref, size):
+    if kind == 'pair':
+        return (f'Look again after the failed action: LEFT is {before_ref} before the action, RIGHT is {after_ref} '
+                f'(same camera view) after it, both {size}x{size} px around the pixel you selected, enlarged '
+                f'{ECHO_SCALE}x; the magenta ring marks that pixel. If the robot moved, the same pixel may show a '
+                'different spot.')
+    if kind == 'close':
+        return (f'Look again after the failed action: {after_ref} was unchanged around your pixel. Close view, '
+                f'{size}x{size} px around the pixel you selected, enlarged {ECHO_SCALE}x; the magenta ring marks it.')
+    return (f'Look again after the failed action: wider view of {after_ref}, {size}x{size} px around the pixel '
+            'you selected (not enlarged); the magenta ring marks it. Use it to see what the point is on and what '
+            'surrounds it.')
 
 
 def adjusted_caption(image_ref, size):
@@ -164,7 +233,8 @@ def loopback_host(value):
 async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
                         enable_click_echo=False, max_inline_image_bytes=0, state_memory=False,
                         rolling_handoff_steps=0, planning_mode='off', handoff_note=False,
-                        selection_assist=False, argument_tolerance=False):
+                        selection_assist=False, argument_tolerance=False, failure_look_again=False,
+                        failure_memory=False):
     """Freeze the bridge catalog and register it without changing its schemas.
 
     SDK Tool/FuncMetadata support schemas from external catalogs. The permissive
@@ -196,6 +266,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
     # Harness-side option, off by default: defer early finishes while act/look budget remains.
     guard = FinishGuard(guard_state, state_memory=state_memory) if finish_guard else None
     proxy_memory = StateMemory() if state_memory else None
+    # Harness option (--failure-memory, default off): the model's own recent failed attempts.
+    failures = FailureMemory() if failure_memory else None
     segment_steps = 0
     bridge_has_task_graph = any(spec['name'] == 'plan_task_graph' for spec in catalog)
     local_task_graph = (
@@ -238,7 +310,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         },
                     }
                     return [types.TextContent(type='text', text=json.dumps(checkpoint, ensure_ascii=False))]
-                target = (arguments.get('target') if ((enable_click_echo or selection_assist) and name == 'act'
+                target = (arguments.get('target') if ((enable_click_echo or selection_assist or failure_look_again)
+                                                      and name == 'act'
                                                       and isinstance(arguments, dict)) else None)
                 pre_source = None
                 if (isinstance(target, dict) and isinstance(target.get('image_ref'), str)
@@ -256,6 +329,10 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         result['state_memory'] = proxy_memory.public_view(
                             include_handoff=(name == 'initialize' and proxy_memory.steps_observed > 0)
                         )
+                if failures is not None and isinstance(result, dict):
+                    summary = failures.observe(name, arguments if isinstance(arguments, dict) else {}, result)
+                    if summary is not None:
+                        result['failure_memory'] = summary
                 if guard is not None:
                     guard.observe(result, name, arguments)
                 if local_task_graph is not None:
@@ -316,6 +393,25 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                     except Exception:
                         pass
                 observation = result.get('observation', {})
+                if (failure_look_again and pre_source is not None and isinstance(result, dict)
+                        and result.get('ok') is False and isinstance(result.get('error'), dict)
+                        and observation.get('observation_mode') == 'rgb_only'):
+                    view = target['image_ref'].rsplit('-', 1)[-1]
+                    same = next((f for f in observation['images'] if f.get('view') == view), None)
+                    if same is not None:
+                        try:
+                            after = await asyncio.to_thread(
+                                fetch, url.rstrip('/') + '/image/' + quote(same['image_ref'], safe=''))
+                            for kind, data, size in look_again_images(
+                                    pre_source, after, target['point'], close_already_shown=enable_click_echo):
+                                data, mime = encode_within_byte_limit(data, 'image/jpeg', max_inline_image_bytes)
+                                content.append(types.TextContent(type='text', text=look_again_caption(
+                                    kind, target['image_ref'], same['image_ref'], size)))
+                                content.append(types.ImageContent(
+                                    type='image', data=base64.b64encode(data).decode(), mimeType=mime,
+                                    _meta={'codex/imageDetail': 'original'}))
+                        except Exception:
+                            pass
                 if observation.get('observation_mode') == 'rgb_only':
                     for frame in observation['images']:
                         data = await asyncio.to_thread(fetch, url.rstrip('/') + '/image/' + quote(frame['image_ref'], safe=''))
@@ -417,14 +513,16 @@ async def run_stdio_parsing_string_arguments(server):
 
 async def run(url: str, *, transport='stdio', host='127.0.0.1', port=29431, finish_guard=False, guard_state=None,
               enable_click_echo=False, max_inline_image_bytes=0, state_memory=False, rolling_handoff_steps=0,
-              planning_mode='off', handoff_note=False, selection_assist=False, argument_tolerance=False):
+              planning_mode='off', handoff_note=False, selection_assist=False, argument_tolerance=False,
+              failure_look_again=False, failure_memory=False):
     server = await create_server(url, host=host, port=port, finish_guard=finish_guard, guard_state=guard_state,
                                  enable_click_echo=enable_click_echo,
                                  max_inline_image_bytes=max_inline_image_bytes,
                                  state_memory=state_memory,
                                  rolling_handoff_steps=rolling_handoff_steps,
                                  planning_mode=planning_mode, handoff_note=handoff_note,
-                                 selection_assist=selection_assist, argument_tolerance=argument_tolerance)
+                                 selection_assist=selection_assist, argument_tolerance=argument_tolerance,
+                                 failure_look_again=failure_look_again, failure_memory=failure_memory)
     _startup('serving')
     if transport == 'stdio' and argument_tolerance:
         await run_stdio_parsing_string_arguments(server)
@@ -463,6 +561,10 @@ def main():
                         help='route A selection option: crops for an adjusted point and for the result position')
     parser.add_argument('--argument-tolerance', choices=('off', 'on'), default='off',
                         help='client adaptation (every arm): parse JSON-string tools/call arguments')
+    parser.add_argument('--failure-look-again', choices=('off', 'on'), default='off',
+                        help='harness option: after a failed act, attach before|after crops of the selected view at the selected pixel')
+    parser.add_argument('--failure-memory', choices=('off', 'on'), default='off',
+                        help='harness option: attach the model\'s own recent failed attempts and a repeat warning')
     args = parser.parse_args()
     asyncio.run(run(args.bridge, transport=args.transport, host=args.host, port=args.port,
                     finish_guard=args.finish_guard == 'on', guard_state=args.guard_state,
@@ -473,7 +575,9 @@ def main():
                     planning_mode=args.planning_mode,
                     handoff_note=args.handoff_progress_note == 'on',
                     selection_assist=args.selection_assist == 'on',
-                    argument_tolerance=args.argument_tolerance == 'on'))
+                    argument_tolerance=args.argument_tolerance == 'on',
+                    failure_look_again=args.failure_look_again == 'on',
+                    failure_memory=args.failure_memory == 'on'))
 
 
 if __name__ == '__main__':

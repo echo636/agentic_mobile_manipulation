@@ -7,9 +7,9 @@ from dataclasses import asdict
 from ..contracts import Budget, SkillError, validate
 from .deadline import DEADLINE_STEP_SENTINEL, FINISH_GRACE_SECONDS, EpisodeDeadline
 from .harness import Harness as LegacyPlanHelpers
-from ..observations.boundary import public_observation, public_execution_error
+from ..observations.boundary import public_observation, public_execution_error, factual_execution_error
 from ..records import write_json
-from ..agent.skill_runtime import SkillLibrary
+from ..agent.skill_runtime import SkillLibrary, skill_root
 from ..tools import REGISTRY, tool_specs
 from ..tools.intent import validate_intent, PROTOCOL as INTENT_PROTOCOL, LEGACY_PROTOCOL
 from .tool_context import ToolContext
@@ -27,40 +27,28 @@ NO_WORLD_CHANGE_CODES = frozenset({
 })
 
 ACTION_FEEDBACK_HINTS = {
-    'no_removable_material': (
-        ' Check the Click echo crop and returned RGB: your pixel may have landed on the adjacent floor, wall, '
-        'or countertop just outside the dirty surface edge rather than on the intended object itself.'
+    # Route A causal hints (auxiliary_feedback). v8 receipts state only the physical outcome, so these list
+    # general possible causes for that outcome; they do not reveal which one applied.
+    'nothing_lifted': (
+        ' Common causes: the point was on a large fixed piece of furniture, a counter, wall or floor, or on the '
+        'surface beside or under the item rather than on the item\'s own body; or the item is behind a closed door '
+        'or glass panel (open that with an empty hand first); or the item is out of reach (navigate_to closer). '
+        'Check the Click echo crop and all four views, then reselect.'
     ),
-    'fixed_object': (
-        ' Check two common causes in RGB and Click echo: (1) if the intended item is inside a closed cabinet, '
-        'appliance, drawer, or glass door, your ray hit the closed door panel — call act(primitive="open") on '
-        'that door/container while your hand is empty first; (2) if you tried to move far away or clicked beside '
-        'a movable item, use act(primitive="navigate_to") to walk to distant areas/doorways, or reselect the '
-        'interior body of the movable item itself.'
+    'not_placed': (
+        ' Common causes: the destination is closed (stage the held item, open it with an empty hand, then place); '
+        'the point was not on a surface or opening that can receive the item for this relation (place_inside needs '
+        'an open interior, place_on_top a free upward surface); or the point was on the held item itself.'
     ),
-    'pre_condition_error': (
-        ' Verify three prerequisites in RGB: (1) hand state matches the action (open/close and unheld switches '
-        'require robot.hand == "empty"; cut/clean/treat require holding the proper tool); (2) for open/close, '
-        'click the operable door panel or drawer front rather than the fixed outer frame, countertop, or an '
-        'already-open door panel — if a swung-open door blocks your view of the interior shelves, call '
-        'act(primitive="navigate_to") onto floor space past/facing the open cavity and inspect all 4 views; '
-        '(3) for distant rooms, walk closer with navigate_to before operating.'
-    ),
-    'unsupported_relation': (
-        ' Check the receiving object type and action primitive: place_inside requires an open container/compartment; '
-        'place_on_top requires a flat upward support surface; attach requires a compatible mounting peg/socket/fixture.'
-    ),
-    'cut_target_unsupported': (
-        ' Check Click echo: your pixel likely hit the cutting board or countertop under/beside the food/workpiece '
-        'rather than the uncut item itself, or the item is already sliced.'
+    'no_visible_change': (
+        ' Common causes: the point was not on the operable part (door front, handle, switch or panel) or on the '
+        'item to process; the held tool does not suit this action; the hand state does not match (open/close and '
+        'unheld switches need an empty hand); or the object has nothing left to change. Check the Click echo crop '
+        'and RGB before choosing a different point, tool or action.'
     ),
     'hand_occupied': (
         ' open/close and unheld switches require robot.hand == "empty". Stage the held item on a nearby clear '
         'surface first, perform open/close/toggle, then re-grasp.'
-    ),
-    'container_closed': (
-        ' If your hand is occupied, stage the held item on a nearby surface first so your hand is empty, '
-        'open the container, then pick the item back up and place_inside.'
     ),
 }
 
@@ -68,7 +56,8 @@ class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
                  goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False,
                  scheduling_mode='none', planning_mode='off', auxiliary_feedback=False, state_memory=False,
-                 argument_tolerance=False, selection_assist=False, selection_names=False):
+                 argument_tolerance=False, selection_assist=False, selection_names=False,
+                 operation_tips=False):
         if profile == 'basic-skills': goal_skill = 'none'
         if profile == 'goal-tree': goal_skill = 'tree'
         if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
@@ -83,6 +72,8 @@ class VisionHarness:
         # Route A selection module options (default off): snapping + crops; object category names.
         self.selection_assist=bool(selection_assist)
         self.selection_names=bool(selection_names)
+        # Harness option (default off): general per-action operation checks appended to visual-manipulation.
+        self.operation_tips=bool(operation_tips)
         backend.selection_snap=self.selection_assist
         self.state_memory_enabled=bool(state_memory)
         self.state_memory=StateMemory(output_dir=recorder.output) if self.state_memory_enabled else None
@@ -130,7 +121,10 @@ class VisionHarness:
                 excluded = excluded | {'time-space-scheduling'}
             if planning_mode != 'task_graph':
                 excluded = excluded | {'task-graph-planning'}
-            self.skills=SkillLibrary(recorder.output,exclude=excluded)
+            appendix={}
+            if self.operation_tips:
+                appendix[('visual-manipulation','SKILL.md')]=(skill_root()/'_options'/'operation-checks.md').read_text()
+            self.skills=SkillLibrary(recorder.output,exclude=excluded,appendix=appendix)
         recorder.run['config']['agent_profile'] = profile
         recorder.run['config'].update(goal_skill=goal_skill,
             scheduling_mode=scheduling_mode,
@@ -140,6 +134,7 @@ class VisionHarness:
             argument_tolerance=self.argument_tolerance,
             selection_assist=self.selection_assist,
             selection_names=self.selection_names,
+            operation_tips=self.operation_tips,
             require_tool_intent=require_tool_intent,
             tool_intent_protocol=INTENT_PROTOCOL if require_tool_intent else LEGACY_PROTOCOL)
         recorder.run['episode_deadline_unix']=self.deadline.unix
@@ -475,8 +470,9 @@ class VisionHarness:
             details=self.backend.execute_visual(primitive,target,limit,**kwargs)
             self.recorder.event('private_executor_result',{'primitive':primitive,'details':details})
         except SkillError as exc:
-            self.recorder.event('private_executor_error',{'code':exc.code,'detail':str(exc)})
-            error=public_execution_error(exc)
+            self.recorder.event('private_executor_error',{'code':exc.code,'stage':exc.stage,'detail':str(exc)})
+            # v8 shared receipt (all arms): only the physical outcome and the robot's own gripper state.
+            error=factual_execution_error(exc,primitive,self._public_hand_state())
         finally:
             self.backend._active_request_id=None
             self.revision+=1
@@ -486,11 +482,7 @@ class VisionHarness:
         extras=self._selection_extras(primitive, error is None)
         if error: return {'ok':False,'error':error,'observation':self.snapshot,'actions_used':self.actions,**extras}
         effect={'primitive':primitive,'status':'completed','verification':'executor_operation_only'}
-        if primitive=='open' and details.get('other_panels_not_operated') is True:
-            effect['opening']={'other_panels_not_operated':True,
-                'message':'Opened only the door or drawer at the selected point; this object has other doors or '
-                          'drawers that stayed closed. Check in the returned RGB that the opened compartment is the '
-                          'one you need; if it is not, select the intended door or drawer.'}
+        # v8: other_panels_not_operated (articulation knowledge) is no longer reported.
         if primitive=='cut':
             # Report this action's transformation, without object/material IDs
             # or task-goal state. Particle counts are not physical piece counts.
@@ -508,12 +500,7 @@ class VisionHarness:
                     'source_has_more_material':remaining if isinstance(remaining,bool) else None,
                     'held_object_retained':True,
                     'message':'Contents were transferred. Check remaining contents and the receiver in the returned RGB.'}
-                receiver = details.get('receiver_kind')
-                if receiver in {'container', 'surface'}:
-                    effect['transfer']['receiver_kind'] = receiver
-                    effect['transfer']['message'] = (
-                        f'Contents were transferred to the selected {receiver}. '
-                        'Check remaining contents and the receiver in the returned RGB.')
+                # v8: the receiver's semantic kind (container/surface) is no longer reported.
                 if rigid:
                     effect['transfer'].update(rigid)
                 partial = []
