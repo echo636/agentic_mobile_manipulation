@@ -112,7 +112,7 @@ def inline_skill_guidance(goal_skill='hierarchical'):
     return ('\nWorkflow guidance, included in full. There are no skill-reading tools.\n\n' + '\n'.join(sections))
 
 
-def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_intent=False,
+def system_prompt(profile='skills', *, rgb_reference_review=False, goal_skill='hierarchical', require_tool_intent=False,
                   autonomy=False, scheduling_mode='none', state_memory=False, planning_mode='off'):
     if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
     if scheduling_mode not in {'none', 'text', 'program'}: raise ValueError('Unknown scheduling mode')
@@ -145,6 +145,8 @@ def system_prompt(profile='skills', *, goal_skill='hierarchical', require_tool_i
             intent = _replace_once(intent, 'list_skills, read_skill, ', '')
         prompt = intent + prompt.replace(
             'initialize({})', 'initialize(intent="Inspect the initial four views to locate the task-relevant items.")')
+    if rgb_reference_review:
+        prompt += '\nTo compare an earlier view with the current scene, call initialize with reference_image_ref set to the earlier image_ref.\n'
     return prompt
 
 
@@ -159,7 +161,8 @@ class RGBResponsesPolicy(ResponsesPolicy):
             return future.result()
 
     def run(self, harness, instruction, *, image_history_captures=0):
-        loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile,goal_skill=harness.goal_skill,
+        loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile, rgb_reference_review=harness.rgb_reference_review,
+            goal_skill=harness.goal_skill,
             require_tool_intent=getattr(harness, 'require_tool_intent', False),
             state_memory=getattr(harness, 'state_memory_enabled', False),
             planning_mode=getattr(harness, 'planning_mode', 'off')),

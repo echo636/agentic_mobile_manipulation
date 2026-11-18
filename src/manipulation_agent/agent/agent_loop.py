@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 
 from ..contracts import SkillError
 from .image_history import ImageHistory
+from ..observations.boundary import labeled_rgb_images
 from ..records import now, write_json
 
 
@@ -44,8 +45,14 @@ class VisualToolLoop:
 
     def run(self, harness, instruction):
         config = self.config
-        specs = [{'type': 'function', 'name': tool['name'], 'description': tool['description'],
-                  'parameters': tool['inputSchema'], 'strict': True} for tool in harness.tool_specs()]
+        specs = []
+        for tool in harness.tool_specs():
+            parameters = tool['inputSchema']
+            if tool['name'] == 'initialize':
+                # Strict Responses schemas express the optional reference as a required, nullable field.
+                parameters = {**parameters, 'required': list(parameters['properties'])}
+            specs.append({'type': 'function', 'name': tool['name'], 'description': tool['description'],
+                          'parameters': parameters, 'strict': True})
         images = ImageHistory(config.image_history_captures)
         history = [{'role': 'user', 'content': instruction}]
         tokens = 0
@@ -156,13 +163,13 @@ class VisualToolLoop:
                 # References point to the exact bytes verified and attached by
                 # ImageHistory. Replays do not duplicate base64 into their JSON.
                 content.extend({'type': 'image', 'image_ref': f['image_ref'], 'mimeType': f['mime_type']}
-                               for f in result.get('observation', {}).get('images', []))
+                               for f, _ in labeled_rgb_images(result.get('observation', {}), result.get('reference_image')))
                 replay_event('completed', {'id': call_id, 'type': 'mcp_tool_call',
                              'server': 'manipulation', 'tool': call.get('name', ''), 'arguments': args,
                              'result': {'content': content}, 'status': 'completed'})
                 history.append({'type': 'function_call_output', 'call_id': call_id,
                                 'output': json.dumps(result, ensure_ascii=False)})
-                images.append(history, result.get('observation', {}), harness.image_bytes)
+                images.append(history, result.get('observation', {}), harness.image_bytes, result.get('reference_image'))
                 if harness.closed:
                     canonical_event('run_finished', content={'closed': True})
                     return

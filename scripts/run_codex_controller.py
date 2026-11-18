@@ -263,6 +263,7 @@ def main(argv=None, *, allow_client=False):
                         help='Private argv JSON: atomically arm remote execution clock after MCP handshake')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
+    p.add_argument('--rgb-reference-review', action='store_true', help='Enable the episode RGB comparison tool parameter.')
     p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
     p.add_argument('--scheduling-mode', choices=['none','text','program'], default='none',
@@ -329,13 +330,13 @@ def main(argv=None, *, allow_client=False):
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(Path(__file__).resolve().parents[1] / "src", args.output / "source_snapshot",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    instructions = system_prompt(args.agent_profile, goal_skill=args.goal_skill,
+    instructions = system_prompt(args.agent_profile, rgb_reference_review=args.rgb_reference_review, goal_skill=args.goal_skill,
                                  require_tool_intent=args.require_tool_intent,
                                  autonomy=args.autonomy_instruction == 'on',
                                  scheduling_mode=args.scheduling_mode,
                                  state_memory=args.state_memory == 'on',
                                  planning_mode=args.planning_mode)
-    catalog = tool_specs(args.agent_profile, require_intent=args.require_tool_intent,
+    catalog = tool_specs(args.agent_profile, rgb_reference_review=args.rgb_reference_review, require_intent=args.require_tool_intent,
                          scheduling_mode=args.scheduling_mode,
                          planning_mode=args.planning_mode)
     raw_mcp_args = json.loads(args.mcp_args_json)
@@ -401,6 +402,7 @@ def main(argv=None, *, allow_client=False):
                 "model_reasoning_effort": args.reasoning_effort, "observation_mode": "rgb_only",
                 "episode_deadline_unix":deadline.unix,"requested_timeout_seconds":args.timeout,
                 "agent_profile": args.agent_profile, "goal_skill": args.goal_skill,
+                "rgb_reference_review": args.rgb_reference_review,
                 "require_tool_intent": args.require_tool_intent, "mcp_tool_exposure": args.mcp_tool_exposure,
                 "codex_context": args.codex_context,
                 "tool_intent_protocol": INTENT_PROTOCOL if args.require_tool_intent else LEGACY_PROTOCOL,

@@ -43,6 +43,31 @@ def rgb_result(revision):
 
 @unittest.skipUnless(HAS_MCP, 'Install the pinned MCP extra for planner transport tests')
 class PlannerContracts(unittest.IsolatedAsyncioTestCase):
+    async def test_historical_reference_is_labeled_and_distinct_from_current_views(self):
+        old = rgb_result(0)
+        current = rgb_result(1)
+        body = json.loads(current.content[0].text)
+        prior = json.loads(old.content[0].text)['observation']['images'][0]
+        body['reference_image'] = {'revision': 0, 'image': prior}
+        reference_pixel = next(part for part in old.content if part.type == 'image')
+        current.content = [types.TextContent(type='text', text=json.dumps(body)),
+                           *current.content[1:], reference_pixel]
+        with tempfile.TemporaryDirectory() as directory:
+            payloads = []
+            def request(payload):
+                payloads.append(payload)
+                return response(PLAN)
+            planner = PlanningSubagent(instruction='Serve cups.', model='test', effort='high',
+                request=request, output=directory, capabilities='public RGB')
+            planner.observe('initialize', {'reference_image_ref': prior['image_ref']}, current)
+            planner.consult('Compare the views.')
+            parts = payloads[0]['input'][0]['content']
+            self.assertEqual(len(planner.observation['images']), 4)
+            self.assertEqual(len([part for part in parts if part['type'] == 'input_image']), 5)
+            self.assertIn('Historical RGB', parts[-2]['text'])
+            self.assertTrue(parts[-1]['image_url'].endswith(reference_pixel.data))
+            planner.events.close()
+
     async def test_proxy_preserves_images_and_uses_latest_rgb_without_acting(self):
         payloads = []
         def request(payload):

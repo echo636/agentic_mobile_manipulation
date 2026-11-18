@@ -13,7 +13,7 @@ from .reporting.audit import audit_episode
 from .records import now, write_json, read_run
 from .reporting.transcript import build_transcript
 from .reporting.tool_trace import enrich_tool_trace
-from .clients.events import event_path
+from .clients.events import event_path, with_native_rgb
 from .reporting.goal_replay import goal_state, planning_metrics
 
 
@@ -48,7 +48,7 @@ def build_replay(run_dir: Path, controller_dir: Path | None = None) -> dict:
     summaries=[r for r in summaries if r.get('source')=='provider_returned_reasoning_summary' and r.get('verbatim') is True]
     summary_index=0
     model_source = event_path(controller_dir or run_dir)
-    model_events = lines(model_source)
+    model_events = with_native_rgb(lines(model_source), controller_dir or run_dir)
     if model_events:
         for event_index, event in enumerate(model_events):
             item = event.get('item',{})

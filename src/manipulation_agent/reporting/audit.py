@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from ..contracts import tool_specs
-from ..clients.events import event_path
+from ..clients.events import event_path, with_native_rgb
 from ..records import now, write_json
 
 
@@ -34,6 +34,7 @@ def audit_episode(run_dir: Path, controller_dir: Path) -> dict:
         planner_calls = [event['item'] for event in model_events
                          if is_planner(event) and event.get('type') == 'item.completed']
         model_events = [event for event in model_events if not is_planner(event)]
+    model_events = with_native_rgb(model_events, controller_dir)
     sim_calls = [{'name': e['name'], 'arguments': e['arguments']} for e in model_sim_events if e['kind'] == 'tool_call']
     calls = []; unexpected = []; usage = {}; closed = False
     rgb = run.get('config', {}).get('observation_mode') == 'rgb_only'
@@ -134,7 +135,7 @@ def audit_rgb_transport(run_dir: Path, sim_events: list[dict], model_events: lis
     This is a protocol audit, not a claim to prove absence of all possible covert
     channels. Private simulator events are never treated as model observations.
     """
-    from ..observations.boundary import public_observation
+    from ..observations.boundary import labeled_rgb_images, public_observation
     items = [e['item'] for e in model_events if e.get('type') == 'item.completed'
              and e.get('item', {}).get('type') == 'mcp_tool_call']
     results = [e for e in sim_events if e.get('kind') == 'tool_result']
@@ -143,8 +144,11 @@ def audit_rgb_transport(run_dir: Path, sim_events: list[dict], model_events: lis
     files = {i['image_ref']: i for c in captures for i in c['images']}
     checks = {'model_results_match_simulator': len(items) == len(results),
               'rgb_observation_allowlist': True, 'image_bytes_hashes_and_archive_match': True,
-              'pixel_actions_use_latest_images': True, 'actual_images_delivered': False}
+              'pixel_actions_use_latest_images': True, 'actual_images_delivered': False,
+              'references_match_previously_delivered_rgb': True}
     count = 0; refs = set(); latest = set(); errors = []
+    published = {}
+    reference_count = 0
     for item, event in zip(items, results):
         try:
             if item['tool'] == 'act' and item['arguments'].get('target') is not None:
@@ -169,35 +173,63 @@ def audit_rgb_transport(run_dir: Path, sim_events: list[dict], model_events: lis
             expected = {**event['result'], 'evidence_id': event['id']}
             checks['model_results_match_simulator'] &= result == expected
             observation = result.get('observation')
-            images = [c for c in content if c.get('type') == 'image']
+            reference = result.get('reference_image')
+            requested = item.get('arguments', {}).get('reference_image_ref')
+            images = [(i, c) for i, c in enumerate(content) if c.get('type') == 'image']
             if observation is None:
                 checks['image_bytes_hashes_and_archive_match'] &= not images
+                checks['references_match_previously_delivered_rgb'] &= reference is None
                 continue
+            public = True
             try:
                 raw = {k: v for k, v in observation.items() if k != 'revision'}
                 public_observation(raw, observation['revision'])
             except (RuntimeError, KeyError, TypeError):
+                public = False
                 checks['rgb_observation_allowlist'] = False
-            metadata = observation.get('images', [])
-            checks['image_bytes_hashes_and_archive_match'] &= len(images) == len(metadata)
-            for meta, image in zip(metadata, images):
+            current = observation.get('images', [])
+            current_refs = {frame['image_ref'] for frame in current}
+            if reference is not None:
+                valid = (isinstance(reference, dict) and set(reference) == {'revision', 'image'}
+                         and type(reference['revision']) is int and isinstance(reference['image'], dict)
+                         and isinstance(requested, str) and reference['image'].get('image_ref') == requested
+                         and requested not in current_refs and item['tool'] == 'initialize'
+                         and result.get('ok') is True and published.get(requested) == reference)
+                checks['references_match_previously_delivered_rgb'] &= valid
+                if not valid:
+                    checks['rgb_observation_allowlist'] = False
+                    reference = None
+            elif requested is not None and result.get('ok') is True:
+                checks['references_match_previously_delivered_rgb'] &= requested in current_refs
+            frames = list(labeled_rgb_images(observation, reference))
+            checks['image_bytes_hashes_and_archive_match'] &= len(images) == len(frames)
+            for (meta, label), (index, image) in zip(frames, images):
                 payload = base64.b64decode(image['data'], validate=True)
                 sha = hashlib.sha256(payload).hexdigest()
                 saved = files[meta['image_ref']]
                 path = (run_dir / saved['file']).resolve()
                 if not path.is_relative_to(run_dir.resolve()):
                     raise ValueError('Image path outside run directory')
-                checks['image_bytes_hashes_and_archive_match'] &= (
-                    sha == meta['sha256'] == saved['sha256'] == hashlib.sha256(path.read_bytes()).hexdigest()
-                    and image['mimeType'] == meta['mime_type'])
-                count += 1; refs.add(meta['image_ref'])
-            latest = {m['image_ref'] for m in metadata}
+                matches = (sha == meta['sha256'] == saved['sha256'] == hashlib.sha256(path.read_bytes()).hexdigest()
+                           and image['mimeType'] == meta['mime_type'])
+                checks['image_bytes_hashes_and_archive_match'] &= matches
+                ref = meta['image_ref']
+                if ref in current_refs:
+                    if public and matches and result == expected:
+                        published.setdefault(ref, {'revision': observation['revision'], 'image': meta})
+                else:
+                    previous = content[index - 1]
+                    checks['references_match_previously_delivered_rgb'] &= (
+                        previous.get('type') == 'text' and previous.get('text') == label)
+                    reference_count += 1
+                count += 1; refs.add(ref)
+            latest = current_refs
         except (ValueError, KeyError, TypeError, IndexError, OSError) as exc:
             checks['image_bytes_hashes_and_archive_match'] = False
             errors.append({'event_id': event.get('id'), 'error_type': type(exc).__name__})
     checks['actual_images_delivered'] = count > 0
     return {'checks': checks, 'image_content_count': count, 'unique_model_image_count': len(refs),
-            'archive_capture_count': len(captures), 'errors': errors}
+            'reference_image_content_count': reference_count, 'archive_capture_count': len(captures), 'errors': errors}
 
 
 def main() -> int:

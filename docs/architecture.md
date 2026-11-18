@@ -115,6 +115,13 @@ bytes after success or failure, and checks turn, token and task budgets. Plain
 assistant text saying “done” does not close the episode. The model must call
 `finish`; otherwise an exhausted budget closes it as aborted.
 
+Set `rgb_reference_review` to `true` in the batch manifest, or pass `--rgb-reference-review` to the simulator
+and standalone controller. The default preserves the original tool schema and policy prompt.
+Call `initialize({})` to read the prepared four-view snapshot. To compare any earlier published view,
+call `initialize({"reference_image_ref": "rgb-00006-right"})` with its actual episode reference.
+The response pairs the current views with the labeled historical RGB in the same image-bearing item.
+The action revision and camera state stay at the current capture.
+
 `agent/image_history.py` records capture identity and verifies every attached image.
 `--image-history-captures 0` keeps all images, preserving the default behavior.
 A positive value limits historical image attachments in outgoing native requests;

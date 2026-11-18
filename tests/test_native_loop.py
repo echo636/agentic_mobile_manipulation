@@ -25,6 +25,53 @@ class NativeLoopTests(unittest.TestCase):
         return {'output': [{'type': 'function_call', 'call_id': ident,
                             'name': name, 'arguments': json.dumps(args)}], 'usage': {'total_tokens': 10}}
 
+    def test_read_earlier_rgb_in_latest_image_item(self):
+        from manipulation_agent.agent.vision_policy import system_prompt
+        self.assertNotIn('reference_image_ref', system_prompt('minimal'))
+        self.assertIn('reference_image_ref', system_prompt('minimal', rgb_reference_review=True))
+        base_schema = next(t for t in self.harness.tool_specs() if t['name'] == 'initialize')['inputSchema']
+        self.assertEqual(base_schema['properties'], {})
+        denied = self.harness.call('initialize', {'reference_image_ref': 'img'}, 'disabled')
+        self.assertEqual(denied['error']['code'], 'invalid_arguments')
+        self.harness = VisionHarness(self.backend, self.recorder, profile='minimal', rgb_reference_review=True)
+        old = self.harness.call('initialize', {}, 'initial')['observation']['images'][0]
+        for n in range(10):
+            result = self.harness.call('look', {'revision': n, 'yaw_degrees': 5}, f'look-{n}')
+            self.assertTrue(result['ok'])
+        current = self.harness.snapshot
+        capture, steps, actions = self.backend.capture, self.backend.steps, self.harness.actions
+        args = {'reference_image_ref': old['image_ref']}
+        reviewed = self.harness.call('initialize', args, 'review')
+        self.assertEqual(reviewed['observation'], current)
+        self.assertEqual(reviewed['reference_image'], {'revision': 0, 'image': old})
+        self.assertEqual(self.harness.call('initialize', args, 'review'), reviewed)
+        duplicate = self.harness.call('initialize', {'reference_image_ref': current['images'][0]['image_ref']}, 'current')
+        self.assertNotIn('reference_image', duplicate)
+        bogus = self.harness.call('initialize', {'reference_image_ref': '../executor_frames/unknown'}, 'unknown')
+        self.assertEqual(bogus['error']['code'], 'unknown_image_ref')
+        self.assertEqual((self.backend.capture, self.backend.steps, self.harness.actions), (capture, steps, actions))
+
+        turns = []
+        def request(harness, payload):
+            turns.append(payload)
+            if len(turns) == 1:
+                spec = next(t for t in payload['tools'] if t['name'] == 'initialize')
+                self.assertIn('reference_image_ref', spec['parameters']['required'])
+                return self.response('initialize', args, 'recall-again')
+            blocks = payload['input'][-1]['content']
+            images = [part for part in blocks if part['type'] == 'input_image']
+            self.assertEqual(len(images), len(current['images']) + 1)
+            self.assertIn('Historical RGB', blocks[-2]['text'])
+            self.assertEqual(base64.b64decode(images[-1]['image_url'].split(',')[1]),
+                             self.backend.image_bytes(old['image_ref'])[0])
+            return self.response('finish', {'outcome': 'blocked', 'reason': 'fixture'}, 'end')
+        stale = self.harness.call('act', {'primitive': 'grasp', 'revision': current['revision'],
+                                  'target': {'image_ref': old['image_ref'], 'point': [.5, .5]}}, 'stale')
+        self.assertEqual(stale['error']['code'], 'stale_image_ref')
+        VisualToolLoop(model='fixture', instructions='test', request=request,
+                       config=LoopConfig(image_history_captures=1)).run(self.harness, 'fixture')
+        self.assertEqual(len(turns), 2)
+
     def test_failed_action_new_rgb_recovery_and_finish_keep_real_feedback(self):
         requests = []
         def request(harness, payload):
@@ -69,6 +116,8 @@ class NativeLoopTests(unittest.TestCase):
         first = self.backend.observe()
         first['revision'] = 0
         ledger.append(history, first, self.backend.image_bytes)
+        frame = first['images'][0]
+        self.assertEqual(history[-1]['content'][0]['text'], f"Robot RGB: {frame['view']} / {frame['image_ref']}")
         second = self.backend.observe()
         second['revision'] = 1
         ledger.append(history, second, self.backend.image_bytes)

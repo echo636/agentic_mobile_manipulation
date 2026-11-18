@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 import uuid
 
+from ..observations.boundary import labeled_rgb_images
 from ..records import JsonlAppend, now, write_json
 
 ACTOR_INSTRUCTION = '''
@@ -80,6 +81,7 @@ class PlanningSubagent:
         self.plan = json.loads(plan_path.read_text()) if plan_path.exists() else None
         self.observation = None
         self.images = []
+        self.labeled_frames = []
         self.feedback = deque(maxlen=8)
         self.feedback_count = 0
         self.action_seconds = 0.
@@ -91,9 +93,10 @@ class PlanningSubagent:
         observation = body.get('observation')
         if observation and observation.get('observation_mode') == 'rgb_only':
             images = [part for part in result.content if part.type == 'image']
-            if len(images) != len(observation['images']) or not images:
+            frames = list(labeled_rgb_images(observation, body.get('reference_image')))
+            if len(images) != len(frames) or not images:
                 raise ValueError('RGB metadata arrived without matching image content')
-            self.observation, self.images = observation, images
+            self.observation, self.images, self.labeled_frames = observation, images, frames
         if name in {'act', 'look'}:
             self.feedback.append({'tool': name, 'arguments': arguments,
                 **{key: body[key] for key in ('ok', 'evidence_id', 'effect', 'error', 'runtime') if key in body}})
@@ -109,8 +112,8 @@ class PlanningSubagent:
             'earlier_feedback_omitted': self.feedback_count - len(self.feedback),
             'actions_since_plan': self.feedback_count, 'action_seconds_since_plan': self.action_seconds}
         content = [{'type': 'input_text', 'text': json.dumps(context, ensure_ascii=False)}]
-        for frame, part in zip(self.observation['images'], self.images):
-            content += [{'type': 'input_text', 'text': f'RGB view={frame["view"]}, image_ref={frame["image_ref"]}'},
+        for (_, label), part in zip(self.labeled_frames, self.images):
+            content += [{'type': 'input_text', 'text': label},
                         {'type': 'input_image', 'image_url': f'data:{part.mimeType};base64,{part.data}',
                          'detail': 'original'}]
         payload = {'model': self.model, 'instructions': PLANNER_INSTRUCTION + '\n\nRobot capabilities:\n' + self.capabilities,
@@ -123,7 +126,7 @@ class PlanningSubagent:
         self.events.append({'at': now(), 'kind': 'planner_request', 'call_id': call_id,
             'model': self.model, 'effort': self.effort, 'context': context,
             'instructions': payload['instructions'], 'image_count': len(self.images),
-            'image_refs': self.observation['images'],
+            'image_refs': [frame for frame, _ in self.labeled_frames],
             'request_sha256': hashlib.sha256(json.dumps(payload).encode()).hexdigest()})
         try:
             response = self.request(payload)

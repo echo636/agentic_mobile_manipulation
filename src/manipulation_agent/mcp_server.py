@@ -42,6 +42,7 @@ def _startup(stage):
 
 
 _startup('proxy_import')
+from .observations.boundary import labeled_rgb_images
 from .transport.bridge import rpc
 from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
@@ -249,12 +250,12 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         pass
                 observation = result.get('observation', {})
                 if observation.get('observation_mode') == 'rgb_only':
-                    for frame in observation['images']:
+                    for frame, label in labeled_rgb_images(observation, result.get('reference_image')):
                         data = await asyncio.to_thread(fetch, url.rstrip('/') + '/image/' + quote(frame['image_ref'], safe=''))
                         if hashlib.sha256(data).hexdigest() != frame['sha256']:
                             raise RuntimeError('RGB image content hash mismatch')
                         out_data, out_mime = encode_within_byte_limit(data, frame['mime_type'], max_inline_image_bytes)
-                        content.append(types.TextContent(type='text', text=f'RGB view={frame["view"]}, image_ref={frame["image_ref"]}'))
+                        content.append(types.TextContent(type='text', text=label))
                         content.append(types.ImageContent(
                             type='image', data=base64.b64encode(out_data).decode(), mimeType=out_mime,
                             _meta={'codex/imageDetail': 'original'}))

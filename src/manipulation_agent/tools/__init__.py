@@ -35,7 +35,7 @@ for _name, _metadata in _METADATA.items():
     if _name in REGISTRY:
         REGISTRY[_name] = replace(REGISTRY[_name], metadata=_metadata)
 
-def tool_specs(profile='skills', *, require_intent=False, scheduling_mode='none', planning_mode='off'):
+def tool_specs(profile='skills', *, require_intent=False, scheduling_mode='none', planning_mode='off', rgb_reference_review=False):
     if profile not in {*PROFILE_TOOLS, 'workflow'}:
         raise ValueError('Unknown agent profile')
     if scheduling_mode not in {'none', 'text', 'program'}:
@@ -57,6 +57,9 @@ def tool_specs(profile='skills', *, require_intent=False, scheduling_mode='none'
         schema = deepcopy(t.schema)
         metadata = {'profile': profile, **t.metadata.as_dict()}
         description = t.description
+        if rgb_reference_review and t.name == 'initialize':
+            description = observation.REFERENCE_REVIEW_DESCRIPTION
+            schema['properties']['reference_image_ref'] = {'type': ['string', 'null'], 'minLength': 1}
         if profile == 'goal-tree' and t.name == 'task_notes':
             schema['properties']['operation']['enum'] = ['read', 'write', 'update']
             description = ('Store the model-authored goal tree and progress. read returns notes and recent public action receipts; '

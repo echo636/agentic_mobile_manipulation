@@ -31,6 +31,8 @@ def main():
     p.add_argument('--custom-task',type=Path,help='Private frozen custom task specification; public instruction only goes to controller')
     p.add_argument('--catalog-task',type=Path,help='Frozen native BDDL instance with pinned sampling evidence; includes explicit custom definitions')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
+    p.add_argument('--rgb-reference-review', action='store_true',
+                   help='Allow initialize to retrieve a previously published RGB view beside the current snapshot.')
     p.add_argument('--agent-profile', choices=['minimal','basic-skills','goal-tree','skills','skills_inline','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','tree','none'],default='hierarchical')
     p.add_argument('--scheduling-mode', choices=['none','text','program'], default='none',
@@ -113,6 +115,7 @@ def main():
         with startup_stage(a.output, 'first_observation_and_harness'):
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
                                                           wall_seconds=a.wall_seconds),profile=a.agent_profile,
+                                  rgb_reference_review=a.rgb_reference_review,
                                   agent_step_limit=a.max_agent_steps,goal_skill=a.goal_skill,
                                   unbounded_episode=a.unbounded_episode,
                                   require_tool_intent=a.require_tool_intent,

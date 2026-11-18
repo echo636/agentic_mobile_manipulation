@@ -51,7 +51,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         code = ('from manipulation_agent.transport import bridge; bridge.CLOSED_REPLAY_SECONDS=0.1; '
                 'from manipulation_agent.vision_cli import main; raise SystemExit(main())')
         self.backend = subprocess.Popen([sys.executable, '-c', code, '--backend', 'mock',
-            '--port', str(self.port), '--output', str(self.output), '--agent-profile', 'skills'],
+            '--port', str(self.port), '--output', str(self.output), '--agent-profile', 'skills', '--rgb-reference-review'],
             cwd=ROOT, env=self.env, stdout=subprocess.DEVNULL, stderr=self.errors)
         self.addCleanup(self.stop, self.backend)
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -140,7 +140,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
         async with self.client(transport) as session:
             listed = await session.list_tools()
             self.assertEqual({t.name: t.inputSchema for t in listed.tools},
-                             {t['name']: t['inputSchema'] for t in tool_specs('skills')})
+                             {t['name']: t['inputSchema'] for t in tool_specs('skills', rgb_reference_review=True)})
             self.assertEqual({t.name for t in listed.tools},
                              {'initialize', 'look', 'act', 'finish', 'list_skills', 'read_skill', 'task_notes'})
             observe_spec = next(t for t in listed.tools if t.name == 'initialize')
@@ -169,6 +169,17 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(action['effect']['verification'], 'executor_operation_only')
             self.assertNotEqual(before, self.check_images(acted, action))
             self.assertNotIn('PRIVATE_OBJECT_NAME', json.dumps(action))
+            ref = target['image_ref']
+            recalled = await session.call_tool('initialize', {'reference_image_ref': ref})
+            body = self.result(recalled)
+            self.assertEqual(body['observation'], action['observation'])
+            self.assertEqual(body['reference_image']['revision'], 0)
+            self.assertEqual(body['reference_image']['image'], observation['observation']['images'][0])
+            images = [part for part in recalled.content if part.type == 'image']
+            self.assertEqual(len(images), 5)
+            self.assertEqual([part.data for part in images[:4]], [part.data for part in acted.content if part.type == 'image'])
+            self.assertEqual(images[-1].data, next(part.data for part in observed.content if part.type == 'image'))
+            self.assertIn('Historical RGB', recalled.content[-2].text)
             finished = self.result(await session.call_tool('finish', {'outcome': 'achieved', 'reason': 'Green RGB fixture'}))
             self.assertTrue(finished['closed'])
             self.assertNotIn('evaluation', finished)
@@ -198,7 +209,7 @@ class MCPTransports(unittest.IsolatedAsyncioTestCase):
     def test_existing_readonly_preflight_accepts_fastmcp(self):
         from manipulation_agent.transport.mcp_preflight import check_server
         result = check_server(sys.executable, ['-m', 'manipulation_agent.mcp_server', '--bridge', self.url],
-                              tool_specs('skills'), Path(self.temp.name), timeout=90)
+                              tool_specs('skills', rgb_reference_review=True), Path(self.temp.name), timeout=90)
         self.assertEqual(result['status'], 'passed')
         self.assertEqual(result['tool_calls'], 0)
 

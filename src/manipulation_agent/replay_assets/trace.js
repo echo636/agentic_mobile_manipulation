@@ -100,7 +100,8 @@ window.ReplayToolTrace = class ReplayToolTrace {
     const caption = target
       ? `${viewLabel} · ${image.image_ref || target.image_ref} · (u=${target.point[0]}, v=${target.point[1]})`
       : `${viewLabel}${image.image_ref ? ' · ' + image.image_ref : ''}`;
-    figure.append(wrap, this.node('figcaption', caption, 'tt-caption'));
+    const label = image.historical ? `历史参考 · 修订 ${image.reference_revision} · ${caption}` : caption;
+    figure.append(wrap, this.node('figcaption', label, 'tt-caption'));
     return figure;
   }
 
@@ -148,7 +149,7 @@ window.ReplayToolTrace = class ReplayToolTrace {
       if (!figure) continue;
       media.append(figure);
       shown += 1;
-      if (image.image_ref) this.previousImages.set(image.image_ref, image);
+      if (image.image_ref && !image.historical) this.previousImages.set(image.image_ref, image);
     }
     if (shown) card.append(media);
     const recorded = entry.image_delivery?.attachment_count ?? entry.image_count;
