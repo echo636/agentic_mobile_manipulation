@@ -145,7 +145,12 @@ def main(argv=None, *, allow_client=False):
     p.add_argument('--resume-backoff-seconds', type=int, default=90)
     p.add_argument('--permanent-route-forks', type=int, default=0,
                    help='Opt-in native-history forks for an unavailable sticky route; retains the same live robot episode')
+    p.add_argument('--action-feedback', choices=['off', 'sensor_only', 'evidence'], default='off',
+                   help='Select the RGB feedback contract for a minimal/basic-skills episode')
     args = p.parse_args(argv)
+    feedback_mode = args.action_feedback
+    if feedback_mode != 'off' and args.agent_profile not in ('minimal', 'basic-skills'):
+        p.error('--action-feedback requires minimal or basic-skills')
     client = getattr(args, 'client', 'codex')
     if client == 'codex' and args.reasoning_effort is None:args.reasoning_effort='low'
     adapter = get_adapter(client)
@@ -175,6 +180,18 @@ def main(argv=None, *, allow_client=False):
     catalog = tool_specs(args.agent_profile)
     planner_config = None
     mcp_env_vars = ()
+    if feedback_mode != 'off':
+        from manipulation_agent.agent.action_evidence import INSPECT_TOOL, SENSOR_INSTRUCTION, EVIDENCE_INSTRUCTION
+        feedback_path = (args.output / 'feedback_config.json').resolve()
+        write_json(feedback_path, dict(mode=feedback_mode, state=str(args.output.resolve() / 'feedback_state.json'),
+                                       upstream_command=args.mcp_command, upstream_args=json.loads(args.mcp_args_json)))
+        args.mcp_command = args.planner_python
+        args.mcp_args_json = json.dumps(['-m', 'manipulation_agent.evidence_server', '--config', str(feedback_path)])
+        mcp_env_vars = ('PYTHONPATH',)
+        instructions += SENSOR_INSTRUCTION
+        if feedback_mode == 'evidence':
+            catalog = [*catalog, INSPECT_TOOL]
+            instructions += EVIDENCE_INSTRUCTION
     if args.planner_model:
         provider_path = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))) / 'config.toml'
         provider = tomllib.loads(provider_path.read_text())['model_providers'][args.model_provider_profile]
@@ -219,7 +236,7 @@ def main(argv=None, *, allow_client=False):
     command = project.argv
     native_sessions = project.native_sessions
     metadata = {"started_at": now(), "status": "running", "model": args.model,
-                "model_reasoning_effort": args.reasoning_effort, "observation_mode": "rgb_only",
+                "model_reasoning_effort": args.reasoning_effort, "observation_mode": "rgb_only", "action_feedback": feedback_mode,
                 "episode_deadline_unix":deadline.unix,"requested_timeout_seconds":args.timeout,
                 "agent_profile": args.agent_profile, "goal_skill": args.goal_skill,
                 "host": os.uname().nodename, "controller": client + "_cli", "command": command,
