@@ -72,6 +72,9 @@ print(json.dumps({
 '''
 
 
+MCP_TOOL_TIMEOUT_SECONDS = 900
+
+
 class AgyAdapter(ClientAdapter):
     name = "agy"
     fallback_paths = ("~/.gemini/bin/agy", "~/.local/bin/agy")
@@ -188,6 +191,9 @@ class AgyAdapter(ClientAdapter):
         mcp_server_spec: dict = {
             "command": config.mcp_command,
             "args": config.mcp_args,
+            # agy's own per-call MCP deadline defaults to 3 min, shorter than one executor action (300 s cap) or a
+            # finish-evidence judge call; the client must not cut a tool call the executor is still running.
+            "timeoutSeconds": MCP_TOOL_TIMEOUT_SECONDS,
         }
         if mcp_env:
             mcp_server_spec["env"] = mcp_env

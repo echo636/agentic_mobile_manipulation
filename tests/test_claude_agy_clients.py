@@ -84,6 +84,9 @@ class ClaudeAndAgyAdapterTests(unittest.TestCase):
             self.assertIn("Policy instructions for agy.", (output / "agy_project" / "GEMINI.md").read_text())
             hooks = json.loads((output / "agy_project" / ".agents" / "hooks.json").read_text())
             self.assertIn("mcp-only-gate", hooks)
+            # agy's default 3 min per-call MCP deadline must not cut a running executor action (300 s cap).
+            server = json.loads((output / "agy_isolated_gemini" / "mcp_config.json").read_text())["mcpServers"]["manipulation"]
+            self.assertGreaterEqual(server["timeoutSeconds"], 360)
 
             cid = "829f852d-dcb1-47a7-b455-7ee67f11cf78"
             resumed = adapter.prepare_resume(prepared, cid, "Continue from current state.")
