@@ -5,6 +5,20 @@ from ..contracts import SkillError
 OBS_KEYS = {"images", "observation_mode"}
 IMAGE_KEYS = {"image_ref", "view", "width", "height", "mime_type", "sha256"}
 CAPTURE_KEYS = {'capture_id','captured_at','sim_step','sim_time_seconds'}
+# Simulator clocks never reach the model (v10, benchmark side): host wall-clock values (how long the simulator took,
+# when a frame was rendered) depend on machine load, and simulator physics time/step counters are not something a
+# real robot has. The robot's own clock is reported separately as `robot_time`. These fields stay in private records.
+WALL_CLOCK_KEYS = frozenset({'tool_seconds', 'captured_at', 'action_seconds_since_plan',
+                             'sim_time_seconds', 'observed_simulation_seconds', 'sim_step'})
+
+
+def without_wall_clock(value):
+    """Copy of a model-bound payload with simulator clock fields (WALL_CLOCK_KEYS) removed at any depth."""
+    if isinstance(value, dict):
+        return {k: without_wall_clock(v) for k, v in value.items() if k not in WALL_CLOCK_KEYS}
+    if isinstance(value, list):
+        return [without_wall_clock(v) for v in value]
+    return value
 
 def public_observation(value: dict, revision: int) -> dict:
     if set(value) not in (OBS_KEYS, OBS_KEYS | {'capture'}) or value["observation_mode"] != "rgb_only":

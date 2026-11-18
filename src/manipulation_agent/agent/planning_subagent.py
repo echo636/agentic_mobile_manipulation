@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 import uuid
 
+from ..observations.boundary import without_wall_clock
 from ..records import JsonlAppend, now, write_json
 
 ACTOR_INSTRUCTION = '''
@@ -107,7 +108,8 @@ class PlanningSubagent:
             'previous_plan': self.plan, 'observation': self.observation,
             'recent_action_feedback': list(self.feedback),
             'earlier_feedback_omitted': self.feedback_count - len(self.feedback),
-            'actions_since_plan': self.feedback_count, 'action_seconds_since_plan': self.action_seconds}
+            'actions_since_plan': self.feedback_count}
+        context = without_wall_clock(context)
         content = [{'type': 'input_text', 'text': json.dumps(context, ensure_ascii=False)}]
         for frame, part in zip(self.observation['images'], self.images):
             content += [{'type': 'input_text', 'text': f'RGB view={frame["view"]}, image_ref={frame["image_ref"]}'},

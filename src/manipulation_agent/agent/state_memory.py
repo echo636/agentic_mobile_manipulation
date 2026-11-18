@@ -564,12 +564,9 @@ class StateMemory:
             self.steps_observed = max(self.steps_observed, budget['steps_used'])
 
         rt = result.get('robot_time') if isinstance(result.get('robot_time'), dict) else {}
+        # Only the public robot clock is read (v10): simulator physics time is not an interface a real robot has.
         if isinstance(rt.get('total_s'), (int, float)) and math.isfinite(float(rt['total_s'])):
             self.robot_clock_s = max(self.robot_clock_s, float(rt['total_s']))
-        else:
-            sim_dt = (result.get('runtime') or {}).get('observed_simulation_seconds')
-            if isinstance(sim_dt, (int, float)) and sim_dt > 0:
-                self.robot_clock_s += float(sim_dt)
 
         if name == 'initialize':
             init_loc = _clean_short(args.get('location'), 40) or self.current_location
@@ -628,8 +625,8 @@ class StateMemory:
             )
             if moved_macro and nav_status != 'already_at_closest_approach':
                 dst_loc = self._resolve_location_on_move(args, hint)
-                measured_s = travel_s if has_clock else float((result.get('runtime') or {}).get('observed_simulation_seconds') or 0.0)
-                if dst_loc != prev_loc and (has_clock or measured_s > 0):
+                measured_s = travel_s if has_clock else 0.0
+                if dst_loc != prev_loc and has_clock:
                     self._record_travel(prev_loc, dst_loc, measured_s, travel_m, step)
                 self._touch_location(dst_loc, step, self.last_revision, image_refs, hint=hint)
             else:

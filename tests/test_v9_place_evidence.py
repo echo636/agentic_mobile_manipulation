@@ -150,3 +150,37 @@ def test_furniture_breaks_the_chain_and_footprint_is_required():
     apple, hotdog, plate = map(_O, ('apple', 'hotdog', 'plate1'))
     b = _backend({('apple', 'hotdog'), ('hotdog', 'plate1')}, footprint=False)
     assert not b._stacked_on_top(apple, plate, [apple, hotdog, plate])
+
+
+# ---- benchmark side: simulator wall-clock values never reach the model ----
+
+def test_model_bound_payloads_drop_wall_clock_fields():
+    from manipulation_agent.observations.boundary import without_wall_clock
+    result = {'ok': True, 'runtime': {'tool_seconds': 167.2, 'observed_simulation_seconds': 0.07},
+              'observation': {'capture': {'capture_id': 'capture-00003', 'captured_at': '2026-11-18T12:00:00+00:00',
+                                          'sim_step': 4, 'sim_time_seconds': 0.13}, 'revision': 3},
+              'planning': {'execution': {'tool_seconds': 300.0, 'failed_actions': 0}},
+              'robot_time': {'this_call': {'travel_m': 3.1, 'travel_s': 4.4, 'manipulation_s': 5.0, 'wait_s': 0.0},
+                             'total_s': 42.0}}
+    clean = without_wall_clock(result)
+    text = str(clean)
+    for key in ('tool_seconds', 'captured_at', 'sim_time_seconds', 'observed_simulation_seconds', 'sim_step'):
+        assert key not in text, key
+    assert clean['robot_time'] == result['robot_time']             # the robot's own clock stays
+    assert clean['observation']['capture'] == {'capture_id': 'capture-00003'}
+    assert result['runtime']['tool_seconds'] == 167.2          # private copy untouched
+
+
+def test_state_memory_reads_travel_time_only_from_robot_clock():
+    from manipulation_agent.agent.state_memory import StateMemory
+    import inspect
+    src = inspect.getsource(StateMemory)
+    assert 'observed_simulation_seconds' not in src and 'tool_seconds' not in src
+
+
+def test_mcp_server_serializes_through_wall_clock_filter():
+    import inspect
+    from manipulation_agent import mcp_server
+    src = inspect.getsource(mcp_server)
+    assert 'json.dumps(result,' not in src and 'json.dumps(payload,' not in src
+    assert src.count('json.dumps(without_wall_clock(') >= 3

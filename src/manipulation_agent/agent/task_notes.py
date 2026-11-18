@@ -133,7 +133,7 @@ class TaskNotes:
                 (pending or {}).get('tool_seconds', 0.), 3),
                 failed_actions=failures,
                 observed_simulation_seconds=simulation_seconds,
-                scope='Tool wall time excludes model requests; simulation delta comes from public capture timestamps'),
+                scope='Counts since the last checkpoint; action durations are reported by robot_time in each action receipt'),
             latest_receipt={k: latest[k] for k in ('primitive', 'ok', 'effect', 'error') if k in latest},
             failed_since_checkpoint=failed,
             next_decision=('No operation or method was selected at this checkpoint. Reconcile actual progress and '

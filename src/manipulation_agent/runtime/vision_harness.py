@@ -364,11 +364,11 @@ class VisionHarness:
                     err_code = result['error'].get('code')
                     if err_code in ACTION_FEEDBACK_HINTS:
                         result['error']['message'] = str(result['error'].get('message', '')) + ACTION_FEEDBACK_HINTS[err_code]
-            if (self.auxiliary_feedback or self.scheduling_mode == 'program'
-                    or self.state_memory_enabled or self.planning_mode == 'task_graph'):
-                rt_public = self._public_robot_time()
-                if rt_public is not None:
-                    result['robot_time'] = rt_public
+            # v10 (benchmark side): the robot's own clock is part of every action receipt for all methods; a real
+            # robot knows how long its own motion took. Simulator clocks are filtered at the model boundary.
+            rt_public = self._public_robot_time()
+            if rt_public is not None:
+                result['robot_time'] = rt_public
             if self.scheduling_mode == 'program':
                 rt_for_ledger = result.get('robot_time') or self._public_robot_time()
                 ledger_input = result if 'robot_time' in result else {**result, **({'robot_time': rt_for_ledger} if rt_for_ledger else {})}

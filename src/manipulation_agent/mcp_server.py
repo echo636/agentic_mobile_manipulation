@@ -51,6 +51,7 @@ from .agent.failure_memory import FailureMemory
 from .tools.finish_evidence import FinishEvidence, agy_judge, codex_judge
 from .agent.task_graph_planner import TaskGraphSession
 from .contracts import SkillError, validate
+from .observations.boundary import without_wall_clock
 
 # Harness option (--click-echo on, default off): crop around the model's selected pixel on the chosen RGB image.
 ECHO_HALF_PX = 80
@@ -396,7 +397,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                                     + (HANDOFF_NOTE_REQUEST if handoff_note else '')
                                 ),
                             }
-                content = [types.TextContent(type='text', text=json.dumps(result, ensure_ascii=False))]
+                content = [types.TextContent(type='text', text=json.dumps(without_wall_clock(result), ensure_ascii=False))]
                 adjustment = result.get('selection_adjustment') if isinstance(result, dict) else None
                 if (selection_assist and pre_source is not None and isinstance(adjustment, dict)
                         and adjustment.get('applied') and adjustment.get('image_ref') == target.get('image_ref')):
@@ -495,7 +496,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                         return fetch(url.rstrip('/') + '/image/' + quote(ref, safe=''))
                     forward, payload, images = await asyncio.to_thread(evidence.on_finish, arguments, fetch_image)
                     if not forward:
-                        content = [types.TextContent(type='text', text=json.dumps(payload, ensure_ascii=False))]
+                        content = [types.TextContent(type='text', text=json.dumps(without_wall_clock(payload), ensure_ascii=False))]
                         for caption, data in images:
                             data, mime = encode_within_byte_limit(data, 'image/jpeg', max_inline_image_bytes)
                             content.append(types.TextContent(type='text', text=caption))
@@ -540,7 +541,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                     payload = {'ok': True, **local_task_graph.update_and_solve(exec_args)}
                 except SkillError as exc:
                     payload = {'ok': False, 'error': {'code': exc.code, 'message': str(exc)}}
-                return [types.TextContent(type='text', text=json.dumps(payload, ensure_ascii=False))]
+                return [types.TextContent(type='text', text=json.dumps(without_wall_clock(payload), ensure_ascii=False))]
 
         registered.append(Tool(
             fn=invoke_local_task_graph,
