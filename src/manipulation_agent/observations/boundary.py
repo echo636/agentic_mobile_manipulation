@@ -20,6 +20,20 @@ def public_observation(value: dict, revision: int) -> dict:
             raise RuntimeError('Four-camera capture boundary violation')
     return {**copy.deepcopy(value), "revision":revision}
 
+def historical_rgb_label(reference):
+    frame = reference['image']
+    return (f"Historical RGB for comparison only. revision={reference['revision']}, "
+            f"view={frame['view']}, image_ref={frame['image_ref']}. Use current RGB for actions.")
+
+
+def labeled_rgb_images(observation, reference_image=None):
+    """Yield current action views first, then the optional, read-only historical view."""
+    for frame in observation.get('images', []):
+        yield frame, f"RGB view={frame['view']}, image_ref={frame['image_ref']}"
+    if reference_image is not None:
+        yield reference_image['image'], historical_rgb_label(reference_image)
+
+
 ERROR_MESSAGES = {
     'articulation_endpoint_unresolved':'The executor could not find a checked, stable open position for the selected object\'s door or lid.',
     'look_rotation_blocked':'The requested turn has no checked clearance for the robot and carried item. Use the current four views; choose a different general approach if needed instead of repeating this turn.',

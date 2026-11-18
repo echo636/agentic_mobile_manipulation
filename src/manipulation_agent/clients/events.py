@@ -15,6 +15,97 @@ def event_path(directory: Path) -> Path:
     return compat if compat.exists() else directory / "model_events.jsonl"
 
 
+def _native_rgb_receipt(output, pending):
+    """Return just the public RGB result for an outstanding evidence ID."""
+    if not isinstance(output, list):
+        return None
+    for index, part in enumerate(output):
+        if not isinstance(part, dict) or part.get('type') != 'input_text':
+            continue
+        body = _object(part.get('text'))
+        if isinstance(body, dict) and isinstance(body.get('evidence_id'), str) and body['evidence_id'] in pending:
+            break
+    else:
+        return None
+    parts = []
+    for block in output[index:]:
+        if not isinstance(block, dict):
+            return None
+        if block.get('type') == 'input_text':
+            parts.append({'type': 'text', 'text': block['text']})
+        elif block.get('type') == 'input_image':
+            header, marker, data = block.get('image_url', '').partition(';base64,')
+            if not marker or not header.startswith('data:image/'):
+                return None
+            parts.append({'type': 'image', 'mimeType': header[5:], 'data': data})
+        else:
+            return None
+    return body, parts
+
+
+def with_native_rgb(events: list[dict], directory: Path) -> list[dict]:
+    """Recover oversized Codex CLI RGB receipts from actual per-run model input.
+
+    stdout can serialize a large MCP result as one clipped JSON text block. Join
+    its public receipt to the session by evidence ID, tool, arguments and body.
+    Leave missing or ambiguous evidence alone. The raw streams stay untouched.
+    """
+    pending = {}
+    for index, event in enumerate(events):
+        item = event.get('item') or {}
+        if (event.get('type') != 'item.completed' or item.get('type') != 'mcp_tool_call'
+                or item.get('server') != 'manipulation'):
+            continue
+        content = (item.get('result') or {}).get('content', [])
+        if len(content) != 1 or content[0].get('type') != 'text':
+            continue
+        envelope = _object(content[0].get('text'))
+        blocks = envelope.get('content') if isinstance(envelope, dict) else None
+        if not isinstance(blocks, list) or not blocks or not isinstance(blocks[0], dict):
+            continue
+        body = _object(blocks[0].get('text'))
+        if isinstance(body, dict) and body.get('evidence_id') and (body.get('observation') or {}).get('images'):
+            pending.setdefault(body['evidence_id'], []).append((index, item, body))
+    if not pending:
+        return events
+
+    matches = {}
+    for path in sorted((directory / 'native_sessions').glob('*/*/*/rollout-*.jsonl')):
+        calls = {}
+        with path.open() as stream:
+            for line_number, line in enumerate(stream, 1):
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if row.get('type') != 'response_item':
+                    continue
+                record = row.get('payload') or {}
+                call_id = record.get('call_id')
+                if record.get('type') == 'function_call' and record.get('namespace') == 'mcp__manipulation':
+                    calls[call_id] = (record.get('name'), _object(record.get('arguments')))
+                    continue
+                if record.get('type') != 'function_call_output' or call_id not in calls:
+                    continue
+                receipt = _native_rgb_receipt(record.get('output'), pending)
+                if receipt is None:
+                    continue
+                body, parts = receipt
+                for index, item, expected in pending[body['evidence_id']]:
+                    if expected == body and calls[call_id] == (item.get('tool'), item.get('arguments')):
+                        source = {'file': str(path.relative_to(directory)), 'line': line_number,
+                                  'call_id': call_id, 'evidence_id': body['evidence_id']}
+                        matches.setdefault(index, []).append((parts, source))
+    recovered = events.copy()
+    for index, found in matches.items():
+        if len(found) == 1:
+            parts, source = found[0]
+            item = events[index]['item']
+            recovered[index] = {**events[index], 'rgb_content_source': source, 'item': {
+                **item, 'result': {**item['result'], 'content': parts}}}
+    return recovered
+
+
 def _object(value):
     if isinstance(value, str):
         try:

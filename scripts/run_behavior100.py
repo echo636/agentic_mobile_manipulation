@@ -1057,6 +1057,7 @@ class Batch:
                  '--timeout',str(seconds if seconds is not None else 0),'--execution-clock-command-json',
                  json.dumps(self.execution_clock_command(clock_path,seconds,row=row)),
                  '--agent-profile',self.manifest['agent_profile'],'--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+            if self.manifest.get('rgb_reference_review'):cmd.append('--rgb-reference-review')
             if self.manifest.get('model_reasoning_effort'):
                 cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
             if self.c.get('model_provider_profile'):
@@ -1337,6 +1338,7 @@ class Batch:
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
              '--timeout',str(self.manifest['model_timeout_seconds'] or 0),'--agent-profile',self.manifest['agent_profile'],
              '--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+        if self.manifest.get('rgb_reference_review'):cmd.append('--rgb-reference-review')
         if self.manifest.get('model_reasoning_effort'):
             cmd += ['--reasoning-effort',self.manifest['model_reasoning_effort']]
         if self.c.get('model_provider_profile'):

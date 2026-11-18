@@ -101,6 +101,80 @@ class ReplayEvidenceTests(unittest.TestCase):
         self.assertEqual(result['image_content_count'],2)
         self.assertEqual(result['unique_model_image_count'],1)
 
+    def test_oversized_stdout_uses_the_matched_native_model_image_bytes(self):
+        from manipulation_agent.clients.events import with_native_rgb
+        event = copy.deepcopy(self.models[0])
+        item = event['item']
+        item.update(server='manipulation', tool='initialize', arguments={})
+        content = item['result']['content']
+        wire = [{'type': 'input_text', 'text': 'Wall time: 0.1 seconds'},
+                {'type': 'input_text', 'text': content[0]['text']},
+                {'type': 'input_image', 'image_url': 'data:image/jpeg;base64,' + content[1]['data']}]
+        item['result']['content'] = [{'type': 'text', 'text': json.dumps({'content': content[:1]})}]
+        path = self.root / 'native_sessions/2026/11/18/rollout-test.jsonl'
+        path.parent.mkdir(parents=True)
+        def write(args):
+            call = {'type': 'function_call', 'namespace': 'mcp__manipulation', 'call_id': 'a',
+                    'name': 'initialize', 'arguments': json.dumps(args)}
+            reply = {'type': 'function_call_output', 'call_id': 'a', 'output': wire}
+            path.write_text(''.join(json.dumps({'type': 'response_item', 'payload': v}) + '\n' for v in (call, reply)))
+        write({})
+        recovered = with_native_rgb([event], self.root)[0]
+        self.assertEqual(recovered['item']['result']['content'], content)
+        self.assertEqual(recovered['rgb_content_source']['call_id'], 'a')
+        self.assertEqual(len(item['result']['content']), 1)
+        write({'reference_image_ref': 'different'})
+        self.assertEqual(with_native_rgb([event], self.root), [event])
+
+    def test_historical_rgb_requires_previous_delivery_and_remains_ineligible_for_actions(self):
+        old = self.obs['images'][0]
+        current = [{**old, 'view': view, 'image_ref': f'new-{view}'}
+                   for view in ('front', 'back', 'left', 'right')]
+        with (self.root / 'captures.jsonl').open('a') as stream:
+            stream.write(json.dumps({'images': [{**frame, 'file': 'frames/img.jpg'} for frame in current]}) + '\n')
+        self.append_observation_after_action()
+        request = self.models[1]['item']
+        request.update(tool='initialize', arguments={'reference_image_ref': 'img'})
+        self.events[4].update(name='initialize', arguments=request['arguments'])
+        self.events[5].update(name='initialize')
+        reference = {'revision': 0, 'image': old}
+        result = {'ok': True, 'observation': {**self.obs, 'revision': 1, 'images': current},
+                  'reference_image': reference}
+        self.events[5]['result'] = result
+        attachment = self.models[0]['item']['result']['content'][1]
+        content = request['result']['content']
+        content[:] = [{'type': 'text', 'text': json.dumps({**result, 'evidence_id': 'res2'})}]
+        content.extend([attachment] * len(current))
+        content.extend([{'type': 'text', 'text': 'Historical RGB for comparison only. revision=0, '
+                         'view=head, image_ref=img. Use current RGB for actions.'}, attachment])
+        report = audit_rgb_transport(self.root, self.events, self.models)
+        self.assertTrue(all(report['checks'].values()), report)
+        self.assertEqual(report['reference_image_content_count'], 1)
+        self.assertEqual(report['image_content_count'], 7)
+
+        label = content[-2]['text']
+        content[-2]['text'] = 'RGB view=head, image_ref=img'
+        self.assertFalse(audit_rgb_transport(self.root, self.events, self.models)['checks']['references_match_previously_delivered_rgb'])
+        content[-2]['text'] = label
+        content[-1] = {**attachment, 'data': base64.b64encode(b'different pixels').decode()}
+        self.assertFalse(audit_rgb_transport(self.root, self.events, self.models)['checks']['image_bytes_hashes_and_archive_match'])
+        content[-1] = attachment
+
+        act = self.models[2]['item']
+        act.update(tool='act', arguments={'target': {'image_ref': 'img', 'point': [.5, .5]}})
+        self.assertFalse(audit_rgb_transport(self.root, self.events, self.models)['checks']['pixel_actions_use_latest_images'])
+        act['arguments']['target']['image_ref'] = current[2]['image_ref']
+        self.assertTrue(audit_rgb_transport(self.root, self.events, self.models)['checks']['pixel_actions_use_latest_images'])
+        for forged in ({**reference, 'revision': 7}, {**reference, 'private_id': 1},
+                       {**reference, 'image': {**old, 'image_ref': 'unpublished'}}):
+            with self.subTest(forged=forged):
+                result['reference_image'] = forged
+                request['arguments']['reference_image_ref'] = forged['image']['image_ref']
+                content[0]['text'] = json.dumps({**result, 'evidence_id': 'res2'})
+                checks = audit_rgb_transport(self.root, self.events, self.models)['checks']
+                self.assertFalse(checks['references_match_previously_delivered_rgb'])
+                self.assertFalse(checks['rgb_observation_allowlist'])
+
     def append_observation_after_action(self):
         call=copy.deepcopy(self.events[2]);call.update(id='call3',request_id='3')
         result=copy.deepcopy(self.events[3]);result.update(id='res3',request_id='3')

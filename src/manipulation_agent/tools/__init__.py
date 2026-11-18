@@ -28,7 +28,7 @@ for _name, _metadata in _METADATA.items():
     if _name in REGISTRY:
         REGISTRY[_name] = replace(REGISTRY[_name], metadata=_metadata)
 
-def tool_specs(profile='skills'):
+def tool_specs(profile='skills', *, rgb_reference_review=False):
     if profile not in {'minimal', 'skills', 'workflow'}:
         raise ValueError('Unknown agent profile')
     allowed = MINIMAL_TOOLS if profile == 'minimal' else SKILL_TOOLS
@@ -36,7 +36,11 @@ def tool_specs(profile='skills'):
     for t in REGISTRY.values():
         if profile != 'workflow' and t.name not in allowed: continue
         schema = deepcopy(t.schema)
-        result.append({'name':t.name,'description':t.description,'inputSchema':schema,
+        description = t.description
+        if rgb_reference_review and t.name == 'initialize':
+            description = observation.REFERENCE_REVIEW_DESCRIPTION
+            schema['properties']['reference_image_ref'] = {'type': ['string', 'null'], 'minLength': 1}
+        result.append({'name':t.name,'description':description,'inputSchema':schema,
                        'annotations':t.metadata.annotations(),
                        '_meta':{'mas':{'profile':profile,**t.metadata.as_dict()}}})
     return result

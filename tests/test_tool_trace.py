@@ -64,6 +64,30 @@ class ToolTraceTests(unittest.TestCase):
             self.assertEqual(entry['images'][0]['verification'], 'matched_archive_sha256')
             self.assertFalse((root / 'staged').exists())
 
+    def test_historical_attachment_with_same_bytes_has_its_own_ref_revision_and_label(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data, event = fixture(root)
+            content = event['item']['result']['content']
+            body = json.loads(content[0]['text'])
+            old = {**body['observation']['images'][0], 'image_ref': 'rgb-00001-front'}
+            body['reference_image'] = {'revision': 1, 'image': old}
+            content[0]['text'] = json.dumps(body)
+            content.extend([{'type': 'text', 'text': 'Historical RGB for comparison only. revision=1, '
+                             'view=front, image_ref=rgb-00001-front. Use current RGB for actions.'}, content[-1]])
+            with (root / 'captures.jsonl').open('a') as stream:
+                stream.write(json.dumps({'images': [old]}) + '\n')
+            (root / 'model_public_events.jsonl').write_text(json.dumps(event) + '\n')
+            entry = enrich_tool_trace(data, root)['model_transcript'][1]
+            live, recalled = entry['images']
+            self.assertNotIn('historical', live)
+            self.assertEqual(live['image_ref'], 'rgb-00002-front')
+            self.assertEqual(recalled['image_ref'], 'rgb-00001-front')
+            self.assertTrue(recalled['historical'])
+            self.assertEqual(recalled['reference_revision'], 1)
+            self.assertEqual(recalled['verification'], 'matched_archive_sha256')
+            self.assertEqual(live['sha256'], recalled['sha256'])
+
     def test_metadata_or_after_image_does_not_prove_delivery(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

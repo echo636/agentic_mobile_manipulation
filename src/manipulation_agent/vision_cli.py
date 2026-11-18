@@ -29,6 +29,8 @@ def main():
     p.add_argument('--instruction');p.add_argument('--inside-placement',choices=['symbolic_raycast','official_volume'],default='official_volume')
     p.add_argument('--custom-task',type=Path,help='Private frozen custom task specification; public instruction only goes to controller')
     p.add_argument('--port',type=int,default=29440);p.add_argument('--controller',default='unspecified')
+    p.add_argument('--rgb-reference-review', action='store_true',
+                   help='Allow initialize to retrieve a previously published RGB view beside the current snapshot.')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
     p.add_argument('--require-task-notes',action='store_true',help='Require model-authored working notes before the first action; same rule in both comparison arms')
@@ -88,6 +90,7 @@ def main():
         with startup_stage(a.output, 'first_observation_and_harness'):
             harness=VisionHarness(backend,recorder,Budget(max_actions=a.max_actions,max_sim_steps=a.max_sim_steps,
                                                           wall_seconds=a.wall_seconds),profile=a.agent_profile,
+                                  rgb_reference_review=a.rgb_reference_review,
                                   agent_step_limit=a.max_agent_steps,goal_skill=a.goal_skill,
                                   require_task_notes=a.require_task_notes,unbounded_episode=a.unbounded_episode)
         if policy:

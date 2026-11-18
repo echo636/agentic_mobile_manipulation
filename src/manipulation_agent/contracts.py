@@ -95,8 +95,10 @@ def validate(value, schema: dict, path: str = "arguments") -> None:
         raise SkillError("invalid_arguments", f"{path} is not an allowed value")
     if kind == "object":
         props = schema["properties"]
-        if set(value) != set(props):
-            raise SkillError("invalid_arguments", f"{path} needs exactly {sorted(props)}")
+        missing = set(schema.get("required", props)) - value.keys()
+        extra = value.keys() - props.keys()
+        if missing or extra:
+            raise SkillError("invalid_arguments", f"{path} missing {sorted(missing)}, unexpected {sorted(extra)}")
         for k, v in value.items():
             validate(v, props[k], f"{path}.{k}")
     elif kind == "array":

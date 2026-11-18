@@ -14,6 +14,8 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+from .observations.boundary import historical_rgb_label
+
 _LABEL = re.compile(r'RGB view=([^,\s]+),\s*image_ref=([^\s]+)')
 _EXTENSIONS = {'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
                'image/webp': 'webp', 'image/gif': 'gif'}
@@ -146,11 +148,26 @@ def enrich_tool_trace(data: dict, source_dir: Path | None = None,
             continue
         record = candidates[0]
         content = record['content']
+        if len(content) == 1 and content[0].get('type') == 'text':
+            wrapped = next(_json_objects([content[0].get('text')]), {})
+            blocks = wrapped.get('content')
+            if isinstance(blocks, list) and any(isinstance(b, dict) and b.get('type') == 'image' for b in blocks):
+                delivery['diagnostics'].append({'code': 'wrapped_rgb_requires_native_evidence'})
+                stats['unverified_results'] += 1
+                continue
         metadata = {}
+        reference_labels = {}
         for value in _json_objects(b.get('text', '') for b in content if isinstance(b, dict) and b.get('type') == 'text'):
             for image in (value.get('observation') or {}).get('images', []):
                 if image.get('image_ref'):
                     metadata[image['image_ref']] = image
+            reference = value.get('reference_image')
+            if isinstance(reference, dict) and type(reference.get('revision')) is int:
+                raw = reference.get('image')
+                if isinstance(raw, dict) and raw.get('image_ref') and raw.get('view'):
+                    info = {**raw, 'historical': True, 'reference_revision': reference['revision']}
+                    metadata[raw['image_ref']] = info
+                    reference_labels[historical_rgb_label(reference)] = info
         count = sum(isinstance(b, dict) and b.get('type') == 'image' for b in content)
         delivery.update(attachment_count=count, source=source.name, source_line=record['line'],
                         call_id=record['id'], evidence_ids=sorted(record['evidence']))
@@ -160,8 +177,9 @@ def enrich_tool_trace(data: dict, source_dir: Path | None = None,
             if not isinstance(block, dict):
                 continue
             if block.get('type') == 'text':
-                match = _LABEL.fullmatch(block.get('text', '').strip())
-                label = {'view': match[1], 'image_ref': match[2]} if match else None
+                caption = block.get('text', '').strip()
+                match = _LABEL.fullmatch(caption)
+                label = {'view': match[1], 'image_ref': match[2]} if match else reference_labels.get(caption)
                 continue
             if block.get('type') != 'image':
                 label = None
@@ -188,7 +206,7 @@ def enrich_tool_trace(data: dict, source_dir: Path | None = None,
             if not info:
                 matches = [i for i in metadata.values() if i.get('sha256') == sha]
                 if len(matches) == 1:
-                    info = {k: matches[0].get(k) for k in ('view', 'image_ref')}
+                    info = matches[0]
             ref = info.get('image_ref')
             declared = metadata.get(ref, {})
             if declared.get('sha256') and declared['sha256'] != sha:
@@ -228,7 +246,8 @@ def enrich_tool_trace(data: dict, source_dir: Path | None = None,
             dimensions = {key: declared[key] for key in ('width', 'height')
                           if declared.get('sha256') == sha and isinstance(declared.get(key), int)
                           and declared[key] > 0}
-            entry['images'].append({**dimensions, 'file': relative, 'view': info.get('view'), 'image_ref': ref,
+            historical = {k: info[k] for k in ('historical', 'reference_revision') if k in info}
+            entry['images'].append({**dimensions, **historical, 'file': relative, 'view': info.get('view'), 'image_ref': ref,
                                     'sha256': sha, 'source': source.name, 'verification': verification,
                                     'call_id': record['id'], 'evidence_ids': sorted(record['evidence']),
                                     'content_index': index})

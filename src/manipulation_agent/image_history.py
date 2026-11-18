@@ -2,6 +2,8 @@
 import base64
 import hashlib
 
+from .observations.boundary import labeled_rgb_images
+
 
 class ImageHistory:
     def __init__(self, retained_captures=0):
@@ -10,17 +12,19 @@ class ImageHistory:
         self.retained_captures = retained_captures
         self.attachments = {}
 
-    def append(self, history, observation, read_image):
+    def append(self, history, observation, read_image, reference_image=None):
         frames = observation.get('images', [])
         if not frames:
             return
         content = []
-        for frame in frames:
+        for index, (frame, label) in enumerate(labeled_rgb_images(observation, reference_image)):
+            if index < len(frames):
+                label = f"Robot RGB: {frame['view']} / {frame['image_ref']}"
             data, mime = read_image(frame['image_ref'])
             if mime != frame['mime_type'] or hashlib.sha256(data).hexdigest() != frame['sha256']:
                 raise RuntimeError('RGB attachment does not match its recorded observation')
             content.extend([
-                {'type': 'input_text', 'text': f"Robot RGB: {frame['view']} / {frame['image_ref']}"},
+                {'type': 'input_text', 'text': label},
                 {'type': 'input_image', 'image_url': 'data:' + mime + ';base64,' +
                  base64.b64encode(data).decode(), 'detail': 'high'},
             ])
@@ -29,6 +33,7 @@ class ImageHistory:
             'revision': observation['revision'],
             'capture': dict(observation.get('capture', {})),
             'images': [dict(frame) for frame in frames],
+            **({'reference_image': reference_image} if reference_image is not None else {}),
         }
         history.append({'role': 'user', 'content': content})
 
@@ -43,7 +48,8 @@ class ImageHistory:
             # Keep the historical observation identity, but never silently replace
             # it with a new capture or manufacture a visual summary.
             attachment = self.attachments[index]
-            refs = ', '.join(frame['image_ref'] for frame in attachment['images'])
+            refs = ', '.join(frame['image_ref'] for frame, _ in labeled_rgb_images(
+                attachment, attachment.get('reference_image')))
             messages.append({'role': 'user', 'content': [{
                 'type': 'input_text',
                 'text': f'Historical RGB pixels omitted by configured image retention: {refs}. '

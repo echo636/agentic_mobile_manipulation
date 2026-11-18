@@ -76,10 +76,13 @@ GOAL_SKILL_INSTRUCTION = '\nBefore the first act/look, also read goal-decomposit
 SKILLS_PROMPT = SKILLS_BASE_PROMPT + GOAL_SKILL_INSTRUCTION
 SYSTEM_PROMPT = SKILLS_PROMPT
 
-def system_prompt(profile='skills', *, goal_skill='hierarchical'):
+def system_prompt(profile='skills', *, rgb_reference_review=False, goal_skill='hierarchical'):
     if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
-    return {'minimal':MINIMAL_PROMPT,'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
+    prompt = {'minimal':MINIMAL_PROMPT,'skills':SKILLS_BASE_PROMPT + (GOAL_SKILL_INSTRUCTION if goal_skill=='hierarchical' else ''),
             'workflow':WORKFLOW_PROMPT}[profile]
+    if rgb_reference_review:
+        prompt += '\nTo compare an earlier view with the current scene, call initialize with reference_image_ref set to the earlier image_ref.\n'
+    return prompt
 
 class RGBResponsesPolicy(ResponsesPolicy):
     def _request_with_observation_jobs(self, harness, payload):
@@ -92,7 +95,9 @@ class RGBResponsesPolicy(ResponsesPolicy):
             return future.result()
 
     def run(self, harness, instruction, *, image_history_captures=0):
-        loop = VisualToolLoop(model=self.model, instructions=system_prompt(harness.profile,goal_skill=harness.goal_skill),
+        instructions = system_prompt(harness.profile, goal_skill=harness.goal_skill,
+                                     rgb_reference_review=harness.rgb_reference_review)
+        loop = VisualToolLoop(model=self.model, instructions=instructions,
                               request=self._request_with_observation_jobs,
                               config=LoopConfig(max_turns=self.max_turns, max_tokens=self.max_tokens,
                                                 image_history_captures=image_history_captures))

@@ -17,7 +17,7 @@ from .closure import EpisodeClosure
 from .task_notes import TaskNotes
 
 class VisionHarness:
-    def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', agent_step_limit=None,
+    def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', rgb_reference_review=False, agent_step_limit=None,
                  goal_skill='hierarchical', require_task_notes=False, unbounded_episode=False):
         if goal_skill not in {'hierarchical','none'}: raise ValueError('Unknown goal skill mode')
         if require_task_notes and profile not in {'skills','workflow'}:
@@ -48,14 +48,17 @@ class VisionHarness:
         self.closure=EpisodeClosure(recorder.output)
         self.profile = profile
         self.surround = SurroundJobs(self)
-        self.catalog = {t['name']: t for t in tool_specs(profile)}
+        self.catalog = {t['name']: t for t in tool_specs(profile, rgb_reference_review=rgb_reference_review)}
         self.cache,self.evidence={},{}
+        self.rgb_reference_review = rgb_reference_review
+        self._published_rgb = {}
         self.skills = None
         if profile == 'workflow':
             self.plan,self.memory=[],{}
         if profile in {'skills','workflow'}:
             self.skills=SkillLibrary(recorder.output,exclude={'goal-decomposition'} if goal_skill=='none' else ())
         recorder.run['config']['agent_profile'] = profile
+        recorder.run['config']['rgb_reference_review'] = rgb_reference_review
         recorder.run['config'].update(goal_skill=goal_skill,require_task_notes=require_task_notes)
         recorder.run['episode_deadline_unix']=self.deadline.unix
         self.deadline.check()
@@ -96,9 +99,15 @@ class VisionHarness:
     def sync_execution_clock(self): return LegacyPlanHelpers.sync_execution_clock(self)
     def start_standalone_clock(self): return LegacyPlanHelpers.start_standalone_clock(self)
 
-    def initialize(self):
+    def initialize(self, reference_image_ref=None):
         """Deliver the ready episode snapshot without reset, physics or rendering."""
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
+        if reference_image_ref is not None:
+            reference = self._published_rgb.get(reference_image_ref)
+            if reference is None:
+                raise SkillError('unknown_image_ref', 'Use an image_ref previously returned in this episode.')
+            if all(frame['image_ref'] != reference_image_ref for frame in self.snapshot['images']):
+                result['reference_image'] = copy.deepcopy(reference)
         if hasattr(self.backend,'local_manipulation'):
             result['control']={'manipulation_protocol':
                 'target_locked_approach_v2' if self.backend.local_manipulation else 'explicit_navigation_v1',
@@ -181,6 +190,12 @@ class VisionHarness:
         except SkillError as exc:
             result={'ok':False,'error':{'code':exc.code,'message':str(exc)}}
             result['observation']=self.snapshot
+        observation = result.get('observation')
+        if self.rgb_reference_review and origin == 'controller' and observation and observation.get('observation_mode') == 'rgb_only':
+            for frame in observation['images']:
+                self._published_rgb.setdefault(frame['image_ref'], {
+                    'revision': observation['revision'], 'image': frame.copy(),
+                })
         # Report the existing clock after execution/rendering, without arming,
         # extending or adding a limit. This is runtime metadata, never scene GT.
         remaining = self.deadline.remaining()

@@ -21,7 +21,8 @@ class ToolContext:
     @property
     def surround(self): return self.harness.surround
 
-    def initialize(self): return self.harness.initialize()
+    def initialize(self, reference_image_ref=None):
+        return self.harness.initialize(reference_image_ref)
     def refresh(self): return self.harness.refresh()
     def perform(self, primitive, target, revision, **options):
         return self.harness.perform(primitive, target, revision, _parent_request_id=self.request_id, **options)

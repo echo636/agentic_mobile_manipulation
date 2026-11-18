@@ -314,6 +314,7 @@ def main():
           '--max-actions',str(manifest['max_actions']),'--max-sim-steps',str(manifest['max_sim_steps']),
           '--output',str(a.data_root/'runs'/row['run_id'])]
     args+=['--goal-skill',manifest.get('goal_skill','hierarchical')]
+    if manifest.get('rgb_reference_review'): args.append('--rgb-reference-review')
     if row.get('custom_task_spec'):
         args+=['--custom-task',row['custom_task_spec']]
     if manifest.get('require_task_notes'): args.append('--require-task-notes')

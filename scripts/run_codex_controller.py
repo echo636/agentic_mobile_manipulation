@@ -63,6 +63,7 @@ def main(argv=None, *, allow_client=False):
                         help='Private argv JSON: atomically arm remote execution clock after MCP handshake')
     p.add_argument('--isolate-client-storage', action='store_true',
                    help='Use per-run native sessions and logs without changing HOME, CODEX_HOME or authentication')
+    p.add_argument('--rgb-reference-review', action='store_true', help='Enable the episode RGB comparison tool parameter.')
     p.add_argument('--agent-profile', choices=['minimal','skills','workflow'], default='skills')
     p.add_argument('--goal-skill',choices=['hierarchical','none'],default='hierarchical')
     p.add_argument('--reasoning-effort', choices=['low','medium','high','xhigh'])
@@ -107,8 +108,8 @@ def main(argv=None, *, allow_client=False):
         print(json.dumps(asdict(capability)))
         return 3
     try:
-        project = adapter.prepare_project(config, system_prompt(args.agent_profile,goal_skill=args.goal_skill),
-                                          [t['name'] for t in tool_specs(args.agent_profile)])
+        project = adapter.prepare_project(config, system_prompt(args.agent_profile, rgb_reference_review=args.rgb_reference_review, goal_skill=args.goal_skill),
+                                          [t['name'] for t in tool_specs(args.agent_profile, rgb_reference_review=args.rgb_reference_review)])
     except (ValueError, RuntimeError) as exc:
         write_json(args.output / 'controller.json', {
             'started_at': now(), 'finished_at': now(), 'status': 'unsupported',
@@ -124,6 +125,7 @@ def main(argv=None, *, allow_client=False):
                 "model_reasoning_effort": args.reasoning_effort, "observation_mode": "rgb_only",
                 "episode_deadline_unix":deadline.unix,"requested_timeout_seconds":args.timeout,
                 "agent_profile": args.agent_profile, "goal_skill": args.goal_skill,
+                "rgb_reference_review": args.rgb_reference_review,
                 "host": os.uname().nodename, "controller": client + "_cli", "command": command,
                 "instruction": args.instruction, "source": source_version(),
                 "client_version": capability.version, "client_capability": asdict(capability)}
@@ -147,7 +149,7 @@ def main(argv=None, *, allow_client=False):
             # access to /dev/null. A host-only handshake misses mount failures.
             prefix=project.mcp_prefix
             mcp_command=prefix[0];mcp_args=prefix[1:]+['--',args.mcp_command,*mcp_args]
-        metadata['mcp_preflight']=check_server(mcp_command,mcp_args,tool_specs(args.agent_profile),args.output,
+        metadata['mcp_preflight']=check_server(mcp_command,mcp_args,tool_specs(args.agent_profile, rgb_reference_review=args.rgb_reference_review),args.output,
                                                timeout=deadline.remaining(90))
         metadata['mcp_preflight']['inside_client_storage_namespace']=native_sessions is not None
     except Exception as exc:
