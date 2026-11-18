@@ -72,7 +72,7 @@ print(json.dumps({
 '''
 
 
-MCP_TOOL_TIMEOUT_SECONDS = 900
+MCP_TOOL_TIMEOUT_SECONDS = 2400  # must exceed the executor stall guard (LocalLimits.wall_seconds) with margin
 
 
 class AgyAdapter(ClientAdapter):
@@ -191,7 +191,7 @@ class AgyAdapter(ClientAdapter):
         mcp_server_spec: dict = {
             "command": config.mcp_command,
             "args": config.mcp_args,
-            # agy's own per-call MCP deadline defaults to 3 min, shorter than one executor action (300 s cap) or a
+            # agy's own per-call MCP deadline defaults to 3 min, shorter than one executor action (1800 s guard) or a
             # finish-evidence judge call; the client must not cut a tool call the executor is still running.
             "timeoutSeconds": MCP_TOOL_TIMEOUT_SECONDS,
         }

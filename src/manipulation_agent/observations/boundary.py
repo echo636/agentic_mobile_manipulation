@@ -39,6 +39,7 @@ ERROR_MESSAGES = {
     'look_rotation_blocked':'The requested turn has no checked clearance for the robot and carried item. Use the current four views; choose a different general approach if needed instead of repeating this turn.',
     'needs_macro_navigation':'The selected target is outside local adjustment range. Use navigate_to for a closer general approach, then select the target in the returned RGB.',
     'local_adjustment_blocked':'The selected target could not be operated on after the approach. Inspect the returned RGB and choose a different general approach or report blocked; do not repeat the same operation or make tiny navigation corrections.',
+    'executor_wall_guard':'The action did not finish and its result could not be confirmed. Inspect the returned RGB before choosing the next action.',
     'local_adjustment_exhausted':'The executor reached its approach planning or operation work budget. Inspect the current RGB before choosing a different general approach; do not blindly repeat the same action.',
     "stale_image_ref":"Select a point in the latest returned image.",
     "no_surface_at_point":"The selected pixel could not be grounded to a surface. Inspect RGB and choose another point.",
@@ -106,7 +107,8 @@ SIMULATOR_SEMANTIC_CODES = frozenset({
     'unsupported_relation', 'cut_target_unsupported', 'cutting_tool_required', 'invalid_transfer_destination',
     'material_dispenser_off', 'material_source_empty', 'no_removable_material',
 })
-SIMULATOR_UNCONFIRMED_CODES = frozenset({'target_changed', 'physics_instability', 'postcondition_error'})
+SIMULATOR_UNCONFIRMED_CODES = frozenset({'target_changed', 'physics_instability', 'postcondition_error',
+                                         'executor_wall_guard'})
 FACTUAL_CODES = ('nothing_lifted', 'not_placed', 'no_visible_change', 'result_unconfirmed')
 HAND_TEXT = {'empty': 'Your hand is empty.', 'holding_item': 'You are still holding the item.'}
 FACTUAL_MESSAGES = {

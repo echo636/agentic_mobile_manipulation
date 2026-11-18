@@ -19,7 +19,9 @@ class LocalLimits:
     floor_click_snap_m: float = 2.0
     max_env_steps: int = 600  # Atomic manipulation allowance, separate from episode policy.
     max_sampling_steps: int = 1200
-    wall_seconds: float = 300.0
+    # v10: a stall guard only. Work is bounded by env/sampling steps; wall time depends on host load and must not
+    # decide an action's outcome. If the guard fires, the episode is facility-invalid (see wall_guard.jsonl).
+    wall_seconds: float = 1800.0
 
     def __post_init__(self):
         if any(not math.isfinite(v) or v <= 0 for v in asdict(self).values()):
@@ -53,10 +55,29 @@ class LocalOperation:
         sampled = getattr(self.backend, 'sampling_physics_steps', 0)-self.start_sampling
         self.changed |= changed or used > 0 or sampled > 0
         work_seconds = self.clock()-self.started
-        if (work_seconds >= self.limits.wall_seconds or used >= self.step_limit
-                or sampled >= self.limits.max_sampling_steps):
+        if work_seconds >= self.limits.wall_seconds:
+            self._wall_guard(work_seconds, used, sampled)
+            raise SkillError('executor_wall_guard', 'Executor wall-clock stall guard reached',
+                             changed=self.changed, stage='wall_guard')
+        if used >= self.step_limit or sampled >= self.limits.max_sampling_steps:
             raise SkillError('local_adjustment_exhausted', 'Local operation work limit reached',
                              changed=self.changed, stage='local_work_budget')
+
+    def _wall_guard(self, work_seconds, used, sampled):
+        """Private, executor-side record that the stall guard fired; the launcher marks the episode invalid."""
+        import json
+        output = getattr(self.backend, 'output', None)
+        if output is None:
+            return
+        try:
+            from ..records import now
+            with (output / 'wall_guard.jsonl').open('a') as stream:
+                stream.write(json.dumps({'at': now(), 'primitive': self.primitive, 'work_seconds': work_seconds,
+                                         'env_steps': used, 'sampling_steps': sampled,
+                                         'limit_seconds': self.limits.wall_seconds,
+                                         'audience': 'executor_private'}) + '\n')
+        except OSError:
+            pass
 
     def admit_pose(self, pose):
         """Check every commanded pose BEFORE a base setter can move the robot."""

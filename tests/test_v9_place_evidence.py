@@ -184,3 +184,35 @@ def test_mcp_server_serializes_through_wall_clock_filter():
     src = inspect.getsource(mcp_server)
     assert 'json.dumps(result,' not in src and 'json.dumps(payload,' not in src
     assert src.count('json.dumps(without_wall_clock(') >= 3
+
+
+# ---- v10 benchmark side: executor wall time is a stall guard, never a work budget ----
+
+def test_local_wall_guard_is_a_distinct_private_event_and_unconfirmed_receipt(tmp_path):
+    from types import SimpleNamespace
+    import pytest
+    from manipulation_agent.contracts import SkillError
+    from manipulation_agent.executors.local_manipulation import LocalLimits, LocalOperation
+    from manipulation_agent.observations.boundary import factual_execution_error
+    assert LocalLimits().wall_seconds >= 1800
+    t = [0.]
+    backend = SimpleNamespace(local_limits=LocalLimits(), steps=0, sampling_physics_steps=0, output=tmp_path,
+                              deadline=SimpleNamespace(check=lambda changed=False: None),
+                              _local_pose=lambda: (0., 0., 0.))
+    op = LocalOperation(backend, 'place_on_top', None, 600, {}, clock=lambda: t[0])
+    t[0] = 400.
+    op.check()                                   # 400 s of slow host is no longer a failure
+    t[0] = LocalLimits().wall_seconds
+    with pytest.raises(SkillError) as err:
+        op.check()
+    assert err.value.code == 'executor_wall_guard'
+    row = json.loads((tmp_path / 'wall_guard.jsonl').read_text())
+    assert row['audience'] == 'executor_private' and row['primitive'] == 'place_on_top'
+    public = factual_execution_error(err.value, 'place_on_top', 'holding_item')
+    assert public['code'] == 'result_unconfirmed' and 'wall' not in public['message'].lower()
+
+
+def test_agy_client_timeout_exceeds_executor_guard_with_margin():
+    from manipulation_agent.clients.agy import MCP_TOOL_TIMEOUT_SECONDS
+    from manipulation_agent.executors.local_manipulation import LocalLimits
+    assert MCP_TOOL_TIMEOUT_SECONDS > LocalLimits().wall_seconds + 300

@@ -36,6 +36,9 @@ from manipulation_agent.transport.mcp_preflight import check_server
 from manipulation_agent.runtime.deadline import EpisodeDeadline, validate_execution_clock
 
 
+
+CLIENT_TIMEOUT_MARGIN_SECONDS = 300
+
 def rate_limit_error(events):
     """Resume only after the latest terminal provider failure is transient."""
     terminal = next((event for event in reversed(events)
@@ -312,6 +315,16 @@ def main(argv=None, *, allow_client=False):
     if args.rolling_handoff_steps < 0:
         p.error('--rolling-handoff-steps must be nonnegative')
     if args.timeout==0:args.timeout=None
+    # v10: a client must never cut a tool call the executor is still allowed to run (stall guard + margin).
+    from manipulation_agent.executors.local_manipulation import LocalLimits
+    from manipulation_agent.runtime.deadline import tool_wait_seconds
+    from manipulation_agent.clients.agy import MCP_TOOL_TIMEOUT_SECONDS
+    guard = LocalLimits().wall_seconds + CLIENT_TIMEOUT_MARGIN_SECONDS
+    client_tool_timeout = (MCP_TOOL_TIMEOUT_SECONDS if client == 'agy' else
+                           tool_wait_seconds(args.timeout) if client == 'codex' else None)
+    # Wall-bounded episodes (--timeout > 0) are cut by the episode deadline anyway; the rule is for step budgets.
+    if args.timeout is None and client_tool_timeout is not None and client_tool_timeout <= guard:
+        p.error(f'{client} tool timeout {client_tool_timeout}s must exceed the executor stall guard + margin ({guard}s)')
     if args.rate_limit_resumes is None:
         args.rate_limit_resumes = -1 if client in {'codex', 'claude', 'agy'} and args.timeout is None else 0
     if args.rate_limit_resumes < -1 or args.resume_backoff_seconds < 1:
