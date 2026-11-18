@@ -367,6 +367,7 @@ def main(argv=None, *, allow_client=False):
         args.mcp_args_json = json.dumps(raw_mcp_args)
     planner_config = None
     mcp_env_vars = ()
+    judge_relay_config = None
     # Harness option --finish-evidence (v9): the proxy's evidence judge is a separate, history-free, tool-free call
     # of the SAME model on the SAME provider (codex: one-shot tool-free call; agy: one-shot call whose only tool
     # returns the crops). Other clients get freshness checks only (no judge).
@@ -381,7 +382,9 @@ def main(argv=None, *, allow_client=False):
                 judge_path = (args.output / 'finish_evidence_judge.json').resolve()
                 write_json(judge_path, dict(client='codex', model=args.model, effort=args.reasoning_effort,
                                             provider=args.model_provider_profile,
-                                            gateway=args.model_provider_gateway, output=str(evidence_dir / 'judge')))
+                                            gateway=args.model_provider_gateway, output=str(evidence_dir / 'judge'),
+                                            queue=str(evidence_dir / 'judge_queue')))
+                judge_relay_config = json.loads(judge_path.read_text())
                 extra += ['--finish-evidence-judge', str(judge_path)]
                 # Codex filters MCP subprocess environments. Forward names, never write credential values.
                 mcp_env_vars = ('PYTHONPATH', 'CODEX_HOME', 'MAS_CLIENT_STATE_ROOT', 'no_proxy', 'NO_PROXY',
@@ -389,11 +392,18 @@ def main(argv=None, *, allow_client=False):
             elif client == 'agy':
                 judge_path = (args.output / 'finish_evidence_judge.json').resolve()
                 write_json(judge_path, dict(client='agy', model=args.model, effort=args.reasoning_effort,
-                                            provider='agy', output=str(evidence_dir / 'judge')))
+                                            provider='agy', output=str(evidence_dir / 'judge'),
+                                            queue=str(evidence_dir / 'judge_queue')))
+                judge_relay_config = json.loads(judge_path.read_text())
                 extra += ['--finish-evidence-judge', str(judge_path)]
                 mcp_env_vars = ('PYTHONPATH', 'MAS_CLIENT_STATE_ROOT', 'HOME', 'PATH', 'no_proxy', 'NO_PROXY')
             raw_mcp_args = [*raw_mcp_args, *extra]
             args.mcp_args_json = json.dumps(raw_mcp_args)
+    if judge_relay_config is not None:
+        # v10c: the judge runs here, outside the client's sandbox; the proxy relays requests through files.
+        import threading
+        from manipulation_agent.tools.finish_evidence import serve_judge_queue
+        serve_judge_queue(judge_relay_config, threading.Event())
     if args.planner_model:
         provider_path = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))) / 'config.toml'
         provider = tomllib.loads(provider_path.read_text())['model_providers'][args.model_provider_profile]

@@ -347,3 +347,71 @@ def agy_judge(config):
                  'output_tokens': u.get('output_tokens'), 'reasoning_output_tokens': u.get('thinking_tokens')}
         return verdicts, usage, seconds
     return judge
+
+
+# ---- v10c: judge relay. The MCP proxy runs inside the client's bubblewrap sandbox, where a nested sandboxed client
+# cannot start ("No permissions to create new namespace"). The proxy therefore hands each judge request to a worker in
+# the controller process (outside the sandbox) through files in the episode directory; same model, same channel. ----
+
+RELAY_TIMEOUT_SECONDS = 900
+
+
+def relay_judge(config):
+    """Proxy side: write <queue>/<id>/request.json (+ crop files), wait for response.json from the controller."""
+    import uuid
+    queue = Path(config['queue'])
+
+    def judge(text, images):
+        req = queue / str(uuid.uuid4())
+        req.mkdir(parents=True)
+        files = []
+        for i, (caption, data) in enumerate(images):
+            path = req / f'crop-{i}.jpg'
+            path.write_bytes(data)
+            files.append({'caption': caption, 'path': str(path)})
+        tmp = req / 'request.json.tmp'
+        tmp.write_text(json.dumps({'text': text, 'images': files}))
+        tmp.rename(req / 'request.json')
+        started = time.monotonic()
+        while time.monotonic() - started < RELAY_TIMEOUT_SECONDS:
+            resp = req / 'response.json'
+            if resp.exists():
+                out = json.loads(resp.read_text())
+                if out.get('error'):
+                    raise RuntimeError('judge worker: ' + out['error'])
+                verdicts = {int(k): tuple(v) for k, v in out['verdicts'].items()}
+                return verdicts, out.get('usage'), out.get('seconds')
+            time.sleep(0.5)
+        raise TimeoutError('judge relay: no response from the controller worker')
+    return judge
+
+
+def serve_judge_queue(config, stop_event):
+    """Controller side (outside the sandbox): answer every request in config['queue'] with the real judge."""
+    import threading
+    judge = (agy_judge if config.get('client') == 'agy' else codex_judge)(config)
+    queue = Path(config['queue'])
+    queue.mkdir(parents=True, exist_ok=True)
+
+    def loop():
+        while not stop_event.is_set():
+            for req in sorted(queue.glob('*/request.json')):
+                resp = req.parent / 'response.json'
+                if resp.exists() or (req.parent / 'claimed').exists():
+                    continue
+                (req.parent / 'claimed').write_text('')
+                try:
+                    spec = json.loads(req.read_text())
+                    images = [(f['caption'], Path(f['path']).read_bytes()) for f in spec['images']]
+                    verdicts, usage, seconds = judge(spec['text'], images)
+                    out = {'verdicts': {str(k): list(v) for k, v in verdicts.items()}, 'usage': usage,
+                           'seconds': seconds}
+                except Exception as exc:
+                    out = {'error': repr(exc)[:500]}
+                tmp = req.parent / 'response.json.tmp'
+                tmp.write_text(json.dumps(out))
+                tmp.rename(resp)
+            stop_event.wait(0.5)
+    thread = threading.Thread(target=loop, name='finish-evidence-judge', daemon=True)
+    thread.start()
+    return thread

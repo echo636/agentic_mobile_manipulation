@@ -281,3 +281,31 @@ def test_finish_guard_evidence_mode_keeps_only_unresolved_deferral_for_achieved(
     g2 = FinishGuard(tmp_path / 'g2.json')
     g2.observe({'ok': True, 'execution_budget': {'steps_remaining': 100}}, 'act', {'primitive': 'grasp'})
     assert g2.deferral({'outcome': 'achieved', 'reason': 'x'}) is not None                      # v10 behaviour
+
+
+# ---- v10c: judge relay (proxy inside the client sandbox -> worker in the controller) ----
+
+def test_judge_relay_round_trip(tmp_path, monkeypatch):
+    import threading
+    from manipulation_agent.tools import finish_evidence as fe
+    calls = []
+
+    def fake_factory(config):
+        def judge(text, images):
+            calls.append((text, len(images)))
+            return {1: ('yes', 'a plate'), 1001: ('no', 'door open')}, {'input_tokens': 5}, 0.1
+        return judge
+    monkeypatch.setattr(fe, 'codex_judge', fake_factory)
+    stop = threading.Event()
+    cfg = {'client': 'codex', 'queue': str(tmp_path / 'q')}
+    fe.serve_judge_queue(cfg, stop)
+    verdicts, usage, seconds = fe.relay_judge(cfg)('Claim 1: plate', [('close', _jpeg()), ('wider', _jpeg())])
+    stop.set()
+    assert verdicts == {1: ('yes', 'a plate'), 1001: ('no', 'door open')} and usage == {'input_tokens': 5}
+    assert calls == [('Claim 1: plate', 2)]
+
+
+def test_proxy_uses_relay_when_queue_configured():
+    import inspect
+    from manipulation_agent import mcp_server
+    assert "relay_judge if judge_config.get('queue')" in inspect.getsource(mcp_server)

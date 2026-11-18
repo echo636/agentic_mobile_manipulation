@@ -48,7 +48,7 @@ from .runtime.deadline import tool_wait_seconds
 from .tools.finish_guard import FinishGuard
 from .agent.state_memory import StateMemory
 from .agent.failure_memory import FailureMemory
-from .tools.finish_evidence import FinishEvidence, agy_judge, codex_judge
+from .tools.finish_evidence import FinishEvidence, agy_judge, codex_judge, relay_judge
 from .agent.task_graph_planner import TaskGraphSession
 from .contracts import SkillError, validate
 from .observations.boundary import without_wall_clock
@@ -303,7 +303,8 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
         judge = None
         if finish_evidence_judge:
             judge_config = json.loads(Path(finish_evidence_judge).read_text())
-            judge = (agy_judge if judge_config.get('client') == 'agy' else codex_judge)(judge_config)
+            judge = (relay_judge if judge_config.get('queue') else
+                     agy_judge if judge_config.get('client') == 'agy' else codex_judge)(judge_config)
         evidence = FinishEvidence(judge=judge, log_dir=finish_evidence_dir, crop=evidence_crops)
     segment_steps = 0
     bridge_has_task_graph = any(spec['name'] == 'plan_task_graph' for spec in catalog)
