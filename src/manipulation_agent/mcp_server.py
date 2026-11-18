@@ -374,7 +374,7 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
                 if guard is not None:
                     guard.observe(result, name, arguments)
                 if evidence is not None and name in ('act', 'look') and isinstance(result, dict):
-                    note = evidence.observe(name, result)
+                    note = evidence.observe(name, result, arguments if isinstance(arguments, dict) else None)
                     if note:
                         result['finish_evidence_note'] = note
                 if local_task_graph is not None:
@@ -488,7 +488,10 @@ async def create_server(url: str, *, host='127.0.0.1', port=29431, finish_guard=
             # The bridge sets only stop intent here; simulator access and scoring
             # still happen serially on its owner thread, after action cancellation.
             if name == 'finish':
-                deferred = guard.deferral(arguments) if guard is not None else None
+                # v10b: with --finish-evidence the item-by-item check of finish(achieved) belongs to it; the finish
+                # guard then keeps only its unresolved-records deferral for achieved (blocked/aborted unchanged).
+                deferred = (guard.deferral(arguments, evidence_mode=evidence is not None)
+                            if guard is not None else None)
                 if deferred is not None:
                     return [types.TextContent(type='text', text=json.dumps(deferred, ensure_ascii=False))]
                 if evidence is not None:

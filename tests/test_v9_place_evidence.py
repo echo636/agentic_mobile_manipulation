@@ -216,3 +216,68 @@ def test_agy_client_timeout_exceeds_executor_guard_with_margin():
     from manipulation_agent.clients.agy import MCP_TOOL_TIMEOUT_SECONDS
     from manipulation_agent.executors.local_manipulation import LocalLimits
     assert MCP_TOOL_TIMEOUT_SECONDS > LocalLimits().wall_seconds + 300
+
+
+# ---- v10b: finish-evidence pre-close exception and the finish guard's evidence mode ----
+
+def _act(primitive, rev, remaining, view='front', point=(0.5, 0.5)):
+    args = {'primitive': primitive, 'target': {'image_ref': f'rgb-{rev - 1:05d}-{view}', 'point': list(point)}}
+    result = {'ok': True, 'effect': {'primitive': primitive, 'status': 'completed'},
+              'observation': {'revision': rev, 'images': [{'image_ref': f'rgb-{rev:05d}-{view}'}]},
+              'execution_budget': {'steps_remaining': remaining, 'steps_used': 160 - remaining}}
+    return args, result
+
+
+def _enclosure_run(tmp_path, reopen=False, verdict='yes'):
+    ev, calls = _ev(verdict, tmp_path)
+    seq = [('open', 10), ('place_inside', 11), ('close', 12)]
+    seq += [('open', 13), ('navigate_to', 14)] if reopen else [('navigate_to', 13)]   # reopen: same stance
+    for i, (prim, rev) in enumerate(seq):
+        args, res = _act(prim, rev, 60 - i)
+        ev.observe('act', res, args)
+    ev.observe('look', {'ok': True, 'observation': {'revision': 20}, 'execution_budget': {'steps_remaining': 40}})
+    return ev, calls
+
+
+def test_preclose_image_accepted_only_with_a_fresh_closed_view(tmp_path):
+    ev, calls = _enclosure_run(tmp_path)
+    reason = 'ITEM: knife -> cabinet | rgb-00011-front | 0.5, 0.5 | rgb-00020-front | 0.4, 0.6'
+    fwd, payload, _ = ev.on_finish({'outcome': 'achieved', 'reason': reason}, lambda r: _jpeg())
+    assert fwd and payload['finish_evidence']['decision'] == 'accepted'
+    assert calls and calls[0][1] == 4                      # item crops + closed-now crops
+    row = [json.loads(l) for l in (tmp_path / 'finish_evidence.jsonl').read_text().splitlines()][-1]
+    assert row['checks'][0]['verified_by_preclose_image'] and row['verified_by_preclose_image_total'] == 1
+    ev2, _ = _enclosure_run(tmp_path / 'b')
+    fwd, payload, _ = ev2.on_finish({'outcome': 'achieved', 'reason': 'ITEM: knife -> cabinet | rgb-00011-front | 0.5, 0.5'},
+                                    lambda r: _jpeg())
+    assert not fwd and 'stale image' in payload['error']['message']   # no fresh closed view -> not accepted
+
+
+def test_preclose_exception_void_after_reopen_or_outside_window(tmp_path):
+    ev, _ = _enclosure_run(tmp_path, reopen=True)
+    reason = 'ITEM: knife -> cabinet | rgb-00011-front | 0.5, 0.5 | rgb-00020-front | 0.4, 0.6'
+    fwd, payload, _ = ev.on_finish({'outcome': 'achieved', 'reason': reason}, lambda r: _jpeg())
+    assert not fwd and 'stale image' in payload['error']['message']
+    ev2, _ = _enclosure_run(tmp_path / 'b')
+    late = 'ITEM: knife -> cabinet | rgb-00012-front | 0.5, 0.5 | rgb-00020-front | 0.4, 0.6'   # close's own view
+    fwd, payload, _ = ev2.on_finish({'outcome': 'achieved', 'reason': late}, lambda r: _jpeg())
+    assert not fwd
+
+
+def test_preclose_rule_text_is_generic():
+    from manipulation_agent.tools.finish_evidence import REQUEST
+    low = REQUEST.lower()
+    assert 'before closing' in low
+    for banned in ('fridge', 'cabinet', 'microwave', 'knife', 'drawer', 'score', 'evaluator'):
+        assert banned not in low, banned
+
+
+def test_finish_guard_evidence_mode_keeps_only_unresolved_deferral_for_achieved(tmp_path):
+    from manipulation_agent.tools.finish_guard import FinishGuard
+    g = FinishGuard(tmp_path / 'g.json')
+    g.observe({'ok': True, 'execution_budget': {'steps_remaining': 100}}, 'act', {'primitive': 'grasp'})
+    assert g.deferral({'outcome': 'achieved', 'reason': 'x'}, evidence_mode=True) is None
+    assert g.deferral({'outcome': 'blocked', 'reason': 'x'}, evidence_mode=True) is not None   # anti-early-quit kept
+    g2 = FinishGuard(tmp_path / 'g2.json')
+    g2.observe({'ok': True, 'execution_budget': {'steps_remaining': 100}}, 'act', {'primitive': 'grasp'})
+    assert g2.deferral({'outcome': 'achieved', 'reason': 'x'}) is not None                      # v10 behaviour

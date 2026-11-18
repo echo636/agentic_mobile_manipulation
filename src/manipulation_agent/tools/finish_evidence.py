@@ -24,11 +24,14 @@ import re
 import time
 from pathlib import Path
 
+CLOSED_CLAIM_OFFSET = 1000   # judge claim index of the "is closed now" check paired with item <index>
 MAX_ROUNDS = 3            # checklist request + up to two evidence checks that may send work back
 RESERVE_MIN_STEPS = 10
+_PT = r'(?:\|\s*\[?\s*(?P<{x}>[01](?:\.\d+)?)\s*,\s*(?P<{y}>[01](?:\.\d+)?)\s*\]?)?\s*'
 LINE_RE = re.compile(
     r'^\s*(?:[-*]\s*)?(?:ITEM\s*\d*\s*[:.)-]\s*)?(?P<item>[^|]+?)\s*\|\s*(?P<ref>rgb-\d+-[a-z]+|none)\s*'
-    r'(?:\|\s*\[?\s*(?P<x>[01](?:\.\d+)?)\s*,\s*(?P<y>[01](?:\.\d+)?)\s*\]?)?\s*$', re.IGNORECASE)
+    + _PT.format(x='x', y='y')
+    + r'(?:\|\s*(?P<ref2>rgb-\d+-[a-z]+)\s*' + _PT.format(x='x2', y='y2') + r')?$', re.IGNORECASE)
 
 REQUEST = (
     'finish(outcome=achieved) was not accepted yet. Before finishing, list every item the instruction requires and '
@@ -36,7 +39,10 @@ REQUEST = (
     'exactly:\n  ITEM: <what x count -> where> | <image_ref> | <x>, <y>\n'
     'The image_ref must come from an observation returned by your last act or later (use look, or move and look, so '
     'the item and where it is are visible), and the point must be on that item. Write "| none" if you cannot show it. '
-    'The cited points will be cropped and checked one by one.')
+    'The cited points will be cropped and checked one by one. For something you put inside an enclosure and then '
+    'closed, you may cite the image taken after putting it in and before closing (point on the item), followed by '
+    'a fresh image showing that the enclosure is closed now:\n'
+    '  ITEM: <what x count -> where> | <image_ref before closing> | <x>, <y> | <fresh image_ref> | <x>, <y>')
 JUDGE_INSTRUCTIONS = (
     'You check a household robot\'s claim that a task item is done. For each numbered claim you get two crops of the '
     'robot\'s own camera image around the point the robot cited (close, then wider; the magenta ring marks the '
@@ -60,8 +66,11 @@ def parse_checklist(reason):
         point = None
         if ref != 'none' and m.group('x') is not None:
             point = [float(m.group('x')), float(m.group('y'))]
+        closed_ref = m.group('ref2').lower() if m.group('ref2') else None
+        closed_point = ([float(m.group('x2')), float(m.group('y2'))]
+                        if closed_ref and m.group('x2') is not None else None)
         items.append({'item': m.group('item').strip()[:200], 'image_ref': None if ref == 'none' else ref,
-                      'point': point})
+                      'point': point, 'closed_image_ref': closed_ref, 'closed_point': closed_point})
     return items
 
 
@@ -91,6 +100,47 @@ class FinishEvidence:
         self.reminded = False
         self.judge_usage = {'calls': 0, 'input_tokens': 0, 'cached_input_tokens': 0, 'output_tokens': 0,
                             'reasoning_output_tokens': 0, 'seconds': 0.0}
+        # v10b pre-close exception: container records come only from the robot's own completed actions (a private
+        # StateMemory instance fed with the same public receipts; no simulator identity). Per container id:
+        # revisions returned by place_inside into it, the revision returned by the close after them, reopened flag.
+        from ..agent.state_memory import StateMemory
+        self.memory = StateMemory()
+        self.enclosures = {}
+        self.preclose_used = 0
+
+    def _containers(self):
+        return {cid: (len(c.get('items_inside') or []), c.get('opened_at_step'), c.get('closed_at_step'))
+                for cid, c in self.memory.container_states.items()}
+
+    def _track(self, name, arguments, result):
+        before = self._containers()
+        try:
+            self.memory.observe(name, arguments, result)
+        except Exception:
+            return
+        obs = result.get('observation') if isinstance(result.get('observation'), dict) else {}
+        rev = obs.get('revision') if isinstance(obs.get('revision'), int) else None
+        primitive = str((arguments or {}).get('primitive') or name)
+        for cid, (n_in, opened, closed) in self._containers().items():
+            b = before.get(cid, (0, None, None))
+            e = self.enclosures.setdefault(cid, {'placed': [], 'closed': None, 'reopened': False})
+            if primitive == 'place_inside' and n_in > b[0] and rev is not None:
+                e['placed'].append(rev)
+                e['closed'], e['reopened'] = None, False
+            if primitive == 'close' and closed != b[2] and e['placed'] and rev is not None:
+                e['closed'], e['reopened'] = rev, False
+            if primitive == 'open' and opened != b[1] and e['closed'] is not None:
+                e['reopened'] = True
+
+    def preclose_window(self, revision):
+        """A container whose own records show place_inside, then close, and no open since: an image taken after
+        the place_inside and before the close's returned observation shows what was put in."""
+        for cid, e in self.enclosures.items():
+            if e['closed'] is None or e['reopened']:
+                continue
+            if any(p <= revision < e['closed'] for p in e['placed']):
+                return cid
+        return None
 
     def _write(self, record):
         if self.log:
@@ -101,10 +151,11 @@ class FinishEvidence:
         n = len(self.first_checklist or [])
         return max(RESERVE_MIN_STEPS, 2 * n)
 
-    def observe(self, name, result):
-        """Track budget and freshness; returns a one-time reminder text or None."""
+    def observe(self, name, result, arguments=None):
+        """Track budget, freshness and own enclosure records; returns a one-time reminder text or None."""
         if not isinstance(result, dict):
             return None
+        self._track(name, arguments, result)
         budget = result.get('execution_budget')
         if isinstance(budget, dict) and isinstance(budget.get('steps_remaining'), int):
             self.steps_remaining = budget['steps_remaining']
@@ -136,23 +187,33 @@ class FinishEvidence:
         checks, images, judge_items = [], [], []
         for idx, it in enumerate(items, 1):
             rev = _revision(it['image_ref']) if it['image_ref'] else None
-            status = None
+            status, preclose = None, None
             if it['image_ref'] is None or it['point'] is None:
                 status = 'no_evidence'
             elif rev is None or rev < self.fresh_after:
-                status = 'stale_image'
-            else:
+                rev2 = _revision(it.get('closed_image_ref')) if it.get('closed_image_ref') else None
+                preclose = self.preclose_window(rev) if rev is not None else None
+                if preclose is None or rev2 is None or rev2 < self.fresh_after or it.get('closed_point') is None:
+                    status, preclose = 'stale_image', None
+            if status is None:
                 try:
                     data = fetch_image(it['image_ref'])
+                    data2 = fetch_image(it['closed_image_ref']) if preclose else None
                 except Exception:
-                    data = None
-                if data is None:
+                    data = data2 = None
+                if data is None or (preclose and data2 is None):
                     status = 'image_unavailable'
                 else:
                     crops = self.crop(data, it['point']) if self.crop else []
+                    crops2 = self.crop(data2, it['closed_point']) if (preclose and self.crop) else []
                     judge_items.append((idx, it, crops))
+                    if preclose:
+                        judge_items.append((CLOSED_CLAIM_OFFSET + idx,
+                                            {**it, 'item': 'the enclosure holding: ' + it['item'] + ' — is closed now'},
+                                            crops2))
             checks.append({'index': idx, 'item': it['item'], 'image_ref': it['image_ref'], 'point': it['point'],
-                           'status': status})
+                           'status': status, **({'preclose_container': preclose,
+                                                 'closed_image_ref': it['closed_image_ref']} if preclose else {})})
         judge_record = None
         if judge_items and self.judge is not None:
             text = '\n'.join(f'Claim {idx}: {it["item"]}' for idx, it, _ in judge_items)
@@ -173,7 +234,14 @@ class FinishEvidence:
             for c in checks:
                 if c['status'] is None:
                     verdict, note = verdicts.get(c['index'], ('unclear', ''))
+                    if c.get('preclose_container'):
+                        v2, note2 = verdicts.get(CLOSED_CLAIM_OFFSET + c['index'], ('unclear', ''))
+                        verdict = verdict if v2 == 'yes' else ('no' if v2 == 'no' else 'unclear')
+                        note = f'{note}; closed now: {note2}'
                     c['status'] = {'yes': 'confirmed', 'no': 'not_confirmed'}.get(verdict, 'unclear')
+                    if c['status'] == 'confirmed' and c.get('preclose_container'):
+                        c['verified_by_preclose_image'] = True
+                        self.preclose_used += 1
                     c['judge_note'] = str(note)[:200]
         elif judge_items:
             for c in checks:
@@ -187,7 +255,8 @@ class FinishEvidence:
         decision = 'accepted' if ok else ('sent_back' if can_retry else 'accepted_unverified')
         self._write({'decision': decision, 'round': self.rounds, 'steps_remaining': self.steps_remaining,
                      'fresh_after_revision': self.fresh_after, 'checks': checks, 'dropped_items': dropped,
-                     'judge': judge_record, 'judge_usage_total': dict(self.judge_usage)})
+                     'judge': judge_record, 'judge_usage_total': dict(self.judge_usage),
+                     'verified_by_preclose_image_total': self.preclose_used})
         if decision != 'sent_back':
             return True, {'finish_evidence': {'decision': decision}}, []
         for c in open_items:

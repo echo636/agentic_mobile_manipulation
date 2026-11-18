@@ -245,8 +245,11 @@ class FinishGuard:
         mem_block = self._memory_checklist_block()
         return base + ('\n' + mem_block if mem_block else '')
 
-    def deferral(self, arguments):
-        """Return the deferral result for this finish request, or None when the finish goes to the bridge."""
+    def deferral(self, arguments, *, evidence_mode=False):
+        """Return the deferral result for this finish request, or None when the finish goes to the bridge.
+
+        evidence_mode (v10b, --finish-evidence on): for finish(achieved) only the unresolved-records deferral is
+        kept; the format/verification deferrals are left to the finish-evidence check. Without it: unchanged."""
         outcome = arguments.get('outcome') if isinstance(arguments, dict) else None
         if outcome not in THRESHOLDS or self.steps_remaining is None or self.steps_remaining < THRESHOLDS[outcome]:
             return None
@@ -295,7 +298,13 @@ class FinishGuard:
             self.failures_in_row = 0
             self.failed_primitives_in_row = []
         else:
-            if self.state_memory_enabled:
+            if evidence_mode:
+                issues = self._memory_unresolved_issues() if self.state_memory_enabled else []
+                if not issues or count >= MAX_ACHIEVED_ISSUE_DEFERRALS:
+                    return None
+                message = MESSAGES['achieved_unresolved'].format(remaining=self.steps_remaining,
+                                                                 issues='\n'.join(issues))
+            elif self.state_memory_enabled:
                 issues = self._memory_unresolved_issues()
                 cap = MAX_ACHIEVED_ISSUE_DEFERRALS if issues else MAX_DEFERRALS['achieved']
                 if count >= cap:
