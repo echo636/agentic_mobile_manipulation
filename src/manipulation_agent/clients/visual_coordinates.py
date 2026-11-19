@@ -16,6 +16,9 @@ def pixel_request(data, max_pixels):
         raise ValueError(
             "The local visual model needs a canvas of at least 56 pixels per side"
         )
+    required = {"front", "back", "left", "right"}
+    if "inspection" in schema["properties"]["view"].get("enum", []):
+        required.add("inspection")
     views = {}
     images = []
     view = None
@@ -24,8 +27,7 @@ def pixel_request(data, max_pixels):
             tag = part["text"].removeprefix("Current RGB ")
             view = (
                 tag
-                if part["text"].startswith("Current RGB ")
-                and tag in ("front", "back", "left", "right")
+                if part["text"].startswith("Current RGB ") and tag in required
                 else None
             )
             images.append(part)
@@ -52,8 +54,10 @@ def pixel_request(data, max_pixels):
         )
         views[view] = (x, y, fitted.width, fitted.height)
         view = None
-    if set(views) != {"front", "back", "left", "right"}:
-        raise ValueError("The point grounder needs four labelled current views")
+    if set(views) != required:
+        raise ValueError(
+            "The point grounder needs every requested labelled current image"
+        )
     fields = {k: v for k, v in schema["properties"].items() if k not in ("x", "y")}
     fields.update(
         {
@@ -66,6 +70,8 @@ def pixel_request(data, max_pixels):
         "an interior point in displayed pixels",
     )
     instructions += f"\nEach current image is {side} by {side} pixels. Return x_pixel from the left and y_pixel from the top, both integers from 0 to {side - 1}. Use the current full view named in view. Historical crops cannot supply action points."
+    if "inspection" in required:
+        instructions += " For a target in the live inspection crop select view=inspection and use its displayed pixel coordinates."
     return {
         **data,
         "instructions": instructions,

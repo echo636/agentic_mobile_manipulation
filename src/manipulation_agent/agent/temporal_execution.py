@@ -4,13 +4,32 @@ import math
 from dataclasses import asdict
 
 from .temporal_graph import Job, TemporalGraph, schedule
-from .temporal_memory import DeltaMemory
-from .temporal_models import COMPILE, DECISION, GRAPH, GROUND, PATCH, REPAIR
+from .temporal_memory import CurrentInspection, DeltaMemory
+from .temporal_models import (
+    COMPILE,
+    DECISION,
+    GRAPH,
+    GROUND,
+    INSPECT_DECISION,
+    INSPECT_GROUND,
+    INSPECT_PATCH,
+    INSPECT_REPAIR,
+    PATCH,
+    REPAIR,
+)
 
 
 class DispatchController:
     def __init__(
-        self, instruction, catalog, planner, grounder, *, serial=False, log=None
+        self,
+        instruction,
+        catalog,
+        planner,
+        grounder,
+        *,
+        serial=False,
+        log=None,
+        repair_inspection=True,
     ):
         self.instruction = instruction
         self.catalog = tuple(catalog)
@@ -18,6 +37,8 @@ class DispatchController:
         self.serial = serial
         self.log = log or (lambda kind, **row: None)
         self.memory = DeltaMemory()
+        self.repair_inspection = repair_inspection
+        self.inspection = None
         self.completed = {}
         self.carriers = {}
         self.operations = {}
@@ -72,13 +93,36 @@ class DispatchController:
 
     def ask(self, role, instructions, schema, context, *, history=""):
         images = self.camera.parts()
+        focus = self.inspection
+        if (
+            role != "fast"
+            or not focus
+            or not focus.matches(
+                self.camera, [r["id"] for r in context.get("selected", ())]
+            )
+        ):
+            focus = None
+        if focus:
+            instructions += "\n" + INSPECT_GROUND.format(source_view=focus.source_view)
+            schema = INSPECT_DECISION
+            context = {
+                **context,
+                "current_inspection": {
+                    "node": focus.node,
+                    "view": focus.source_view,
+                    "revision": focus.revision,
+                    "box": focus.box,
+                },
+            }
         if history:
             images += self.memory.panel_parts
-            images += self.memory.reference(
-                history,
-                limit=1 if self.memory.panel_parts else 2,
-                before=self.camera.revision,
-            )
+            remaining = 2 - int(bool(self.memory.panel_parts)) - int(bool(focus))
+            if remaining:
+                images += self.memory.reference(
+                    history, limit=remaining, before=self.camera.revision
+                )
+        if focus:
+            images += focus.parts(self.camera)
         self.log(
             "model_call",
             role=role,
@@ -89,6 +133,20 @@ class DispatchController:
         model = self.grounder if role == "fast" else self.planner
         result = model.ask(instructions, schema, context, images)
         self.log("model_answer", role=role, result=result)
+        if (
+            focus
+            and result.get("view") == "inspection"
+            and result.get("decision") == "act"
+        ):
+            x, y = focus.full_point(result["x"], result["y"])
+            self.log(
+                "inspection_target",
+                revision=focus.revision,
+                view=focus.source_view,
+                point=[x, y],
+                box=focus.box,
+            )
+            return {**result, "view": focus.source_view, "x": x, "y": y}
         return result
 
     def compile(self):
@@ -143,18 +201,30 @@ class DispatchController:
         }
         self.memory.remember_frame(("anomaly", reason[:60]), self.camera, "front")
         for _ in range(2):
-            patch = self.ask("repair", REPAIR, PATCH, context, history=reason)
+            instructions = REPAIR + INSPECT_REPAIR if self.repair_inspection else REPAIR
+            schema = INSPECT_PATCH if self.repair_inspection else PATCH
+            patch = self.ask("repair", instructions, schema, context, history=reason)
             if patch["outcome"] == "blocked":
                 self.log("reported_blocked", reason=patch["reason"])
                 return False
             try:
                 graph = self.graph.repair(patch, scope, self.completed)
-                if graph == self.graph:
+                proposed = patch.get("inspection") if self.repair_inspection else None
+                eligible = (
+                    scope | (graph.nodes.keys() - self.graph.nodes.keys())
+                ) & graph.nodes.keys()
+                focus = (
+                    CurrentInspection.bind(proposed, self.camera, eligible)
+                    if proposed is not None
+                    else None
+                )
+                if graph == self.graph and (focus is None or focus == self.inspection):
                     raise ValueError("The repair did not change the failed method")
             except (TypeError, ValueError, KeyError) as exc:
                 context["edit_error"] = str(exc)[:400]
                 continue
             self.graph = graph
+            self.inspection = focus
             self.active = None
             self.previous_selection = None
             self.repeat = 0

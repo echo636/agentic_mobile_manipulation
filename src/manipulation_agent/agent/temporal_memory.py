@@ -63,6 +63,79 @@ class Camera:
         return result
 
 
+@dataclass(frozen=True)
+class CurrentInspection:
+    node: str
+    source_view: str
+    revision: int
+    sha256: str
+    box: tuple[int, int, int, int]
+    width: int
+    height: int
+
+    @classmethod
+    def bind(cls, spec, camera, eligible):
+        from .action_evidence import crop_at, load_rgb, valid_point
+
+        point = [spec["x"], spec["y"]]
+        if (
+            spec["node"] not in eligible
+            or spec["view"] not in camera.frames
+            or not valid_point(point)
+        ):
+            raise ValueError(
+                "Inspection requires a current RGB point and an affected unfinished node"
+            )
+        frame = camera.frames[spec["view"]]
+        image = load_rgb(frame)
+        side = max(1, round(min(image.size) * 7 / 32))
+        _, _, box = crop_at(image, point, side=side)
+        return cls(
+            spec["node"],
+            spec["view"],
+            camera.revision,
+            frame["sha256"],
+            box,
+            *image.size,
+        )
+
+    def matches(self, camera, selected):
+        frame = camera.frames.get(self.source_view)
+        return (
+            self.revision == camera.revision
+            and frame is not None
+            and frame["sha256"] == self.sha256
+            and self.node in selected
+        )
+
+    def parts(self, camera):
+        from .action_evidence import load_rgb, png
+
+        image = load_rgb(camera.frames[self.source_view]).crop(self.box)
+        return [
+            {"type": "input_text", "text": "Current RGB inspection"},
+            {
+                "type": "input_image",
+                "image_url": "data:image/png;base64,"
+                + base64.b64encode(png(image)).decode("ascii"),
+                "detail": "original",
+            },
+        ]
+
+    def full_point(self, x, y):
+        from .action_evidence import valid_point
+
+        if not valid_point([x, y]):
+            raise ValueError(
+                "The selected inspection point is outside its current RGB crop"
+            )
+        left, top, right, bottom = self.box
+        return (
+            (left + x * (right - left - 1)) / max(1, self.width - 1),
+            (top + y * (bottom - top - 1)) / max(1, self.height - 1),
+        )
+
+
 class DeltaMemory:
     def __init__(self, keyframe_limit=8):
         self.facts = OrderedDict()

@@ -517,3 +517,72 @@ def test_invalid_fast_decision_reaches_local_repair_without_motor_action():
     tool, args = controller.next()
     assert tool == "finish" and args["outcome"] == "blocked"
     assert "visual grounder" in slow.calls[-1]["event"] and controller.clock == 0
+
+
+def test_repair_crop_is_bound_to_one_node_current_frame_and_actual_camera_pixels():
+    from manipulation_agent.agent.temporal_memory import CurrentInspection
+    from manipulation_agent.agent.temporal_models import GROUND, INSPECT_DECISION
+    from manipulation_agent.clients.visual_coordinates import pixel_request
+
+    cam = camera(7, 4)
+    proposal = {"node": "remaining", "view": "back", "x": 0.97, "y": 0.1}
+    focus = CurrentInspection.bind(proposal, cam, {"remaining"})
+    assert focus.matches(cam, ["remaining"]) and not focus.matches(cam, ["unrelated"])
+    assert not focus.matches(camera(8, 5), ["remaining"])
+    changed = Camera(
+        cam.revision,
+        {**cam.frames, "back": {**cam.frames["back"], "sha256": "other"}},
+        cam.clock,
+        cam.hand,
+    )
+    assert not focus.matches(changed, ["remaining"])
+    left, top, right, bottom = focus.box
+    assert focus.full_point(0, 0) == (
+        left / (focus.width - 1),
+        top / (focus.height - 1),
+    )
+    assert focus.full_point(1, 1) == (
+        (right - 1) / (focus.width - 1),
+        (bottom - 1) / (focus.height - 1),
+    )
+    with pytest.raises(ValueError):
+        CurrentInspection.bind(proposal, cam, {"different"})
+    with pytest.raises(ValueError):
+        focus.full_point(1.1, 0)
+    req, views = pixel_request(
+        {
+            "instructions": GROUND,
+            "schema": INSPECT_DECISION,
+            "images": cam.parts() + focus.parts(cam),
+        },
+        512 * 512,
+    )
+    assert set(views) == {"front", "back", "left", "right", "inspection"}
+    assert req["schema"]["properties"]["x_pixel"]["maximum"] == 503
+
+
+def test_inspection_only_repair_can_ground_one_click_then_expires():
+    focus = {"node": "x", "view": "back", "x": 0.76, "y": 0.27}
+    patch = {
+        "outcome": "repair",
+        "reason": "Visible alternative",
+        "upsert": [],
+        "remove": [],
+        "windows": [],
+        "inspection": focus,
+    }
+    slow = Role(graph([work("x")]), patch)
+    fast = Role(
+        decision("anomaly"),
+        {**decision(), "view": "inspection", "x": 0.5, "y": 0.5},
+        decision("done"),
+    )
+    controller = DispatchController("user request", ["open"], slow, fast)
+    controller.observe(camera(0, 0))
+    kind, args = controller.next()
+    assert kind == "act" and args["target"]["image_ref"] == "back-0"
+    assert tuple(args["target"]["point"]) == controller.inspection.full_point(0.5, 0.5)
+    assert "current_inspection" in fast.calls[1] and not controller.completed
+    controller.observe(camera(1, 4))
+    assert controller.next()[1]["outcome"] == "achieved"
+    assert "current_inspection" not in fast.calls[2]

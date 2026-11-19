@@ -75,6 +75,7 @@ def run(args):
         "fast_model": args.model,
         "fast_effort": None if args.fast_vision_port else args.reasoning_effort,
         "fast_backend": "local_qwen" if args.fast_vision_port else "codex",
+        "repair_inspection": not args.no_repair_inspection,
         "host": os.uname().nodename,
         "pid": os.getpid(),
         "interpreter": sys.executable,
@@ -137,6 +138,7 @@ def run(args):
             native("slow", args.planner_model, args.planner_reasoning_effort),
             fast,
             serial=args.dispatch_policy == "serial",
+            repair_inspection=not args.no_repair_inspection,
             log=log,
         )
 
@@ -201,6 +203,11 @@ def main():
     )
     p.add_argument("--planner-model", required=True)
     p.add_argument("--planner-reasoning-effort", default="high")
+    p.add_argument(
+        "--no-repair-inspection",
+        action="store_true",
+        help="Ablate optional current-camera crops proposed by local repairs",
+    )
     p.add_argument("--model-provider-profile")
     p.add_argument("--model-provider-gateway")
     p.add_argument("--execution-clock-command-json")

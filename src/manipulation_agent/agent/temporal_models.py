@@ -82,6 +82,36 @@ DECISION = obj(
     verified=arr(obj(id=S, evidence=S)),
 )
 
+INSPECT_PATCH = obj(
+    **PATCH["properties"],
+    inspection={
+        "anyOf": [
+            obj(
+                node=S,
+                view=VIEWS,
+                x=DECISION["properties"]["x"],
+                y=DECISION["properties"]["y"],
+            ),
+            {"type": "null"},
+        ]
+    },
+)
+INSPECT_DECISION = obj(
+    **{
+        **DECISION["properties"],
+        "view": {"type": "string", "enum": [*VIEWS["enum"], "inspection"]},
+    }
+)
+INSPECT_REPAIR = """ If you see a plausible candidate for the failed work on a current full RGB view,
+attach one optional inspection to an affected node id. Provide its view and normalized [0,1] coordinates
+from left/top within that full image, or null if there is no useful visible candidate. It requests digital zoom.
+It neither drives the robot nor verifies the assertion."""
+INSPECT_GROUND = """The image labelled Current RGB inspection is a magnified crop of the current {source_view} camera,
+proposed by the local repair. Inspect its contents yourself. To point inside this crop, choose view=inspection
+and report coordinates relative to the entire crop. To point in a full current view, choose that view instead.
+A proposed crop alone cannot establish identity or success."""
+
+
 COMPILE = """Compile the user's request into a single mobile robot's remaining work, using only the
 current RGB and user information. Include one required_outcomes node id for every explicit user outcome, even when other work depends on it. List explicit user order relations in required_order. Preserve required order and terminal outcomes. Unobserved facts,
 durations, distances and usable carrier capacity are estimates. Name compact stable semantic ids and
