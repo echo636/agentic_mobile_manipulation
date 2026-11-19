@@ -250,6 +250,35 @@ class TemporalGraph:
     def distance(self, a, b):
         return 0 if a == b else self.travel.get((a, b), self.unknown_travel)
 
+    def work_duration(self, node):
+        return node.seconds + self.distance(node.origin, node.destination)
+
+    def conflicting_window(self, completed, now):
+        """Identify a check whose own duration cannot fit even with an idle robot."""
+        for key, window in self.windows.items():
+            if key in completed:
+                continue
+            node = self.nodes[key]
+            start = window.earliest
+            deadline = window.latest - window.margin
+            basis = f"seconds after {window.start} completes"
+            if window.start in completed:
+                anchor = completed[window.start]
+                start = max(ceil(now), ceil(anchor) + start)
+                deadline += floor(anchor)
+                basis = "absolute robot seconds"
+            finish = start + self.work_duration(node)
+            if finish > deadline:
+                transit = self.distance(node.origin, node.destination)
+                reason = (
+                    f"Process window for {key} cannot fit its check ({basis}). "
+                    f"Earliest check start {start} + handling {node.seconds} + "
+                    f"within-check travel {transit} = earliest finish {finish}. "
+                    f"Latest finish after reserving {window.margin} is {deadline}."
+                )
+                return key, reason
+        return None
+
     def route_decimetres(self, a, b):
         if a == b:
             return 0
@@ -350,7 +379,7 @@ def candidates(graph, done, locations, grouping):
             (n.id,),
             n.origin,
             n.destination,
-            n.seconds + graph.distance(n.origin, n.destination),
+            graph.work_duration(n),
         )
         for n in nodes
     ]

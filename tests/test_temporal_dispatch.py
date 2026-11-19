@@ -153,6 +153,68 @@ def test_multiple_devices_with_conflicting_visits():
         )
     )
     assert schedule(g, {"s1": 10, "s2": 10}, region="A", now=10).status == "infeasible"
+    assert g.conflicting_window({"s1": 10, "s2": 10}, now=10) is None
+
+
+def test_an_impossible_check_repairs_its_subgraph_before_the_first_motor():
+    raw = graph(
+        [
+            work("start"),
+            work("visit", "A", "B"),
+            work("serve", after=["visit"]),
+            work("elsewhere"),
+        ],
+        [window(earliest=60, latest=90, margin=15)],
+    )
+    patch = {
+        "outcome": "repair",
+        "reason": "Revise estimated deadline",
+        "remove": [],
+        "upsert": [],
+        "windows": [window(earliest=60, latest=110, margin=15)],
+    }
+    slow = Role(raw, patch)
+    c = DispatchController("task", ["open"], slow, Role(decision()))
+    c.observe(camera(0, 0))
+    assert c.next()[0] == "act"
+    event = slow.calls[1]
+    assert (
+        "60 + handling 10 + within-check travel 15 = earliest finish 85"
+        in event["event"]
+    )
+    assert "reserving 15 is 75" in event["event"]
+    assert {node["id"] for node in event["affected"]} == {"visit", "serve"}
+    assert event["boundary_prerequisites"] == ["start"]
+    assert c.completed == {}
+
+
+def test_window_conflict_uses_rounded_live_clock_and_allows_exact_fit():
+    g = TemporalGraph.read(
+        graph([work("start"), work("visit")], [window(earliest=5, latest=15)])
+    )
+    assert g.conflicting_window({}, now=1000) is None
+    assert g.conflicting_window({"start": 4}, now=9) is None
+    key, text = g.conflicting_window({"start": 4.2}, now=9.2)
+    assert key == "visit" and "earliest finish 20" in text and "is 19" in text
+    assert g.conflicting_window({"start": 4, "visit": 19}, now=1000) is None
+
+
+def test_timer_keeps_time_for_travel_within_a_return_visit():
+    from manipulation_agent.agent.temporal_graph import Job
+
+    raw = graph(
+        [work("start"), work("visit", "A", "B"), work("other", seconds=1)],
+        [window(earliest=0, latest=40)],
+        travel=20,
+    )
+    c = DispatchController("task", ["open"], Role(raw), Role(decision()))
+    c.observe(camera(0, 0))
+    c.compile()
+    c.completed["start"] = 0
+    c.active = Job(("other",), "A", "A", 1)
+    c.observe(camera(1, 12))
+    assert c.next()[0] == "act" and c.active.members == ("visit",)
+    assert c.active.duration == 30
 
 
 def test_atomic_local_edit_protects_completed_work_and_distant_goal():

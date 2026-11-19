@@ -376,13 +376,14 @@ class DispatchController:
             op, {"image_ref": self.camera.frames[view]["image_ref"], "point": point}
         )
 
+    def visit_duration(self, key):
+        node = self.graph.nodes[key]
+        return self.graph.distance(self.region, node.origin) + self.graph.work_duration(
+            node
+        )
+
     def wait(self, seconds, windows):
-        events = [
-            w["latest_in_s"]
-            - self.graph.distance(self.region, self.graph.nodes[w["check"]].origin)
-            - self.graph.nodes[w["check"]].seconds
-            for w in windows
-        ]
+        events = [w["latest_in_s"] - self.visit_duration(w["check"]) for w in windows]
         amount = max(0.1, min(120, seconds, *(t for t in events if t >= 0.1)))
         return self.motor("wait", self.act_args("wait", wait=amount))
 
@@ -517,7 +518,6 @@ class DispatchController:
                 + evidence[:350]
             )
         if windows and op != "wait" and windows[0]["check"] not in job.members:
-            check = self.graph.nodes[windows[0]["check"]]
             reserve = self.motor_seconds.get(
                 op,
                 max(
@@ -525,10 +525,8 @@ class DispatchController:
                     min(n.seconds for n in (self.graph.nodes[k] for k in job.members)),
                 ),
             )
-            remaining = (
-                windows[0]["latest_in_s"]
-                - self.graph.distance(self.region, check.origin)
-                - check.seconds
+            remaining = windows[0]["latest_in_s"] - self.visit_duration(
+                windows[0]["check"]
             )
             if reserve >= remaining:
                 self.return_reserve = reserve
@@ -553,11 +551,7 @@ class DispatchController:
                     w
                     for w in windows
                     if w["latest_in_s"]
-                    <= self.graph.distance(
-                        self.region, self.graph.nodes[w["check"]].origin
-                    )
-                    + self.graph.nodes[w["check"]].seconds
-                    + self.return_reserve
+                    <= self.visit_duration(w["check"]) + self.return_reserve
                 ),
                 None,
             )
@@ -580,15 +574,28 @@ class DispatchController:
                     remaining_s=due["latest_in_s"],
                     interrupted=list(self.active.members) if self.active else [],
                 )
-                self.active = Job((key,), node.origin, node.destination, node.seconds)
+                self.active = Job(
+                    (key,),
+                    node.origin,
+                    node.destination,
+                    self.graph.work_duration(node),
+                )
                 self.due_wait = 0
             if self.active is None:
                 status = self.choose()
                 if self.active is None:
+                    reason = "No dispatchable schedule: " + status
                     keys = {w["check"] for w in windows} or (
                         self.graph.nodes.keys() - self.completed.keys()
                     )
-                    if self.repair("No dispatchable schedule: " + status, keys):
+                    if status == "infeasible":
+                        conflict = self.graph.conflicting_window(
+                            self.completed, self.clock
+                        )
+                        if conflict:
+                            key, reason = conflict
+                            keys = {key}
+                    if self.repair(reason, keys):
                         continue
                     return "finish", {
                         "outcome": "blocked",
