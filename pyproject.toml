@@ -10,11 +10,13 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+dispatch = ["ortools>=9.10,<9.15", "mcp==1.28.1", "Pillow>=10"]
 mcp = ["mcp==1.28.1", "Pillow>=10"]
 navigation = ["numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.scripts]
 manip-agent = "manipulation_agent.vision_cli:main"
+manip-dispatch = "manipulation_agent.clients.temporal:main"
 manip-mcp = "manipulation_agent.mcp_server:main"
 
 [tool.setuptools.packages.find]

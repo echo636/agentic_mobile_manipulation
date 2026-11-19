@@ -39,6 +39,7 @@ def main():
                    help='Harness option: strategy supplementation mode (default none)')
     p.add_argument('--planning-mode', choices=['off','task_graph'], default='off',
                    help='Harness option: general precondition and cost-aware task graph planner (default off)')
+    p.add_argument('--public-robot-clock', action='store_true', help='Expose elapsed robot seconds and traveled distance to a time-aware controller.')
     p.add_argument('--auxiliary-feedback', choices=['off','on'], default='off',
                    help='Harness option: public hand state, actionable error hints and step refund on validation errors')
     p.add_argument('--state-memory', choices=['off','on'], default='off',
@@ -121,7 +122,7 @@ def main():
                                   require_tool_intent=a.require_tool_intent,
                                   scheduling_mode=a.scheduling_mode,
                                   planning_mode=a.planning_mode,
-                                  auxiliary_feedback=a.auxiliary_feedback == 'on',
+                                  public_robot_clock=a.public_robot_clock, auxiliary_feedback=a.auxiliary_feedback == 'on',
                                   state_memory=a.state_memory == 'on')
         if policy:
             harness.start_standalone_clock()

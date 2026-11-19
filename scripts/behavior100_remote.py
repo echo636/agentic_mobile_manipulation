@@ -376,6 +376,7 @@ def main():
           '--output',str(a.data_root/'runs'/row['run_id'])]
     args += episode_budget_args(manifest)
     args+=['--goal-skill',manifest.get('goal_skill','hierarchical')]
+    if manifest.get('public_robot_clock'): args.append('--public-robot-clock')
     if manifest.get('rgb_reference_review'): args.append('--rgb-reference-review')
     if row.get('custom_task_spec'):
         args+=['--custom-task',row['custom_task_spec']]

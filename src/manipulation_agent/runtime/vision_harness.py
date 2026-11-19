@@ -67,7 +67,7 @@ ACTION_FEEDBACK_HINTS = {
 class VisionHarness:
     def __init__(self, backend, recorder, budget=Budget(), *, profile='skills', rgb_reference_review=False, agent_step_limit=None,
                  goal_skill='hierarchical', unbounded_episode=False, require_tool_intent=False,
-                 scheduling_mode='none', planning_mode='off', auxiliary_feedback=False, state_memory=False):
+                 scheduling_mode='none', planning_mode='off', auxiliary_feedback=False, state_memory=False, public_robot_clock=False):
         if profile == 'basic-skills': goal_skill = 'none'
         if profile == 'goal-tree': goal_skill = 'tree'
         if goal_skill not in {'hierarchical','tree','none'}: raise ValueError('Unknown goal skill mode')
@@ -76,6 +76,7 @@ class VisionHarness:
         self.goal_skill=goal_skill
         self.scheduling_mode=scheduling_mode
         self.planning_mode=planning_mode
+        self.public_robot_clock=public_robot_clock
         self.auxiliary_feedback=bool(auxiliary_feedback)
         self.state_memory_enabled=bool(state_memory)
         self.state_memory=StateMemory(output_dir=recorder.output) if self.state_memory_enabled else None
@@ -179,6 +180,8 @@ class VisionHarness:
         if self.snapshot['revision'] != self.revision:
             self.refresh()
         result={'initialized': True, 'observation': copy.deepcopy(self.snapshot)}
+        if self.public_robot_clock:
+            result['robot_time'] = {'total_s': getattr(getattr(self.backend, 'robot_clock', None), 'total_s', None)}
         if reference_image_ref is not None:
             reference = self._published_rgb.get(reference_image_ref)
             if reference is None:
@@ -361,6 +364,8 @@ class VisionHarness:
                 rt_public = self._public_robot_time()
                 if rt_public is not None:
                     result['robot_time'] = rt_public
+            elif self.public_robot_clock:
+                result['robot_time'] = {'total_s': getattr(getattr(self.backend, 'robot_clock', None), 'total_s', None)}
             if self.scheduling_mode == 'program':
                 rt_for_ledger = result.get('robot_time') or self._public_robot_time()
                 ledger_input = result if 'robot_time' in result else {**result, **({'robot_time': rt_for_ledger} if rt_for_ledger else {})}

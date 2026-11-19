@@ -1191,6 +1191,10 @@ class Batch:
                  '--timeout',str(seconds if seconds is not None else 0),'--execution-clock-command-json',
                  json.dumps(self.execution_clock_command(clock_path,seconds,row=row)),
                  '--agent-profile',self.manifest['agent_profile'],'--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+            if self.manifest.get('dispatch_policy'):
+                cmd += ['--dispatch-policy',self.manifest['dispatch_policy']]
+                if self.c.get('fast_vision_port'):
+                    cmd += ['--fast-vision-port',str(self.c['fast_vision_port'])]
             if self.manifest.get('action_feedback'):
                 cmd += ['--action-feedback', self.manifest['action_feedback']]
                 if not self.manifest.get('planner_model') and self.c.get('planner_python'):
@@ -1504,6 +1508,10 @@ class Batch:
              '--mcp-args-json',json.dumps(self.c['ssh'][1:]+[remote]),'--output',str(controller),
              '--timeout',str(self.manifest['model_timeout_seconds'] or 0),'--agent-profile',self.manifest['agent_profile'],
              '--goal-skill',self.manifest.get('goal_skill','hierarchical')]
+        if self.manifest.get('dispatch_policy'):
+            cmd += ['--dispatch-policy',self.manifest['dispatch_policy']]
+            if self.c.get('fast_vision_port'):
+                cmd += ['--fast-vision-port',str(self.c['fast_vision_port'])]
         if self.manifest.get('action_feedback'):
             cmd += ['--action-feedback', self.manifest['action_feedback']]
             if not self.manifest.get('planner_model') and self.c.get('planner_python'):

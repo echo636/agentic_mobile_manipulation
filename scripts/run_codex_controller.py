@@ -301,7 +301,14 @@ def main(argv=None, *, allow_client=False):
                    help='Opt-in native-history forks for an unavailable sticky route; retains the same live robot episode')
     p.add_argument('--action-feedback', choices=['off', 'sensor_only', 'evidence'], default='off',
                    help='Select the RGB feedback contract for a minimal/basic-skills episode')
+    p.add_argument('--dispatch-policy', choices=['serial','temporal'], help='Use the event-driven ST-DAG controller')
+    p.add_argument('--fast-vision-port', type=int, help='Use the local Qwen2.5-VL inference server')
     args = p.parse_args(argv)
+    if args.dispatch_policy:
+        if not args.planner_model:
+            p.error('--dispatch-policy requires --planner-model')
+        from manipulation_agent.clients.temporal import run
+        return run(args)
     feedback_mode = args.action_feedback
     if feedback_mode != 'off' and args.agent_profile not in ('minimal', 'basic-skills'):
         p.error('--action-feedback requires minimal or basic-skills')
