@@ -455,7 +455,11 @@ def feasible_incumbent(graph, jobs, completed, region, now, locations, serial):
             if serial and active and not all(k in checks for k in job.members):
                 continue
             starting = [w for w in graph.windows.values() if w.start in job.members]
-            if any(w.resource == other.resource for w in starting for other in active):
+            if any(
+                w.resource == other.resource and other.check not in job.members
+                for w in starting
+                for other in active
+            ):
                 continue
             trip = graph.distance(position, job.origin)
             arrival = clock + trip
@@ -590,9 +594,16 @@ def schedule(
                         model.Add(end[k] <= begin[w.start]).OnlyEnforceIf(before)
                         model.Add(begin[k] >= end[w.check]).OnlyEnforceIf(before.Not())
     for (resource, start_key), checks in resource_uses.items():
-        left = (
-            floor(completed[start_key]) if start_key in completed else begin[start_key]
-        )
+        if start_key in completed:
+            left = floor(completed[start_key])
+        elif (
+            start_key in graph.windows and graph.windows[start_key].resource == resource
+        ):
+            # The preceding phase already reserves this device through the end of
+            # the shared check/start action. The next reservation meets it there.
+            left = end[start_key]
+        else:
+            left = begin[start_key]
         right = model.NewIntVar(now, horizon, "resource_release")
         model.AddMaxEquality(right, checks)
         size = model.NewIntVar(0, horizon, "resource_duration")

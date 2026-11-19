@@ -585,6 +585,51 @@ def test_resource_shared_by_checkpoints_is_kept_until_last_check():
     assert by_id["s2"].start >= by_id["v2"].end
 
 
+@pytest.mark.parametrize("serial", [False, True])
+@pytest.mark.parametrize("budget", [1.0, 0.000001])
+def test_successive_device_phases_share_their_boundary_action(serial, budget):
+    raw = graph(
+        [work("start"), work("handover", seconds=5), work("inspect", seconds=20)],
+        [
+            window("start", "handover", 0, 15, margin=5),
+            window("handover", "inspect", 0, 30, margin=5),
+        ],
+    )
+    g = TemporalGraph.read(raw)
+    for done in ({}, {"start": 10}, {"start": 10, "handover": 15}):
+        s = schedule(
+            g,
+            done,
+            region="A",
+            now=max(done.values(), default=0),
+            serial=serial,
+            solver_seconds=budget,
+        )
+        assert [z.job.members[0] for z in s.slots] == [
+            k for k in ("start", "handover", "inspect") if k not in done
+        ]
+        assert s.slots[-1].end == 35
+
+
+def test_a_handover_cannot_overlap_an_unfinished_check_from_the_preceding_phase():
+    raw = graph(
+        [
+            work("on"),
+            work("change"),
+            work("old_check", after=["change"]),
+            work("new_check"),
+        ],
+        [
+            window("on", "change", 0, 40),
+            window("on", "old_check", 0, 60),
+            window("change", "new_check", 0, 60),
+        ],
+    )
+    assert (
+        schedule(TemporalGraph.read(raw), {}, region="A", now=0).status == "infeasible"
+    )
+
+
 def test_route_length_breaks_equal_makespan_ties_and_required_order_is_immutable():
     g = graph([work("a", "A"), work("b", "B")], region="S", travel=5)
     g.update(
